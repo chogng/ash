@@ -346,6 +346,7 @@ export type { ExtensionDto } from './ExtensionDto.js';
 export type { ExtensionHostCancellationReasonDto } from './ExtensionHostCancellationReasonDto.js';
 export type { ExtensionHostChanged } from './ExtensionHostChanged.js';
 export type { ExtensionHostExtensionDto } from './ExtensionHostExtensionDto.js';
+export type { ExtensionHostExternalUriSchemeDto } from './ExtensionHostExternalUriSchemeDto.js';
 export type { ExtensionHostFailureCodeDto } from './ExtensionHostFailureCodeDto.js';
 export type { ExtensionHostFailureDto } from './ExtensionHostFailureDto.js';
 export type { ExtensionHostInvokeCancelDispositionDto } from './ExtensionHostInvokeCancelDispositionDto.js';

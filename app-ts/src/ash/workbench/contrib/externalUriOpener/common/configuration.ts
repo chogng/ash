@@ -9,6 +9,15 @@ export interface ExternalUriOpenersConfiguration {
 	readonly [uriGlob: string]: string;
 }
 
+let contributedIds: readonly string[] = [];
+let contributedLabels: readonly string[] = [];
+
+/** Updates completion metadata without changing which IDs are valid in saved rules. */
+export function updateContributedOpeners(enumValues: string[], enumDescriptions: string[]): void {
+	contributedIds = [...enumValues];
+	contributedLabels = [...enumDescriptions];
+}
+
 /** Unknown opener IDs stay valid while the owning provider is not registered. */
 export const externalUriOpenersConfigurationNode: IConfigurationKeyDefinition<ExternalUriOpenersConfiguration> = {
 	key: externalUriOpenersSettingId,
@@ -27,9 +36,14 @@ export const externalUriOpenersConfigurationNode: IConfigurationKeyDefinition<Ex
 	schema: {
 		type: 'object',
 		get description() { return localize('externalUriOpener.settingDescription', 'Map HTTP and HTTPS URL patterns to opener IDs. Use default for the standard browser. The first matching available opener is used.'); },
-		additionalProperties: {
-			type: 'string', minLength: 1,
-			anyOf: [{ type: 'string' }, { enum: [defaultExternalUriOpenerId] }],
+		get additionalProperties() {
+			return {
+				type: 'string' as const, minLength: 1,
+				anyOf: [{ type: 'string' as const }, {
+					enum: [defaultExternalUriOpenerId, 'ash.browser.open', ...contributedIds],
+					enumDescriptions: [localize('externalUriOpener.default', 'Open in default browser'), localize('browser.urlOpener', 'Open in Ash browser'), ...contributedLabels],
+				}],
+			};
 		},
 	},
 };

@@ -623,6 +623,7 @@
 		"bulkEdit.verbosityTitle": "重构预览无障碍帮助",
 		"bulkEdit.verbosityDescription": "提示如何打开重构预览的无障碍帮助。",
 		"editor.document.name": "Stanza 文档",
+		"document.link.openHint": "按 {0} 并点击，或按 {0}+Enter 打开链接。也可以聚焦链接后按 Enter。",
 		"settings.chatEditing.label": "编辑",
 		"settings.chatEditing.description": "选择如何审核 Agent 修改。",
 		"issue.title": "报告问题",

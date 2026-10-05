@@ -1,7 +1,8 @@
 import { onUnexpectedError } from '../../base/common/errors.js';
-import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
 import { WINDOW_ZOOM_LEVEL_SETTING } from '../../platform/window/common/window.js';
+import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
@@ -99,10 +100,15 @@ export class NativeWindow extends Disposable {
 	private applyingConfiguredZoom = false;
 
 	constructor(
-		private readonly host: INativeHostApi,
-		private readonly configuration: IConfigurationService,
+		@INativeHostService private readonly host: INativeHostApi,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super();
+		const externalLinks = this.host.onDidRequestOpenExternalUri(target => {
+			void this.opener.open(target, { openExternal: true, allowContributedOpeners: true }).catch(onUnexpectedError);
+		});
+		this._register(toDisposable(() => externalLinks.dispose()));
 		const zoomSubscription = this.host.onDidChangeZoomLevel(level => {
 			if (this.applyingConfiguredZoom) return;
 			this.pendingZoomLevel = Math.round(level);

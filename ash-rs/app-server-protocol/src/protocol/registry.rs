@@ -698,6 +698,8 @@ use crate::protocol::extension_host::ExtensionHostChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostExtensionDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostExternalUriSchemeDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostFailureCodeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostFailureDto;
@@ -5107,6 +5109,7 @@ typescript_bindings! {
     ExtensionHostFailureDto,
     ExtensionHostRegistrationDescriptorDto,
     ExtensionHostRegistrationKindDto,
+    ExtensionHostExternalUriSchemeDto,
     ExtensionHostLanguageProviderOperationDto,
     ExtensionHostInvokeStartParams,
     ExtensionHostInvokeStartResult,

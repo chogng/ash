@@ -6,6 +6,7 @@ use super::ExtensionCapability;
 use super::ExtensionHostRequest;
 use super::ExtensionHostResponse;
 use super::ExtensionHostStdoutFrame;
+use super::ExternalUriScheme;
 use super::HostEventContext;
 use super::HostOutputOperation;
 use super::HostRequestKind;
@@ -35,6 +36,13 @@ fn activation() -> ActivateParams {
 #[test]
 fn channel_and_link_registrations_require_their_declared_capabilities() {
     let registrations = [
+        (
+            ExtensionCapability::ExternalUriOpener,
+            RegistrationKind::ExternalUriOpener {
+                schemes: vec![ExternalUriScheme::Http, ExternalUriScheme::Https],
+                label: "Acme browser".into(),
+            },
+        ),
         (
             ExtensionCapability::DataChannel,
             RegistrationKind::DataChannel {
@@ -348,4 +356,39 @@ fn test_profile_provider_uses_the_provider_domain_vocabulary() {
             "label": "Acme Review"
         })
     );
+}
+
+#[test]
+fn external_uri_opener_rejects_empty_duplicate_and_privileged_schemes() {
+    let mut params = activation();
+    params.capabilities = vec![ExtensionCapability::ExternalUriOpener];
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params),
+    };
+    for schemes in [
+        vec![],
+        vec![ExternalUriScheme::Https, ExternalUriScheme::Https],
+    ] {
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "browser".into(),
+                    kind: RegistrationKind::ExternalUriOpener {
+                        schemes,
+                        label: "Acme browser".into(),
+                    },
+                }],
+            })),
+        };
+        assert!(
+            response
+                .validate_for(&request, &ExtensionHostLimits::default())
+                .is_err()
+        );
+    }
+    for scheme in ["file", "javascript", "ash"] {
+        assert!(serde_json::from_value::<RegistrationDescriptor>(json!({"registrationId":"browser","kind":"externalUriOpener","schemes":[scheme],"label":"Acme browser"})).is_err());
+    }
 }

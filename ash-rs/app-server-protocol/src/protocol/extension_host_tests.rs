@@ -70,6 +70,7 @@ fn registration_descriptor_matches_host_rpc_v1_shape() {
 #[test]
 fn channel_and_link_registration_wire_shapes_round_trip_and_reject_extra_fields() {
     for mut fixture in [
+        json!({"registrationId":"browser","kind":"externalUriOpener","schemes":["https"],"label":"Acme browser"}),
         json!({"registrationId":"edits","kind":"dataChannel","channelId":"editTelemetry"}),
         json!({"registrationId":"issues","kind":"linkPresentationProvider","uriPattern":"^https://example.com/","presentationKind":"issue"}),
     ] {
@@ -96,6 +97,7 @@ fn generated_typescript_uses_camel_case_registration_fields() {
     assert!(typescript.contains("channelId: string"));
     assert!(typescript.contains("uriPattern: string"));
     assert!(typescript.contains("presentationKind: string"));
+    assert!(typescript.contains("\"kind\": \"externalUriOpener\""));
     assert!(!typescript.contains("\"kind\": \"testController\""));
     assert!(!typescript.contains("controllerId"));
     assert!(!typescript.contains("language_ids"));

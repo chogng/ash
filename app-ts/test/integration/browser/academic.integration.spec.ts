@@ -41,6 +41,43 @@ test("TextModel API and Academic code-block editing run in real browsers", async
 	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(["Title", "Body"]);
 });
 
+test('Document links preserve editing and open through the product service with mouse and keyboard', async ({ page }) => {
+	await page.goto('/academic.html?locale=zh-CN');
+	const input = page.locator('#document-editor textarea.stanza-document-text-input').first();
+	await input.evaluate(element => {
+		const textarea = element as HTMLTextAreaElement;
+		textarea.focus();
+		textarea.setSelectionRange(0, 5);
+		textarea.dispatchEvent(new Event('select', { bubbles: true }));
+	});
+	await page.locator("#document-editor [data-action-id='link'] button").click();
+	const dialog = page.getByRole('dialog', { name: 'Link', exact: true });
+	const url = 'https://example.com/document?section=1#link';
+	await dialog.getByRole('textbox').fill(url);
+	await dialog.getByRole('button', { name: '确定', exact: true }).click();
+	const link = page.locator('#document-editor a').filter({ hasText: 'Title' });
+	await expect(link).toHaveAttribute('title', /点击.*Enter/u);
+	await link.click();
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getOpenedLinks())).toEqual([]);
+	await link.click({ modifiers: ['ControlOrMeta'] });
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getOpenedLinks())).toEqual([url]);
+	await link.focus();
+	await link.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getOpenedLinks())).toEqual([url, url]);
+	await link.evaluate(element => {
+		const selection = element.ownerDocument.getSelection()!;
+		const range = element.ownerDocument.createRange();
+		range.setStart(element.firstChild!, 2);
+		range.collapse(true);
+		element.parentElement!.focus();
+		selection.removeAllRanges();
+		selection.addRange(range);
+	});
+	await page.keyboard.press('ControlOrMeta+Enter');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getOpenedLinks())).toEqual([url, url, url]);
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Title', 'Body']);
+});
+
 test('Document contributions mount the rich editor and release its views', async ({ page }) => {
 	await page.goto('/academic.html');
 	const ids = await page.evaluate(() => window.ashAcademicIntegration.getBundleIds());

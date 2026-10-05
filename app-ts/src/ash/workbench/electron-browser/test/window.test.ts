@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../base/common/event.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../../editor/browser/services/openerService.js';
+import { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import type { INativeHostApi } from '../../../platform/native/common/nativeHost.js';
 import type { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { WINDOW_ZOOM_LEVEL_SETTING } from '../../../platform/window/common/window.js';
@@ -125,8 +130,16 @@ test('desktop zoom follows the profile setting and persists a window zoom change
 		getZoomLevel: async () => zoom,
 		setZoomLevel: async (level: number) => { zoom = level; changed?.(level); applied(level); },
 		onDidChangeZoomLevel: (listener: (level: number) => void) => { changed = listener; return { dispose: () => { changed = undefined; } }; },
+		onDidRequestOpenExternalUri: () => ({ dispose() {} }),
 	} as unknown as INativeHostApi;
-	using window = new NativeWindow(host, configuration);
+	using services = new InstantiationService();
+	using codeEditors = new StandaloneCodeEditorService();
+	services.registerInstance(ICodeEditorService, codeEditors);
+	using opener = services.createInstance(OpenerService);
+	services.registerInstance(IOpenerService, opener);
+	services.registerInstance(INativeHostService, host);
+	services.registerInstance(IConfigurationService, configuration);
+	using window = services.createInstance(NativeWindow);
 	assert.equal(await firstApplied, 2);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	const persisted = new Promise<void>(resolve => {

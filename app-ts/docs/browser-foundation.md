@@ -323,10 +323,31 @@ do not affect matching. Pattern paths are kept literal rather than resolving
 dot segments. Settings retain unavailable provider IDs so provider registration
 does not rewrite user preferences.
 
-The current Extension Host registration protocol does not include URI opener
-registrations. Extension activation, persisted provider suggestions and the
-extension API adapter remain unimplemented; Workbench provider registration and
-selection are available independently of that protocol.
+Editor Markdown messages and rich document links use this same service. Rich
+links preserve ordinary editing clicks; Ctrl/Command+click and Ctrl/Command+Enter
+open the link. A focused link also opens with Enter. Product `window.open`
+requests are denied in Main and sent to their owning Workbench for selection;
+auxiliary windows use their owning Workbench as well.
+
+The Ash executable Extension Host admits the `externalUriOpener` capability.
+Activation registrations carry a non-empty, unique list of `http`/`https`
+schemes and a label. `MainThreadUriOpeners` publishes ready process registrations
+as providers and settings completions. Stable settings IDs are
+`extension:<encoded extension ID>:<encoded registration ID>` using
+`encodeURIComponent` for each component. Built-in completions include `default`
+and `ash.browser.open`; unavailable IDs remain valid in saved rules.
+
+The existing fenced invocation broker handles `canOpenExternalUri` with
+`{ uri }` and a numeric priority (None = 0, Option = 1, Default = 2, Preferred = 3),
+and `openExternalUri` with `{ resolvedUri, sourceUri }` and a boolean handled
+result. Cancellation uses the broker's existing invocation cancel path.
+Registration replacement, extension removal and connection close revoke old
+providers and cancel their pending calls; unrelated fleet changes preserve
+unchanged registrations. Selection and settings stay in TypeScript, while the
+Rust broker transports admitted registration metadata and invokes the existing
+extension process. This does not implement VS Code's JavaScript Extension API or
+lazy `onOpenExternalUri` activation; packages use the existing Ash activation
+events. Completion metadata follows active registrations and is not persisted.
 
 ## Design rules
 

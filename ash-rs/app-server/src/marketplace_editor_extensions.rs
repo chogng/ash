@@ -444,6 +444,7 @@ enum ManifestCapability {
     TestProfileProvider,
     DataChannel,
     LinkPresentationProvider,
+    ExternalUriOpener,
 }
 
 impl ManifestCapability {
@@ -456,6 +457,7 @@ impl ManifestCapability {
             Self::TestProfileProvider => ExtensionCapability::TestProfileProvider,
             Self::DataChannel => ExtensionCapability::DataChannel,
             Self::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
+            Self::ExternalUriOpener => ExtensionCapability::ExternalUriOpener,
         }
     }
 
@@ -468,6 +470,7 @@ impl ManifestCapability {
             Self::TestProfileProvider => "testProfileProvider",
             Self::DataChannel => "dataChannel",
             Self::LinkPresentationProvider => "linkPresentationProvider",
+            Self::ExternalUriOpener => "externalUriOpener",
         }
     }
 }

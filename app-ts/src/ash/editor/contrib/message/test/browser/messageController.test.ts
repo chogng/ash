@@ -13,6 +13,8 @@ import { ICodeEditorService } from '../../../../browser/services/codeEditorServi
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { StandaloneCodeEditorService } from '../../../../standalone/browser/standaloneCodeEditorService.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../../../browser/services/openerService.js';
 import '../../browser/messageController.js';
 import '../../../readOnlyMessage/browser/contribution.js';
 
@@ -93,4 +95,25 @@ test('Markdown resource links open through the code editor service', async () =>
 		'ash-remote://ssh+host/src/ash.ts',
 	]);
 	messages.dispose();
+});
+
+test('Markdown message URLs reach contributed openers and dismiss the message', async () => {
+	const container = h(environment.window.document, 'main');
+	environment.window.document.body.append(container);
+	using cleanup = toDisposable(() => container.remove());
+	using model = new TextModel('alpha');
+	using services = new InstantiationService();
+	using codeEditors = new StandaloneCodeEditorService();
+	services.registerInstance(ICodeEditorService, codeEditors);
+	using opener = services.createInstance(OpenerService);
+	services.registerInstance(IOpenerService, opener);
+	let resolveOpened!: (href: string) => void;
+	const opened = new Promise<string>(resolve => { resolveOpened = resolve; });
+	using registration = opener.registerExternalOpener({ openExternal: async href => { resolveOpened(href); return true; } });
+	using editor = createTestCodeEditor({ container, model, instantiationService: services });
+	editor.layout({ width: 400, height: 100 });
+	const messages = MessageController.get(editor)!;
+	messages.showMessage(new MarkdownString('[Documentation](https://example.com/docs)'), new Position(1, 1));
+	environment.window.document.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a')!.click();
+	assert.deepEqual({ href: await opened, visible: messages.isVisible() }, { href: 'https://example.com/docs', visible: false });
 });

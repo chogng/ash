@@ -7,9 +7,8 @@ import {
 import { InstallShellCommandAction, UninstallShellCommandAction } from './actions/installActions.js';
 import './parts/dialogs/dialog.contribution.js';
 import '../contrib/files/electron-browser/fileActions.contribution.js';
-import { INativeHostService } from '../common/services.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../common/contributions.js';
-import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
@@ -89,7 +88,4 @@ registerAction2(MoveWindowTabToNewWindowAction);
 registerAction2(MergeWindowTabsAction);
 registerAction2(InstallShellCommandAction);
 registerAction2(UninstallShellCommandAction);
-registerWorkbenchContribution('workbench.contrib.nativeWindow', WorkbenchPhase.AfterRestored, accessor => new NativeWindow(
-	accessor.get(INativeHostService),
-	accessor.get(IConfigurationService),
-));
+registerWorkbenchContribution('workbench.contrib.nativeWindow', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(NativeWindow));

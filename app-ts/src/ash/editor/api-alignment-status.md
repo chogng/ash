@@ -2462,3 +2462,8 @@ Standalone CSS 续批：核对上游后确认 `browser/standalone-tokens.css` �
 Standalone 通用 Worker 续批：`editor.createWebWorker` 从窗口模型服务读取已注册模型，`standalone/browser/standaloneWebWorker.ts` 提供公开代理与 Worker 侧启动入口，`standalone/browser/services/standaloneWebWorkerService.ts` 持有 Worker、双向消息通道、多模型订阅和空闲释放。模型变更传输版本与增量，Worker 使用已有 `LanguageWorkerDocumentMirror`；模型释放和 Worker 释放清理镜像与传输。真实 Chromium 场景验证两个资源、后续编辑、宿主回调、模型与 Worker 释放。`check-editor-alignment.mjs --test=all` 通过，239/239 个单测文件、637 个浏览器场景通过；Stanza 和 Renderer 生产构建通过。同路径文件 458 个。剩余两个缺失路径的结论：`referenceSearch/standaloneReferenceSearch.ts` 对应的引用请求、Peek 展示和生命周期已由 `LanguageNavigationController` 唯一拥有，补同名注册层会重复控制器；`standaloneTreeSitterLibraryService.ts` 的上游文件自身只有未实现的方法，Ash standalone 尚无本地 Tree-sitter 解析器与下游使用链，不能通过空服务宣称能力已接通。Code Workbench 的 App Server 解析会话属于另一条调用链，不为 standalone 创建同名服务。
 
 2026-09-24：drop/paste 初期批次纠正了文件内容解码与 HTML 隐式转文本行为，并按用户确认删除仅 Ash 的 `browser/textFileTransfer.ts` 及其测试。后续 provider、排序和选择器接入后的当前行为与剩余边界见本页顶部的 Drop / Paste 节。初期批次的定向单测 10 项、Chromium 场景 9 项、Stanza 类型检查与 Renderer 构建通过；这些数字不代表后续批次的验证结果。
+
+
+2026-10-04：URL 打开规则续接。MessageController 的 Markdown 外链使用构造器注入的 IOpenerService，并显式允许用户规则；富文本文档通过该服务处理修饰键点击和键盘打开。产品窗口的 window.open 请求从 Main 返回所属窗口的 opener；辅助窗口复用所属 Workbench。原有仅 Ash 的富文本与窗口 IPC 归属沿用已授权职责，未新增平行选择服务。
+
+扩展 URL 打开方式位于上游对应路径 `workbench/api/browser/mainThreadUriOpeners.ts`，由 Code 和 Sessions 入口加载，使用已有 Ash 扩展协议读取注册与调用。配置补全更新接口位于上游对应 `externalUriOpener/common/configuration.ts` 的 `updateContributedOpeners`。这里保留 Ash 可执行扩展的代次、权限和取消约定；不计为 VS Code JavaScript Extension API、惰性 URL 激活或持久化扩展建议的完整对齐。

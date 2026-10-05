@@ -5,6 +5,7 @@ import './contrib/issue/browser/issue.contribution.js';
 import './services/dialogs/common/dialogService.js';
 import './services/dataChannel/browser/dataChannelService.js';
 import './api/browser/mainThreadDataChannels.contribution.js';
+import './api/browser/mainThreadUriOpeners.js';
 import './contrib/bulkEdit/browser/bulkEditService.js';
 /**
  * Shared Workbench registrations loaded by every renderer host.

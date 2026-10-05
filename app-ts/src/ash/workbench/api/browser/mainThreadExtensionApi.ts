@@ -114,7 +114,7 @@ export class MainThreadExtensionApi extends Disposable {
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider') {
+				if (registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);

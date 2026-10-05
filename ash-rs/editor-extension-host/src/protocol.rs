@@ -112,6 +112,7 @@ pub enum ExtensionCapability {
     TestProfileProvider,
     DataChannel,
     LinkPresentationProvider,
+    ExternalUriOpener,
 }
 
 /// Language provider operations understood by the v1 broker seam.
@@ -175,6 +176,10 @@ impl<'de> Deserialize<'de> for RegistrationDescriptor {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    ExternalUriOpener {
+        schemes: Vec<ExternalUriScheme>,
+        label: String,
+    },
     DataChannel {
         channel_id: String,
     },
@@ -200,6 +205,14 @@ pub enum RegistrationKind {
         provider_id: String,
         label: String,
     },
+}
+
+/// URL schemes that contributed openers may handle; privileged schemes stay with the platform.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExternalUriScheme {
+    Http,
+    Https,
 }
 
 /// Registration set published only after the whole activation succeeds.

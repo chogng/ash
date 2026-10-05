@@ -37,7 +37,7 @@ export class MessageController extends Disposable implements IEditorContribution
 	private visible = false;
 	private mouseOver = false;
 
-	constructor(private readonly editor: ICodeEditor) {
+	constructor(private readonly editor: ICodeEditor, @IOpenerService private readonly opener: IOpenerService, @ICommandService private readonly commands: ICommandService, @ICodeEditorService private readonly codeEditors: ICodeEditorService) {
 		super();
 		this.visibleKey = editor.invokeWithinContext(accessor => accessor.getOptional(IContextKeyService))?.createKey(MessageController.MESSAGE_VISIBLE.key, false);
 		if (this.visibleKey) this._register(toDisposable(() => this.visibleKey?.reset()));
@@ -85,22 +85,17 @@ export class MessageController extends Disposable implements IEditorContribution
 					this.closeMessage();
 					if (target.startsWith('command:')) {
 						const command = parseCommandLink(target);
-						const commandService = this.editor.invokeWithinContext(accessor => accessor.getOptional(ICommandService));
-						if (command && commandService) {
-							void commandService.executeCommand(command.id, ...command.args).catch(error => console.error('Could not run Markdown command', error));
+						if (command) {
+							void this.commands.executeCommand(command.id, ...command.args).catch(error => console.error('Could not run Markdown command', error));
 						}
 						return;
 					}
 					if (isEditorResourceLink(target)) {
-						const editorService = this.editor.invokeWithinContext(accessor => accessor.getOptional(ICodeEditorService));
-						if (editorService) {
-							void editorService.openCodeEditor({ resource: URI.parse(target) }, this.editor).catch(error => console.error('Could not open Markdown resource', error));
-						}
+						void this.codeEditors.openCodeEditor({ resource: URI.parse(target) }, this.editor).catch(error => console.error('Could not open Markdown resource', error));
 						return;
 					}
 					if (target.startsWith(`${Schemas.internal}:`)) return;
-					const opener = this.editor.invokeWithinContext(accessor => accessor.getOptional(IOpenerService));
-					if (opener) void opener.open(target, { openExternal: true, fromUserGesture: true }).catch(error => console.error('Could not open Markdown link', error));
+					void this.opener.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }).catch(error => console.error('Could not open Markdown link', error));
 				},
 			});
 			content = markdown.element;

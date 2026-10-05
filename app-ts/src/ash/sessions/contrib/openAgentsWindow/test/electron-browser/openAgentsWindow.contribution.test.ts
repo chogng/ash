@@ -63,6 +63,7 @@ class Fixture extends Disposable {
 			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,
+			onDidRequestOpenExternalUri: () => ({ dispose() {} }),
 			openExternal: async () => { throw new Error('unused'); },
 			showNativeDialog: async () => { throw new Error('unused'); },
 			installShellCommand: async () => '',

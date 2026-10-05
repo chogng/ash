@@ -45,7 +45,7 @@ const PRODUCT_MANIFEST: &[u8] = br#"{
     "executable": "editor-runtime",
     "runtimeApiVersion": 1,
     "activationEvents": [{"type": "onCommand", "id": "demo.run"}],
-    "capabilities": ["command", "dataChannel", "linkPresentationProvider"]
+    "capabilities": ["command", "dataChannel", "linkPresentationProvider", "externalUriOpener"]
   }]
 }"#;
 
@@ -86,6 +86,7 @@ fn signed_product_sidecar_requires_independent_admission_and_manager_lease() {
             ash_editor_extension_host::ExtensionCapability::Command,
             ash_editor_extension_host::ExtensionCapability::DataChannel,
             ash_editor_extension_host::ExtensionCapability::LinkPresentationProvider,
+            ash_editor_extension_host::ExtensionCapability::ExternalUriOpener,
         ]
     );
     assert!(deployment.authority.authorizes());

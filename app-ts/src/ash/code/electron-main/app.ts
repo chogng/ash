@@ -50,7 +50,7 @@ import { formatNlsMessage } from '../../nls.js';
 import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
-import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
+import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
 import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
@@ -124,7 +124,7 @@ import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/la
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePacksService.js';
 import { LanguagePackStore } from '../../platform/languagePacks/node/languagePackStore.js';
 import { LANGUAGE_PACK_READ_CHANNEL, LANGUAGE_PACK_WRITE_CHANNEL, NLS_CONFIGURATION_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
-import { HOST_RESTART_CHANNEL } from '../../platform/window/common/window.js';
+import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL } from '../../platform/window/common/window.js';
 export type AppServerStartupMode = "required" | "disabled";
 
 export interface AshApplicationOptions {
@@ -1467,13 +1467,14 @@ export class AshApplication extends Disposable {
 		};
 	}
 
-	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore): void {
+	private configureWindowNavigation(window: BrowserWindow, windowDisposables: DisposableStore, openerWindow: BrowserWindow = window): void {
 		const auxiliaryWindows = windowDisposables.add(new DisposableMap<number, IDisposable>());
-		const externalOpener = new ElectronOpenerService();
 		// Apply restored popup bounds before creation; Chromium ignores its position features here.
 		window.webContents.setWindowOpenHandler(details => {
 			if (details.url !== 'about:blank') {
-				void externalOpener.openExternal(details.url).catch(error => console.error('Could not open external link', error));
+				// The owning workbench selects URL rules; auxiliary windows share that owner.
+				try { openerWindow.webContents.send(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, normalizeExternalUrl(details.url)); }
+				catch (error) { console.error('Could not request external link opening', error); }
 				return { action: 'deny' };
 			}
 			return { action: 'allow', overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(details) };
@@ -1483,7 +1484,7 @@ export class AshApplication extends Disposable {
 			const childResources = new DisposableStore();
 			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id));
 			auxiliaryWindows.set(child.id, childResources);
-			this.configureWindowNavigation(child, childResources);
+			this.configureWindowNavigation(child, childResources, openerWindow);
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
 		};
 		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.

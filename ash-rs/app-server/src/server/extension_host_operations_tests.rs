@@ -18,6 +18,13 @@ use ash_editor_extension_host::SequencedExtensionHostOutputEvent;
 fn channel_and_link_registrations_preserve_frontend_subscription_fields() {
     for (kind, expected) in [
         (
+            RegistrationKind::ExternalUriOpener {
+                schemes: vec![ash_editor_extension_host::ExternalUriScheme::Https],
+                label: "Acme browser".into(),
+            },
+            serde_json::json!({"registrationId":"provider","kind":"externalUriOpener","schemes":["https"],"label":"Acme browser"}),
+        ),
+        (
             RegistrationKind::DataChannel {
                 channel_id: "editTelemetry".into(),
             },

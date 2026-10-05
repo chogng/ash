@@ -35,6 +35,12 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { OpenerService } from '../../../src/ash/editor/browser/services/openerService.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import messages from '../../../localization/zh-CN/workbench.json' with { type: 'json' };
 
 interface AcademicIntegrationHarness {
 	readonly apiDocumentType: string;
@@ -43,6 +49,7 @@ interface AcademicIntegrationHarness {
 	getStructuredBlockTexts(): readonly string[];
 	getStructuredFirstTextMarks(): readonly { readonly type: string; readonly attrs: Readonly<Record<string, string | number | boolean | null>> }[];
 	getStructuredSelection(): unknown;
+	getOpenedLinks(): readonly string[];
 	saveCodeBlock(): Promise<void>;
 	getSavedCodeBlock(): string;
 	dispose(): void;
@@ -121,6 +128,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 	}
 }
 
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') { setNlsMessages('zh-CN', messages); }
 const schema = createDefaultDocumentSchema();
 const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("editor-api")] })]);
 const apiModel = TextModel.create(schema, apiDocument);
@@ -137,6 +145,11 @@ const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
+services.registerInstance(ICodeEditorService, disposables.add(new StandaloneCodeEditorService()));
+const openedLinks: string[] = [];
+const opener = disposables.add(services.createInstance(OpenerService));
+services.registerInstance(IOpenerService, opener);
+disposables.add(opener.registerExternalOpener({ openExternal: async href => { openedLinks.push(href); return true; } }));
 disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 const copies = disposables.add(new BrowserWorkingCopyService());
 const files = { onDidChangeFiles: codeBlockFiles.onDidChangeFiles, resolve: (request: TextFileResolveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(request, signal), save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal) };
@@ -158,6 +171,7 @@ window.ashAcademicIntegration = {
 	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),
 	getStructuredFirstTextMarks: () => structuredPane.getDocument().content[0]?.content[0]?.marks ?? [],
 	getStructuredSelection: () => structuredPane.getDocumentSelection(),
+	getOpenedLinks: () => openedLinks,
 	saveCodeBlock: () => codeBlockPane.save(),
 	getSavedCodeBlock: () => codeBlockFiles.read(codeBlockResource),
 	dispose: () => {

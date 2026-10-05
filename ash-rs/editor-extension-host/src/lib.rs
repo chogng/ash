@@ -32,6 +32,7 @@ pub use protocol::ExtensionCapability;
 pub use protocol::ExtensionHostOutputEvent;
 pub use protocol::ExtensionHostRequest;
 pub use protocol::ExtensionHostResponse;
+pub use protocol::ExternalUriScheme;
 pub use protocol::HostErrorCode;
 pub use protocol::HostEventContext;
 pub use protocol::HostFailure;

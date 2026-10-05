@@ -6,6 +6,7 @@ import { URI } from '../../../base/common/uri.js';
 import { parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
+export const WINDOW_OPEN_EXTERNAL_URI_CHANNEL = 'ash:window:openExternalUri';
 
 /** Backend catalog readers request windows using ordinary workspace identities only. */
 export function validateWorkspaceRecovery(value: unknown): readonly IAnyWorkspaceIdentifier[] {

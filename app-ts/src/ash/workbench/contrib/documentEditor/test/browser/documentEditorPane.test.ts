@@ -9,6 +9,10 @@ import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFile
 import { DocumentEditorTextModelService } from '../../../../services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../services/documentEditor/common/documentTypes.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { EditorPanes } from '../../../../browser/editor.js';
 import { IDialogService as DialogServiceId } from '../../../../../platform/dialogs/common/dialogs.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
@@ -48,7 +52,16 @@ class EditorPane extends DocumentEditorPane {
 	constructor(files: ITextFileService, options: Partial<EditorPaneOptions> = {}) {
 		const copies = new BrowserWorkingCopyService();
 		const models = new DocumentEditorTextModelService(files, copies);
-		super({ contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models);
+		const services = new InstantiationService();
+		const codeEditors = new StandaloneCodeEditorService();
+		services.registerInstance(ICodeEditorService, codeEditors);
+		const opener = services.createInstance(OpenerService);
+		services.registerInstance(IOpenerService, opener);
+		services.registerInstance(DialogServiceId, testDialogs);
+		super({ contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models, services);
+		this._register(services);
+		this._register(codeEditors);
+		this._register(opener);
 		this._register(copies);
 		this._register(models);
 	}
@@ -64,6 +77,10 @@ test('registered Academic panes share one model, save baseline and working copy 
 	using services = new InstantiationService();
 	services.registerInstance(IDocumentEditorTextModelService, models);
 	services.registerInstance(DialogServiceId, testDialogs);
+	using codeEditors = new StandaloneCodeEditorService();
+	services.registerInstance(ICodeEditorService, codeEditors);
+	using opener = services.createInstance(OpenerService);
+	services.registerInstance(IOpenerService, opener);
 	const input = { resource: URI.file('/paper.ash-academic') };
 	const descriptor = EditorPanes.getEditorPane(input)!;
 	using first = descriptor.create({ input, instantiationService: services }) as DocumentEditorPane;

@@ -51,6 +51,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		services.registerInstance(IThemeService, themes);
 		services.registerInstance(INativeHostService, {
 			isAdmin: async () => false,
+			onDidRequestOpenExternalUri: () => ({ dispose() {} }),
 			openExternal: async () => { throw new Error('unused'); },
 		showNativeDialog: async () => { throw new Error('unused'); },
 			installShellCommand: async () => '',

@@ -24,9 +24,11 @@ import {
 import {
 	WINDOW_OPERATION_CHANNEL,
 	WINDOW_ZOOM_CHANGED_CHANNEL,
+	WINDOW_OPEN_EXTERNAL_URI_CHANNEL,
 	type IWorkbenchWindowInfo,
 } from '../../window/common/window.js';
 import { showNativeDialog } from '../../dialogs/electron-browser/dialog.js';
+import { normalizeExternalUrl } from '../../opener/common/opener.js';
 
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
 	const colors = mainProcessService.getChannel('colorScheme');
@@ -60,6 +62,10 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
 		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
 		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
+		onDidRequestOpenExternalUri: listener => subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {
+			if (typeof value !== 'string') { throw new TypeError('Invalid external URL request'); }
+			listener(normalizeExternalUrl(value));
+		}),
 		revealFile: path => invoke<void>(NATIVE_HOST_REVEAL_FILE_CHANNEL, path),
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
 		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),

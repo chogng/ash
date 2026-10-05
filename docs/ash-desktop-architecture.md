@@ -856,7 +856,9 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 }
 ```
 
-规则按配置顺序选择第一个匹配且已注册的打开方式；`default` 使用系统浏览器。未配置时内置浏览器不接管链接。编辑器、聊天、终端、Git、问题报告和发布说明中的用户链接均使用同一选择服务。终端的网址支持鼠标打开和命令面板的“终端：打开检测到的链接…”；取消选择返回终端。通过规则打开的页面属于用户，并复用当前工作区的浏览器 Session。Web 不注册桌面浏览器打开方式。
+规则按配置顺序选择第一个匹配且已注册的打开方式；`default` 使用系统浏览器。未配置时内置浏览器不接管链接。编辑器、聊天、终端、Git、问题报告和发布说明中的用户链接均使用同一选择服务。编辑器 Markdown 提示、富文本文档链接，以及 Code 和 Agents 窗口的 `window.open` 请求也走这条链。富文本中按 Ctrl/Command 点击或按 Ctrl/Command+Enter 打开当前链接，普通点击保留编辑行为；聚焦链接后也可按 Enter 打开。终端的网址支持鼠标打开和命令面板的“终端：打开检测到的链接…”；取消选择返回终端。通过规则打开的页面属于用户，并复用当前工作区的浏览器 Session。Web 不注册桌面浏览器打开方式。
+
+Ash 可执行扩展可以声明 `externalUriOpener` 能力，在激活结果中注册 HTTP/HTTPS 打开方式。设置补全显示扩展提供的名称，规则 ID 为 `extension:<encodeURIComponent(扩展 ID)>:<encodeURIComponent(注册 ID)>`。前端负责规则选择，既有扩展宿主负责带代次校验的调用和取消；扩展退出、重启或连接关闭时，旧注册与请求一同撤销。这条接口属于 Ash 扩展协议，尚未实现 VS Code JavaScript 扩展的 `registerExternalUriOpener` 和按 URL 惰性激活。完整协议字段与调用约定见 [Browser foundation](../app-ts/docs/browser-foundation.md#external-uri-opening)。
 
 当前 URL policy 允许 HTTPS、loopback HTTP 与精确的 `about:blank`，拒绝 URL credentials、
 `file:`、`javascript:` 和其他特权 scheme。用户 Session 按工作区持久保存，Agent Session 按窗口和 Thread 使用内存 partition，同一 Thread 的多个页面共享登录。所有页面固定：

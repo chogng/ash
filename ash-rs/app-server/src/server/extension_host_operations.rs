@@ -1,6 +1,7 @@
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostExtensionDto;
+use ash_app_server_protocol::protocol::extension_host::ExtensionHostExternalUriSchemeDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostFailureCodeDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostFailureDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostInvokeCancelDispositionDto;
@@ -23,6 +24,7 @@ use ash_app_server_protocol::protocol::extension_host::ExtensionHostRegistration
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostSnapshotDto;
 use ash_editor_extension_host::CancelReason;
 use ash_editor_extension_host::ExtensionHostError;
+use ash_editor_extension_host::ExternalUriScheme;
 use ash_editor_extension_host::HostOutputChannelKind;
 use ash_editor_extension_host::HostOutputOperation;
 use ash_editor_extension_host::HostOutputSeverity;
@@ -299,12 +301,28 @@ fn registration_dto(
     ExtensionHostRegistrationDescriptorDto {
         registration_id: registration.registration_id,
         kind: match registration.kind {
+            RegistrationKind::ExternalUriOpener { schemes, label } => {
+                ExtensionHostRegistrationKindDto::ExternalUriOpener {
+                    schemes: schemes
+                        .into_iter()
+                        .map(|scheme| match scheme {
+                            ExternalUriScheme::Http => ExtensionHostExternalUriSchemeDto::Http,
+                            ExternalUriScheme::Https => ExtensionHostExternalUriSchemeDto::Https,
+                        })
+                        .collect(),
+                    label,
+                }
+            }
             RegistrationKind::DataChannel { channel_id } => {
                 ExtensionHostRegistrationKindDto::DataChannel { channel_id }
             }
-            RegistrationKind::LinkPresentationProvider { uri_pattern, presentation_kind } => {
-                ExtensionHostRegistrationKindDto::LinkPresentationProvider { uri_pattern, presentation_kind }
-            }
+            RegistrationKind::LinkPresentationProvider {
+                uri_pattern,
+                presentation_kind,
+            } => ExtensionHostRegistrationKindDto::LinkPresentationProvider {
+                uri_pattern,
+                presentation_kind,
+            },
             RegistrationKind::Command { command, title } => {
                 ExtensionHostRegistrationKindDto::Command { command, title }
             }

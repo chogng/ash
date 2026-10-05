@@ -176,7 +176,10 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::TaskProvider => ExtensionCapability::TaskProvider,
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
         EditorExtensionCapability::DataChannel => ExtensionCapability::DataChannel,
-        EditorExtensionCapability::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
+        EditorExtensionCapability::LinkPresentationProvider => {
+            ExtensionCapability::LinkPresentationProvider
+        }
+        EditorExtensionCapability::ExternalUriOpener => ExtensionCapability::ExternalUriOpener,
     }
 }
 
@@ -189,6 +192,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
         EditorExtensionCapability::DataChannel => "dataChannel",
         EditorExtensionCapability::LinkPresentationProvider => "linkPresentationProvider",
+        EditorExtensionCapability::ExternalUriOpener => "externalUriOpener",
     }
 }
 

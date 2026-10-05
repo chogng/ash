@@ -23,6 +23,7 @@ import type { IWorkingCopy } from "../../../services/workingCopy/common/workingC
 import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
 import { h } from "../../../../base/browser/dom.js";
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends RichTextEditorOptions {
@@ -56,7 +57,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		return this.modelReference.value;
 	}
 
-	constructor(options: EditorPaneOptions, @IDialogService private readonly dialogs: IDialogService, @IDocumentEditorTextModelService private readonly modelService: IDocumentEditorTextModelService) {
+	constructor(options: EditorPaneOptions, @IDialogService private readonly dialogs: IDialogService, @IDocumentEditorTextModelService private readonly modelService: IDocumentEditorTextModelService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.options = options;
 		this._register(toDisposable(() => this.stopCollaboration()));
@@ -86,7 +87,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		this.collaboration = collaboration;
 		container.append(collaboration.element);
 		collaboration.setState(this.collaborationService ? 'inactive' : 'unavailable');
-		const editor = this._register(new RichTextEditorWidget(editorOptions, this.dialogs));
+		const editor = this._register(this.instantiation.createInstance(RichTextEditorWidget, editorOptions));
 		this.editor = editor;
 		editor.create(container);
 	}

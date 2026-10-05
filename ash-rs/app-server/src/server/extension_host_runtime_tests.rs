@@ -96,6 +96,13 @@ fn abandoned_terminal_sessions_are_reaped_before_reusing_quota() {
 
 #[test]
 fn invocation_operations_are_brokered_by_registration_kind() {
+    let opener = RegistrationKind::ExternalUriOpener {
+        schemes: vec![ash_editor_extension_host::ExternalUriScheme::Https],
+        label: "Acme browser".into(),
+    };
+    assert!(registration_allows_operation(&opener, "canOpenExternalUri"));
+    assert!(registration_allows_operation(&opener, "openExternalUri"));
+    assert!(!registration_allows_operation(&opener, "execute"));
     let command = RegistrationKind::Command {
         command: "acme.run".into(),
         title: "Run".into(),

@@ -75,6 +75,18 @@ pub(super) fn validate_registrations(
             return Err(protocol_error("registration IDs must be unique"));
         }
         let required = match &registration.kind {
+            RegistrationKind::ExternalUriOpener { schemes, label } => {
+                if schemes.is_empty()
+                    || schemes.len() > 2
+                    || schemes.iter().copied().collect::<BTreeSet<_>>().len() != schemes.len()
+                {
+                    return Err(protocol_error(
+                        "external URI opener schemes must be non-empty and unique",
+                    ));
+                }
+                validate_display_text(label, "external URI opener label")?;
+                ExtensionCapability::ExternalUriOpener
+            }
             RegistrationKind::DataChannel { channel_id } => {
                 validate_selector(channel_id, "data channel ID")?;
                 ExtensionCapability::DataChannel

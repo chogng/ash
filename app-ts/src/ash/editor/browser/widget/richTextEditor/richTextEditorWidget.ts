@@ -21,7 +21,11 @@ import { DocumentCollaborationController } from '../../../contrib/collaboration/
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
 import type { DocumentCollaborationConnection, DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
 import { h, fragment as createFragment } from '../../../../base/browser/dom.js';
-import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
+import { localize } from '../../../../nls.js';
 
 export interface RichTextEditorOptions {
 	/** Configures the generic heading query exposed by the pane. */
@@ -121,7 +125,7 @@ export class RichTextEditorWidget extends Disposable {
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	constructor(private readonly options: RichTextEditorOptions = {}, private readonly dialogs: IDialogService) {
+	constructor(private readonly options: RichTextEditorOptions = {}, @IDialogService private readonly dialogs: IDialogService, @IOpenerService private readonly opener: IOpenerService) {
 		super();
 		this._register(toDisposable(() => this.disposeNodeViews()));
 	}
@@ -492,8 +496,21 @@ export class RichTextEditorWidget extends Disposable {
 					for (const mark of child.marks) run.classList.add(`stanza-document-mark-${mark.type}`);
 					applyTextStyleMark(run, textStyleMark);
 					if (linkMark) {
+						const anchor = run as HTMLAnchorElement;
 						run.setAttribute("href", typeof linkMark.attrs.href === "string" ? linkMark.attrs.href : "");
-						run.addEventListener("click", event => event.preventDefault());
+						run.tabIndex = 0;
+						run.title = localize('document.link.openHint', '{0}+click or {0}+Enter opens this link. You can also focus the link and press Enter.', isMacintosh ? '⌘' : 'Ctrl');
+						anchor.addEventListener("click", event => {
+							event.preventDefault();
+							if (event.metaKey || event.ctrlKey) { this.openLink(run.getAttribute('href')!); }
+						});
+						anchor.addEventListener('keydown', event => {
+							if (event.key === 'Enter' && !event.isComposing) {
+								event.preventDefault();
+								event.stopPropagation();
+								this.openLink(run.getAttribute('href')!);
+							}
+						});
 					}
 					run.textContent = child.text.slice(from, to);
 					applyViewDecorations(run, activeDecorations);
@@ -855,7 +872,20 @@ export class RichTextEditorWidget extends Disposable {
 		this.updateInlineNodeSelection();
 	}
 
+	private openLink(href: string): void {
+		void this.opener.open(href, { fromUserGesture: true, allowContributedOpeners: true }).catch(onUnexpectedError);
+	}
+
 	private handleRichTextKeydown(event: KeyboardEvent, node: DocumentNode, model: TextModel, editor: HTMLDivElement): void {
+		if (!event.isComposing && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key === 'Enter') {
+			const selection = readDocumentTextSelection(this.requireContainer(), true)?.selection;
+			const mark = selection?.kind === 'text' ? findNode(model.document, selection.anchor.nodeId)?.marks.find(mark => mark.type === 'link') : undefined;
+			if (mark && typeof mark.attrs.href === 'string') {
+				event.preventDefault();
+				this.openLink(mark.attrs.href);
+				return;
+			}
+		}
 		if (this.isReadOnly() || event.isComposing) return;
 		if (this.handleHistoryShortcut(event, model)) return;
 		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {

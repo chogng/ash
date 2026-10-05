@@ -75,7 +75,13 @@ export interface ExtensionHostLinkPresentationRegistration extends ExtensionHost
 	readonly presentationKind: LinkPresentationKind;
 }
 
-export type ExtensionHostRegistration = ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'externalUriOpener';
+	readonly schemes: readonly ('http' | 'https')[];
+	readonly label: string;
+}
+
+export type ExtensionHostRegistration = ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
 export interface ExtensionHostRuntime {
 	readonly id: string;
@@ -285,6 +291,13 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	const input = record(value, "Extension Host registration");
 	const kind = input.kind;
 	const registrationId = boundedText(input.registrationId, "Extension Host registration ID", 256);
+	if (kind === 'externalUriOpener') {
+		exactKeys(input, 'Extension Host external URI opener registration', ['kind', 'label', 'registrationId', 'schemes']);
+		const schemes = boundedArray(input.schemes, 'Extension Host opener schemes', 2).map(scheme => stringEnum(scheme, 'Extension Host opener scheme', ['http', 'https'] as const));
+		if (schemes.length === 0) throw new TypeError('Extension Host opener schemes must not be empty');
+		assertUnique(schemes, 'Extension Host opener schemes');
+		return Object.freeze({ kind, registrationId, schemes: Object.freeze(schemes), label: boundedText(input.label, 'Extension Host opener label', 512) });
+	}
 	if (kind === "command") {
 		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"]);
 		return Object.freeze({ kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512) });

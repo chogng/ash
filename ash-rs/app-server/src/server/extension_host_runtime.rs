@@ -458,6 +458,9 @@ impl Drop for RuntimeInner {
 
 fn registration_allows_operation(registration: &RegistrationKind, operation: &str) -> bool {
     match registration {
+        RegistrationKind::ExternalUriOpener { .. } => {
+            matches!(operation, "canOpenExternalUri" | "openExternalUri")
+        }
         RegistrationKind::Command { .. } => operation == "execute",
         RegistrationKind::LanguageProvider { operations, .. } => operations
             .iter()

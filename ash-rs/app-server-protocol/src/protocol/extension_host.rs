@@ -229,6 +229,12 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    ExternalUriOpener {
+        #[schemars(length(min = 1, max = 2))]
+        schemes: Vec<ExtensionHostExternalUriSchemeDto>,
+        #[schemars(length(min = 1, max = 512))]
+        label: String,
+    },
     DataChannel {
         #[schemars(length(min = 1, max = 256))]
         channel_id: String,
@@ -265,6 +271,14 @@ pub enum ExtensionHostRegistrationKindDto {
         #[schemars(length(min = 1, max = 512))]
         label: String,
     },
+}
+
+/// URL schemes admitted by the external URI opener registration.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum ExtensionHostExternalUriSchemeDto {
+    Http,
+    Https,
 }
 
 /// Language provider operations supported by the v1 invocation broker seam.

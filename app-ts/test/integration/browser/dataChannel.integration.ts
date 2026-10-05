@@ -1,3 +1,11 @@
+import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { ExternalUriOpenerPriority } from '../../../src/ash/editor/common/languages.js';
+import { MainThreadUriOpeners } from '../../../src/ash/workbench/api/browser/mainThreadUriOpeners.js';
+import { ExternalUriOpenerService, IExternalUriOpenerService } from '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpenerService.js';
+import '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { Emitter } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import type { AppServerConnectionState } from '../../../src/ash/platform/app-server/common/appServerApi.js';
@@ -20,6 +28,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public title = 'Issue one';
 	public state: AppServerConnectionState = 'ready';
 	public readonly delivery = document.createElement('output');
+	public readonly uriDelivery = document.createElement('output');
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
 	public list(): Promise<ExtensionHostFleetSnapshot> {
 		return Promise.resolve(normalizeExtensionHostSnapshot({ generation: this.incarnation, extensions: [{
@@ -27,6 +36,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 			activationGeneration: 1, incarnation: this.incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
 			registrations: [
 				{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
+				{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Extension browser' },
 				{ kind: 'linkPresentationProvider', registrationId: 'issues', uriPattern: '^https://example\\.com/issues/', presentationKind: 'issue' },
 			],
 		}] }));
@@ -37,6 +47,11 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public onConnectionState(listener: (state: AppServerConnectionState) => void) { return this.connection.event(listener); }
 	public invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue> {
 		signal.throwIfAborted();
+		if (request.operation === 'canOpenExternalUri') { return Promise.resolve(ExternalUriOpenerPriority.Option); }
+		if (request.operation === 'openExternalUri') {
+			this.uriDelivery.textContent = JSON.stringify({ incarnation: request.incarnation, payload: request.payload });
+			return Promise.resolve(true);
+		}
 		if (request.operation === 'receiveData') {
 			this.delivery.textContent = JSON.stringify(request.payload);
 			return Promise.resolve(null);
@@ -61,12 +76,21 @@ services.registerSingleton(IDataChannelService, () => new DataChannelService());
 services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
 const bridge = resources.add(services.createInstance(MainThreadDataChannels, 1_000));
 await bridge.start();
+const editorServices = createCodeEditorServices(resources, services);
+editorServices.registerInstance(IPreferencesService, { openSettings: async () => {}, openGlobalKeybindingSettings: async () => {}, openUserSettings: async () => {} });
+editorServices.registerInstance(IExternalUriOpenerService, resources.add(editorServices.createInstance(ExternalUriOpenerService)));
+const uriBridge = resources.add(editorServices.createInstance(MainThreadUriOpeners, 1_000));
+await uriBridge.start();
+await editorServices.get(IConfigurationService).updateValue('workbench.externalUriOpeners', { 'https://example.com': 'extension:test.links:browser' });
+const opener = editorServices.get(IOpenerService);
 const container = document.createElement('main');
 const opened = document.createElement('output');
 opened.setAttribute('aria-label', 'Opened target');
 api.delivery.setAttribute('aria-label', 'Extension channel delivery');
-document.body.append(container, opened, api.delivery);
-const widget = resources.add(services.createInstance(ChatListWidget, container, { onDidRequestLink: (target: string) => opened.textContent = target }));
+api.uriDelivery.setAttribute('aria-label', 'Extension URL delivery');
+document.body.append(container, opened, api.delivery, api.uriDelivery);
+const widget = resources.add(services.createInstance(ChatListWidget, container, { onDidRequestLink: (target: string) => { opened.textContent = target; void opener.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }); } }));
+opener.setDefaultExternalOpener({ openExternal: async href => { api.uriDelivery.textContent = `default:${href}`; return true; } });
 widget.setVisible(true);
 widget.render([{ id: 'message', type: 'agentMessage', text: '[Original issue](https://example.com/issues/1) and [Plain link](https://example.org/)', transient: false }]);
 const telemetry = services.createInstance(DataChannelForwardingTelemetryService);

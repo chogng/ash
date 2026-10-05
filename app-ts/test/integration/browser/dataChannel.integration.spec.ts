@@ -15,9 +15,13 @@ test('extension channel delivery and Chat link updates retain keyboard navigatio
 	await expect(link.locator('img')).toHaveCount(0);
 	await page.keyboard.press('Enter');
 	await expect(page.getByRole('status', { name: 'Opened target' })).toHaveText('https://example.com/issues/1');
+	await expect(page.getByRole('status', { name: 'Extension URL delivery' })).toHaveText(JSON.stringify({ incarnation: 2, payload: { resolvedUri: 'https://example.com/issues/1', sourceUri: 'https://example.com/issues/1' } }));
 	await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 	await expect(link).toHaveText('Original issue');
 	await expect(link).not.toHaveAttribute('aria-busy');
+	await link.focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('status', { name: 'Extension URL delivery' })).toHaveText('default:https://example.com/issues/1');
 	await expect(page.getByRole('link', { name: 'Plain link' })).toHaveAttribute('href', 'https://example.org/');
 	expect(errors).toEqual([]);
 });

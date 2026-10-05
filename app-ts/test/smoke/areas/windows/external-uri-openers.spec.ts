@@ -26,6 +26,28 @@ test('External URL opener rules accept unregistered IDs and persist after reopen
 	await restarted.editors.groupAt(0).editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)['workbench.externalUriOpeners']) === JSON.stringify(rules));
 });
 
+test('URL opener settings suggest built-in IDs and their names', async ({ target, workbench }) => {
+	test.skip(target.workbenchMode !== 'code' || target.appServerMode !== 'required', 'Requires the product JSON language declarations.');
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.press('ControlOrMeta+A');
+	await group.editor.input.evaluate(element => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', '{"workbench.externalUriOpeners":{"*":""}}');
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	});
+	await group.editor.input.press('ArrowLeft');
+	await group.editor.input.press('ArrowLeft');
+	await group.editor.input.press('ArrowLeft');
+	await group.editor.input.press('Control+Space');
+	const choices = group.content.locator('.stanza-editor-completion-option');
+	await expect(choices.filter({ hasText: 'ash.browser.open' })).toContainText('Open in Ash browser');
+	await expect(choices.filter({ hasText: 'default' })).toContainText('Open in default browser');
+	await choices.filter({ hasText: 'default' }).click();
+	await group.editor.waitForEditorContents(source => JSON.parse(source)['workbench.externalUriOpeners']['*'] === 'default');
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+});
+
 test('URL rules open editor links in the Ash browser and default links in the system browser', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron' || target.workbenchMode !== 'code', 'Requires the desktop browser provider.');
 	const server = createServer((_request, response) => {
@@ -77,16 +99,19 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 		await expect.poll(views).toEqual([]);
 		await expect.poll(() => electron.evaluate(() => (globalThis as URLRuleSmokeGlobal).urlRuleSmoke.urls)).toEqual([`${root}/external`]);
 
+		await workbench.page.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${root}/internal?source=window`);
+		await expect(browser.getByRole('status')).toHaveText('Configured URL page');
+		await expect.poll(views).toEqual([{ url: `${root}/internal?source=window`, visible: true }]);
+		await workbench.page.getByRole('button', { name: 'Close Configured URL page', exact: true }).click();
+		await expect.poll(views).toEqual([]);
+
 		// The dedicated Agents window loads the same desktop provider and browser editor.
 		const agents = await workbench.openAgentsWindow(target.kind);
-		await agents.keyboard.press('F1');
-		await agents.locator('.ash-quick-pick').getByRole('combobox').fill('>ash.browser.open');
-		await agents.getByRole('option').filter({ hasText: 'ash.browser.open' }).click();
+		await agents.evaluate(url => { window.open(url, '_blank', 'noopener,noreferrer'); }, `${root}/internal?source=agents`);
 		const agentBrowser = agents.locator('.ash-browser-editor:visible');
 		await expect(agentBrowser).toBeVisible();
-		await agentBrowser.getByRole('textbox', { name: 'Browser address' }).fill(`${root}/internal`);
-		await agentBrowser.getByRole('textbox', { name: 'Browser address' }).press('Enter');
 		await expect(agentBrowser.getByRole('status')).toHaveText('Configured URL page');
+		await expect.poll(views).toEqual([{ url: `${root}/internal?source=agents`, visible: true }]);
 		await agents.getByRole('button', { name: 'Close Configured URL page', exact: true }).click();
 		await expect.poll(views).toEqual([]);
 	} finally {

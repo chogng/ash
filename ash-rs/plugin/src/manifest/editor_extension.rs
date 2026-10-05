@@ -114,4 +114,5 @@ pub enum EditorExtensionCapability {
     TestProfileProvider,
     DataChannel,
     LinkPresentationProvider,
+    ExternalUriOpener,
 }

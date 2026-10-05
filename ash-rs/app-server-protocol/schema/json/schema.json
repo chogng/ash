@@ -21821,6 +21821,14 @@
       ],
       "type": "object"
     },
+    "ExtensionHostExternalUriSchemeDto": {
+      "description": "URL schemes admitted by the external URI opener registration.",
+      "enum": [
+        "http",
+        "https"
+      ],
+      "type": "string"
+    },
     "ExtensionHostFailureCodeDto": {
       "description": "Stable failure categories shared by runtime health and invocation outcomes.",
       "enum": [
@@ -22320,6 +22328,33 @@
     "ExtensionHostRegistrationDescriptorDto": {
       "description": "One provider registration published atomically by an activated extension process.",
       "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "externalUriOpener",
+              "type": "string"
+            },
+            "label": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            "schemes": {
+              "items": {
+                "$ref": "#/$defs/ExtensionHostExternalUriSchemeDto"
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "schemes",
+            "label"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "channelId": {

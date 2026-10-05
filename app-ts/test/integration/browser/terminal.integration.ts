@@ -12,9 +12,8 @@ import { NotificationService } from '../../../src/ash/workbench/services/notific
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
-import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
-import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
 import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -28,7 +27,6 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 const store = new DisposableStore();
 const output = store.add(new Emitter<Uint8Array>());
 const exit = store.add(new Emitter<number | undefined>());
-const theme = store.add(new TestThemeService(darkColorTheme));
 const writes: string[] = [];
 const resizes: ITerminalDimensions[] = [];
 const instance: ITerminalInstance = {
@@ -47,7 +45,8 @@ const instance: ITerminalInstance = {
 	resize: dimensions => { resizes.push(dimensions); },
 	close: async () => {},
 };
-const widget = store.add(new TerminalInstanceWidget(document.querySelector<HTMLElement>('#terminal')!, instance, theme));
+const widgetServices = createCodeEditorServices(store);
+const widget = store.add(widgetServices.createInstance(TerminalInstanceWidget, document.querySelector<HTMLElement>('#terminal')!, instance));
 widget.setVisible(true);
 let completion: Promise<void> | undefined;
 
@@ -84,11 +83,10 @@ declare global {
 // Exercise the production pane with controlled process and workspace boundaries.
 if (new URLSearchParams(location.search).has('pane')) {
 	widget.dispose();
-	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { InstantiationService }, { CommandService }, { URI }] = await Promise.all([
+	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { CommandService }, { URI }] = await Promise.all([
 		import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js'),
 		import('../../../src/ash/platform/contextkey/browser/contextKeyService.js'),
 		import('../../../src/ash/platform/actions/common/menuService.js'),
-		import('../../../src/ash/platform/instantiation/common/instantiationService.js'),
 		import('../../../src/ash/workbench/services/commands/common/commandService.js'),
 		import('../../../src/ash/base/common/uri.js'),
 	]);
@@ -96,7 +94,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	const workspaceChanged = store.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
 	const created = store.add(new Emitter<ITerminalInstance>());
 	const context = store.add(new ContextKeyService());
-	const services = store.add(new InstantiationService());
+	const services = store.add(widgetServices.createChild());
 	const commands = new CommandService(services);
 	const menu = new MenuService(commands, context);
 	let visible = false;
@@ -138,7 +136,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	registerTestDictationOnboarding(services);
 	services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
 	services.registerInstance(INotificationService, store.add(new NotificationService()));
-	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, terminals, theme, menu, {
+	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, terminals, menu, {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: () => {},
