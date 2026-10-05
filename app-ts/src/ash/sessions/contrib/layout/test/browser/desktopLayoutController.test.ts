@@ -31,6 +31,19 @@ class WorkingSetController extends BaseLayoutController {}
 const storageKey = 'sessions.singlePane.layoutState';
 
 suite('DesktopLayoutController', () => {
+	test('restoring an older Code working set removes page tabs and retains the selected file', async () => {
+		const saved = workingSet('session:b', 'retained.ts');
+		const file = saved.groups[0]!.editors[0]!;
+		const page = (resource: string): typeof file => ({ input: { typeId: 'workbench.editorInput.resource', value: { resource } }, preview: false });
+		const mixed = { ...saved, groups: [{ ...saved.groups[0]!, editors: [page('ash-design:/canvas'), file, page('ash-library:/library')], activeEditorIndex: 1 }] };
+		using fixture = await createFixture([{ sessionResource: 'session:b', editorWorkingSet: mixed }]);
+		await fixture.open('b');
+		assert.deepEqual(fixture.editor.current, saved);
+		await fixture.storage.flush();
+		const persisted = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!);
+		assert.deepEqual(persisted.find((entry: { sessionResource: string }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
+	});
+
 	test('Code restores each session panel view only while the panel is visible', async () => {
 		using fixture = await createFixture([{ sessionResource: 'session:b', panelViewContainerId: 'tools.b' }]);
 		await fixture.open('b');
@@ -229,7 +242,7 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(DesktopLayoutController, undefined as unknown as import('../../../../browser/parts/sidebarPart.js').SidebarPart), /paneCompositePartService/);
+		assert.throws(() => services.createInstance(DesktopLayoutController, undefined as unknown as import('../../../../browser/parts/sidebarPart.js').SidebarPart, undefined as unknown as import('../../../library/browser/libraryPage.js').LibraryPart, undefined as unknown as import('../../../creator/browser/creatorPage.js').CreatorPart), /paneCompositePartService/);
 	});
 });
 

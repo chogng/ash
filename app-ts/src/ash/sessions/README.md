@@ -5,6 +5,9 @@
 [`docs/workbench-modes.md`](../../../../docs/workbench-modes.md); this README
 is canonical for the renderer implementation and extension points.
 
+Creator's Sites mode, contribution boundaries, implementation order and acceptance
+requirements are described in [Creator Sites](CREATOR_SITES.md).
+
 ## Ownership
 
 | Area | Owner | Current implementation |
@@ -36,8 +39,8 @@ is canonical for the renderer implementation and extension points.
 | Parts | `browser/parts/` | owns product chrome, window navigation, list, primary surface, and typed active context |
 | Activity Bar | `browser/parts/activitybar/` | renders menu commands, persists their order, and owns account entry, DOM, and presentation; reuses shared Parts, controls, configuration, and menu services without importing Workbench Activity Bar styles |
 | View containers | `workbench/services/panecomposite/browser/panecomposite.ts` and `workbench/browser/parts/paneCompositePartService.ts` | both windows use the same service to open, hide and focus containers; Parts retain their instances |
-| Library and Design | `contrib/library/browser/library.contribution.ts` and `contrib/design/browser/design.contribution.ts` | contribute real editor inputs and Activity Bar menu commands; the shared Editor Part owns their panes |
-| Design | [`contrib/design/`](contrib/design/README.md) | owns the Sessions design editor and its document, editing, rendering and file lifecycle; loads through `sessions.common.main.ts`. Sessions Settings exposes its profile-scoped cursor and accessibility preferences in Design. |
+| Library and Creator | `contrib/library/browser/library.contribution.ts` and `contrib/creator/browser/creator.contribution.ts` | contribute Activity Bar menu commands; their modules retain their pages independently of Code editor groups |
+| Creator | [`contrib/creator/`](contrib/creator/README.md) | owns seven independently registered creation workspaces and their shared canvas document, editing and file lifecycle; loads through `sessions.common.main.ts`. Sessions Settings exposes its profile-scoped cursor and accessibility preferences in Design. |
 | Application menu and titlebar actions | `browser/menus.ts`, `browser/parts/menubar.contribution.ts`, and `browser/layoutActions.ts` | Sessions owns its menu root, File menu, and layout action menu; common sections are explicitly shared. The Workbench BrowserMenubarControl owns menu interaction; the layout and Sessions service own sidebar visibility and history |
 | Session chat commands | `browser/actions/sessionsChatActions.ts` | maps the reused ChatWidget New Chat and History commands to the Sessions window's draft and active-chat selection |
 | Open Agents Window | `code/browser/workbench/workbench.ts`, `workbench/contrib/chat/electron-browser/`, `contrib/openAgentsWindow/electron-browser/`, and `workbench/browser/parts/titlebar/` | the browser product entry owns page navigation; the Chat desktop contribution owns the titlebar action, hover label, and window command; the Sessions desktop contribution owns system-wide shortcut synchronization; the Workbench titlebar owns the shared mark and motion. Shared shortcut selection lives in `workbench/contrib/keybindings/`, while `platform/globalKeybindings/` owns operating-system registrations |
@@ -57,8 +60,8 @@ history. `SessionsPart` retains one `SessionsChatView`. Each visible Session own
 its `ChatWidgetModel`, editor, unsent text, attachments and pending submission.
 Chat, Code and Collaboration commands change the surrounding Parts while keeping
 that selection and those live inputs. Code reveals editor tools; Collaboration
-selects the Teams sidebar. Library and Design open editor inputs through
-`IEditorService`. `DesktopLayoutController` coordinates their Parts, and Activity
+selects the Teams sidebar. Library and Design open retained product pages through
+`LibraryPart` and `CreatorPart`. `DesktopLayoutController` coordinates their Parts, and Activity
 Bar selection follows the actual editor, sidebar and layout.
 See [input and conversation state ownership](../../../docs/input-state-ownership.md)
 for the boundary with regular Workbench Chat and SCM.
@@ -94,6 +97,13 @@ joins pending attachment resolution before flushing storage.
    Sessions creates the same `WorkbenchThemeService` as the regular Workbench
    against its own document. On desktop, both renderers read the shared
    `workbench.colorTheme` setting, so changes apply to both windows.
+   Both windows use the same profile `settings.json` (JSONC). The Sessions
+   configuration service resolves registered `agentsWindow.default` values;
+   user values override them unless `agentsWindow.readOnly` is set. Read-only
+   settings ignore shared-file and language values and reject setting updates,
+   while raw file edits remain shared with the regular Workbench. Settings
+   inspection and reset use the active window's default. Resource revisions
+   still advance for ignored edits without announcing an effective setting change.
    `WorkbenchWindow` registers the renderer window and its document styles;
    Desktop initializes its window storage through the Main `storage` channel
    before creating Parts. Main merges key updates into `workbench-state.json`
@@ -113,8 +123,8 @@ joins pending attachment resolution before flushing storage.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    activitybar, sidebar, sessions, editor, and auxiliary Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.
-   The Activity Bar runs Chat, Collaboration, Library, Code, and Design commands; Collaboration opens the Teams sidebar; Library browses the shared asset catalog with image import, search, favorites, collections, grid/list views and previews. Its retained editor pane owns browsing state and releases preview URLs while hidden. Library can attach an exact image version to the current Chat draft or place it in Design; the window composition owns navigation between these surfaces.
-   [Design](contrib/design/README.md) registers a design pane with the Workbench editor registry. In Design, SidebarPart hosts Layers, EditorPart hosts the canvas, and AuxiliaryBarPart hosts Shape properties; SessionsPart is hidden. EditorPart retains the document, viewport and selection across Activity Bar commands and owns tab closure through the working-copy lifecycle. The panel views borrow the active editor's document and selection through the window-scoped Design editor service. Design owns no Session state. Document, command, widget and file lifecycle responsibilities, geometry and persistence contracts, supported tools and validation entry points are documented in the Design directory.
+   The Activity Bar runs Chat, Collaboration, Library, Code, and Design commands; Collaboration opens the Teams sidebar; Library opens in LibraryPart and browses the shared asset catalog with image import, search, favorites, collections, grid/list views and previews. Its retained page owns browsing state and releases preview URLs while hidden. Library can attach an exact image version to the current Chat draft or place it in Design; the window composition owns navigation between these surfaces.
+   [Creator](contrib/creator/README.md) provides retained editing workspaces hosted by CreatorPart. Its editors use the independent [Canvas contribution](contrib/canvas/README.md) for spatial surfaces, viewport state and pointer capture. In Design, SidebarPart hosts Layers, CreatorPart hosts the editor, and AuxiliaryBarPart hosts Shape properties; SessionsPart is hidden. CreatorPart provides a seven-mode home and retains each workspace, viewport and selection. The editor service owns one document per mode and checks all dirty documents during window shutdown. Home and Make hide the outer canvas panels. The panel views borrow the active editor's document and selection through the window-scoped Design editor service. Creator and Canvas own no Session state. Document, command, widget and file lifecycle responsibilities, geometry and persistence contracts, supported tools and validation entry points are documented in their owning directories.
    Chat hides the auxiliary bar. Code exposes Files and Changes; opening a file or comparison reveals the retained Workbench editor beside the conversation. Changing the composition hides and restores that editor without closing its files. Session details has been removed.
    Mobile devices remains unavailable. Its right-click menu moves the
    controls to the sidebar top or bottom, hides them, or selects the side rail size through

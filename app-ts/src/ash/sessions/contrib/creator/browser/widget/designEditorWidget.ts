@@ -1,0 +1,488 @@
+import type { AssetVersion } from '../../../../../platform/assets/common/assetService.js';
+import './designEditorWidget.css';
+import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
+import { Separator, type IAction } from '../../../../../base/common/actions.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { localize } from '../../../../../nls.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
+import type { DesignShape } from '../../common/model/document.js';
+import { getDesignShapeEntries, hitTestDesignShapes } from '../../common/model/hitTest.js';
+import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
+import type { DesignPoint } from '../../common/core/geometry.js';
+import { DocumentCommands } from '../../common/commands/documentCommands.js';
+import { DesignSelection } from '../../common/selection.js';
+import type { DesignDocumentController } from '../designDocumentController.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { DesignMediaPreview } from '../designMedia.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import { DesignView } from '../view.js';
+import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
+import { DesignInputController } from '../controller/designInputController.js';
+import { DesignToolsWidget } from './designToolsWidget.js';
+import type { DesignEditorContributionFactory, IDesignDrawingContribution, IDesignMotionContribution, IDesignPropertiesContribution, IDesignCodeContribution } from '../designEditorBrowser.js';
+
+const KEYBOARD_ZOOM_FACTOR = 1.2;
+const KEYBOARD_PAN_DISTANCE = 60;
+const focusedViews = new WeakMap<Element, DesignEditorWidget>();
+/** Design document editor; document coordinates never depend on its viewport. */
+export class DesignEditorWidget extends Disposable {
+	public readonly domNode: HTMLElement;
+	private readonly commands: DocumentCommands;
+	public readonly selection = new DesignSelection();
+	private readonly viewChange = this._register(new Emitter<void>());
+	public readonly onDidChangeView = this.viewChange.event;
+	private readonly mediaPreview = this._register(new DesignMediaPreview());
+	private readonly camera = new CanvasViewport();
+	private readonly canvas: DesignView;
+	private readonly properties: IDesignPropertiesContribution;
+	private readonly contentDomNode: HTMLElement;
+	private readonly messageDomNode: HTMLElement;
+	private readonly zoomDomNode: HTMLElement;
+	private contextMenuVisible = false;
+	private readonly toolsWidget: DesignToolsWidget;
+	private readonly drawing: IDesignDrawingContribution;
+	private readonly motion: IDesignMotionContribution;
+	private readonly code: IDesignCodeContribution;
+	private tool = DesignTool.Select;
+	private mode = DesignMode.Design;
+	private readonly input: DesignInputController;
+	private dimension: IDimension = { width: 0, height: 0 };
+
+	constructor(
+		ownerDocument: Document,
+		public readonly documentController: DesignDocumentController,
+		createContributions: DesignEditorContributionFactory,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@ICommandService commandService: ICommandService,
+	) {
+		super();
+		this.commands = new DocumentCommands(documentController.model);
+		this.domNode = h(ownerDocument, 'section', { className: 'ash-sessions-design-view', attributes: { role: 'region', 'aria-label': localize('sessions.design.canvas', 'Design canvas'), tabindex: '0' } });
+		focusedViews.set(this.domNode, this);
+		this._register(toDisposable(() => {
+			this.cancelGesture();
+			focusedViews.delete(this.domNode);
+			if (this.contextMenuVisible) { this.contextMenus.hideContextMenu(); }
+		}));
+		this.zoomDomNode = h(ownerDocument, 'span', { className: 'ash-sessions-design-zoom' });
+		this.canvas = this._register(instantiationService.createInstance(DesignView, ownerDocument));
+		this.canvas.setTool(this.tool);
+		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
+		this.toolsWidget = this._register(instantiationService.createInstance(DesignToolsWidget, ownerDocument, (tool: DesignTool) => commandService.executeCommand(`sessions.design.tool.${tool}`, this), (mode: DesignMode) => commandService.executeCommand(`sessions.design.mode.${mode}`, this), (action: string) => commandService.executeCommand(`sessions.design.${action}`, this)));
+		const contributions = this._register(createContributions({
+			ownerDocument,
+			documentController,
+			commands: this.commands,
+			selection: this.selection,
+			getTool: () => this.tool,
+			getMode: () => this.mode,
+			selectShape: id => this.selectShape(id),
+			renderCanvas: () => this.renderShapes(),
+			runFileOperation: operation => this.runFileOperation(operation),
+		}));
+		this.drawing = contributions.drawing;
+		this.properties = contributions.properties;
+		this.motion = contributions.motion;
+		this.code = contributions.code;
+		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.toolsWidget.domNode);
+
+		this.contentDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-content', attributes: { 'aria-hidden': 'true' } });
+		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-message', attributes: { role: 'status', 'aria-live': 'polite' } });
+		const statusDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-status' });
+		statusDomNode.append(this.messageDomNode, this.zoomDomNode);
+		this.domNode.append(stage, statusDomNode, this.contentDomNode);
+		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
+		scopedContext.createKey('sessionsDesignCanvasFocused', true);
+		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
+		this._register(addDisposableListener(this.domNode, 'focus', () => { active.set(true); this.canvas.setFocused(this.domNode.matches(':focus-visible')); }));
+		this._register(addDisposableListener(this.domNode, 'blur', () => { active.set(false); this.canvas.setFocused(false); }));
+		this._register(this.documentController.model.onDidChange(kind => {
+			this.cancelGesture();
+			if (kind === 'replace') { this.select([]); }
+			else if (this.selection.retain(getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape))) { this.announceSelection(); }
+			this.render();
+		}));
+		this._register(documentController.onDidChange(event => {
+			if (documentController.isBusy) { this.cancelGesture(); }
+			if (event.message !== undefined) { this.messageDomNode.textContent = event.message; }
+			this.render();
+		}));
+		this._register(this.drawing.onDidChange(() => this.renderShapes()));
+		this._register(this.motion.onDidChangeTime(() => this.renderShapes()));
+		this.input = this._register(new DesignInputController({
+			viewport: this.canvas.domNode,
+			domNode: this.domNode,
+			getTool: () => this.tool,
+			getMode: () => this.mode,
+			getShapesForHitTesting: () => this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes,
+			render: () => this.render(),
+			applyTransform: () => this.applyTransform(),
+			selectionChanged: () => this.announceSelection(),
+		}, documentController, this.commands, this.selection, this.camera, this.drawing));
+		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeyDown(event)));
+		this._register(addDisposableListener(this.canvas.domNode, 'contextmenu', event => this.handleContextMenu(event)));
+	}
+
+	public initialize(): void {
+		this.render();
+		this.applyTransform();
+	}
+
+	public focus(): void { this.domNode.focus(); }
+	public layout(dimension: IDimension): void { this.dimension = dimension; }
+	public focusProperties(): void { this.properties.focus(); }
+	public get propertiesDomNode(): HTMLElement { return this.properties.domNode; }
+	public get hasProperties(): boolean { return this.mode === DesignMode.Design || this.mode === DesignMode.Draw; }
+	public selectShape(id: string): void {
+		this.selectShapes([id]);
+	}
+	public selectShapes(ids: readonly string[]): void {
+		if (this.documentController.isBusy) return;
+		this.cancelGesture();
+		this.select(ids);
+		this.render();
+	}
+	public revealShape(id: string): void {
+		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === id);
+		if (!entry) { return; }
+		this.selectShapes([id]);
+		const height = this.canvas.domNode.clientHeight;
+		this.camera.scale = Math.max(0.2, Math.min(1, (this.dimension.width - 48) / entry.world.width, (height - 100) / entry.world.height));
+		this.camera.panX = this.dimension.width / 2 - (entry.world.x + entry.world.width / 2) * this.camera.scale;
+		this.camera.panY = height / 2 - (entry.world.y + entry.world.height / 2) * this.camera.scale;
+		this.applyTransform();
+	}
+	public setVisible(visible: boolean): void {
+		if (!visible) {
+			this.cancelGesture();
+			this.properties.cancel();
+			if (this.contextMenuVisible) this.contextMenus.hideContextMenu();
+		}
+		this.motion.setActive(visible && this.mode === DesignMode.Motion);
+	}
+
+	public static getFocused(element: HTMLElement): DesignEditorWidget | undefined {
+		const root = element.closest('.ash-sessions-design-view');
+		return root ? focusedViews.get(root) : undefined;
+	}
+
+	public getAccessibleContent(): string { return this.mode === DesignMode.Code ? this.code.getAccessibleContent() : this.contentDomNode.textContent!; }
+	public undo(): void { if (this.documentController.isBusy) { return; } this.cancelGesture(); this.documentController.model.undo(); }
+	public redo(): void { if (this.documentController.isBusy) { return; } this.cancelGesture(); this.documentController.model.redo(); }
+	public selectAll(): void {
+		if (this.documentController.isBusy) { return; }
+		this.cancelGesture();
+		this.select(this.documentController.model.value.shapes.map(shape => shape.id));
+		this.render();
+		this.focus();
+	}
+
+	private get selectedShape(): DesignShape | undefined { return this.selection.ids.size === 1 ? this.selectedShapes[0] : undefined; }
+	private get selectedShapes(): readonly DesignShape[] { return getDesignShapeEntries(this.documentController.model.value.shapes).filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id))).map(entry => entry.shape); }
+
+	private select(ids: readonly string[]): void {
+		this.selection.set(ids);
+		this.announceSelection();
+	}
+
+	private announceSelection(): void {
+		this.messageDomNode.textContent = localize('sessions.design.selectionCount', '{0} objects selected.', this.selection.ids.size);
+	}
+
+	private action(id: string, label: string, run: () => unknown, enabled = true): IAction {
+		return { id: `sessions.design.${id}`, label, tooltip: label, enabled, run };
+	}
+
+	private addShape(kind: 'rectangle' | 'ellipse' | 'text' | 'path'): void {
+		if (this.documentController.isBusy) { return; }
+		this.cancelGesture();
+		this.select([this.commands.addShape(kind, this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }), localize('sessions.design.text', 'Text'))]);
+		this.render();
+		this.focus();
+	}
+
+	public setTool(tool: DesignTool): void {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
+		this.cancelGesture();
+		this.tool = tool;
+		this.canvas.setTool(tool);
+		this.render();
+	}
+
+	public setMode(mode: DesignMode): void {
+		this.cancelGesture();
+		this.mode = mode;
+		this.domNode.classList.toggle('code-mode', mode === DesignMode.Code);
+		this.domNode.classList.toggle('motion-mode', mode === DesignMode.Motion);
+		this.motion.setActive(mode === DesignMode.Motion);
+		this.tool = mode === DesignMode.Draw ? DesignTool.Pen : DesignTool.Select;
+		this.canvas.setTool(this.tool);
+		this.render();
+	}
+
+	public addFrame(): void {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		this.cancelGesture();
+		this.select([this.commands.addFrame(this.viewportCenter())]);
+		this.render();
+		this.focus();
+	}
+
+	private viewportCenter(): DesignPoint { return this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }); }
+
+	public async importImage(): Promise<void> {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion) { return; }
+		this.cancelGesture();
+		const selected = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => this.selection.ids.has(entry.shape.id));
+		const center = selected?.world.kind === 'frame' ? { x: selected.world.x + selected.world.width / 2, y: selected.world.y + selected.world.height / 2 } : this.viewportCenter();
+		const id = await this.documentController.importImage(center);
+		if (this.isDisposed) { return; }
+		if (id) { this.select([id]); this.render(); }
+		this.focus();
+	}
+
+	public async adoptAssetVersion(version: AssetVersion): Promise<void> {
+		this.setMode(DesignMode.Design);
+		this.cancelGesture();
+		const id = await this.documentController.adoptAssetVersion(version, this.viewportCenter());
+		if (this.isDisposed) { return; }
+		if (id) { this.select([id]); this.render(); }
+		this.focus();
+	}
+
+	private duplicateImage(): void {
+		if (this.documentController.isBusy || this.selectedShape?.kind !== 'image') { return; }
+		const shape = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === this.selectedShape!.id)!.world;
+		const id = generateUuid();
+		this.commands.insertShape({ ...shape, id, x: shape.x + 20, y: shape.y + 20, ...(shape.motion ? { motion: { ...shape.motion, keyframes: shape.motion.keyframes.map(frame => ({ ...frame, x: frame.x + 20, y: frame.y + 20 })) } } : {}) });
+		this.select([id]); this.render(); this.focus();
+	}
+
+	private renderShapes(): void {
+		const scene = this.mode === DesignMode.Motion ? this.motion.getScene() : undefined;
+		const preview = (shape: DesignShape): DesignShape => {
+			const fillPreview = this.properties.preview;
+			const updated = fillPreview?.id === shape.id ? fillPreview : this.input.preview.find(preview => preview.id === shape.id) ?? shape;
+			return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(preview) } : updated;
+		};
+		const shapes = (scene?.shapes ?? this.documentController.model.value.shapes).map(preview);
+		const selected = getDesignShapeEntries(shapes).filter(entry => this.selection.ids.has(entry.shape.id));
+		this.canvas.render({
+			shapes,
+			selectedShapes: selected.map(entry => entry.world),
+			images: this.mediaPreview.getSources(this.documentController.model.value, version => this.documentController.readMedia(version)),
+			draft: this.drawing.preview,
+			showPathHandles: this.mode !== DesignMode.Motion,
+			scale: this.camera.scale,
+			opacity: scene?.opacity,
+		});
+		const showProperties = this.mode === DesignMode.Design || this.mode === DesignMode.Draw;
+		this.properties.update(showProperties && selected.length === 1 ? selected[0].shape : undefined, showProperties);
+		this.viewChange.fire();
+	}
+
+	private handleContextMenu(event: MouseEvent): void {
+		event.preventDefault();
+		event.stopPropagation();
+		this.cancelGesture();
+		const bounds = this.canvas.domNode.getBoundingClientRect();
+		const point = this.camera.toWorld({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+		const shapes = this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes;
+		const shape = hitTestDesignShapes(shapes, point);
+		// Keep a multi-selection when opening its menu, including on empty canvas space.
+		if (!this.documentController.isBusy && shape && !this.selection.ids.has(shape.id)) {
+			this.select([shape.id]);
+			this.render();
+		}
+		this.showContextMenu({ x: event.clientX, y: event.clientY, targetWindow: this.domNode.ownerDocument.defaultView! });
+	}
+
+	private showContextMenu(anchor: ContextMenuAnchor): void {
+		this.cancelGesture();
+		this.focus();
+		this.contextMenus.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => this.getContextMenuActions(),
+			getMenuClassName: () => 'ash-design-menu',
+			onHide: () => { this.contextMenuVisible = false; },
+		});
+		this.contextMenuVisible = true;
+	}
+
+	private getContextMenuActions(): readonly IAction[] {
+		const shapes = this.documentController.model.value.shapes;
+		const selected = this.selectedShape;
+		return [
+			this.action('undo', localize('sessions.design.undo', 'Undo'), () => this.undo(), !this.documentController.isBusy && this.documentController.model.canUndo),
+			this.action('redo', localize('sessions.design.redo', 'Redo'), () => this.redo(), !this.documentController.isBusy && this.documentController.model.canRedo),
+			new Separator(),
+			this.action('delete', localize('sessions.design.delete', 'Delete'), () => this.deleteSelected(), !this.documentController.isBusy && this.selection.ids.size > 0),
+			this.action('selectAll', localize('sessions.design.selectAll', 'Select all'), () => this.selectAll(), !this.documentController.isBusy && shapes.length > 0),
+			this.action('duplicateImage', localize('sessions.design.duplicateImage', 'Duplicate image'), () => this.duplicateImage(), !this.documentController.isBusy && selected?.kind === 'image'),
+			this.action('group', localize('sessions.design.group', 'Group'), () => this.groupSelected(), !this.documentController.isBusy && this.commands.canGroup(this.selection.ids)),
+			this.action('ungroup', localize('sessions.design.ungroup', 'Ungroup'), () => this.ungroupSelected(), !this.documentController.isBusy && selected?.kind === 'group' && !selected.motion),
+			...this.properties.getActions(),
+			new Separator(),
+			this.action('addFrame', localize('sessions.design.addFrame', 'Add frame (F)'), () => this.addFrame(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
+			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
+			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
+			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
+		];
+	}
+
+	private render(): void {
+		this.renderShapes();
+		const shapes = this.documentController.model.value.shapes;
+		const selected = this.selectedShape;
+		this.toolsWidget.update(this.tool, this.mode, this.documentController.isBusy);
+		this.motion.update(selected, this.documentController.isBusy);
+		this.code.update(this.documentController.model.value, this.mode === DesignMode.Code, this.documentController.isBusy);
+
+		const describe = (shape: DesignShape, index: number): string => {
+			const labels = {
+				rectangle: localize('sessions.design.rectangle', 'Rectangle'),
+				ellipse: localize('sessions.design.ellipse', 'Ellipse'),
+				text: localize('sessions.design.text', 'Text'),
+				path: localize('sessions.design.path', 'Bézier path'),
+				group: localize('sessions.design.group', 'Group'),
+				frame: localize('sessions.design.frame', 'Frame'),
+				image: localize('sessions.design.image', 'Image'),
+			};
+			let content = localize('sessions.design.shapeDescription', '{0}. {1}: X {2}, Y {3}, width {4}, height {5}, rotation {6} degrees, fill {7}', index + 1, labels[shape.kind], shape.x, shape.y, shape.width, shape.height, shape.rotation, shape.fill);
+			if (this.selection.ids.has(shape.id)) { content += ' · ' + localize('sessions.design.selected', 'Selected'); }
+			if (shape.kind === 'text') { content += `\n${shape.text}`; }
+			if (shape.kind === 'path') { content += '\n' + localize('sessions.design.pathDescription', '{0} nodes; closed: {1}', shape.nodes.length, shape.closed ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No')); }
+			if (shape.kind === 'image') { content += '\n' + this.documentController.model.value.assets.find(asset => asset.id === shape.assetId)!.name; }
+			if (shape.kind === 'group' || shape.kind === 'frame') { content += '\n' + shape.children.map(describe).join('\n'); }
+			if (shape.motion) { content += '\n' + localize('sessions.design.motionDescription', '{0} keyframes, duration {1} ms, loop: {2}', shape.motion.keyframes.length, shape.motion.duration, shape.motion.loop ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No')); }
+			return content;
+		};
+		this.contentDomNode.textContent = shapes.length === 0 ? localize('sessions.design.empty', 'The design document is empty.') : shapes.map(describe).join('\n');
+		this.domNode.classList.toggle('dirty', this.documentController.isDirty);
+		this.updateZoomLabel();
+	}
+
+	private cancelGesture(): void { this.input.cancelGesture(); }
+
+	private deleteSelected(): void {
+		if (this.documentController.isBusy) { return; }
+		this.cancelGesture();
+		this.commands.removeShapes(this.selection.ids);
+		this.focus();
+	}
+
+	private groupSelected(): void {
+		if (this.documentController.isBusy) { return; }
+		this.cancelGesture();
+		const id = this.commands.group(this.selection.ids);
+		if (id) { this.select([id]); this.render(); }
+		this.focus();
+	}
+
+	private ungroupSelected(): void {
+		if (this.documentController.isBusy || this.selectedShape?.kind !== 'group' || this.selectedShape.motion) { return; }
+		this.cancelGesture();
+		this.select(this.commands.ungroup(this.selectedShape.id));
+		this.render(); this.focus();
+	}
+
+
+	private handleKeyDown(event: KeyboardEvent): void {
+		if (event.target === this.domNode) { this.canvas.setFocused(true); }
+		if (event.defaultPrevented || event.target !== this.domNode) { return; }
+		if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+			event.preventDefault();
+			this.showContextMenu(this.canvas.domNode);
+			return;
+		}
+		if (this.documentController.isBusy || this.mode === DesignMode.Code) { return; }
+		if (event.key === 'Escape') { this.cancelGesture(); this.select([]); this.render(); event.preventDefault(); return; }
+		if (this.input.isGesturing) { return; }
+		if (event.ctrlKey || event.metaKey) {
+			if (event.key.toLowerCase() === 'a') { this.selectAll(); event.preventDefault(); }
+			return;
+		}
+		const shapes = this.selectedShapes;
+		const distance = event.shiftKey ? 10 : 1;
+		const directions: Record<string, DesignPoint> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
+		const direction = directions[event.key];
+		if (direction) {
+			if (shapes.length) {
+				const entries = getDesignShapeEntries(this.documentController.model.value.shapes);
+				this.commands.updateShapes(shapes.map(shape => {
+					const radians = -(entries.find(entry => entry.shape.id === shape.id)!.parent?.rotation ?? 0) * Math.PI / 180;
+					return { ...shape, x: shape.x + (direction.x * Math.cos(radians) - direction.y * Math.sin(radians)) * distance, y: shape.y + (direction.x * Math.sin(radians) + direction.y * Math.cos(radians)) * distance };
+				}));
+			}
+			else { this.camera.panBy(-direction.x * KEYBOARD_PAN_DISTANCE, -direction.y * KEYBOARD_PAN_DISTANCE); this.applyTransform(); }
+		} else {
+			 switch (event.key.toLowerCase()) {
+				case 'f': this.addFrame(); break;
+				case 'i': void this.importImage(); break;
+				case 'v': this.setTool(DesignTool.Select); break;
+				case 'h': this.setTool(DesignTool.Hand); break;
+				case 'r': this.addShape('rectangle'); break;
+				case 'e': this.addShape('ellipse'); break;
+				case 't': this.addShape('text'); break;
+				case 'p': this.addShape('path'); break;
+				case 'g': this.groupSelected(); break;
+				case 'u': this.ungroupSelected(); break;
+				case 'n': {
+					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
+					const next = shapes.find(shape => !this.selection.ids.has(shape.id));
+					if (next) { this.selection.add(next.id); this.announceSelection(); this.render(); }
+					break;
+				}
+				case 'delete': case 'backspace': this.deleteSelected(); break;
+				case 'tab': {
+					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
+					const index = shapes.findIndex(item => item.id === this.selectedShapes.at(-1)?.id);
+					const next = index + (event.shiftKey ? -1 : 1);
+					if (next < 0 || next >= shapes.length) { return; }
+					this.select([shapes[next].id]);
+					this.render();
+					break;
+				}
+				case '=': case '+': this.zoomAtCenter(KEYBOARD_ZOOM_FACTOR); break;
+				case '-': case '_': this.zoomAtCenter(1 / KEYBOARD_ZOOM_FACTOR); break;
+				case '0': this.camera.reset(); this.applyTransform(); break;
+				default: return;
+			}
+		}
+		event.preventDefault();
+	}
+
+	private zoomAtCenter(factor: number): void {
+		this.camera.zoomAt({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }, factor);
+		this.applyTransform();
+	}
+
+	private applyTransform(): void {
+		this.canvas.applyTransform(this.camera);
+		this.renderShapes();
+		this.updateZoomLabel();
+	}
+
+	private updateZoomLabel(): void {
+		this.zoomDomNode.textContent = localize('sessions.design.zoom', '{0}% · 1 unit = 1 px · grid 12 px', Math.round(this.camera.scale * 100)) + (this.documentController.isDirty ? ' · ' + localize('sessions.design.unsaved', 'Unsaved changes') : '');
+	}
+
+	private async runFileOperation(operation: () => Promise<unknown>): Promise<void> {
+		this.cancelGesture();
+		await operation();
+		if (!this.isDisposed) { this.focus(); }
+	}
+
+	public async saveDocument(): Promise<boolean> {
+		this.cancelGesture();
+		const saved = await this.documentController.saveDocument();
+		if (!this.isDisposed) { this.focus(); }
+		return saved;
+	}
+}

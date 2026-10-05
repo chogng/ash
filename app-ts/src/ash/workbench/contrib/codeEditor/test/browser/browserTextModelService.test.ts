@@ -281,7 +281,7 @@ test("Stanza text model refuses to overwrite externally changed content", async 
 	assert.deepEqual(textFiles.savedTexts, []);
 });
 
-test("Stanza text model reloads clean external changes and marks dirty models conflicted", async () => {
+test("Stanza text model reloads clean external changes and reports dirty-model conflicts only on save", async () => {
 	const resource = URI.file("C:\\project\\main.ts");
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
@@ -305,11 +305,122 @@ test("Stanza text model reloads clean external changes and marks dirty models co
 	}]);
 	textFiles.setText("external dirty");
 	textFiles.fireExternalChange(resource);
-	assert.equal(reference.hasExternalChange, true);
+	await models.refresh(resource);
+	assert.deepEqual([reference.hasExternalChange, textFiles.resolveCount, reference.model.getText()], [false, 3, 'local external clean']);
 	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
+	assert.equal(reference.hasExternalChange, true);
 	await reference.revert(new AbortController().signal);
 	assert.equal(reference.model.getText(), "external dirty");
 	assert.equal(reference.hasExternalChange, false);
+});
+
+test('file invalidations and focus checks skip dirty models without advancing their saved revision', async () => {
+	const resource = URI.file('/project/main.ts');
+	const textFiles = new TestTextFileService('first\r\nsecond\nthird\n');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	const conflicts: boolean[] = [];
+	using listener = reference.onDidChangeExternalChange(() => conflicts.push(reference.hasExternalChange));
+	reference.model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'local ' }]);
+
+	textFiles.fireExternalChange();
+	await models.refresh(resource);
+	assert.deepEqual([reference.isDirty, reference.hasExternalChange, textFiles.resolveCount, conflicts], [true, false, 1, []]);
+
+	textFiles.setText('external');
+	await models.refresh(resource);
+	assert.deepEqual([reference.isDirty, reference.hasExternalChange, textFiles.resolveCount, conflicts], [true, false, 1, []]);
+	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
+	await models.refresh(resource);
+	assert.deepEqual([reference.hasExternalChange, conflicts, textFiles.savedTexts, textFiles.resolveCount], [true, [true], [], 1]);
+});
+
+test('failed background file checks preserve clean and dirty editor states', async () => {
+	const resource = URI.file('/project/unavailable.ts');
+	using changes = new Emitter<IFileChangeEvent>();
+	const failure = new Error('File service is unavailable');
+	let unavailable = false;
+	const textFiles: ITextFileService = {
+		onDidChangeFiles: changes.event,
+		resolve: async () => {
+			if (unavailable) throw failure;
+			return { resource, text: 'saved', revision: '1', encoding: 'utf8', source: TextFileContentSource.FileSystem };
+		},
+		save: async () => ({ revision: '1' }),
+	};
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	unavailable = true;
+	const errors: unknown[][] = [];
+	const logged = deferred<void>();
+	const originalError = console.error;
+	console.error = (...args: unknown[]) => { errors.push(args); logged.resolve(); };
+	try {
+		changes.fire({ resources: undefined });
+		await logged.promise;
+		assert.deepEqual([reference.isDirty, reference.hasExternalChange, reference.model.getText(), errors], [false, false, 'saved', [['Could not refresh open file', failure]]]);
+	} finally {
+		console.error = originalError;
+	}
+	reference.model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'local ' }]);
+	await models.refresh(resource);
+	assert.deepEqual([reference.isDirty, reference.hasExternalChange, reference.model.getText()], [true, false, 'local saved']);
+	unavailable = false;
+	await models.refresh(resource);
+	assert.equal(reference.hasExternalChange, false);
+});
+
+test('a background read that overlaps local edits leaves the saved revision and editor state untouched', async () => {
+	const resource = URI.file('/project/concurrent.txt');
+	const textFiles = new TestTextFileService('saved');
+	const started = deferred<void>();
+	const proceed = deferred<void>();
+	let delayRead = false;
+	using models = new BrowserTextModelService(new BrowserTextResourceStore({
+		onDidChangeFiles: textFiles.onDidChangeFiles,
+		resolve: async request => {
+			if (delayRead) {
+				started.resolve();
+				await proceed.promise;
+			}
+			return textFiles.resolve(request);
+		},
+		save: request => textFiles.save(request),
+	}));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	textFiles.setText('external');
+	delayRead = true;
+	const refreshing = models.refresh(resource);
+	await started.promise;
+	reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'local ' }]);
+	proceed.resolve();
+	await refreshing;
+	assert.deepEqual([reference.model.getText(), reference.isDirty, reference.hasExternalChange], ['local saved', true, false]);
+	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
+	assert.equal(reference.hasExternalChange, true);
+});
+
+test('undoing local edits clears a rejected-save conflict when the model returns to its saved state', async () => {
+	const resource = URI.file('/project/undo-conflict.txt');
+	const textFiles = new TestTextFileService('saved');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'local ' }]);
+	textFiles.setText('external');
+	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
+	reference.model.undo();
+	assert.deepEqual([reference.model.getText(), reference.isDirty, reference.hasExternalChange], ['saved', false, false]);
+	await models.refresh(resource);
+	assert.deepEqual([reference.model.getText(), reference.isDirty, reference.hasExternalChange], ['external', false, false]);
+});
+
+test('workspace rescans do not read untitled documents or mark them conflicted', async () => {
+	const textFiles = new TestTextFileService('unrelated');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: 'draft' }, new AbortController().signal);
+	textFiles.fireExternalChange();
+	await models.refresh(reference.resource);
+	assert.deepEqual([reference.isDirty, reference.hasExternalChange, textFiles.resolveCount], [true, false, 1]);
 });
 
 class TestTextFileService implements ITextFileService {
@@ -347,8 +458,8 @@ class TestTextFileService implements ITextFileService {
 		this.revision += 1;
 	}
 
-	fireExternalChange(resource: URI): void {
-		this.fileChanges.fire(Object.freeze({ resources: Object.freeze([resource]) }));
+	fireExternalChange(resource?: URI): void {
+		this.fileChanges.fire(Object.freeze({ resources: resource ? Object.freeze([resource]) : undefined }));
 	}
 
 	private currentRevision(): string {

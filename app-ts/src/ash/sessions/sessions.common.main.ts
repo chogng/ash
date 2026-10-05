@@ -9,7 +9,15 @@ import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.j
 import './contrib/files/browser/files.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/editor/browser/emptyFileEditor.contribution.js';
-import './contrib/design/browser/design.contribution.js';
+import './contrib/creator/browser/creatorEditor.contribution.js';
+import './contrib/creator/browser/creator.contribution.js';
+import './contrib/creator/contrib/design/browser/design.contribution.js';
+import './contrib/creator/contrib/whiteboard/browser/whiteboard.contribution.js';
+import './contrib/creator/contrib/slides/browser/slides.contribution.js';
+import './contrib/creator/contrib/brand/browser/brand.contribution.js';
+import './contrib/creator/contrib/sites/browser/sites.contribution.js';
+import './contrib/creator/contrib/make/browser/make.contribution.js';
+import './contrib/creator/contrib/prototype/browser/prototype.contribution.js';
 import './contrib/library/browser/library.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../workbench/contrib/scm/browser/scm.service.contribution.js';

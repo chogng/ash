@@ -1,5 +1,5 @@
 import '../../../welcomeGettingStarted/browser/gettingStartedColors.js';
-import '../../../../../sessions/contrib/design/browser/widget/designToolsWidget.js';
+import '../../../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
 import '../../../../../platform/theme/common/colors/baseColors.js';
 import '../../../../../platform/theme/common/sizes/baseSizes.js';
 import '../../../../../editor/common/core/editorColorRegistry.js';

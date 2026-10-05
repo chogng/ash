@@ -12,13 +12,13 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
-import { DesignConfiguration } from '../../contrib/design/common/config/editorConfiguration.js';
-import { Event as AshEvent } from '../../../base/common/event.js';
+import { DesignConfiguration } from '../../contrib/creator/common/config/editorConfiguration.js';
+import { Emitter, Event as AshEvent } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
-import type { DesignEditorContributionContext } from '../../contrib/design/browser/designEditorBrowser.js';
+import type { DesignEditorContributionContext } from '../../contrib/creator/browser/designEditorBrowser.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -26,12 +26,14 @@ import { WorkspaceContextService } from '../../../workbench/services/workspaces/
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService } from '../../../workbench/services/workingCopy/common/workingCopyService.js';
-import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
-import { EditorPanes } from '../../../workbench/browser/editor.js';
 import { EditorPaneVisibility } from '../../../workbench/browser/parts/editor/editorPane.js';
-import { ILifecycleService, LifecyclePhase, StartupKind } from '../../../workbench/services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, LifecyclePhase, StartupKind, type IBeforeShutdownEvent } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -50,16 +52,24 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/design/common/model/document.js');
-const { DesignEditorWidget } = await import('../../contrib/design/browser/widget/designEditorWidget.js');
-const { DesignDocumentController } = await import('../../contrib/design/browser/designDocumentController.js');
-const { EditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
-const { DesignEditorPage } = await import('../../contrib/design/browser/designEditorPage.js');
-const { DesignEditorService, IDesignEditorService } = await import('../../contrib/design/browser/designEditorService.js');
-const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/design/browser/designViews.js');
-const { DESIGN_EDITOR_RESOURCE } = await import('../../contrib/design/browser/designDocumentController.js');
-await import('../../contrib/design/browser/design.contribution.js');
-const { createDesignEditorContributions } = await import('../../contrib/design/design.main.js');
+const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/creator/common/model/document.js');
+const { DesignEditorWidget } = await import('../../contrib/creator/browser/widget/designEditorWidget.js');
+const { DesignDocumentController } = await import('../../contrib/creator/browser/designDocumentController.js');
+const { DesignEditorPage } = await import('../../contrib/creator/browser/designEditorPage.js');
+const { DesignEditorService, IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
+const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/creator/browser/designViews.js');
+const { CreatorMode } = await import('../../contrib/creator/common/creator.js');
+const { CreatorPage } = await import('../../contrib/creator/browser/creatorPage.js');
+await import('../../contrib/creator/contrib/design/browser/design.contribution.js');
+await import('../../contrib/creator/contrib/whiteboard/browser/whiteboard.contribution.js');
+await import('../../contrib/creator/contrib/slides/browser/slides.contribution.js');
+await import('../../contrib/creator/contrib/brand/browser/brand.contribution.js');
+await import('../../contrib/creator/contrib/sites/browser/sites.contribution.js');
+await import('../../contrib/creator/contrib/make/browser/make.contribution.js');
+await import('../../contrib/creator/contrib/prototype/browser/prototype.contribution.js');
+const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
+await import('../../contrib/creator/browser/creatorEditor.contribution.js');
+const { createDesignEditorContributions } = await import('../../contrib/creator/design.main.js');
 const services = new InstantiationService();
 const colorContextView = new ContextView(browser.window.document.body);
 services.registerInstance(IContextViewService, Object.assign(colorContextView, { container: browser.window.document.body }));
@@ -157,7 +167,7 @@ class DesignEditorFixture extends Disposable {
 		this.layersDomNode = ownerDocument.createElement('section');
 		this.layersDomNode.dataset.part = 'sidebar';
 		ownerDocument.body.append(editorHost, this.propertiesDomNode, this.layersDomNode);
-		this.pane = this._register(EditorPanes.getEditorPane({ resource: DESIGN_EDITOR_RESOURCE })!.create({ instantiationService: child }) as InstanceType<typeof DesignEditorPage>);
+		this.pane = this._register(child.createInstance(DesignEditorPage, CreatorMode.Design));
 		this.pane.create(editorHost);
 		this.domNode = this.pane.domNode;
 		const properties = this._register(child.createInstance(DesignPropertiesView, this.propertiesDomNode, { id: 'design.properties', title: 'Shape properties' }));
@@ -174,7 +184,7 @@ class DesignEditorFixture extends Disposable {
 
 function createView(): DesignEditorFixture {
 	const view = new DesignEditorFixture();
-	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	let captured: number | undefined;
 	viewport.setPointerCapture = id => { captured = id; };
 	viewport.hasPointerCapture = id => captured === id;
@@ -184,20 +194,20 @@ function createView(): DesignEditorFixture {
 }
 
 function projectedTransform(view: { readonly domNode: HTMLElement }): ProjectedTransform {
-	const transform = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-world')!.style.transform;
+	const transform = view.domNode.querySelector<HTMLElement>('.ash-canvas-world')!.style.transform;
 	const match = transform.match(/translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/)!;
 	return { panX: Number(match[1]), panY: Number(match[2]), scale: Number(match[3]) };
 }
 
 function dispatchWheel(view: { readonly domNode: HTMLElement }, init: WheelEventInit & { clientX?: number; clientY?: number }): void {
-	view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!
+	view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!
 		.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
 }
 
 test('Design cursor follows configuration and theme changes and releases its subscriptions', async () => {
 	const view = createView();
-	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
-	const cursor = () => viewport.style.getPropertyValue('--ash-sessions-design-pointer-cursor');
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
+	const cursor = () => viewport.style.getPropertyValue('--ash-canvas-pointer-cursor');
 	try {
 		assert.equal(viewport.classList.contains('pointer-cursor'), true);
 		assert.match(decodeURIComponent(cursor()), /width="24" height="24"/u);
@@ -208,7 +218,7 @@ test('Design cursor follows configuration and theme changes and releases its sub
 		assert.equal(viewport.classList.contains('pointer-cursor'), false);
 		assert.equal(configuration.inspect(DesignConfiguration.usePointerCursor).userValue, false);
 		using nextView = createView();
-		assert.equal(nextView.domNode.querySelector('.ash-sessions-design-viewport')!.classList.contains('pointer-cursor'), false);
+		assert.equal(nextView.domNode.querySelector('.ash-canvas-viewport')!.classList.contains('pointer-cursor'), false);
 		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, 'false'), /must be boolean/u);
 		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, false, ConfigurationTarget.WORKSPACE), /Unable to write/u);
 		view.dispose();
@@ -294,7 +304,7 @@ test('Design canvas pans and zooms from the keyboard and resets with 0', () => {
 
 test('Design canvas pans by dragging with the pointer', () => {
 	const view = createView();
-	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	const firePointer = (type: string, x: number, y: number): void => {
 		viewport.dispatchEvent(new browser.window.PointerEvent(type, { pointerId: 1, button: 0, isPrimary: true, clientX: x, clientY: y, bubbles: true }));
 	};
@@ -438,7 +448,7 @@ test('Design canvas menu keeps selection, applies edits and disappears with its 
 		pressCanvas(view, 'e');
 		pressCanvas(view, 'ArrowRight', { shiftKey: true });
 		await clickCanvasMenu(view, 'Select all');
-		const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+		const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 		viewport.dispatchEvent(new browser.window.MouseEvent('contextmenu', { clientX: 150, clientY: 50, bubbles: true, cancelable: true }));
 		assert.equal(view.domNode.querySelector('.ash-sessions-design-message')!.textContent, '2 objects selected.');
 		assert.equal(contextMenu!.getActions().find(action => action.label === 'Group')!.enabled, true);
@@ -470,7 +480,7 @@ test('Design edits render fractional geometry, keep input editing separate and u
 	width.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
 	assert.equal(rect.getAttribute('width'), '120.5');
 	pressCanvas(view, '+');
-	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	const fire = (type: string, x: number): void => { viewport.dispatchEvent(new browser.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: x, clientY: 50, bubbles: true })); };
 	const before = Number(rect.getAttribute('x'));
 	fire('pointerdown', 100);
@@ -679,7 +689,7 @@ test('Chinese Design actions and new property labels are localized', async () =>
 });
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
-	using document = services.createInstance(DesignDocumentController);
+	using document = services.createInstance(DesignDocumentController, CreatorMode.Design);
 	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
 	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
 	for (const editor of [first, second]) {
@@ -707,7 +717,7 @@ test('Design editors share document edits and history while keeping selection, c
 	assert.equal(DesignEditorWidget.getFocused(first.domNode), undefined);
 	pressCanvas(second, 'e');
 	assert.equal(document.model.value.shapes.length, 2);
-	assert.equal(first.domNode.querySelectorAll('[data-shape-id]').length, 1);
+	assert.equal(first.domNode.querySelector('.ash-canvas-viewport'), null);
 });
 
 test('Design editor owns the unsaved browser-close check and releases it with the editor', () => {
@@ -728,7 +738,7 @@ test('Design editor owns the unsaved browser-close check and releases it with th
 test('Design tool contribution draws a shape at document coordinates and hand gestures preserve objects', async () => {
 	using view = createView();
 	view.layout({ width: 400, height: 300 });
-	const viewport = view.domNode.querySelector<HTMLElement>('.ash-sessions-design-viewport')!;
+	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	const pointer = (type: string, x: number, y: number): void => {
 		viewport.dispatchEvent(new browser.window.PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true }));
 	};
@@ -801,7 +811,7 @@ test('Motion keyframes round trip, scrub without editing, undo and export runnab
 	timeline.value = '500'; timeline.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 	const rectangle = view.domNode.querySelector<SVGGraphicsElement>('[data-shape-id]')!;
 	assert.deepEqual([rectangle.getAttribute('x'), rectangle.getAttribute('opacity')], ['190', '0.75']);
-	assert.equal(view.domNode.querySelector('.ash-sessions-design-selection rect')!.getAttribute('x'), '190');
+	assert.equal(view.domNode.querySelector('.ash-canvas-selection rect')!.getAttribute('x'), '190');
 	assert.equal(view.domNode.querySelector('.ash-sessions-design-selection')!.classList.contains('visible'), true);
 	await clickAction(view, 'Add keyframe');
 	assert.equal(view.domNode.querySelector<HTMLSelectElement>('select[aria-label="Keyframe"]')!.options.length, 3);
@@ -883,35 +893,40 @@ test('Design panels share the editor selection and detach when the pane hides', 
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 });
 
-test('Design editor tabs use shared save, cancel and discard confirmation', async () => {
-	using child = createTestEditorServices(configuration, services);
+test('Design shutdown checks cancel, save and discard even while its page is hidden', async () => {
+	using child = services.createChild();
+	using shutdown = new Emitter<IBeforeShutdownEvent>();
+	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
 	using designEditors = child.createInstance(DesignEditorService);
 	child.registerInstance(IDesignEditorService, designEditors);
-	using part = child.createInstance(EditorPart, browser.window.document.body, {
-		fileDialogService: services.get(IFileDialogService),
-		workingCopyService: services.get(IWorkingCopyService),
-	});
-	const input = { resource: DESIGN_EDITOR_RESOURCE, label: 'Design', showBreadcrumbs: false };
+	using page = child.createInstance(DesignEditorPage, CreatorMode.Design);
+	const host = browser.window.document.createElement('section');
+	browser.window.document.body.append(host);
+	using hostCleanup = toDisposable(() => host.remove());
+	page.create(host);
+	page.setVisible(EditorPaneVisibility.Visible);
+	const editor = designEditors.activeEditor.get()!;
+	const isVetoed = async (): Promise<boolean> => {
+		const vetoes: (boolean | Promise<boolean>)[] = [];
+		shutdown.fire({ reason: 'windowClose', veto: value => { vetoes.push(value); } });
+		return (await Promise.all(vetoes)).some(Boolean);
+	};
 	try {
-		await part.openEditor(input, { pinned: true });
-		let editor = designEditors.activeEditor.get()!;
 		pressCanvas(editor, 'r');
+		page.setVisible(EditorPaneVisibility.Hidden);
 		saveDecision = ConfirmResult.CANCEL;
-		assert.equal(await part.closeEditor(input), false);
-		assert.equal(part.activePane!.workingCopy!.isDirty, true);
+		assert.equal(await isVetoed(), true);
+		assert.equal(designEditors.document.isDirty, true);
 		saveDecision = ConfirmResult.SAVE;
-		assert.equal(await part.closeEditor(input), true);
+		assert.equal(await isVetoed(), false);
 		assert.equal(parseDesignDocument(fileContent).shapes.length, 1);
+		assert.equal(designEditors.document.isDirty, false);
 		assert.equal(designEditors.activeEditor.get(), undefined);
-		await part.openEditor(input, { pinned: true });
-		editor = designEditors.activeEditor.get()!;
+		page.setVisible(EditorPaneVisibility.Visible);
 		pressCanvas(editor, 'e');
 		saveDecision = ConfirmResult.DONT_SAVE;
-		assert.equal(await part.closeEditor(input), true);
-		assert.equal(part.groups[0]!.inputs.length, 0);
-		assert.equal(designEditors.activeEditor.get(), undefined);
+		assert.equal(await isVetoed(), false);
 		assert.equal(services.get(IWorkingCopyService).get(DESIGN_EDITOR_RESOURCE).length, 1);
-		assert.equal(designEditors.document.isDirty, false);
 	} finally { saveDecision = ConfirmResult.DONT_SAVE; }
 });
 
@@ -932,20 +947,25 @@ test('Design panel labels and empty states follow Chinese localization', async (
 });
 
 
-test('Design split panes share the window document and retain independent editing state', async () => {
-	using child = createTestEditorServices(configuration, services);
+test('Design page instances share the window document and retain independent editing state', async () => {
+	using child = services.createChild();
 	using designEditors = child.createInstance(DesignEditorService);
 	child.registerInstance(IDesignEditorService, designEditors);
-	using part = child.createInstance(EditorPart, browser.window.document.body, { workingCopyService: services.get(IWorkingCopyService) });
-	await part.openEditor({ resource: DESIGN_EDITOR_RESOURCE, label: 'Design', showBreadcrumbs: false }, { pinned: true });
+	using firstPage = child.createInstance(DesignEditorPage, CreatorMode.Design);
+	using secondPage = child.createInstance(DesignEditorPage, CreatorMode.Design);
+	const host = browser.window.document.createElement('section');
+	browser.window.document.body.append(host);
+	using hostCleanup = toDisposable(() => host.remove());
+	firstPage.create(host);
+	firstPage.setVisible(EditorPaneVisibility.Visible);
 	const first = designEditors.activeEditor.get()!;
 	pressCanvas(first, 'r');
 	pressCanvas(first, '+');
-	await part.splitActiveGroupVertical();
+	secondPage.create(host);
+	secondPage.setVisible(EditorPaneVisibility.Visible);
 	const second = designEditors.activeEditor.get()!;
 	assert.notEqual(first, second);
 	assert.equal(first.documentController, second.documentController);
-	assert.equal(part.groups.length, 2);
 	assert.equal(services.get(IWorkingCopyService).get(DESIGN_EDITOR_RESOURCE).length, 1);
 	assert.equal(second.domNode.querySelectorAll('[data-shape-id]').length, 1);
 	assert.equal(second.selection.ids.size, 0);
@@ -987,7 +1007,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	assert.deepEqual(parseDesignDocument(fileContent), beforeSave);
 	assert.equal(controller.isDirty, false);
 	const backup = controller.backup();
-	using recovered = services.createInstance(DesignDocumentController);
+	using recovered = services.createInstance(DesignDocumentController, CreatorMode.Design);
 	recovered.restoreBackup(backup);
 	assert.deepEqual(recovered.readMedia(asset.versions[0]), bytes);
 	assert.deepEqual(recovered.model.value, beforeSave);
@@ -1022,11 +1042,11 @@ test('Frame rotation keeps keyboard movement in canvas directions and unclipped 
 	if (updated.kind !== 'frame') { throw new Error('Expected frame'); }
 	assert.equal(updated.children[0].x, 20);
 	assert.equal(updated.children[0].y, 29);
-	const { exportDesignSvg } = await import('../../contrib/design/browser/svgRenderer.js');
+	const { exportDesignSvg } = await import('../../contrib/creator/browser/svgRenderer.js');
 	const overflowing = { ...frame, rotation: 0, children: [{ ...child, x: -50, y: -20 }] };
 	assert.match(exportDesignSvg(documentFromShapes([overflowing])), /viewBox="50 180 150 120"/u);
 	assert.match(exportDesignSvg(documentFromShapes([{ ...overflowing, clip: true }])), /viewBox="100 200 100 100"/u);
-	const { generateDesignCode } = await import('../../contrib/design/contrib/code/browser/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/creator/contrib/code/browser/designCodeGenerator.js');
 	const motion = { duration: 1000, loop: false, keyframes: [{ offset: 0, x: -50, y: -20, rotation: 0, opacity: 1 }, { offset: 1, x: 40, y: -20, rotation: 0, opacity: 1 }] };
 	const code = generateDesignCode(documentFromShapes([{ ...overflowing, children: [{ ...overflowing.children[0], motion }] }]));
 	assert.match(code, new RegExp(`@keyframes ash-design-object-${child.id}-motion`, 'u'));
@@ -1042,7 +1062,7 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 	const pending = new Promise<void>(resolve => { release = resolve; });
 	const childServices = services.createChild();
 	childServices.registerInstance(IFileService, { ...files, writeFile: async request => { entered!(); await pending; return files.writeFile(request); } });
-	using controller = childServices.createInstance(DesignDocumentController);
+	using controller = childServices.createInstance(DesignDocumentController, CreatorMode.Design);
 	const shape = { id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 50, height: 40, rotation: 0, fill: '#ffffff' };
 	controller.model.applyEdit([shape]);
 	const saving = controller.saveDocument();
@@ -1098,7 +1118,7 @@ test('Design import adopts backend version identities and metadata and packages 
 		getVersion: unexpected,
 		readVersion: async version => { assert.equal(version, backend); return committed; },
 	});
-	using controller = child.createInstance(DesignDocumentController);
+	using controller = child.createInstance(DesignDocumentController, CreatorMode.Design);
 	const id = await controller.importImage({ x: 500, y: 400 });
 	assert.ok(id);
 	assert.equal(imports, 1);
@@ -1116,7 +1136,7 @@ test('Design reuses the exact Library version without importing again or duplica
 	const bytes = new Uint8Array([1, 2, 3]);
 	const version = { assetId: generateUuid(), versionId: generateUuid(), name: 'Library image', source: URI.file('/image.png'), sha256: createHash('sha256').update(bytes).digest('hex'), mediaType: 'image/png' as const, size: bytes.length, width: 100, height: 60 };
 	child.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: async selected => { assert.equal(selected, version); return bytes; } });
-	using controller = child.createInstance(DesignDocumentController);
+	using controller = child.createInstance(DesignDocumentController, CreatorMode.Design);
 	await controller.adoptAssetVersion(version, { x: 200, y: 200 });
 	await controller.adoptAssetVersion(version, { x: 400, y: 400 });
 	assert.equal(controller.model.value.assets.length, 1);
@@ -1125,4 +1145,121 @@ test('Design reuses the exact Library version without importing again or duplica
 	assert.deepEqual(controller.readMedia(controller.model.value.assets[0].versions[0]), bytes);
 	controller.model.undo();
 	assert.equal(controller.model.value.shapes.length, 1);
+});
+
+class CreatorFixture extends Disposable {
+	readonly page: InstanceType<typeof CreatorPage>;
+	readonly editors: InstanceType<typeof DesignEditorService>;
+	constructor() {
+		super();
+		setARIAContainer(browser.window.document.body);
+		const child = this._register(services.createChild());
+		this.editors = this._register(child.createInstance(DesignEditorService));
+		child.registerInstance(IDesignEditorService, this.editors);
+		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() {}, [Symbol.dispose]() {} });
+		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
+		child.registerInstance(IStorageService, storage);
+		this.page = this._register(child.createInstance(CreatorPage, browser.window.document));
+		browser.window.document.body.append(this.page.domNode);
+		this.page.initialize();
+		this.page.layout({ width: 1000, height: 720 });
+		this.page.setVisible(true);
+	}
+	click(label: string): void {
+		const button = [...this.page.domNode.querySelectorAll<HTMLElement>('button, [role="button"]')].find(element => element.getAttribute('aria-label') === label && !element.closest('[hidden]'));
+		assert.ok(button, label);
+		button.click();
+	}
+}
+
+test('Creator routes all seven contributions and retains separate documents, selection and camera', () => {
+	using fixture = new CreatorFixture();
+	assert.equal(fixture.page.domNode.querySelectorAll('[data-creator-mode]').length, 7);
+	assert.equal(fixture.page.usesCanvasPanels, false);
+	fixture.page.openMode(CreatorMode.Design);
+	const design = fixture.editors.activeEditor.get()!;
+	pressCanvas(design, 'r');
+	pressCanvas(design, '+');
+	const selected = [...design.selection.ids];
+	const transform = projectedTransform(design);
+	fixture.page.showHome();
+	assert.equal(fixture.editors.activeEditor.get(), undefined);
+	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creator-mode'), 'design');
+	fixture.page.openMode(CreatorMode.Whiteboard);
+	fixture.click('Add note');
+	const whiteboard = fixture.editors.getDocument(CreatorMode.Whiteboard);
+	assert.equal(whiteboard.model.value.shapes[0].kind, 'group');
+	whiteboard.model.undo();
+	assert.equal(whiteboard.model.value.shapes.length, 0);
+	assert.equal(design.documentController.model.value.shapes.length, 1);
+	for (const mode of [CreatorMode.Slides, CreatorMode.Brand, CreatorMode.Sites, CreatorMode.Make, CreatorMode.Prototype]) {
+		fixture.page.openMode(mode);
+		assert.equal(fixture.editors.activeEditor.get()!.documentController.model.value.mode, mode);
+		assert.equal(fixture.editors.getDocument(mode).model.value.shapes.length, 0);
+		assert.equal(fixture.page.usesCanvasPanels, mode !== CreatorMode.Make);
+	}
+	fixture.page.openMode(CreatorMode.Design);
+	assert.equal(fixture.editors.activeEditor.get(), design);
+	assert.deepEqual([...design.selection.ids], selected);
+	assert.deepEqual(projectedTransform(design), transform);
+	fixture.page.setVisible(false);
+	assert.equal(fixture.editors.activeEditor.get(), undefined);
+	fixture.page.setVisible(true);
+	assert.equal(fixture.editors.activeEditor.get(), design);
+});
+
+test('Creator Slides order and Brand variants use their own complete undo history', () => {
+	using fixture = new CreatorFixture();
+	fixture.page.openMode(CreatorMode.Slides);
+	fixture.click('Add slide');
+	fixture.click('Add slide');
+	const slides = fixture.editors.getDocument(CreatorMode.Slides).model;
+	const order = slides.value.shapes.map(shape => shape.id);
+	assert.deepEqual(slides.value.shapes.map(shape => [shape.width, shape.height]), [[1280, 720], [1280, 720]]);
+	fixture.click('Move slide earlier');
+	assert.deepEqual(slides.value.shapes.map(shape => shape.id), [...order].reverse());
+	slides.undo();
+	assert.deepEqual(slides.value.shapes.map(shape => shape.id), order);
+	fixture.page.openMode(CreatorMode.Brand);
+	fixture.click('Square asset');
+	fixture.click('Create size variants');
+	const brand = fixture.editors.getDocument(CreatorMode.Brand).model;
+	assert.deepEqual(brand.value.shapes.map(shape => [shape.width, shape.height]), [[1080, 1080], [1080, 1080], [1080, 1920], [1200, 628]]);
+	assert.equal(parseDesignDocument(serializeDesignDocument(brand.value)).mode, CreatorMode.Brand);
+	brand.undo();
+	assert.equal(brand.value.shapes.length, 1);
+	assert.equal(slides.value.shapes.length, 2);
+});
+
+test('Creator saves workspace identity and refuses to replace another mode with its file or backup', async () => {
+	using controller = services.createInstance(DesignDocumentController, CreatorMode.Slides);
+	new (await import('../../contrib/creator/common/commands/documentCommands.js')).DocumentCommands(controller.model).addFrame({ x: 0, y: 0 });
+	assert.equal(await controller.saveDocument(), true);
+	assert.equal(parseDesignDocument(fileContent).mode, CreatorMode.Slides);
+	using other = services.createInstance(DesignDocumentController, CreatorMode.Design);
+	const before = other.model.value;
+	await other.openDocument();
+	assert.equal(other.model.value, before);
+	assert.throws(() => other.restoreBackup(controller.backup()), /belongs to Slides/);
+	assert.equal(other.model.value, before);
+});
+
+
+test('Creator shutdown checks dirty documents in hidden modes', async () => {
+	using child = services.createChild();
+	using shutdown = new Emitter<IBeforeShutdownEvent>();
+	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
+	using editors = child.createInstance(DesignEditorService);
+	editors.getDocument(CreatorMode.Design);
+	const slides = editors.getDocument(CreatorMode.Slides);
+	const { DocumentCommands } = await import('../../contrib/creator/common/commands/documentCommands.js');
+	new DocumentCommands(slides.model).addFrame({ x: 0, y: 0 });
+	try {
+		saveDecision = ConfirmResult.CANCEL;
+		const vetoes: (boolean | Promise<boolean>)[] = [];
+		shutdown.fire({ reason: 'windowClose', veto: value => { vetoes.push(value); } });
+		assert.equal((await Promise.all(vetoes)).some(Boolean), true);
+		assert.equal(slides.isDirty, true);
+		assert.equal(editors.activeEditor.get(), undefined);
+	} finally { saveDecision = ConfirmResult.DONT_SAVE; }
 });

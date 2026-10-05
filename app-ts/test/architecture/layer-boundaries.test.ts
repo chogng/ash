@@ -130,7 +130,8 @@ function sourceName(file: string): string {
 
 
 test("Design editor stays within its Sessions contribution and keeps document code independent from the page", () => {
-	const designRoot = join(sourceRoot, "sessions/contrib/design");
+	const designRoot = join(sourceRoot, "sessions/contrib/creator");
+	const canvasRoot = join(sourceRoot, "sessions/contrib/canvas");
 	const commonRoot = join(designRoot, "common");
 	const coreRoot = join(commonRoot, "core");
 	const violations: string[] = [];
@@ -146,7 +147,7 @@ test("Design editor stays within its Sessions contribution and keeps document co
 	}
 	const widget = join(designRoot, "browser/widget/designEditorWidget.ts");
 	for (const target of localImports(widget)) {
-		if (target.startsWith(join(sourceRoot, "sessions")) && !target.startsWith(`${designRoot}${sep}`)) {
+		if (target.startsWith(join(sourceRoot, "sessions")) && !target.startsWith(`${designRoot}${sep}`) && !target.startsWith(`${canvasRoot}${sep}`)) {
 			violations.push(`${sourceName(widget)} -> ${sourceName(target)}`);
 		}
 	}
@@ -160,6 +161,43 @@ test("Design editor stays within its Sessions contribution and keeps document co
 		for (const target of localImports(file)) {
 			if (target.startsWith(join(designRoot, "contrib")) || target === join(designRoot, "design.main.ts")) {
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			}
+		}
+	}
+	assert.deepEqual(violations, []);
+});
+
+test("Shared canvas does not depend on Creator modes or Sessions composition", () => {
+	const canvasRoot = join(sourceRoot, "sessions/contrib/canvas");
+	const violations: string[] = [];
+	for (const file of productionTypeScriptFiles(canvasRoot)) {
+		for (const target of localImports(file)) {
+			if (target.startsWith(join(sourceRoot, "sessions")) && !target.startsWith(`${canvasRoot}${sep}`)) {
+				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			}
+			if (file.startsWith(join(canvasRoot, "common")) && target.includes(`${sep}browser${sep}`)) {
+				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			}
+		}
+	}
+	assert.deepEqual(violations, []);
+});
+
+
+test("Creator host consumes mode contracts and modes do not import each other's implementations", () => {
+	const root = join(sourceRoot, "sessions/contrib/creator");
+	const modes = ["design", "whiteboard", "slides", "brand", "sites", "make", "prototype"];
+	const roots = modes.map(mode => join(root, "contrib", mode));
+	const violations: string[] = [];
+	for (const file of [join(root, "browser/creatorPage.ts"), join(root, "browser/creatorWorkspace.ts")]) {
+		for (const target of localImports(file)) {
+			if (roots.some(modeRoot => target.startsWith(modeRoot + sep))) violations.push(sourceName(file) + " -> " + sourceName(target));
+		}
+	}
+	for (const modeRoot of roots) {
+		for (const file of productionTypeScriptFiles(modeRoot)) {
+			for (const target of localImports(file)) {
+				if (roots.some(other => other !== modeRoot && target.startsWith(other + sep))) violations.push(sourceName(file) + " -> " + sourceName(target));
 			}
 		}
 	}

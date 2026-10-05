@@ -16,9 +16,13 @@ test('File editor tracker reloads clean visible files after window focus and kee
 	const resource = URI.file('C:\\project\\notes.txt');
 	let diskText = 'first';
 	let revision = 1;
+	let reads = 0;
 	const textFiles: ITextFileService = {
 		onDidChangeFiles: Event.None,
-		resolve: async request => ({ resource: request.resource, text: diskText, source: TextFileContentSource.FileSystem, revision: String(revision), encoding: 'utf8' }),
+		resolve: async request => {
+			reads++;
+			return { resource: request.resource, text: diskText, source: TextFileContentSource.FileSystem, revision: String(revision), encoding: 'utf8' };
+		},
 		save: async () => { throw new Error('Unexpected save'); },
 	};
 	const models = getBrowserTextModelService(getBrowserTextResourceStore(textFiles));
@@ -41,8 +45,8 @@ test('File editor tracker reloads clean visible files after window focus and kee
 	diskText = 'third';
 	revision += 1;
 	browser.window.dispatchEvent(new browser.window.Event('focus'));
-	await waitFor(() => reference.hasExternalChange);
-	assert.equal(reference.model.getText(), 'mine');
+	await models.refresh(resource);
+	assert.deepEqual([reference.model.getText(), reference.isDirty, reference.hasExternalChange, reads], ['mine', true, false, 2]);
 	browser.window.close();
 });
 

@@ -1,4 +1,5 @@
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
+import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { Registry } from '../../registry/common/platform.js';
 
 export const Extensions = {
@@ -12,6 +13,7 @@ export enum ConfigurationScope {
 export interface IConfigurationPropertySchema extends JsonSchema {
 	readonly scope?: ConfigurationScope;
 	readonly included?: boolean;
+	readonly agentsWindow?: { readonly default: JsonValue; readonly readOnly?: boolean };
 }
 
 interface IConfigurationSettingSchemaBase {
@@ -69,6 +71,7 @@ export interface IRegisteredConfiguration<T = unknown> {
 	readonly setting?: IConfigurationSettingSchema;
 	readonly scope?: ConfigurationScope;
 	readonly schema?: JsonSchema;
+	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean };
 }
 
 export interface IConfigurationKeyDefinition<T> {
@@ -79,6 +82,8 @@ export interface IConfigurationKeyDefinition<T> {
 	readonly setting?: ConfigurationSettingSchemaFor<T>;
 	readonly scope?: ConfigurationScope;
 	readonly schema?: JsonSchema;
+	/** Window defaults affect resolution only; the user document remains shared. */
+	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean };
 }
 
 export interface IConfigurationRegistry {
@@ -117,6 +122,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 			parse: definition.parse,
 			serialize: definition.serialize ?? ((value: T) => value),
 			setting: definition.setting as IConfigurationSettingSchema | undefined,
+			agentsWindow: definition.agentsWindow ? Object.freeze({ ...definition.agentsWindow, default: definition.parse(definition.agentsWindow.default) }) : undefined,
 		});
 		this.configurations.set(definition.key, configuration as IRegisteredConfiguration);
 		return definition.key;

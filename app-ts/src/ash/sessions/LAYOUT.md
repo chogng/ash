@@ -20,7 +20,7 @@ Title bar
 Content
 ├── Sidebar
 └── Main region
-    ├── Sessions Part | Editor | Auxiliary Bar | Custom View Grid
+    ├── Sessions Part | Library | Creator | Editor | Auxiliary Bar | Custom View Grid
     └── Panel
 ```
 
@@ -35,8 +35,8 @@ the same buttons and order.
 Both workbenches open, hide and focus view containers through
 `IPaneCompositePartService`. Sidebar, Panel and Auxiliary Bar retain their
 `PaneComposite` instances. `DesktopLayoutController` coordinates the surrounding
-Parts for conversation, collaboration, Library and Design commands. Library and
-Design use `IEditorService` and the shared Editor Part. `ISessionsService` owns a
+Parts for conversation, collaboration, Library and Creator commands.
+`LibraryPart` and `CreatorPart` retain their own pages independently of the Code Editor Part. `ISessionsService` owns a
 single conversation selection, visible arrangement and navigation history;
 changing the surrounding layout never creates a second conversation or composer.
 
@@ -45,12 +45,13 @@ changing the surrounding layout never creates a second conversation or composer.
 | Title bar | Window navigation and window-scoped actions |
 | Sidebar | Sessions list and Sessions-owned sidebar views |
 | Sessions Part | One or more visible session surfaces |
-| Editor | File, browser, diff, Library, Design canvas, and other editor inputs |
+| Library / Creator | Each module owns its retained page, selected through the Activity Bar |
+| Editor | Code file, browser, diff, and other document inputs |
 | Auxiliary Bar | Code files and changes, or the active Design editor's properties |
 | Panel | Terminal and other panel views |
 | Custom View Grid | Full-surface contributed views that replace session content |
 
-Design uses the fixed `SidebarPart | EditorPart | AuxiliaryBarPart` chain. Its registered Layers view belongs to SidebarPart, the registered canvas pane belongs to EditorPart, and Shape properties belongs to AuxiliaryBarPart. SessionsPart remains the conversation owner and is hidden in Design. The two panel views consume the active design editor's state rather than creating a document or selection of their own. Activity Bar commands retain editor panes; closing a Design tab uses the shared working-copy save/discard/cancel lifecycle.
+Creator canvas modes use the fixed `SidebarPart | CreatorPart | AuxiliaryBarPart` chain. Layers belongs to SidebarPart, the retained canvas belongs to CreatorPart, and Shape properties belongs to AuxiliaryBarPart. SessionsPart remains the conversation owner and is hidden in Creator. Creator home and Make occupy the primary Part without the outer canvas panels. The two panel views consume the active design editor's state rather than creating a document or selection of their own. Page navigation retains the document, selection and viewport without a close operation. The window editor service checks save/discard/cancel for every mode document through window shutdown, including hidden workspaces. Library occupies LibraryPart without the outer sidebar or properties panel. Product pages never enter Code editor groups or per-session working sets.
 
 The Sessions Part contains its own nested two-dimensional split grid. Its leaves are not workbench editor groups, nor the chat groups inside an individual session.
 
@@ -60,7 +61,7 @@ The main workbench grid is non-proportional. The Sessions Part is the flexible s
 
 The Sessions grid retains user-established proportions even when a narrower composition temporarily clamps leaves to their minimum widths. The preferred widths are restored when the available area grows again.
 
-The primary surface absorbs general window resize: SessionsPart for conversations, or EditorPart while Library or Design replaces the conversation region. Design preserves both side-panel widths as the editor expands and shrinks. This prevents fixed side parts from absorbing general window resize.
+The primary surface absorbs general window resize: SessionsPart for conversations, or LibraryPart and CreatorPart while Library or Creator replaces the conversation region. Design preserves both side-panel widths as the editor expands and shrinks. This prevents fixed side parts from absorbing general window resize.
 
 The desktop presentation may place the Auxiliary Bar inside the Editor's grid node. Consumers must distinguish the actual Editor content area from the shared grid node when interpreting visibility or size.
 
@@ -102,7 +103,7 @@ The main Editor supports exactly one editor group. Its shared multiple-group cap
 
 The durable state and transition catalog lives in [DESKTOP.md](DESKTOP.md). Implementation behavior is covered by the layout-controller and desktop strategy tests.
 
-Editors must be opened through `IEditorService`. Sessions-specific presentation must not bypass editor service behavior by opening directly on an editor group.
+Code documents must be opened through `IEditorService`. Sessions-specific presentation must not bypass editor service behavior by opening directly on an editor group.
 
 Chat input status-pill composition is owned by the shared workbench `ChatInputPills` and `StandardChatInputPillSources` components. The Agents Window and Agent Host editor/panel surfaces supply observable data adapters and their allowed pill kinds only; ordering, per-kind presentation, visibility, context menus, keyboard behavior, compact layout, and lifecycle rendering must not be reimplemented per surface. Per-kind visibility preferences belong to `ISessionChatPillVisibilityService`; data adapters apply them before supplying pill data and option actions to the shared renderer.
 

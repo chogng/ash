@@ -9,7 +9,7 @@ import { join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
 import { Workbench } from '../../../automation/workbench.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/design/common/model/document.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/creator/common/model/document.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 
@@ -26,7 +26,7 @@ async function clickCanvasMenu(canvas: Locator, name: string, application: Playw
 async function inspectCanvasMenu(canvas: Locator, application: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean }[]> {
 	const trigger = async (): Promise<void> => {
 		await canvas.focus();
-		if (pointer) await canvas.locator('.ash-sessions-design-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
+		if (pointer) await canvas.locator('.ash-canvas-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
 		else await canvas.press('Shift+F10');
 	};
 	if ('windows' in application && process.platform === 'darwin') {
@@ -211,9 +211,10 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 			page = await opened;
 		}
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+		await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
-		const viewport = canvas.locator('.ash-sessions-design-viewport');
+		const viewport = canvas.locator('.ash-canvas-viewport');
 		const tools = canvas.locator('.ash-design-tools-widget');
 		const chromeBackground = scheme === 'high-contrast-light' ? 'rgb(255, 255, 255)' : scheme === 'high-contrast-dark' ? 'rgb(0, 0, 0)' : 'rgb(24, 24, 24)';
 		await expect(tools).toHaveCSS('background-color', chromeBackground);
@@ -235,7 +236,7 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 			probe.style.color = 'var(--ash-foreground)';
 			const foreground = getComputedStyle(probe).color;
 			probe.remove();
-			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-sessions-design-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrast-border').trim() };
+			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrast-border').trim() };
 		});
 		expect(colors.cursorColor).toBe(colors.foreground);
 		if (scheme.startsWith('high-contrast')) {
@@ -289,14 +290,17 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 test('Sessions Design contribution keeps its viewport and applies canvas cursor settings', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const design = navigation.getByRole('button', { name: 'Design', exact: true });
+	const openDesign = async (): Promise<void> => {
+		await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
+		await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	};
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	const world = canvas.locator('.ash-sessions-design-world');
+	const world = canvas.locator('.ash-canvas-world');
 	const transform = () => world.evaluate(element => (element as HTMLElement).style.transform);
-	await design.click();
+	await openDesign();
 	await expect(canvas).toBeVisible();
 	await expect(canvas).toHaveCSS('display', 'flex');
-	await expect(page.locator('[data-part="editor"]').getByRole('region', { name: 'Design canvas' })).toBeVisible();
+	await expect(page.locator('[data-part="creator"]').getByRole('region', { name: 'Design canvas' })).toBeVisible();
 	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 	await expect(page.locator('[data-part="sidebar"]').getByRole('tree', { name: 'Layers' })).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
@@ -306,7 +310,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await expect(properties.getByRole('tab')).toHaveCount(0);
 	await expect(properties).toContainText('Select one object to edit its properties.');
 	await expect(canvas.locator('.ash-sessions-design-properties')).toHaveCount(0);
-	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	const viewport = canvas.locator('.ash-canvas-viewport');
 	await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
 	await expect(viewport).toHaveCSS('background-size', '12px 12px, 12px 12px');
 	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
@@ -322,7 +326,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await expect(canvas).toBeFocused();
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(canvas).toBeHidden();
-	await design.click();
+	await openDesign();
 	await expect(canvas).toBeVisible();
 	await expect(canvas).toHaveCount(1);
 	await expect.poll(transform).toBe(retainedTransform);
@@ -355,7 +359,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await page.keyboard.press('Escape');
 	await expect(viewport).toHaveCSS('cursor', 'grab');
 	await page.reload();
-	await design.click();
+	await openDesign();
 	await expect(canvas).toBeVisible();
 	await expect(viewport).toHaveCSS('cursor', 'grab');
 	await openDesignSettings();
@@ -382,7 +386,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await expect(canvas).toBeHidden();
 	await expect(properties.getByRole('spinbutton', { name: 'X', exact: true })).toBeHidden();
 	await expect(properties.getByRole('tab')).toHaveCount(0);
-	await design.click();
+	await openDesign();
 	await expect(canvas).toBeVisible();
 	await expect(properties.locator('.ash-pane-composite-title')).toBeHidden();
 	await expect(properties.getByRole('spinbutton', { name: 'X', exact: true })).toHaveValue('42');
@@ -392,10 +396,13 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 
 test('Sessions Design floating tools draw, edit motion and expose reusable code', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const tools = canvas.locator('.ash-design-tools-widget');
-	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	const codeTabs = page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { includeHidden: true });
+	const codeTabsBefore = await codeTabs.allTextContents();
+	const viewport = canvas.locator('.ash-canvas-viewport');
 	const viewportBounds = (await viewport.boundingBox())!;
 	const toolsBounds = (await tools.boundingBox())!;
 	expect(toolsBounds.height).toBeLessThanOrEqual(48);
@@ -483,7 +490,7 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	await expect(timeline.getByRole('button', { name: 'Pause', exact: true })).toBeEnabled();
 	await timeline.getByRole('button', { name: 'Pause', exact: true }).click();
 	await tools.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(page.locator('[data-part="editor"] [role="tab"]')).toHaveCount(1);
+	await expect(codeTabs).toHaveText(codeTabsBefore);
 	const source = canvas.getByRole('textbox', { name: 'Generated code', exact: true });
 	await expect(source).toBeVisible();
 	await expect(source).toHaveValue(/@keyframes[\s\S]*data-design-id=[\s\S]*ash-design-document/u);
@@ -525,7 +532,7 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	await canvas.focus();
 	await expect(canvas).toBeFocused();
 	await page.keyboard.press('ControlOrMeta+a');
-	await expect(canvas.locator('.ash-sessions-design-selection rect')).toHaveCount(2);
+	await expect(canvas.locator('.ash-canvas-selection rect')).toHaveCount(2);
 	await page.keyboard.press('Delete');
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
 	if (target.kind === 'browser') {
@@ -544,9 +551,10 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 test('Sessions Design canvas context menu edits the pointed object and preserves keyboard focus', async ({ application, target, workbench }) => {
 	test.skip((target.kind === 'electron' && process.platform === 'darwin'), 'DOM menu focus is tested in the browser; macOS system menus have a separate scenario.');
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	const viewport = canvas.locator('.ash-canvas-viewport');
 	const item = (name: string): Locator => page.getByRole('menuitem', { name, exact: true });
 	await expect(canvas.locator('.ash-sessions-design-tools')).toHaveCount(0);
 	await expect(canvas.getByRole('button', { name: 'Save design', exact: true })).toHaveCount(0);
@@ -605,7 +613,8 @@ test('Sessions Design macOS canvas menu dispatches editing through Main', async 
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin');
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	expect(await inspectCanvasMenu(canvas, application, true)).toEqual([
 		{ label: 'Undo', enabled: false }, { label: 'Redo', enabled: false },
@@ -637,9 +646,10 @@ test('Sessions Design macOS canvas menu dispatches editing through Main', async 
 
 test('Sessions Design edits vector geometry and preserves a complete undo gesture', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	const viewport = canvas.locator('.ash-canvas-viewport');
 	await canvas.focus();
 	await page.keyboard.press('r');
 	const rectangle = canvas.locator('rect[data-shape-id]');
@@ -702,7 +712,8 @@ test('Sessions Design color picker preserves formats, previews gestures and expo
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.press('r');
 	const shape = canvas.locator('rect[data-shape-id]');
@@ -833,7 +844,8 @@ test('Sessions Design property pane groups fields, collapses with the keyboard a
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const pane = page.locator('[data-part="auxiliarybar"]');
 	await expect(pane.getByRole('heading', { name: 'Page', exact: true })).toBeVisible();
@@ -912,7 +924,8 @@ test('Sessions Design frames keep child geometry, nested selection and whole-ges
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Add frame (F)', exact: true }).click();
 	const frame = canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id]');
@@ -933,7 +946,7 @@ test('Sessions Design frames keep child geometry, nested selection and whole-ges
 	await expect(child).toHaveAttribute('width', '120');
 	await expect(child).toHaveAttribute('x', '260');
 	await layers.getByRole('treeitem', { name: 'Rectangle', exact: true }).click();
-	const viewport = canvas.locator('.ash-sessions-design-viewport');
+	const viewport = canvas.locator('.ash-canvas-viewport');
 	const bounds = await child.boundingBox();
 	expect(bounds).not.toBeNull();
 	await page.mouse.move(bounds!.x + 30, bounds!.y + 20);
@@ -977,7 +990,8 @@ test('Sessions Design imports backend asset versions, crops independently and re
 			dialog.showSaveDialog = async () => ({ canceled: false, filePath: `${folder}/design.ash-design` });
 		}, directory);
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus(); await page.keyboard.press('f');
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Import image', exact: true }).click();
@@ -1047,7 +1061,8 @@ test('Sessions Design saves and reopens an editable file through App Server', as
 		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
 	}, packagePath);
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('r');
@@ -1112,7 +1127,8 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the standalone browser file picker');
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const folderName = await page.evaluate(async () => {
 		const name = `ash-design-${crypto.randomUUID()}`;
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
@@ -1174,7 +1190,8 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 
 test('Sessions Design edits text and Bézier handles and transforms groups with keyboard and pointer', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
@@ -1245,7 +1262,7 @@ test('Sessions Design edits text and Bézier handles and transforms groups with 
 	await canvas.focus();
 	await page.keyboard.press('p');
 	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Outgoing handle Y', exact: true })).toBeVisible();
-	await expect.poll(async () => (await canvas.locator('.ash-sessions-design-viewport').boundingBox())!.height).toBeGreaterThan(100);
+	await expect.poll(async () => (await canvas.locator('.ash-canvas-viewport').boundingBox())!.height).toBeGreaterThan(100);
 });
 
 test('Sessions Design exports SVG and HTML and reopens grouped text and paths through the file service', async ({ application, target, testWorkspace, workbench }) => {
@@ -1272,7 +1289,8 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
 	await page.keyboard.press('t');
@@ -1922,7 +1940,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
-	const world = canvas.locator('.ash-sessions-design-world');
+	const world = canvas.locator('.ash-canvas-world');
 	const worldTransform = () => world.evaluate(element => (element as HTMLElement).style.transform);
 	await expect.poll(worldTransform).toBe('translate(0px, 0px) scale(1)');
 	await page.mouse.move(700, 400);

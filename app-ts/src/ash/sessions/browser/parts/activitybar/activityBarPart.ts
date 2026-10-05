@@ -222,12 +222,18 @@ export class ActivityBarPart extends WorkbenchPart {
 			throw new TypeError(localize('sessions.activity.invalidOrder', 'Saved navigation order is invalid.'));
 		}
 		if (legacy !== undefined) {
-			const migrated = order.map(id => `sessions.open.${id === 'colab' ? 'teams' : id}`);
+			const migrated = order.map(id => {
+				if (id === 'colab') { return 'sessions.open.teams'; }
+				if (id === 'design') { return 'sessions.open.creator'; }
+				return `sessions.open.${id}`;
+			});
 			this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER);
 			this.storage.remove('sessions.activityBar.pageOrder', StorageScope.PROFILE);
 			return migrated;
 		}
-		return order;
+		const migrated = order.map(id => id === 'sessions.open.design' ? 'sessions.open.creator' : id);
+		if (migrated.some((id, index) => id !== order[index])) { this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER); }
+		return migrated;
 	}
 
 	public updateHelpHint(hint: string | undefined): void {

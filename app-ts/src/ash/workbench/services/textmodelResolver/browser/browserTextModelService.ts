@@ -248,48 +248,45 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const dirty = entry.model.getText() !== entry.savedText;
 		if (entry.dirty === dirty) return;
 		entry.dirty = dirty;
+		if (!dirty) {
+			this.setExternalChange(entry, false);
+		}
 		entry.dirtyEmitter.fire();
 	}
 
 	private acceptFileChange(entry: TextModelEntry, event: TextResourceChangeEvent): void {
 		if (entry.disposed || (event.resources && !event.resources.some(resource => resource.toString() === entry.resource.toString()))) return;
-		if (entry.dirty) {
-			this.setExternalChange(entry, true);
-			return;
-		}
-		const observedVersion = entry.model.version;
-		void entry.saveQueue.then(async () => {
-			const content = await this.resourceStore.resolve({ resource: entry.resource }, new AbortController().signal);
-			if (entry.disposed) return;
-			if (entry.dirty || entry.model.version !== observedVersion) {
-				this.setExternalChange(entry, true);
-				return;
-			}
-			if (content.text === entry.savedText) {
-				entry.encoding = content.encoding;
-				entry.revision = content.revision;
-				this.setExternalChange(entry, false);
-				return;
-			}
-			this.applyFileContent(entry, content, "reload");
-			this.setExternalChange(entry, false);
-		}).catch(() => {
-			if (!entry.disposed) this.setExternalChange(entry, true);
-		});
+		// Watcher events are invalidations, including workspace rescans and our own writes.
+		void this.refresh(entry.resource).catch(error => console.error("Could not refresh open file", error));
 	}
 
 	/** Rechecks an open file when its window regains focus and watcher events may have been missed. */
 	async refresh(resource: URI): Promise<void> {
 		this.ensureAlive();
 		const entry = this.entries.get(resource.toString());
-		if (!entry) return;
+		// Background reads must not advance the persisted baseline of local edits.
+		if (!entry || entry.dirty || entry.resource.scheme === Schemas.untitled) return;
 		await entry.saveQueue;
-		if (entry.disposed) return;
+		if (entry.disposed || entry.dirty) return;
 		const observedVersion = entry.model.version;
 		const content = await this.resourceStore.resolve({ resource }, new AbortController().signal);
-		if (entry.disposed || content.revision === entry.revision) return;
-		if (entry.dirty || entry.model.version !== observedVersion) {
-			this.setExternalChange(entry, true);
+		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion) return;
+		if (content.revision !== undefined && content.revision === entry.revision) {
+			this.setExternalChange(entry, false);
+			return;
+		}
+		const buffer = createPieceTreeTextBuffer(modelText(content), entry.model.getOptions().defaultEOL);
+		let text: string;
+		try {
+			const lastLine = buffer.getLineCount();
+			text = buffer.getValueInRange(new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1), EndOfLinePreference.TextDefined);
+		} finally {
+			buffer.dispose();
+		}
+		// Compare with the persisted baseline, not local edits or raw mixed-EOL bytes.
+		if (text === entry.savedText && content.encoding === entry.encoding) {
+			entry.revision = content.revision;
+			this.setExternalChange(entry, false);
 			return;
 		}
 		this.applyFileContent(entry, content, "reload");

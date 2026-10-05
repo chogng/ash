@@ -1,6 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { URI } from '../../../../base/common/uri.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -57,7 +58,7 @@ export abstract class BaseLayoutController extends Disposable {
 				}
 				// The editor owns validation and deserialization of its persisted working sets.
 				if (entry.editorWorkingSet) {
-					this.workingSets.set(entry.sessionResource, entry.editorWorkingSet as unknown as EditorWorkingSet);
+					this.workingSets.set(entry.sessionResource, removeLegacyPageEditors(entry.editorWorkingSet as unknown as EditorWorkingSet));
 				}
 				if (typeof entry.panelViewContainerId === 'string') {
 					this.panelViews.set(entry.sessionResource, entry.panelViewContainerId);
@@ -265,4 +266,23 @@ export abstract class BaseLayoutController extends Disposable {
 		const created = this.management.materializedSessions.get().get(selection.session.untitledSessionId);
 		return created ? `session:${created.sessionId}` : `untitled:${selection.session.untitledSessionId}`;
 	}
+}
+
+/** Retired page resources must not return as Code tabs when restoring an older working set. */
+function removeLegacyPageEditors(workingSet: EditorWorkingSet): EditorWorkingSet {
+	return {
+		...workingSet,
+		groups: workingSet.groups.map(group => {
+			const active = group.editors[group.activeEditorIndex];
+			const editors = group.editors.filter(editor => {
+				if (editor.input.typeId !== 'workbench.editorInput.resource') { return true; }
+				const value = editor.input.value;
+				if (!isRecord(value) || typeof value.resource !== 'string') { return true; }
+				const scheme = URI.parse(value.resource).scheme;
+				return scheme !== 'ash-design' && scheme !== 'ash-library';
+			});
+			if (editors.length === group.editors.length) { return group; }
+			return { ...group, editors, activeEditorIndex: active && editors.includes(active) ? editors.indexOf(active) : editors.length - 1 };
+		}),
+	};
 }

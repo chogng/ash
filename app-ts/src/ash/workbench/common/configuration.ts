@@ -23,6 +23,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
 	windowTitle: configurationRegistry.registerConfiguration<string>({
 		key: 'window.title',
+		agentsWindow: { default: '${appName}', readOnly: true },
 		defaultValue: '${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}',
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string' },
@@ -133,6 +134,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	}),
 	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarPosition>({
 		key: 'workbench.activityBar.location',
+		agentsWindow: { default: ActivityBarPosition.DEFAULT, readOnly: true },
 		defaultValue: ActivityBarPosition.DEFAULT,
 		parse(value: unknown): ActivityBarPosition {
 			if (value === ActivityBarPosition.DEFAULT) return ActivityBarPosition.DEFAULT;
@@ -172,6 +174,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	}),
 	activityBarCompact: configurationRegistry.registerConfiguration<boolean>({
 		key: 'workbench.activityBar.compact',
+		agentsWindow: { default: false, readOnly: true },
 		defaultValue: false,
 		parse(value: unknown): boolean {
 			if (typeof value === 'boolean') return value;
@@ -185,6 +188,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	}),
 	sideBarLocation: configurationRegistry.registerConfiguration<SideBarLocation>({
 		key: 'workbench.sideBar.location',
+		agentsWindow: { default: 'left', readOnly: true },
 		defaultValue: 'left',
 		parse(value: unknown): SideBarLocation {
 			if (value === 'left' || value === 'right') return value;

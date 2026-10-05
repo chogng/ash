@@ -1,0 +1,78 @@
+.ash-canvas-viewport {
+	--ash-canvas-grid-size: 12px;
+	--ash-canvas-grid-line: color-mix(in srgb, var(--ash-foreground) 8%, transparent);
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	cursor: grab;
+	user-select: none;
+	touch-action: none;
+	background-color: color-mix(in srgb, var(--ash-foreground) 3%, var(--ash-editor-background));
+	background-image: linear-gradient(to right, var(--ash-canvas-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness)), linear-gradient(to bottom, var(--ash-canvas-grid-line) var(--ash-stroke-thickness), transparent var(--ash-stroke-thickness));
+	background-size: calc(var(--ash-canvas-grid-size) * var(--ash-canvas-scale, 1)) calc(var(--ash-canvas-grid-size) * var(--ash-canvas-scale, 1));
+	background-position: var(--ash-canvas-pan-x, 0px) var(--ash-canvas-pan-y, 0px);
+}
+
+.ash-canvas-viewport.pointer-cursor {
+	cursor: var(--ash-canvas-pointer-cursor);
+}
+
+.ash-canvas-viewport.hand-tool {
+	cursor: grab;
+}
+
+.ash-canvas-viewport.drawing-tool {
+	cursor: crosshair;
+}
+
+[data-color-scheme="high-contrast-dark"] .ash-canvas-viewport,
+[data-color-scheme="high-contrast-light"] .ash-canvas-viewport {
+	--ash-canvas-grid-line: var(--ash-contrast-border);
+	background-color: var(--ash-editor-background);
+}
+
+.ash-canvas-viewport.panning {
+	cursor: grabbing;
+}
+
+.ash-canvas-viewport.moving {
+	cursor: move;
+}
+
+.ash-canvas-viewport.focused {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+}
+
+.ash-canvas-world {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 0;
+	height: 0;
+	transform-origin: 0 0;
+}
+
+.ash-canvas-selection {
+	display: none;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1px;
+	height: 1px;
+	overflow: visible;
+	pointer-events: none;
+	fill: none;
+	stroke: var(--ash-focus-border);
+	stroke-width: 2px;
+}
+
+.ash-canvas-selection.visible {
+	display: block;
+}
+
+.ash-canvas-selection rect {
+	vector-effect: non-scaling-stroke;
+}

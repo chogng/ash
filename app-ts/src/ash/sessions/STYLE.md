@@ -38,9 +38,9 @@ Ash 的样式分为三层：IDE、Agent Window（Sessions）、Agent Window 内�
 
 Design 菜单的现有样式入口：
 
-- [designEditorWidget.ts](contrib/design/browser/widget/designEditorWidget.ts)为画布右键菜单指定 `ash-design-menu`。
-- [designToolsWidget.ts](contrib/design/browser/widget/designToolsWidget.ts)为工具菜单指定同一标识，并注册 `sessions.design.chromeBackground` 和 `sessions.design.chromeForeground`。普通主题的背景值为 `#181818`，表达这里所说的黑色表面。
-- [designToolsWidget.css](contrib/design/browser/widget/designToolsWidget.css)只在带有 Design 菜单标识的浮层上消费专属主题变量。菜单位于共享浮层容器中，因此不能依赖它是画布 DOM 的后代。
+- [designEditorWidget.ts](contrib/creator/browser/widget/designEditorWidget.ts)为画布右键菜单指定 `ash-design-menu`。
+- [designToolsWidget.ts](contrib/creator/browser/widget/designToolsWidget.ts)为工具菜单指定同一标识，并注册 `sessions.design.chromeBackground` 和 `sessions.design.chromeForeground`。普通主题的背景值为 `#181818`，表达这里所说的黑色表面。
+- [designToolsWidget.css](contrib/creator/browser/widget/designToolsWidget.css)只在带有 Design 菜单标识的浮层上消费专属主题变量。菜单位于共享浮层容器中，因此不能依赖它是画布 DOM 的后代。
 
 这些入口用于定位当前实现，不替代上面的设计要求。复用菜单服务不要求复用菜单颜色；新增 Design 菜单时保留页面标识，新增其他菜单时不能复制 Design 的标识或颜色。
 

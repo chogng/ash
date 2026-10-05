@@ -8,6 +8,8 @@
 	font-size: var(--ash-font-size-body1);
 }
 
+.ash-library[hidden] { display: none; }
+
 .ash-library-sidebar {
 	flex: 0 0 220px;
 	min-width: 0;

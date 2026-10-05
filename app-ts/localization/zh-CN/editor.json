@@ -1,5 +1,6 @@
 {
 	"ash": {
+		"configuration.readOnly": "设置 {0} 在此窗口中为只读。",
 		"list.smoothScrollingTitle": "列表平滑滚动",
 		"list.smoothScrollingDescription": "控制列表和树形列表是否使用短动画滚动。",
 		"list.smoothScrollingInvalid": "列表平滑滚动设置必须是布尔值",

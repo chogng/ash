@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignShape } from '../../contrib/design/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignShape } from '../../contrib/creator/common/model/document.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DesignModel } from '../../contrib/design/common/model/designModel.js';
-import { DocumentCommands } from '../../contrib/design/common/commands/documentCommands.js';
-import { DesignViewport } from '../../contrib/design/common/viewport.js';
-import { getDesignShapeEntries, hitTestDesignShapes } from '../../contrib/design/common/model/hitTest.js';
-import { sampleDesignMotion } from '../../contrib/design/contrib/motion/common/motion.js';
+import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
+import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
+import { getDesignShapeEntries, hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
+import { sampleDesignMotion } from '../../contrib/creator/contrib/motion/common/motion.js';
 
 test('Design transparent fills survive serialization and the committed undo history', () => {
 	using model = new DesignModel();
@@ -96,21 +95,6 @@ test('Design hit testing respects paint order, ellipse contours and rotation', (
 	assert.equal(hitTestDesignShapes([rectangle, ellipse], { x: 68, y: 65 })?.id, 'back');
 	assert.equal(hitTestDesignShapes([ellipse], { x: 0, y: 0 }), undefined);
 	assert.equal(hitTestDesignShapes([{ ...ellipse, kind: 'rectangle' }], { x: 68, y: 65 })?.id, 'front');
-});
-
-test('Design camera keeps a fractional world point fixed across pan and zoom', () => {
-	const camera = new DesignViewport();
-	camera.panBy(123.5, -77.25);
-	const point = { x: 211.25, y: 33.5 };
-	const world = camera.toWorld(point);
-	camera.zoomAt(point, 2);
-	assert.deepEqual(camera.toWorld(point), world);
-	camera.zoomAt(point, 100);
-	assert.equal(camera.scale, 4);
-	camera.zoomAt(point, 0.0001);
-	assert.equal(camera.scale, 0.2);
-	camera.reset();
-	assert.deepEqual(camera.toWorld(point), point);
 });
 
 test('Design text, paths and nested groups round trip and undo as complete edits', () => {

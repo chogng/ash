@@ -1477,6 +1477,45 @@ test('file open failures stay in the editor and binary actions work with an exis
 	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
 });
 
+test('file state checks keep unchanged documents clean and report disk conflicts only after saving', async ({ application, target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires workspace file reads and change notifications');
+	const page = workbench.page;
+	const name = 'file-state.txt';
+	const path = join(testWorkspace.directory, name);
+	await writeFile(path, 'saved\ntext');
+	const row = page.locator('.ash-explorer').getByRole('treeitem', { name, exact: true });
+	await row.dblclick();
+	const group = workbench.editors.groupAt(0);
+	const tab = group.element.locator('.ash-tab').filter({ hasText: name });
+	const input = group.content.getByRole('textbox', { name, exact: true });
+	await expect(group.editor.lines).toHaveText(['saved', 'text']);
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect(tab).not.toHaveAttribute('data-state', /dirty|conflict/);
+	await input.press('ControlOrMeta+Home');
+	await input.type('local ');
+	await expect(tab).toHaveAttribute('data-state', 'dirty');
+
+	await writeFile(path, 'saved\ntext');
+	await writeFile(join(testWorkspace.directory, 'file-state-check.txt'), 'watcher marker');
+	await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'file-state-check.txt', exact: true })).toBeVisible();
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect(tab).toHaveAttribute('data-state', 'dirty');
+	await expect(group.editor.lines).toHaveText(['local saved', 'text']);
+
+	await writeFile(path, 'external\ntext');
+	await writeFile(join(testWorkspace.directory, 'file-state-external.txt'), 'watcher marker');
+	await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'file-state-external.txt', exact: true })).toBeVisible();
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect(tab).toHaveAttribute('data-state', 'dirty');
+	await expect(group.editor.lines).toHaveText(['local saved', 'text']);
+	const warning = await workbench.dialogs.expectMessage(application, 'File changed on disk', () => input.press('ControlOrMeta+s'));
+	expect(warning.message).toContain('Your unsaved changes are still open in the editor.');
+	await expect(tab).toHaveAttribute('data-state', 'conflict');
+	await expect(page.locator('[data-part="statusbar"]')).toContainText('Conflict');
+	await expect(group.editor.lines).toHaveText(['local saved', 'text']);
+	expect(await readFile(path, 'utf8')).toBe('external\ntext');
+});
+
 test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain undoable', async ({ target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 	const group = workbench.editors.groupAt(0);

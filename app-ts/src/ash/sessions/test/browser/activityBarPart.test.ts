@@ -30,12 +30,12 @@ const { ContextKeyService, IContextKeyService } = await import('../../../platfor
 const { CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
-const { IDesignEditorService } = await import('../../contrib/design/browser/designEditorService.js');
+const { IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
 const { Menus } = await import('../../browser/menus.js');
 const { Lxicon } = await import('../../../base/common/lxicons.js');
-const { IStorageService } = await import('../../../platform/storage/common/storage.js');
+const { IStorageService, StorageScope, StorageTarget } = await import('../../../platform/storage/common/storage.js');
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 await import('../../sessions.common.main.js');
 suiteTeardown(() => browser.window.close());
@@ -44,7 +44,7 @@ const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
-test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Design actions', async () => {
+test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Creator actions', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let accountAnchor: HTMLElement | undefined;
@@ -65,7 +65,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Desi
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
-	using executed = services.get(ICommandService).onWillExecuteCommand(event => selectedActions.push(event.commandId.slice('sessions.open.'.length)));
+	using executed = services.get(ICommandService).onWillExecuteCommand(event => { if (event.commandId.startsWith('sessions.open.')) { selectedActions.push(event.commandId.slice('sessions.open.'.length)); } });
 	selectedActions.push('chat');
 	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, {
 		showAccountMenu: async (anchor: HTMLElement) => { accountAnchor = anchor; },
@@ -85,7 +85,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Desi
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-		), [['Chat', 'Collaboration', 'Library', 'Code', 'Design'], ['Accounts']]);
+		), [['Chat', 'Collaboration', 'Library', 'Code', 'Creator'], ['Accounts']]);
 		assert.ok(buttons.every(button => button.classList.contains('icon-only')));
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
@@ -105,7 +105,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Desi
 			['code', null], ['symbol-color-filled', 'page'],
 		]);
 		buttons[0]?.click();
-		assert.deepEqual(selectedActions, ['chat', 'teams', 'library', 'code', 'design', 'chat']);
+		assert.deepEqual(selectedActions, ['chat', 'teams', 'library', 'code', 'creator', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[4]?.getAttribute('aria-current'), null);
 		buttons[5]?.click();
@@ -190,7 +190,9 @@ test('navigation order survives a new window and includes new menu contributions
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
+	storage.store('sessions.activityBar.actionOrder', JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.design']), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
+	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.creator']));
 	setARIAContainer(document.body);
 	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
 	buttons[4]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -198,9 +200,9 @@ test('navigation order survives a new window and includes new menu contributions
 	assert.equal(bar.domNode.querySelectorAll('button')[3], buttons[4]);
 	await storage.flush();
 	using restored = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Design', 'Code']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Design', 'Code', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
@@ -242,10 +244,11 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const commands = resources.add(new CommandService(services));
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
-	const keys = new Map(['chat', 'teams', 'library', 'code', 'design'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
+	const keys = new Map(['chat', 'teams', 'library', 'code', 'creator'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { for (const [candidate, key] of keys) { key.set(candidate === id); } });
 	for (const id of ['chat', 'teams', 'code']) { resources.add(CommandsRegistry.register(`sessions.open.${id}`, () => select(id))); }
-	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string } }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'design') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
-	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/design/browser/designEditorService.js').IDesignEditorService);
+	for (const id of ['library', 'creator']) { resources.add(CommandsRegistry.register(`sessions.show.${id}`, () => select(id))); }
+	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string } }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
+	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/creator/browser/designEditorService.js').IDesignEditorService);
 	return resources;
 }

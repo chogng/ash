@@ -49,7 +49,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
-await import('../../contrib/design/browser/design.contribution.js');
+await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 

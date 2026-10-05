@@ -233,7 +233,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 - Disposal 只释放当前 owner 创建的 listener、DOM、tracked handle、worker 或 reference；不得顺带 dispose caller-owned model、selection controller 或 feature source。
 - View projection 发现 layout、visual projection 与 model version 不一致时停止本次投影，不尝试猜测或修补。
 - Async language、clipboard、diff 和 file result 在 apply 前再次检查 identity/version/revision。
-- Save 使用 resolve 时的 opaque revision 作为写入 guard；watcher 事件只是较早的冲突提示。
+- Code 文件保存使用 resolve 时的 opaque revision 作为写入 guard；watcher 和窗口焦点检查只重读没有本地修改的模型。只有 expected-revision 保存被拒绝才进入冲突状态，后台读取失败不改变保存状态。
 
 ## 当前状态与演进
 

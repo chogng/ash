@@ -86,7 +86,7 @@ export class SettingModel<T> extends Disposable implements SettingReference {
 export function configurationSettingBinding<T>(configurationService: IConfigurationService, configuration: IRegisteredConfiguration<T>): SettingValueBinding<T> {
 	return {
 		id: configuration.key,
-		defaultValue: configuration.defaultValue,
+		defaultValue: configurationService.inspect<T>(configuration.key).defaultValue!,
 		onDidChange: listener => configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(configuration.key)) listener();
 		}),

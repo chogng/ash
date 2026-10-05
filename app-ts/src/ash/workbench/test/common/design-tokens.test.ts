@@ -9,7 +9,7 @@ import '../../../platform/theme/common/colors/miscColors.js';
 import '../../../platform/theme/common/colors/quickpickColors.js';
 import '../../../platform/theme/common/colors/searchColors.js';
 import '../../contrib/welcomeGettingStarted/browser/gettingStartedColors.js';
-import '../../../sessions/contrib/design/browser/widget/designToolsWidget.js';
+import '../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
 import '../../../platform/theme/common/colors/baseColors.js';
 import '../../../platform/theme/common/sizes/baseSizes.js';
 import { strict as assert } from "node:assert";

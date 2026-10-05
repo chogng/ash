@@ -15,6 +15,8 @@ export interface WorkbenchConfigurationServiceOptions {
 	readonly initialSnapshot?: IConfigurationSnapshot;
 	readonly registry?: IConfigurationRegistry;
 	readonly onError?: (error: unknown) => void;
+	readonly defaults?: ReadonlyMap<string, unknown>;
+	readonly readOnlyKeys?: ReadonlySet<string>;
 }
 
 interface ConfigurationState {
@@ -34,6 +36,8 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	private readonly api: IConfigurationApi | undefined;
 	private readonly registry: IConfigurationRegistry;
 	private readonly onError: (error: unknown) => void;
+	private readonly defaults: ReadonlyMap<string, unknown>;
+	private readonly readOnlyKeys: ReadonlySet<string>;
 	private readonly changeEmitter = this._register(new Emitter<IConfigurationChangeEvent>());
 	private readonly resourceChangeEmitter = this._register(new Emitter<IConfigurationResourceSnapshot>());
 	private readonly values = new Map<string, unknown>();
@@ -52,6 +56,8 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		super();
 		this.api = options.api;
 		this.registry = options.registry ?? Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		this.defaults = options.defaults ?? new Map();
+		this.readOnlyKeys = options.readOnlyKeys ?? new Set();
 		this.onError = options.onError ?? (error => console.error('Failed to apply configuration', error));
 		this.hasAuthoritativeSnapshot = this.api === undefined;
 		this.rebuildValues();
@@ -70,7 +76,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 
 	getConfigurationData(): IConfigurationData {
 		const defaults = new Map<string, unknown>();
-		for (const configuration of this.registry.getRegisteredConfigurations()) defaults.set(configuration.key, configuration.defaultValue);
+		for (const configuration of this.registry.getRegisteredConfigurations()) defaults.set(configuration.key, this.defaultValue(configuration));
 		return Object.freeze({
 			defaults: configurationModel(defaults),
 			policy: emptyConfigurationModel(),
@@ -104,6 +110,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
 	async updateValue(key: string, value: unknown, arg3?: unknown, arg4?: unknown, _options?: IConfigurationUpdateOptions): Promise<void> {
 		const configuration = this.requireConfiguration(key);
+		if (this.readOnlyKeys.has(key)) throw new Error(localize('configuration.readOnly', 'Setting {0} is read-only in this window.', key));
 		const { identifiers, overrides, target } = parseUpdateArguments(arg3, arg4);
 		assertNoResourceOverride(overrides, 'Workbench configuration');
 		if (target !== undefined && target !== ConfigurationTarget.USER && target !== ConfigurationTarget.USER_LOCAL) throw new Error(`Unable to write ${key} to target ${target}.`);
@@ -111,7 +118,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		const parsed = value === undefined ? undefined : configuration.parse(value);
 		let serialized = parsed === undefined ? undefined : configuration.serialize(parsed);
 		if (serialized === undefined && value !== undefined) throw new TypeError(`Configuration key '${key}' did not serialize to JSON`);
-		if (equals(parsed, configuration.defaultValue)) serialized = undefined;
+		if (equals(parsed, this.defaultValue(configuration))) serialized = undefined;
 		if (this.api && !this.hasAuthoritativeSnapshot) await this.reloadConfiguration();
 		let source = this.document.source;
 		if (identifiers.length === 0) {
@@ -149,10 +156,10 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 			})
 			: undefined;
 		return Object.freeze({
-			defaultValue: configuration.defaultValue as Readonly<T>,
+			defaultValue: this.defaultValue(configuration) as Readonly<T>,
 			...(userLocalValue === undefined ? {} : { userValue: userLocalValue, userLocalValue }),
 			value: this.resolveSection(key, overrides) as Readonly<T>,
-			default: Object.freeze({ value: configuration.defaultValue as Readonly<T> }),
+			default: Object.freeze({ value: this.defaultValue(configuration) as Readonly<T> }),
 			...(userLocal === undefined ? {} : { user: userLocal, userLocal }),
 			...(overrideIdentifiers.length === 0 ? {} : { overrideIdentifiers: Object.freeze(overrideIdentifiers) as string[] }),
 		});
@@ -239,7 +246,12 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 
 	private applySnapshot(snapshot: IConfigurationSnapshot): void {
 		const previous = this.snapshot();
-		const change = changedConfiguration(this.document, snapshot.document);
+		const documentChange = changedConfiguration(this.document, snapshot.document);
+		// Shared-file edits still advance the resource revision when this window ignores their values.
+		const change: IConfigurationChange = {
+			keys: documentChange.keys.filter(key => !this.readOnlyKeys.has(key)),
+			overrides: documentChange.overrides.map(([identifier, keys]): [string, string[]] => [identifier, keys.filter(key => !this.readOnlyKeys.has(key))]).filter(([, keys]) => keys.length > 0),
+		};
 		this.revision = snapshot.revision;
 		this.document = snapshot.document;
 		this.rebuildValues();
@@ -256,8 +268,8 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		const configured = configurationValues(this.document);
 		for (const configuration of this.registry.getRegisteredConfigurations()) {
 			const candidate = configured[configuration.key];
-			if (candidate === undefined) {
-				this.values.set(configuration.key, configuration.defaultValue);
+			if (candidate === undefined || this.readOnlyKeys.has(configuration.key)) {
+				this.values.set(configuration.key, this.defaultValue(configuration));
 				continue;
 			}
 			const value = this.parseConfigurationValue(configuration, candidate);
@@ -268,7 +280,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 			const blockValues = new Map<string, unknown>();
 			for (const [key, candidate] of Object.entries(entry.values)) {
 				const configuration = this.registry.getConfiguration(key);
-				if (configuration) {
+				if (configuration && !this.readOnlyKeys.has(key)) {
 					if (configuration.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) {
 						this.onError(new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key)));
 						continue;
@@ -276,6 +288,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 					blockValues.set(key, this.parseConfigurationValue(configuration, candidate));
 				}
 			}
+			if (blockValues.size === 0) continue;
 			this.overrideBlocks.push({ key: entry.key, identifiers: [...entry.identifiers], values: blockValues });
 			for (const identifier of entry.identifiers) {
 				const values = this.overrideValues.get(identifier) ?? new Map<string, unknown>();
@@ -297,8 +310,12 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 			return configuration.parse(value);
 		} catch (error) {
 			this.onError(new Error(`Invalid configuration value for '${configuration.key}'`, { cause: error }));
-			return configuration.defaultValue;
+			return this.defaultValue(configuration);
 		}
+	}
+
+	private defaultValue(configuration: IRegisteredConfiguration): unknown {
+		return this.defaults.has(configuration.key) ? this.defaults.get(configuration.key) : configuration.defaultValue;
 	}
 
 	private requireConfiguration(key: string): IRegisteredConfiguration {

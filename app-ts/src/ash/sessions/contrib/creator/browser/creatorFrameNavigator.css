@@ -1,0 +1,37 @@
+.ash-creator-frame-selector {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	font-size: var(--ash-font-size-label1);
+}
+.ash-creator-frame-selector > select {
+	max-width: 180px;
+	min-height: 28px;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
+}
+.ash-creator-frame-preview {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	background: var(--ash-editor-background);
+}
+.ash-creator-frame-preview[hidden] { display: none; }
+.ash-creator-preview-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120);
+}
+.ash-creator-preview-scene {
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+}
+.ash-creator-frame-selector > select:focus-visible,
+.ash-creator-frame-preview:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: -1px; }

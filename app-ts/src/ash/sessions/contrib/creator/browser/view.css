@@ -1,0 +1,30 @@
+.ash-sessions-design-shapes {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.ash-sessions-design-selection {
+	display: none;
+	fill: none;
+	stroke: var(--ash-focus-border);
+	stroke-width: 2px;
+	vector-effect: non-scaling-stroke;
+}
+
+.ash-sessions-design-selection.visible {
+	display: block;
+}
+
+.ash-sessions-design-selection line,
+.ash-sessions-design-path-handle {
+	vector-effect: non-scaling-stroke;
+}
+
+.ash-sessions-design-path-handle {
+	fill: var(--ash-editor-background);
+	pointer-events: all;
+	cursor: move;
+}

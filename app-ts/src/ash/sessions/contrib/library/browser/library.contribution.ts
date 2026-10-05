@@ -6,24 +6,12 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { EditorPanes } from '../../../../workbench/browser/editor.js';
-import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
-import { LibraryPage, LibraryEditorPane, LIBRARY_EDITOR_RESOURCE } from './libraryPage.js';
+import { LibraryPage } from './libraryPage.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-
-EditorPanes.registerStatic({
-	id: LibraryEditorPane.ID,
-	name: 'Library',
-	canOpen: input => input.resource.toString() === LIBRARY_EDITOR_RESOURCE.toString() ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => {
-		if (!options.instantiationService) { throw new Error('Library editor requires an instantiation service'); }
-		return options.instantiationService.createInstance(LibraryEditorPane);
-	},
-});
 
 registerAction2(class OpenLibrary extends Action2 {
 	constructor() {
@@ -34,7 +22,7 @@ registerAction2(class OpenLibrary extends Action2 {
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IEditorService).openEditor({ resource: LIBRARY_EDITOR_RESOURCE, label: localize('library.title', 'Library'), readOnly: true, showBreadcrumbs: false }, { pinned: true });
+		await accessor.get(ICommandService).executeCommand('sessions.show.library');
 	}
 });
 

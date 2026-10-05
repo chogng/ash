@@ -53,7 +53,7 @@ import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
-import { DesignEditorService, IDesignEditorService } from '../contrib/design/browser/designEditorService.js';
+import { DesignEditorService, IDesignEditorService } from '../contrib/creator/browser/designEditorService.js';
 import { sessionsPartIds, SESSION_SIDEBAR_DEFAULT_WIDTH, SESSION_AUXILIARYBAR_DEFAULT_WIDTH, type SessionsPartId } from '../common/layoutConstants.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { ILanguageService } from "../../editor/common/languages/language.js";
@@ -173,7 +173,7 @@ import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
 import { AppServerAccountService } from '../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IChatService } from "../../workbench/services/chat/common/chatService.js";
-import { WorkbenchConfigurationService } from "../../workbench/services/configuration/browser/configurationService.js";
+import { ConfigurationService } from '../services/configuration/browser/configurationService.js';
 import { ExtensionColorThemeService } from "../../workbench/services/extensions/browser/extensionColorThemeService.js";
 import type { BrowserStorageServiceOptions } from "../../workbench/services/storage/browser/storageService.js";
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
@@ -204,6 +204,9 @@ import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompos
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
+import { LibraryPart } from '../contrib/library/browser/libraryPage.js';
+import { CreatorPart } from '../contrib/creator/browser/creatorPage.js';
+import { CreatorMode } from '../contrib/creator/common/creator.js';
 import { SidebarPart } from "./parts/sidebarPart.js";
 import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
@@ -234,7 +237,7 @@ export interface IWorkbenchOptions {
 /** Owns the dedicated Sessions window's services, Parts, layout, and disposal. */
 export class Workbench extends Disposable {
 	readonly domNode: HTMLElement;
-	readonly configurationService: WorkbenchConfigurationService;
+	readonly configurationService: ConfigurationService;
 	readonly themeService: WorkbenchThemeService;
 	private readonly layoutService: SessionsWorkbenchLayout;
 	private readonly lifecycleService: ILifecycleService;
@@ -276,7 +279,7 @@ export class Workbench extends Disposable {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
-		const configurationService = this.configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
+		const configurationService = this.configurationService = this._register(new ConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
 		const serviceCollection = new ServiceCollection();
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
@@ -510,8 +513,16 @@ export class Workbench extends Disposable {
 		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
 			const version = value as AssetVersion;
 			const design = services.get(IDesignEditorService);
-			await editors.openEditor(design.input, { pinned: true, preserveFocus: true });
+			await commandService.executeCommand('sessions.creator.openMode', CreatorMode.Design);
 			await design.activeEditor.get()!.adoptAssetVersion(version);
+		}));
+		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
+			const request = value as { readonly prompt: string; readonly content: string };
+			view.openNewSession(localize('sessions.creator.make.session', 'Make development'));
+			await commandService.executeCommand('sessions.open.code');
+			sessionsPart!.addContext({ id: 'creator-source', name: 'creator.html', kind: 'file', resolve: async () => ({ name: 'creator.html', content: request.content }) });
+			sessionsPart!.appendToDraft(request.prompt || localize('sessions.creator.make.request', 'Build an application from the attached Creator document.'));
+			sessionsPart!.focus();
 		}));
 		this._register(CommandsRegistry.register('sessions.library.addToChat', async (_accessor, value) => {
 			const version = value as AssetVersion;
@@ -542,7 +553,7 @@ export class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library browses imported images, favorites and collections in an editor. Design opens a canvas editor with Layers and Shape properties. Accounts opens the account menu, which includes Return to Workbench.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -636,11 +647,15 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		const library = this._register(services.createInstance(LibraryPart, this.domNode));
+		const creator = this._register(services.createInstance(CreatorPart, this.domNode));
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
 			["sidebar", sidebar],
 			["sessions", sessionsPart],
+			['library', library],
+			['creator', creator],
 			['editor', editor],
 			["auxiliarybar", auxiliarybar],
 			['panel', panel],
@@ -651,7 +666,7 @@ export class Workbench extends Disposable {
 				void views.openViewContainer(event.compositeId, true).catch(error => notificationService.error(String(error)));
 			}));
 		}
-		const layoutController = this._register(services.createInstance(DesktopLayoutController, sidebar));
+		const layoutController = this._register(services.createInstance(DesktopLayoutController, sidebar, library, creator));
 		layoutController.start();
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
@@ -696,7 +711,7 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, configurationService: WorkbenchConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost, storage: IStorageService, commands: ICommandService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
+	private async initialize(view: SessionsService, configurationService: ConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost, storage: IStorageService, commands: ICommandService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
 		await configurationService.reloadConfiguration();
 		await view.initialize();
 		if (this.isDisposed) return;
@@ -710,12 +725,13 @@ export class Workbench extends Disposable {
 		}
 		view.activateSelection(selected);
 		const previousActivity = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE);
-		if (previousActivity === 'library' || previousActivity === 'design' || previousActivity === 'colab') {
+		if (previousActivity === 'design') { await commands.executeCommand('sessions.creator.openMode', CreatorMode.Design); }
+		if (previousActivity === 'library' || previousActivity === 'creator' || previousActivity === 'colab') {
 			await commands.executeCommand(`sessions.open.${previousActivity === 'colab' ? 'teams' : previousActivity}`);
 		}
 		storage.remove('sessions.activityBar.activePage', StorageScope.WORKSPACE);
 		await layoutController.whenSettled();
-		await layoutController.restorePrimaryEditor();
+		await layoutController.restorePrimaryPage();
 		if (this.isDisposed) return;
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
@@ -742,7 +758,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setLayoutStyle(style: SessionsLayoutStyle): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
-	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;
+	setPartAvailable(partId: 'sessions' | 'library' | 'creator' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;
 	updateParts(update: () => void): void;
 	showPart(partId: SessionsPartId): void;
 	hidePart(partId: SessionsPartId): void;
@@ -938,6 +954,8 @@ function createSessionsWorkbenchGridDescriptor(
 								priority: SESSIONS_LAYOUT_PRIORITY,
 								children: [
 									leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
+									leaf('library', mainWidth, false, SESSIONS_LAYOUT_PRIORITY),
+									leaf('creator', mainWidth, false, SESSIONS_LAYOUT_PRIORITY),
 									leaf('editor', state.editor.visible ? state.editor.width : state.auxiliarybar.width, state.editor.visible || state.auxiliarybar.visible),
 									leaf('auxiliarybar', state.auxiliarybar.width, false),
 								],
@@ -960,7 +978,7 @@ function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDim
 }
 
 function parseSessionsPartId(value: unknown): SessionsPartId {
-	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'editor' || value === 'auxiliarybar' || value === 'panel') return value;
+	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'library' || value === 'creator' || value === 'editor' || value === 'auxiliarybar' || value === 'panel') return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
 
@@ -995,7 +1013,7 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 	}
 	public override get onDidChange(): Event<void> { return this.partId === 'editor' ? this.compositionChanged : super.onDidChange; }
 	public get priority(): 'high' | 'normal' {
-		return this.partId === 'sessions' || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
+		return this.partId === 'sessions' || this.partId === 'library' || this.partId === 'creator' ? 'high' : 'normal';
 	}
 
 	public override layout(bounds: IPositionedRectangle): void {
@@ -1009,7 +1027,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 	private grid!: SerializableGrid<SessionsWorkbenchPartView>;
 	private partUpdateDepth = 0;
 	private readonly unavailableParts = new Set<SessionsPartId>();
-	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean };
+	private readonly desiredVisibility: { sessions: boolean; library: boolean; creator: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean };
 	private titlebarHeight = 0;
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
@@ -1045,7 +1063,9 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		const state = this.stateModel.state;
 		this.sidePaneWidth = state.editor.width;
 		this.detailsWidth = state.auxiliarybar.width;
-		this.desiredVisibility = { sessions: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: state.editor.visible, panel: state.panel.visible };
+		this.desiredVisibility = { sessions: true, library: true, creator: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: state.editor.visible, panel: state.panel.visible };
+		this.unavailableParts.add('library');
+		this.unavailableParts.add('creator');
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
@@ -1193,7 +1213,7 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
-	public setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void {
+	public setPartAvailable(partId: 'sessions' | 'library' | 'creator' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void {
 		if (available === !this.unavailableParts.has(partId)) {
 			return;
 		}
@@ -1250,13 +1270,18 @@ export class SessionsWorkbenchLayout extends BrowserLayoutService implements IAg
 		const contentLeftEdge = this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge;
 		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: rightEdge, left: contentLeftEdge });
 		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
+		this.view('library').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: contentLeftEdge });
+		this.view('creator').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: 0 });
 		this.view('editor').setFrameInsets({ top: 0, right: this.isDocked || !auxiliarybarVisible ? rightEdge : 0, bottom: rightEdge, left: !sidebarVisible && !sessionsVisible ? contentLeftEdge : 0 });
-		const firstPart = sidebarVisible ? 'sidebar' : sessionsVisible ? 'sessions' : 'editor';
-		let lastPart: SessionsPartId = 'sessions';
+		let mainPart: SessionsPartId = 'sessions';
+		if (this.desiredVisibility.library && !this.unavailableParts.has('library')) { mainPart = 'library'; }
+		if (this.desiredVisibility.creator && !this.unavailableParts.has('creator')) { mainPart = 'creator'; }
+		const firstPart = sidebarVisible ? 'sidebar' : mainPart;
+		let lastPart: SessionsPartId = mainPart;
 		if (editorVisible) lastPart = 'editor';
 		if (auxiliarybarVisible) lastPart = this.isDocked ? 'editor' : 'auxiliarybar';
-		for (const partId of ['sidebar', 'sessions', 'editor', 'auxiliarybar'] as const) {
+		for (const partId of ['sidebar', 'sessions', 'library', 'creator', 'editor', 'auxiliarybar'] as const) {
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-start', partId === firstPart);
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-end', partId === lastPart);
 		}

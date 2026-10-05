@@ -10,11 +10,13 @@ Editor/Details composition. It reads the window's observable selection through
 `ISessionsService.getSelection`, captures outgoing editors before workspace
 changes settle, and serializes restoration once the incoming workspace is ready.
 Chat, Code and Collaboration commands keep this same selection and input.
-Library and Design open through the shared editor service; the desktop controller
-coordinates the surrounding Parts. Window geometry and Part visibility are
+Library and Creator open in the retained `LibraryPart` and `CreatorPart`; the desktop controller
+coordinates the surrounding Parts without changing Code editor inputs. Window geometry and Part visibility are
 persisted by `SessionsWorkbenchLayout`. Draft materialization transfers state to
-the created Session identity. The primary Library or Design editor resource is
-restored from workspace storage at `sessions.layout.primaryEditor`.
+the created Session identity. The selected Library or Creator page is
+restored from workspace storage at `sessions.layout.primaryPage`. The old
+`sessions.layout.primaryEditor` value is migrated once and removed; old page
+resources are removed from saved Code working sets. Legacy Design selection opens Creator in Design mode; Creator mode selection is stored at `sessions.creator.activeMode`. The Creator home command clears mode selection while retaining the workspace instances.
 
 
 Code now has a bottom Panel and Details docked below one shared editor tab strip. Desktop coordinators map Files/Changes tabs to detail content and protect the managed tabs in Details-only mode. Hiding Editor closes ordinary tabs after the shared unsaved-file confirmation and retains a restorable working set; opening a file merges it into that state. Closing the whole side pane retains its tabs, and the preceding open composition is remembered in profile storage at `sessions.layout.sidePane.lastOpen`. Resolved Changes comparison documents are released when their editor content is hidden.
@@ -74,7 +76,7 @@ Closing the whole side pane keeps ordinary editors available for restoration. En
 
 The desktop layout stores bottom-panel visibility with workbench part visibility. It remembers only the active panel view per session in `sessions.singlePane.layoutState`.
 
-The Panel can be opened from any conversation layout through the shared view service. Chat and Collaboration commands hide it; Library and Design make it unavailable. Its retained views and height survive these changes, and explicit panel commands reveal them again.
+The Panel can be opened from any conversation layout through the shared view service. Chat and Collaboration commands hide it; Library and Creator make it unavailable. Its retained views and height survive these changes, and explicit panel commands reveal them again.
 
 The active panel view is captured from `IPaneCompositePartService.onDidPaneCompositeOpen`. A session switch restores that view only while the panel is already visible, so restoring content never forces the panel open. Sessions without a remembered view fall back to the Terminal.
 

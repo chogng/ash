@@ -34,7 +34,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 		this.dispatchEvent(new window.Event('close'));
 	};
 	await import('../../browser/activityBarAccessibility.js');
-	await import('../../contrib/design/browser/design.contribution.js');
+	await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 	const [{ SessionsPreferences }, { WorkbenchConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
 		import('../../../workbench/services/configuration/browser/configurationService.js'),

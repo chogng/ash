@@ -27,7 +27,7 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 | `editor.*.all.ts` | 共同编辑能力装配已具备 | 行式与富文档贡献清单；不得注册 Workbench pane/input |
 | `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | 编辑器宿主适配已具备 | pane/input、文件与 working-copy 接线及 Academic profile 注册；文档模型服务按资源共享模型和保存状态；不得实现编辑事务或视图内部行为 |
 | `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
-| Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
+| Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与 expected-revision/CAS。Code 文件后台检查跳过有本地修改的模型，只在保存被磁盘版本检查拒绝时报告冲突；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
 | Language model | 已具备 Code 主路径 | 基础 token 与预览着色由前端 TextMate Worker 计算；诊断、符号、折叠与结构选择通过异步 parser provider 获取，语义 token、补全、跨文件查询和重构由 LSP provider 接入；结果均检查模型版本 |
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、字符/块 canvas minimap（公共布局、semantic-token 颜色、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |

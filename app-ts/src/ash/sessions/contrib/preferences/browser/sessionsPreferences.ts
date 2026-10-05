@@ -36,7 +36,7 @@ import type { ISetting } from '../../../../workbench/services/preferences/common
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SessionsCustomizeContent } from './sessionsCustomizeContent.js';
-import { DesignConfiguration } from '../../design/common/config/editorConfiguration.js';
+import { DesignConfiguration } from '../../creator/common/config/editorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,

@@ -1,5 +1,4 @@
 import { URI } from '../../../../base/common/uri.js';
-import { LIBRARY_EDITOR_RESOURCE } from '../../library/browser/libraryPage.js';
 import { localize2, localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -17,7 +16,10 @@ import { ISessionsManagementService } from '../../../services/sessions/common/se
 import { IPaneCompositePartService } from '../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import type { SidebarPart } from '../../../browser/parts/sidebarPart.js';
-import { IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from '../../design/browser/designEditorService.js';
+import { DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from '../../creator/browser/designEditorService.js';
+import type { LibraryPart } from '../../library/browser/libraryPage.js';
+import type { CreatorPart } from '../../creator/browser/creatorPage.js';
+import { CreatorMode } from '../../creator/common/creator.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { DesktopDockedTabsCoordinator } from './desktop/desktopDockedTabsCoordinator.js';
 import { DesktopDetailPanelCoordinator } from './desktop/desktopDetailPanelCoordinator.js';
@@ -57,14 +59,14 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private existingProfile: SidePaneProfile | undefined;
 	private closedProfile: SidePaneProfile = { editor: false, details: true };
 	private initialRestore = true;
-	private sessionEditor: EditorInput | undefined;
 	private applyingComposition = false;
-	private readonly restoredEditorResource: URI | undefined;
+	private readonly restoredPage: 'library' | 'creator' | undefined;
 
 	constructor(
 		private readonly sidebar: SidebarPart,
+		private readonly library: LibraryPart,
+		private readonly creator: CreatorPart,
 		@IPaneCompositePartService panes: IPaneCompositePartService,
-		@IDesignEditorService private readonly designEditors: IDesignEditorService,
 		@ISessionsService sessions: ISessionsService,
 		@ISessionsManagementService management: ISessionsManagementService,
 		@IEditorPart editor: IEditorPart,
@@ -82,10 +84,20 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		const primaryEditor = storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
 		if (primaryEditor !== undefined) {
-			const resource = URI.parse(primaryEditor);
-			if (resource.toString() !== designEditors.input.resource.toString() && resource.toString() !== LIBRARY_EDITOR_RESOURCE.toString()) { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
-			this.restoredEditorResource = resource;
+			const scheme = URI.parse(primaryEditor).scheme;
+			if (scheme !== 'ash-design' && scheme !== 'ash-library') { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
+			storage.store('sessions.layout.primaryPage', scheme === 'ash-design' ? 'creator' : 'library', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			if (scheme === 'ash-design') { storage.store('sessions.creator.activeMode', CreatorMode.Design, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
+			storage.remove('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
 		}
+		let page = storage.get('sessions.layout.primaryPage', StorageScope.WORKSPACE);
+		if (page === 'design') {
+			page = 'creator';
+			storage.store('sessions.layout.primaryPage', page, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			storage.store('sessions.creator.activeMode', CreatorMode.Design, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		}
+		if (page !== undefined && page !== 'library' && page !== 'creator') { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
+		this.restoredPage = page;
 		const profile = storage.get(profileKey, StorageScope.WORKSPACE);
 		if (profile !== undefined) {
 			this.existingProfile = parseProfile(profile);
@@ -98,41 +110,25 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	public override start(): void {
 		super.start();
-		const activityKeys = new Map(['chat', 'code', 'teams', 'library', 'design'].map(id => [id, this.contextKeys.createKey<boolean>(`sessions.activity.${id}Selected`, false)]));
+		const activityKeys = new Map(['chat', 'code', 'teams', 'library', 'creator'].map(id => [id, this.contextKeys.createKey<boolean>(`sessions.activity.${id}Selected`, false)]));
 		const updateActivity = (): void => this.contextKeys.bufferChangeEvents(() => {
 			const editorVisible = this.layout.isPartVisible('editor');
-			const scheme = this.editors.activeEditor?.resource.scheme;
-			const editorOnly = !this.layout.isPartVisible('sessions');
-			const teams = !editorOnly && this.sidebar.currentView === 'teams';
-			const code = !editorOnly && !teams && (editorVisible || this.layout.isPartVisible('auxiliarybar') || this.layout.isPartVisible('panel'));
-			activityKeys.get('chat')!.set(!editorOnly && !teams && !code);
+			const pageVisible = this.layout.isPartVisible('library') || this.layout.isPartVisible('creator');
+			const teams = !pageVisible && this.sidebar.currentView === 'teams';
+			const code = !pageVisible && !teams && (editorVisible || this.layout.isPartVisible('auxiliarybar') || this.layout.isPartVisible('panel'));
+			activityKeys.get('chat')!.set(!pageVisible && !teams && !code);
 			activityKeys.get('code')!.set(code);
 			activityKeys.get('teams')!.set(teams);
-			activityKeys.get('library')!.set(editorOnly && editorVisible && scheme === 'ash-library');
-			activityKeys.get('design')!.set(editorOnly && editorVisible && scheme === 'ash-design');
+			activityKeys.get('library')!.set(this.layout.isPartVisible('library'));
+			activityKeys.get('creator')!.set(this.layout.isPartVisible('creator'));
 		});
 		this._register(toDisposable(() => { for (const key of activityKeys.values()) { key.reset(); } }));
 		this._register(this.layout.onDidLayoutMainContainer(updateActivity));
 		this._register(this.sidebar.onDidChangeView(updateActivity));
 		this._register(this.editors.onDidActiveEditorChange(() => {
 			const input = this.editors.activeEditor;
-			if (input && input.resource.scheme !== 'ash-design' && input.resource.scheme !== 'ash-library') { this.sessionEditor = input; }
-			if (!this.applyingComposition && !this.restoring && input) {
-				if (input.resource.scheme === 'ash-design' || input.resource.scheme === 'ash-library') {
-					void this.showEditorComposition(input.resource.scheme === 'ash-design').catch(error => this.notifications.error(String(error)));
-				} else {
-					this.layout.updateParts(() => {
-						this.layout.setPartAvailable('sessions', true);
-						this.layout.setPartAvailable('editor', true);
-						this.layout.setPartAvailable('sidebar', true);
-						this.layout.setPartAvailable('panel', true);
-						this.layout.setPartAvailable('auxiliarybar', true);
-					});
-					this.savePrimaryEditor();
-				}
-			}
-			if (!input && !this.applyingComposition && !this.restoring && !this.layout.isPartVisible('sessions')) {
-				void this.showSessionComposition('chat').catch(error => this.notifications.error(String(error)));
+			if (!this.applyingComposition && !this.restoring && input && (this.layout.isPartVisible('library') || this.layout.isPartVisible('creator'))) {
+				void this.showSessionComposition('code').catch(error => this.notifications.error(String(error)));
 			}
 			updateActivity();
 		}));
@@ -145,6 +141,16 @@ export class DesktopLayoutController extends BaseLayoutController {
 		for (const id of ['chat', 'code', 'teams'] as const) {
 			this._register(CommandsRegistry.register(`sessions.open.${id}`, () => this.showSessionComposition(id)));
 		}
+		this._register(CommandsRegistry.register('sessions.show.library', () => this.showPageComposition('library')));
+		this._register(CommandsRegistry.register('sessions.show.creator', () => { this.creator.showHome(); return this.showPageComposition('creator'); }));
+		this._register(CommandsRegistry.register('sessions.creator.openMode', (_accessor, value) => {
+			if (!Object.values(CreatorMode).includes(value as CreatorMode)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Creator document mode.')); }
+			this.creator.openMode(value as CreatorMode);
+			return this.showPageComposition('creator');
+		}));
+		this._register(this.creator.onDidChangeWorkspace(() => {
+			if (this.layout.isPartVisible('creator')) { void this.updateCreatorPanels().catch(error => this.notifications.error(String(error))); }
+		}));
 		updateActivity();
 		const editorVisible = editorVisibleContext.bindTo(this.contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(this.contextKeys);
@@ -279,7 +285,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	protected override isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.updating || this.applyingComposition; }
 	protected override shouldShowEditor(): boolean {
 		const input = this.editors.activeEditor;
-		return super.shouldShowEditor() && (this.layout.isPartVisible('editor') || !input || !this.tabs.isManaged(input));
+		return !this.layout.isPartVisible('library') && !this.layout.isPartVisible('creator') && super.shouldShowEditor() && (this.layout.isPartVisible('editor') || !input || !this.tabs.isManaged(input));
 	}
 	protected override getWorkingSet(key: string): EditorWorkingSet {
 		const current = super.getWorkingSet(key);
@@ -309,8 +315,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 
 	protected override async onSessionRestored(selection: SessionsViewSelection, hasSavedEditors: boolean): Promise<void> {
-		// Design retains its live document when covered by Code. Code composition must
-		// wait for a Code editor rather than closing the hidden, possibly dirty canvas.
+		// Product pages never adopt a session's editor composition.
 		if (!this.layout.isPartAvailable('editor')) {
 			return;
 		}
@@ -334,23 +339,45 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.detailPanel.update(false);
 	}
 
-	private async showEditorComposition(design: boolean): Promise<void> {
+	private async showPageComposition(page: 'library' | 'creator'): Promise<void> {
+		await this.whenSettled();
+		this.captureEditors();
+		if (this.isCodeActive()) { this.closedProfile = this.profile; }
+		if (page === 'creator') { this.creator.initialize(); }
+		const canvas = page === 'creator' && this.creator.usesCanvasPanels;
 		this.applyingComposition = true;
 		try {
 			this.layout.updateParts(() => {
-				this.layout.setPartAvailable('editor', true);
-				this.layout.showPart('editor');
+				this.layout.setPartAvailable('editor', false);
 				this.layout.setPartAvailable('sessions', false);
-				this.layout.setPartAvailable('sidebar', design);
-				this.layout.setPartAvailable('auxiliarybar', design);
+				this.layout.setPartAvailable('library', page === 'library');
+				this.layout.setPartAvailable('creator', page === 'creator');
+				this.layout.setPartAvailable('sidebar', canvas);
+				this.layout.setPartAvailable('auxiliarybar', canvas);
 				this.layout.setPartAvailable('panel', false);
+				if (canvas) { this.layout.showPart('sidebar'); this.layout.showPart('auxiliarybar'); }
 			});
-			if (design) {
+			if (canvas) {
 				await this.panes.openPaneComposite(DESIGN_LAYERS_CONTAINER_ID, ViewContainerLocation.Sidebar);
 				await this.panes.openPaneComposite(DESIGN_PROPERTIES_CONTAINER_ID, ViewContainerLocation.AuxiliaryBar);
 			}
+			if (page === 'library') { this.library.focus(); }
+			else { this.creator.focus(); }
 		} finally { this.applyingComposition = false; }
-		this.savePrimaryEditor();
+		this.savePrimaryPage();
+	}
+
+	private async updateCreatorPanels(): Promise<void> {
+		const canvas = this.creator.usesCanvasPanels;
+		this.layout.updateParts(() => {
+			this.layout.setPartAvailable('sidebar', canvas);
+			this.layout.setPartAvailable('auxiliarybar', canvas);
+			if (canvas) { this.layout.showPart('sidebar'); this.layout.showPart('auxiliarybar'); }
+		});
+		if (canvas) {
+			await this.panes.openPaneComposite(DESIGN_LAYERS_CONTAINER_ID, ViewContainerLocation.Sidebar);
+			await this.panes.openPaneComposite(DESIGN_PROPERTIES_CONTAINER_ID, ViewContainerLocation.AuxiliaryBar);
+		}
 	}
 
 	private async showSessionComposition(action: 'chat' | 'code' | 'teams'): Promise<void> {
@@ -358,16 +385,12 @@ export class DesktopLayoutController extends BaseLayoutController {
 		try {
 			const keepComposition = this.layout.isPartVisible('sessions') && this.sidebar.currentView === 'chats'
 				&& (this.layout.isPartVisible('editor') || this.layout.isPartVisible('auxiliarybar') || this.layout.isPartVisible('panel'));
-			const specialEditor = ['ash-design', 'ash-library'].includes(this.editors.activeEditor?.resource.scheme ?? '');
-			if (specialEditor) {
-				const retained = this.sessionEditor && this.editor.groups.some(group => group.inputs.includes(this.sessionEditor!));
-				if (retained) { this.editor.activateEditor(this.sessionEditor!); }
-				else { await this.tabs.openFiles(); }
-			}
 			if (action !== 'code' && this.layout.isPartVisible('sessions') && (this.layout.isPartVisible('editor') || this.layout.isPartVisible('auxiliarybar'))) {
 				this.closedProfile = this.profile;
 			}
 			this.layout.updateParts(() => {
+				this.layout.setPartAvailable('library', false);
+				this.layout.setPartAvailable('creator', false);
 				this.layout.setPartAvailable('sidebar', true);
 				this.sidebar.selectView(action === 'teams' ? 'teams' : 'chats');
 				this.layout.setPartAvailable('editor', true);
@@ -384,6 +407,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 				}
 			});
 			if (action === 'code') {
+				// Revealing Sessions schedules its working-set restore, including a new Make draft.
+				// Seed Code tabs only after that restore has completed to keep one editor-opening owner.
+				await this.whenSettled();
 				const selection = this.sessions.activeSelection;
 				if (selection) {
 					await this.tabs.reconcile(selection, !this.layout.isPartVisible('editor'));
@@ -393,22 +419,17 @@ export class DesktopLayoutController extends BaseLayoutController {
 				this.editors.focusActiveEditor();
 			} else { this.sidebar.focus(); }
 		} finally { this.applyingComposition = false; }
-		this.savePrimaryEditor();
+		this.savePrimaryPage();
 	}
 
-	public async restorePrimaryEditor(): Promise<void> {
-		if (!this.restoredEditorResource) { return; }
-		const input = this.restoredEditorResource.scheme === 'ash-design'
-			? this.designEditors.input
-			: { resource: LIBRARY_EDITOR_RESOURCE, label: localize('library.title', 'Library'), readOnly: true, showBreadcrumbs: false };
-		await this.editors.openEditor(input, { pinned: true, preserveFocus: true });
+	public async restorePrimaryPage(): Promise<void> {
+		if (this.restoredPage) { await this.showPageComposition(this.restoredPage); }
 	}
 
-	private savePrimaryEditor(): void {
-		const input = this.editors.activeEditor;
-		if (input && !this.layout.isPartVisible('sessions')) {
-			this.storage.store('sessions.layout.primaryEditor', input.resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		} else { this.storage.remove('sessions.layout.primaryEditor', StorageScope.WORKSPACE); }
+	private savePrimaryPage(): void {
+		if (this.layout.isPartVisible('library') || this.layout.isPartVisible('creator')) {
+			this.storage.store('sessions.layout.primaryPage', this.layout.isPartVisible('library') ? 'library' : 'creator', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		} else { this.storage.remove('sessions.layout.primaryPage', StorageScope.WORKSPACE); }
 	}
 
 	private get profile(): SidePaneProfile { return { editor: this.layout.isPartVisible('editor'), details: this.layout.isPartVisible('auxiliarybar') }; }

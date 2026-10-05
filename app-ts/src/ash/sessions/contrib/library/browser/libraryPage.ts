@@ -1,5 +1,5 @@
 import './libraryPage.css';
-import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, h, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,8 +17,27 @@ import { ImageResource } from '../../../../platform/media/browser/image.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
+import { WorkbenchPart } from '../../../../workbench/browser/part.js';
+
+export class LibraryPart extends WorkbenchPart {
+	private page: LibraryPage | undefined;
+	private dimension: IDimension = Dimension.Zero;
+	constructor(container: HTMLElement, @IInstantiationService private readonly instantiation: IInstantiationService) {
+		super(container, 'library');
+		this.titleDomNode.remove();
+	}
+	public override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		if (visible && !this.page) {
+			this.page = this._register(this.instantiation.createInstance(LibraryPage, this.domNode.ownerDocument));
+			this.contentDomNode.append(this.page.domNode);
+			this.page.layout(this.dimension);
+		}
+		this.page?.setVisible(visible);
+	}
+	public override layout(dimension: IDimension): void { this.dimension = dimension; this.page?.layout(dimension); }
+	public focus(): void { this.page!.focus(); }
+}
 
 interface LibraryItem {
 	readonly store: DisposableStore;
@@ -397,30 +416,4 @@ export class LibraryPage extends Disposable {
 		else { next += event.key === 'ArrowDown' ? columns : event.key === 'ArrowUp' ? -columns : event.key === 'ArrowRight' ? 1 : -1; }
 		event.preventDefault(); buttons[Math.max(0, Math.min(buttons.length - 1, next))].focus();
 	}
-}
-
-export const LIBRARY_EDITOR_RESOURCE = URI.from({ scheme: 'ash-library', path: '/library' });
-
-/** The Editor Part owns mounting and visibility; browsing state stays in the widget. */
-export class LibraryEditorPane extends Disposable implements IEditorPane {
-	public static readonly ID = 'sessions.library.editor';
-	public readonly id = LibraryEditorPane.ID;
-	private library!: LibraryPage;
-
-	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
-
-	public create(parent: HTMLElement): void {
-		this.library = this._register(this.instantiation.createInstance(LibraryPage, parent.ownerDocument));
-		parent.append(this.library.domNode);
-		this._register(toDisposable(() => this.library.domNode.remove()));
-	}
-
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
-		if (input.resource.toString() !== LIBRARY_EDITOR_RESOURCE.toString()) { throw new TypeError('Invalid Library editor input'); }
-		signal.throwIfAborted();
-	}
-	public clearInput(): void { this.library.setVisible(false); }
-	public setVisible(visibility: EditorPaneVisibility): void { this.library.setVisible(visibility === EditorPaneVisibility.Visible); }
-	public layout(dimension: IDimension): void { this.library.layout(dimension); }
-	public focus(): void { this.library.focus(); }
 }

@@ -348,7 +348,7 @@ test('Sessions Part availability preserves user visibility and cached widths dur
 	dom.window.close();
 });
 
-test('Design replaces Sessions with a flexible Editor and preserves both side panel sizes', () => {
+test('Design replaces Sessions with a flexible page and preserves both side panel sizes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
 	using layout = createLayout(dom.window.document.body, parts);
@@ -357,22 +357,30 @@ test('Design replaces Sessions with a flexible Editor and preserves both side pa
 	layout.resizePart('auxiliarybar', new Dimension(280, 900));
 	const sidebarWidth = layout.getPartSize('sidebar').width;
 	const auxiliaryWidth = layout.getPartSize('auxiliarybar').width;
-	layout.showPart('editor');
-	layout.setPartAvailable('sessions', false);
+	layout.updateParts(() => {
+		layout.setPartAvailable('editor', false);
+		layout.setPartAvailable('sessions', false);
+		layout.setPartAvailable('creator', true);
+	});
 	assert.equal(layout.isPartVisible('sessions'), false);
-	assert.equal(layout.isPartVisible('editor'), true);
+	assert.equal(layout.isPartVisible('editor'), false);
+	assert.equal(layout.isPartVisible('creator'), true);
+	assert.equal(layout.isPartVisible('library'), false);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
-	const editorWidth = layout.getPartSize('editor').width;
+	const pageWidth = layout.getPartSize('creator').width;
 	layout.layout(new Dimension(1600, 900));
-	assert.equal(layout.getPartSize('editor').width, editorWidth + 200);
+	assert.equal(layout.getPartSize('creator').width, pageWidth + 200);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
 	layout.hidePart('sidebar');
-	assert.equal(parts.get('editor')!.domNode.classList.contains('ash-sessions-frame-start'), true);
+	assert.equal(parts.get('creator')!.domNode.classList.contains('ash-sessions-frame-start'), true);
 	layout.showPart('sidebar');
-	layout.setPartAvailable('sessions', true);
-	layout.hidePart('editor');
+	layout.updateParts(() => {
+		layout.setPartAvailable('creator', false);
+		layout.setPartAvailable('sessions', true);
+		layout.setPartAvailable('editor', true);
+	});
 	assert.equal(layout.isPartVisible('sessions'), true);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
