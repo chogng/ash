@@ -1,11 +1,11 @@
 use crate::PromptArtifact;
 
-/// Shared working rules applied to every Agent, independently of its model or role.
+/// Default Agent base prompt used when no exact model prompt is registered.
 pub const AGENT_INSTRUCTIONS: PromptArtifact = PromptArtifact::new(
     "prompts",
     "agent/common",
     "agent-common-v1",
-    include_str!("../templates/agent/common.md"),
+    include_str!("../templates/agent/base_prompt.md"),
 );
 
 /// Continuation notice for an interrupted ordinary Turn, without guessing its cause.

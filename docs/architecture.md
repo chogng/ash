@@ -82,7 +82,7 @@ flowchart TD
 
 | 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
 | --- | --- | --- | --- | --- |
-| 模型系统 | 最终使用哪个供应商、模型和调用配置？ | 模型目录、能力、配置解析和运行时选择 | 目录、配置、凭据、供应商适配、传输和重试是否分层 | [`models-manager.md`](models-manager.md)、[`model-provider.md`](model-provider.md)、[`model-provider-config.md`](model-provider-config.md) |
+| 模型系统 | 最终使用哪个供应商、模型和调用配置？ | 模型目录、能力、配置解析和运行时选择 | 目录、配置、凭据、供应商适配、传输和重试是否分层 | [`models-manager.md`](models-manager.md)、[`model-provider.md`](model-provider.md)、[`model-provider-info.md`](model-provider-info.md) |
 | 工具系统 | Agent 能看到和调用哪些能力？ | 工具定义、发现、绑定、参数验证、调用和结果契约 | 工具定义、调度、授权、执行与结果持久化是否互相越界 | [`tools.md`](tools.md) |
 | 权限系统 | 某个具体动作能否执行？ | 授权规则、批准范围、批准有效期与最终授权决定 | 权限、Guardian、工具调度和沙箱是否都在做最终决定 | [`permissions.md`](permissions.md)、[`guardian.md`](guardian.md) |
 | 沙箱系统 | 已获准动作实际能触及什么？ | 文件、网络、进程能力和平台强制执行 | 策略选择、用户批准与操作系统强制执行是否分开 | [`sandboxing.md`](sandboxing.md) |

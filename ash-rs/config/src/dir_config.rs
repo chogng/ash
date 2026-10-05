@@ -219,7 +219,7 @@ impl DirConfigStore {
         // model identity into the canonical snapshot, without changing connection selection.
         if let Some(model) = &mut document.agent.model {
             if let Some(provider) =
-                ash_model_provider_config::legacy_model_providers().remove(&model.provider)
+                model_provider_info::legacy_model_providers().remove(&model.provider)
             {
                 model.provider = provider;
             }

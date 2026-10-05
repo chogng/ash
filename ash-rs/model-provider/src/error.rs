@@ -1,6 +1,6 @@
 use ash_api::ApiError;
-use ash_model_provider_config::{ModelId, ProviderConfigError, ProviderId};
 use ash_secrets::SecretStoreError;
+use model_provider_info::{ModelId, ProviderConfigError, ProviderId};
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

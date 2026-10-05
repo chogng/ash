@@ -199,10 +199,10 @@ impl CustomProviderConfig {
             .filter(|entry| match &self.model {
                 Some(id) => entry.model_id == id.as_str(),
                 None => registry
-                    .get(&ProviderId::new(entry.provider_id).expect("static provider"))
+                    .get(&ProviderId::new(&entry.provider_id).expect("static provider"))
                     .is_some_and(|provider| provider.api_profile == profile),
             })
-            .map(|entry| (entry.model_id, entry.model()))
+            .map(|entry| (&entry.model_id, entry.model()))
             .collect::<BTreeMap<_, _>>()
             .into_values()
             .collect()

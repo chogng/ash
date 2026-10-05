@@ -81,7 +81,7 @@ fn memories_live_model_saves_and_recalls_an_authorized_fact() {
         ash_chatgpt::ChatGptAuthManagement::Codex,
     );
     let runtime = ash_model_provider::ModelProviderRuntime::with_secrets(
-        ash_model_provider_config::ProviderConfigRegistry::builtin(),
+        model_provider_info::ProviderConfigRegistry::builtin(),
         secrets,
     )
     .with_chatgpt_oauth(auth);
@@ -92,7 +92,7 @@ fn memories_live_model_saves_and_recalls_an_authorized_fact() {
     let model = Arc::new(LiveModel {
         model: runtime
             .build_model(
-                &ash_model_provider_config::ModelProviderConfig::new(model_ref.provider.clone()),
+                &model_provider_info::ModelProviderConfig::new(model_ref.provider.clone()),
                 &model_ref,
             )
             .map_err(|_| "Live model initialization failed")

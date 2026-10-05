@@ -16,10 +16,6 @@ use ash_http_client::HttpHeader;
 use ash_kimi::KimiCli;
 use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
-use ash_model_provider_config::{
-    ApiProfile, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig, ProviderAdapter,
-    ProviderConfigError, ProviderConfigRegistry, ProviderDefinition,
-};
 use ash_model_tokenizer::LocalTokenCount;
 use ash_model_tokenizer::LocalTokenizationOutcome;
 use ash_model_tokenizer::LocalTokenizerError;
@@ -28,6 +24,10 @@ use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use model_provider_info::{
+    ApiProfile, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig, ProviderAdapter,
+    ProviderConfigError, ProviderConfigRegistry, ProviderDefinition,
+};
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -287,7 +287,7 @@ fn provider_config_with_endpoint(
         fast_models: Default::default(),
         connection: ash_protocol::ModelConnectionId::new(provider).unwrap(),
         custom: None,
-        provider: ash_model_provider_config::connection_provider(
+        provider: model_provider_info::connection_provider(
             &ash_protocol::ModelConnectionId::new(provider).unwrap(),
         ),
         base_url: Some(base_url.into()),
@@ -320,8 +320,8 @@ fn responses_response(text: &str) -> Value {
 
 #[test]
 fn custom_provider_uses_selected_protocol_and_isolated_credentials() {
-    use ash_model_provider_config::CustomProviderConfig;
-    use ash_model_provider_config::CustomProviderProtocol;
+    use model_provider_info::CustomProviderConfig;
+    use model_provider_info::CustomProviderProtocol;
     for (protocol, path, response) in [
         (
             CustomProviderProtocol::Responses,
@@ -1875,12 +1875,12 @@ fn both_coding_plan_runtimes_measure_through_their_own_endpoints() {
     for (provider, base_url, expected_endpoint) in [
         (
             "bigmodel-coding-plan",
-            ash_model_provider_config::BIGMODEL_CODING_PLAN_BASE_URL,
+            model_provider_info::BIGMODEL_CODING_PLAN_BASE_URL,
             "https://open.bigmodel.cn/api/coding/paas/v4/tokenizer",
         ),
         (
             "zai-coding-plan",
-            ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL,
+            model_provider_info::ZAI_CODING_PLAN_BASE_URL,
             "https://api.z.ai/api/coding/paas/v4/tokenizer",
         ),
     ] {
@@ -2302,8 +2302,8 @@ fn read_http_request(stream: &mut impl Read) -> String {
 
 #[test]
 fn unsaved_provider_probe_uses_exact_ids_and_draft_keys_without_persisting() {
-    use ash_model_provider_config::CustomProviderConfig;
-    use ash_model_provider_config::CustomProviderProtocol;
+    use model_provider_info::CustomProviderConfig;
+    use model_provider_info::CustomProviderProtocol;
     for (protocol, suffix, response) in [
         (
             CustomProviderProtocol::Responses,
@@ -2442,11 +2442,11 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
             ))
             .filter(|connection| !matches!(
                 connection.runtime,
-                ash_model_provider_config::ModelConnectionRuntime::ChatGptSubscription
-                    | ash_model_provider_config::ModelConnectionRuntime::KimiCode
-                    | ash_model_provider_config::ModelConnectionRuntime::KimiDesktop
-                    | ash_model_provider_config::ModelConnectionRuntime::KimiCli
-                    | ash_model_provider_config::ModelConnectionRuntime::XaiSubscription
+                model_provider_info::ModelConnectionRuntime::ChatGptSubscription
+                    | model_provider_info::ModelConnectionRuntime::KimiCode
+                    | model_provider_info::ModelConnectionRuntime::KimiDesktop
+                    | model_provider_info::ModelConnectionRuntime::KimiCli
+                    | model_provider_info::ModelConnectionRuntime::XaiSubscription
             ))
             .count()
     );
@@ -2496,7 +2496,7 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
             .build_model(
                 &provider_config_with_endpoint(provider, "https://example.test/v1"),
                 &ModelRef::new(
-                    ash_model_provider_config::connection_provider(
+                    model_provider_info::connection_provider(
                         &ash_protocol::ModelConnectionId::new(provider).unwrap(),
                     ),
                     model_id("fixture-model"),

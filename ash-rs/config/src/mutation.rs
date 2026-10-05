@@ -1,6 +1,6 @@
 use crate::{ConfigError, PreferencesUpdate, UserConfigCommand, UserConfigDocument};
-use ash_model_provider_config::STATIC_MODEL_CATALOG;
 use ash_protocol::Patch;
+use model_provider_info::STATIC_MODEL_CATALOG;
 
 pub(crate) fn apply_command(
     document: &mut UserConfigDocument,

@@ -14,7 +14,7 @@
 | 默认 Agent | `Default` 使用正常执行配置，不读取专用 Role | `general.toml` 已删除 |
 | Issue 入口 | 页面通过通用 Session 创建契约选择 `issue` | TUI 已接入，旧执行工作流已移除 |
 | 默认 worker | 选择 `Default`，不继承父 Role 的协调职责 | 关键词匹配已删除，完整历史继承也保留角色隔离 |
-| 模型专化 | Generic 或准确模型指导，收益经评测后确认 | 已默认登记 16 个准确模型的初版指导；效果未评测，见下文 |
+| 模型专化 | Generic 或准确模型指导，收益经评测后确认 | 内置模型的规格与完整基础正文在 models.json 同一条目维护；效果未评测，见下文 |
 | 本地性能 | 分别测选择、组装、持久化和并发 | 已测选择与组合，见 [本轮数据](benchmarks/agent-instructions-2026-09-09.md)；内存和磁盘启动仍待测 |
 | 模型行为 | 同模型、同 Role、同工具下比较模板 | 尚无任务成功率和成本实测 |
 | 文档维护 | 设计、当前实现、实验结果分别标注 | 本文建立初始记录 |
@@ -25,9 +25,9 @@
 
 | 内容 | 表达什么 | 目标 owner |
 | --- | --- | --- |
-| 共同规则 | 保留无关修改、核验交付、如实报告、遵守宿主授权 | Prompts |
+| 基础提示词 | 保留无关修改、核验交付、如实报告、遵守宿主授权 | models.json 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
 | 协作模式 | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式 | Collaboration Mode Templates；模式标识由 Protocol 定义 |
-| 模型指导 | 针对确定模型有效的指令表达与工具使用指导 | Models Manager 的模型指令资产 |
+| 模型差异 | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | models.json；Models Manager 选择并冻结 |
 | Role | 协调、实现、审查等当前职责和交付要求 | Agent Roles |
 | 工具与运行信息 | 实际可调用工具、环境、父子关系和取消状态 | 各执行领域；Core 组装 |
 | 目录规则、Skill、任务材料 | 已授权规则与任务上下文，保留各自来源和层级 | 既有 Instructions、Skill 与任务 owner |
@@ -86,7 +86,8 @@
     → ModelInstructionCatalog::resolve
     → Generic { model } 或 Specialized { model, instructions, digest }
 
-Core 接收：共同规则 + 选择结果 + 当前 Role + 实际工具/环境 + 任务
+新 Turn 冻结：选中的完整模型基础正文，或未登记模型的 base_prompt.md
+Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
     → 有来源的 ContextPlan
     → ModelRequest
 ```
@@ -111,11 +112,11 @@ Core 接收：共同规则 + 选择结果 + 当前 Role + 实际工具/环境 + 
 | 候选 | 评价 | 采用条件 |
 | --- | --- | --- |
 | 所有模型共享同一模板 | 最少维护成本，作为实验对照 | 每个支持模型完成能力与行为验证 |
-| 共同规则加有界模型指导 | 推荐；Role 仍独立，差异容易定位 | 固定任务集证明质量或效率收益 |
-| 每个模型维护完整 Agent 提示词 | 容易复制共同规则与角色职责 | 本方案不采用 |
+| 共同规则加模型指导 | 原方案，已改为完整基础正文 | 历史冻结资产保持原组合含义 |
+| 每个模型维护完整基础提示词 | 当前采用；每个模型可独立修改 | Role、权限与模式仍独立，公共要求修改要同步适用条目 |
 | 任意 section 覆盖或运行脚本改写提示词 | 扩大验证面、增加组合歧义 | 不作为普通 Role 或 Plugin 能力 |
 
-当前专化贡献一个有界的模型指导块，上限 64 KiB；空白资产、重复登记或不一致的已保存摘要会失败。没有引入通用模板语言、动态注册中心、模型族匹配或工具条件模板。增加这些能力必须有具体消费者、兼容规则和对应评测，不能用未经验证的隐式规则代替。
+当前模型条目提供完整基础提示词，上限 64 KiB；空白资产、重复登记或不一致的已保存摘要会失败。没有引入通用模板语言、动态注册中心、模型族匹配或工具条件模板。增加这些能力必须有具体消费者、兼容规则和对应评测，不能用未经验证的隐式规则代替。
 
 每个专化记录适用模型、正文 revision、设计假设和证据状态。本轮按“先补上、后续再修改”的要求默认启用初版；真实失败案例和对照结果仍标为未完成，不能因为已经启用就声称更优。后续优化须以同模型对照评测判断收益，保留空目录作为 Generic 对照。
 
@@ -123,27 +124,28 @@ Core 接收：共同规则 + 选择结果 + 当前 Role + 实际工具/环境 + 
 
 ## 内置模型指导初版
 
-当前提供四份可直接修改的 Markdown，准确登记仓库已有的 16 个模型。默认启用的状态是**初版、未做真实模型效果评测**；这是本轮补齐模板的产品决定，不是质量或成本提升的证明。没有增加或替换模型型号，也没有改动推理等级、服务等级、能力 metadata、凭据或 API 参数。
+当前内置模型的完整基础提示词与规格统一登记在 [`models.json`](../model-provider-info/models.json)。每条正文和 revision 都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
 
-| 资产 | 准确模型登记 | 设计假设与来源 |
-| --- | --- | --- |
-| `model/gpt` / `gpt-guidance-v1` | `openai/` 下的 `gpt-6-astra`、`gpt-6.1-sol`、`gpt-5.6`、`gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 指导](https://developers.openai.com/api/docs/guides/latest-model) |
-| `model/claude` / `claude-guidance-v1` | `anthropic/claude-sonnet-4-20250514` | 明确所需产物并限制额外工程化；参考 [Claude 提示词指导](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) 的通用原则，不将较新型号的行为描述冒充 Sonnet 4 的实测结论 |
-| `model/gemini` / `gemini-guidance-v1` | `google/gemini-3.6-flash` | 简洁指令、明确当前任务、证据与目标格式；参考 [Gemini 3 指导](https://ai.google.dev/gemini-api/docs/gemini-3)，这属于对当前登记型号的初版应用 |
-| `model/function-calling` / `function-calling-guidance-v1` | `xai/grok-4.5`、`qwen/qwen-plus`、`kimi/kimi-k2.6`、`kimi/kimi-k2.7-code`、`deepseek/deepseek-v4-pro`、`zai/glm-5.1`、`minimax/MiniMax-M3`、`mimo/mimo-v2.5-pro` | 共同的工具调用接口适配：执行参数与回答分离，等待实际结果后继续；参考 Ash 已接的工具通道，以及 [Qwen Function Calling](https://www.alibabacloud.com/help/en/model-studio/qwen-function-calling)、[Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling) |
+这些初始正文尚未做真实模型效果评测。以下保留原指导的设计假设与来源，来源复核日期为 2026-09-09，不代表本轮验证了远端型号的在线可用性。
 
-来源复核日期为 2026-09-09。上述具体登记来自 [`STATIC_MODEL_CATALOG`](../model-provider-config/src/model_catalog.rs)，不代表本轮验证了每个远端型号的在线可用性。多型号共用正文是明确的代码登记，不是按名称前缀猜测兼容性；未知型号、自定义 provider 和不同大小写不会自动套用。
+| 初始指导来源 | 设计假设与参考 |
+| --- | --- |
+| GPT | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 指导](https://developers.openai.com/api/docs/guides/latest-model) |
+| Claude | 明确所需产物并限制额外工程化；参考 [Claude 提示词指导](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) 的通用原则 |
+| Gemini | 简洁指令、明确当前任务、证据与目标格式；参考 [Gemini 3 指导](https://ai.google.dev/gemini-api/docs/gemini-3) |
+| 工具调用 | 执行参数与回答分离，等待实际结果后继续；参考 Ash 工具通道、[Qwen Function Calling](https://www.alibabacloud.com/help/en/model-studio/qwen-function-calling) 和 [Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling) |
 
-四份正文没有复制整套通用规则、权限策略或 Role，也没有要求生成内部推理过程、伪造工具执行记录或通过文字调整 API 设置。诸如 DeepSeek 的 `reasoning_content` 或 Gemini 的思考签名，其保存和重放要求属于供应商 adapter，提示词无法代替实现。[DeepSeek 文档](https://api-docs.deepseek.com/guides/thinking_mode/)、[Gemini 文档](https://ai.google.dev/gemini-api/docs/gemini-3)
+正文不授予权限或代替 Role，也不能通过文字调整 API 设置。DeepSeek 的 `reasoning_content` 和 Gemini 思考签名的保存与重放仍属于供应商 adapter。[DeepSeek 文档](https://api-docs.deepseek.com/guides/thinking_mode/)、[Gemini 文档](https://ai.google.dev/gemini-api/docs/gemini-3)
 
 ### 修改、生效与检查
 
-- 正文位于 [`models-manager/templates/instructions`](../models-manager/templates/instructions)，模型分组、资产 ID 与 revision 位于 [`instructions.rs`](../models-manager/src/instructions.rs) 的 `BUILT_INS`；具体操作见 [crate README](../models-manager/README.md#初版模板与修改入口)。
-- 内置 catalog 经一次校验、冻结和摘要计算后，由进程共享；选择时执行准确 HashMap 查找，不扫描目录，不调用模型。
-- `ModelInstructionCatalog::default()` 保持空目录语义。嵌入方使用 `with_model_instructions` 替换整个目录，不隐式叠加旧内置条目；这也提供同模型 Generic 对照入口。
-- 模板通过 `include_str!` 编译嵌入；编辑后需重编译、重启。普通 Default 根会话的新 Turn 重新解析指导，已有角色与子 Agent 的冻结内容不被覆盖。
-- 当前假设尚无任务集结果。后续优先比较完成率、工具调用正确性、额外检查/停顿和最终回答完整度，再比较延迟、token 与成本。若要单独调优共用正文中的某个型号，把准确条目移入独立资产组即可。
-- 本轮仅运行本地契约、调用链与构建验证；前两份离线报告保留其原始源码摘要，不据此推断新增模型指导后的请求规模和性能。
+- 修改一个模型只编辑 JSON 中它的 `instructions.body` 与 `instructions.revision`；新增沿用现有协议的模型只增加 JSON 条目。具体入口见 [crate README](../models-manager/README.md#初版模板与修改入口)。
+- `model-provider-info` 校验 JSON 并提供共享规格；`models-manager` 生成准确指令目录和内容摘要。选择不扫描目录、不查询网络；未知型号、自定义 provider 与不同大小写不会自动套用已知模型正文。
+- `for_turn` 在新 Turn 接受前选好完整基础正文；宿主自定义基础正文优先，产品任务只替换共享 Agent 基础正文。Core 渲染冻结资产，选中模型正文不会重复加入；已保存的独立指导资产仍按其保存含义组合。
+- `ModelInstructionCatalog::default()` 为明确的空目录。嵌入方通过 `with_model_instructions` 整体替换目录，也可用空目录建立同模型 Generic 对照。
+- JSON 与默认 Markdown 经 `include_str!` 编译嵌入；修改后需重编译、重启。普通 Default 根会话的新 Turn 重新选择，已有角色与子 Agent 的冻结内容用于恢复。
+- 单独调优一个模型无需增加模板枚举或代码分支。公共要求有变化时，要同步适用模型的完整正文；默认 Markdown 不会自动继承到 JSON 条目。
+- 旧 `models-manager/templates/instructions/*.md` 与 Rust 模型清单已由 JSON 替代；`prompts/templates/agent/common.md` 改为 `base_prompt.md`。历史评测继续保留原路径和原始源码摘要，不据此推断当前请求规模或性能。
 
 ### 初版指导验证记录（2026-09-09）
 
@@ -350,7 +352,7 @@ aggregate_and_intervals / failure_examples / artifacts_and_digests / decision
 
 ### 修改时同步什么
 
-1. 改共同规则：在 prompts 提升资产 revision，检查所有已上线 Role，运行最终上下文契约测试与代表性跨角色评测。
+1. 改基础工作规则：同步适用模型的 JSON 正文与默认 base_prompt.md，各自提升 revision，检查已上线 Role 与最终上下文契约。
 2. 改模型专化：更新适用模型、失败假设、对照结果及兼容范围；重跑受影响模型和角色的保留集。
 3. 改 Role：同步正文版本、工具/Skill 声明、根与子 Thread 的启动测试及对应任务评测。
 4. 改组合顺序、来源标签或缓存边界：核对最终请求、层级、泄漏、缓存冷/热态以及恢复行为。
@@ -365,11 +367,11 @@ aggregate_and_intervals / failure_examples / artifacts_and_digests / decision
 
 | 位置 | 当前职责 |
 | --- | --- |
-| `prompts/src/agent.rs`、`prompts/templates/agent/common.md` | 所有 Agent 共用规则的唯一资产与 revision |
+| `prompts/src/agent.rs`、`prompts/templates/agent/base_prompt.md` | 未登记模型的默认基础正文与 revision |
 | `protocol/src/agent.rs` | Default/Exact 选择、共享 AgentConfiguration 与工具/Skill 上限 |
 | `protocol/src/turn/instructions.rs` | 扁平共享资产、独立模式资产、模型指导与持久化校验 |
 | `app-server/src/server/agent_selection.rs` | 根、子 Thread 共用的准确来源解析和根 Skill 依赖准备 |
-| `models-manager/src/instructions.rs` | 准确模型指导登记、查找与无效资产拒绝 |
+| `model-provider-info/models.json`、`models-manager/src/instructions.rs` | 模型规格和完整正文登记、准确选择与新 Turn 冻结 |
 | `core/src/thread_controller.rs` | 根配置与创建事实同批写入、幂等重放 |
 | `core/src/multi_agent` | 角色隔离、委托恢复、上下文、并发和能力上限 |
 | `code/tui/src/issues` | Issue 浏览与通用 Session 创建、稳定首 Turn 请求 |
@@ -380,7 +382,7 @@ TUI 的自动 Issue 标签注入和仅服务旧流程的编辑器绑定已退场
 
 配置文件 schemaVersion 2 移除 Issue 执行偏好，保留浏览刷新设置；SQLite 配置文档版本 10 的支持下界为 7。旧 Issue 数据表不再由生产路径打开，也不在后台删除用户已有数据。
 
-App Server 默认使用 `ModelInstructionCatalog::built_in()`。`AppServer::with_model_instructions(ModelInstructionCatalog)` 可在创建环境宿主前整体替换目录；传入空目录建立 Generic 对照。catalog 由准确 `ModelRef` 与带 owner/id/revision 的 `PromptArtifact` 构建；重复模型、空白正文与超过 64 KiB 的资产会被拒绝。当前初版已启用，现有运行仍保留已冻结的指令，新内容只影响后续解析。
+App Server 默认使用 `ModelInstructionCatalog::built_in()`。`AppServer::with_model_instructions(ModelInstructionCatalog)` 可在创建环境宿主前整体替换目录；传入空目录建立 Generic 对照。catalog 由准确 `ModelRef` 与带 owner/id/revision 的 `InstructionText` 构建；重复模型、空白正文与超过 64 KiB 的资产会被拒绝。当前初版已启用，现有运行仍保留已冻结的指令，新内容只影响后续解析。
 
 共享库归属按本次明确选择固定为 prompts。Codex 的 [prompts 共享库](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/lib.rs) 是参考，其模型基础模板仍有不同归属；Ash 没有宣称逐目录复制外部产品。
 

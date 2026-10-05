@@ -64,10 +64,6 @@ use ash_model_provider::ModelProviderRuntime;
 use ash_model_provider::ModelRuntimeRequest;
 use ash_model_provider::TokenizerAssetCatalog;
 use ash_model_provider::UnavailableModel;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderAccessMode;
-use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::find_static_model;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::ModelRequirements;
 use ash_models_manager::ModelsManager;
@@ -85,6 +81,10 @@ use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
 use github::GitHubOAuth;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderAccessMode;
+use model_provider_info::ProviderConfigRegistry;
+use model_provider_info::find_static_model;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -1157,7 +1157,7 @@ pub fn open_app_server_with_codebase_providers(
         }
     };
     threads
-        .migrate_model_providers(&ash_model_provider_config::legacy_model_providers())
+        .migrate_model_providers(&model_provider_info::legacy_model_providers())
         .map_err(open_error)?;
 
     if profile_runtime.is_none() {
@@ -2474,7 +2474,7 @@ impl ModelCatalog for ConfigBackedModelService {
                         | "bigmodel-start-plan"
                         | "zai-start-plan"
                 )
-                .then(|| ash_model_provider_config::ModelProviderConfig::for_connection(id.clone()))
+                .then(|| model_provider_info::ModelProviderConfig::for_connection(id.clone()))
             })
             .ok_or(ModelCatalogRefreshError::InvalidConfiguration)?;
         config
@@ -2525,7 +2525,7 @@ impl ModelCatalog for ConfigBackedModelService {
         let contexts = self.context_catalog(&config)?;
         // Product identities and order stay fixed. Unconfigured rows still use the product's
         // effective defaults; connection definitions only affect their configured provider.
-        let mut models: Vec<_> = ash_model_provider_config::STATIC_MODEL_CATALOG
+        let mut models: Vec<_> = model_provider_info::STATIC_MODEL_CATALOG
             .iter()
             .map(|spec| {
                 let model = spec.model_ref();

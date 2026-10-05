@@ -1,6 +1,6 @@
 use ash_file_access::DirId;
-use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::ModelRef;
+use model_provider_info::ModelProviderConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

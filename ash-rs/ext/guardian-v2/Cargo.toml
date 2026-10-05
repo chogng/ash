@@ -15,7 +15,7 @@ action-policy = { package = "ash-action-policy", path = "../../action-policy" }
 async-utils = { package = "ash-async-utils", path = "../../async-utils" }
 config = { package = "ash-config", path = "../../config" }
 model-provider = { package = "ash-model-provider", path = "../../model-provider" }
-model-provider-config = { package = "ash-model-provider-config", path = "../../model-provider-config" }
+model-provider-info = { workspace = true }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 
 [dev-dependencies]

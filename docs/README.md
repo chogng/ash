@@ -42,7 +42,7 @@
 
 ## 模型与配置
 
-[`model-provider.md`](model-provider.md)、[`model-provider-config.md`](model-provider-config.md)、
+[`model-provider.md`](model-provider.md)、[`model-provider-info.md`](model-provider-info.md)、
 [`models-manager.md`](models-manager.md)、[`config.md`](config.md)、[`login.md`](login.md)、
 [`subscriptions.md`](subscriptions.md)（订阅接入与额度）、
 [订阅套餐一览](models/plans-and-pricing.md)、

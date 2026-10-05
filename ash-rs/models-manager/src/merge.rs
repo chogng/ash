@@ -5,7 +5,6 @@ use crate::ModelCapabilitiesProvenance;
 use crate::ModelCatalogEntry;
 use crate::ModelMetadataPatch;
 use crate::ModelMetadataProvenance;
-use ash_model_provider_config::ProviderDefinition;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelAvailability;
@@ -15,6 +14,7 @@ use ash_protocol::ModelLifecycle;
 use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use model_provider_info::ProviderDefinition;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -10,8 +10,8 @@ use ash_app_server_protocol::protocol::provider::ProviderApiKeySetResult;
 use ash_app_server_protocol::protocol::provider::ProviderCatalogEntryDto;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use ash_model_provider::ProviderCredentialError;
-use ash_model_provider_config::ApiKeyPolicy;
 use ash_protocol::ModelConnectionId;
+use model_provider_info::ApiKeyPolicy;
 use serde_json::Value;
 
 impl AppServer {
@@ -109,10 +109,10 @@ impl AppServer {
                         || ((oauth || external) && ready),
                     ready,
                     access: match entry.access_mode {
-                        ash_model_provider_config::ProviderAccessMode::Api => {
+                        model_provider_info::ProviderAccessMode::Api => {
                             ash_protocol::ModelAccess::ApiKey
                         }
-                        ash_model_provider_config::ProviderAccessMode::Subscription => {
+                        model_provider_info::ProviderAccessMode::Subscription => {
                             ash_protocol::ModelAccess::Subscription
                         }
                     },
@@ -126,7 +126,7 @@ impl AppServer {
             .collect();
         let mut preferred = std::collections::BTreeMap::new();
         for entry in providers.iter().filter(|entry| entry.ready) {
-            let rank = ash_model_provider_config::connection_priority(
+            let rank = model_provider_info::connection_priority(
                 &ModelConnectionId::new(entry.connection.clone()).expect("catalog connection ID"),
             );
             let current = preferred
@@ -179,7 +179,7 @@ impl AppServer {
             .get(&connection)
             .cloned()
             .unwrap_or_else(|| {
-                ash_model_provider_config::ModelProviderConfig::for_connection(connection.clone())
+                model_provider_info::ModelProviderConfig::for_connection(connection.clone())
             });
         config
             .validate_static()

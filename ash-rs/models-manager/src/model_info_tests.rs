@@ -1,23 +1,23 @@
 use crate::CatalogWarningCode;
 use crate::ModelRequirements;
 use crate::ModelsManager;
-use ash_model_provider_config::ApiProfile;
-use ash_model_provider_config::CustomProviderConfig;
-use ash_model_provider_config::CustomProviderProtocol;
-use ash_model_provider_config::EndpointPolicy;
-use ash_model_provider_config::ModelCatalogPolicy;
-use ash_model_provider_config::ModelContextConfig;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderAdapter;
-use ash_model_provider_config::ProviderConfigError;
-use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::ProviderDefinition;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelCapabilities;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use model_provider_info::ApiProfile;
+use model_provider_info::CustomProviderConfig;
+use model_provider_info::CustomProviderProtocol;
+use model_provider_info::EndpointPolicy;
+use model_provider_info::ModelCatalogPolicy;
+use model_provider_info::ModelContextConfig;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderAdapter;
+use model_provider_info::ProviderConfigError;
+use model_provider_info::ProviderConfigRegistry;
+use model_provider_info::ProviderDefinition;
 
 fn model_ref() -> ModelRef {
     ModelRef::new(
@@ -258,31 +258,38 @@ fn effective_fast_mode_support_follows_the_connection_without_mutating_static_ev
 }
 
 #[test]
-fn every_builtin_gpt_uses_272k_by_default_and_preserves_explicit_budgets() {
+fn every_builtin_uses_its_json_context_preferences_and_preserves_explicit_budgets() {
     let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
     let mut count = 0;
-    for spec in ash_model_provider_config::STATIC_MODEL_CATALOG
-        .iter()
-        .filter(|spec| spec.model_id.starts_with("gpt-"))
-    {
+    for spec in model_provider_info::STATIC_MODEL_CATALOG.iter() {
         count += 1;
         let model = spec.model_ref();
         let resolved = manager
             .resolve_static(&model, &ModelRequirements::agent())
             .unwrap();
         let mut config = ModelProviderConfig::new(model.provider.clone());
-        let ContextWindow::Known(ceiling) = spec.context_window else {
-            panic!("GPT ceiling must be declared")
-        };
         let default = resolved.entry().model_info(&config).unwrap();
-        let window = ceiling.min(272_000);
         assert_eq!(
-            default.context_window,
-            ContextWindow::Known(window),
+            default.context_window, spec.default_context_window,
             "{}",
             spec.model_id
         );
-        assert_eq!(default.auto_compact_token_limit, Some(window * 9 / 10));
+        assert_eq!(
+            resolved.entry().context_window_options(&config),
+            spec.context_window_options
+        );
+        let compact = match spec.default_context_window {
+            ContextWindow::Known(window) => {
+                let recommended = (u64::from(window) * 9 / 10) as u32;
+                Some(
+                    spec.auto_compact_token_limit
+                        .unwrap_or(recommended)
+                        .min(recommended),
+                )
+            }
+            ContextWindow::Unknown => None,
+        };
+        assert_eq!(default.auto_compact_token_limit, compact);
         assert_eq!(resolved.entry().info().context_window, spec.context_window);
         config.model_context.insert(
             model.model,
@@ -291,12 +298,72 @@ fn every_builtin_gpt_uses_272k_by_default_and_preserves_explicit_budgets() {
                 auto_compact_token_limit: None,
             },
         );
+        let selected_window = match spec.context_window {
+            ContextWindow::Known(capacity) => capacity.min(1_000_000),
+            ContextWindow::Unknown => 1_000_000,
+        };
         assert_eq!(
             resolved.entry().model_info(&config).unwrap().context_window,
-            ContextWindow::Known(ceiling.min(1_000_000))
+            ContextWindow::Known(selected_window)
         );
     }
     assert!(count > 0);
+}
+
+#[test]
+fn discovered_gpt_names_do_not_acquire_undeclared_budget_presets() {
+    let mut info = ModelInfo::new(ModelId::new("gpt-undocumented").unwrap(), "Observed model");
+    info.context_window = ContextWindow::Known(600_000);
+    let model = ModelRef::new(model_ref().provider, info.id.clone());
+    let manager = manager(info);
+    let entry = manager
+        .resolve_static(&model, &ModelRequirements::agent())
+        .unwrap();
+    let config = ModelProviderConfig::new(model.provider);
+    assert_eq!(
+        entry.entry().default_context_window(&config),
+        ContextWindow::Known(600_000)
+    );
+    assert_eq!(entry.entry().context_window_options(&config), [600_000]);
+}
+
+#[test]
+fn declared_budgets_follow_observed_capacity_and_keep_compaction_limits() {
+    let mut info = ModelInfo::new(model_ref().model, "Model");
+    info.context_window = ContextWindow::Known(200_000);
+    info.auto_compact_token_limit = Some(45_000);
+    let manager = manager(info);
+    let resolved = manager
+        .resolve_static(&model_ref(), &ModelRequirements::agent())
+        .unwrap();
+    let mut entry = resolved.entry().clone();
+    entry.declared_default_context_window = ContextWindow::Known(80_000);
+    entry.declared_context_window_options = vec![80_000, 240_000];
+    let mut config = ModelProviderConfig::new(model_ref().provider);
+    assert_eq!(entry.context_window_options(&config), [80_000]);
+    let effective = entry.model_info(&config).unwrap();
+    assert_eq!(effective.context_window, ContextWindow::Known(80_000));
+    assert_eq!(effective.auto_compact_token_limit, Some(45_000));
+    entry
+        .apply_preferences(
+            &mut config,
+            &crate::ModelPreferencesUpdate {
+                fast: None,
+                context_window: Some(80_000),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        entry.model_info(&config).unwrap().context_window,
+        ContextWindow::Known(80_000)
+    );
+    entry.declared_default_context_window = ContextWindow::Known(240_000);
+    entry.declared_context_window_options = vec![240_000, 300_000];
+    assert_eq!(
+        entry.default_context_window(&config),
+        ContextWindow::Known(200_000)
+    );
+    assert_eq!(entry.context_window_options(&config), [200_000]);
 }
 
 #[test]

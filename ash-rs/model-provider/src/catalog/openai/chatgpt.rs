@@ -38,7 +38,7 @@ use std::time::SystemTime;
 const MAX_CATALOG_BYTES: usize = 1024 * 1024;
 
 pub(crate) fn chatgpt_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     auth: Arc<ChatGptOAuth>,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,

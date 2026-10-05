@@ -598,8 +598,8 @@ fn meta_connection_declares_muse_responses_auth_and_reasoning() {
 #[test]
 fn static_model_catalog_has_unique_valid_rows() {
     let mut identities = BTreeSet::new();
-    for spec in STATIC_MODEL_CATALOG {
-        assert!(identities.insert((spec.provider_id, spec.model_id)));
+    for spec in STATIC_MODEL_CATALOG.iter() {
+        assert!(identities.insert((&spec.provider_id, &spec.model_id)));
         assert_eq!(find_static_model(&spec.model_ref()), Some(spec));
         if let Some(effort) = spec.model_reasoning_effort {
             assert!(spec.supported_reasoning_efforts.contains(&effort));

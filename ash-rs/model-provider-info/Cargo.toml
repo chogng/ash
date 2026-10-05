@@ -1,5 +1,5 @@
 [package]
-name = "ash-model-provider-config"
+name = "ash-model-provider-info"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,17 +7,15 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "ash_model_provider_config"
+name = "model_provider_info"
 path = "src/lib.rs"
 
 [dependencies]
 schemars = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 url = { workspace = true }
 ash-protocol = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }
 
 [lints]
 workspace = true

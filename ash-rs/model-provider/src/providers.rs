@@ -6,11 +6,11 @@ use ash_client::OperationClient;
 use ash_client::ResolvedApiTarget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
-use ash_model_provider_config::ApiProfile;
-use ash_model_provider_config::NormalizedModelProviderConfig;
-use ash_model_provider_config::ProviderAdapter as ProviderAdapterKind;
 use ash_protocol::Model;
 use ash_protocol::ModelImageInputPolicy;
+use model_provider_info::ApiProfile;
+use model_provider_info::NormalizedModelProviderConfig;
+use model_provider_info::ProviderAdapter as ProviderAdapterKind;
 use std::sync::Arc;
 
 mod anthropic;

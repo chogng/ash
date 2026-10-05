@@ -32,7 +32,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 pub(crate) fn xai_api_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
@@ -207,7 +207,7 @@ impl ModelCatalogSource for XaiApiCatalogSource {
 }
 
 pub(crate) fn xai_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     auth: Arc<SuperGrokOAuth>,
 ) -> Result<Option<ModelCatalogBinding>, crate::ModelProviderError> {
     let Some(account_id) = auth

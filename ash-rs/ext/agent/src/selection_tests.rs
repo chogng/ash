@@ -596,7 +596,7 @@ fn imported_role_migrates_service_identity_before_freezing_without_rewriting_sou
             resolve_agent_selection(&exact("reviewer"), None, vec![], &[], &[catalog], &[])
                 .unwrap();
         let model = selected.role.unwrap().model.unwrap();
-        assert_eq!(model.provider.as_str(), "zai");
+        assert_eq!(model.provider.as_str(), "glm");
         assert_eq!(model.model.as_str(), "glm-5.1");
         assert_eq!(fs::read_to_string(path).unwrap(), source);
     }

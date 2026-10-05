@@ -38,7 +38,7 @@ fn fixture(
     services: Vec<(String, String)>,
 ) -> (tempfile::TempDir, crate::AppServer) {
     let root = tempfile::tempdir().unwrap();
-    let registry = ash_model_provider_config::ProviderConfigRegistry::builtin();
+    let registry = model_provider_info::ProviderConfigRegistry::builtin();
     let server = server()
         .with_config_store(Arc::new(
             ash_config::ConfigStore::open(root.path().join("state.sqlite")).unwrap(),

@@ -40,15 +40,6 @@ use ash_http_client::UreqHttpClient;
 use ash_kimi::KimiCli;
 use ash_kimi::KimiDesktop;
 use ash_kimi::KimiOAuth;
-use ash_model_provider_config::Model;
-use ash_model_provider_config::ModelId;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::NormalizedModelProviderConfig;
-use ash_model_provider_config::ProviderAccessMode;
-use ash_model_provider_config::ProviderConfigError;
-use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::ProviderDefinition;
-use ash_model_provider_config::ProviderId;
 use ash_model_tokenizer::LocalTokenizerRegistry;
 use ash_model_tokenizer::LocalTokenizerService;
 use ash_models_manager::ModelRequirements;
@@ -59,6 +50,15 @@ use ash_protocol::ModelImageInputPolicy;
 use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_secrets::SecretStore;
+use model_provider_info::Model;
+use model_provider_info::ModelId;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::NormalizedModelProviderConfig;
+use model_provider_info::ProviderAccessMode;
+use model_provider_info::ProviderConfigError;
+use model_provider_info::ProviderConfigRegistry;
+use model_provider_info::ProviderDefinition;
+use model_provider_info::ProviderId;
 use response_debug_context::AuthRecovery;
 use response_debug_context::ResponseDiagnosticSink;
 use response_debug_context::ResponseOperation;
@@ -793,8 +793,7 @@ impl Provider {
         }
         let model_ref = ModelRef::new(self.definition.id.clone(), model_id.clone());
         // Built-in membership is independent of a remote listing, including an empty or stale one.
-        let mut model = if let Some(spec) = ash_model_provider_config::find_static_model(&model_ref)
-        {
+        let mut model = if let Some(spec) = model_provider_info::find_static_model(&model_ref) {
             spec.model()
         } else {
             self.models
@@ -901,14 +900,14 @@ impl ModelProviderRuntime {
                     .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
                 _ => {
                     connection.transport.api_key_policy
-                        != ash_model_provider_config::ApiKeyPolicy::Required
+                        != model_provider_info::ApiKeyPolicy::Required
                         || api_keys.get(&connection.id) == Some(&true)
                 }
             };
             if !ready {
                 continue;
             }
-            let rank = ash_model_provider_config::connection_priority(&connection.id);
+            let rank = model_provider_info::connection_priority(&connection.id);
             let provider = connection.provider;
             if selected
                 .get(&provider)
@@ -1297,7 +1296,7 @@ impl ModelProviderRuntime {
             .get(&normalized.provider)
             .expect("normalization only succeeds for registered providers");
         match definition.adapter {
-            ash_model_provider_config::ProviderAdapter::Xai => {
+            model_provider_info::ProviderAdapter::Xai => {
                 let authentication = runtime
                     .credentials
                     .as_ref()
@@ -1313,8 +1312,8 @@ impl ModelProviderRuntime {
                 )
                 .map(Some)
             }
-            ash_model_provider_config::ProviderAdapter::OpenAi
-            | ash_model_provider_config::ProviderAdapter::OpenAiCompatible => {
+            model_provider_info::ProviderAdapter::OpenAi
+            | model_provider_info::ProviderAdapter::OpenAiCompatible => {
                 let authentication = runtime
                     .credentials
                     .as_ref()
@@ -1330,7 +1329,7 @@ impl ModelProviderRuntime {
                 )
                 .map(Some)
             }
-            ash_model_provider_config::ProviderAdapter::Anthropic => {
+            model_provider_info::ProviderAdapter::Anthropic => {
                 let adapter = providers::instantiate(definition.adapter, &normalized);
                 let authentication = runtime
                     .credentials
@@ -1351,15 +1350,13 @@ impl ModelProviderRuntime {
                 )
                 .map(Some)
             }
-            ash_model_provider_config::ProviderAdapter::Ollama => {
-                crate::catalog::ollama_catalog_binding(
-                    normalized.provider,
-                    &normalized.base_url,
-                    Arc::clone(&self.client),
-                )
-                .map(Some)
-                .map_err(|error| ModelProviderError::Unavailable(error.to_string()))
-            }
+            model_provider_info::ProviderAdapter::Ollama => crate::catalog::ollama_catalog_binding(
+                normalized.provider,
+                &normalized.base_url,
+                Arc::clone(&self.client),
+            )
+            .map(Some)
+            .map_err(|error| ModelProviderError::Unavailable(error.to_string())),
             _ => Ok(None),
         }
     }
@@ -1447,7 +1444,7 @@ impl ModelProviderRuntime {
         &self,
         normalized: &NormalizedModelProviderConfig,
     ) -> Result<ProviderConnection, ModelProviderError> {
-        use ash_model_provider_config::ModelConnectionRuntime;
+        use model_provider_info::ModelConnectionRuntime;
         let connection = self
             .configs
             .connection(&normalized.connection)

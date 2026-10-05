@@ -18,7 +18,7 @@ on:
       - "ash-rs/call/**"
       - "ash-rs/collaboration-server/**"
       - "ash-rs/model-provider/**"
-      - "ash-rs/model-provider-config/**"
+      - "ash-rs/model-provider-info/**"
       - "ash-rs/ash-api/**"
       - "ash-rs/websocket-client/**"
       - "Cargo.toml"

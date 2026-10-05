@@ -1,20 +1,19 @@
-use ash_prompts::PromptArtifact;
 use ash_protocol::ContentDigest;
-use ash_protocol::ModelId;
+use ash_protocol::InstructionText;
 use ash_protocol::ModelInstructionSelection;
 use ash_protocol::ModelRef;
-use ash_protocol::ProviderId;
+use ash_protocol::TurnInstructions;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
-/// A code-owned instruction asset selected for one exact provider/model identity.
+/// Complete base instructions selected for one exact provider/model identity.
 /// Selection does not imply that its quality or performance has been evaluated.
 #[derive(Clone, Debug)]
 pub struct ModelInstructionProfile {
     pub model: ModelRef,
-    pub instructions: PromptArtifact,
+    pub instructions: InstructionText,
 }
 
 /// Immutable, indexed model guidance. It does not load files, select models, or grant tools.
@@ -28,18 +27,17 @@ impl ModelInstructionCatalog {
     /// `default()` remains an empty catalog for an explicit generic-only configuration.
     pub fn built_in() -> Arc<Self> {
         static CATALOG: LazyLock<Arc<ModelInstructionCatalog>> = LazyLock::new(|| {
-            let profiles = BUILT_INS.iter().flat_map(|group| {
-                group
-                    .models
-                    .iter()
-                    .map(move |(provider, model)| ModelInstructionProfile {
-                        model: ModelRef::new(
-                            ProviderId::new(*provider).expect("built-in provider ID is valid"),
-                            ModelId::new(*model).expect("built-in model ID is valid"),
-                        ),
-                        instructions: group.instructions,
-                    })
-            });
+            let profiles = model_provider_info::STATIC_MODEL_CATALOG
+                .iter()
+                .map(|spec| ModelInstructionProfile {
+                    model: spec.model_ref(),
+                    instructions: InstructionText {
+                        owner: "models-manager".into(),
+                        id: format!("model/{}/{}", spec.provider_id, spec.model_id),
+                        revision: spec.instructions.revision.clone(),
+                        body: spec.instructions.body.clone(),
+                    },
+                });
             Arc::new(
                 ModelInstructionCatalog::new(profiles)
                     .expect("built-in model instruction profiles are valid"),
@@ -55,17 +53,17 @@ impl ModelInstructionCatalog {
         let mut catalog = Self::default();
         for profile in profiles {
             let key = profile.model.clone();
-            if profile.instructions.body().len() > 64 * 1024 {
+            if profile.instructions.body.len() > 64 * 1024 {
                 return Err(ModelInstructionError::InvalidProfile {
                     model: profile.model,
                     reason: "guidance exceeds 64 KiB".into(),
                 });
             }
             let instructions = ash_protocol::TurnInstructions::new(
-                profile.instructions.owner(),
-                profile.instructions.id(),
-                profile.instructions.revision(),
-                profile.instructions.body(),
+                profile.instructions.owner,
+                profile.instructions.id,
+                profile.instructions.revision,
+                profile.instructions.body,
             )
             .map_err(|error| ModelInstructionError::InvalidProfile {
                 model: profile.model.clone(),
@@ -95,6 +93,52 @@ impl ModelInstructionCatalog {
             model: model.cloned(),
         }
     }
+
+    /// Selects the complete base before a new Turn is frozen. Host-defined bases take precedence;
+    /// product tasks keep their own primary text and replace only their shared Agent base.
+    pub fn for_turn(&self, base: TurnInstructions, model: Option<&ModelRef>) -> TurnInstructions {
+        let selection = self.resolve(model);
+        let primary = base.as_text();
+        let previous = match base.model_guidance() {
+            Some(ModelInstructionSelection::Specialized { instructions, .. }) => Some(instructions),
+            Some(ModelInstructionSelection::Generic { .. }) | None => None,
+        };
+        let is_base = |asset: &InstructionText| {
+            (asset.owner == ash_prompts::AGENT_INSTRUCTIONS.owner()
+                && asset.id == ash_prompts::AGENT_INSTRUCTIONS.id())
+                || previous == Some(asset)
+        };
+        if !base
+            .shared()
+            .iter()
+            .chain(std::iter::once(&primary))
+            .any(is_base)
+        {
+            return base.with_model_guidance(ModelInstructionSelection::Generic {
+                model: model.cloned(),
+            });
+        }
+        let chosen = match &selection {
+            ModelInstructionSelection::Specialized { instructions, .. } => instructions.clone(),
+            ModelInstructionSelection::Generic { .. } => {
+                ash_prompts::AGENT_INSTRUCTIONS.freeze().as_text()
+            }
+        };
+        let freeze = |asset: &InstructionText| {
+            TurnInstructions::new(&asset.owner, &asset.id, &asset.revision, &asset.body)
+                .expect("selected instruction assets are validated")
+        };
+        let selected =
+            |asset: &InstructionText| freeze(if is_base(asset) { &chosen } else { asset });
+        let mut frozen = selected(&primary);
+        for asset in base.shared() {
+            frozen = frozen.with_shared(&selected(asset));
+        }
+        if let Some(mode) = base.mode_instructions() {
+            frozen = frozen.with_mode(&freeze(mode));
+        }
+        frozen.with_model_guidance(selection)
+    }
 }
 
 /// A duplicate or invalid profile rejected before an Agent can select it.
@@ -122,137 +166,6 @@ impl fmt::Display for ModelInstructionError {
 }
 
 impl std::error::Error for ModelInstructionError {}
-
-struct InstructionGroup {
-    instructions: PromptArtifact,
-    models: &'static [(&'static str, &'static str)],
-}
-
-// These are exact registrations, not prefix or provider-wide matching rules.
-// Keep model identities aligned with model-provider-config's static catalog.
-const BUILT_INS: &[InstructionGroup] = &[
-    InstructionGroup {
-        instructions: PromptArtifact::new(
-            "models-manager",
-            "model/gpt",
-            "gpt-guidance-v1",
-            include_str!("../templates/instructions/gpt.md"),
-        ),
-        models: &[
-            ("openai", "gpt-6-astra"),
-            ("openai", "gpt-6.1-sol"),
-            ("openai", "gpt-6-sol"),
-            ("openai", "gpt-6-luna"),
-            ("openai", "gpt-5.6-sol"),
-            ("openai", "gpt-5.6-terra"),
-            ("openai", "gpt-5.6-luna"),
-            ("openai", "gpt-5.6"),
-            ("openai", "gpt-5.5"),
-            ("openai", "gpt-5.4"),
-            ("openai", "gpt-5.4-mini"),
-            ("openai", "gpt-5.4-nano"),
-            ("openai", "gpt-5.3-codex"),
-            ("openai", "gpt-5.2"),
-            ("openai", "gpt-5.1"),
-            ("openai", "gpt-5"),
-            ("openai", "gpt-5-mini"),
-            ("openai", "gpt-5-nano"),
-            ("openai", "gpt-4.1"),
-            ("openai", "gpt-4.1-mini"),
-            ("openai", "gpt-4o"),
-            ("openai", "gpt-4o-mini"),
-            ("openai", "o3"),
-        ],
-    },
-    InstructionGroup {
-        instructions: PromptArtifact::new(
-            "models-manager",
-            "model/claude",
-            "claude-guidance-v1",
-            include_str!("../templates/instructions/claude.md"),
-        ),
-        models: &[
-            ("anthropic", "claude-sonnet-4-20250514"),
-            ("anthropic", "claude-fable-5-1"),
-            ("anthropic", "claude-opus-5-5"),
-            ("anthropic", "claude-sonnet-5"),
-            ("anthropic", "claude-haiku-4-5-20251001"),
-            ("anthropic", "claude-opus-4-8"),
-            ("anthropic", "claude-opus-4-7"),
-            ("anthropic", "claude-opus-4-6"),
-            ("anthropic", "claude-sonnet-4-6"),
-            ("anthropic", "claude-sonnet-4-5-20250929"),
-        ],
-    },
-    InstructionGroup {
-        instructions: PromptArtifact::new(
-            "models-manager",
-            "model/gemini",
-            "gemini-guidance-v1",
-            include_str!("../templates/instructions/gemini.md"),
-        ),
-        models: &[
-            ("google", "gemini-3.8-flash"),
-            ("google", "gemini-3.7-flash"),
-            ("google", "gemini-3.6-flash"),
-            ("google", "gemini-3.5-flash"),
-            ("google", "gemini-3.5-flash-lite"),
-            ("google", "gemini-3.1-flash-lite"),
-            ("google", "gemini-3.1-pro-preview"),
-            ("google", "gemini-3-flash-preview"),
-        ],
-    },
-    InstructionGroup {
-        instructions: PromptArtifact::new(
-            "models-manager",
-            "model/function-calling",
-            "function-calling-guidance-v1",
-            include_str!("../templates/instructions/function_calling.md"),
-        ),
-        models: &[
-            ("xai", "grok-4.7"),
-            ("xai", "grok-4.6"),
-            ("xai", "grok-4.5"),
-            ("qwen", "qwen3.8-max"),
-            ("qwen", "qwen3.8-flash"),
-            ("qwen", "qwen3.7-max"),
-            ("qwen", "qwen3.7-plus"),
-            ("qwen", "qwen3.7-flash"),
-            ("qwen", "qwen3.6-plus"),
-            ("qwen", "qwen3.6-flash"),
-            ("qwen", "qwen3.5-plus"),
-            ("qwen", "qwen3.5-flash"),
-            ("qwen", "qwen3-max"),
-            ("qwen", "qwen3-coder-next"),
-            ("qwen", "qwen3-coder-plus"),
-            ("qwen", "qwen3-coder-flash"),
-            ("qwen", "qwen-plus"),
-            ("kimi", "kimi-k3"),
-            ("kimi", "kimi-k2.7-code"),
-            ("kimi", "kimi-k2.6"),
-            ("kimi", "kimi-k2.5"),
-            ("deepseek", "deepseek-flash"),
-            ("deepseek", "deepseek-v4-pro"),
-            ("zai", "glm-5.3"),
-            ("zai", "glm-5.3-flash"),
-            ("zai", "glm-5.3-flashx"),
-            ("zai", "glm-5.2"),
-            ("zai", "glm-5.1"),
-            ("zai", "glm-5-turbo"),
-            ("minimax", "MiniMax-M3"),
-            ("minimax", "MiniMax-M2.7"),
-            ("minimax", "MiniMax-M2.7-highspeed"),
-            ("minimax", "MiniMax-M2.5"),
-            ("minimax", "MiniMax-M2.5-highspeed"),
-            ("minimax", "MiniMax-M2.1"),
-            ("minimax", "MiniMax-M2.1-highspeed"),
-            ("minimax", "MiniMax-M2"),
-            ("mimo", "mimo-v2.6-pro"),
-            ("mimo", "mimo-v2.6-flash"),
-            ("mimo", "mimo-v2.5-pro"),
-        ],
-    },
-];
 
 #[cfg(test)]
 #[path = "instructions_tests.rs"]

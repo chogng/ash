@@ -374,14 +374,14 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
         ash_chatgpt::ChatGptAuthManagement::Codex,
     );
     let runtime = ash_model_provider::ModelProviderRuntime::with_secrets(
-        ash_model_provider_config::ProviderConfigRegistry::builtin(),
+        model_provider_info::ProviderConfigRegistry::builtin(),
         secrets,
     )
     .with_chatgpt_oauth(auth);
     let luna = Arc::new(Luna {
         model: runtime
             .build_model(
-                &ash_model_provider_config::ModelProviderConfig::new(model_ref().provider),
+                &model_provider_info::ModelProviderConfig::new(model_ref().provider),
                 &model_ref(),
             )
             .unwrap(),

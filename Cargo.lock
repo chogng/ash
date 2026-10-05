@@ -452,7 +452,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-instructions",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-models-manager",
  "ash-prompts",
  "ash-protocol",
@@ -648,7 +648,7 @@ dependencies = [
  "ash-memories-extension",
  "ash-memory-diagnostics",
  "ash-model-provider",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-models-manager",
  "ash-mxc-sandbox",
  "ash-network-proxy",
@@ -1211,7 +1211,7 @@ dependencies = [
  "ash-execpolicy",
  "ash-features",
  "ash-file-access",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-plugin",
  "ash-protocol",
  "ash-state",
@@ -1782,7 +1782,7 @@ dependencies = [
  "ash-extension-api",
  "ash-guardian-reviewer",
  "ash-model-provider",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-protocol",
 ]
 
@@ -2217,7 +2217,7 @@ dependencies = [
  "ash-http-client",
  "ash-kimi",
  "ash-login",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-model-tokenizer",
  "ash-models-manager",
  "ash-ollama",
@@ -2238,7 +2238,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-model-provider-config"
+name = "ash-model-provider-info"
 version = "0.1.0"
 dependencies = [
  "ash-protocol",
@@ -2266,7 +2266,7 @@ dependencies = [
 name = "ash-models-manager"
 version = "0.1.0"
 dependencies = [
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-prompts",
  "ash-protocol",
  "fs2",
@@ -2457,7 +2457,7 @@ dependencies = [
  "ash-async-utils",
  "ash-http-client",
  "ash-model-provider",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-protocol",
  "ash-voice-host",
  "ash-websocket-client",
@@ -3326,7 +3326,7 @@ dependencies = [
  "ash-livekit-api",
  "ash-livekit-client",
  "ash-model-provider",
- "ash-model-provider-config",
+ "ash-model-provider-info",
  "ash-secrets",
  "ash-websocket-client",
  "base64 0.22.1",

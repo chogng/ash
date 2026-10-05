@@ -126,7 +126,7 @@ ash-login = { workspace = true }
 ash-subscriptions = { workspace = true }
 ash-core-plugins = { workspace = true }
 ash-model-provider = { workspace = true }
-ash-model-provider-config = { workspace = true }
+model-provider-info = { workspace = true }
 ash-models-manager = { workspace = true }
 ash-prompts = { workspace = true }
 ash-collaboration-mode-templates = { workspace = true }

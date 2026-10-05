@@ -71,8 +71,8 @@ model provider 负责“如何用已选模型执行一次调用”
 | 位置 | 已有职责 | 不应继续扩张的方向 |
 | --- | --- | --- |
 | `ash-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
-| `ash-model-provider-config` | provider definition、endpoint/default、静态 seed models、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
-| `ash-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；长期拥有 provider 无关的模型候选选择 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
+| `ash-model-provider-info` | provider definition、endpoint/default、静态 seed models、每个模型的完整基础提示词、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
+| `ash-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；模型与提示词选择、Turn 接受前冻结基础提示词 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
 | `ash-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
 | `ash-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
 | `ash-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
@@ -196,10 +196,10 @@ capability metadata 暴露，不能创建、续期或命中厂商推理 cache。
 ```text
 ash-models-manager
   ├──▶ ash-protocol
-  └──▶ ash-model-provider-config
+  └──▶ ash-model-provider-info
 
 ash-model-provider
-  ├──▶ ash-model-provider-config
+  ├──▶ ash-model-provider-info
   ├──▶ ash-models-manager       # implements ModelCatalogSource
   ├──▶ ash-api ───▶ ash-client
   ├──▶ ash-client
@@ -216,7 +216,7 @@ ash-chatgpt
 
 具体规则：
 
-- `ash-models-manager` 可依赖 `ash-protocol` 和 `ash-model-provider-config`；
+- `ash-models-manager` 可依赖 `ash-protocol` 和 `ash-model-provider-info`；
 - `ash-models-manager` 不依赖 `ash-model-provider`、`ash-api`、`ash-client`、
   `ash-http-client`、`ash-secrets` 或 App Server；
 - manager 定义并拥有 `ModelCatalogSource` port，因为它是该 port 的消费者；

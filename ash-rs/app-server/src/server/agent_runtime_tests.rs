@@ -357,7 +357,7 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         ),
         (
             "anthropic",
-            "claude-sonnet-4-20250514",
+            "claude-sonnet-5-5",
             "claude",
             "CLAUDE.md",
             "directory",
@@ -376,10 +376,32 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             ".cursorrules",
             "directory",
         ),
+        ("glm", "glm-5.3", "codex", "AGENTS.override.md", "directory"),
+        (
+            "openai",
+            "unregistered-model",
+            "codex",
+            "AGENTS.override.md",
+            "directory",
+        ),
+        (
+            "custom-openai",
+            "gpt-6-astra",
+            "codex",
+            "AGENTS.override.md",
+            "directory",
+        ),
+        (
+            "meta",
+            "muse-spark-1.3",
+            "codex",
+            "AGENTS.override.md",
+            "directory",
+        ),
         ("openai", "gpt-6-astra", "codex", ".codex/AGENTS.md", "user"),
         (
             "anthropic",
-            "claude-sonnet-4-20250514",
+            "claude-sonnet-5-5",
             "claude",
             ".claude/CLAUDE.md",
             "user",
@@ -391,9 +413,13 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         );
         let expected =
             ash_models_manager::ModelInstructionCatalog::built_in().resolve(Some(&model));
-        let ash_protocol::ModelInstructionSelection::Specialized { instructions, .. } = &expected
-        else {
-            panic!("built-in guidance missing");
+        let expected_body = match &expected {
+            ash_protocol::ModelInstructionSelection::Specialized { instructions, .. } => {
+                instructions.body.as_str()
+            }
+            ash_protocol::ModelInstructionSelection::Generic { .. } => {
+                ash_prompts::AGENT_INSTRUCTIONS.body()
+            }
         };
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
@@ -513,7 +539,10 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             "instructions/import",
             json!({"scope":scope,"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[],"digest":preview["digest"]}),
         );
-        assert_eq!(imported["items"][0]["status"], "imported");
+        assert_eq!(
+            imported["items"][0]["status"], "imported",
+            "{provider}/{name}: {imported}"
+        );
         call(
             "session/request",
             json!({"commandId":"initial-guidance-turn", "sessionId":session, "request":{"type":"startTurn", "threadId":session, "expectedSequence":1, "input":[{"type":"text", "text":"start a worker"}]}}),
@@ -558,8 +587,13 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
                 "{context}"
             );
             let body = request.instructions.unwrap();
-            assert_eq!(body.matches(instructions.body.trim()).count(), 1);
-            assert_eq!(body.matches("## Shared working rules").count(), 1);
+            assert_eq!(body.matches(expected_body.trim()).count(), 1);
+            let default_body = ash_prompts::AGENT_INSTRUCTIONS.body().trim();
+            assert_eq!(
+                body.matches(default_body).count(),
+                expected_body.matches(default_body).count(),
+                "{provider}/{name}: only the selected base belongs in the request"
+            );
             assert_eq!(body.matches("## Tool permissions").count(), 1);
         }
         let deadline = Instant::now() + Duration::from_secs(5);

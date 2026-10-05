@@ -105,14 +105,11 @@ pub trait EmbeddingInvoker: Send + Sync {
 #[derive(Clone)]
 pub struct EmbeddingRuntimeRequest {
     pub model: crate::ModelRef,
-    pub config: ash_model_provider_config::ModelProviderConfig,
+    pub config: model_provider_info::ModelProviderConfig,
 }
 
 impl EmbeddingRuntimeRequest {
-    pub fn new(
-        model: crate::ModelRef,
-        config: ash_model_provider_config::ModelProviderConfig,
-    ) -> Self {
+    pub fn new(model: crate::ModelRef, config: model_provider_info::ModelProviderConfig) -> Self {
         Self { model, config }
     }
 }
@@ -221,7 +218,7 @@ pub trait RerankInvoker: Send + Sync {
 #[derive(Clone)]
 pub struct RerankRuntimeRequest {
     pub model: crate::ModelRef,
-    pub config: ash_model_provider_config::ModelProviderConfig,
+    pub config: model_provider_info::ModelProviderConfig,
 }
 
 /// Where one semantic model invocation executes relative to the user's device.
@@ -232,10 +229,7 @@ pub enum SemanticRuntimeLocation {
 }
 
 impl RerankRuntimeRequest {
-    pub fn new(
-        model: crate::ModelRef,
-        config: ash_model_provider_config::ModelProviderConfig,
-    ) -> Self {
+    pub fn new(model: crate::ModelRef, config: model_provider_info::ModelProviderConfig) -> Self {
         Self { model, config }
     }
 }

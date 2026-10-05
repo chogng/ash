@@ -61,7 +61,7 @@ HTTP backend 与共享 proxy/TLS policy 属于 `ash-http-client`；WebSocket han
 ## 2. 四层关系
 
 ```text
-ash-model-provider-config
+ash-model-provider-info
   声明 Provider、默认 base URL、允许的 API profile
                 │
                 ▼
@@ -305,7 +305,7 @@ just test ash-api --test provider_adapters
 just test ash-model-provider --lib
 just test ash-websocket-client
 just test ash-http-client
-just test ash-model-provider-config --lib
+just test ash-model-provider-info --lib
 just generate-protocol
 just test ash-app-server-protocol --lib
 just check ash-app-server -p ash-model-provider -p ash-api

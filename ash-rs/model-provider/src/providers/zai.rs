@@ -10,8 +10,8 @@ use ash_client::ResolvedApiTarget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_http_client::HttpHeader;
-use ash_model_provider_config::InputTokenCountProfile;
-use ash_model_provider_config::NormalizedModelProviderConfig;
+use model_provider_info::InputTokenCountProfile;
+use model_provider_info::NormalizedModelProviderConfig;
 
 pub(crate) struct ZaiAdapter {
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,

@@ -15,7 +15,7 @@ use protocol::ToolCallId;
 use protocol::UserInput;
 
 #[test]
-fn exposes_only_the_three_agent_coordination_tools() {
+fn exposes_agent_coordination_and_team_messaging_tools() {
     let service = service();
 
     let names = service
@@ -30,6 +30,8 @@ fn exposes_only_the_three_agent_coordination_tools() {
             SPAWN_AGENT_TOOL_NAME,
             SEND_AGENT_MESSAGE_TOOL_NAME,
             WAIT_AGENT_TOOL_NAME,
+            TEAM_POST_MESSAGE_TOOL_NAME,
+            TEAM_READ_MESSAGES_TOOL_NAME,
         ]
     );
 }

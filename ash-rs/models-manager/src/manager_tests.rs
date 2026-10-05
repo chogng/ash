@@ -21,12 +21,6 @@ use crate::ModelsManager;
 use crate::ModelsManagerError;
 use crate::UnknownCapabilityPolicy;
 use crate::cache::Clock;
-use ash_model_provider_config::ApiProfile;
-use ash_model_provider_config::EndpointPolicy;
-use ash_model_provider_config::ModelCatalogPolicy;
-use ash_model_provider_config::ProviderAdapter;
-use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::ProviderDefinition;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelAvailability;
@@ -37,6 +31,12 @@ use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
+use model_provider_info::ApiProfile;
+use model_provider_info::EndpointPolicy;
+use model_provider_info::ModelCatalogPolicy;
+use model_provider_info::ProviderAdapter;
+use model_provider_info::ProviderConfigRegistry;
+use model_provider_info::ProviderDefinition;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -205,10 +205,10 @@ async fn effective_model_info_uses_the_live_window_without_rewriting_the_scope()
         ],
     ))]));
     let snapshot = manager.refresh(scope.clone(), source).await.unwrap();
-    let mut config = ash_model_provider_config::ModelProviderConfig::new(provider_id("strict"));
+    let mut config = model_provider_info::ModelProviderConfig::new(provider_id("strict"));
     config.model_context.insert(
         model_id("alpha"),
-        ash_model_provider_config::ModelContextConfig {
+        model_provider_info::ModelContextConfig {
             context_window: 100_000,
             auto_compact_token_limit: Some(90_000),
         },

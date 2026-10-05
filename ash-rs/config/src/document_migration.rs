@@ -186,7 +186,7 @@ fn migrate_connections(root: &mut toml::map::Map<String, toml::Value>) -> Result
     for (id, value) in &mut connections {
         let connection = ash_protocol::ModelConnectionId::new(id.clone())
             .map_err(|error| ConfigError(error.to_string()))?;
-        let provider = ash_model_provider_config::connection_provider(&connection);
+        let provider = model_provider_info::connection_provider(&connection);
         let config = value
             .as_table_mut()
             .ok_or_else(|| ConfigError("connection must be a table".into()))?;
@@ -207,7 +207,7 @@ fn migrate_model_references(value: &mut toml::Value) {
         toml::Value::Table(table) => {
             if table.get("model").is_some_and(toml::Value::is_str) {
                 if let Some(toml::Value::String(provider)) = table.get_mut("provider") {
-                    if let Some(current) = ash_model_provider_config::legacy_model_providers()
+                    if let Some(current) = model_provider_info::legacy_model_providers()
                         .iter()
                         .find_map(|(old, current)| (old.as_str() == provider).then_some(current))
                     {

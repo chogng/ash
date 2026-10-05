@@ -200,14 +200,16 @@ impl AppServer {
                     .and_then(|thread| thread.agent_configuration())
                     .and_then(|agent| agent.base_instructions.clone())
                     .unwrap_or_else(|| ash_prompts::AGENT_INSTRUCTIONS.freeze());
-                let guidance = base
+                let base = if base
                     .model_guidance()
-                    .filter(|guidance| guidance.model() == model.as_ref())
-                    .cloned()
-                    .unwrap_or_else(|| self.model_instructions.resolve(model.as_ref()));
+                    .is_some_and(|guidance| guidance.model() == model.as_ref())
+                {
+                    base
+                } else {
+                    self.model_instructions.for_turn(base, model.as_ref())
+                };
                 let mode = latest.map(|turn| turn.mode).unwrap_or_default();
                 base.with_mode(&collaboration_mode_templates::instructions(mode))
-                    .with_model_guidance(guidance)
             }
         };
         let scope = match &params.scope {
@@ -1481,11 +1483,18 @@ impl AppServer {
             .agent_configuration()
             .and_then(|agent| agent.base_instructions.clone())
             .unwrap_or_else(|| ash_prompts::AGENT_INSTRUCTIONS.freeze());
+        let base = if base
+            .model_guidance()
+            .is_some_and(|guidance| guidance.model() == model.as_ref())
+        {
+            base
+        } else {
+            self.model_instructions.for_turn(base, model.as_ref())
+        };
         let guidance = base
             .model_guidance()
-            .filter(|guidance| guidance.model() == model.as_ref())
             .cloned()
-            .unwrap_or_else(|| self.model_instructions.resolve(model.as_ref()));
+            .expect("Agent base records its model selection");
         let (workflow, instructions) = match selection {
             TurnInstructionSelection::Agent => (None, base),
             TurnInstructionSelection::Product(prompt) => (None, prompt.with_shared(&base)),

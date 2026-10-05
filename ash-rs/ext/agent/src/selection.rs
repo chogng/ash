@@ -353,7 +353,7 @@ fn parse_model_ref(reference: &str) -> Result<ModelRef, CoreError> {
         ProviderId::new(provider).map_err(|error| CoreError::InvalidInput(error.to_string()))?;
     // Directory definitions are read-only input. Migrate their identity before the role is
     // frozen; never let a former service ID select a connection during execution.
-    let provider = model_provider_config::legacy_model_providers()
+    let provider = model_provider_info::legacy_model_providers()
         .remove(&provider)
         .unwrap_or(provider);
     Ok(ModelRef::new(
@@ -484,9 +484,8 @@ pub fn resolve_root_agent(
         .as_ref()
         .and_then(|role| role.model.as_ref())
         .or(model.as_ref());
-    let instructions = prompts::AGENT_INSTRUCTIONS
-        .freeze()
-        .with_model_guidance(model_instructions.resolve(selected_model));
+    let instructions =
+        model_instructions.for_turn(prompts::AGENT_INSTRUCTIONS.freeze(), selected_model);
     let agent = protocol::AgentConfiguration {
         role: selected.role,
         capability_scope: selected.capability_scope,

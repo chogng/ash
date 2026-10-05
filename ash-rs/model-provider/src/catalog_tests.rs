@@ -3,9 +3,6 @@ use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_glm::{GlmOAuth, GlmProvider};
-use ash_model_provider_config::ModelId;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderConfigRegistry;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::CatalogReadPolicy;
 use ash_models_manager::CatalogReadSource;
@@ -13,6 +10,9 @@ use ash_models_manager::CatalogSourceErrorKind;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ProviderId;
 use ash_secrets::{SecretKey, SecretStore, SecretValue};
+use model_provider_info::ModelId;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderConfigRegistry;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -283,7 +283,7 @@ fn api_and_coding_plan_connections_have_separate_credentials() {
     let mut config = ModelProviderConfig::for_connection(
         ash_protocol::ModelConnectionId::new("zai-coding-plan").unwrap(),
     );
-    config.base_url = Some(ash_model_provider_config::ZAI_CODING_PLAN_BASE_URL.into());
+    config.base_url = Some(model_provider_info::ZAI_CODING_PLAN_BASE_URL.into());
     assert!(
         runtime.catalog_binding(&config).unwrap().is_none(),
         "Coding Plans do not invent a discovery source"
@@ -421,8 +421,8 @@ fn openai_catalog_handles_empty_lists_invalid_payloads_and_http_errors() {
 
 #[test]
 fn custom_catalog_fetches_models_with_its_own_key_and_invalidates_scope() {
-    use ash_model_provider_config::CustomProviderConfig;
-    use ash_model_provider_config::CustomProviderProtocol;
+    use model_provider_info::CustomProviderConfig;
+    use model_provider_info::CustomProviderProtocol;
     struct Client {
         requests: Mutex<Vec<ClientRequest>>,
         body: Vec<u8>,

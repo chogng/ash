@@ -1,7 +1,6 @@
 use crate::catalog::ModelCatalogBinding;
 use ash_async_utils::CancellationSource;
 use ash_client::OperationClient;
-use ash_model_provider_config::ModelId;
 use ash_models_manager::CatalogCacheHint;
 use ash_models_manager::CatalogDiscoveryOutcome;
 use ash_models_manager::CatalogScopeKey;
@@ -19,6 +18,7 @@ use ash_ollama::OllamaClient;
 use ash_ollama::OllamaError;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ProviderId;
+use model_provider_info::ModelId;
 use sha2::Digest;
 use sha2::Sha256;
 use std::fmt::Write;

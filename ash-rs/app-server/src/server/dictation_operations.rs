@@ -143,7 +143,7 @@ impl AppServer {
                     .get(&connection)
                     .cloned()
                     .unwrap_or_else(|| {
-                        ash_model_provider_config::ModelProviderConfig::for_connection(connection)
+                        model_provider_info::ModelProviderConfig::for_connection(connection)
                     });
                 let network = ash_http_client::OutboundNetworkSnapshot::with_policy(
                     ash_http_client::HttpClientConfig::new(),

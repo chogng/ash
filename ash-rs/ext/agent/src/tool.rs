@@ -183,28 +183,26 @@ impl MultiAgentToolService {
                             instructions: arguments.task,
                         },
                         role: selection.role.clone(),
-                        base_instructions: prompts::AGENT_INSTRUCTIONS
-                            .freeze()
-                            .with_mode(&collaboration_mode_templates::instructions(
-                                parent
-                                    .turns
-                                    .iter()
-                                    .find(|turn| turn.turn_id == *identity.turn_id())
-                                    .ok_or_else(|| {
-                                        CoreError::NotFound(identity.turn_id().to_string())
-                                    })?
-                                    .mode
-                                    .delegated(),
-                            ))
-                            .with_model_guidance(
-                                self.model_instructions.resolve(
-                                    selection
-                                        .role
-                                        .as_ref()
-                                        .and_then(|role| role.model.as_ref())
-                                        .or(identity.model()),
+                        base_instructions: self.model_instructions.for_turn(
+                            prompts::AGENT_INSTRUCTIONS.freeze().with_mode(
+                                &collaboration_mode_templates::instructions(
+                                    parent
+                                        .turns
+                                        .iter()
+                                        .find(|turn| turn.turn_id == *identity.turn_id())
+                                        .ok_or_else(|| {
+                                            CoreError::NotFound(identity.turn_id().to_string())
+                                        })?
+                                        .mode
+                                        .delegated(),
                                 ),
                             ),
+                            selection
+                                .role
+                                .as_ref()
+                                .and_then(|role| role.model.as_ref())
+                                .or(identity.model()),
+                        ),
                         inheritance: spawn_context(arguments.context)?,
                         policy_ceiling: DelegatedPolicyCeiling {
                             policy_revision: identity.policy_revision().into(),

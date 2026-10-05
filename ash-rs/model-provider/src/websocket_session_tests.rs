@@ -179,7 +179,7 @@ async fn stored_api_key_authenticates_all_three_openai_websocket_services() {
     runtime
         .connect_voice(
             &config,
-            &ash_model_provider_config::VoiceModelConfig::default(),
+            &model_provider_info::VoiceModelConfig::default(),
             "test",
             &local_connector(),
             WebSocketSessionConfig::default(),
@@ -289,7 +289,7 @@ fn websocket_factories_require_their_own_declared_service_protocols() {
             runtime
                 .connect_voice(
                     &config,
-                    &ash_model_provider_config::VoiceModelConfig::default(),
+                    &model_provider_info::VoiceModelConfig::default(),
                     "",
                     &connector,
                     WebSocketSessionConfig::default(),
@@ -298,7 +298,7 @@ fn websocket_factories_require_their_own_declared_service_protocols() {
                 .await,
             Err(ModelProviderError::Unavailable(_))
         ));
-        let selection = ash_model_provider_config::VoiceModelConfig {
+        let selection = model_provider_info::VoiceModelConfig {
             model: Some(model_ref("openai", "gpt-5.6-luna").model),
             voice: None,
         };
@@ -314,7 +314,7 @@ fn websocket_factories_require_their_own_declared_service_protocols() {
                 )
                 .await,
             Err(ModelProviderError::Config(
-                ash_model_provider_config::ProviderConfigError::ModelNotRegistered { .. }
+                model_provider_info::ProviderConfigError::ModelNotRegistered { .. }
             ))
         ));
         assert!(matches!(

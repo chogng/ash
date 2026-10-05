@@ -5,7 +5,6 @@ use crate::catalog::ModelCatalogBinding;
 use crate::diagnostics::DiagnosticClient;
 use ash_async_utils::CancellationSource;
 use ash_client::OperationClient;
-use ash_model_provider_config::ModelId;
 use ash_models_manager::CatalogCacheHint;
 use ash_models_manager::CatalogDiscoveryOutcome;
 use ash_models_manager::CatalogScopeKey;
@@ -17,6 +16,7 @@ use ash_models_manager::DiscoveredCatalog;
 use ash_models_manager::DiscoveredModel;
 use ash_models_manager::DiscoveryCoverage;
 use ash_models_manager::ModelCatalogSource;
+use model_provider_info::ModelId;
 use response_debug_context::DiagnosticOutcome;
 use response_debug_context::ResponseDiagnosticSink;
 use response_debug_context::ResponseOperation;
@@ -27,7 +27,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 pub(crate) fn openai_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
@@ -36,7 +36,7 @@ pub(crate) fn openai_catalog_binding(
 }
 
 pub(crate) fn anthropic_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
@@ -60,13 +60,13 @@ pub(crate) fn anthropic_catalog_binding(
 }
 
 fn http_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     target: ash_client::ResolvedApiTarget,
     client: Arc<dyn OperationClient>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
     path: &str,
 ) -> Result<ModelCatalogBinding, crate::ModelProviderError> {
-    let paginate = config.api_profile == ash_model_provider_config::ApiProfile::AnthropicMessages;
+    let paginate = config.api_profile == model_provider_info::ApiProfile::AnthropicMessages;
     let mut digest = Sha256::new();
     // Context declarations and local aliases do not change the remote catalog identity.
     digest.update(

@@ -1,7 +1,7 @@
 use super::*;
 use ash_file_access::{Permission, Permissions};
-use ash_model_provider_config::{ModelProviderConfig, ProviderConfigRegistry};
 use ash_protocol::{CommandId, Patch, ProviderId};
+use model_provider_info::{ModelProviderConfig, ProviderConfigRegistry};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -507,13 +507,13 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
     let store = ConfigStore::open(&path).unwrap();
     let mut config = ModelProviderConfig::new(provider_id("custom-test"));
     config.base_url = Some("https://example.test/v1".into());
-    config.custom = Some(ash_model_provider_config::CustomProviderConfig {
+    config.custom = Some(model_provider_info::CustomProviderConfig {
         model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         model: None,
         name: "Example".into(),
-        protocol: ash_model_provider_config::CustomProviderProtocol::Responses,
+        protocol: model_provider_info::CustomProviderProtocol::Responses,
     });
     let command = |id: &str, config: ModelProviderConfig| ConfigCommandRequest {
         command_id: CommandId::new(id).unwrap(),
@@ -526,7 +526,7 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
     store.apply(command("create", config.clone())).unwrap();
     let mut changed = config.clone();
     changed.custom.as_mut().unwrap().protocol =
-        ash_model_provider_config::CustomProviderProtocol::ChatCompletions;
+        model_provider_info::CustomProviderProtocol::ChatCompletions;
     assert!(store.apply(command("stale", changed)).is_err());
     drop(store);
     config.custom.as_mut().unwrap().order = 1;
@@ -2625,7 +2625,7 @@ fn saved_connections_survive_restarting() {
     ] {
         revision = configure_provider(&store, revision, id).revision.get();
         let snapshot = store.read_snapshot().unwrap();
-        let vendor = ash_model_provider_config::connection_provider(&connection_id(id));
+        let vendor = model_provider_info::connection_provider(&connection_id(id));
         assert_eq!(snapshot.values.providers[&vendor].provider, vendor);
     }
     let snapshot = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();

@@ -78,14 +78,14 @@ use ash_config::UserConfigCommand;
 use ash_model_provider::ModelId;
 use ash_model_provider::ModelRef;
 use ash_model_provider::ProviderId;
-use ash_model_provider_config::ModelContextConfig;
-use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::HookEvent;
 use ash_protocol::Patch;
 use ash_state::ClearOutcome;
 use core_api::HookEventDecision;
 use core_api::HookEventRequest;
 use core_api::HookEventScope;
+use model_provider_info::ModelContextConfig;
+use model_provider_info::ModelProviderConfig;
 use serde_json::Value;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
@@ -1162,9 +1162,9 @@ fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
             model: custom.model.map(|model| model.to_string()),
             name: custom.name,
             protocol: match custom.protocol {
-                ash_model_provider_config::CustomProviderProtocol::Responses => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
-                ash_model_provider_config::CustomProviderProtocol::ChatCompletions => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions,
-                ash_model_provider_config::CustomProviderProtocol::AnthropicMessages => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::AnthropicMessages,
+                model_provider_info::CustomProviderProtocol::Responses => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses,
+                model_provider_info::CustomProviderProtocol::ChatCompletions => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions,
+                model_provider_info::CustomProviderProtocol::AnthropicMessages => ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::AnthropicMessages,
             },
         }),
         base_url: config.base_url,
@@ -1243,16 +1243,16 @@ pub(super) fn provider_config_from_dto(
             .collect::<Result<_, _>>()?,
         connection: ash_protocol::ModelConnectionId::new(config.connection)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
-        custom: config.custom.map(|custom| ash_model_provider_config::CustomProviderConfig {
+        custom: config.custom.map(|custom| model_provider_info::CustomProviderConfig {
             model_aliases,
             context_window: custom.context_window,
             order: custom.order,
             model: custom_model,
             name: custom.name,
             protocol: match custom.protocol {
-                ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses => ash_model_provider_config::CustomProviderProtocol::Responses,
-                ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions => ash_model_provider_config::CustomProviderProtocol::ChatCompletions,
-                ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::AnthropicMessages => ash_model_provider_config::CustomProviderProtocol::AnthropicMessages,
+                ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::Responses => model_provider_info::CustomProviderProtocol::Responses,
+                ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::ChatCompletions => model_provider_info::CustomProviderProtocol::ChatCompletions,
+                ash_app_server_protocol::protocol::config::CustomProviderProtocolDto::AnthropicMessages => model_provider_info::CustomProviderProtocol::AnthropicMessages,
             },
         }),
         provider: ProviderId::new(config.provider)

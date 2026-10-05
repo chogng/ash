@@ -63,7 +63,7 @@ primitive，不能共享一套虚假的 `CredentialManager`。
 
 ```text
 static declaration
-  ash-config / model-provider-config
+  ash-config / model-provider-info
   └─ 只保存 CredentialRef、account selection、provider auth mode
 
 domain runtime

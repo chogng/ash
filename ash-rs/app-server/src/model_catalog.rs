@@ -14,7 +14,7 @@ pub(crate) struct ModelPreferencesCommand {
 #[derive(Debug)]
 pub(crate) enum ModelPreferencesError {
     Catalog(CoreError),
-    InvalidPreferences(ash_model_provider_config::ProviderConfigError),
+    InvalidPreferences(model_provider_info::ProviderConfigError),
     Configuration(ash_config::ConfigCommandError),
 }
 

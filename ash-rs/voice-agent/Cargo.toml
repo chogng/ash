@@ -16,7 +16,7 @@ tokio = { workspace = true, features = ["macros", "sync", "time"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-ash-model-provider-config = { workspace = true }
+model-provider-info = { workspace = true }
 ash-http-client = { workspace = true }
 ash-websocket-client = { workspace = true }
 ash-secrets = { workspace = true }

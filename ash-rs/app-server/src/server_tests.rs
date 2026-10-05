@@ -15,14 +15,14 @@ mod memories_live_tests;
 
 #[path = "automation_tests.rs"]
 mod automation_tests;
-#[path = "task_delivery_host_tests.rs"]
-mod task_delivery_tests;
 #[path = "backup_tests.rs"]
 mod backup_tests;
 #[path = "infrastructure_tests.rs"]
 mod infrastructure_tests;
 #[path = "memory_tests.rs"]
 mod memory_tests;
+#[path = "task_delivery_host_tests.rs"]
+mod task_delivery_tests;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
 use ash_action_policy::ActionPolicyRevision;
@@ -600,7 +600,7 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
         ))
         .with_provider_credentials(Arc::new(
             ash_model_provider::ProviderCredentialService::new(
-                ash_model_provider_config::ProviderConfigRegistry::builtin(),
+                model_provider_info::ProviderConfigRegistry::builtin(),
                 secrets,
             ),
         ));
@@ -616,7 +616,7 @@ fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting
     );
     assert_eq!(
         initial["result"]["providers"].as_array().unwrap().len(),
-        ash_model_provider_config::ProviderConfigRegistry::builtin()
+        model_provider_info::ProviderConfigRegistry::builtin()
             .connections()
             .len()
     );
@@ -727,7 +727,7 @@ fn provider_list_discovers_a_deferred_subscription_before_account_read() {
         ))
         .with_provider_credentials(Arc::new(
             ash_model_provider::ProviderCredentialService::new(
-                ash_model_provider_config::ProviderConfigRegistry::builtin(),
+                model_provider_info::ProviderConfigRegistry::builtin(),
                 secrets,
             ),
         ))
@@ -840,7 +840,7 @@ fn custom_provider_rpc_round_trips_protocol_and_stores_a_separate_key() {
         .with_config_store(store)
         .with_provider_credentials(Arc::new(
             ash_model_provider::ProviderCredentialService::new(
-                ash_model_provider_config::ProviderConfigRegistry::builtin(),
+                model_provider_info::ProviderConfigRegistry::builtin(),
                 Arc::new(MemorySecretStore::default()),
             ),
         ));
@@ -6883,7 +6883,7 @@ fn custom_provider_order_survives_edits_and_remove_cleans_only_its_secret() {
     let directory = tempfile::tempdir().unwrap();
     let store = Arc::new(ConfigStore::open(directory.path().join("config.sqlite3")).unwrap());
     let secrets = Arc::new(MemorySecretStore::default());
-    let registry = ash_model_provider_config::ProviderConfigRegistry::builtin();
+    let registry = model_provider_info::ProviderConfigRegistry::builtin();
     let credentials = Arc::new(ash_model_provider::ProviderCredentialService::new(
         registry,
         secrets.clone(),
@@ -7310,7 +7310,7 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
             command: ash_config::UserConfigCommand::ConfigureConnection {
                 connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
                     .unwrap(),
-                config: ash_model_provider_config::ModelProviderConfig::new(provider.clone()),
+                config: model_provider_info::ModelProviderConfig::new(provider.clone()),
             },
         })
         .unwrap();

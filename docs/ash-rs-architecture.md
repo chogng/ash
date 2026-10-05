@@ -84,7 +84,7 @@ ash-rs/
 ├── backend-models/       # 各供应商后台 HTTP 请求与响应合约，保留各自字段和单位
 ├── backend-client/       # 各供应商后台 HTTP 路由、校验与解释
 ├── chatgpt/              # native ChatGPT subscription OAuth and authenticated target
-├── model-provider-config/
+├── model-provider-info/
 ├── model-provider/
 ├── ash-api/
 ├── http-client/           # shared outbound network policy + unary/streaming HTTP substrate

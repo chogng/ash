@@ -20,7 +20,6 @@ use ash_model_provider::EmbeddingRequest;
 use ash_model_provider::EmbeddingResponse;
 use ash_model_provider::EmbeddingVector;
 use ash_model_provider::ModelProviderError;
-use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::CommandId;
 use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
@@ -28,6 +27,7 @@ use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use model_provider_info::ModelProviderConfig;
 use tempfile::TempDir;
 
 use super::CodebaseRetrievalContextSource;

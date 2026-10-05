@@ -83,3 +83,89 @@ fn empty_catalog_does_not_remove_the_product_conflict_contract() {
     assert_eq!(fragments[0].placement(), InstructionPlacement::Product);
     assert_eq!(fragments[0].retention(), InstructionRetention::Required);
 }
+
+#[test]
+fn frozen_bases_and_distinct_guidance_render_once_with_runtime_instructions() {
+    let model_base = ash_protocol::TurnInstructions::new(
+        "models-manager",
+        "model/test/test",
+        "v1",
+        "MODEL_BASE",
+    )
+    .unwrap();
+    let selection = ash_protocol::ModelInstructionSelection::Specialized {
+        model: ash_protocol::ModelRef::new(
+            ash_protocol::ProviderId::new("test").unwrap(),
+            ash_protocol::ModelId::new("test").unwrap(),
+        ),
+        digest: ash_protocol::ContentDigest::sha256(model_base.body().as_bytes()),
+        instructions: model_base.as_text(),
+    };
+    let custom =
+        ash_protocol::TurnInstructions::new("host", "custom", "v1", "CUSTOM_BASE").unwrap();
+    let task = ash_protocol::TurnInstructions::new("host", "task", "v1", "TASK_RULES").unwrap();
+    let mode = ash_protocol::TurnInstructions::new("modes", "mode", "v1", "MODE_RULES").unwrap();
+    for (base, has_model, has_default, has_custom, has_task) in [
+        (
+            model_base.clone().with_model_guidance(selection.clone()),
+            true,
+            false,
+            false,
+            false,
+        ),
+        (
+            ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+            false,
+            true,
+            false,
+            false,
+        ),
+        (custom, false, false, true, false),
+        (
+            task.with_shared(&model_base)
+                .with_model_guidance(selection.clone()),
+            true,
+            false,
+            false,
+            true,
+        ),
+        // Previously saved supplemental guidance remains separate on restoration.
+        (
+            ash_prompts::AGENT_INSTRUCTIONS
+                .freeze()
+                .with_model_guidance(selection),
+            true,
+            true,
+            false,
+            false,
+        ),
+    ] {
+        let fragments = turn_instruction_fragments(
+            &base.with_mode(&mode),
+            ash_protocol::ApprovalMode::Manual,
+            Vec::new(),
+        );
+        let bodies = fragments
+            .iter()
+            .map(InstructionFragment::body)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            bodies.iter().filter(|body| **body == "MODEL_BASE").count(),
+            usize::from(has_model)
+        );
+        assert_eq!(
+            bodies.contains(&ash_prompts::AGENT_INSTRUCTIONS.body()),
+            has_default
+        );
+        assert_eq!(bodies.contains(&"CUSTOM_BASE"), has_custom);
+        assert_eq!(bodies.contains(&"TASK_RULES"), has_task);
+        assert!(bodies.contains(&"MODE_RULES"));
+        assert_eq!(
+            bodies
+                .iter()
+                .filter(|body| body.contains("## Tool permissions"))
+                .count(),
+            1
+        );
+    }
+}

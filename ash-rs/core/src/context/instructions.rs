@@ -229,34 +229,22 @@ pub(crate) fn turn_instruction_fragments(
     approval_mode: ash_protocol::ApprovalMode,
     additional: Vec<InstructionFragment>,
 ) -> Vec<InstructionFragment> {
-    let mut instruction_fragments = vec![crate::context::InstructionFragment::new(
-        crate::context::InstructionSource::new(
-            instructions.owner(),
-            instructions.id(),
-            instructions.revision(),
-        ),
-        crate::context::InstructionPlacement::System,
-        crate::context::InstructionRetention::Required,
-        instructions.body(),
-    )];
-    let mut shared_fragments = instructions
+    let primary = instructions.as_text();
+    let assets = instructions
         .shared()
         .iter()
+        .chain(std::iter::once(&primary));
+    let mut instruction_fragments = assets
+        .clone()
         .map(|asset| {
             crate::context::InstructionFragment::new(
-                crate::context::InstructionSource::new(
-                    asset.owner.clone(),
-                    asset.id.clone(),
-                    asset.revision.clone(),
-                ),
+                crate::context::InstructionSource::new(&asset.owner, &asset.id, &asset.revision),
                 crate::context::InstructionPlacement::System,
                 crate::context::InstructionRetention::Required,
-                asset.body.clone(),
+                &asset.body,
             )
         })
         .collect::<Vec<_>>();
-    shared_fragments.append(&mut instruction_fragments);
-    instruction_fragments = shared_fragments;
     instruction_fragments.splice(
         0..0,
         ash_prompts::permissions_instructions(approval_mode)
@@ -274,20 +262,19 @@ pub(crate) fn turn_instruction_fragments(
                 )
             }),
     );
+    // Complete model bases are already frozen among the assets. Keep separately frozen guidance
+    // only when it is a distinct asset, so restoring a Turn never changes its instruction meaning.
     if let Some(ash_protocol::ModelInstructionSelection::Specialized {
         instructions: asset,
         ..
     }) = instructions.model_guidance()
+        && !assets.clone().any(|existing| existing == asset)
     {
         instruction_fragments.push(crate::context::InstructionFragment::new(
-            crate::context::InstructionSource::new(
-                asset.owner.clone(),
-                asset.id.clone(),
-                asset.revision.clone(),
-            ),
+            crate::context::InstructionSource::new(&asset.owner, &asset.id, &asset.revision),
             crate::context::InstructionPlacement::Product,
             crate::context::InstructionRetention::Required,
-            asset.body.clone(),
+            &asset.body,
         ));
     }
     instruction_fragments.extend(additional);

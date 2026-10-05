@@ -13,13 +13,13 @@ use crate::PluginsConfig;
 use crate::SkillsConfig;
 use crate::ToolSearchConfig;
 use crate::UserExecPolicyConfig;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderConfigError;
-use ash_model_provider_config::ProviderConfigRegistry;
 use ash_protocol::ModelConnectionId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderConfigError;
+use model_provider_info::ProviderConfigRegistry;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -554,7 +554,7 @@ fn approval_review_effort(
             reasoning_effort, ..
         } => *reasoning_effort,
     };
-    let spec = ash_model_provider_config::find_static_model(model);
+    let spec = model_provider_info::find_static_model(model);
     if let (Some(effort), Some(spec)) = (selected_effort, spec)
         && !spec.supported_reasoning_efforts.contains(&effort)
     {
@@ -589,9 +589,9 @@ impl From<&UserConfigDocument> for ResolvedConfig {
     fn from(document: &UserConfigDocument) -> Self {
         let mut providers: BTreeMap<ProviderId, ModelProviderConfig> = BTreeMap::new();
         for config in document.connections.values() {
-            let rank = ash_model_provider_config::connection_priority(&config.connection);
+            let rank = model_provider_info::connection_priority(&config.connection);
             if providers.get(&config.provider).is_some_and(|current| {
-                ash_model_provider_config::connection_priority(&current.connection) <= rank
+                model_provider_info::connection_priority(&current.connection) <= rank
             }) {
                 continue;
             }

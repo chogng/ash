@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use ash_model_provider_config::ApiKeyPolicy;
-use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::ProviderId;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use model_provider_info::ApiKeyPolicy;
+use model_provider_info::ProviderConfigRegistry;
+use model_provider_info::ProviderId;
 
 use crate::ProviderCredentialError;
 use crate::ProviderCredentialService;

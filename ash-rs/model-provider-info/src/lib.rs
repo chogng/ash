@@ -1,4 +1,4 @@
-//! Declarative, serializable, and runtime-free model-provider configuration.
+//! Model metadata, base instructions, and connection declarations shared without request clients.
 
 mod config;
 mod connection;
@@ -48,6 +48,7 @@ pub use providers::bigmodel::BIGMODEL_CODING_PLAN_BASE_URL;
 pub use providers::zai::ZAI_CODING_PLAN_BASE_URL;
 pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;
+pub use static_model_spec::ModelInstructions;
 pub use static_model_spec::StaticModelSpec;
 
 use schemars::{Schema, schema_for};

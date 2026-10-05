@@ -3,8 +3,8 @@ use std::sync::Arc;
 use ash_api::SemanticApiEndpoint;
 use ash_client::OperationClient;
 use ash_client::ResolvedApiTarget;
-use ash_model_provider_config::ProviderAdapter;
-use ash_model_provider_config::ProviderConfigRegistry;
+use model_provider_info::ProviderAdapter;
+use model_provider_info::ProviderConfigRegistry;
 
 use crate::EmbeddingInvoker;
 use crate::EmbeddingRequest;
@@ -91,7 +91,7 @@ impl SemanticRuntimeResolver {
     fn runtime_location(
         &self,
         provider: &ash_protocol::ProviderId,
-        config: &ash_model_provider_config::ModelProviderConfig,
+        config: &model_provider_info::ModelProviderConfig,
     ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
         let registry = self.configs.with_configs([config])?;
         let normalized = registry.normalize_for(config, provider)?;
@@ -116,7 +116,7 @@ impl SemanticRuntimeResolver {
     fn resolve(
         &self,
         provider: &ash_protocol::ProviderId,
-        config: &ash_model_provider_config::ModelProviderConfig,
+        config: &model_provider_info::ModelProviderConfig,
         operation: SemanticOperation,
     ) -> Result<SemanticHttpRuntime, ModelProviderError> {
         let registry = self.configs.with_configs([config])?;
@@ -124,7 +124,7 @@ impl SemanticRuntimeResolver {
         if registry
             .connection(&config.connection)
             .is_some_and(|connection| {
-                connection.runtime != ash_model_provider_config::ModelConnectionRuntime::ProviderApi
+                connection.runtime != model_provider_info::ModelConnectionRuntime::ProviderApi
             })
         {
             return Err(ModelProviderError::Unavailable(format!(

@@ -1,6 +1,6 @@
 use super::ProviderAdapter;
 use ash_api::ApiEndpoint;
-use ash_model_provider_config::NormalizedModelProviderConfig;
+use model_provider_info::NormalizedModelProviderConfig;
 
 pub(crate) struct DeepSeekAdapter {
     endpoint: ApiEndpoint,
@@ -9,7 +9,7 @@ pub(crate) struct DeepSeekAdapter {
 impl DeepSeekAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         let endpoint = match config.api_profile {
-            ash_model_provider_config::ApiProfile::OpenAiChatCompletions => {
+            model_provider_info::ApiProfile::OpenAiChatCompletions => {
                 ApiEndpoint::DeepSeekChatCompletions
             }
             profile => super::api_endpoint(profile),

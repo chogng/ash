@@ -11,11 +11,11 @@ name = "realtime_voice"
 [features]
 default = []
 # Product hosts opt into remote transcription; local microphone clients do not need model invocation.
-cloud = ["dep:model-provider", "dep:model-provider-config", "dep:protocol", "dep:websocket-client"]
+cloud = ["dep:model-provider", "dep:model-provider-info", "dep:protocol", "dep:websocket-client"]
 
 [dependencies]
 model-provider = { package = "ash-model-provider", path = "../model-provider", optional = true }
-model-provider-config = { package = "ash-model-provider-config", path = "../model-provider-config", optional = true }
+model-provider-info = { workspace = true, optional = true }
 async-utils = { package = "ash-async-utils", path = "../async-utils" }
 protocol = { package = "ash-protocol", path = "../protocol", optional = true }
 websocket-client = { package = "ash-websocket-client", path = "../websocket-client", optional = true }

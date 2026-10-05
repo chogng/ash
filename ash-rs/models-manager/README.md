@@ -2,13 +2,13 @@
 
 > 本 README 是 crate 当前实现的权威说明。跨 crate 的目录语义、provider 调研和分阶段演进见
 > [`docs/models-manager.md`](../../docs/models-manager.md)；provider declaration 见
-> [`ash-model-provider-config`](../model-provider-config/README.md)，调用 runtime 见
+> [`ash-model-provider-info`](../model-provider-info/README.md)，调用 runtime 见
 > [`ash-model-provider`](../model-provider/README.md)。
 
 - 从 `ProviderDefinition.models` 读取静态模型，合并按 scope 隔离的动态发现结果。
 - 管理目录刷新、缓存、并发请求合并和 snapshot generation。
 - 负责模型筛选、准确模型解析和配置生效后的模型信息。
-- 选择模型专化指令；共同 Agent 规则由 `ash-prompts` 拥有。
+- 选择每个模型的完整基础提示词；未登记模型的默认正文由 `ash-prompts` 拥有。
 - 不持有凭据、调用客户端、Config 存储或 UI 状态。
 
 ## 公共契约
@@ -27,7 +27,7 @@
 | `ResolvedModel` | exact model + catalog generation + warnings | `AllowUnlisted` 产生 unverified synthetic metadata |
 | `ModelCatalogEntry::model_info` | 取得配置生效后的 `ModelInfo` | 校验 provider 身份、裁剪上下文和压缩阈值；不修改原始条目 |
 | `ModelInstructionCatalog` | 按准确 provider/model 选择指导 | 返回 Generic 或冻结的专化资产；拒绝重复与无效定义 |
-| `ModelInstructionProfile` | 登记代码维护的模型指导 | 记录准确模型和有版本的 PromptArtifact，不授予工具或权限 |
+| `ModelInstructionProfile` | 登记代码维护的模型指导 | 记录准确模型和有版本的 InstructionText，不授予工具或权限 |
 
 `CatalogSourceScopeId` 不是 endpoint 或 credential reference。Host 必须先对 normalized endpoint、tenant、
 credential revision 和 provider config revision 生成不可逆、无秘密的稳定指纹；任一输入变化都使用新
@@ -126,7 +126,7 @@ Explicit `refresh` 仍返回 typed error，调用方可另行读取 last-known s
 
 ## 集成义务
 
-- `ash-model-provider-config` 提供 immutable `ProviderConfigRegistry` 和 seed，不依赖本 crate。
+- `ash-model-provider-info` 提供 immutable `ProviderConfigRegistry` 和 seed，不依赖本 crate。
 - `ash-model-provider` 持有并公开同一个 `ModelsManager` clone；`Provider::resolve_model` 消费 manager
   的 static resolution，不再维护第二套 catalog gate。
 - Local App Server 从 provider runtime 取得该 manager；`model/list` 的 `discovered` 视图只列出
@@ -154,7 +154,7 @@ App Server DTO/schema fixture。
 ## 有效模型信息与职责
 
 - `entry.info()` 返回原始目录信息；`entry.model_info(&provider_config)` 返回配置生效后的独立副本。
-- 先校验 provider 身份和配置。按准确 ModelId 读取 `model_context`，未声明时才使用自定义连接的默认窗口。没有显式窗口设置时，`gpt-` 型号的执行预算默认为 272,000 token，并受目录声明的最大窗口限制；目录证据仍保留原最大容量。
+- 先校验 provider 身份和配置。按准确 ModelId 读取 `model_context`，未声明时才使用自定义连接的默认窗口。内置模型没有用户覆盖时，读取 `models.json` 的 `default_context_window`；预算选项由同一条目的 `context_window_options` 声明。目录证据仍保留 `context_window` 的最大容量，实际预算受当前容量限制；发现结果不根据型号前缀生成预算档位。
 - 配置窗口不能超过目录已知窗口。未配置压缩阈值时建议使用有效窗口的 90%；显式阈值同样受此上限限制。
 - 未知窗口保持未知，除非配置明确提供。配置不推断工具能力、不改变 availability，也不改写 snapshot、provenance 或 generation。
 - App Server 的模型列表与调用预算读取同一批静态规格和当前连接的已缓存发现结果，统一计算输出预留、安全余量及压缩阈值。每轮开始时冻结目录证据和配置；刷新只影响后续执行。未知容量可以展示，但必须声明窗口后才能请求模型；真正执行分配和压缩由 Core 负责。
@@ -164,39 +164,31 @@ App Server DTO/schema fixture。
 
 | Codex 位置 | Ash 归属 |
 | --- | --- |
-| `model-provider-info` 的供应商声明、默认值和校验 | `model-provider-config` |
+| `model-provider-info` 的供应商声明、默认值和校验 | `model-provider-info` |
 | `model-provider-info` 的凭据读取、请求 Header 和 API target 转换 | `model-provider`、登录服务和 client |
 | `models-manager/model_info` 的模型信息与配置覆盖 | 本 crate 的 `model_info.rs` |
-| 模型专化指导 | 本 crate 的 `instructions.rs`；共同规则在 `prompts` |
+| 模型专化指导 | 本 crate 的 `instructions.rs` 选择；完整正文在 model-provider-info/models.json，默认正文在 prompts |
 
-现有 crate 已提供供应商配置和调用依赖隔离，无需再建立同职能的 `model-provider-info`。
+供应商与模型声明统一归 `model-provider-info`；本 crate 与请求实现共享这份数据，不重复维护声明，也不读取凭据或创建客户端。
 Codex 针对未知模型写入的固定规格不适用于这里的多供应商目录。
 
 ## Agent 指令边界
 
-- 共同规则归 `ash-prompts::AGENT_INSTRUCTIONS`；这里的模板只补充模型表达和工具调用指导。
-- `ModelInstructionCatalog::built_in()` 返回共享的内置初版目录，当前覆盖静态模型目录中的 16 个准确 provider/model 身份。
-- `ModelInstructionCatalog::new` 校验自定义目录；`default()` 明确创建空目录，已知模型也使用 Generic。
-- `resolve` 只做准确匹配，不按 provider、型号前缀、显示名或 API 地址推断；同一正文可以由多个准确条目共用。
-- App Server 和委托工具默认使用内置目录。嵌入方可在环境创建前通过 `with_model_instructions` 整体替换它，包含用空目录建立 Generic 对照。
-- 每次选择记录准确模型、正文、id/revision 和摘要；结构校验通过不代表模型效果已评测。
+- 模型规格和完整基础提示词统一来自 [`models.json`](../model-provider-info/models.json)，本 crate 不维护第二份模型 ID 清单。
+- `ModelInstructionCatalog::built_in()` 从 JSON 条目建立共享目录；每个模型的正文、revision 和资产身份独立。`resolve` 按准确 provider/model 匹配，不按型号前缀、显示名或 API 地址推断。
+- `for_turn` 在接受新 Turn 前选好并冻结基础提示词。命中模型条目时替换默认 Agent 正文；未登记时使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。宿主显式指定的基础正文优先；产品任务保留自己的正文，只替换共享的 Agent 基础正文。
+- 权限、Role、协作模式、项目指令、历史和工具定义仍由对应运行时组合。模型提示词不授予工具或权限。
+- App Server 和委托工具默认使用内置目录。嵌入方可在环境创建前通过 `with_model_instructions` 整体替换它，传入空目录建立 Generic 对照。
+- 每次选择记录准确模型、正文、id/revision 和摘要；结构校验通过不代表模型效果已评测。已接受 Turn 和角色/子 Agent 的冻结内容用于后续请求与恢复。
 
 ### 初版模板与修改入口
 
-| 文件 | 当前登记 | 指导重点 |
-| --- | --- | --- |
-| [gpt.md](templates/instructions/gpt.md) | OpenAI 的 GPT-6 Astra、GPT-5.6/sol/terra/luna、GPT-5.5 | 结果与范围、适量验证、保留交付证据 |
-| [claude.md](templates/instructions/claude.md) | `anthropic/claude-sonnet-4-20250514` | 从建议推进到所需产物，限制额外抽象和改动 |
-| [gemini.md](templates/instructions/gemini.md) | `google/gemini-3.6-flash` | 长上下文中的当前任务、直接输出与证据定位 |
-| [function_calling.md](templates/instructions/function_calling.md) | 当前 Grok、Qwen、Kimi、DeepSeek、GLM、MiniMax、MiMo 共 8 个准确条目 | 结构化调用、参数与自然语言分开、收到结果后继续 |
+1. 调整某个模型：编辑 `models.json` 中该模型的 `instructions.body`，提升同一条目的 `instructions.revision`。它是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。
+2. 新增沿用现有协议的模型：只在 JSON 的 `models` 数组增加规格与完整提示词；无需增加模板枚举、Markdown 或指令选择分支。新增供应商协议仍需实现对应接入。
+3. 修改未登记模型的默认行为：编辑 `base_prompt.md` 并提升 `prompts/src/agent.rs` 的资产 revision，不会影响已有模型条目的正文。
+4. 编译并重启宿主。新建 Agent 按新目录选择基础提示词；已有 Agent 在模型未变时沿用保存的正文，已接受的 Turn 保留本轮快照。验证新正文时创建新的相应 Agent。
+5. 运行 `just verify ash-model-provider-info`、`just verify ash-models-manager`、`just verify ash-agent`，以及 Core 指令组合和 App Server 根/子 Agent 的调用链验证。
 
-完整登记项与 revision 在 [instructions.rs](src/instructions.rs) 的 `BUILT_INS`。工具调用模板是框架适配初稿，不表示这些模型有相同的内部行为或已经完成各自的优化。
+现有模型的初始正文来自原共同规则与对应模型指导的组合，后续可逐模型调优。旧 `templates/instructions/*.md`、模板枚举和 Rust 模型条目已退场；新归属为 `model-provider-info/models.json`。默认 `prompts/templates/agent/common.md` 改为 `base_prompt.md`。
 
-1. 调整措辞：编辑对应 Markdown，并提升同一组 `PromptArtifact` 的 revision。
-2. 单独适配某个模型：增加一份 Markdown 和一个登记组，把该模型的准确条目移入新组；不能让同一模型同时属于两个组。
-3. 编译并重启宿主。普通 Default 根会话的新 Turn 重新选择指导；已冻结的角色/子 Agent 继续使用旧快照，验证新内容时创建新的相应 Agent。
-4. 运行 `just test ash-models-manager`、`just test ash-app-server built_in_model_guidance` 和 `just check ash-app-server`。测试检查静态目录覆盖、重复/无效条目、准确匹配、主/子 Agent 接线与共同规则保留。
-
-初版已按当前需求启用，质量、延迟和成本收益尚未实测。来源、假设与后续评测见 [模型初版指导](../docs/agent-instructions.md#内置模型指导初版)。供应商请求参数、推理元数据、历史重放与工具协议由 provider adapter 和 Core 拥有，模板不替代它们。
-
-新增资产由 `BUILD.bazel` 的 `templates/instructions/*.md` 清单编译打包，`.gitattributes` 固定 LF。正文上限 64 KiB；模型族匹配、工具条件模板和运行时模板语言不在本接口中。
+JSON 与 Markdown 均编译嵌入，资源清单和 LF 行尾属性随所属 crate 维护。正文上限 64 KiB；本接口不包含运行时模板语言。质量、延迟和成本收益尚未实测；来源和后续评测见 [模型初版指导](../docs/agent-instructions.md#内置模型指导初版)。供应商请求参数、推理元数据、历史重放与工具协议仍归 provider adapter 和 Core。

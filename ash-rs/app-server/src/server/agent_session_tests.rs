@@ -346,7 +346,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
     let catalog = ash_models_manager::ModelInstructionCatalog::new([
         ash_models_manager::ModelInstructionProfile {
             model: model(),
-            instructions: guidance,
+            instructions: guidance.freeze().as_text(),
         },
     ])
     .unwrap();
@@ -417,7 +417,8 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
     assert!(started.get("result").is_some(), "{started}");
     let request = rx.recv_timeout(Duration::from_secs(10)).unwrap();
     let rendered = serde_json::to_string(&request).unwrap();
-    assert!(rendered.contains("Shared working rules"));
+    // A model entry is the complete base; an independently written base need not copy the default.
+    assert!(!rendered.contains("Shared working rules"));
     assert!(rendered.contains("Issue coordinator"));
     assert!(rendered.contains("MODEL_GUIDANCE_MARKER"));
     assert!(
@@ -633,7 +634,20 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
 }
 
 #[test]
-fn collaboration_modes_reach_rpc_turns_and_init_without_replacing_shared_rules() {
+fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
+    let selected_model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let expected =
+        ash_models_manager::ModelInstructionCatalog::built_in().resolve(Some(&selected_model));
+    let ModelInstructionSelection::Specialized {
+        instructions: model_base,
+        ..
+    } = &expected
+    else {
+        panic!("missing model base");
+    };
     for mode in [
         ash_protocol::CollaborationMode::Agent,
         ash_protocol::CollaborationMode::Plan,
@@ -667,7 +681,7 @@ fn collaboration_modes_reach_rpc_turns_and_init_without_replacing_shared_rules()
                 "session/request",
                 serde_json::json!({"commandId":"mode-turn","sessionId":id,
                     "request":{"type":"startTurn","threadId":id,"expectedSequence":1,
-                        "mode":mode,"input":[{"type":"text","text":text}]}}),
+                        "mode":mode,"model":selected_model,"input":[{"type":"text","text":text}]}}),
             );
             assert!(response.get("error").is_none(), "{response}");
             let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -675,6 +689,16 @@ fn collaboration_modes_reach_rpc_turns_and_init_without_replacing_shared_rules()
             let turn = &root.turns[0];
             assert_eq!(turn.mode, mode);
             let frozen = turn.instructions.as_ref().unwrap();
+            assert_eq!(frozen.model_guidance(), Some(&expected));
+            assert_eq!(
+                request
+                    .instructions
+                    .as_deref()
+                    .unwrap()
+                    .matches(model_base.body.trim())
+                    .count(),
+                1
+            );
             let approach = collaboration_mode_templates::instructions(mode);
             assert_eq!(frozen.mode_instructions(), Some(&approach.as_text()));
             assert_eq!(
@@ -686,12 +710,15 @@ fn collaboration_modes_reach_rpc_turns_and_init_without_replacing_shared_rules()
                     .count(),
                 1
             );
-            assert!(
+            let default_body = ash_prompts::AGENT_INSTRUCTIONS.body().trim();
+            assert_eq!(
                 request
                     .instructions
                     .as_deref()
                     .unwrap()
-                    .contains(ash_prompts::AGENT_INSTRUCTIONS.body().trim())
+                    .matches(default_body)
+                    .count(),
+                model_base.body.matches(default_body).count()
             );
             assert!(root.delegations.is_empty());
         }

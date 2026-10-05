@@ -2,16 +2,16 @@ use std::fmt;
 use std::sync::Arc;
 
 use ash_http_client::HttpHeader;
-use ash_model_provider_config::ApiKeyHeader;
-use ash_model_provider_config::ApiKeyPolicy;
-use ash_model_provider_config::ProviderConfigRegistry;
-use ash_model_provider_config::ProviderDefinition;
-use ash_model_provider_config::ProviderId;
 use ash_protocol::ModelConnectionId;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreError;
 use ash_secrets::SecretValue;
+use model_provider_info::ApiKeyHeader;
+use model_provider_info::ApiKeyPolicy;
+use model_provider_info::ProviderConfigRegistry;
+use model_provider_info::ProviderDefinition;
+use model_provider_info::ProviderId;
 
 const MAX_API_KEY_BYTES: usize = 16 * 1024;
 
@@ -24,7 +24,7 @@ pub fn provider_api_key_secret_key(provider: &ModelConnectionId) -> SecretKey {
 pub struct ProviderCredentialStatus {
     pub provider: ProviderId,
     pub connection: ModelConnectionId,
-    pub access_mode: ash_model_provider_config::ProviderAccessMode,
+    pub access_mode: model_provider_info::ProviderAccessMode,
     pub display_name: String,
     pub api_key_policy: ApiKeyPolicy,
     pub api_key_configured: bool,
@@ -68,8 +68,8 @@ impl ProviderCredentialService {
     /// Resolves credentials against the persisted connection definitions.
     pub fn with_configs<'a>(
         &self,
-        configs: impl IntoIterator<Item = &'a ash_model_provider_config::ModelProviderConfig>,
-    ) -> Result<Self, ash_model_provider_config::ProviderConfigError> {
+        configs: impl IntoIterator<Item = &'a model_provider_info::ModelProviderConfig>,
+    ) -> Result<Self, model_provider_info::ProviderConfigError> {
         Ok(self.with_registry(self.providers.with_configs(configs)?))
     }
     /// Uses a validated connection snapshot while preserving the same secret authority.
@@ -146,21 +146,21 @@ impl ProviderCredentialService {
 
     pub(crate) fn request_model_headers(
         &self,
-        config: &ash_model_provider_config::NormalizedModelProviderConfig,
+        config: &model_provider_info::NormalizedModelProviderConfig,
     ) -> Result<ModelHeaders, ProviderCredentialError> {
         let definition = self.definition(&config.connection)?;
         let secret = self.api_key(&config.connection, &definition)?;
         let count_header = match config.input_token_count.as_ref().map(|count| count.profile) {
-            Some(ash_model_provider_config::InputTokenCountProfile::GoogleGenerateContent) => {
+            Some(model_provider_info::InputTokenCountProfile::GoogleGenerateContent) => {
                 ApiKeyHeader::XGoogApiKey
             }
-            Some(ash_model_provider_config::InputTokenCountProfile::AnthropicMessages) => {
+            Some(model_provider_info::InputTokenCountProfile::AnthropicMessages) => {
                 ApiKeyHeader::XApiKey
             }
             Some(
-                ash_model_provider_config::InputTokenCountProfile::OpenAiResponses
-                | ash_model_provider_config::InputTokenCountProfile::KimiChatCompletions
-                | ash_model_provider_config::InputTokenCountProfile::ZaiChatCompletions,
+                model_provider_info::InputTokenCountProfile::OpenAiResponses
+                | model_provider_info::InputTokenCountProfile::KimiChatCompletions
+                | model_provider_info::InputTokenCountProfile::ZaiChatCompletions,
             ) => ApiKeyHeader::Bearer,
             None => definition.api_key_header,
         };

@@ -9,15 +9,15 @@ use ash_context_engine::ContextTokenCount;
 use ash_context_engine::ContextTokenMeasurement;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_context_engine::ContextTokenMeasurementSource;
-use ash_model_provider_config::InputTokenCountModelPolicy;
-use ash_model_provider_config::InputTokenCountProfile;
-use ash_model_provider_config::ModelId;
-use ash_model_provider_config::NormalizedModelProviderConfig;
-use ash_model_provider_config::ProviderId;
 use ash_model_tokenizer::LocalTokenCount;
 use ash_model_tokenizer::LocalTokenizationOutcome;
 use ash_model_tokenizer::LocalTokenizerService;
 use ash_protocol::ModelRef;
+use model_provider_info::InputTokenCountModelPolicy;
+use model_provider_info::InputTokenCountProfile;
+use model_provider_info::ModelId;
+use model_provider_info::NormalizedModelProviderConfig;
+use model_provider_info::ProviderId;
 use std::sync::Arc;
 
 pub(crate) struct ProviderInputTokenCounter {

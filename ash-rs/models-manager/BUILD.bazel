@@ -3,5 +3,4 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "models-manager",
     crate_name = "ash_models_manager",
-    data = glob(["templates/instructions/*.md"]),
 )

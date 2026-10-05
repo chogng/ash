@@ -1,7 +1,7 @@
 # `ash-model-provider`
 
 > 本 README 解释 provider runtime instantiation、adapter selection 与 immutable model invoker。
-> Declarative config 见 [`ash-model-provider-config`](../model-provider-config/README.md)，跨系统
+> Declarative config 见 [`ash-model-provider-info`](../model-provider-info/README.md)，跨系统
 > credential/provider 设计见 [`docs/model-provider.md`](../../docs/model-provider.md)，模型目录实现见
 > [`ash-models-manager`](../models-manager/README.md)。
 

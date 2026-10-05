@@ -13,7 +13,7 @@ use http_client::OutboundNetworkSnapshot;
 #[cfg(feature = "cloud")]
 use model_provider::ModelProviderRuntime;
 #[cfg(feature = "cloud")]
-use model_provider_config::ModelProviderConfig;
+use model_provider_info::ModelProviderConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;

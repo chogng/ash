@@ -2,9 +2,6 @@ use crate::CatalogGeneration;
 use crate::CatalogWarning;
 use crate::ModelCatalogEntry;
 use crate::ModelMetadataProvenance;
-use ash_model_provider_config::ModelContextConfig;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderConfigError;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelAvailability;
 use ash_protocol::ModelId;
@@ -13,6 +10,9 @@ use ash_protocol::ModelLifecycle;
 use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use model_provider_info::ModelContextConfig;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderConfigError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedModel {
@@ -48,23 +48,27 @@ impl ResolvedModel {
 }
 
 impl ModelCatalogEntry {
-    /// Selectable budgets for the active connection, ordered from compact to expanded.
-    /// A fixed capacity has one choice; unknown capacity has none. The picker switches
-    /// between the two declared presets rather than interpreting the model ceiling.
+    /// Selectable declared budgets, constrained by the current capacity observation.
+    /// A custom connection specifies its own fixed budget; unknown capacity has no choices.
     pub fn context_window_options(&self, config: &ModelProviderConfig) -> Vec<u32> {
         let ContextWindow::Known(default) = self.default_context_window(config) else {
             return Vec::new();
         };
-        if config.custom.is_none()
-            && self.info().id.as_str().starts_with("gpt-")
-            && let ContextWindow::Known(limit) = self.info().context_window
-            && limit >= 1_000_000
-            && default < 1_000_000
-        {
-            vec![default, 1_000_000]
-        } else {
-            vec![default]
+        let mut options = vec![default];
+        if config.custom.is_none() {
+            options.extend(
+                self.declared_context_window_options
+                    .iter()
+                    .copied()
+                    .filter(|tokens| match self.info().context_window {
+                        ContextWindow::Known(limit) => *tokens <= limit,
+                        ContextWindow::Unknown => true,
+                    }),
+            );
         }
+        options.sort_unstable();
+        options.dedup();
+        options
     }
 
     /// Validates the complete update before changing the selected model's preferences.
@@ -116,16 +120,15 @@ impl ModelCatalogEntry {
     pub fn default_context_window(&self, config: &ModelProviderConfig) -> ContextWindow {
         let window = if let Some(custom) = &config.custom {
             Some(custom.context_window)
-        } else if self.info().id.as_str().starts_with("gpt-") {
-            Some(272_000)
         } else {
-            None
+            match self.declared_default_context_window {
+                ContextWindow::Known(tokens) => Some(tokens),
+                ContextWindow::Unknown => None,
+            }
         };
         match (self.info().context_window, window) {
             (ContextWindow::Known(limit), Some(window)) => ContextWindow::Known(limit.min(window)),
-            (ContextWindow::Unknown, Some(window)) if config.custom.is_some() => {
-                ContextWindow::Known(window)
-            }
+            (ContextWindow::Unknown, Some(window)) => ContextWindow::Known(window),
             (catalog, _) => catalog,
         }
     }
@@ -163,12 +166,7 @@ impl ModelCatalogEntry {
             });
             info.auto_compact_token_limit = context.auto_compact_token_limit;
         } else {
-            // The catalog keeps the model ceiling; GPT execution starts at 272k unless
-            // the user explicitly selects a different budget. Every client consumes this value.
             info.context_window = self.default_context_window(config);
-            if info.id.as_str().starts_with("gpt-") {
-                info.auto_compact_token_limit = None;
-            }
         }
         if let ContextWindow::Known(window) = info.context_window {
             // Ash's automatic compaction recommendation reserves ten percent of the context.

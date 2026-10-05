@@ -13,7 +13,7 @@
 /ash-rs/prompts/templates/** text eol=lf
 /ash-rs/collaboration-mode-templates/templates/** text eol=lf
 /ash-rs/agent-roles/assets/** text eol=lf
-/ash-rs/models-manager/templates/instructions/** text eol=lf
+/ash-rs/model-provider-info/models.json text eol=lf
 
 # Keep embedded classifier assets identical to their pinned release hashes.
 /app-rs/input-classifier/models/*.json text eol=lf

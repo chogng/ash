@@ -1,7 +1,7 @@
 //! Shared prompt infrastructure and stable prompts used by more than one product path.
 //!
 //! Model-specific and feature-specific prompts stay with their owning crate. This crate owns the
-//! common asset contract, shared Agent rules, permission descriptions, and continuation templates.
+//! common asset contract, the default Agent base, permission descriptions, and continuation templates.
 
 mod agent;
 mod artifact;

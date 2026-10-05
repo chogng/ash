@@ -9,7 +9,7 @@ use model_provider::ModelInvoker;
 use model_provider::ModelProvider;
 use model_provider::ModelProviderRuntime;
 use model_provider::ModelRuntimeRequest;
-use model_provider_config::ProviderConfigRegistry;
+use model_provider_info::ProviderConfigRegistry;
 use protocol::ModelRef;
 use protocol::ModelRequest;
 use protocol::ResponseItem;

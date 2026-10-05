@@ -24,7 +24,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 pub(crate) fn glm_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     auth: Arc<GlmOAuth>,
 ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
     let Some(identity) = auth

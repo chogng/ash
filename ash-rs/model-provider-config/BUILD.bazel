@@ -1,6 +1,0 @@
-load("//:defs.bzl", "ash_rust_crate")
-
-ash_rust_crate(
-    name = "model-provider-config",
-    crate_name = "ash_model_provider_config",
-)

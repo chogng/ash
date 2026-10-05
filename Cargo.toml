@@ -134,7 +134,7 @@ members = [
     "ash-rs/lsp",
     "ash-rs/model-accounting",
     "ash-rs/model-provider",
-    "ash-rs/model-provider-config",
+    "ash-rs/model-provider-info",
     "ash-rs/models-manager",
     "ash-rs/model-tokenizer",
     "ash-rs/ollama",
@@ -558,7 +558,7 @@ ash-markdown = { path = "app-rs/markdown" }
 ash-mcp = { path = "ash-rs/ash-mcp" }
 ash-model-accounting = { path = "ash-rs/model-accounting" }
 ash-model-provider = { path = "ash-rs/model-provider" }
-ash-model-provider-config = { path = "ash-rs/model-provider-config" }
+model-provider-info = { package = "ash-model-provider-info", path = "ash-rs/model-provider-info" }
 ash-models-manager = { path = "ash-rs/models-manager" }
 ash-model-tokenizer = { path = "ash-rs/model-tokenizer" }
 ash-ollama = { path = "ash-rs/ollama" }

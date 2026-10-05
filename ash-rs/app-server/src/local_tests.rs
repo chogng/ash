@@ -30,13 +30,6 @@ use ash_model_provider::ModelId;
 use ash_model_provider::ModelInvoker;
 use ash_model_provider::ModelProviderError;
 use ash_model_provider::ProviderId;
-use ash_model_provider_config::ApiProfile;
-use ash_model_provider_config::EndpointPolicy;
-use ash_model_provider_config::ModelCatalogPolicy;
-use ash_model_provider_config::ModelContextConfig;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderAdapter;
-use ash_model_provider_config::ProviderDefinition;
 use ash_plugin::LocalPluginPackage;
 use ash_protocol::CommandId;
 use ash_protocol::ImageDetail;
@@ -53,6 +46,13 @@ use ash_web_search_extension::WebSearchBackend;
 use ash_web_search_extension::WebSearchError;
 use ash_web_search_extension::WebSearchRequest;
 use ash_web_search_extension::WebSearchResponse;
+use model_provider_info::ApiProfile;
+use model_provider_info::EndpointPolicy;
+use model_provider_info::ModelCatalogPolicy;
+use model_provider_info::ModelContextConfig;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderAdapter;
+use model_provider_info::ProviderDefinition;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
@@ -2495,6 +2495,51 @@ fn configured_model_context_enables_core_managed_compaction() {
             .context_budget(ModelSelection::ConfiguredDefault)
             .is_ok()
     );
+    let snapshot = service.config.read_snapshot().unwrap();
+    let connection = ash_protocol::ModelConnectionId::new("openai").unwrap();
+    let mut config = snapshot.values.connections[&connection].clone();
+    config.model_context.remove(&model);
+    service
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("use-declared-context-default").unwrap(),
+            expected_revision: snapshot.revision,
+            command: UserConfigCommand::ConfigureConnection { connection, config },
+        })
+        .unwrap();
+    let selected = ModelRef::new(provider, model);
+    let spec = model_provider_info::find_static_model(&selected).unwrap();
+    let ContextWindow::Known(default_window) = spec.default_context_window else {
+        panic!("the selected model declares its default budget");
+    };
+    let compact = (u64::from(default_window) * 9 / 10) as u32;
+    assert_eq!(
+        service
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        ContextBudget::core_managed(
+            ContextTokenCount::new(default_window),
+            ContextTokenCount::new(2_048),
+            ContextTokenCount::new(1_024),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(compact)),
+        )
+    );
+    let listed = service.list().unwrap();
+    let entry = listed.iter().find(|entry| entry.model == selected).unwrap();
+    assert_eq!(entry.context_window, Some(default_window));
+    assert_eq!(entry.default_context_window, Some(default_window));
+    assert_eq!(entry.context_window_options, spec.context_window_options);
+    assert_eq!(
+        frozen
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        ContextBudget::core_managed(
+            ContextTokenCount::new(20_000),
+            ContextTokenCount::new(2_048),
+            ContextTokenCount::new(1_024),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
+        )
+    );
 }
 
 #[test]
@@ -3419,24 +3464,24 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
     let provider = ProviderId::new("custom-example").unwrap();
     let mut connection = ModelProviderConfig::new(provider.clone());
     connection.base_url = Some("https://example.test/v1".into());
-    connection.custom = Some(ash_model_provider_config::CustomProviderConfig {
+    connection.custom = Some(model_provider_info::CustomProviderConfig {
         model_aliases: Default::default(),
         context_window: 272_000,
         order: 0,
         model: None,
         name: "Example".into(),
-        protocol: ash_model_provider_config::CustomProviderProtocol::Responses,
+        protocol: model_provider_info::CustomProviderProtocol::Responses,
     });
     connection.model_context.insert(
         ModelId::new("private-first").unwrap(),
-        ash_model_provider_config::ModelContextConfig {
+        model_provider_info::ModelContextConfig {
             context_window: 272_000,
             auto_compact_token_limit: None,
         },
     );
     connection.model_context.insert(
         ModelId::new("private-second").unwrap(),
-        ash_model_provider_config::ModelContextConfig {
+        model_provider_info::ModelContextConfig {
             context_window: 1_000_000,
             auto_compact_token_limit: None,
         },
@@ -3650,7 +3695,7 @@ fn test_provider_registry() -> ProviderConfigRegistry {
                 EndpointPolicy::ConfiguredOnly,
                 ModelCatalogPolicy::AllowUnlisted,
             )
-            .with_api_key_policy(ash_model_provider_config::ApiKeyPolicy::Unsupported)
+            .with_api_key_policy(model_provider_info::ApiKeyPolicy::Unsupported)
             .with_models(
                 [
                     ("before-update", 128_000),

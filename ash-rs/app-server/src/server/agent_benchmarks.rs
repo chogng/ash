@@ -46,7 +46,9 @@ fn instruction_benchmark_selection() {
                 "benchmark/guidance",
                 "v1",
                 ash_prompts::AGENT_INSTRUCTIONS.body(),
-            ),
+            )
+            .freeze()
+            .as_text(),
         },
     ])
     .unwrap();

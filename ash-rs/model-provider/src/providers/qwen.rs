@@ -1,7 +1,7 @@
 use super::ProviderAdapter;
 use super::api_endpoint;
 use ash_api::ApiEndpoint;
-use ash_model_provider_config::NormalizedModelProviderConfig;
+use model_provider_info::NormalizedModelProviderConfig;
 
 pub(crate) struct QwenAdapter {
     endpoint: ApiEndpoint,

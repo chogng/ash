@@ -15,12 +15,12 @@ use ash_api::WebSocketSessionConfig;
 use ash_api::XaiTranscriptionSession;
 use ash_async_utils::CancellationToken;
 use ash_client::ResolvedApiTarget;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::RealtimeApiProfile;
-use ash_model_provider_config::TranscriptionApiProfile;
-use ash_model_provider_config::WebSocketApiProfile;
 use ash_protocol::ModelRef;
 use ash_websocket_client::WebSocketConnector;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::RealtimeApiProfile;
+use model_provider_info::TranscriptionApiProfile;
+use model_provider_info::WebSocketApiProfile;
 
 /// Explicit caller-owned Responses connection. Separate instances isolate execution branches.
 /// Credentials are rechecked before each invocation; rotation discards all connection history.
@@ -58,7 +58,7 @@ impl ModelProviderRuntime {
                 "provider has no declared transcription protocol".into(),
             ));
         }
-        if config.access_mode() == ash_model_provider_config::ProviderAccessMode::Subscription {
+        if config.access_mode() == model_provider_info::ProviderAccessMode::Subscription {
             return Err(ModelProviderError::Unavailable(
                 "subscription text models do not authorize transcription".into(),
             ));
@@ -100,7 +100,7 @@ impl ModelProviderRuntime {
                 "provider has no declared xAI transcription protocol".into(),
             ));
         }
-        if config.access_mode() == ash_model_provider_config::ProviderAccessMode::Subscription {
+        if config.access_mode() == model_provider_info::ProviderAccessMode::Subscription {
             return Err(ModelProviderError::Unavailable(
                 "subscription text models do not authorize transcription".into(),
             ));
@@ -124,7 +124,7 @@ impl ModelProviderRuntime {
     pub async fn connect_voice(
         &self,
         config: &ModelProviderConfig,
-        selection: &ash_model_provider_config::VoiceModelConfig,
+        selection: &model_provider_info::VoiceModelConfig,
         instructions: &str,
         connector: &WebSocketConnector,
         limits: WebSocketSessionConfig,
@@ -137,7 +137,7 @@ impl ModelProviderRuntime {
             .configs
             .get(&normalized.provider)
             .expect("normalized provider exists");
-        if definition.live_api_profile != ash_model_provider_config::LiveApiProfile::OpenAiLive {
+        if definition.live_api_profile != model_provider_info::LiveApiProfile::OpenAiLive {
             return Err(ModelProviderError::Unavailable(
                 "provider has no declared voice session protocol".into(),
             ));
@@ -244,7 +244,7 @@ impl ModelProviderRuntime {
                 "provider has no declared Realtime GA protocol".into(),
             ));
         }
-        if config.access_mode() == ash_model_provider_config::ProviderAccessMode::Subscription {
+        if config.access_mode() == model_provider_info::ProviderAccessMode::Subscription {
             return Err(ModelProviderError::Unavailable(
                 "subscription text models do not authorize the Realtime service".into(),
             ));
@@ -286,7 +286,7 @@ impl ResponsesModelSession {
     ) -> Result<ModelResponse, ModelProviderError> {
         self.refresh_auth(cancellation).await?;
         let model = self.provider.resolve_model(
-            &ash_model_provider_config::ModelId::new(&self.model).expect("validated model ID"),
+            &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
         )?;
         let request = self.provider.prepare_request(&model, request);
         let mut events = Events {
@@ -309,7 +309,7 @@ impl ResponsesModelSession {
     ) -> Result<ash_api::ResponsesWarmup, ModelProviderError> {
         self.refresh_auth(cancellation).await?;
         let model = self.provider.resolve_model(
-            &ash_model_provider_config::ModelId::new(&self.model).expect("validated model ID"),
+            &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
         )?;
         let request = self.provider.prepare_request(&model, request);
         self.session

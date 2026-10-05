@@ -5,8 +5,6 @@ use ash_core::ContextTokenCount;
 use ash_core::ResolvedContextBudget;
 use ash_model_provider::ModelProviderError;
 use ash_model_provider::ModelProviderRuntime;
-use ash_model_provider_config::ModelProviderConfig;
-use ash_model_provider_config::ProviderConfigRegistry;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::ModelCatalogEntry;
 use ash_models_manager::ModelRequirements;
@@ -16,6 +14,8 @@ use ash_protocol::ModelInfo;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use core_api::CoreError;
+use model_provider_info::ModelProviderConfig;
+use model_provider_info::ProviderConfigRegistry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 

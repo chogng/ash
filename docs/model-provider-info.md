@@ -1,19 +1,18 @@
-# 模型供应商配置
+# 模型与供应商声明
 
-> - 物理位置：`ash-rs/model-provider-config/`
-> - Rust crate：`ash_model_provider_config`
-> - 层次：声明配置层
+> - 物理位置：`ash-rs/model-provider-info/`
+> - Rust crate：`model_provider_info`
+> - 层次：模型与接入声明层
 > - 当前状态：基础实现已包含声明式默认 `ApiProfile` 和独立 input-token count binding；invocation
 >   WebSocket profile 也已使用独立的 fail-closed capability；多 profile allow-list 与用户 override
 >   仍待实现
-> - Crate 实现与修改路径：[`ash-rs/model-provider-config/README.md`](../ash-rs/model-provider-config/README.md)
+> - Crate 实现与修改路径：[`ash-rs/model-provider-info/README.md`](../ash-rs/model-provider-info/README.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`ash-api.md`](ash-api.md)
 
 ## 快速理解
 
-模型供应商配置只描述“允许怎样配置”，并以确定性方式校验和归一化；它不读取凭据、不访问网络，
-也不执行模型请求。
+`model-provider-info` 统一保存模型规格、完整基础提示词、供应商与接入声明，并校验和规范化接入配置。目录刷新、缓存与模型选择归 `models-manager`，认证、客户端与模型请求归 `model-provider`。
 
 内置模型固定登记，接入独立配置，每次调用为每个厂商选择一条已就绪连接。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `glm` 模型厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入；实际选择由运行时根据凭据状态决定。规则见[登录与账户系统](login.md#1-结论)。
 
@@ -27,10 +26,9 @@
 
 ## 1. 结论
 
-`ash-model-provider-config` 描述“一个 Provider 可以怎样被配置”。它只包含可序列化、可校验、
-可生成 schema 的声明值，不创建 HTTP client，不读取 credential，也不执行模型调用。
+`ash-model-provider-info` 提供不依赖网络或凭据状态的模型与接入声明。配置值可序列化、校验并生成 schema；内置模型规格和完整基础正文由 `models.json` 维护。这里不创建 HTTP client、不读取 credential，也不执行模型调用。
 
-这里的“静态”主要指校验不依赖运行时状态；其中 built-in model 目录确实由一个 Rust 常量维护：
+这里的“静态”指校验不依赖运行时状态；内置模型目录从编译嵌入的 JSON 一次解析后共享：
 
 - 值可以在进程外持久化和传输；
 - 校验不依赖网络、credential 或当前进程状态；
@@ -40,7 +38,7 @@
 一句话边界：
 
 ```text
-model-provider-config 负责描述和归一化
+model-provider-info  负责描述和归一化
 model-provider        负责解析并运行
 ash-api              负责协议编解码
 ash-client           负责 API operation retry/framing
@@ -59,7 +57,8 @@ ash-http-client      负责底层网络传输
 - exact WebSocket API profile；未声明时必须保持 unavailable；
 - input-token count profile、独立 target 与 model eligibility policy；
 - base URL normalization 规则；
-- 唯一 `STATIC_MODEL_CATALOG`、由它投影的 seed models 和 model catalog policy；
+- 唯一 `STATIC_MODEL_CATALOG`、由它生成的 seed models 和 model catalog policy；
+- 每个模型独立的完整基础提示词正文与 revision；
 - 非敏感调用默认值，例如最大输出 token；
 - 用户按模型 ID 提供的 context window 与 automatic compaction threshold；
 - 用户 `ModelProviderConfig`；
@@ -95,7 +94,7 @@ ash-http-client      负责底层网络传输
 - `EndpointPolicy`；
 - `ModelCatalogPolicy`；
 - built-in Provider definitions；
-- `STATIC_MODEL_CATALOG` 与 `StaticModelSpec`；
+- `STATIC_MODEL_CATALOG`、`StaticModelSpec` 与 `ModelInstructions`；
 - 静态校验、registry merge 和 schema tests。
 
 当前需要演进的地方：
@@ -221,7 +220,7 @@ Normalization 不得：
 
 | 概念 | Owner | 示例 |
 | --- | --- | --- |
-| 默认 base URL | `model-provider-config` | `https://api.anthropic.com` |
+| 默认 base URL | `model-provider-info` | `https://api.anthropic.com` |
 | resolved runtime target | `model-provider` | base URL + credential/runtime headers |
 | relative API endpoint | `ash-api` | `POST /v1/messages` |
 
@@ -231,7 +230,9 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-`STATIC_MODEL_CATALOG` 是产品内置文本模型的唯一声明点。每个条目只声明厂商、模型 ID、显示名、上下文窗口、能力和推理参数等模型规格。订阅/API 重复条目合并；`access` 和 `runtime` 不属于模型条目。1M 上下文直接写 `context_window = 1_000_000`。
+[`ash-rs/model-provider-info/models.json`](../ash-rs/model-provider-info/models.json) 是产品内置文本模型的唯一声明点，`STATIC_MODEL_CATALOG` 提供其一次解析后的共享数据。每个条目包含厂商、模型 ID、显示名、模型容量 `context_window`、默认执行预算 `default_context_window`、普通／扩展档位 `context_window_options`、能力、推理参数，以及可独立修改的完整基础提示词与 revision。订阅/API 共享模型条目；`access`、`runtime` 和凭据不属于模型条目。未知容量和默认预算都写为 `null`，预算选项写为空数组。默认值与选项的校验规则见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
+
+模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
 
 `builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 选择保存的接入定义并规范化参数；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
 
@@ -245,7 +246,7 @@ definition/runtime 显式声明。
 ash-protocol
       ▲
       │ shared IDs/model metadata
-ash-model-provider-config
+ash-model-provider-info
       ▲
       │ normalized declaration
 ash-model-provider
@@ -253,23 +254,23 @@ ash-model-provider
 
 允许：
 
-- `ash-model-provider-config → ash-protocol`；
-- `ash-model-provider → ash-model-provider-config`。
+- `ash-model-provider-info → ash-protocol`；
+- `ash-model-provider → ash-model-provider-info`。
 
 禁止：
 
 ```text
-ash-model-provider-config → ash-model-provider
-ash-model-provider-config → ash-api
-ash-model-provider-config → ash-client
-ash-model-provider-config → ash-http-client
-ash-model-provider-config → credentials
-ash-model-provider-config → Core/App Server
+ash-model-provider-info → ash-model-provider
+ash-model-provider-info → ash-api
+ash-model-provider-info → ash-client
+ash-model-provider-info → ash-http-client
+ash-model-provider-info → credentials
+ash-model-provider-info → Core/App Server
 ```
 
 ## 9. 修改入口
 
-静态模型在 `src/model_catalog.rs`，接入声明在 `src/connection.rs`，端点和协议细节在 `src/providers/`。用户配置和规范化结果在 `src/config.rs`，注册和校验在 `src/registry.rs`。测试使用相邻的 `*_tests.rs`，不另建重复目录。
+静态模型规格和提示词在 `models.json`，读取与校验在 `src/model_catalog.rs`；接入声明在 `src/connection.rs`，端点和协议细节在 `src/providers/`。用户配置和规范化结果在 `src/config.rs`，注册和校验在 `src/registry.rs`。测试使用相邻的 `*_tests.rs`，不另建重复目录。
 
 ## 10. 验收
 

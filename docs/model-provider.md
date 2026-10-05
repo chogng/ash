@@ -9,7 +9,7 @@
 >   materialization 已有 host-injected `SecretStore` 路径；独立 WebSocket transport 与显式 provider
 >   capability 已落地，Responses WebSocket 和公共 Realtime GA 已提供显式 runtime 会话入口
 > - Crate 实现与 adapter 调用图：[`ash-rs/model-provider/README.md`](../ash-rs/model-provider/README.md)
-> - 声明配置层：[`model-provider-config.md`](model-provider-config.md)
+> - 声明配置层：[`model-provider-info.md`](model-provider-info.md)
 > - API 协议层：[`ash-api.md`](ash-api.md)
 > - Operation client：[`ash-client.md`](ash-client.md)
 > - 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
@@ -115,7 +115,7 @@ ChatGPT、Kimi 与 Super Grok 订阅在这里都只是一次模型调用：各�
 已移除的重复分派为：
 
 ```text
-model-provider-config::ProviderAdapter
+model-provider-info::ProviderAdapter
         ↓
 model-provider::providers::instantiate
         ↓
@@ -340,8 +340,8 @@ BigModel Coding Plan、Z.AI Coding Plan、BigModel Start Plan、Z.AI Start Plan�
 
 | 内容 | Owner |
 | --- | --- |
-| Platform/default provider base URL | `model-provider-config` |
-| 用户 base URL override | 仅 Platform/custom-compatible provider；由 `model-provider-config` 声明、runtime 解析 |
+| Platform/default provider base URL | `model-provider-info` |
+| 用户 base URL override | 仅 Platform/custom-compatible provider；由 `model-provider-info` 声明、runtime 解析 |
 | ChatGPT 订阅服务目标 | `ash-chatgpt` 固定 target；不接受 Ash generic user override |
 | Kimi Code 订阅服务目标 | `ash-kimi` 固定为 `https://api.kimi.com/coding/v1`；不接受 generic base URL override |
 | resolved absolute target | `model-provider` |
@@ -445,7 +445,7 @@ ChatGPT 订阅的账户身份由 `ash-chatgpt` 从已验证登录 token 提供�
 
 ```text
 ash-model-provider
-  ├──▶ ash-model-provider-config
+  ├──▶ ash-model-provider-info
   ├──▶ ash-api ───▶ ash-client
   ├──▶ ash-client
   ├──▶ ash-http-client

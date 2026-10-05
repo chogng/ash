@@ -1,11 +1,18 @@
-# `ash-model-provider-config`
+# `ash-model-provider-info`
 
-> 本 README 解释 provider declaration、registry validation 与 normalization。跨系统配置模型和
-> 演进见 [`docs/model-provider-config.md`](../../docs/model-provider-config.md)；runtime
-> instantiation 见 [`ash-model-provider`](../model-provider/README.md)。
+> 本 README 解释模型与接入声明、校验和规范化。跨系统配置模型和
+> 演进见 [`docs/model-provider-info.md`](../../docs/model-provider-info.md)；请求实现见
+> [`ash-model-provider`](../model-provider/README.md)。
 
-本 crate 拥有 serializable、runtime-free 的 provider configuration。它不持有 API client、
-credential、secret、connection pool 或 process-local adapter。
+本 crate 统一维护模型规格、完整基础提示词、供应商与接入声明，以及用户接入配置的校验和规范化。配置存储、模型目录和请求实现共享这些声明，不需要为读取它们引入供应商客户端。
+
+| 内容 | 归属 |
+| --- | --- |
+| 模型规格、基础正文、接入协议与配置规则 | `model-provider-info` |
+| 目录发现结果、刷新、缓存、模型与提示词选择 | `models-manager` |
+| 凭据读取、客户端、连接与实际请求 | `model-provider` |
+
+原 `ash-rs/model-provider-config` 已改名为本目录，Cargo package 为 `ash-model-provider-info`，消费方统一使用 `model-provider-info` dependency key 和 `model_provider_info` Rust 路径。`ModelProviderConfig` 等类型仍表达接入配置，不因 crate 改名而改变配置格式或协议字段。
 
 ## 公共模型
 
@@ -16,7 +23,7 @@ credential、secret、connection pool 或 process-local adapter。
 | `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
-| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 内置文本模型目录 | 唯一 model/provider ID、context、capabilities、reasoning、defaults |
+| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 内置文本模型目录 | 唯一 model/provider ID、context、capabilities、reasoning、defaults 和完整基础提示词 |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `ash-api::ApiEndpoint` |
 | `WebSocketApiProfile` | Responses WebSocket 能力 | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
@@ -54,7 +61,7 @@ src/
 ├── config.rs       # user config、normalized config、URL helpers
 ├── definition.rs   # provider declaration 与 validation
 ├── input_token_count.rs # count profile、target、model policy 与 normalized snapshot
-├── model_catalog.rs # sole built-in model list 与 ProviderDefinition projection
+├── model_catalog.rs # 读取、校验 models.json 并生成 ProviderDefinition.models
 ├── registry.rs     # registration、merge、selection、normalization
 ├── providers/      # provider endpoint、adapter、profile 与 transport declarations
 ├── error.rs
@@ -66,7 +73,7 @@ src/
 | `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
 | `ProviderDefinition::validate` | public method | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效 |
 | `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
-| `STATIC_MODEL_CATALOG` | public constant | 产品内置文本模型及静态 metadata | 文本模型在这里声明；语音目录归 `voice_models` |
+| `STATIC_MODEL_CATALOG` | public static | 产品内置文本模型及静态 metadata | 文本模型在 models.json 声明；语音目录归 `voice_models` |
 | `attach_static_models` | crate-private function | catalog rows → provider models | registry validation 前自动执行 |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
@@ -122,7 +129,7 @@ Merge 必须 preflight 后一次 extend；在循环中边验证边插入会造�
 
 每个 `providers/<name>.rs::definition()` 返回不含文本模型清单的 `ProviderDefinition`，可声明独立语音目录。例如 OpenAI 选择
 `OpenAiResponses` 与同 base 的 count profile；Google invocation 使用 compatible base，但
-`countTokens` 使用单独声明的 native base；Anthropic 选择 `AnthropicMessages` 并声明默认 max
+`countTokens` 使用单独声明的官方计数地址；Anthropic 选择 `AnthropicMessages` 并声明默认 max
 tokens。Kimi、Google 和 Z.AI 的额外 allow-unlisted count model 是 transport definition 数据；进入产品
 模型列表由 `STATIC_MODEL_CATALOG` 提供；计数支持范围由每条接入显式声明，不按模型 ID 前缀猜测。
 Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction pattern。
@@ -135,20 +142,40 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 
 ## 统一静态模型清单
 
-产品内置文本模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。模型自身不带认证方式、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。
+产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和完整的 `instructions.body`，每个模型的正文与 revision 可以独立修改。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
 
-```rust
-static_model! {
-    provider: "provider-id",
-    id: "model-id",
-    name: "Display Name",
-    context_window: 1_000_000,
-    capabilities: { tools: supported, reasoning: supported },
-    reasoning: [low, medium, high],
-    model_reasoning_effort: medium,
-    default_personality: pragmatic,
+```json
+{
+  "provider_id": "provider-id",
+  "model_id": "model-id",
+  "display_name": "Display Name",
+  "context_window": 1000000,
+  "default_context_window": 200000,
+  "context_window_options": [200000, 1000000],
+  "auto_compact_token_limit": null,
+  "capabilities": {
+    "tools": "supported",
+    "reasoning": "supported",
+    "parallelToolCalls": "unknown",
+    "personality": "unknown",
+    "imageDetailOriginal": "unknown",
+    "fastMode": "unknown"
+  },
+  "supported_reasoning_efforts": ["low", "medium", "high"],
+  "model_reasoning_effort": "medium",
+  "default_personality": null,
+  "instructions": {
+    "revision": "model-base-v1",
+    "body": "Complete Agent base instructions for this model.\n"
+  }
 }
 ```
+
+条目放在顶层 `models` 数组中。未知上下文窗口用 `null`；未知能力保持 `unknown`，不因采用默认提示词而猜测规格。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+
+`context_window` 是模型容量，`default_context_window` 是没有用户覆盖时的执行预算。`context_window_options` 明确声明普通预算和可选的扩展预算，按升序包含一或两个值，第一项必须是默认预算，所有值不得超过容量。未知容量同时使用默认值 `null` 和空选项数组。每个模型独立声明这些值，运行时不根据型号名称推断默认预算或扩展档位。用户覆盖仍由 `models-manager` 合并，并受当前目录容量限制；压缩推荐使用有效预算的 90%，条目的显式压缩阈值与用户覆盖也受这一上限限制。
+
+`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、协作模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，资源清单在 `BUILD.bazel`，修改后需重编译并重启。
 
 `connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `glm` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
 
@@ -170,7 +197,7 @@ service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 pro
 
 ## 方向偏差检查
 
-- config crate 依赖 `ash-api`/HTTP/secret：runtime state 下沉；
+- 声明层依赖 `ash-api`/HTTP/secret：runtime state 下沉；
 - `ProviderAdapter` 直接存 trait object：declaration 不再 serializable；
 - runtime 根据 provider name 猜 API profile：显式 declaration 被绕过；
 - runtime 根据 HTTP compatibility 猜 WebSocket：handshake/event/session contract 被绕过；
@@ -182,13 +209,13 @@ service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 pro
 ## 测试、限制与演进
 
 ```text
-just test ash-model-provider-config
-bazel test //ash-rs/model-provider-config:model-provider-config-unit-tests
+just test ash-model-provider-info
+bazel test //ash-rs/model-provider-info:model-provider-info-unit-tests
 ```
 
 测试覆盖 serde/schema、defaults、configured-only endpoint、invalid URL/output/context tokens、HTTP/WebSocket
 profile pairing、merge semantics、
-automatic review model、统一静态目录投影与 metadata contract、catalog gate、built-in completeness 与 provider mismatch。
+automatic review model、统一静态目录映射与 metadata contract、catalog gate、built-in completeness 与 provider mismatch。
 
 当前 URL validator 只接受具有非空 authority 的 HTTP(S) shape，不解析 credential、DNS、route 或
 reachability。Catalog 也是 declarative snapshot，不代表 account entitlement。未来可以扩充 schema、

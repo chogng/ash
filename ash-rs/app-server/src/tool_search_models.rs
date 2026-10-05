@@ -5,9 +5,9 @@ use ash_config::ToolSearchConfig;
 use ash_config::ToolSearchModeConfig;
 use ash_model_provider::EmbeddingRuntimeRequest;
 use ash_model_provider::SemanticModelProvider;
-use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use model_provider_info::ModelProviderConfig;
 
 use crate::tool_composition::ToolSearchOptions;
 

@@ -1,4 +1,5 @@
 use crate::CatalogScopeKey;
+use ash_protocol::ContextWindow;
 use ash_protocol::ModelAvailability;
 use ash_protocol::ModelCatalogFreshness;
 use ash_protocol::ModelInfo;
@@ -109,6 +110,8 @@ impl CatalogWarning {
 pub struct ModelCatalogEntry {
     model: ModelRef,
     info: ModelInfo,
+    pub(crate) declared_default_context_window: ContextWindow,
+    pub(crate) declared_context_window_options: Vec<u32>,
     catalog_order: Option<usize>,
     availability: ModelAvailability,
     lifecycle: ModelLifecycle,
@@ -128,9 +131,21 @@ impl ModelCatalogEntry {
         provenance: ModelMetadataProvenance,
         warnings: Vec<CatalogWarning>,
     ) -> Self {
+        // Freeze bundled execution preferences separately from capacity observations. Discovery
+        // can update the model's ceiling without inventing product budget presets from its name.
+        let (declared_default_context_window, declared_context_window_options) =
+            match model_provider_info::find_static_model(&model) {
+                Some(spec) => (
+                    spec.default_context_window,
+                    spec.context_window_options.clone(),
+                ),
+                None => (ContextWindow::Unknown, Vec::new()),
+            };
         Self {
             model,
             info,
+            declared_default_context_window,
+            declared_context_window_options,
             catalog_order,
             availability,
             lifecycle,

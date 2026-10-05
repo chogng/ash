@@ -1,4 +1,5 @@
 use super::*;
+use ash_prompts::PromptArtifact;
 use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
 use std::collections::HashSet;
@@ -22,7 +23,7 @@ fn specialization_is_exact_and_does_not_cross_provider_or_model_identity() {
     let target = model("a", "model-v1");
     let catalog = ModelInstructionCatalog::new([ModelInstructionProfile {
         model: target.clone(),
-        instructions: GUIDANCE,
+        instructions: GUIDANCE.freeze().as_text(),
     }])
     .unwrap();
     let ModelInstructionSelection::Specialized {
@@ -53,7 +54,7 @@ fn specialization_is_exact_and_does_not_cross_provider_or_model_identity() {
 fn duplicate_model_profiles_fail_before_any_instruction_is_used() {
     let profile = ModelInstructionProfile {
         model: model("a", "model-v1"),
-        instructions: GUIDANCE,
+        instructions: GUIDANCE.freeze().as_text(),
     };
     assert!(
         ModelInstructionCatalog::new([profile.clone(), profile])
@@ -67,7 +68,12 @@ fn duplicate_model_profiles_fail_before_any_instruction_is_used() {
 fn invalid_guidance_is_rejected_without_silently_selecting_generic() {
     let profile = ModelInstructionProfile {
         model: model("a", "model-v1"),
-        instructions: PromptArtifact::new("models-manager", "model/invalid", "test-v1", " "),
+        instructions: InstructionText {
+            owner: "models-manager".into(),
+            id: "model/invalid".into(),
+            revision: "test-v1".into(),
+            body: " ".into(),
+        },
     };
     assert!(matches!(
         ModelInstructionCatalog::new([profile]),
@@ -79,7 +85,7 @@ fn invalid_guidance_is_rejected_without_silently_selecting_generic() {
 fn built_in_guidance_covers_the_static_catalog_with_valid_exact_registrations() {
     let catalog = ModelInstructionCatalog::built_in();
     assert!(Arc::ptr_eq(&catalog, &ModelInstructionCatalog::built_in()));
-    let models = ash_model_provider_config::STATIC_MODEL_CATALOG;
+    let models = &*model_provider_info::STATIC_MODEL_CATALOG;
     assert_eq!(
         catalog.profiles.keys().cloned().collect::<HashSet<_>>(),
         models
@@ -111,6 +117,24 @@ fn built_in_guidance_covers_the_static_catalog_with_valid_exact_registrations() 
 }
 
 #[test]
+fn exact_json_entry_supplies_the_complete_versioned_base_prompt() {
+    let catalog = ModelInstructionCatalog::built_in();
+    for spec in model_provider_info::STATIC_MODEL_CATALOG.iter() {
+        let ModelInstructionSelection::Specialized { instructions, .. } =
+            catalog.resolve(Some(&spec.model_ref()))
+        else {
+            panic!("missing prompt");
+        };
+        assert_eq!(
+            instructions.id,
+            format!("model/{}/{}", spec.provider_id, spec.model_id)
+        );
+        assert_eq!(instructions.revision, spec.instructions.revision);
+        assert_eq!(instructions.body, spec.instructions.body);
+    }
+}
+
+#[test]
 fn built_in_guidance_does_not_guess_aliases_or_apply_to_another_provider() {
     let catalog = ModelInstructionCatalog::built_in();
     for model in [
@@ -118,6 +142,8 @@ fn built_in_guidance_does_not_guess_aliases_or_apply_to_another_provider() {
         model("custom-openai", "gpt-6-astra"),
         model("anthropic", "claude-sonnet-4-latest"),
         model("minimax", "minimax-m3"),
+        model("zai", "glm-5.3"),
+        model("anthropic", "claude-sonnet-4-20250514"),
     ] {
         assert_eq!(
             catalog.resolve(Some(&model)),
@@ -136,29 +162,89 @@ fn built_in_guidance_does_not_guess_aliases_or_apply_to_another_provider() {
 }
 
 #[test]
-fn shared_guidance_keeps_each_selected_model_identity_independent() {
+fn each_model_has_its_own_instruction_identity_even_with_the_same_initial_body() {
+    let catalog = ModelInstructionCatalog::new(["first", "second"].map(|name| {
+        let mut instructions = GUIDANCE.freeze().as_text();
+        instructions.id = format!("model/test/{name}");
+        ModelInstructionProfile {
+            model: model("test", name),
+            instructions,
+        }
+    }))
+    .unwrap();
+    let first = model("test", "first");
+    let second = model("test", "second");
+    let ModelInstructionSelection::Specialized {
+        model: first_model,
+        instructions: first_text,
+        digest: first_digest,
+    } = catalog.resolve(Some(&first))
+    else {
+        panic!("first model instructions missing");
+    };
+    let ModelInstructionSelection::Specialized {
+        model: second_model,
+        instructions: second_text,
+        digest: second_digest,
+    } = catalog.resolve(Some(&second))
+    else {
+        panic!("second model instructions missing");
+    };
+    assert_eq!((first_model, second_model), (first, second));
+    assert_ne!(first_text.id, second_text.id);
+    assert_eq!(first_text.body, second_text.body);
+    assert_eq!(first_digest, second_digest);
+}
+
+#[test]
+fn turn_freezes_the_selected_base_and_preserves_tasks_modes_and_custom_bases() {
     let catalog = ModelInstructionCatalog::built_in();
-    for name in ["gpt-5.6-sol", "gpt-6.1-sol"] {
-        let first = model("openai", name);
-        let second = model("openai", "gpt-6-astra");
-        let ModelInstructionSelection::Specialized {
-            model: first_model,
-            instructions: first_text,
-            digest: first_digest,
-        } = catalog.resolve(Some(&first))
-        else {
-            panic!("GPT guidance missing");
-        };
-        let ModelInstructionSelection::Specialized {
-            model: second_model,
-            instructions: second_text,
-            digest: second_digest,
-        } = catalog.resolve(Some(&second))
-        else {
-            panic!("GPT guidance missing");
-        };
-        assert_eq!((first_model, second_model), (first, second));
-        assert_eq!(first_text, second_text);
-        assert_eq!(first_digest, second_digest);
-    }
+    let first = model("openai", "gpt-6-astra");
+    let second = model("anthropic", "claude-sonnet-5-5");
+    let unknown = model("openai", "unregistered-model");
+    let mode = ash_protocol::TurnInstructions::new("mode", "mode", "v1", "MODE").unwrap();
+    let default = ash_prompts::AGENT_INSTRUCTIONS.freeze().with_mode(&mode);
+    let frozen = catalog.for_turn(default.clone(), Some(&first));
+    assert_eq!(frozen.id(), "model/openai/gpt-6-astra");
+    assert_eq!(
+        frozen.body(),
+        model_provider_info::find_static_model(&first)
+            .unwrap()
+            .instructions
+            .body
+    );
+    assert_eq!(frozen.mode_instructions(), default.mode_instructions());
+    assert_eq!(
+        frozen.model_guidance(),
+        Some(&catalog.resolve(Some(&first)))
+    );
+    let switched = catalog.for_turn(frozen.clone(), Some(&second));
+    assert_eq!(switched.id(), "model/anthropic/claude-sonnet-5-5");
+    assert_eq!(
+        switched.body(),
+        model_provider_info::find_static_model(&second)
+            .unwrap()
+            .instructions
+            .body
+    );
+    let generic = catalog.for_turn(switched, Some(&unknown));
+    assert_eq!(generic.body(), ash_prompts::AGENT_INSTRUCTIONS.body());
+    assert!(matches!(
+        generic.model_guidance(),
+        Some(ModelInstructionSelection::Generic { .. })
+    ));
+    let task = ash_protocol::TurnInstructions::new("host", "task", "v1", "TASK")
+        .unwrap()
+        .with_shared(&default);
+    let task = catalog.for_turn(task, Some(&first));
+    assert_eq!(task.body(), "TASK");
+    assert_eq!(task.shared().len(), 1);
+    assert_eq!(task.shared()[0], frozen.as_text());
+    let custom = ash_protocol::TurnInstructions::new("host", "custom", "v1", "CUSTOM").unwrap();
+    let custom = catalog.for_turn(custom, Some(&first));
+    assert_eq!(custom.body(), "CUSTOM");
+    assert!(matches!(
+        custom.model_guidance(),
+        Some(ModelInstructionSelection::Generic { .. })
+    ));
 }

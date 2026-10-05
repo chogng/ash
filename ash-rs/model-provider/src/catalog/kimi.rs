@@ -28,7 +28,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 pub(crate) fn kimi_external_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     connection: &str,
     credential: Arc<dyn KimiExternalCredential>,
     client: Arc<dyn OperationClient>,
@@ -185,7 +185,7 @@ impl ModelCatalogSource for KimiExternalCatalogSource {
 }
 
 pub(crate) fn kimi_catalog_binding(
-    config: &ash_model_provider_config::NormalizedModelProviderConfig,
+    config: &model_provider_info::NormalizedModelProviderConfig,
     auth: Arc<KimiOAuth>,
 ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
     let Some(identity) = auth

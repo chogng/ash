@@ -30,7 +30,7 @@ use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::OutboundProxyRoute;
-use ash_model_provider_config::ModelProviderConfig;
+use model_provider_info::ModelProviderConfig;
 use serde_json::Value;
 use std::sync::Arc;
 use url::Url;
