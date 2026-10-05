@@ -6,7 +6,7 @@
 - [LAYOUT.md](../LAYOUT.md)：fullscreen 与 inline 的页面区域、历史输出、面板、状态归属和终端生命周期。
 - [lib.rs](src/lib.rs)：crate 的公开接口。
 
-普通 `/context` 面板只显示工具定义总占用；开发构建（启用 Rust debug assertions）注册 `/debug-context`，打开独立的上下文诊断面板，通过上下键选择工具、Enter 或左右键展开完整定义、Esc 关闭。开发构建中的诊断入口也可在 `/help` 中搜索；普通发行构建不注册或解析该命令。普通上下文面板在两种构建中保持一致，不设置全局开发者模式。
+普通 `/context` 面板只显示各分类的总占用和上下文空间分配，所有分类均不可展开；开发构建（启用 Rust debug assertions）注册 `/debug-context`，打开上下文诊断面板，通过上下键选择分类或工具、Enter 或左右键展开来源明细及完整工具定义、Esc 关闭。开发构建中的诊断入口也可在 `/help` 中搜索；普通发行构建不注册或解析该命令。普通上下文面板在两种构建中保持一致，不设置全局开发者模式。
 
 从仓库根目录运行 `just ash`；验证入口见 [Ash Code 测试](../README.md#测试与支持边界)。
 

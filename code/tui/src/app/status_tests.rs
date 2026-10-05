@@ -89,44 +89,37 @@ fn exercise_panel(mode: ScreenMode) -> String {
         "used categories must have distinct colors"
     );
     frames.push(format!("Overview\n{overview}"));
-    key(&mut app, KeyCode::Enter);
-    let expanded = frame(&app, 80, 26).1;
-    assert!(
-        expanded.contains("system/prompt · 1.5k tokens"),
-        "{expanded}"
-    );
-    frames.push(format!("Expanded system prompt\n{expanded}"));
+    for _ in 0..5 {
+        let before = frame(&app, 80, 26).1;
+        for code in [KeyCode::Enter, KeyCode::Right, KeyCode::Left] {
+            key(&mut app, code);
+            assert_eq!(frame(&app, 80, 26).1, before);
+        }
+        key(&mut app, KeyCode::Down);
+    }
+    key(&mut app, KeyCode::Up);
+    frames.push(format!(
+        "Categories remain collapsed\n{}",
+        frame(&app, 80, 26).1
+    ));
     let other_mode = match mode {
         ScreenMode::Fullscreen => ScreenMode::Inline,
         ScreenMode::Inline => ScreenMode::Fullscreen,
     };
     settings(&mut app, other_mode, Language::English);
-    assert!(
-        frame(&app, 80, 26)
-            .1
-            .contains("system/prompt · 1.5k tokens")
-    );
+    let summary = frame(&app, 80, 26).1;
+    for source in [
+        "system/prompt",
+        "read_file",
+        "AGENTS.md",
+        "available",
+        "history",
+    ] {
+        assert!(!summary.contains(source), "{summary}");
+    }
+    assert!(!summary.contains("Enter details"));
     assert_eq!(app.input(), "draft to preserve");
     settings(&mut app, mode, Language::English);
-    key(&mut app, KeyCode::Enter);
-    key(&mut app, KeyCode::Down);
-    key(&mut app, KeyCode::Enter);
-    let tools = frame(&app, 80, 26).1;
-    assert!(tools.contains("Tool definitions"));
-    assert!(!tools.contains("read_file"));
-    let tools_row = tools
-        .lines()
-        .find(|line| line.contains("Tool definitions"))
-        .unwrap();
-    assert!(!tools_row.contains('+') && !tools_row.contains('-'));
-    frames.push(format!("Tool definitions summary\n{tools}"));
-    key(&mut app, KeyCode::Right);
-    assert!(!frame(&app, 80, 26).1.contains("read_file"));
-    key(&mut app, KeyCode::Down);
-    key(&mut app, KeyCode::Enter);
-    let memory = frame(&app, 80, 26).1;
-    assert!(memory.contains("AGENTS.md · 300 tokens"), "{memory}");
-    frames.push(format!("Expanded memory file\n{memory}"));
     assert_eq!(
         super::frame::process_resource_demand(&app, ratatui::layout::Rect::new(0, 0, 80, 26)),
         ash_memory_diagnostics::ProcessResourceDemand::Disabled
@@ -181,9 +174,8 @@ fn exercise_narrow_states(mode: ScreenMode) -> String {
         }
         frames.push(format!("{name}\n{text}"));
         key(&mut app, KeyCode::Enter);
-        let expanded = frame(&app, 40, 16).1;
-        assert!(expanded.contains("system/prompt"), "{expanded}");
-        frames.push(format!("{name} · expanded source\n{expanded}"));
+        assert_eq!(frame(&app, 40, 16).1, text);
+        assert!(!text.contains("Enter 详情"));
         app.handle_key_in_area(
             KeyEvent::new(KeyCode::End, KeyModifiers::NONE),
             ratatui::layout::Rect::new(0, 0, 40, 16),
@@ -233,9 +225,11 @@ fn context_status_and_usage_commands_have_distinct_titles_in_both_modes() {
 }
 
 #[test]
-fn context_source_mouse_target_follows_the_summary_and_toggles_details() {
+fn context_diagnostics_source_mouse_target_follows_the_summary_and_toggles_details() {
     let mut app = app(ScreenMode::Fullscreen, Language::English);
-    app.update(crate::context::Event::Opened(panel(12_345, Some(90_000))));
+    app.update(crate::context::Event::Opened(
+        crate::context::diagnostics_panel(inspection(12_345, Some(90_000)), vec![]),
+    ));
     let area = ratatui::layout::Rect::new(0, 0, 80, 24);
     for (row_offset, expected_expanded) in [(2, false), (0, true), (0, false)] {
         let text = frame(&app, area.width, area.height).1;
@@ -556,8 +550,27 @@ fn exercise_context_diagnostics(mode: ScreenMode, language: Language) -> String 
     assert!(overview.contains("read_file"));
     assert!(!overview.contains("Read a workspace file"));
     let mut frames = vec![format!("Diagnostics overview\n{overview}")];
-    // Section dividers are skipped by keyboard selection; the sixth selectable row is the tool.
-    for _ in 0..5 {
+    for source in [
+        Some("system/prompt · 1.5k tokens"),
+        None,
+        Some("AGENTS.md · 300 tokens"),
+        Some("available · 1.5k tokens"),
+        Some("history · 4k tokens"),
+    ] {
+        if let Some(source) = source {
+            key(&mut app, KeyCode::Enter);
+            let expanded = frame(&app, 100, 44).1;
+            assert!(expanded.contains(source), "{expanded}");
+            if source.starts_with("AGENTS.md") {
+                frames.push(format!("Expanded memory source\n{expanded}"));
+            }
+            key(&mut app, KeyCode::Left);
+            assert!(!frame(&app, 100, 44).1.contains(source));
+            key(&mut app, KeyCode::Right);
+            assert!(frame(&app, 100, 44).1.contains(source));
+            key(&mut app, KeyCode::Enter);
+        }
+        // Section dividers are skipped by keyboard selection.
         key(&mut app, KeyCode::Down);
     }
     key(&mut app, KeyCode::Enter);

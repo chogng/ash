@@ -107,8 +107,9 @@ impl Panel {
             position,
         )
         .filter(|target| {
-            !matches!(target,
-            ListSelectionPointerTarget::Item(id) if *id == ListSelectionItemId::new("category-1"))
+            matches!(target, ListSelectionPointerTarget::Item(id)
+                if self.pages.visible_items().iter().any(|item|
+                    item.id() == Some(id) && item.has_expandable_details()))
         })
     }
     pub(crate) fn handle_click(
@@ -326,12 +327,6 @@ fn build_panel(
         .categories
         .iter()
         .map(|category| {
-            let details = category
-                .sources
-                .iter()
-                .map(|source| format!("{} · {} tokens", source.name, compact_tokens(source.tokens)))
-                .collect::<Vec<_>>()
-                .join("\n");
             let mut item = ListSelectionItem::new(category_label(category.category))
                 .with_id(ListSelectionItemId::new(format!(
                     "category-{}",
@@ -343,9 +338,21 @@ fn build_panel(
                     "",
                     value(category.tokens),
                 );
-            // Internal tool identities belong to the explicit diagnostic view, never this summary.
-            if category.category != ModelContextCategory::SystemTools && !details.is_empty() {
-                item = item.with_details(Text::literal(details));
+            // Source identities belong to diagnostics; the ordinary view reports category totals.
+            if detail == ContextReadDetail::Diagnostics
+                && category.category != ModelContextCategory::SystemTools
+                && !category.sources.is_empty()
+            {
+                item = item.with_details(Text::literal(
+                    category
+                        .sources
+                        .iter()
+                        .map(|source| {
+                            format!("{} · {} tokens", source.name, compact_tokens(source.tokens))
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ));
             }
             item
         })

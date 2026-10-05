@@ -61,44 +61,66 @@ fn context_diagnostics_explicitly_requests_definitions() {
 }
 
 #[test]
-fn tool_summary_is_read_only_for_keyboard_and_pointer_input() {
+fn context_summary_categories_are_read_only_for_keyboard_and_pointer_input() {
     let mut panel = panel(ModelContextInspection {
         model: None,
-        estimated_tokens: 500,
+        estimated_tokens: 2_500,
         estimator_revision: "test".into(),
         allocation: None,
         latest_request: None,
-        categories: vec![ash_protocol::ModelContextCategoryUsage {
-            category: ModelContextCategory::SystemTools,
-            tokens: 500,
-            sources: vec![ash_protocol::ModelContextSourceUsage {
-                name: "read_file".into(),
+        categories: [
+            ModelContextCategory::SystemPrompt,
+            ModelContextCategory::SystemTools,
+            ModelContextCategory::MemoryFiles,
+            ModelContextCategory::Skills,
+            ModelContextCategory::Conversation,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(
+            |(index, category)| ash_protocol::ModelContextCategoryUsage {
+                category,
                 tokens: 500,
-            }],
-        }],
+                sources: vec![ash_protocol::ModelContextSourceUsage {
+                    name: format!("source-{index}"),
+                    tokens: 500,
+                }],
+            },
+        )
+        .collect(),
     });
     let body = Rect::new(0, 0, 80, 24);
     let list = panel.context_areas(body)[1];
-    for x in list.x..list.right() {
-        assert!(
-            panel
-                .pointer_target_at(body, Position::new(x, list.y))
-                .is_none()
-        );
-    }
-    assert_eq!(
-        panel.pages.selected_item().unwrap().id(),
-        Some(&ListSelectionItemId::new("category-1"))
-    );
-    let before = panel.body_rows(body.width);
-    for code in [
-        crossterm::event::KeyCode::Enter,
-        crossterm::event::KeyCode::Right,
-    ] {
+    for index in 0..5 {
+        let selected = ListSelectionItemId::new(format!("category-{index}"));
+        for x in list.x..list.right() {
+            assert!(
+                panel
+                    .pointer_target_at(body, Position::new(x, list.y + index))
+                    .is_none()
+            );
+        }
+        let before = panel.body_rows(body.width);
+        for code in [
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyCode::Left,
+        ] {
+            panel.handle_key(
+                KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+                body,
+            );
+            assert_eq!(panel.body_rows(body.width), before);
+            let item = panel.pages.selected_item().unwrap();
+            assert_eq!(item.id(), Some(&selected));
+            assert!(!item.has_expandable_details());
+        }
         panel.handle_key(
-            KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+            KeyEvent::new(
+                crossterm::event::KeyCode::Down,
+                crossterm::event::KeyModifiers::NONE,
+            ),
             body,
         );
-        assert_eq!(panel.body_rows(body.width), before);
     }
 }
