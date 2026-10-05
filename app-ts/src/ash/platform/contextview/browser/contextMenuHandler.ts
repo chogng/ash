@@ -97,7 +97,7 @@ export class ContextMenuHandler extends Disposable {
 		}
 
 		onDidShow?.();
-		if (delegate.autoSelectFirstItem !== false) menu.focusFirst();
+		menu.focus(delegate.autoSelectFirstItem === true);
 		return true;
 	}
 

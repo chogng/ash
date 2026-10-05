@@ -8,6 +8,7 @@ import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDra
 export interface IndexTreeOptions<T> {
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnDoubleClick?: boolean;
@@ -84,6 +85,7 @@ export class IndexTree<T> extends Disposable {
 		this.tree = this._register(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnDoubleClick: options.expandOnDoubleClick,

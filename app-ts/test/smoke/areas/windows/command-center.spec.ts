@@ -638,6 +638,60 @@ test('activity bar context menu hides and restores view icons', async ({ applica
 	expect(await workbench.menus.inspect(application, () => explorer.press('Shift+F10'))).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Hide 'Explorer'", enabled: true })]));
 });
 
+test('action menus open without selecting a row and keep pointer and keyboard navigation', async ({ workbench }) => {
+	const page = workbench.page;
+	const manage = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Manage', exact: true });
+	const menu = page.locator('.ash-context-view-menu:not([hidden]) > .ash-menu').first();
+	const items = menu.getByRole('menuitem');
+	const focused = menu.locator(':scope > .ash-action-view-item.focused');
+
+	await manage.click();
+	await expect(menu).toBeFocused();
+	await expect(focused).toHaveCount(0);
+	await page.keyboard.press('ArrowDown');
+	await expect(items.first()).toBeFocused();
+	await expect(focused).toHaveCount(1);
+	await page.keyboard.press('ArrowUp');
+	await expect(items.last()).toBeFocused();
+	await items.nth(1).hover();
+	await expect(items.nth(1)).toBeFocused();
+	await expect(focused).toHaveCount(1);
+	await page.keyboard.press('Escape');
+	await expect(menu).toHaveCount(0);
+	await expect(manage).toBeFocused();
+
+	// A menu appearing under a resting pointer must wait for actual movement.
+	await manage.click();
+	const firstBounds = await items.first().boundingBox();
+	expect(firstBounds).not.toBeNull();
+	await page.mouse.move(firstBounds!.x + firstBounds!.width / 2, firstBounds!.y + firstBounds!.height / 2);
+	await expect(items.first()).toBeFocused();
+	await page.keyboard.press('Escape');
+	await manage.press('Enter');
+	await expect(menu).toBeFocused();
+	await expect(focused).toHaveCount(0);
+	await page.mouse.move(firstBounds!.x + firstBounds!.width / 2 + 2, firstBounds!.y + firstBounds!.height / 2);
+	await expect(items.first()).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(manage).toBeFocused();
+
+	await manage.press('ArrowDown');
+	await expect(menu).toBeFocused();
+	await expect(focused).toHaveCount(0);
+	await page.keyboard.press('ArrowUp');
+	await expect(items.last()).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(manage).toBeFocused();
+
+	await manage.press('Enter');
+	await page.keyboard.press('ArrowDown');
+	await expect(items.first()).toHaveText(/Command Palette/u);
+	await page.keyboard.press('Enter');
+	await expect(menu).toHaveCount(0);
+	await expect(workbench.quickaccess.input).toBeFocused();
+	await workbench.quickaccess.close();
+});
+
 test('Accounts and Manage menus open beside the activity bar and below the title bar', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'browser', 'This scenario requires the web Code workbench');
 	const page = workbench.page;

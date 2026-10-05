@@ -310,6 +310,22 @@ Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 与 Kill action 注册为 Command + Menu contribution；profile 使用自定义 action view item
 保留原生选择控件，显隐与 enablement 由 Terminal Context Key 投影。
 
+## 弹层打开时的焦点
+
+打开时聚焦哪里由弹层用途决定，不能给所有菜单统一预选首项。焦点、高亮和
+`checked` 是不同状态：高亮表示当前导航位置，`checked` 表示已保存的选择。
+
+| 用途 | 初始焦点 |
+| --- | --- |
+| 齿轮、更多操作、右键命令菜单 | 默认聚焦菜单容器；调用方明确请求首项时才聚焦首个可用动作 |
+| 模型、模式等单选菜单 | 聚焦当前选项；当前选项不在菜单中时只聚焦容器 |
+| 代码动作、粘贴方式等候选列表 | 有当前选项时优先聚焦它，否则可预选首个可用候选 |
+| 命令面板 | 焦点留在搜索输入，结果列表可以预选第一项 |
+
+Base `Menu` 负责导航和焦点呈现，`ContextMenuHandler`、`ActionList` 和各选择器
+负责各自的打开策略。菜单出现在静止的鼠标下方时不改变导航位置，也不展开子菜单；
+实际移动、点击和键盘操作才改变这些状态。
+
 ## 生命周期与失败语义
 
 - `MenusRegistry` 是当前 JavaScript realm 内的共享注册表。

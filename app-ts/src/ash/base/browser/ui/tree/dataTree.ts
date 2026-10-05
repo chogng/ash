@@ -8,6 +8,7 @@ import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, Tr
 export interface DataTreeOptions<T> {
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
+	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnDoubleClick?: boolean;
@@ -49,6 +50,7 @@ export class DataTree<TInput, T> extends Disposable {
 		this.tree = this._register(new ObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
+			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnDoubleClick: options.expandOnDoubleClick,

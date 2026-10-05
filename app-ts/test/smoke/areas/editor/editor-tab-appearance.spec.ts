@@ -5,6 +5,250 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+async function expectTabActionCentered(item: Locator): Promise<void> {
+	const geometry = await item.evaluate(element => {
+		const tab = element.getBoundingClientRect();
+		const button = element.querySelector('.ash-tab-primary-action button')!.getBoundingClientRect();
+		const icon = element.querySelector('.ash-tab-primary-action button svg')!.getBoundingClientRect();
+		return {
+			buttonOffsetY: button.top + button.height / 2 - tab.top - tab.height / 2,
+			iconOffsetX: icon.left + icon.width / 2 - button.left - button.width / 2,
+			iconOffsetY: icon.top + icon.height / 2 - button.top - button.height / 2,
+		};
+	});
+	expect(geometry.buttonOffsetY).toBeCloseTo(0, 2);
+	expect(geometry.iconOffsetX).toBeCloseTo(0, 2);
+	expect(geometry.iconOffsetY).toBeCloseTo(0, 2);
+}
+
+test('editor tab width settings resize existing tabs and persist after reload', async ({ workbench, reloadWorkbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await page.keyboard.press('ControlOrMeta+N');
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await expect(group.tabs).toHaveCount(2);
+	const first = group.tabs.filter({ hasText: 'Untitled-1' });
+	const id = await first.getAttribute('id');
+	const widths = async () => group.title.locator('.ash-tab').evaluateAll(tabs => tabs.map(tab => Math.round(tab.getBoundingClientRect().width * 100) / 100));
+	const fitWidths = await widths();
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectCategory('editor');
+	const settings = page.locator('.ash-settings-editor');
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.tabSizing');
+	const select = settings.locator('[data-configuration-key="workbench.editor.tabSizing"]').getByRole('combobox');
+	const min = settings.locator('[data-configuration-key="workbench.editor.tabSizingFixedMinWidth"]');
+	const max = settings.locator('[data-configuration-key="workbench.editor.tabSizingFixedMaxWidth"]');
+	await expect(select).toContainText('Fit');
+	await expect(min).toHaveValue('50');
+	await expect(max).toHaveValue('160');
+	await select.click();
+	await page.getByRole('option', { name: 'Fixed', exact: true }).click();
+	await expect.poll(widths).toEqual([160, 160]);
+	await min.fill('90');
+	await min.press('Tab');
+	await max.fill('220');
+	await max.press('Tab');
+	await expect.poll(widths).toEqual([220, 220]);
+	await max.fill('120');
+	await max.press('Tab');
+	await expect.poll(widths).toEqual([120, 120]);
+	await max.fill('120.5');
+	await max.press('Tab');
+	await expect.poll(widths).toEqual([120.5, 120.5]);
+	await max.fill('120');
+	await max.press('Tab');
+	await min.fill('150');
+	await min.press('Tab');
+	await expect.poll(widths).toEqual([150, 150]);
+	await min.fill('90');
+	await min.press('Tab');
+	await expect.poll(widths).toEqual([120, 120]);
+	for (const mode of ['Shrink', 'Fit']) {
+		await select.click();
+		await page.getByRole('option', { name: mode, exact: true }).click();
+		await expect(first).toHaveAttribute('id', id!);
+	}
+	await expect.poll(widths).toEqual(fitWidths);
+	await select.click();
+	await page.getByRole('option', { name: 'Fixed', exact: true }).click();
+	await page.locator('.ash-modal-editor-close').click();
+	await first.focus();
+	await first.press('Tab');
+	const item = group.title.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: 'Untitled-1', exact: true }) });
+	const close = item.locator('.ash-tab-primary-action button');
+	await expect(close).toBeFocused();
+	await close.hover();
+	await expectTabActionCentered(item);
+	await expect.poll(widths).toEqual([120, 120]);
+	const restored = await reloadWorkbench();
+	await restored.workbench.settingsEditor.openUserSettingsUI();
+	await restored.workbench.settingsEditor.selectCategory('editor');
+	const restoredSettings = restored.workbench.page.locator('.ash-settings-editor');
+	await restoredSettings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.tabSizing');
+	await expect(restoredSettings.locator('[data-configuration-key="workbench.editor.tabSizing"]').getByRole('combobox')).toContainText('Fixed');
+	await expect(restoredSettings.locator('[data-configuration-key="workbench.editor.tabSizingFixedMinWidth"]')).toHaveValue('90');
+	await expect(restoredSettings.locator('[data-configuration-key="workbench.editor.tabSizingFixedMaxWidth"]')).toHaveValue('120');
+	await restored.workbench.page.locator('.ash-modal-editor-close').click();
+	await restored.workbench.page.keyboard.press('ControlOrMeta+N');
+	await expect.poll(() => restored.workbench.editors.groupAt(0).title.locator('.ash-tab').last().evaluate(tab => Math.round(tab.getBoundingClientRect().width * 100) / 100)).toBe(120);
+});
+
+test('editor pill style includes the action in tab width and survives reload', async ({ workbench, reloadWorkbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const tab = group.tabs.filter({ hasText: 'Untitled-1' });
+	const item = group.title.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: 'Untitled-1', exact: true }) });
+	const close = item.locator('.ash-tab-primary-action button');
+	const id = await tab.getAttribute('id');
+	const geometry = async () => item.evaluate(element => {
+		const bounds = element.getBoundingClientRect();
+		const label = element.querySelector<HTMLElement>('.ash-tab-label')!;
+		const action = element.querySelector<HTMLElement>('.ash-tab-primary-action button')!.getBoundingClientRect();
+		const style = getComputedStyle(element);
+		return {
+			width: bounds.width, labelRight: label.getBoundingClientRect().right, actionLeft: action.left,
+			actionWidth: action.width, rightInset: bounds.right - action.right,
+			topRadius: style.borderTopLeftRadius, bottomRadius: style.borderBottomLeftRadius,
+			labelOverlay: getComputedStyle(label, '::after').content,
+			textOverflow: getComputedStyle(label.querySelector('.ash-icon-label-text')!).textOverflow,
+		};
+	});
+	await expect(tab).toBeVisible();
+	const initialWidth = (await geometry()).width;
+	for (const option of ['Pill', 'Connected', 'Pill']) {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectCategory('editor');
+		const settings = page.locator('.ash-settings-editor');
+		await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+		const select = settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox');
+		await select.click();
+		await page.getByRole('option', { name: option, exact: true }).click();
+		await expect(select).toContainText(option);
+		await page.locator('.ash-modal-editor-close').click();
+		await expect(group.title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(option === 'Connected' ? /ash-connected-editor-tabs/u : /^(?!.*ash-connected-editor-tabs)/u);
+		await expect(tab).toHaveAttribute('id', id!);
+		const bounds = await geometry();
+		await expectTabActionCentered(item);
+		expect(bounds).toMatchObject({ width: initialWidth, actionWidth: 22, labelOverlay: 'none', textOverflow: 'ellipsis' });
+		expect(bounds.rightInset).toBeCloseTo(2, 2);
+		expect(bounds.labelRight).toBeLessThanOrEqual(bounds.actionLeft);
+		expect(bounds.bottomRadius).toBe(option === 'Connected' ? '0px' : bounds.topRadius);
+	}
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Light', 'Ash High Contrast Dark']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
+		await picker.fill(theme);
+		await picker.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await close.hover();
+		expect((await geometry()).width).toBe(initialWidth);
+		await expectTabActionCentered(item);
+		await tab.focus();
+		await tab.press('Tab');
+		await expect(close).toBeFocused();
+		expect((await geometry()).width).toBe(initialWidth);
+		await expectTabActionCentered(item);
+	}
+	await page.keyboard.press('ControlOrMeta+N');
+	await group.editor.input.focus();
+	await page.mouse.move(0, 0);
+	await expect(close).toBeHidden();
+	const hiddenWidth = (await geometry()).width;
+	await tab.hover();
+	await expect(close).toBeVisible();
+	expect((await geometry()).width).toBe(hiddenWidth);
+	await expectTabActionCentered(item);
+	const restored = await reloadWorkbench();
+	await restored.workbench.settingsEditor.openUserSettingsUI();
+	await restored.workbench.settingsEditor.selectCategory('editor');
+	const settings = restored.workbench.page.locator('.ash-settings-editor');
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+	await expect(settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox')).toContainText('Pill');
+	await restored.workbench.page.locator('.ash-modal-editor-close').click();
+	await restored.workbench.page.keyboard.press('ControlOrMeta+N');
+	await expect(restored.workbench.editors.groupAt(0).title.locator('.ash-ordinary-editor-tabs-row')).not.toHaveClass(/ash-connected-editor-tabs/u);
+});
+
+test('unsaved tab indicators stay round and centered until the close button is hovered or focused', async ({ application, workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const tab = group.tabs.filter({ hasText: 'Untitled-1' });
+	const item = group.title.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: /^Untitled-1(?:,|$)/u }) });
+	const close = item.locator('.ash-tab-primary-action button');
+	const icon = close.locator('svg');
+	await group.editor.waitForEditorFocus();
+	await expect(close).toBeVisible();
+	const indicator = async () => close.evaluate(button => {
+		const style = getComputedStyle(button, '::after');
+		const bounds = button.getBoundingClientRect();
+		const tabBounds = button.closest('.ash-tab')!.getBoundingClientRect();
+		return {
+			content: style.content,
+			width: parseFloat(style.width),
+			height: parseFloat(style.height),
+			centerX: parseFloat(style.left) + parseFloat(style.marginLeft) + parseFloat(style.width) / 2,
+			centerY: parseFloat(style.top) + parseFloat(style.marginTop) + parseFloat(style.height) / 2,
+			buttonCenterX: bounds.width / 2,
+			buttonCenterY: bounds.height / 2,
+			buttonOffsetY: bounds.top + bounds.height / 2 - tabBounds.top - tabBounds.height / 2,
+			radius: style.borderRadius,
+			color: style.backgroundColor,
+			foreground: getComputedStyle(button).color,
+		};
+	});
+	expect((await indicator()).content).toBe('none');
+	await page.keyboard.insertText('unsaved text');
+	await expect(tab).toHaveAttribute('aria-label', /unsaved changes/u);
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Light', 'Ash High Contrast Dark']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
+		await picker.fill(theme);
+		await picker.press('Enter');
+		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+		await group.editor.input.focus();
+		await page.mouse.move(0, 0);
+		await expect(icon).toBeHidden();
+		const geometry = await indicator();
+		expect(geometry).toMatchObject({ content: '""', width: 8, height: 8, radius: '50%' });
+		expect(geometry.centerX).toBeCloseTo(geometry.buttonCenterX, 1);
+		expect(geometry.centerY).toBeCloseTo(geometry.buttonCenterY, 1);
+		expect(geometry.buttonOffsetY).toBeCloseTo(0, 2);
+		expect(geometry.color).toBe(geometry.foreground);
+		await tab.hover();
+		await tab.focus();
+		await expect(icon).toBeHidden();
+		expect((await indicator()).content).toBe('""');
+		await close.hover();
+		await expect(icon).toBeVisible();
+		await expect.poll(async () => (await indicator()).content).toBe('none');
+		await expectTabActionCentered(item);
+		await page.mouse.move(0, 0);
+		await tab.focus();
+		await tab.press('Tab');
+		await expect(close).toBeFocused();
+		await expect(icon).toBeVisible();
+		expect((await indicator()).content).toBe('none');
+		await expectTabActionCentered(item);
+	}
+	await page.keyboard.press('ControlOrMeta+N');
+	await expect(tab).toHaveAttribute('aria-selected', 'false');
+	await group.editor.input.focus();
+	await page.mouse.move(0, 0);
+	await expect(close).toBeVisible();
+	await expect(icon).toBeHidden();
+	expect((await indicator()).content).toBe('""');
+	expect((await indicator()).buttonOffsetY).toBeCloseTo(0, 2);
+	await tab.click();
+	await group.editor.waitForEditorFocus();
+	await close.hover();
+	await expect(icon).toBeVisible();
+	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => close.click());
+	await expect(tab).toHaveCount(0);
+});
+
 test('editor label format setting persists and keeps untitled tabs free of directory labels', async ({ workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
@@ -34,6 +278,109 @@ test('editor label format setting persists and keeps untitled tabs free of direc
 
 test.describe('File tab label format', () => {
 	test.use({ openWorkspace: true });
+
+	test('editor tabs keep complete filenames and scroll instead of shrinking', async ({ target, testWorkspace, workbench }) => {
+		test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Desktop file access requires App Server');
+		const page = workbench.page;
+		const names = ['browser-foundation.md', '浏览器基础与依赖方向说明.md', ...Array.from({ length: 5 }, (_, index) => `browser-foundation-layout-and-editor-tab-width-regression-${index}.md`)];
+		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+			await page.evaluate(async filenames => {
+				const root = await navigator.storage.getDirectory();
+				const folder = await root.getDirectoryHandle('tab-width-files', { create: true });
+				for (const name of filenames) {
+					const file = await folder.getFileHandle(name, { create: true });
+					const writer = await file.createWritable();
+					await writer.write(`# ${name}`);
+					await writer.close();
+				}
+				Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+			}, names);
+			await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+		} else {
+			await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), `# ${name}`)));
+		}
+		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+		await workbench.openExplorer();
+		const group = workbench.editors.groupAt(0);
+		const tab = group.element.getByRole('tab', { name: names[0]!, exact: true });
+		const item = group.title.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: names[0]!, exact: true }) });
+		const geometry = async () => item.evaluate(element => {
+			const label = element.querySelector<HTMLElement>('.ash-tab-label')!;
+			const text = label.querySelector<HTMLElement>('.ash-icon-label-text')!;
+			const range = document.createRange();
+			range.selectNodeContents(text);
+			const textBounds = range.getBoundingClientRect();
+			const action = element.querySelector<HTMLElement>('.ash-tab-primary-action button')!.getBoundingClientRect();
+			return { width: element.getBoundingClientRect().width, clipped: text.scrollWidth > text.clientWidth,
+				textRight: textBounds.right, labelRight: label.getBoundingClientRect().right, actionLeft: action.left };
+		});
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: names[0]!, exact: true }).dblclick();
+		await expect(tab).toBeVisible();
+		await expect.poll(async () => (await geometry()).clipped).toBe(false);
+		const initialWidth = (await geometry()).width;
+		for (const option of ['Pill', 'Connected']) {
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectCategory('editor');
+			const settings = page.locator('.ash-settings-editor');
+			await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+			await settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox').click();
+			await page.getByRole('option', { name: option, exact: true }).click();
+			await page.locator('.ash-modal-editor-close').click();
+			const bounds = await geometry();
+			await expectTabActionCentered(item);
+			expect(bounds).toMatchObject({ width: initialWidth, clipped: false });
+			expect(bounds.textRight).toBeLessThanOrEqual(bounds.labelRight);
+			// Fractional display scaling can round the shared edge differently.
+			expect(bounds.labelRight - bounds.actionLeft).toBeLessThan(0.01);
+		}
+		for (const name of names.slice(1)) {
+			await page.locator('.ash-explorer').getByRole('treeitem', { name, exact: true }).dblclick();
+			const label = group.element.getByRole('tab', { name, exact: true }).locator('.ash-icon-label-text');
+			await expect(label).toHaveText(name);
+			await expect.poll(() => label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(false);
+			if (name.startsWith('browser-foundation-layout')) {
+				expect(await label.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(180);
+			}
+		}
+		await expect(group.tabs).toHaveCount(names.length);
+		const viewport = group.title.locator('.ash-ordinary-editor-tabs-row .ash-scrollbar-viewport');
+		await expect.poll(() => viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+		await tab.focus();
+		await expect(tab).toBeInViewport();
+		const inactiveWidth = (await geometry()).width;
+		await item.locator('.ash-tab-primary-action button').hover();
+		await expectTabActionCentered(item);
+		expect((await geometry()).width).toBe(inactiveWidth);
+		await tab.press('Alt+Enter');
+		await expect(group.title.locator('.ash-sticky-editor-tabs-row').getByRole('tab', { name: names[0]!, exact: true })).toBeVisible();
+		await expectTabActionCentered(item);
+		expect((await geometry()).clipped).toBe(false);
+		const ordinary = group.title.locator('.ash-ordinary-editor-tabs-row .ash-tab');
+		const naturalWidths = await ordinary.evaluateAll(tabs => tabs.map(tab => tab.getBoundingClientRect().width));
+		for (const mode of ['Shrink', 'Fixed', 'Fit']) {
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectCategory('editor');
+			const settings = page.locator('.ash-settings-editor');
+			await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.tabSizing');
+			await settings.locator('[data-configuration-key="workbench.editor.tabSizing"]').getByRole('combobox').click();
+			await page.getByRole('option', { name: mode, exact: true }).click();
+			await page.locator('.ash-modal-editor-close').click();
+			const resized = await ordinary.evaluateAll(tabs => tabs.map(tab => tab.getBoundingClientRect().width));
+			if (mode === 'Fit') {
+				resized.forEach((width, index) => expect(width).toBeCloseTo(naturalWidths[index]!, 2));
+			} else if (mode === 'Shrink') {
+				expect(resized.every((width, index) => width <= naturalWidths[index]!)).toBe(true);
+				expect(resized.some((width, index) => width < naturalWidths[index]! - 1)).toBe(true);
+				expect(await viewport.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+			} else {
+				expect(Math.max(...resized) - Math.min(...resized)).toBeLessThan(0.02);
+				expect(resized.every(width => width >= 50 && width <= 160.01)).toBe(true);
+			}
+			for (const button of await ordinary.locator('.ash-tab-primary-action button').all()) {
+				expect(await button.evaluate(element => element.getBoundingClientRect().width)).toBe(22);
+			}
+		}
+	});
 
 	test('file tabs only add distinguishing paths and preserve them across pinned rows and settings changes', async ({ target, testWorkspace, workbench }) => {
 		test.skip(target.kind === 'electron' && target.appServerMode === 'disabled', 'Desktop file access requires App Server');
@@ -279,6 +626,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 		return { width: rect.width, height: rect.height, iconWidth: icon.width, iconHeight: icon.height, left: icon.left - rect.left, right: rect.right - icon.right };
 	});
 	expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
+	await expectTabActionCentered(ordinary);
 
 	await ordinary.getByRole('tab').press('Alt+Enter');
 	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
@@ -293,6 +641,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await expect(unpin).toBeVisible();
 	await sticky.getByRole('tab').hover();
 	await unpin.hover();
+	await expectTabActionCentered(sticky);
 	await expect(unpin.locator('svg')).toBeVisible();
 	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
 	await expect(sticky.getByRole('button', { name: /^Close /u })).toHaveCount(0);
@@ -301,6 +650,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', untitledName!);
 	await ordinary.getByRole('tab').press('Alt+Enter');
 	await unpin.focus();
+	await expectTabActionCentered(sticky);
 	await unpin.press('Enter');
 	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
 	await expect(ordinary.getByRole('tab')).toBeFocused();

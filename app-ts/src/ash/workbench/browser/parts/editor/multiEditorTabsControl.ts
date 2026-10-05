@@ -25,7 +25,8 @@ import { basename, dirname } from '../../../../base/common/resources.js';
 import { shorten } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
-import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorLabelFormat, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from "../../../services/editor/common/editorConfiguration.js";
+import type { ModernUIEditorTabStyle } from '../../../common/configuration.js';
+import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration, EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorLabelFormat, type EditorTabSizing, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from "../../../services/editor/common/editorConfiguration.js";
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
 
@@ -63,6 +64,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(EditorShowIconsConfiguration)) this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
 			if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) this.updateScrollbarOptions();
+			if (event.affectsConfiguration(EditorTabSizingConfiguration) || event.affectsConfiguration(EditorTabSizingFixedMinWidthConfiguration) || event.affectsConfiguration(EditorTabSizingFixedMaxWidthConfiguration)) this.updateTabSizing();
 			if (event.affectsConfiguration(EditorLabelFormatConfiguration)) {
 				this.setEditors(this.editors, this.activeInput, this.selectedIds);
 			}
@@ -112,6 +114,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.updateScrollbarOptions();
 		const viewport = this.tabList.scrollableElement;
 		this.viewport = viewport;
+		this.updateTabSizing();
 		this.domNode.classList.add(CONNECTED_EDITOR_TABS_CLASS);
 		this._register(this.tabList.onDidScroll(() => this.updateConnectedTab()));
 		this._register(observeResize(viewport, () => this.updateConnectedTab()));
@@ -142,6 +145,16 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			scrollbarSize: this.configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration) === 'large' ? 10 : 3,
 			horizontal: this.configurationService.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
 		});
+	}
+
+	private updateTabSizing(): void {
+		const mode = this.configurationService.getValue<EditorTabSizing>(EditorTabSizingConfiguration);
+		this.tabList.setSizing(mode === 'fixed' ? {
+			mode,
+			minWidth: this.configurationService.getValue<number>(EditorTabSizingFixedMinWidthConfiguration),
+			maxWidth: this.configurationService.getValue<number>(EditorTabSizingFixedMaxWidthConfiguration),
+		} : { mode });
+		this.updateConnectedTab();
 	}
 
 	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {
@@ -299,9 +312,9 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		tabLabel.setAttribute('aria-label', state ? `${name}, ${state}` : name);
 	}
 
-	setPresentation(presentation: TabListPresentation): void {
+	setPresentation(presentation: TabListPresentation, tabStyle: ModernUIEditorTabStyle): void {
 		this.tabList.setPresentation(presentation);
-		this.connected = presentation === "inset";
+		this.connected = presentation === "inset" && tabStyle === 'connected';
 		this.domNode.classList.toggle(CONNECTED_EDITOR_TABS_CLASS, this.connected);
 		this.updateConnectedTab();
 	}

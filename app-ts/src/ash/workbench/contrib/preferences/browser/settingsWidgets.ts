@@ -346,7 +346,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 			this.input = h(this.domNode.ownerDocument, 'input');
 			this.input.className = 'ash-general-setting-control';
 			this.input.type = 'number';
-			this.input.step = '1';
+			this.input.step = 'any';
 			this.domNode.append(this.input);
 		}
 		this.input.dataset.configurationKey = descriptor.configuration.key;
@@ -367,7 +367,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 
 	private acceptValue(): void {
 		const value = this.input.valueAsNumber;
-		if (!Number.isSafeInteger(value) || value < this.descriptor.minimum || value > this.descriptor.maximum) {
+		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum) {
 			this.model.refresh();
 			this.input.value = String(this.model.state.value);
 			this.reportStatus(`${this.descriptor.title} must be between ${this.descriptor.minimum} and ${this.descriptor.maximum}.`, true);

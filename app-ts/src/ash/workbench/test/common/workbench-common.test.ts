@@ -5,6 +5,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import {
+	ConfigurationScope,
 	Extensions as ConfigurationExtensions,
 	type IConfigurationRegistry,
 } from "../../../platform/configuration/common/configurationRegistry.js";
@@ -31,6 +32,7 @@ import {
 	WorkbenchPhase,
 } from "../../../workbench/common/contributions.js";
 import { WorkbenchConfiguration } from "../../../workbench/common/configuration.js";
+import { EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration } from '../../services/editor/common/editorConfiguration.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 import { DialogsModel } from "../../../workbench/common/dialogs.js";
@@ -214,6 +216,31 @@ test("workbench configuration exposes modern and flat layout styles", () => {
 		() => layoutStyle.parse("classic"),
 		/Unknown Workbench layout style/,
 	);
+});
+
+test('editor tab style uses the VS Code setting key and validates persisted values', () => {
+	const style = configurationRegistry.getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)!;
+	assert.deepEqual({ key: style.key, defaultValue: style.defaultValue, scope: style.scope, schema: style.schema }, {
+		key: 'workbench.experimental.modernUIEditorTabStyle', defaultValue: 'connected', scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string', enum: ['connected', 'pill'] },
+	});
+	assert.deepEqual(['connected', 'pill'].map(value => style.serialize(style.parse(value))), ['connected', 'pill']);
+	assert.throws(() => style.parse('overlay'), /Invalid editor tab style/u);
+});
+
+test('editor tab widths validate sizing modes and fixed bounds before applying persisted values', () => {
+	const sizing = configurationRegistry.getConfiguration(EditorTabSizingConfiguration)!;
+	assert.deepEqual([sizing.key, sizing.defaultValue, sizing.scope], ['workbench.editor.tabSizing', 'fit', ConfigurationScope.WINDOW]);
+	assert.deepEqual(['fit', 'shrink', 'fixed'].map(value => sizing.serialize(sizing.parse(value))), ['fit', 'shrink', 'fixed']);
+	assert.throws(() => sizing.parse('auto'), /Invalid editor tab sizing/u);
+	for (const [key, defaultValue] of [[EditorTabSizingFixedMinWidthConfiguration, 50], [EditorTabSizingFixedMaxWidthConfiguration, 160]] as const) {
+		const width = configurationRegistry.getConfiguration(key)!;
+		assert.deepEqual([width.defaultValue, width.scope, width.schema], [defaultValue, ConfigurationScope.WINDOW, { type: 'number', minimum: 38 }]);
+		assert.deepEqual([38, 90.5, 240].map(value => width.serialize(width.parse(value))), [38, 90.5, 240]);
+		for (const value of [37, NaN, Infinity, '90']) {
+			assert.throws(() => width.parse(value), /finite number of at least 38 pixels/u);
+		}
+	}
 });
 
 test("workbench theme registries reject duplicate themes", () => {

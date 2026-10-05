@@ -24,7 +24,7 @@ import { NoEditorTabsControl } from "./noEditorTabsControl.js";
 import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
 import { h } from "../../../../base/browser/dom.js";
 import { localize } from "../../../../nls.js";
-import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
+import { WorkbenchConfiguration, type ModernUIEditorTabStyle, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -99,7 +99,7 @@ export class EditorTitleControl extends Disposable {
 					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
 					this.heightEmitter.fire();
 				}
-				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.updateTabsLayoutStyle();
+				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) || event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)) this.updateTabsLayoutStyle();
 			}));
 		}
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -150,7 +150,8 @@ export class EditorTitleControl extends Disposable {
 	private updateTabsLayoutStyle(): void {
 		if (!(this.tabs instanceof MultiEditorTabsControl || this.tabs instanceof MultiRowEditorControl)) return;
 		const style = this.configurationService?.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle) ?? configurationDefault<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
-		this.tabs.setPresentation(style === 'modern' ? 'inset' : 'flush');
+		const tabStyle = this.configurationService?.getValue<ModernUIEditorTabStyle>(WorkbenchConfiguration.modernUIEditorTabStyle) ?? configurationDefault<ModernUIEditorTabStyle>(WorkbenchConfiguration.modernUIEditorTabStyle);
+		this.tabs.setPresentation(style === 'modern' ? 'inset' : 'flush', tabStyle);
 	}
 
 	private get tabs(): EditorTabsControl {

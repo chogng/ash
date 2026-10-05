@@ -40,6 +40,8 @@ export interface TabListItem<T> {
 
 /** Named visual presentation for the ActionBar and tabs rendered by a TabList. */
 export type TabListPresentation = "flush" | "inset";
+/** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
+export type TabListSizing = { readonly mode: 'fit' | 'shrink' } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number };
 export type TabListDropPosition = ActionBarDropPosition;
 
 /** Drag callbacks for a tab list; the caller owns payload and mutation semantics. */
@@ -170,6 +172,19 @@ export class TabList<T> extends Disposable {
 		this.element.classList.remove(`ash-tab-list-${this.presentation}`);
 		this.presentation = presentation;
 		this.element.classList.add(`ash-tab-list-${presentation}`);
+	}
+
+	setSizing(sizing: TabListSizing): void {
+		for (const mode of ['fit', 'shrink', 'fixed']) {
+			this.element.classList.toggle(`ash-tab-list-sizing-${mode}`, sizing.mode === mode);
+		}
+		if (sizing.mode === 'fixed') {
+			this.element.style.setProperty('--ash-tab-list-fixed-min-width', `${sizing.minWidth}px`);
+			this.element.style.setProperty('--ash-tab-list-fixed-max-width', `${sizing.maxWidth}px`);
+		} else {
+			this.element.style.removeProperty('--ash-tab-list-fixed-min-width');
+			this.element.style.removeProperty('--ash-tab-list-fixed-max-width');
+		}
 	}
 
 	setTabs(

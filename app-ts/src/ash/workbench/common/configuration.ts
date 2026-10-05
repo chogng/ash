@@ -7,6 +7,7 @@ import { isMacintosh, isWeb } from "../../base/common/platform.js";
 import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 
 export type WorkbenchLayoutStyle = "modern" | "flat";
+export type ModernUIEditorTabStyle = 'connected' | 'pill';
 export const enum ActivityBarPosition {
 	DEFAULT = 'default',
 	TOP = 'top',
@@ -107,6 +108,27 @@ export const WorkbenchConfiguration = Object.freeze({
 				{ value: "modern", label: "Modern" },
 				{ value: "flat", label: "Flat" },
 			],
+		},
+	}),
+	modernUIEditorTabStyle: configurationRegistry.registerConfiguration<ModernUIEditorTabStyle>({
+		key: 'workbench.experimental.modernUIEditorTabStyle',
+		defaultValue: 'connected',
+		scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string', enum: ['connected', 'pill'] },
+		parse(value: unknown): ModernUIEditorTabStyle {
+			if (value === 'connected' || value === 'pill') return value;
+			throw new TypeError(localize('workbench.editor.tabStyle.invalid', 'Invalid editor tab style. Use connected or pill.'));
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('workbench.editor.tabStyle.title', 'Editor Tab Style'); },
+			get description() { return localize('workbench.editor.tabStyle.description', 'Choose connected tabs or separate rounded tabs in the Modern layout. Each tab includes space for its status and close button.'); },
+			get options() {
+				return [
+					{ value: 'connected', label: localize('workbench.editor.tabStyle.connected', 'Connected') },
+					{ value: 'pill', label: localize('workbench.editor.tabStyle.pill', 'Pill') },
+				] as const;
+			},
 		},
 	}),
 	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarPosition>({

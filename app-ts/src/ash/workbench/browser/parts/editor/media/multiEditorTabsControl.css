@@ -43,17 +43,25 @@
   visibility: visible;
 }
 
-.ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover):not(:focus-within) .ash-tab-primary-action svg {
+.ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-primary-action button {
+  position: relative;
+}
+
+.ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-primary-action button:not(:hover):not(:focus-visible) svg {
   visibility: hidden;
 }
 
-.ash-multi-editor-tabs-control .ash-tab[data-state]:not(:hover):not(:focus-within) .ash-tab-primary-action button::after {
+.ash-multi-editor-tabs-control .ash-tab[data-state] .ash-tab-primary-action button:not(:hover):not(:focus-visible)::after {
+  /* Share the icon's center without competing with its retained content in flex layout. */
+  position: absolute;
+  inset: 0;
   width: 8px;
   height: 8px;
   margin: auto;
   border-radius: 50%;
   background: currentcolor;
   content: "";
+  pointer-events: none;
 }
 
 .ash-multi-editor-tabs-control .ash-tab[data-state="conflict"] .ash-tab-primary-action button::after {

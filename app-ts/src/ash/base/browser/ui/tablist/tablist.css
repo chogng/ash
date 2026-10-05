@@ -25,7 +25,8 @@
   height: max-content;
 }
 
-.ash-tab {
+/* Tabs own cross-axis alignment instead of ActionBar's stretch default. */
+.ash-tab-list .ash-tab {
   position: relative;
   display: flex;
   min-width: 0;
@@ -128,7 +129,7 @@
 }
 
 .ash-tab-list-inset .ash-tab-label {
-  --ash-icon-label-text-overflow: clip;
+  --ash-icon-label-text-overflow: ellipsis;
 
   position: relative;
   overflow: hidden;
@@ -139,20 +140,35 @@
   white-space: nowrap;
 }
 
-.ash-tab-list-inset .ash-tab.checked .ash-tab-label::after,
-.ash-tab-list-inset .ash-tab:hover .ash-tab-label::after {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--ash-toolbar-action-size);
-  content: "";
-  pointer-events: none;
-  background: linear-gradient(to right, transparent, var(--ash-tab-list-inactive-background, transparent));
+.ash-tab-list-sizing-fit .ash-tab {
+  max-width: none;
+  flex: 0 0 auto;
 }
 
-.ash-tab-list-inset .ash-tab.checked .ash-tab-label::after {
-  background: linear-gradient(to right, transparent, var(--ash-tab-list-active-background));
+.ash-tab-list-sizing-shrink .ash-tab-list-scroll-content,
+.ash-tab-list-sizing-fixed .ash-tab-list-scroll-content,
+.ash-tab-list-sizing-shrink .ash-tab-list-scroll-content > .ash-action-bar,
+.ash-tab-list-sizing-fixed .ash-tab-list-scroll-content > .ash-action-bar {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.ash-tab-list-sizing-shrink .ash-tab {
+  min-width: 80px;
+  max-width: fit-content;
+  flex: 1 1 0;
+}
+
+.ash-tab-list-sizing-fixed .ash-tab {
+  min-width: var(--ash-tab-list-fixed-min-width);
+  max-width: var(--ash-tab-list-fixed-max-width);
+  flex: 1 0 0;
+}
+
+.ash-tab-list-sizing-shrink .ash-tab-label,
+.ash-tab-list-sizing-fixed .ash-tab-label {
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .ash-tab-list-inset .ash-tab-label:focus-visible {
@@ -164,10 +180,14 @@
   font-style: italic;
 }
 
-.ash-tab-actions {
+.ash-tab .ash-tab-actions {
   align-items: center;
   flex: 0 0 auto;
   gap: 0;
+}
+
+.ash-tab-list-inset .ash-tab-actions {
+  padding-right: var(--ash-spacing-size20);
 }
 
 .ash-tab-primary-action {

@@ -250,6 +250,16 @@ test('application menu switches its root submenus on pointer entry', async ({ ta
 	await editMenuItem.hover();
 	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'false');
 	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
+	const bounds = await editMenuItem.boundingBox();
+	expect(bounds).not.toBeNull();
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	await trigger.press('Enter');
+	await expect(mainMenu).toBeFocused();
+	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'false');
+	await expect(mainMenu.locator('.ash-action-view-item.focused')).toHaveCount(0);
+	await page.mouse.move(bounds!.x + bounds!.width / 2 + 2, bounds!.y + bounds!.height / 2);
+	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
 });
 
 test('application menu keeps submenu arrows inside their menu rows', async ({ target, workbench }) => {

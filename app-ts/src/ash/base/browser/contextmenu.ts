@@ -38,6 +38,7 @@ export interface IContextMenuDelegate {
 	getMenuClassName?(): string;
 	readonly onHide?: (didCancel: boolean) => void;
 	readonly actionRunner?: IActionRunner;
+	/** Selects the first enabled action on opening; otherwise only the menu receives focus. */
 	readonly autoSelectFirstItem?: boolean;
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;

@@ -132,7 +132,16 @@ test("Menu projects one focused item for keyboard and pointer navigation", async
 		value(): void {},
 	});
 
-	menu.focusFirst();
+	menu.focus(false);
+	assert.equal(dom.window.document.activeElement, menu.element);
+	assert.equal(items.some((item) => item.classList.contains("focused")), false);
+	menu.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		key: "ArrowUp",
+	}));
+	assert.equal(dom.window.document.activeElement, buttons[2]);
+
+	menu.focus(true);
 	assert.equal(dom.window.document.activeElement, buttons[0]);
 	assert.deepEqual(items.map((item) => item.classList.contains("focused")), [
 		true,
@@ -144,6 +153,11 @@ test("Menu projects one focused item for keyboard and pointer navigation", async
 		bubbles: true,
 		relatedTarget: buttons[0],
 	}));
+	buttons[1]!.dispatchEvent(new dom.window.MouseEvent("mousemove", { bubbles: true }));
+	assert.equal(dom.window.document.activeElement, buttons[0]);
+	const movement = new dom.window.MouseEvent("mousemove", { bubbles: true });
+	Object.defineProperty(movement, "movementX", { value: 1 });
+	buttons[1]!.dispatchEvent(movement);
 	assert.equal(dom.window.document.activeElement, buttons[1]);
 	assert.deepEqual(items.map((item) => item.classList.contains("focused")), [
 		false,
@@ -258,7 +272,7 @@ test("Menu delays pointer expansion and switches the expanded submenu", async ()
 	}
 });
 
-test("Menu opens immediate root submenus on pointer entry without changing nested hover delay", async () => {
+test("Menu opens immediate root submenus only on movement without changing nested hover delay", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	mock.timers.enable({ apis: ["setTimeout"] });
 	Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
@@ -297,21 +311,31 @@ test("Menu opens immediate root submenus on pointer entry without changing neste
 	const enter = (button: HTMLButtonElement): void => {
 		button.parentElement!.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
 	};
+	const move = (button: HTMLButtonElement): void => {
+		const movement = new dom.window.MouseEvent("mousemove", { bubbles: true });
+		Object.defineProperty(movement, "movementX", { value: 1 });
+		button.dispatchEvent(movement);
+	};
 	const leave = (button: HTMLButtonElement): void => {
 		button.parentElement!.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
 	};
 
 	try {
 		enter(first);
+		first.dispatchEvent(new dom.window.MouseEvent("mousemove", { bubbles: true }));
+		assert.equal(first.getAttribute("aria-expanded"), "false");
+		move(first);
 		assert.equal(first.getAttribute("aria-expanded"), "true");
 
 		leave(first);
 		enter(second);
+		move(second);
 		assert.equal(first.getAttribute("aria-expanded"), "false");
 		assert.equal(second.getAttribute("aria-expanded"), "true");
 
 		leave(second);
 		enter(first);
+		move(first);
 		const nested = dom.window.document.querySelector<HTMLButtonElement>('.ash-context-view-menu:not([hidden]) [data-action-id="nested"] button')!;
 		enter(nested);
 		assert.equal(nested.getAttribute("aria-expanded"), "false");
@@ -386,6 +410,7 @@ test("Menu preserves submenu focus and closes after focus leaves or the parent s
 
 		trigger.parentElement!.dispatchEvent(new dom.window.MouseEvent("mouseleave"));
 		leaf.dispatchEvent(new dom.window.MouseEvent("mouseover", { bubbles: true }));
+		leaf.dispatchEvent(movement);
 		mock.timers.tick(749);
 		assert.equal(trigger.getAttribute("aria-expanded"), "true");
 		mock.timers.tick(1);

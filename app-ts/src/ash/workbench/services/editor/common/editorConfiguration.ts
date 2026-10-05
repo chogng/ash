@@ -8,10 +8,70 @@ import type { IDocumentDiffProviderOptions } from "../../../../editor/common/dif
 export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
 export type EditorTabsMode = "multiple" | "single" | "none";
 export type EditorLabelFormat = 'default' | 'short' | 'medium' | 'long';
+export type EditorTabSizing = 'fit' | 'shrink' | 'fixed';
 export type EditorTitleScrollbarSizing = 'default' | 'large';
 export type EditorTitleScrollbarVisibility = 'auto' | 'visible' | 'hidden';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+export const EditorTabSizingConfiguration = configurationRegistry.registerConfiguration<EditorTabSizing>({
+	key: 'workbench.editor.tabSizing',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['fit', 'shrink', 'fixed'] },
+	defaultValue: 'fit',
+	parse: value => {
+		if (value !== 'fit' && value !== 'shrink' && value !== 'fixed') {
+			throw new TypeError(localize('workbench.editor.tabSizing.invalid', 'Invalid editor tab sizing. Use fit, shrink, or fixed.'));
+		}
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.tabSizing.title', 'Workbench › Editor: Tab Sizing'); },
+		get description() { return localize('workbench.editor.tabSizing.description', 'Controls the width of editor tabs when multiple tabs are shown. Fit shows full labels; Shrink reduces widths when space is limited; Fixed gives tabs equal widths.'); },
+		valueType: 'select',
+		get options() { return [
+			{ value: 'fit' as const, label: localize('workbench.editor.tabSizing.fit', 'Fit') },
+			{ value: 'shrink' as const, label: localize('workbench.editor.tabSizing.shrink', 'Shrink') },
+			{ value: 'fixed' as const, label: localize('workbench.editor.tabSizing.fixed', 'Fixed') },
+		]; },
+	},
+});
+
+export const EditorTabSizingFixedMinWidthConfiguration = configurationRegistry.registerConfiguration<number>({
+	key: 'workbench.editor.tabSizingFixedMinWidth',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'number', minimum: 38 },
+	defaultValue: 50,
+	parse: value => {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 38) {
+			throw new TypeError(localize('workbench.editor.tabSizingFixedMinWidth.invalid', 'Minimum tab width must be a finite number of at least 38 pixels.'));
+		}
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.tabSizingFixedMinWidth.title', 'Workbench › Editor: Tab Sizing Fixed Min Width'); },
+		get description() { return localize('workbench.editor.tabSizingFixedMinWidth.description', 'Controls the minimum width in pixels of tabs when Tab Sizing is Fixed.'); },
+		valueType: 'number', minimum: 38, maximum: Number.MAX_VALUE,
+	},
+});
+
+export const EditorTabSizingFixedMaxWidthConfiguration = configurationRegistry.registerConfiguration<number>({
+	key: 'workbench.editor.tabSizingFixedMaxWidth',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'number', minimum: 38 },
+	defaultValue: 160,
+	parse: value => {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 38) {
+			throw new TypeError(localize('workbench.editor.tabSizingFixedMaxWidth.invalid', 'Maximum tab width must be a finite number of at least 38 pixels.'));
+		}
+		return value;
+	},
+	setting: {
+		get title() { return localize('workbench.editor.tabSizingFixedMaxWidth.title', 'Workbench › Editor: Tab Sizing Fixed Max Width'); },
+		get description() { return localize('workbench.editor.tabSizingFixedMaxWidth.description', 'Controls the maximum width in pixels of tabs when Tab Sizing is Fixed.'); },
+		valueType: 'number', minimum: 38, maximum: Number.MAX_VALUE,
+	},
+});
 
 export const EditorLabelFormatConfiguration = configurationRegistry.registerConfiguration<EditorLabelFormat>({
 	key: 'workbench.editor.labelFormat',

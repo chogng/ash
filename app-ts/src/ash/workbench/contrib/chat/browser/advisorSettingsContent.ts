@@ -42,6 +42,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 	private readonly enabledLabel: HTMLElement;
 	private readonly title: HTMLElement;
 	private menu: Menu | undefined;
+	private selectedMenuIndex = -1;
 	private models: readonly ModelCatalogEntry[] = [];
 	private savedAdvisor: AdvisorConfig | null = null;
 	private loaded = false;
@@ -79,7 +80,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		}));
 		this.advisor.button.setAttribute('aria-haspopup', 'menu');
 		this._register(this.advisor.onDidChangeVisibility(({ visible }) => {
-			if (visible) { this.menu?.focusFirst(); }
+			if (visible) { this.menu?.focus(this.selectedMenuIndex); }
 		}));
 		const enabledRow = h(document, 'div');
 		enabledRow.className = 'ash-advisor-settings-row';
@@ -216,7 +217,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 			run: () => this.saveAdvisor(this.savedAdvisor ? { ...this.savedAdvisor, enabled: false } : null),
 		};
 		const models = this.models.filter(entry => flagshipModels[entry.model.provider]?.includes(entry.model.model) && this.languageModels.isModelVisible(entry.model));
-		const actions: IAction[] = models.map(entry => ({
+		const modelActions: IAction[] = models.map(entry => ({
 			id: modelRefIdentity(entry.model), label: entry.displayName, tooltip: '', enabled: true,
 			checked: !!this.savedAdvisor?.enabled && modelRefIdentity(this.savedAdvisor.model) === modelRefIdentity(entry.model),
 			run: () => this.saveAdvisor({
@@ -225,8 +226,10 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 				reasoningEffort: this.savedAdvisor?.reasoningEffort && entry.supportedReasoningEfforts?.includes(this.savedAdvisor.reasoningEffort) ? this.savedAdvisor.reasoningEffort : undefined,
 			}),
 		}));
+		const actions = [disable, ...(modelActions.length ? [new Separator(), ...modelActions] : [])];
+		this.selectedMenuIndex = actions.findIndex(action => action.checked);
 		this.menu = this.menuDisposables.add(new Menu(h(this.domNode.ownerDocument, 'div'), {
-			actions: [disable, ...(actions.length ? [new Separator(), ...actions] : [])],
+			actions,
 			getCheckedActionsRepresentation: () => 'radio',
 			onDidSelect: () => this.advisor.hide(),
 			onDidRequestClose: () => this.advisor.hide(),

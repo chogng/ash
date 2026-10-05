@@ -72,6 +72,7 @@ export class ActionList<T> extends Disposable {
 	private readonly layoutRequested = this._register(new Emitter<void>());
 	public readonly onDidRequestLayout = this.layoutRequested.event;
 	private focusedEntry: IActionListItem<T> | undefined;
+	private visibleItems: readonly IActionListItem<T>[] = [];
 	private busy = false;
 
 	constructor(
@@ -210,6 +211,7 @@ export class ActionList<T> extends Disposable {
 			};
 		});
 		this.menuResources.clear();
+		this.visibleItems = visible;
 		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, {
 			actions,
 			className: 'ash-action-widget-menu',
@@ -226,7 +228,10 @@ export class ActionList<T> extends Disposable {
 			this.focusedEntry = row ? entries.get(row.dataset.actionId!) : undefined;
 			this.updatePreview();
 		}));
-		this.focusedEntry = previous && visible.includes(previous) && !previous.disabled ? previous : visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
+		this.focusedEntry = previous && visible.includes(previous) && !previous.disabled
+			? previous
+			: visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked)
+				?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
 		this.updatePreview();
 		const count = visible.filter(entry => entry.kind === ActionListItemKind.Action).length;
 		this.statusDomNode.textContent = '';
@@ -271,7 +276,9 @@ export class ActionList<T> extends Disposable {
 	}
 
 	public focus(): void {
-		this.menu?.focusFirst();
+		if (this.focusedEntry) {
+			this.menu?.focus(this.visibleItems.indexOf(this.focusedEntry));
+		}
 		if (!this.domNode.contains(getActiveElement(this.domNode.ownerDocument))) {
 			this.domNode.focus({ preventScroll: true });
 		}

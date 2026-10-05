@@ -194,8 +194,8 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		indicator.className = "ash-submenu-indicator";
 		appendIcon(Lxicon.chevronRight, indicator);
 		this.button.domNode.append(indicator);
-		this._register(addDisposableListener(container, "mouseenter", () => {
-			if (this.openImmediatelyOnHover) this.openFromPointer();
+		this._register(addDisposableListener(container, "mouseenter", (event) => {
+			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 		}));
 		this._register(addDisposableListener(container, "mousemove", (event) => {
 			const previous = this.lastPointerPosition;
@@ -323,6 +323,7 @@ export class Menu extends Disposable {
 	private readonly submenus: SubmenuMenuActionViewItem[] = [];
 	private readonly entries: MenuEntry[] = [];
 	private focusedEntry: MenuEntry | undefined;
+	private lastPointerPosition: { x: number; y: number } | undefined;
 
 	constructor(container: HTMLElement, options: MenuOptions) {
 		super();
@@ -334,6 +335,7 @@ export class Menu extends Disposable {
 			? `ash-menu ${options.className}`
 			: "ash-menu";
 		element.setAttribute("role", "menu");
+		element.tabIndex = -1;
 		container.append(element);
 
 		for (const action of options.actions) {
@@ -376,11 +378,21 @@ export class Menu extends Disposable {
 			this.setFocusedEntry(undefined);
 		}));
 		this._register(addDisposableListener(element, "mouseover", (event) => {
+			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+		}));
+		this._register(addDisposableListener(element, "mousemove", (event) => {
+			const previous = this.lastPointerPosition;
+			const moved = Boolean(event.movementX || event.movementY ||
+				(previous && (previous.x !== event.clientX || previous.y !== event.clientY)));
+			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+			// Showing a menu under a resting pointer must not select an action.
+			if (!moved) return;
 			const entry = this.findEntry(event.target);
 			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
 		}));
 		this._register(addDisposableListener(element, "mouseout", (event) => {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
+			this.lastPointerPosition = undefined;
 			this.setFocusedEntry(undefined);
 		}));
 		this._register(addDisposableListener(container, "scroll", (event) => {
@@ -437,6 +449,24 @@ export class Menu extends Disposable {
 			event.preventDefault();
 			event.stopPropagation();
 		}));
+	}
+
+	/** Menu focus and action focus are separate so opening need not highlight a row. */
+	public focus(selectFirst?: boolean): void;
+	public focus(index?: number): void;
+	public focus(target: boolean | number = true): void {
+		if (typeof target === "number") {
+			const entry = this.entries[target];
+			if (entry?.action.enabled) {
+				entry.item.focus();
+				return;
+			}
+		} else if (target) {
+			this.focusFirst();
+			return;
+		}
+		this.setFocusedEntry(undefined);
+		this.element.focus({ preventScroll: true });
 	}
 
 	focusFirst(): void {

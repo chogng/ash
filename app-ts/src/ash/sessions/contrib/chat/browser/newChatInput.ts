@@ -29,7 +29,9 @@ import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChat
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
-/** Sessions owns its composer layout and editor policy while sharing input operations. */
+/** Sessions owns its composer layout and editor policy while sharing input operations.
+ * 
+ */
 export class NewChatInputWidget extends ChatInputPart {
 	private readonly heading: HTMLHeadingElement;
 	private submittedMessage = false;

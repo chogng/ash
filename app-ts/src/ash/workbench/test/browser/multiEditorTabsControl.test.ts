@@ -4,7 +4,7 @@ import '../../../editor/test/browser/testEditorDom.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
-import { EditorShowIconsConfiguration, EditorLabelFormatConfiguration } from '../../services/editor/common/editorConfiguration.js';
+import { EditorShowIconsConfiguration, EditorLabelFormatConfiguration, EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration } from '../../services/editor/common/editorConfiguration.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
@@ -48,6 +48,15 @@ test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 		assert.equal(control.domNode.getAttribute('aria-label'), '编辑器面包屑');
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorShowIconsConfiguration)?.setting;
 		assert.deepEqual([setting?.title, setting?.description], ['工作台 › 编辑器：显示图标', '在编辑器标签中显示文件图标。']);
+		const tabStyle = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)?.setting;
+		assert.equal(tabStyle?.title, '编辑器标签样式');
+		assert.ok(tabStyle?.valueType === 'select');
+		assert.deepEqual(tabStyle.options.map(option => option.label), ['连接式', '独立圆角']);
+		const sizing = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorTabSizingConfiguration)!.setting!;
+		assert.equal(sizing.title, '工作台 › 编辑器：标签宽度');
+		assert.ok(sizing.valueType === 'select');
+		assert.deepEqual(sizing.options.map(option => option.label), ['完整显示', '空间不足时缩小', '等宽']);
+		assert.deepEqual([EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration].map(key => Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(key)!.setting!.title), ['工作台 › 编辑器：等宽标签最小宽度', '工作台 › 编辑器：等宽标签最大宽度']);
 		assert.equal(control.domNode.querySelector('.ash-breadcrumbs-widget') !== null, true);
 	} finally {
 		resetNlsResolver();
@@ -279,22 +288,39 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 
 	assert.equal(control.domNode.querySelectorAll(".ash-tab").length, 2);
 	const firstTab = control.domNode.querySelector('.ash-tab');
+	const ordinaryRow = control.domNode.querySelector('.ash-ordinary-editor-tabs-row')!;
+	const stickyRow = control.domNode.querySelector('.ash-sticky-editor-tabs-row')!;
+	const close = firstTab!.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
+	close.focus();
+	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);
+	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'pill');
+	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), false);
+	assert.equal(control.domNode.querySelector('.ash-tab'), firstTab);
+	assert.equal(dom.window.document.activeElement, close);
 	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-inset'), true);
 	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
 	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-flush'), true);
 	assert.equal(control.domNode.querySelector('.ash-tab'), firstTab);
 	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'modern');
 	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-inset'), true);
+	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), false);
+	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'connected');
+	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);
 	assert.match(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /folder.*second/);
 	assert.equal(control.height, 57);
 	group.stick(first);
 	control.setEditors([{ ...descriptor(first), sticky: true }, descriptor(second)], second);
 	assert.equal(control.height, 92);
 	assert.equal(control.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-tab-label')?.textContent, 'folder/first');
+	assert.deepEqual([stickyRow, ordinaryRow].map(row => row.classList.contains('ash-connected-editor-tabs')), [false, true]);
+	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'pill');
+	assert.deepEqual([stickyRow, ordinaryRow].map(row => row.classList.contains('ash-connected-editor-tabs')), [false, false]);
+	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'connected');
 	group.unstick(first);
 	control.setEditors([descriptor(first), descriptor(second)], second);
 	assert.equal(control.height, 57);
 	assert.equal((control.domNode.querySelector('.ash-sticky-editor-tabs-row') as HTMLElement).hidden, true);
+	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);
 
 	await configuration.updateValue(EditorTabsModeConfiguration, "single");
 	assert.equal(control.height, 57);
@@ -310,6 +336,35 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	control.dispose();
 	configuration.dispose();
 	dom.window.close();
+});
+
+test('editor tab width changes reach both rows and preserve focused actions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = new InMemoryConfigurationService();
+		using services = createTestEditorServices(configuration);
+		const group = new EditorGroupModel();
+		const first = input('first');
+		const second = input('second');
+		group.openEditor(first);
+		group.openEditor(second);
+		group.stick(first);
+		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
+		control.setEditors([{ ...descriptor(first), sticky: true }, descriptor(second)], second);
+		const lists = [...control.domNode.querySelectorAll<HTMLElement>('.ash-tab-list')];
+		const action = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
+		action.focus();
+		await configuration.updateValue(EditorTabSizingFixedMinWidthConfiguration, 90);
+		await configuration.updateValue(EditorTabSizingFixedMaxWidthConfiguration, 220);
+		for (const mode of ['fixed', 'shrink', 'fit']) {
+			await configuration.updateValue(EditorTabSizingConfiguration, mode);
+			assert.equal(control.domNode.querySelector('.ash-tab-primary-action button'), action);
+			assert.equal(dom.window.document.activeElement, action);
+			assert.deepEqual(lists.map(list => ({ mode: list.classList.contains(`ash-tab-list-sizing-${mode}`), min: list.style.getPropertyValue('--ash-tab-list-fixed-min-width'), max: list.style.getPropertyValue('--ash-tab-list-fixed-max-width') })), lists.map(() => ({ mode: true, min: mode === 'fixed' ? '90px' : '', max: mode === 'fixed' ? '220px' : '' })));
+		}
+	} finally {
+		dom.window.close();
+	}
 });
 
 test("EditorTitleControl follows nested document symbols and opens outline selection", async () => {

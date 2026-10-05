@@ -138,8 +138,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 	get items(): readonly TNode[] { return this.list.items; }
 	public updateOptions(options: Pick<AbstractTreeOptions<T, TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
-		if (options.smoothScrolling !== undefined) { this.list.updateOptions({ smoothScrolling: options.smoothScrolling }); }
 		validateIndent(options.indent);
+		this.list.updateOptions(options);
 		if (options.indent !== undefined) this.element.style.setProperty("--ash-tree-indent", `${options.indent}px`);
 		if (options.indentGuides !== undefined) {
 			this.element.classList.remove("ash-tree-indent-guides-none", "ash-tree-indent-guides-onHover", "ash-tree-indent-guides-always");

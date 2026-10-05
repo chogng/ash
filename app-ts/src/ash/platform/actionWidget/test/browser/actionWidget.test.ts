@@ -14,7 +14,7 @@ import { ServiceCollection } from '../../../instantiation/common/serviceCollecti
 import { getSingletonServiceDescriptors } from '../../../instantiation/common/extensions.js';
 import { getIconDefinition } from '../../../theme/common/iconRegistry.js';
 import { IActionWidgetService } from '../../browser/actionWidget.js';
-import { ActionListItemKind } from '../../browser/actionList.js';
+import { ActionList, ActionListItemKind } from '../../browser/actionList.js';
 import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 
@@ -59,6 +59,33 @@ test('action choices preserve icons, radio states and separators when dispatchin
 		assert.deepEqual(selected, [2]);
 		service.hide();
 		assert.equal(dom.window.document.activeElement, source);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('action lists focus the current choice, preserve navigation on refresh and preselect eligible candidates', () => {
+	const dom = new JSDOM('<body></body>');
+	try {
+		const document = dom.window.document;
+		const items = [
+			{ kind: ActionListItemKind.Action, item: 0, label: 'Unavailable', disabled: true, checked: true },
+			{ kind: ActionListItemKind.Header, label: 'Modes' },
+			{ kind: ActionListItemKind.Action, item: 1, label: 'Agent', checked: false },
+			{ kind: ActionListItemKind.Separator, label: '' },
+			{ kind: ActionListItemKind.Action, item: 2, label: 'Plan', checked: true },
+		];
+		using list = new ActionList('choices', items, { onSelect: () => {}, onHide: () => {} }, document.body, undefined, false, {});
+		list.focus();
+		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Plan');
+		list.domNode.querySelector<HTMLButtonElement>('[aria-label="Agent"]')!.focus();
+		list.updateItems(items);
+		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Agent');
+		list.updateItems([
+			{ kind: ActionListItemKind.Action, item: 0, label: 'Unavailable', disabled: true },
+			{ kind: ActionListItemKind.Action, item: 1, label: 'Apply edit' },
+		]);
+		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Apply edit');
 	} finally {
 		dom.window.close();
 	}

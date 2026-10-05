@@ -314,6 +314,8 @@
 		"--ash-sessions-titlebar-leading-width",
 		"--ash-shadow-lg",
 		"--ash-split-view-separator-border",
+		"--ash-tab-list-fixed-max-width",
+		"--ash-tab-list-fixed-min-width",
 		"--ash-tab-list-inactive-background",
 		"--ash-terminal-command-gutter-width",
 		"--ash-z-index-context-view",

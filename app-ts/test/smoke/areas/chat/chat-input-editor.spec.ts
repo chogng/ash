@@ -101,12 +101,14 @@ test('Chat can switch from Plan back to Agent without selecting a different Agen
 	await picker.press('ArrowDown');
 	menu = page.locator('.ash-chat-input-mode-menu');
 	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
 	const agent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
 	await expect(agent).toBeEnabled();
 	await agent.click();
 	await expect(picker).toHaveText('Agent');
 	await picker.press('ArrowDown');
 	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toBeFocused();
 	await menu.press('Escape');
 	await expect(picker).toBeFocused();
 });
@@ -125,6 +127,7 @@ test('Chat mode picker exposes all five modes with one checked selection', async
 		await expect(picker).toHaveText(name);
 		await picker.press('ArrowDown');
 		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
 		// Agent choices are a separate radio group; the five mode actions have exactly one choice.
 		await expect(menu.getByRole('menuitemradio', { name: /^(Agent|Plan|Debug|Multitask|Ask)$/ }).and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
 		await menu.press('Escape');
