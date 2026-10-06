@@ -2,6 +2,61 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('panel commands focus the retained view and restore editor geometry after maximizing', async ({ workbench }) => {
+	const page = workbench.page;
+	const panel = page.locator('[data-part="panel"]');
+	const editor = page.locator('[data-part="editor"]');
+	const output = page.locator('[data-view-id="ash.output"]');
+	await workbench.quickaccess.runCommand('workbench.action.output.show');
+	const retained = await output.elementHandle();
+	const height = await panel.evaluate(element => element.getBoundingClientRect().height);
+	try {
+		await panel.getByRole('button', { name: 'Close Panel', exact: true }).click();
+		await expect(panel).toBeHidden();
+		await workbench.quickaccess.runCommand('workbench.action.focusPanel');
+		await expect(output).toBeVisible();
+		await expect.poll(() => output.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+		expect(await output.evaluate((element, previous) => element === previous, retained)).toBe(true);
+		await workbench.quickaccess.runCommand('workbench.action.toggleMaximizedPanel');
+		await expect(editor).toBeHidden();
+		await expect(panel).toBeVisible();
+		await workbench.quickaccess.runCommand('workbench.action.closePanel');
+		await expect(editor).toBeVisible();
+		await expect(panel).toBeHidden();
+		await workbench.quickaccess.runCommand('workbench.action.focusPanel');
+		await expect(editor).toBeHidden();
+		await expect.poll(() => output.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+		await workbench.quickaccess.runCommand('workbench.action.toggleMaximizedPanel');
+		await expect(editor).toBeVisible();
+		await expect.poll(() => panel.evaluate(element => element.getBoundingClientRect().height)).toBeCloseTo(height, 0);
+		await expect.poll(() => output.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+		for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			const picker = page.locator('.ash-quick-pick');
+			await picker.getByRole('combobox').fill(theme);
+			await picker.getByRole('combobox').press('Enter');
+			await expect(picker).toHaveCount(0);
+			const tab = panel.getByRole('tab', { name: 'Output', exact: true });
+			await tab.focus();
+			await expect(tab).toBeFocused();
+			await expect.poll(() => panel.evaluate(element => {
+				const title = element.querySelector<HTMLElement>('.ash-panel-title-control')!;
+				const bar = title.querySelector<HTMLElement>('.ash-composite-bar')!;
+				const actions = title.querySelector<HTMLElement>('.ash-pane-composite-title-actions')!;
+				const style = getComputedStyle(title);
+				return {
+					display: style.display,
+					border: style.borderBottomStyle,
+					fits: bar.getBoundingClientRect().right <= actions.getBoundingClientRect().left + 1,
+					height: bar.getBoundingClientRect().height > 0,
+				};
+			})).toEqual({ display: 'flex', border: 'solid', fits: true, height: true });
+		}
+	} finally {
+		await retained?.dispose();
+	}
+});
+
 test('view commands reveal retained containers and focus the requested view', async ({ workbench }) => {
 	const page = workbench.page;
 	const output = page.locator('[data-view-id="ash.output"]');

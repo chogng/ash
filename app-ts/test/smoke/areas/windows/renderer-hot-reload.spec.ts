@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import type * as Stanza from '../../../../src/ash/editor/editor.main.js';
+import { createServer } from 'vite';
 
 declare global {
 	var stanza: typeof Stanza;
@@ -136,5 +137,72 @@ test('development Renderer replaces contribution initialization twice while reta
 		if (current !== written && current !== original) {
 			throw new Error(`Concurrent edit detected; preserve ${sourceFile}`);
 		}
+	}
+});
+
+test('development Sessions applies successive CSS saves without reloading its page', async ({ playwright }, testInfo) => {
+	test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'Development CSS hot reload runs in browser and Electron UI projects.');
+	test.setTimeout(120_000);
+	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
+	const sourceFile = resolve(desktopDirectory, 'src/ash/sessions/browser/parts/activitybar/media/activityBarPart.css');
+	const original = await readFile(sourceFile, 'utf8');
+	let written = original;
+	const isBrowser = testInfo.project.name === 'browser-ui';
+	const profile = await mkdtemp(join(tmpdir(), 'ash-css-hmr-'));
+	let electron: ElectronApplication | undefined;
+	let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | undefined;
+	const server = await createServer({
+		configFile: resolve(desktopDirectory, '../build/app_ts/vite/vite.config.ts'),
+		mode: isBrowser ? 'web' : 'development',
+		server: { port: 5197, strictPort: true, warmup: { clientFiles: [] } },
+	});
+	try {
+		await server.listen();
+		let page: Page;
+		if (isBrowser) {
+			browser = await playwright.chromium.launch();
+			page = await browser.newPage();
+			await page.goto('http://127.0.0.1:5197/browser/sessions/sessions-code.html');
+		} else {
+			const configuration = resolveElectronConfiguration({ desktopDirectory, appServerMode: 'disabled', userDataDirectory: profile });
+			electron = await _electron.launch({
+				args: [...configuration.args], cwd: configuration.cwd, executablePath: configuration.executablePath,
+				env: { ...configuration.env, ASH_RENDERER_URL: 'http://127.0.0.1:5197', ASH_DEV_AGENTS_WINDOW: '1' },
+			});
+			page = await electron.firstWindow();
+		}
+		const library = page.getByRole('button', { name: 'Library', exact: true });
+		await library.click();
+		await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+		const icon = library.locator('svg');
+		await expect(icon).toHaveCSS('width', '24px');
+		await page.evaluate(() => { document.body.dataset.cssHotReloadRetained = 'true'; });
+		for (const size of ['18px', '20px']) {
+			written = `${original}\n.ash-sessions-activity-content { --ash-sessions-activity-bar-icon-size: ${size}; }\n`;
+			if (size === '18px') {
+				const temporary = `${sourceFile}.ash-hot-reload`;
+				await writeFile(temporary, written);
+				await rename(temporary, sourceFile);
+			} else {
+				await writeFile(sourceFile, `${original}\n.ash-sessions-activity-content { --ash-sessions-activity-bar-icon-size: 19px; }\n`);
+				await writeFile(sourceFile, written);
+			}
+			await expect(icon).toHaveCSS('width', size);
+			await expect(page.locator('body')).toHaveAttribute('data-css-hot-reload-retained', 'true');
+			await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+		}
+	} finally {
+		const current = await readFile(sourceFile, 'utf8');
+		if (current === written) await writeFile(sourceFile, original);
+		if (electron) {
+			await electron.evaluate(({ BrowserWindow }) => {
+				for (const window of BrowserWindow.getAllWindows()) window.destroy();
+			});
+			await electron.close();
+		}
+		await browser?.close();
+		await server.close();
+		await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		if (current !== written && current !== original) throw new Error(`Concurrent edit detected; preserve ${sourceFile}`);
 	}
 });

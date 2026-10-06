@@ -1,32 +1,32 @@
-import "./panelpart.css";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { IStorageService } from "../../../../platform/storage/common/storage.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import "./media/panelpart.css";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import { ViewContainerLocation } from "../../../common/views.js";
-import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import type { IViewDescriptorService } from "../../../common/views.js";
-import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
-
-/** Construction inputs for the bottom Panel Composite host. */
-export interface PanelPartOptions {
-	readonly viewDescriptorService: IViewDescriptorService;
-	readonly contextKeyService?: IContextKeyService;
-	readonly storageService?: IStorageService;
-	readonly localizationService?: ILocalizationService;
-	readonly contextMenuProvider?: IContextMenuProvider;
-	readonly titleActions?: PaneCompositeTitleActions;
-}
+import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import { IViewDescriptorService } from "../../../common/views.js";
+import { PaneCompositePart } from "../paneCompositePart.js";
 
 /** Bottom tool region with Panel tabs and a contextual title toolbar. */
 export class PanelPart extends PaneCompositePart {
-	override get minimumHeight(): number { return 80; }
+	override get minimumWidth(): number { return 300; }
+	override get minimumHeight(): number { return 77; }
 
-	constructor(container: HTMLElement, options: PanelPartOptions) {
+	constructor(
+		container: HTMLElement,
+		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IStorageService storageService: IStorageService,
+		@ILocalizationService localizationService: ILocalizationService,
+		@IMenuService menuService: IMenuService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+	) {
 		super(container, {
-			viewDescriptorService: options.viewDescriptorService,
-			contextKeyService: options.contextKeyService,
-			storageService: options.storageService,
-			localizationService: options.localizationService,
+			viewDescriptorService,
+			contextKeyService,
+			storageService,
+			localizationService,
 			id: "panel",
 			location: ViewContainerLocation.Panel,
 			ariaLabel: "Panel",
@@ -34,11 +34,10 @@ export class PanelPart extends PaneCompositePart {
 			viewsAriaLabel: "Panel views",
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "panelViews" },
 			compositeBarPresentation: "label",
-			compositeBarContextMenuProvider: options.contextMenuProvider,
-			titleActions: options.titleActions,
+			compositeBarContextMenuProvider: contextMenuService,
+			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.PanelTitle },
 		});
 		this.titleDomNode.classList.add("ash-panel-title-control");
-		this.titleActionsSlotDomNode.classList.add("ash-panel-title-actions");
 	}
 
 	override showComposite(compositeId: string): void {

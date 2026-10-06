@@ -301,11 +301,16 @@ export class WorkbenchLayout
 	}
 
 	showParts(partIds: readonly WorkbenchPartId[]): void {
+		const reopenMaximizedPanel = partIds.includes('panel') && !partIds.includes('editor') &&
+			!this.isPartVisible('panel') && this.stateModel.panelWasLastMaximized;
 		const panelHeight = partIds.includes('editor') ? this.panelHeightBeforeMaximize : undefined;
 		this.updatePartsVisibility(partIds, true);
 		if (panelHeight !== undefined) {
 			this.resizePart('panel', new Dimension(this.getPartSize('panel').width, panelHeight));
 			this.panelHeightBeforeMaximize = undefined;
+		}
+		if (reopenMaximizedPanel) {
+			this.hidePart('editor');
 		}
 	}
 
@@ -314,8 +319,12 @@ export class WorkbenchLayout
 	}
 
 	hideParts(partIds: readonly WorkbenchPartId[]): void {
-		if (partIds.includes('panel') && this.isPanelMaximized()) {
-			this.toggleMaximizedPanel();
+		if (partIds.includes('panel') && this.isPartVisible('panel')) {
+			// Capture the closing state before restoring the editor and the ordinary Panel height.
+			this.stateModel.panelWasLastMaximized = this.isPanelMaximized();
+			if (this.isPanelMaximized()) {
+				this.showPart('editor');
+			}
 		}
 		if (partIds.includes('editor') && this.isPartVisible('editor') && this.isPartVisible('panel')) {
 			this.panelHeightBeforeMaximize = this.getPartSize('panel').height;
@@ -697,6 +706,15 @@ class WorkbenchLayoutStateModel {
 		private readonly defaultLayout: WorkbenchDefaultLayout | undefined,
 	) { }
 
+	get panelWasLastMaximized(): boolean {
+		const key = WorkbenchLayoutStorageKeys.PANEL_WAS_LAST_MAXIMIZED;
+		return this.storageService.getBoolean(key.key, key.scope, false);
+	}
+
+	set panelWasLastMaximized(maximized: boolean) {
+		storeLayoutValue(this.storageService, WorkbenchLayoutStorageKeys.PANEL_WAS_LAST_MAXIMIZED, maximized);
+	}
+
 	get state(): WorkbenchLayoutState {
 		const storage = this.storageService;
 		const fallbackParts = {
@@ -885,6 +903,11 @@ const WorkbenchLayoutStorageKeys = {
 	},
 	PANEL_VISIBLE: {
 		key: "workbench.layout.panel.visible",
+		scope: StorageScope.WORKSPACE,
+		target: StorageTarget.MACHINE,
+	},
+	PANEL_WAS_LAST_MAXIMIZED: {
+		key: 'workbench.layout.panel.wasLastMaximized',
 		scope: StorageScope.WORKSPACE,
 		target: StorageTarget.MACHINE,
 	},

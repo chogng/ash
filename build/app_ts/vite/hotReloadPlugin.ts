@@ -39,6 +39,10 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 				watch: { awaitWriteFinish: { stabilityThreshold: 75, pollInterval: 10 } },
 			},
 		}),
+		configureServer(server) {
+			// Entry roots cover only HTML hosts; watch shared source before first-load transforms can race with a save.
+			server.watcher.add(resolveHostPath(resolve(desktopRoot, "src")));
+		},
 		transformIndexHtml: {
 			order: "pre",
 			handler: () => [{ tag: "script", attrs: { type: "module", src: viteFileUrl(setupPath) }, injectTo: "head-prepend" }],

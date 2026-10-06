@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { resolve, join, dirname } from "node:path";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import { normalizePath } from "vite";
+import { createServer, normalizePath } from "vite";
 import { analyzeHotReloadModule, unsafeHotReloadChangeReason } from "./hotReloadAnalysis.ts";
 import { hotReloadPlugin, type AshHotReloadPlugin } from "./hotReloadPlugin.ts";
 
@@ -115,6 +119,65 @@ test("Vite hot reload lets helper-driven modules reach the runtime handler", asy
 	});
 	assert.equal(result, undefined);
 	assert.deepEqual(messages, []);
+});
+
+test("Vite watches renderer CSS before its first transform and serves a concurrent save", { timeout: 10_000 }, async () => {
+	const fixture = await mkdtemp(join(tmpdir(), "ash-css-hmr-"));
+	const root = join(fixture, "src/ash/code");
+	const styles = join(fixture, "src/ash/sessions/browser");
+	const source = join(styles, "activity.css");
+	const original = ".activity { width: 24px; }";
+	const updated = ".activity { width: 16px; }";
+	await mkdir(root, { recursive: true });
+	await mkdir(styles, { recursive: true });
+	await writeFile(source, original);
+	let saved = false;
+	const events: unknown[] = [];
+	const server = await createServer({
+		configFile: false,
+		root,
+		logLevel: "silent",
+		optimizeDeps: { noDiscovery: true },
+		server: { host: "127.0.0.1", port: 0, fs: { allow: [fixture] } },
+		plugins: [hotReloadPlugin({ desktopRoot: fixture }), {
+			name: "css-save-during-first-transform",
+			configureServer(server) {
+				server.watcher.on("all", (event, file) => events.push({ event, file }));
+			},
+			transform: {
+				order: "pre",
+				handler(code, id) {
+					if (id !== normalizePath(source) || saved) return;
+					assert.equal(code, original);
+					saved = true;
+					// Model a save between reading the CSS and caching its first transform.
+					writeFileSync(source, updated);
+				},
+			},
+		}],
+	});
+	try {
+		await server.listen();
+		const watchDeadline = Date.now() + 2_000;
+		while (!server.watcher.getWatched()[styles]?.includes("activity.css") && Date.now() < watchDeadline) {
+			await delay(20);
+		}
+		assert.ok(server.watcher.getWatched()[styles]?.includes("activity.css"), "Renderer CSS must be watched before a client loads it");
+		const url = `/@fs/${normalizePath(source)}`;
+		await server.environments.client.transformRequest(url);
+		let served = "";
+		const deadline = Date.now() + 2_000;
+		do {
+			served = (await server.environments.client.transformRequest(url))!.code;
+			if (served.includes(updated)) break;
+			await delay(20);
+		} while (Date.now() < deadline);
+		assert.deepEqual({ disk: await readFile(source, "utf8"), servesUpdated: served.includes(updated) }, { disk: updated, servesUpdated: true }, JSON.stringify({ events, watched: server.watcher.getWatched() }));
+	} finally {
+		await server.close();
+		assert.equal(dirname(fixture), tmpdir());
+		await rm(fixture, { recursive: true, force: true });
+	}
 });
 
 function transform(plugin: AshHotReloadPlugin, code: string, id: string): string | undefined {

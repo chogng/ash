@@ -30,6 +30,15 @@ suite('Workbench localization', () => {
 	setup(() => initializeTestLocalization('en'));
 	teardown(() => resetNlsResolver());
 
+	test('Panel commands and navigation help use the selected Chinese catalog', () => {
+		initializeTestLocalization('zh-CN');
+		assert.deepEqual([
+			commandActionLabel(localize2({ bundle: 'ash.actions', key: 'togglePanelVisibility' }, 'Toggle Panel Visibility')),
+			commandActionLabel(localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel')),
+		], ['切换面板显示', '将焦点移入面板']);
+		assert.match(localize('accessibility.editorPanel', ''), /将焦点移入面板[\s\S]*恢复编辑器区域/u);
+	});
+
 	test('Code session layout errors and navigation help use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
 		assert.deepEqual([

@@ -7,25 +7,9 @@
 }
 
 .ash-panel-title-control {
-	display: flex;
-	min-width: 0;
-	height: var(--ash-pane-title-height);
-	flex: 0 0 var(--ash-pane-title-height);
 	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
-.ash-panel-title-control > .ash-composite-bar {
-	min-width: 0;
-	height: 100%;
-	flex: 1 1 auto;
-}
-.ash-panel-title-actions {
-	display: flex;
-	height: 100%;
-	flex: 0 0 auto;
-	align-items: center;
-	margin-left: auto;
-	padding: 0 4px;
-}
+
 .ash-workbench-panel > .ash-composite-content {
 	overflow: hidden;
 }

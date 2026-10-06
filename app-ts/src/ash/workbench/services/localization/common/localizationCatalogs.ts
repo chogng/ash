@@ -29,6 +29,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"accessibility.editorEditable": "You are in an editable text editor.",
 				"accessibility.editorMode": "<keybinding:editor.action.toggleScreenReaderAccessibilityMode> toggles screen reader optimization.",
 				"accessibility.editorNavigation": "In reference Peek, arrow keys move between results, F4 and Shift+F4 cycle results, and F6 switches focus between the results and preview editor. Enter opens a result; F12 then cycles the saved results and Escape ends the cycle. Hierarchy trees use arrow keys to move and expand; the direction buttons choose callers, callees, supertypes or subtypes. Escape closes Peek.",
+				"accessibility.editorPanel": "Run Focus into Panel from the Command Palette to open the last active panel and move focus into it. Hide Panel closes it; Toggle Panel Visibility shows or hides it. Maximize Panel expands it, and Restore Editor Area restores the editor.",
 				"accessibility.editorRead": "Use arrow keys to read text, Shift with arrow keys to select, and Ctrl+C or Command+C to copy. <keybinding:actions.find> opens Find.",
 				"accessibility.editorReadOnly": "You are in a read-only text editor.",
 				"accessibility.editorScreenReaderOff": "Screen reader optimization is disabled.",
@@ -3144,6 +3145,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 			},
 			"ash.actions": {
 				"closePanel": "Close Panel",
+				"focusPanel": "Focus into Panel",
 				"hidePanel": "Hide Panel",
 				"hidePrimarySidebar": "Hide Primary Side Bar",
 				"hideSecondarySidebar": "Hide Secondary Side Bar",
@@ -3154,7 +3156,8 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"restoreEditorArea": "Restore Editor Area",
 				"showPanel": "Show Panel",
 				"showPrimarySidebar": "Show Primary Side Bar",
-				"showSecondarySidebar": "Show Secondary Side Bar"
+				"showSecondarySidebar": "Show Secondary Side Bar",
+				"togglePanelVisibility": "Toggle Panel Visibility"
 			},
 			"ash.marketplace": {
 				"accessibilityHelp": "Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. Open VSX editor extensions load supported declarative contributions. Use Manage Marketplace extension execution in the command palette to enable and authorize JavaScript separately on macOS. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help. Use the command palette to Install extension from workspace and Manage local extensions. Installing a local SDK package does not enable it or grant permissions.",
@@ -3620,6 +3623,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"accessibility.editorEditable": "当前是可编辑的文本编辑器。",
 				"accessibility.editorMode": "<keybinding:editor.action.toggleScreenReaderAccessibilityMode> 切换屏幕阅读器优化。",
 				"accessibility.editorNavigation": "在引用速览中，用方向键移动结果，F4 和 Shift+F4 循环结果，F6 在结果列表和预览编辑器之间切换焦点。按 Enter 打开结果后，F12 循环已保存的结果，Escape 结束循环。层级树用方向键移动和展开，方向按钮选择调用者、被调用者、父类型或子类型。Escape 关闭速览。",
+				"accessibility.editorPanel": "在命令面板中运行“将焦点移入面板”，打开上次使用的面板并移入焦点。“隐藏面板”关闭面板；“切换面板显示”切换显示状态。“最大化面板”展开面板，“恢复编辑器区域”恢复编辑器。",
 				"accessibility.editorRead": "用方向键阅读文本，按住 Shift 并使用方向键选择文本，按 Ctrl+C 或 Command+C 复制。<keybinding:actions.find> 打开查找。",
 				"accessibility.editorReadOnly": "当前是只读文本编辑器。",
 				"accessibility.editorScreenReaderOff": "已关闭屏幕阅读器优化。",
@@ -6735,6 +6739,7 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 			},
 			"ash.actions": {
 				"closePanel": "关闭面板",
+				"focusPanel": "将焦点移入面板",
 				"hidePanel": "隐藏面板",
 				"hidePrimarySidebar": "隐藏主侧栏",
 				"hideSecondarySidebar": "隐藏辅助侧栏",
@@ -6745,7 +6750,8 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"restoreEditorArea": "恢复编辑器区域",
 				"showPanel": "显示面板",
 				"showPrimarySidebar": "显示主侧栏",
-				"showSecondarySidebar": "显示辅助侧栏"
+				"showSecondarySidebar": "显示辅助侧栏",
+				"togglePanelVisibility": "切换面板显示"
 			},
 			"ash.marketplace": {
 				"accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。安装 Open VSX 编辑器扩展时加载受支持的声明式贡献，脚本执行需要另外启用和授权。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。 在命令面板中使用“从工作区安装扩展”和“管理本地扩展”；安装 SDK 扩展包后，需要分别启用和授权。 在 macOS 上，可通过命令面板的“管理市场扩展执行”单独启用并授权市场扩展脚本。",

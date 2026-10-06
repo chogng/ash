@@ -12,17 +12,16 @@ import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
+import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js';
 
-const canNavigateBack = new RawContextKey<boolean>('sessions.canNavigateBack', false);
-const canNavigateForward = new RawContextKey<boolean>('sessions.canNavigateForward', false);
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
 export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sessions: ISessionsService, contextKeys: IContextKeyService): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
-	const backEnabled = canNavigateBack.bindTo(contextKeys);
-	const forwardEnabled = canNavigateForward.bindTo(contextKeys);
+	const backEnabled = CanGoBackContext.bindTo(contextKeys);
+	const forwardEnabled = CanGoForwardContext.bindTo(contextKeys);
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const updateContext = (): void => contextKeys.bufferChangeEvents(() => {
@@ -106,7 +105,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 					id: 'ash.sessions.back',
 					title: localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'),
 					icon: Lxicon.arrowLeft,
-					precondition: canNavigateBack.isEqualTo(true),
+					precondition: CanGoBackContext.isEqualTo(true),
 				},
 				group: 'navigation',
 				order: 1,
@@ -119,7 +118,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 					id: 'ash.sessions.forward',
 					title: localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'),
 					icon: Lxicon.arrowRight,
-					precondition: canNavigateForward.isEqualTo(true),
+					precondition: CanGoForwardContext.isEqualTo(true),
 				},
 				group: 'navigation',
 				order: 2,

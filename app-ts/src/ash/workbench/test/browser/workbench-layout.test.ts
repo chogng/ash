@@ -6,7 +6,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../base/common/actions.js";
-import { Emitter } from "../../../base/common/event.js";
+import { Emitter, Event as BaseEvent } from "../../../base/common/event.js";
 import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/browser/parts/views/viewPane.js";
 import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
@@ -35,7 +35,7 @@ const { Lxicon } = await import("../../../base/common/lxicons.js");
 const { IStorageService, StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { WorkbenchState } = await import("../../../platform/workspace/common/workspace.js");
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
-const { MenuId } = await import(
+const { MenuId, IMenuService } = await import(
 	"../../../platform/actions/common/actions.js"
 );
 const { MenuService } = await import(
@@ -67,6 +67,10 @@ const { ActivitybarPart } = await import(
 const { PanelPart } = await import(
 	"../../../workbench/browser/parts/panel/panelPart.js"
 );
+const { IContextMenuService } = await import('../../../platform/contextview/browser/contextView.js');
+const { IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
+const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
+const { ILocalizationService: PanelLocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
 const { CompositeBar } = await import("../../../workbench/browser/parts/compositeBar.js");
 const { AuxiliarybarPart } = await import(
 	"../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js"
@@ -89,12 +93,11 @@ const {
 } = await import("../../../workbench/common/views.js");
 const {
 	ToggleAuxiliaryBarCommandId,
-	ToggleMaximizedPanelCommandId,
-	TogglePanelCommandId,
 	ToggleSideBarCommandId,
 } = await import(
 	"../../../workbench/browser/parts/titlebar/titlebarActions.js"
 );
+const { TogglePanelAction } = await import("../../../workbench/browser/parts/panel/panelActions.js");
 const { CommandService } = await import(
 	"../../../workbench/services/commands/common/commandService.js"
 );
@@ -566,7 +569,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 	harness.layout.layout(new Dimension(1_200, 800));
 	harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 180));
 
-	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	await harness.configuration.updateValue(WorkbenchConfiguration.sideBarLocation, 'right');
 	await harness.configuration.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.HIDDEN);
 	assert.deepEqual({
@@ -576,14 +579,16 @@ test('maximized Panel survives configuration changes and restores its saved heig
 		savedPanel: harness.layout.state.panel,
 	}, { maximized: true, editorVisible: false, contextMaximized: true, savedPanel: { height: 180, visible: true } });
 
-	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	assert.equal(harness.layout.getPartSize('panel').height, 180);
 	assert.equal(contextKeys.getValue('panelMaximized'), false);
-	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	// ViewsService and other callers close Parts directly, without going through the titlebar command.
 	harness.layout.hidePart('panel');
 	assert.equal(harness.layout.isPartVisible('editor'), true);
 	harness.layout.showPart('panel');
+	assert.equal(harness.layout.isPanelMaximized(), true);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	assert.equal(harness.layout.getPartSize('panel').height, 180);
 	harness.layout.hidePart('editor');
 	harness.layout.showPart('editor');
@@ -594,6 +599,45 @@ test('maximized Panel survives configuration changes and restores its saved heig
 	assert.equal(harness.layout.isPartVisible('editor'), true);
 	disposables.dispose();
 	dom.window.close();
+});
+
+test('Panel reopening remembers its closing state across layout recreation and keeps workspace state separate', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-panel.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'first', backend: dom.window.localStorage, flushInterval: 0 });
+	try {
+		const first = createLayoutHarness(dom.window.document, { storageService: storage, defaultLayout: { parts: { panel: true } } });
+		first.layout.layout(new Dimension(1_200, 800));
+		first.layout.resizePart('panel', new Dimension(first.layout.getPartSize('panel').width, 180));
+		first.layout.toggleMaximizedPanel();
+		first.layout.hidePart('panel');
+		first.layout.hidePart('panel');
+		await storage.flush(WillSaveStateReason.SHUTDOWN);
+		first.disposables.dispose();
+
+		const restored = createLayoutHarness(dom.window.document, { storageService: storage });
+		using resources = restored.disposables;
+		restored.layout.layout(new Dimension(1_200, 800));
+		assert.equal(restored.layout.isPartVisible('panel'), false);
+		restored.layout.showPart('panel');
+		assert.equal(restored.layout.isPanelMaximized(), true);
+		restored.layout.hidePart('panel');
+		await storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+		await storage.switchWorkspace('second');
+		restored.layout.restoreWorkspaceState();
+		restored.layout.showPart('panel');
+		assert.equal(restored.layout.isPanelMaximized(), false);
+		await storage.switchWorkspace('first');
+		restored.layout.restoreWorkspaceState();
+		restored.layout.showPart('panel');
+		assert.equal(restored.layout.isPanelMaximized(), true);
+		restored.layout.toggleMaximizedPanel();
+		assert.equal(restored.layout.getPartSize('panel').height, 180);
+		restored.layout.hidePart('panel');
+		restored.layout.showPart('panel');
+		assert.equal(restored.layout.isPanelMaximized(), false);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test("Workbench layout state is versioned and excludes topology", () => {
@@ -1435,15 +1479,17 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
 		registry,
 	}, contextKeys));
-	const panel = disposables.add(new PanelPart(dom.window.document.body, {
-		viewDescriptorService: viewDescriptors,
-		contextKeyService: contextKeys,
-		titleActions: {
-			menuService,
-			contextMenuProvider,
-			menuId: MenuId.PanelTitle,
-		},
-	}));
+	const panelServices = disposables.add(new InstantiationService());
+	assert.throws(() => panelServices.createInstance(PanelPart, dom.window.document.body), /viewDescriptorService/);
+	panelServices.registerInstance(IViewDescriptorService, viewDescriptors);
+	panelServices.registerInstance(IContextKeyService, contextKeys);
+	panelServices.registerInstance(IStorageService, paneStorage);
+	panelServices.registerInstance(PanelLocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
+	panelServices.registerInstance(IMenuService, menuService);
+	assert.throws(() => panelServices.createInstance(PanelPart, dom.window.document.body), /contextMenuService/);
+	panelServices.registerInstance(IContextMenuService, { ...contextMenuProvider, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None, hideContextMenu() { } });
+	const panel = disposables.add(panelServices.createInstance(PanelPart, dom.window.document.body));
+	assert.deepEqual([panel.minimumWidth, panel.minimumHeight], [300, 77]);
 	dom.window.document.body.append(panel.domNode);
 
 	const tablist = panel.domNode.querySelector(".ash-panel-title-control [role='tablist']");
@@ -1889,20 +1935,20 @@ test("titlebar layout commands toggle shell regions", async () => {
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
 
 	assert.equal(harness.layout.isPartVisible("panel"), true);
-	await commands.executeCommand(TogglePanelCommandId);
+	await commands.executeCommand(TogglePanelAction.ID);
 	assert.equal(harness.layout.isPartVisible("panel"), false);
-	await commands.executeCommand(TogglePanelCommandId);
+	await commands.executeCommand(TogglePanelAction.ID);
 	assert.equal(harness.layout.isPartVisible("panel"), true);
 
 	assert.equal(harness.layout.isPartVisible("editor"), true);
-	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	assert.equal(harness.layout.isPartVisible("panel"), true);
 	assert.equal(harness.layout.isPartVisible("editor"), false);
-	await commands.executeCommand(ToggleMaximizedPanelCommandId);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	assert.equal(harness.layout.isPartVisible("editor"), true);
 
-	await commands.executeCommand(ToggleMaximizedPanelCommandId);
-	await commands.executeCommand(TogglePanelCommandId);
+	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
+	await commands.executeCommand(TogglePanelAction.ID);
 	assert.equal(harness.layout.isPartVisible("panel"), false);
 	assert.equal(harness.layout.isPartVisible("editor"), true);
 
@@ -1920,7 +1966,7 @@ test("panel layout actions use state icons", () => {
 	const panelAction = () => menuService
 		.getMenuActions(MenuId.TitleBar)
 		.flatMap(([, actions]) => actions)
-		.find((action) => action.id === TogglePanelCommandId);
+		.find((action) => action.id === TogglePanelAction.ID);
 	const sidebarAction = () => menuService
 		.getMenuActions(MenuId.TitleBarLeft)
 		.flatMap(([, actions]) => actions)
@@ -1928,10 +1974,13 @@ test("panel layout actions use state icons", () => {
 	const maximizePanelAction = () => menuService
 		.getMenuActions(MenuId.PanelTitle)
 		.flatMap(([, actions]) => actions)
-		.find((action) => action.id === ToggleMaximizedPanelCommandId);
+		.find((action) => action.id === 'workbench.action.toggleMaximizedPanel');
 
 	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeftOff1);
 	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff1);
+	assert.ok(menuService.getMenuActions(MenuId.PanelTitle)
+		.flatMap(([, actions]) => actions)
+		.some((action) => action.id === 'workbench.action.closePanel'));
 	contextKeys.setContext("sideBarVisible", true);
 	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeft1);
 	contextKeys.setContext("panelVisible", true);
@@ -2052,14 +2101,18 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	registry.registerStaticViews('test.panel.second', [{ id: 'test.panel.conditional', title: 'Conditional', when: ContextKeyExpr.has('test.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	const context = resources.add(new ContextKeyService());
 	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
-	const panel = resources.add(new PanelPart(browserEnvironment.window.document.body, { viewDescriptorService: descriptors }));
-	panel.setVisible(false);
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IViewDescriptorService, descriptors);
 	services.registerInstance(IStorageService, paneStorage);
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
+	const commands = resources.add(new CommandService(services));
+	services.registerInstance(IMenuService, new MenuService(commands, context));
+	services.registerInstance(IContextMenuService, { showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
+	panel.setVisible(false);
 	services.registerInstance(IWorkbenchLayoutService, {
+		isPartVisible: () => !panel.domNode.hidden,
 		showPart: () => panel.setVisible(true),
 		hidePart: () => panel.setVisible(false),
 	} as unknown as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
@@ -2090,6 +2143,18 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	assert.equal(await views.focusView('test.panel.view'), true);
 	assert.equal(views.getFocusedViewName(), 'View');
 	assert.equal(context.getValue('focusedView'), 'test.panel.view');
+	// Focus tracking waits for focus to leave the pane before accepting the next command's focus.
+	const commandFocus = new Promise<void>(resolve => resources.add(first!.getView('test.panel.view')!.onDidBlur(resolve)));
+	const commandInput = h(browserEnvironment.window.document, 'input');
+	browserEnvironment.window.document.body.append(commandInput);
+	resources.add(toDisposable(() => commandInput.remove()));
+	commandInput.focus();
+	await commandFocus;
+	await commands.executeCommand('workbench.action.closePanel');
+	await commands.executeCommand('workbench.action.closePanel');
+	assert.equal(panel.domNode.hidden, true);
+	await commands.executeCommand('workbench.action.focusPanel');
+	assert.deepEqual({ visible: !panel.domNode.hidden, retained: panes.getActivePaneComposite(ViewContainerLocation.Panel), focused: views.getFocusedView()?.id }, { visible: true, retained: first, focused: 'test.panel.view' });
 	assert.equal(await views.openView('test.panel.conditional', true), null);
 	assert.equal(views.getVisibleViewContainer(ViewContainerLocation.Panel)?.id, 'test.panel.first');
 	const oldViewBlurred = new Promise<void>(resolve => {

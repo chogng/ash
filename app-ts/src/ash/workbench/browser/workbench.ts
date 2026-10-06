@@ -1023,18 +1023,7 @@ export class Workbench extends Disposable {
 		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
 			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 		}
-		const panel = this._register(new PanelPart(workbenchRoot, {
-			viewDescriptorService: viewDescriptors,
-			contextKeyService: contextKeys,
-			storageService: storage,
-			localizationService,
-			contextMenuProvider: contextMenus,
-			titleActions: {
-				menuService: menus,
-				contextMenuProvider: contextMenus,
-				menuId: MenuId.PanelTitle,
-			},
-		}));
+		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
 		const auxiliarybar = this._register(new AuxiliarybarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,

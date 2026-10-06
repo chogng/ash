@@ -1,14 +1,12 @@
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { AuxiliaryBarVisibleContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
+import { AuxiliaryBarVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
 export const ToggleAuxiliaryBarCommandId = "workbench.action.toggleAuxiliaryBar";
-export const TogglePanelCommandId = "workbench.action.togglePanel";
-export const ToggleMaximizedPanelCommandId = "workbench.action.toggleMaximizedPanel";
 
 registerAction2(class ToggleSideBarAction extends Action2 {
 	constructor() {
@@ -92,81 +90,4 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
 			layout.showPart("auxiliarybar");
 		}
 	}
-});
-
-registerAction2(class TogglePanelAction extends Action2 {
-	constructor() {
-		super({
-			id: TogglePanelCommandId,
-			title: localize2({ bundle: "ash.actions", key: "showPanel" }, "Show Panel"),
-			tooltip: localize2({ bundle: "ash.actions", key: "showPanel" }, "Show Panel"),
-			icon: Lxicon.layoutPanelOff1,
-			toggled: {
-				condition: PanelVisibleContext.isEqualTo(true),
-				title: localize2({ bundle: "ash.actions", key: "hidePanel" }, "Hide Panel"),
-				tooltip: localize2({ bundle: "ash.actions", key: "hidePanel" }, "Hide Panel"),
-				icon: Lxicon.layoutPanel1,
-			},
-			menu: [
-				{
-					id: MenuId.TitleBar,
-					group: "navigation",
-					order: 9,
-				},
-				{
-					id: MenuId.MenubarViewMenu,
-					group: "2_appearance",
-					order: 11,
-				},
-			],
-			f1: true,
-		});
-	}
-
-	override run(accessor: ServicesAccessor): void {
-		const layout = accessor.get(IWorkbenchLayoutService);
-		if (layout.isPartVisible("panel")) {
-			layout.hidePart("panel");
-		} else {
-			layout.showPart("panel");
-		}
-	}
-});
-
-registerAction2(class ToggleMaximizedPanelAction extends Action2 {
-	constructor() {
-		super({
-			id: ToggleMaximizedPanelCommandId,
-			title: localize2({ bundle: "ash.actions", key: "maximizePanel" }, "Maximize Panel"),
-			tooltip: localize2({ bundle: "ash.actions", key: "maximizePanel" }, "Maximize Panel"),
-			icon: Lxicon.screenFull,
-			toggled: {
-				condition: PanelMaximizedContext.isEqualTo(true),
-				title: localize2({ bundle: "ash.actions", key: "restoreEditorArea" }, "Restore Editor Area"),
-				tooltip: localize2({ bundle: "ash.actions", key: "restoreEditorArea" }, "Restore Editor Area"),
-				icon: Lxicon.screenNormal,
-			},
-			menu: {
-				id: MenuId.PanelTitle,
-				group: "navigation",
-				order: 40,
-			},
-			f1: true,
-		});
-	}
-
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IWorkbenchLayoutService).toggleMaximizedPanel();
-	}
-});
-
-MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
-	command: {
-		id: TogglePanelCommandId,
-		title: localize2({ bundle: "ash.actions", key: "closePanel" }, "Close Panel"),
-		tooltip: localize2({ bundle: "ash.actions", key: "closePanel" }, "Close Panel"),
-		icon: Lxicon.close,
-	},
-	group: "navigation",
-	order: 50,
 });
