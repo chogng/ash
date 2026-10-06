@@ -1,3 +1,4 @@
+import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSchemeService.js';
 import assert from 'node:assert/strict';
@@ -23,13 +24,15 @@ import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from '../../.
 import { projectColorThemeTokens } from '../../../textMate/common/textMateThemeProjection.js';
 import { loadColorThemeDocument, loadUserColorTheme, parseUserColorTheme, resolveColorThemeDocument, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../common/colorThemeSchema.js';
-import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { IUserThemeService } from '../../../../common/userThemes.js';
 import { WorkbenchProductIconThemesRegistry } from '../../common/themeExtensionPoints.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 test('selected product icon theme refreshes mounted SVGs and returns to defaults', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -211,7 +214,7 @@ test('theme exports contain standard fields and resolved colors', () => {
 	assert.equal(exported.type, 'light');
 	assert.deepEqual(parseUserColorTheme(source).colors, lightColorTheme.colors);
 	using registration = registerColorThemeSchemas();
-	assert.ok(JsonSchemasRegistry.getSchema(colorThemeSchemaId)?.properties?.colors?.properties?.['editor.background']);
+	assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['editor.background']);
 });
 
 test('active user themes apply overrides for colors registered after theme loading', async () => {
@@ -245,7 +248,7 @@ test('active user themes apply overrides for colors registered after theme loadi
 			tokenRules: [{ scopes: ['comment, string.quoted'], settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
 		});
 		assert.equal(JSON.parse(serializeUserColorThemeDraft(theme, theme.label)).colors['test.workbenchLate'], '#fedcba');
-		assert.ok(JsonSchemasRegistry.getSchema(colorThemeSchemaId)?.properties?.colors?.properties?.['test.workbenchLate']);
+		assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['test.workbenchLate']);
 	} finally {
 		browser.window.close();
 	}

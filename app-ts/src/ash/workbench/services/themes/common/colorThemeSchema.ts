@@ -1,13 +1,16 @@
-import { combinedDisposable } from '../../../../base/common/lifecycle.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { getTokenClassificationRegistry } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import { fileIconThemeSchema, fileIconThemeSchemaId } from './fileIconThemeSchema.js';
 import { productIconThemeSchema, productIconThemeSchemaId } from './productIconThemeSchema.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import '../../../../platform/theme/common/colorTheme.js';
 import '../../../../editor/common/core/editorColorRegistry.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 export const colorThemeSchemaId = 'vscode://schemas/color-theme';
 
@@ -71,9 +74,9 @@ export const colorThemeSchema: JsonSchema = {
 };
 
 export function registerColorThemeSchemas(): IDisposable {
-	return combinedDisposable(
-		JsonSchemasRegistry.registerSchema(colorThemeSchemaId, colorThemeSchema),
-		JsonSchemasRegistry.registerSchema(fileIconThemeSchemaId, fileIconThemeSchema),
-		JsonSchemasRegistry.registerSchema(productIconThemeSchemaId, productIconThemeSchema),
-	);
+	const store = new DisposableStore();
+	jsonRegistry.registerSchema(colorThemeSchemaId, colorThemeSchema, store);
+	jsonRegistry.registerSchema(fileIconThemeSchemaId, fileIconThemeSchema, store);
+	jsonRegistry.registerSchema(productIconThemeSchemaId, productIconThemeSchema, store);
+	return store;
 }

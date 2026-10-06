@@ -1,3 +1,4 @@
+import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createJsonCompletionProvider } from '../../../language/common/jsonLanguageFeatures.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { Position } from '../../../../../editor/common/core/position.js';
@@ -9,7 +10,7 @@ import { KeybindingTestServices } from './keybindingTestServices.js';
 import { suiteTeardown } from 'mocha';
 const profileFixture = new KeybindingTestServices();
 suiteTeardown(() => profileFixture.dispose());
-import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { parseJsonDocument } from '../../../../../base/common/json.js';
 import { jsonSchemaAtPath, validateJsonSchema, type JsonSchema } from '../../../../../base/common/jsonSchema.js';
 import assert from "node:assert/strict";
@@ -74,6 +75,8 @@ import {
 	StatusbarService,
 } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 test("resolver applies context, source, priority, and latest-registration precedence", () => {
 	using registrations = new DisposableStore();
@@ -1021,10 +1024,10 @@ test('keybinding schema registration updates conditional command arguments and r
 	});
 	const invalid = (): number => validateJsonSchema(
 		parseJsonDocument('[{"key":"ctrl+p","command":"test.paste","args":{"kind":"html"}}]'),
-		JsonSchemasRegistry.getSchema('ash://schemas/keybindings'),
+		jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
 	).length;
 	assert.equal(invalid(), 1);
-	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+p","command":"other","args":{"kind":42}}]'), JsonSchemasRegistry.getSchema('ash://schemas/keybindings')).length, 0);
+	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+p","command":"other","args":{"kind":42}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length, 0);
 	kind = 'html';
 	changed.fire();
 	assert.equal(invalid(), 0);
@@ -1032,9 +1035,9 @@ test('keybinding schema registration updates conditional command arguments and r
 	const readsAfterDispose = schemaReads;
 	changed.fire();
 	assert.equal(schemaReads, readsAfterDispose);
-	assert.deepEqual(JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.definitions!.commandsSchemas.allOf, []);
+	assert.deepEqual(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandsSchemas.allOf, []);
 	keybindings.dispose();
-	assert.equal(JsonSchemasRegistry.getSchema('ash://schemas/keybindings'), undefined);
+	assert.equal(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'], undefined);
 });
 
 
@@ -1056,7 +1059,7 @@ test('registered command metadata drives nested batch validation, completion and
 		contextKeyService: contexts, keyboardLayoutService: layouts,
 	}, notifications, profileFixture.files, profileFixture.profiles);
 	const validate = (value: unknown): readonly string[] => validateJsonSchema(
-		parseJsonDocument(JSON.stringify([value])), JsonSchemasRegistry.getSchema('ash://schemas/keybindings'),
+		parseJsonDocument(JSON.stringify([value])), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
 	).map(issue => issue.message);
 	const target = registry.registerMany([{
 		id: 'test.argument', handler: () => undefined,
@@ -1071,7 +1074,7 @@ test('registered command metadata drives nested batch validation, completion and
 		assert.equal(validate({ ...value, args: { commands: [{ command: 'test.argument' }] } }).length, 1);
 		assert.equal(validate({ ...value, args: { commands: [{ command: 'test.argument', args: { kind: 42 } }] } }).length, 1);
 		assert.deepEqual(validate({ ...value, args: { commands: [{ command: 'runCommands', args: { commands: ['unknown.command'] } }] } }), []);
-		const schema = JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!;
+		const schema = jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!;
 		const node = parseJsonDocument(JSON.stringify([value]));
 		const kind = jsonSchemaAtPath(schema, [0, 'args', 'commands', 0, 'args', 'kind'], node.root);
 		assert.deepEqual(kind?.enum, ['text', 'html']);
@@ -1092,7 +1095,7 @@ test('registered command metadata drives nested batch validation, completion and
 		assert.deepEqual(validate({ key: 'ctrl+p', command: 'test.argument', args: 3 }), []);
 		target.dispose();
 		assert.deepEqual(validate(value), []);
-		assert.deepEqual(JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.definitions!.commandNames.enum, ['runCommands']);
+		assert.deepEqual(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandNames.enum, ['runCommands']);
 	} finally {
 		target.dispose();
 	}

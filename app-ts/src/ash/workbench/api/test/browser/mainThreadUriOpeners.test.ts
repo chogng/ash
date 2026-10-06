@@ -1,3 +1,4 @@
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import '../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -12,17 +13,19 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { createCodeEditorServices } from '../../../../editor/test/browser/testCodeEditor.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../platform/configuration/common/configurationSchema.js';
-import { JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { AppServerConnectionState } from '../../../../platform/app-server/common/appServerApi.js';
 import { IExtensionHostApi, normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../platform/extensionHost/common/extensionHostApi.js';
 import { externalUriOpenersConfigurationNode } from '../../../contrib/externalUriOpener/common/configuration.js';
-import { ExternalUriOpenerService, IExternalUriOpenerService } from '../../../contrib/externalUriOpener/common/externalUriOpenerService.js';
+import { IExternalUriOpenerService } from '../../../contrib/externalUriOpener/common/externalUriOpenerService.js';
 import '../../../contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 import { createJsonCompletionProvider } from '../../../services/language/common/jsonLanguageFeatures.js';
 import { MainThreadUriOpeners } from '../../browser/mainThreadUriOpeners.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 const openerId = 'extension:acme.links:browser';
 function snapshot(incarnation = 1): ExtensionHostFleetSnapshot {
@@ -69,7 +72,7 @@ class Fixture extends DisposableStore {
 		super();
 		this.services.registerInstance(IExtensionHostApi, this.api);
 		this.services.registerInstance(IPreferencesService, { openSettings: async () => { }, openGlobalKeybindingSettings: async () => { }, openUserSettings: async () => { } });
-		this.services.registerInstance(IExternalUriOpenerService, this.add(this.services.createInstance(ExternalUriOpenerService)));
+		this.services.get(IExternalUriOpenerService);
 		this.bridge = this.add(this.services.createInstance(MainThreadUriOpeners, 1_000));
 	}
 }
@@ -83,9 +86,10 @@ test('configured extension opener receives resolved and original URLs without a 
 	assert.deepEqual(fixture.api.requests.map(({ operation, payload, incarnation, activationGeneration }) => ({ operation, payload, incarnation, activationGeneration })), [{
 		operation: 'openExternalUri', payload: { resolvedUri: 'https://example.com/resolved?q=1#part', sourceUri: 'https://source.example/docs?q=1#part' }, incarnation: 1, activationGeneration: 1,
 	}]);
-	using schemas = new JsonSchemaRegistry();
-	using schema = schemas.registerSchema(ConfigurationSchemaId, createConfigurationSchema());
-	using association = schemas.registerAssociation(UserSettingsResource, ConfigurationSchemaId);
+	using schemaStore = new DisposableStore();
+	const schemas = jsonRegistry;
+	schemas.registerSchema(ConfigurationSchemaId, createConfigurationSchema(), schemaStore);
+	using association = schemas.registerSchemaAssociation(ConfigurationSchemaId, UserSettingsResource.toString());
 	using settings = new TextModel('{"workbench.externalUriOpeners":{"*":""}}');
 	const suggestions = await createJsonCompletionProvider(schemas).provideCompletions({
 		requestId: 1, languageId: 'jsonc', resource: UserSettingsResource, position: new Position(1, 39),

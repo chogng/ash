@@ -1,3 +1,4 @@
+import { Registry } from '../../../../../platform/registry/common/platform.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -13,7 +14,7 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { BrowserKeyboardLayoutService } from '../../../../services/keybinding/browser/keyboardLayoutService.js';
@@ -23,6 +24,8 @@ import { builtinLanguagePackCatalogs } from '../../../../services/localization/c
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { CodeActionsContribution } from '../../browser/codeActionsContribution.js';
 import '../../browser/codeActions.contribution.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 test('Code Action registration updates settings and command argument suggestions through provider lifetimes', () => {
 	const dom = new JSDOM('<body></body>');
@@ -51,15 +54,15 @@ test('Code Action registration updates settings and command argument suggestions
 	const settingKinds = (): string[] => Object.keys(settings.properties!['editor.codeActionsOnSave'].properties!);
 	const shortcutKinds = (command: string): readonly unknown[] => {
 		const document = parseJsonDocument(JSON.stringify([{ command, args: { kind: '' } }]));
-		return jsonSchemaAtPath(JsonSchemasRegistry.getSchema('ash://schemas/keybindings'), [0, 'args', 'kind'], document.root)!.anyOf![0].enum!;
+		return jsonSchemaAtPath(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'], [0, 'args', 'kind'], document.root)!.anyOf![0].enum!;
 	};
 	assert.deepEqual(settingKinds(), ['source.organizeImports', 'source.fixAll']);
 	assert.deepEqual(Object.keys(settings.properties!['notebook.codeActionsOnSave'].properties!), settingKinds());
 	assert.deepEqual(shortcutKinds('editor.action.refactor'), ['refactor.extract']);
 	assert.deepEqual(shortcutKinds('editor.action.sourceAction'), ['source.organizeImports', 'source.fixAll']);
 	assert.deepEqual(shortcutKinds('editor.action.codeAction'), [...new Set(provider.providedCodeActionKinds)]);
-	assert.equal(validateJsonSchema(parseJsonDocument('[{"command":"editor.action.refactor","args":{"kind":"refactor.future"}}]'), JsonSchemasRegistry.getSchema('ash://schemas/keybindings')).length, 0);
-	assert.equal(validateJsonSchema(parseJsonDocument('[{"command":"editor.action.refactor","args":{"kind":42}}]'), JsonSchemasRegistry.getSchema('ash://schemas/keybindings')).length, 1);
+	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+r","command":"editor.action.refactor","args":{"kind":"refactor.future"}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length, 0);
+	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+r","command":"editor.action.refactor","args":{"kind":42}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length, 1);
 	using second = features.codeActionProvider.register('python', {
 		providedCodeActionKinds: ['source.fixAll', 'source.python'], provideCodeActions: () => [],
 	});
@@ -69,7 +72,7 @@ test('Code Action registration updates settings and command argument suggestions
 	second.dispose();
 	assert.deepEqual(settingKinds(), []);
 	host.dispose();
-	assert.deepEqual((JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.items as JsonSchema).allOf, []);
+	assert.deepEqual(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandsSchemas.allOf, []);
 	using afterClose = features.codeActionProvider.register('typescript', provider);
 	assert.deepEqual(settingKinds(), [], 'Disposed contributions must release their provider listeners');
 });

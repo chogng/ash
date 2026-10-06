@@ -1,3 +1,4 @@
+import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createTestLanguagePacks, createTestLocaleService, initializeTestLocalization } from './localizationTestUtils.js';
 import { localize2, localize, resetNlsResolver } from '../../../../../nls.js';
 import assert from "node:assert/strict";
@@ -17,7 +18,7 @@ import { AppServerProtocolIncompatibleError } from '../../../../../platform/app-
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { JSDOM } from 'jsdom';
 import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
-import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
 import { DefaultSettings } from '../../../preferences/common/settingsModels.js';
@@ -26,6 +27,8 @@ import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/ac
 import '../../../../contrib/git/browser/gitBranches.js';
 import '../../../../contrib/git/browser/git.contribution.js';
 import '../../../../contrib/git/browser/gitWorktrees.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 suite('Workbench localization', () => {
 	setup(() => initializeTestLocalization('en'));
@@ -341,7 +344,7 @@ suite('Workbench localization', () => {
 		using languagePacks = createTestLanguagePacks(createMarketplace());
 		using localeService = createTestLocaleService(configuration, languagePacks);
 		using schemaRegistration = registerColorThemeSchemas();
-		const schema = JsonSchemasRegistry.getSchema(colorThemeSchemaId)!;
+		const schema = jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]!;
 		const description = (id: string): string | undefined => schema.properties?.colors?.properties?.[id]?.description;
 		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');

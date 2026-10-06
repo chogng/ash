@@ -1,3 +1,4 @@
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { environment } from '../../../../base/common/platform.js';
 import { FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
@@ -8,7 +9,7 @@ import { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/r
 import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
 import { localize } from '../../../../nls.js';
 import { type JsonSchema } from '../../../../base/common/jsonSchema.js';
-import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { type KeybindingsSchemaContribution } from '../../../../platform/keybinding/common/keybinding.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { getWindows, onDidRegisterWindow, onWillUnregisterWindow } from "../../../../base/browser/window.js";
@@ -74,6 +75,8 @@ import type {
 import { StatusbarAlignment } from "../../statusbar/browser/statusbar.js";
 import type { IKeyboardShortcutTroubleshootingService } from "../common/keyboardShortcutTroubleshooting.js";
 
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
+
 export { KeybindingContextKeys } from "../../../../platform/keybinding/common/keybinding.js";
 
 export interface WorkbenchKeybindingServiceOptions {
@@ -101,7 +104,7 @@ export class WorkbenchKeybindingService
 	private readonly commandRegistry: CommandRegistry;
 	private loadQueue: Promise<void> = Promise.resolve();
 	private readonly schemaContributions = new Map<KeybindingsSchemaContribution, IDisposable | undefined>();
-	private readonly schemaRegistration = this._register(new MutableDisposable<IDisposable>());
+	private readonly schemaRegistration = this._register(new MutableDisposable<DisposableStore>());
 	private readonly ownerWindow: Window;
 	private readonly commandService: ICommandService;
 	private readonly contextKeyService: IContextKeyService;
@@ -169,7 +172,7 @@ export class WorkbenchKeybindingService
 		}));
 		this._register(this.commandRegistry.onDidChangeCommands(() => this.updateKeybindingsSchema()));
 		this.updateKeybindingsSchema();
-		this._register(JsonSchemasRegistry.registerAssociation(profiles.currentProfile.keybindingsResource, 'ash://schemas/keybindings'));
+		this._register(jsonRegistry.registerSchemaAssociation('ash://schemas/keybindings', profiles.currentProfile.keybindingsResource.toString()));
 		this._register(files.onDidChangeFiles(event => {
 			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
 				void this.initialize().catch(error => notificationService.warning(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))));
@@ -292,8 +295,8 @@ export class WorkbenchKeybindingService
 			},
 			allOf: [{ $ref: '#/definitions/commandsSchemas' }],
 		};
-		this.schemaRegistration.clear();
-		this.schemaRegistration.value = JsonSchemasRegistry.registerSchema('ash://schemas/keybindings', {
+		const registration = new DisposableStore();
+		jsonRegistry.registerSchema('ash://schemas/keybindings', {
 			id: 'ash://schemas/keybindings',
 			type: 'array',
 			definitions: {
@@ -308,7 +311,8 @@ export class WorkbenchKeybindingService
 				commandsSchemas: { allOf: commandSchemas },
 			},
 			items: keybindingsSchema,
-		});
+		}, registration);
+		this.schemaRegistration.value = registration;
 	}
 
 	private attachWindow(targetWindow: Window): void {

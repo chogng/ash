@@ -16,13 +16,15 @@ import { Extensions, type IConfigurationRegistry } from '../../../../../platform
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
-import { JsonSchemaRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { IExtensionService, type ExtensionCatalog } from '../../../../services/extensions/common/extensionService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { createJsonCompletionProvider } from '../../../../services/language/common/jsonLanguageFeatures.js';
 import '../../browser/folding.contribution.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 const configName = 'editor.defaultFoldingRangeProvider';
 
@@ -137,11 +139,12 @@ test('folding candidates follow providers and extension labels and use Chinese c
 	const definition = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(configName)!;
 	const choices = definition.schema!.anyOf![0]!;
 	assert.deepEqual({ ids: choices.enum, label: choices.enumDescriptions?.[1] }, { ids: [null, 'test.extension'], label: 'Test extension' });
-	using schemas = new JsonSchemaRegistry();
-	resources.add(schemas.registerSchema('test.settings', createConfigurationSchema()));
+	using schemaStore = new DisposableStore();
+	const schemas = jsonRegistry;
+	schemas.registerSchema('test.settings', createConfigurationSchema(), schemaStore);
 	const source = '{"editor.defaultFoldingRangeProvider": ""}';
 	using model = new TextModel(source, { languageId: 'json' });
-	resources.add(schemas.registerAssociation(model.uri, 'test.settings'));
+	resources.add(schemas.registerSchemaAssociation('test.settings', model.uri.toString()));
 	const completion = createJsonCompletionProvider(schemas);
 	const complete = async (): Promise<readonly string[]> => {
 		const signal = new AbortController().signal;

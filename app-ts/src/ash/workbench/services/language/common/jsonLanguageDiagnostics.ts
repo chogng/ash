@@ -1,3 +1,4 @@
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import { parseJsonDocument } from '../../../../base/common/json.js';
 import { validateJsonSchema } from '../../../../base/common/jsonSchema.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -5,7 +6,10 @@ import type { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import { JsonSchemasRegistry, type JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { getJsonSchemasForResource } from './jsonLanguageFeatures.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 /** Publishes local syntax diagnostics for JSON and adds schema diagnostics when associated. */
 export function acquireJsonLanguageDiagnostics(
@@ -13,7 +17,7 @@ export function acquireJsonLanguageDiagnostics(
 	languageId: string,
 	model: TextModel,
 	createPublisher: () => LanguageDiagnosticsPublisher,
-	registry: JsonSchemaRegistry = JsonSchemasRegistry,
+	registry: IJSONContributionRegistry = jsonRegistry,
 ): IDisposable | undefined {
 	if (languageId !== 'json' && languageId !== 'jsonc') return undefined;
 	const store = new DisposableStore();
@@ -32,22 +36,22 @@ export function acquireJsonLanguageDiagnostics(
 			source: 'json',
 		}));
 		if (document.errors.length === 0) {
-			const schema = registry.getSchemaForResource(resource);
-			for (const issue of validateJsonSchema(document, schema)) {
-				diagnostics.push(Object.freeze({
-					range: diagnosticRange(model, issue.offset, issue.length),
-					severity: LanguageDiagnosticSeverity.Warning,
-					message: issue.message,
-					source: 'json-schema',
-				}));
+			for (const schema of getJsonSchemasForResource(registry, resource)) {
+				for (const issue of validateJsonSchema(document, schema)) {
+					diagnostics.push(Object.freeze({
+						range: diagnosticRange(model, issue.offset, issue.length),
+						severity: LanguageDiagnosticSeverity.Warning,
+						message: issue.message,
+						source: 'json-schema',
+					}));
+				}
 			}
 		}
 		publisher.update(model.version, Object.freeze(diagnostics));
 	};
 	store.add(model.onDidChangeContent(update));
-	store.add(registry.onDidChange(event => {
-		if (event.resource?.toString() === resource.toString() || !event.resource && registry.getSchemaIdForResource(resource) === event.schemaId) update();
-	}));
+	store.add(registry.onDidChangeSchema(update));
+	store.add(registry.onDidChangeSchemaAssociations(update));
 	update();
 	return store;
 }

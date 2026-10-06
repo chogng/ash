@@ -1,3 +1,4 @@
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../../../services/userDataProfile/common/userDataProfile.js';
@@ -21,7 +22,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
 import { FileRevisionConflictError } from '../../../../../platform/files/common/files.js';
-import { JsonSchemaRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserTextResourceStore } from '../../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
@@ -32,6 +33,8 @@ import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/pre
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 const keybindingProfile = new KeybindingTestServices();
 suiteTeardown(() => keybindingProfile.dispose());
@@ -74,9 +77,10 @@ test('SettingsFileSystemProvider projects only the editable JSONC settings resou
 
 test('generic JSON schema completion is resource-scoped and omits configured keys', async () => {
 	const registry = testRegistry();
-	const schemas = new JsonSchemaRegistry();
-	using schema = schemas.registerSchema(ConfigurationSchemaId, createConfigurationSchema(registry));
-	using association = schemas.registerAssociation(UserSettingsResource, ConfigurationSchemaId);
+	using schemaStore = new DisposableStore();
+	const schemas = jsonRegistry;
+	schemas.registerSchema(ConfigurationSchemaId, createConfigurationSchema(registry), schemaStore);
+	using association = schemas.registerSchemaAssociation(ConfigurationSchemaId, UserSettingsResource.toString());
 	const provider = createJsonCompletionProvider(schemas);
 	using model = new TextModel(`{
 	"editor.enabled": true,

@@ -357,7 +357,6 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"chat.modelPicker.configurationAriaLabel": "模型选项：{0}",
 			"chat.modelPicker.configurationHelp": "模型选项菜单。推理强度和长上下文分为两组，长上下文默认关闭。用 Tab 键在模型按钮和模型选项按钮之间移动。按 Enter 或空格打开；用上下方向键在选项间移动，按 Enter 应用，按 Escape 返回按钮。",
 			"chat.modelPicker.context": "上下文：{0} 个词元",
-			"chat.modelPicker.contextChoice": "{0} 上下文",
 			"chat.modelPicker.contextSize": "上下文大小",
 			"chat.modelPicker.contextWindow": "上下文窗口：{0} 个词元",
 			"chat.modelPicker.current": "当前选项",

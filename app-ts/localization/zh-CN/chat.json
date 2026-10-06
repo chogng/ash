@@ -200,7 +200,6 @@
     "chat.modelPicker.fasterUsage": "响应更快，用量增加",
     "chat.modelPicker.priorityUsage": "优先处理，用量增加",
     "chat.modelPicker.highspeedUsage": "使用独立的高速型号，用量增加",
-    "chat.modelPicker.contextChoice": "{0} 上下文",
     "chat.modelPicker.preferencesFailed": "无法更新模型设置",
     "chat.modelPicker.noModelsPlaceholder": "在设置中配置模型",
     "chat.modelPicker.openSettings": "打开设置",

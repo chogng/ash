@@ -357,7 +357,6 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"chat.modelPicker.configurationAriaLabel": "Model options: {0}",
 			"chat.modelPicker.configurationHelp": "Model options menu. Thinking level and long context are separate groups. Long context is off by default. Tab moves between the model and model options buttons. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.",
 			"chat.modelPicker.context": "{0} context tokens",
-			"chat.modelPicker.contextChoice": "{0} context",
 			"chat.modelPicker.contextSize": "Context Size",
 			"chat.modelPicker.contextWindow": "{0} context window",
 			"chat.modelPicker.current": "Current",

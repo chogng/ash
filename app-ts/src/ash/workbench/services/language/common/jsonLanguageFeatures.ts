@@ -1,3 +1,6 @@
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { match } from '../../../../base/common/glob.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { type ITextModel } from '../../../../editor/common/model.js';
@@ -8,7 +11,9 @@ import { jsonSchemaAtPath, type JsonSchema } from '../../../../base/common/jsonS
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { type TextEdit, type DocumentFormattingEditProvider, type FormattingOptions, LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageHover, type LanguageHoverProvider, type LanguageHoverRequest } from '../../../../editor/common/languages.js';
-import { JsonSchemasRegistry, type JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+
+const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
 const jsonLanguageIds = Object.freeze(['json', 'jsonc']);
 
@@ -20,47 +25,76 @@ interface JsonPropertyCompletionContext {
 }
 
 /** Creates schema-driven completion for every associated JSON or JSONC resource. */
-export function createJsonCompletionProvider(registry: JsonSchemaRegistry = JsonSchemasRegistry): LanguageCompletionProvider {
+export function createJsonCompletionProvider(registry: IJSONContributionRegistry = jsonRegistry): LanguageCompletionProvider {
 	return Object.freeze({
 		id: 'ash.json.schema',
 		languageIds: jsonLanguageIds,
 		triggerCharacters: Object.freeze(['"', ':']),
 		provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined {
 			signal.throwIfAborted();
-			const schema = registry.getSchemaForResource(request.resource);
-			if (!schema) return undefined;
+			const schemas = getJsonSchemasForResource(registry, request.resource);
+			if (schemas.length === 0) return undefined;
 			const source = request.snapshot.getText();
 			const offset = offsetAt(source, request.position);
 			const document = parseJsonDocument(source, jsonParseOptions(request.languageId));
-			if (!document.root && source.trim().length === 0) return emptyDocumentCompletions(schema, request.position);
 			const propertyContext = propertyCompletionContext(source, document, offset);
-			if (propertyContext) return propertyCompletions(document, schema, propertyContext);
-			return valueCompletions(source, document, schema, offset);
+			const items = new Map<string, LanguageCompletionProviderItem>();
+			for (const schema of schemas) {
+				let result: LanguageCompletionProviderResult | undefined;
+				if (!document.root && source.trim().length === 0) {
+					result = emptyDocumentCompletions(schema, request.position);
+				} else if (propertyContext) {
+					result = propertyCompletions(document, schema, propertyContext);
+				} else {
+					result = valueCompletions(source, document, schema, offset);
+				}
+				for (const item of result?.items ?? []) { items.set(item.label, item); }
+			}
+			return items.size > 0 ? {
+				items: [...items.values()].map((item, index) => ({ ...item, id: `schema-${index}` })),
+				isIncomplete: false,
+			} : undefined;
 		},
 	});
 }
 
 /** Creates schema descriptions for JSON property keys and values. */
-export function createJsonHoverProvider(registry: JsonSchemaRegistry = JsonSchemasRegistry): LanguageHoverProvider {
+export function createJsonHoverProvider(registry: IJSONContributionRegistry = jsonRegistry): LanguageHoverProvider {
 	return Object.freeze({
 		provideHover(request: LanguageHoverRequest, signal: AbortSignal): LanguageHover | undefined {
 			signal.throwIfAborted();
-			const schema = registry.getSchemaForResource(request.resource);
-			if (!schema) return undefined;
+			const schemas = getJsonSchemasForResource(registry, request.resource);
+			if (schemas.length === 0) return undefined;
 			const source = request.snapshot.getText();
 			const offset = offsetAt(source, request.position);
 			const document = parseJsonDocument(source, jsonParseOptions(request.languageId));
 			const match = propertyAtOffset(document.root, offset);
 			if (!match) return undefined;
-			const propertySchema = jsonSchemaAtPath(schema, match.path, document.root);
-			if (!propertySchema?.description && !propertySchema?.title) return undefined;
-			const contents = [propertySchema.title, propertySchema.description].filter((value): value is string => Boolean(value));
-			if (propertySchema.default !== undefined) contents.push(`Default: ${JSON.stringify(propertySchema.default)}`);
+			const contents: string[] = [];
+			for (const schema of schemas) {
+				const propertySchema = jsonSchemaAtPath(schema, match.path, document.root);
+				if (!propertySchema?.description && !propertySchema?.title) { continue; }
+				contents.push(...[propertySchema.title, propertySchema.description].filter((value): value is string => Boolean(value)));
+				if (propertySchema.default !== undefined) contents.push(`Default: ${JSON.stringify(propertySchema.default)}`);
+			}
+			if (contents.length === 0) { return undefined; }
 			return Object.freeze({
 				range: rangeFromOffsets(source, match.property.keyNode.offset, match.property.keyNode.offset + match.property.keyNode.length),
 				contents: Object.freeze(contents),
 			});
 		},
+	});
+}
+
+/** Each schema retains its own reference root when several associations match one resource. */
+export function getJsonSchemasForResource(registry: IJSONContributionRegistry, resource: URI | undefined): readonly JsonSchema[] {
+	if (!resource) { return []; }
+	const uri = resource.toString();
+	const schemas = registry.getSchemaContributions().schemas;
+	return Object.entries(registry.getSchemaAssociations()).flatMap(([id, patterns]) => {
+		const included = patterns.some(pattern => !pattern.startsWith('!') && match(pattern, uri));
+		const excluded = patterns.some(pattern => pattern.startsWith('!') && match(pattern.slice(1), uri));
+		return included && !excluded && schemas[id] ? [schemas[id]] : [];
 	});
 }
 

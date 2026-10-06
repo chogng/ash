@@ -251,6 +251,10 @@ Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操�
 
 用户已确认保留仅 Ash 的 `workbench/services/language/common/jsonLanguageFeatures.ts` 作为 JSON schema 补全的唯一实现。它现在解析数组项的位置并汇总 `anyOf` / `oneOf` 枚举建议，保留描述、合并重复值；接受建议只替换当前项，保留其他首选项及注释。空数组、未闭合字符串、逗号后的新项、嵌套和根数组均由同一实现处理。
 
+2026-10-06：Schema 注册收敛到上游对应的 `platform/jsonschemas/common/jsonContributionRegistry.ts`，设置、快捷键、主题及 JSON 语言消费方经 `Registry.as<IJSONContributionRegistry>(Extensions.JSONContribution)` 使用同一注册表。Schema 内容与资源 glob 关联分别通知变化；贡献由注册时传入的 `DisposableStore` 释放，关联由返回的句柄释放。JSON 语言实现负责资源匹配，包括排除模式；多个 Schema 独立解析各自的 `$ref`，再汇总补全、悬停和诊断。此次对齐的是现有生产调用链所需的注册契约；Schema 序列化接口、外部 Schema 加载和完整上游 JSON 语言服务尚未提供。
+
+注册链路验证：113 项相关单测通过，覆盖 Schema 替换与释放、重复关联、多 Schema 引用根及变更后的诊断。Playwright 共 6 项通过：连接 App Server 的 Web 与 Electron 各验证命令名、嵌套批处理和粘贴参数补全；Web UI 与 Electron UI 各验证快捷键 JSON 保存、重载和执行。Renderer 类型检查、桌面及两种 Web 构建、样式和本地化检查通过。Electron 初次验证被旧后端包的协议版本阻塞，经正常准备脚本更新所选包后，同一组测试通过。
+
 当前边界：默认用户配置的快捷键 JSON 资源已关联共享 schema，`Paste As...` 的 `{ kind }` 与 `{ preferences }` 参数补全已接通。设置和快捷键 JSON 的补全使用产品语言声明；UI-only 模式没有加载 JSON 语言，补全行为在连接 App Server 的窗口验证。这里只提供当前默认用户配置的资源身份，没有将完整的多配置管理标为完成。
 
 本批验证：Editor 全量单测 1544 项、251 个文件通过；随后复跑粘贴、拖放、Workbench 配置、快捷键和动作菜单定向单测 65 项通过。补齐数组补全和复制准备后的纯文本粘贴边界后，按原测试编译选项单独编译本批 6 份测试，75 项通过。Chromium 的 10 个相关场景通过，覆盖显式首选、纯文本命令、原有选择器及启用/禁用行为。生产浏览器和 Electron UI 各 1 个配置入口、保存和重载场景通过；连接 App Server 的浏览器和 Electron 各 2 个配置与补全场景通过。Renderer 与完整桌面构建在前一轮通过，最终生产 Vite 打包通过。
