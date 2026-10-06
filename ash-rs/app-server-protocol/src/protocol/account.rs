@@ -219,6 +219,9 @@ pub enum AccountLogoutStatusDto {
 #[ts(rename_all = "camelCase")]
 pub struct AccountLogoutParams {
     pub provider: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

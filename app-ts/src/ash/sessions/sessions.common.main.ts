@@ -4,6 +4,7 @@ import '../workbench/services/dataChannel/browser/dataChannelService.js';
 import '../workbench/api/browser/mainThreadDataChannels.contribution.js';
 import '../workbench/api/browser/mainThreadUriOpeners.js';
 import '../workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
+import '../workbench/contrib/github/browser/github.contribution.js';
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.js';
 import './contrib/files/browser/files.contribution.js';

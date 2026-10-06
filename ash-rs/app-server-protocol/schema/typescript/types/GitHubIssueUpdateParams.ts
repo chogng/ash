@@ -2,4 +2,4 @@
 import type { IssueRepository } from './IssueRepository.js';
 import type { IssueState } from './IssueState.js';
 
-export type GitHubIssueUpdateParams = { operationId: string, repository: IssueRepository, number: number, title: string | null, body: string | null, state: IssueState | null, labels: Array<string> | null, assignees: Array<string> | null, };
+export type GitHubIssueUpdateParams = { operationId: string, accountId?: string, repository: IssueRepository, number: number, title: string | null, body: string | null, state: IssueState | null, labels: Array<string> | null, assignees: Array<string> | null, };

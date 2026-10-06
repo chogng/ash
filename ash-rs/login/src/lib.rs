@@ -9,6 +9,7 @@ mod service;
 mod types;
 
 pub use driver::AccountMetadataRefresher;
+pub use driver::AccountMultiplicity;
 pub use driver::InteractiveLoginDriver;
 pub use driver::LoginEvents;
 pub use error::LoginError;

@@ -9,7 +9,10 @@ mod error;
 mod issues;
 mod pull_requests;
 mod reporter;
+mod reviews;
 pub use auth::GITHUB_PROVIDER_ID;
+pub use auth::GitHubAccount;
+pub use auth::GitHubAccountManager;
 pub use auth::GitHubAuthorization;
 pub use auth::GitHubCredentialProvider;
 pub use auth::GitHubOAuth;
@@ -36,6 +39,17 @@ pub use reporter::GitHubIssueReporter;
 pub use reporter::ReporterError;
 pub use reporter::ReporterIssue;
 pub use reporter::report_repository;
+pub use reviews::DiffSide;
+pub use reviews::FileContent;
+pub use reviews::RequestedReviewers;
+pub use reviews::ReviewComment;
+pub use reviews::ReviewCommentInput;
+pub use reviews::ReviewDiff;
+pub use reviews::ReviewThread;
+pub use reviews::ReviewThreadPage;
+pub use reviews::ReviewerChange;
+pub use reviews::ThreadComments;
+pub use reviews::ThreadState;
 
 use ash_async_utils::CancellationToken;
 use ash_http_client::HttpClient;
@@ -298,6 +312,21 @@ impl GitHub {
             http,
             cancellation,
             credentials,
+            authorization,
+        })
+    }
+
+    pub fn for_selected_account(
+        credentials: Arc<dyn GitHubCredentialProvider>,
+        http: Arc<dyn HttpClient>,
+        cancellation: CancellationToken,
+        account_id: &str,
+    ) -> std::result::Result<Self, ash_login::LoginError> {
+        let authorization = credentials.authorization_for(account_id)?;
+        Ok(Self {
+            credentials,
+            http,
+            cancellation,
             authorization,
         })
     }

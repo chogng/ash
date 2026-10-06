@@ -92,6 +92,35 @@ pub enum GitRemoteProvider {
 }
 
 impl GitClient {
+    // Validate every transport URL immediately before effects. A push URL may differ from fetch.
+    pub(crate) async fn require_remote_identity(
+        &self,
+        repository: &GitRepository,
+        name: &str,
+        expected: &str,
+    ) -> GitResult<()> {
+        validate_argument(name)?;
+        let remote = self
+            .remotes(repository)
+            .await?
+            .into_iter()
+            .find(|remote| remote.name() == name)
+            .ok_or_else(|| invalid("remote no longer exists"))?;
+        let identity = remote
+            .identity()
+            .ok_or_else(|| invalid("remote has no repository identity"))?;
+        let actual = format!(
+            "{}/{}/{}",
+            identity.host(),
+            identity.owner(),
+            identity.repository()
+        );
+        if !remote.has_single_identity() || !actual.eq_ignore_ascii_case(expected) {
+            return Err(invalid("remote repository changed"));
+        }
+        Ok(())
+    }
+
     pub async fn remotes(&self, repository: &GitRepository) -> GitResult<Vec<GitRemote>> {
         let output = self
             .run_query(repository.worktree_root(), ["remote"])

@@ -67,13 +67,13 @@ impl AppServer {
 
     pub(super) fn issue_reporter_submit(&self, params: &Value) -> Result<Value, RpcError> {
         let params: IssueReporterSubmitParams = decode(params)?;
-        let credentials = self
-            .github
+        let processor = self
+            .github_processor
             .as_ref()
             .ok_or_else(|| reporter_error(github::ReporterError::Unavailable))?;
         result(&issue(
             self.reporter()?
-                .submit(credentials.as_ref(), &params.title, &params.body)
+                .submit(processor.credentials(), &params.title, &params.body)
                 .map_err(reporter_error)?,
         ))
     }

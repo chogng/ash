@@ -1,7 +1,9 @@
+use ash_async_utils::CancellationToken;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
+use ash_login::AccountMultiplicity;
 use ash_login::AccountRef;
 use ash_login::AccountSnapshot;
 use ash_login::AccountStatus;
@@ -49,6 +51,7 @@ pub const GITHUB_PROVIDER_ID: &str = "github";
 
 const USER_URL: &str = "https://api.github.com/user";
 const CREDENTIAL_KEY: &str = "provider/github/current/oauth";
+const ACCOUNTS_KEY: &str = "provider/github/accounts";
 const REFRESH_MARGIN: u64 = 300;
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
@@ -65,13 +68,51 @@ pub struct GitHubAuthorization {
 pub trait GitHubCredentialProvider: Send + Sync {
     fn authorization(&self) -> Result<GitHubAuthorization, LoginError>;
     fn token(&self, authorization: &GitHubAuthorization) -> Result<SecretValue, LoginError>;
+
+    /// Selects an exact account, without changing another window's default account.
+    fn authorization_for(&self, account_id: &str) -> Result<GitHubAuthorization, LoginError> {
+        let grant = self.authorization()?;
+        if grant.account_id != account_id {
+            return Err(error(
+                LoginErrorKind::ExternalLoginRequired,
+                "GitHub account is not connected",
+            ));
+        }
+        Ok(grant)
+    }
 }
 
-/// Owns Ash's GitHub account session and browser authorization through Ash's token broker.
-pub struct GitHubOAuth {
+/// Redacted GitHub account metadata; host is part of the credential authority.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitHubAccount {
+    pub id: String,
+    pub host: String,
+    pub login: String,
+    pub status: AccountStatus,
+    pub credential_revision: u64,
+}
+
+/// Manages the provider-owned catalog and connects host-bound user tokens.
+pub trait GitHubAccountManager: Send + Sync {
+    /// The primary grant is first; remaining accounts have stable identity order.
+    fn accounts(&self) -> Result<Vec<GitHubAccount>, LoginError>;
+    fn connect_token(
+        &self,
+        host: &str,
+        token: SecretValue,
+        cancellation: &CancellationToken,
+    ) -> Result<GitHubAccount, LoginError>;
+}
+
+struct BrowserAuthorization {
     client_id: String,
     authorize_url: Url,
     token_url: Url,
+}
+
+/// Owns GitHub accounts; browser authorization additionally requires the product token broker.
+pub struct GitHubOAuth {
+    browser: Option<BrowserAuthorization>,
     http: Arc<dyn HttpClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
@@ -113,17 +154,36 @@ impl GitHubOAuth {
         let token_url = broker_base_url
             .join("v1/oauth/github/token")
             .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub broker URL is invalid"))?;
-        Ok(Arc::new_cyclic(|self_weak| Self {
-            client_id,
-            authorize_url,
-            token_url,
+        Ok(Self::with_browser(
+            Some(BrowserAuthorization {
+                client_id,
+                authorize_url,
+                token_url,
+            }),
+            http,
+            secrets,
+        ))
+    }
+
+    /// Token connections work independently of the product's browser authorization configuration.
+    pub fn tokens(http: Arc<dyn HttpClient>, secrets: Arc<dyn SecretStore>) -> Arc<Self> {
+        Self::with_browser(None, http, secrets)
+    }
+
+    fn with_browser(
+        browser: Option<BrowserAuthorization>,
+        http: Arc<dyn HttpClient>,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Arc<Self> {
+        Arc::new_cyclic(|self_weak| Self {
+            browser,
             http,
             secrets,
             self_weak: self_weak.clone(),
             login_service: Mutex::new(Weak::new()),
             active: Mutex::new(BTreeMap::new()),
             credential_lock: Mutex::new(()),
-        }))
+        })
     }
 
     pub fn install_login_service(&self, service: &Arc<LoginService>) -> Result<(), LoginError> {
@@ -135,35 +195,59 @@ impl GitHubOAuth {
         SecretKey::new(CREDENTIAL_KEY).expect("static GitHub credential key")
     }
 
-    fn load_credential(&self) -> Result<Option<Credential>, LoginError> {
-        self.secrets
-            .load(&Self::credential_key())
-            .map_err(|_| {
-                error(
-                    LoginErrorKind::Unavailable,
-                    "GitHub credential store is unavailable",
-                )
-            })?
-            .map(|value| {
-                serde_json::from_slice(value.expose()).map_err(|_| {
-                    error(
-                        LoginErrorKind::Driver,
-                        "Stored GitHub credential is invalid",
-                    )
-                })
-            })
-            .transpose()
+    fn accounts_key() -> SecretKey {
+        SecretKey::new(ACCOUNTS_KEY).expect("static GitHub accounts key")
     }
 
-    fn store_credential(&self, credential: &Credential) -> Result<(), LoginError> {
-        let bytes = serde_json::to_vec(credential).map_err(|_| {
+    fn load_credentials(&self) -> Result<Credentials, LoginError> {
+        let stored = self.secrets.load(&Self::accounts_key()).map_err(|_| {
+            error(
+                LoginErrorKind::Unavailable,
+                "GitHub credential store is unavailable",
+            )
+        })?;
+        if let Some(stored) = stored {
+            return serde_json::from_slice(stored.expose())
+                .map_err(|_| error(LoginErrorKind::Driver, "Stored GitHub accounts are invalid"));
+        }
+        // One-way migration keeps existing cloud logins while retiring the single-account key.
+        let legacy = self.secrets.load(&Self::credential_key()).map_err(|_| {
+            error(
+                LoginErrorKind::Unavailable,
+                "GitHub credential store is unavailable",
+            )
+        })?;
+        let mut catalog = Credentials::default();
+        if let Some(legacy) = legacy {
+            let credential: Credential = serde_json::from_slice(legacy.expose()).map_err(|_| {
+                error(
+                    LoginErrorKind::Driver,
+                    "Stored GitHub credential is invalid",
+                )
+            })?;
+            let id = credential.identity();
+            catalog.default_account = Some(id.clone());
+            catalog.accounts.insert(id, credential);
+            self.save_credentials(&catalog)?;
+            self.secrets.delete(&Self::credential_key()).map_err(|_| {
+                error(
+                    LoginErrorKind::Unavailable,
+                    "GitHub credential migration failed",
+                )
+            })?;
+        }
+        Ok(catalog)
+    }
+
+    fn save_credentials(&self, catalog: &Credentials) -> Result<(), LoginError> {
+        let bytes = serde_json::to_vec(catalog).map_err(|_| {
             error(
                 LoginErrorKind::Driver,
-                "GitHub credential could not be encoded",
+                "GitHub credentials could not be encoded",
             )
         })?;
         self.secrets
-            .store(&Self::credential_key(), &SecretValue::new(bytes))
+            .store(&Self::accounts_key(), &SecretValue::new(bytes))
             .map_err(|_| {
                 error(
                     LoginErrorKind::Unavailable,
@@ -172,15 +256,49 @@ impl GitHubOAuth {
             })
     }
 
+    fn store_credential(&self, credential: &Credential) -> Result<(), LoginError> {
+        let mut catalog = self.load_credentials()?;
+        let id = credential.identity();
+        let mut credential = credential.clone();
+        // Logout removes the revision counter. A fresh grant identity prevents
+        // reconnecting with the same token from reviving an earlier operation.
+        credential.grant_nonce = random_base64url()?;
+        if let Some(previous) = catalog.accounts.get(&id) {
+            credential.credential_revision = previous.credential_revision.saturating_add(1);
+        }
+        // Cloud-only consumers use the cloud grant; connecting Enterprise does not replace it.
+        if credential.host == "github.com" || catalog.default_account.is_none() {
+            catalog.default_account = Some(id.clone());
+        }
+        catalog.accounts.insert(id, credential);
+        self.save_credentials(&catalog)
+    }
+
     fn current_credential(&self) -> Result<Option<Credential>, LoginError> {
+        self.credential_for(None)
+    }
+
+    fn credential_for(&self, selection: Option<&str>) -> Result<Option<Credential>, LoginError> {
         let _lock = self.credential_lock.lock().map_err(lock_error)?;
-        let Some(mut credential) = self.load_credential()? else {
+        let mut catalog = self.load_credentials()?;
+        let Some(id) = selection
+            .map(str::to_owned)
+            .or_else(|| catalog.default_account.clone())
+        else {
             return Ok(None);
         };
-        if credential.client_id != self.client_id {
+        let Some(mut credential) = catalog.accounts.remove(&id) else {
+            return Ok(None);
+        };
+        if !credential.client_id.is_empty()
+            && self
+                .browser
+                .as_ref()
+                .is_some_and(|browser| credential.client_id != browser.client_id)
+        {
             return Ok(None);
         }
-        if credential.needs_refresh() && credential.can_refresh() {
+        if credential.needs_refresh() && credential.can_refresh() && self.browser.is_some() {
             match self.refresh_token(&credential) {
                 Ok(token) => {
                     let user = self.user(&token.access_token)?;
@@ -191,7 +309,12 @@ impl GitHubOAuth {
                         ));
                     }
                     credential.replace_token(token);
-                    self.store_credential(&credential)?;
+                    catalog.accounts.insert(id, credential.clone());
+                    self.save_credentials(&catalog)?;
+                    if let Some(service) = self.login_service.lock().map_err(lock_error)?.upgrade()
+                    {
+                        service.update_account(credential.snapshot())?;
+                    }
                 }
                 Err(failure) if failure.kind() == LoginErrorKind::ExternalLoginRequired => {}
                 Err(failure) => return Err(failure),
@@ -201,6 +324,12 @@ impl GitHubOAuth {
     }
 
     fn authorize(&self) -> Result<BrowserGrant, LoginError> {
+        let browser = self.browser.as_ref().ok_or_else(|| {
+            error(
+                LoginErrorKind::Unavailable,
+                "GitHub browser authorization is not configured",
+            )
+        })?;
         let state = random_base64url()?;
         let verifier = random_base64url()?;
         let path = format!("/github-oauth/{}", random_base64url()?);
@@ -220,10 +349,10 @@ impl GitHubOAuth {
             .port();
         let redirect_uri = format!("http://127.0.0.1:{port}{path}");
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-        let mut authorization_url = self.authorize_url.clone();
+        let mut authorization_url = browser.authorize_url.clone();
         authorization_url
             .query_pairs_mut()
-            .append_pair("client_id", &self.client_id)
+            .append_pair("client_id", &browser.client_id)
             .append_pair("redirect_uri", &redirect_uri)
             .append_pair("state", &state)
             .append_pair("code_challenge", &challenge)
@@ -243,6 +372,12 @@ impl GitHubOAuth {
         grant: BrowserGrant,
         cancelled: &AtomicBool,
     ) -> Result<Credential, LoginError> {
+        let browser = self.browser.as_ref().ok_or_else(|| {
+            error(
+                LoginErrorKind::Unavailable,
+                "GitHub browser authorization is not configured",
+            )
+        })?;
         let deadline = Instant::now() + LOGIN_TIMEOUT;
         loop {
             if cancelled.load(Ordering::Acquire) {
@@ -269,9 +404,9 @@ impl GitHubOAuth {
                         ));
                     }
                     let response = self.post_form(
-                        self.token_url.as_str(),
+                        browser.token_url.as_str(),
                         &[
-                            ("client_id", &self.client_id),
+                            ("client_id", &browser.client_id),
                             ("grant_type", "authorization_code"),
                             ("code", &code),
                             ("redirect_uri", &grant.redirect_uri),
@@ -287,7 +422,7 @@ impl GitHubOAuth {
                         })?;
                     let token = token.into_token()?;
                     let user = self.user(&token.access_token)?;
-                    return Ok(Credential::new(token, user, self.client_id.clone()));
+                    return Ok(Credential::new(token, user, browser.client_id.clone()));
                 }
                 Err(failure) if failure.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(CANCELLATION_POLL_INTERVAL);
@@ -298,10 +433,16 @@ impl GitHubOAuth {
     }
 
     fn refresh_token(&self, credential: &Credential) -> Result<Token, LoginError> {
+        let browser = self.browser.as_ref().ok_or_else(|| {
+            error(
+                LoginErrorKind::Unavailable,
+                "GitHub browser authorization is not configured",
+            )
+        })?;
         let response = self.post_form(
-            self.token_url.as_str(),
+            browser.token_url.as_str(),
             &[
-                ("client_id", &self.client_id),
+                ("client_id", &browser.client_id),
                 ("grant_type", "refresh_token"),
                 ("refresh_token", &credential.refresh_token),
             ],
@@ -338,7 +479,8 @@ impl GitHubOAuth {
                 LoginErrorKind::Driver,
                 "GitHub user request could not be constructed",
             )
-        })?;
+        })?
+        .without_redirects();
         let response = self
             .http
             .execute(&request)
@@ -404,8 +546,14 @@ impl GitHubOAuth {
             return;
         }
         let outcome = match result.and_then(|credential| {
+            let _lock = self.credential_lock.lock().map_err(lock_error)?;
             self.store_credential(&credential)?;
-            Ok(credential.snapshot())
+            let stored = self
+                .load_credentials()?
+                .accounts
+                .remove(&credential.identity())
+                .expect("stored GitHub account");
+            Ok(stored.snapshot())
         }) {
             Ok(account) => LoginCompletionOutcome::Succeeded { account },
             Err(failure) => LoginCompletionOutcome::Failed {
@@ -439,6 +587,21 @@ impl InteractiveLoginDriver for GitHubOAuth {
             .map(|credential| credential.snapshot()))
     }
 
+    fn account_multiplicity(&self) -> AccountMultiplicity {
+        AccountMultiplicity::Multiple
+    }
+
+    fn read_accounts(&self) -> Result<Vec<AccountSnapshot>, LoginError> {
+        let ids: Vec<_> = {
+            let _lock = self.credential_lock.lock().map_err(lock_error)?;
+            self.load_credentials()?.accounts.into_keys().collect()
+        };
+        ids.iter()
+            .filter_map(|id| self.credential_for(Some(id)).transpose())
+            .map(|result| result.map(|credential| credential.snapshot()))
+            .collect()
+    }
+
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
         if request.method != LoginMethod::GitHubBrowser {
             return Err(error(
@@ -452,14 +615,6 @@ impl InteractiveLoginDriver for GitHubOAuth {
                 LoginErrorKind::Conflict,
                 "a GitHub login is already active",
             ));
-        }
-        if let Some(credential) = self.current_credential()?
-            && credential.is_ready()
-        {
-            return Ok(BeginLogin::Connected {
-                login_id: request.login_id,
-                account: credential.snapshot(),
-            });
         }
         let grant = self.authorize()?;
         let authorization_url = grant.authorization_url.clone();
@@ -500,15 +655,17 @@ impl InteractiveLoginDriver for GitHubOAuth {
         }
         active.clear();
         let _lock = self.credential_lock.lock().map_err(lock_error)?;
-        self.secrets
-            .delete(&Self::credential_key())
-            .map(|_| ())
-            .map_err(|_| {
-                error(
-                    LoginErrorKind::Unavailable,
-                    "GitHub credential store is unavailable",
-                )
-            })
+        let mut catalog = self.load_credentials()?;
+        catalog.accounts.remove(&account.account_id);
+        if catalog.default_account.as_deref() == Some(&account.account_id) {
+            catalog.default_account = catalog
+                .accounts
+                .iter()
+                .find(|(_, credential)| credential.host == "github.com")
+                .or_else(|| catalog.accounts.iter().next())
+                .map(|(id, _)| id.clone());
+        }
+        self.save_credentials(&catalog)
     }
 }
 
@@ -525,9 +682,21 @@ impl GitHubCredentialProvider for GitHubOAuth {
             })
     }
 
+    fn authorization_for(&self, account_id: &str) -> Result<GitHubAuthorization, LoginError> {
+        self.credential_for(Some(account_id))?
+            .filter(Credential::is_ready)
+            .map(|credential| credential.authorization())
+            .ok_or_else(|| {
+                error(
+                    LoginErrorKind::ExternalLoginRequired,
+                    "GitHub authentication is required",
+                )
+            })
+    }
+
     fn token(&self, authorization: &GitHubAuthorization) -> Result<SecretValue, LoginError> {
         let credential = self
-            .current_credential()?
+            .credential_for(Some(&authorization.account_id))?
             .filter(Credential::is_ready)
             .filter(|credential| credential.authorization() == *authorization)
             .ok_or_else(|| {
@@ -539,6 +708,114 @@ impl GitHubCredentialProvider for GitHubOAuth {
         Ok(SecretValue::new(
             credential.access_token.as_bytes().to_vec(),
         ))
+    }
+}
+
+impl GitHubAccountManager for GitHubOAuth {
+    fn accounts(&self) -> Result<Vec<GitHubAccount>, LoginError> {
+        let ids: Vec<_> = {
+            let _lock = self.credential_lock.lock().map_err(lock_error)?;
+            let catalog = self.load_credentials()?;
+            // Consumers without an account picker use the primary grant. Keep the
+            // public catalog in that same order so its displayed sender is accurate.
+            let mut ids: Vec<_> = catalog.accounts.into_keys().collect();
+            if let Some(index) = ids
+                .iter()
+                .position(|id| Some(id) == catalog.default_account.as_ref())
+            {
+                let primary = ids.remove(index);
+                ids.insert(0, primary);
+            }
+            ids
+        };
+        ids.iter()
+            .filter_map(|id| self.credential_for(Some(id)).transpose())
+            .map(|result| result.map(|credential| credential.account()))
+            .collect()
+    }
+
+    fn connect_token(
+        &self,
+        host: &str,
+        token: SecretValue,
+        cancellation: &CancellationToken,
+    ) -> Result<GitHubAccount, LoginError> {
+        let host = host.trim().to_ascii_lowercase();
+        crate::Repository::new(host.clone(), "account".into(), "identity".into())
+            .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub host is invalid"))?;
+        let access_token = std::str::from_utf8(token.expose())
+            .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub token is invalid"))?;
+        if access_token.is_empty()
+            || access_token.len() > 4096
+            || access_token
+                .bytes()
+                .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
+        {
+            return Err(error(
+                LoginErrorKind::InvalidInput,
+                "GitHub token is invalid",
+            ));
+        }
+        let url = if host == "github.com" {
+            USER_URL.to_owned()
+        } else {
+            format!("https://{host}/api/v3/user")
+        };
+        let request = HttpRequest::new(
+            HttpMethod::Get,
+            url,
+            vec![
+                HttpHeader::new("Accept", "application/vnd.github+json"),
+                HttpHeader::new("User-Agent", "Ash Desktop"),
+                HttpHeader::new("Authorization", format!("Bearer {access_token}")),
+            ],
+            Vec::new(),
+        )
+        .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub token is invalid"))?
+        .without_redirects();
+        let response = self
+            .http
+            .execute_with_cancellation(&request, cancellation)
+            .map_err(|_| error(LoginErrorKind::Unavailable, "GitHub is unavailable"))?;
+        if !response.is_success() {
+            return Err(error(
+                LoginErrorKind::ExternalLoginRequired,
+                "GitHub rejected the account token",
+            ));
+        }
+        let user: GitHubUser = serde_json::from_slice(response.body())
+            .map_err(|_| error(LoginErrorKind::Driver, "GitHub returned an invalid account"))?;
+        if user.id == 0 || user.login.is_empty() {
+            return Err(error(
+                LoginErrorKind::Driver,
+                "GitHub returned an incomplete account",
+            ));
+        }
+        cancellation
+            .check()
+            .map_err(|_| error(LoginErrorKind::Driver, "GitHub connection was cancelled"))?;
+        let mut credential = Credential::new(
+            Token {
+                access_token: access_token.to_owned(),
+                refresh_token: String::new(),
+                expires_at: None,
+                refresh_expires_at: None,
+            },
+            user,
+            String::new(),
+        );
+        credential.host = host;
+        {
+            let _lock = self.credential_lock.lock().map_err(lock_error)?;
+            self.store_credential(&credential)?;
+        }
+        let credential = self
+            .credential_for(Some(&credential.identity()))?
+            .ok_or_else(|| error(LoginErrorKind::Driver, "GitHub account was removed"))?;
+        if let Some(service) = self.login_service.lock().map_err(lock_error)?.upgrade() {
+            service.update_account(credential.snapshot())?;
+        }
+        Ok(credential.account())
     }
 }
 
@@ -621,8 +898,20 @@ struct Token {
     refresh_expires_at: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
+struct Credentials {
+    default_account: Option<String>,
+    accounts: BTreeMap<String, Credential>,
+}
+
+fn cloud_host() -> String {
+    "github.com".into()
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 struct Credential {
+    #[serde(default = "cloud_host")]
+    host: String,
     #[serde(default)]
     client_id: String,
     access_token: String,
@@ -632,21 +921,46 @@ struct Credential {
     account_id: String,
     login: String,
     credential_revision: u64,
+    #[serde(default)]
+    grant_nonce: String,
 }
 
 impl Credential {
+    fn identity(&self) -> String {
+        if self.host == "github.com" {
+            self.account_id.clone()
+        } else {
+            format!("{}/{}", self.host, self.account_id)
+        }
+    }
+    fn account(&self) -> GitHubAccount {
+        let snapshot = self.snapshot();
+        GitHubAccount {
+            id: self.identity(),
+            host: self.host.clone(),
+            login: self.login.clone(),
+            status: snapshot.status,
+            credential_revision: self.credential_revision,
+        }
+    }
+
     fn authorization(&self) -> GitHubAuthorization {
         // A re-login or token replacement must never inherit private cache entries from an older grant.
-        let grant_id = URL_SAFE_NO_PAD.encode(Sha256::digest(self.access_token.as_bytes()));
+        let mut digest = Sha256::new();
+        digest.update(self.access_token.as_bytes());
+        digest.update(self.credential_revision.to_le_bytes());
+        digest.update(self.grant_nonce.as_bytes());
+        let grant_id = URL_SAFE_NO_PAD.encode(digest.finalize());
         GitHubAuthorization {
-            host: "github.com".into(),
-            account_id: self.account_id.clone(),
+            host: self.host.clone(),
+            account_id: self.identity(),
             grant_id,
         }
     }
 
     fn new(token: Token, user: GitHubUser, client_id: String) -> Self {
         Self {
+            host: cloud_host(),
             client_id,
             access_token: token.access_token,
             refresh_token: token.refresh_token,
@@ -655,6 +969,7 @@ impl Credential {
             account_id: user.id.to_string(),
             login: user.login,
             credential_revision: 1,
+            grant_nonce: String::new(),
         }
     }
 
@@ -688,7 +1003,7 @@ impl Credential {
         AccountSnapshot {
             account: AccountRef {
                 provider: GITHUB_PROVIDER_ID.into(),
-                account_id: self.account_id.clone(),
+                account_id: self.identity(),
             },
             email: None,
             display_name: Some(self.login.clone()),
@@ -733,6 +1048,11 @@ fn read_callback(
     path: &str,
     state: &str,
 ) -> Result<Option<String>, LoginError> {
+    // Accepted sockets can inherit the listener's nonblocking mode on macOS.
+    // The callback reader owns a bounded blocking read, unlike the accept loop.
+    stream
+        .set_nonblocking(false)
+        .map_err(|_| error(LoginErrorKind::Unavailable, "GitHub callback failed"))?;
     stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .map_err(|_| error(LoginErrorKind::Unavailable, "GitHub callback failed"))?;

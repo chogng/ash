@@ -110,3 +110,12 @@ test('a delayed signed-out snapshot cannot overwrite the completed GitHub login'
 	await expect(page.getByText('Submitting as Test account')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Sign in to GitHub', exact: true })).toBeHidden();
 });
+
+test('the displayed sender follows the primary GitHub grant rather than the generic account ordering', async ({ page }) => {
+	await page.getByRole('button', { name: 'Sign in to GitHub', exact: true }).click();
+	await page.evaluate(() => window.ashIssueReporterIntegration.setAccounts([{ id: '99', host: 'github.com', login: 'Another cloud account', status: 'ready', credentialRevision: '1' }, { id: '42', host: 'github.com', login: 'Test account', status: 'ready', credentialRevision: '1' }]));
+	await expect(page.getByText('Submitting as Another cloud account', { exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashIssueReporterIntegration.setAccounts([{ id: 'ghe.example/42', host: 'ghe.example', login: 'Enterprise user', status: 'ready', credentialRevision: '1' }]));
+	await expect(page.getByRole('button', { name: 'Sign in to GitHub', exact: true })).toBeVisible();
+	await expect(page.getByText('Submitting as Enterprise user', { exact: true })).toHaveCount(0);
+});

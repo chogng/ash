@@ -1,8 +1,8 @@
 use super::AppServer;
 use super::RpcError;
 use super::decode;
-use super::github_operations::github_authentication_error;
-use super::github_operations::github_error;
+use super::github_processor::github_authentication_error;
+use super::github_processor::github_error;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::issues::IssueComment;

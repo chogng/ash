@@ -28,7 +28,7 @@ export class SessionsAccountMenu extends Disposable {
 			const label = account.plan
 				? localize('sessions.account.nameAndPlan', '{0} · {1}', name, account.plan)
 				: name;
-			return { id: `ash.sessions.account.${account.provider}`, label, tooltip: label, enabled: false, run() { } };
+			return { id: `ash.sessions.account.${account.provider}.${account.accountId}`, label, tooltip: label, enabled: false, run() { } };
 		});
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
 		if (this.loadFailed) {
@@ -44,11 +44,11 @@ export class SessionsAccountMenu extends Disposable {
 					? localize('workbench.signOutGitHub', 'Sign out of GitHub ({0})', name)
 					: localize('workbench.signOutAccount', 'Sign out of {0}', name);
 				return {
-					id: `ash.sessions.signOut.${account.provider}`,
+					id: `ash.sessions.signOut.${account.provider}.${account.accountId}`,
 					label,
 					tooltip: label,
 					enabled: true,
-					run: () => this.accounts.logout(account.provider),
+					run: () => this.accounts.logout(account.provider, account.accountId),
 				};
 			}),
 		], [

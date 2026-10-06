@@ -10,13 +10,23 @@ GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口�
 - 不维护 Issue Workflow、assignment、领取租约、执行阶段或交付状态机。
 - Issue 浏览缓存由 `ash-state` 维护；执行通过通用 Session/Agent API，Agent 使用获准的 Plugin 工具处理外部操作。
 
-`GitHub::for_account` 接收共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。当前账号供应商仅支持 GitHub.com，其他主机不得使用其凭据；登录由 `ash-login` 调用本 crate 的授权实现，密钥复用 `ash-secrets`。
+`GitHub::for_selected_account` 接收明确账号、共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。GitHub.com 与 Enterprise Server 的同名账号分别保存，主机不匹配时不会发送凭据；登录由 `ash-login` 调用本 crate 的授权实现，密钥复用 `ash-secrets`。浏览器登录使用配置的 GitHub App；个人访问令牌连接不要求浏览器授权服务配置，通过目标主机的 `/user` 验证账号后保存。
+
+账号目录把主账号排在首位。连接 GitHub.com 账号会更新主账号；连接 Enterprise 不替换已有的 GitHub.com 主账号。未提供账号的消费者通过 `GitHub::for_account` 使用主账号；管理界面选择账号仅影响当前窗口，每个仓库请求携带该账号。按账号登出只移除对应授权，提供方登出移除其全部授权。旧单账号密钥在第一次读取时迁入账号目录并删除。
 
 `github/*` RPC 不要求本地 checkout，直接接收明确的仓库身份。App Server 为同一托管仓库协调读写，写入独占，读取共享；每个请求携带连接内唯一的 `operationId`，通过 `github/cancel` 取消。HTTP 尝试最多 30 秒，响应最多 8 MiB；分页接口显式返回下一页，PR 文件返回是否触及 3000 文件上限。写入只发送一次，响应丢失、服务端错误或取消后无法确认结果时返回 `GitHubSubmissionUncertain`，调用方应先查看远端结果。
 
-已接入的接口包括仓库信息、Issue 列表/详情/创建/修改、Issue 与 PR 的讨论评论、PR 列表/详情/创建/修改/文件/评审/合并/自动合并、提交详情及检查状态、标签和可分配负责人。`github/commit/read` 接收 7–40 位十六进制 SHA，校验返回的完整 SHA 与请求一致，不接受可变分支名。修改 Issue 可以调整状态、标签和负责人。PR 评审与合并携带用户审阅的 commit；合并使用 REST `sha`，自动合并使用 GraphQL `expectedHeadOid` 由 GitHub 原子校验。逐行评审线程、通知、多人账号选择及 Enterprise 登录尚未实现。
+已接入的接口包括仓库信息、Issue 列表/详情/创建/修改、Issue 与 PR 的讨论评论、PR 列表/详情/创建/修改/文件/评审/合并/自动合并、逐行评审线程及回复与解决状态、提交详情及检查状态、标签和可分配负责人。`github/commit/read` 接收 7–40 位十六进制 SHA，校验返回的完整 SHA 与请求一致，不接受可变分支名。修改 Issue 可以调整状态、标签和负责人。PR 评审与合并携带用户审阅的 commit；评审提交前检查当前 head，评论绑定该 commit；合并使用 REST `sha`，自动合并使用 GraphQL `expectedHeadOid` 由 GitHub 原子校验。
 
-前端 `platform/github/common/githubService.ts` 定义 `IGitHubService` 和领域类型，`browser/appServerGitHubService.ts` 封装生成的协议、取消与错误分类。Web 和 Electron 都从现有 Renderer Host 获得该服务，Workbench 注册同一个实例；管理界面独立开发，产品调用不经过 `workbench/api`。
+`github/pullRequest/diff` 返回指定 head 与目标分支的共同祖先及文件列表，读取前后检查 PR head 和目标分支提交未变。`github/file/read` 只按完整提交 SHA 读取文件；超过 1 MiB 的内容和二进制内容返回明确类型。线程列表和每个线程的回复分别返回游标；线程读取、回复、解决和重新打开均核对线程所属仓库与 PR，不能用其他仓库的线程 ID 写入。逐行评论使用文件路径、原文件或修改后文件的行号及侧别，随一次 Review 提交。
+
+前端 `platform/github/common/githubService.ts` 定义 `IGitHubService` 和领域类型，`browser/appServerGitHubService.ts` 封装生成的协议、取消与错误分类。Web 和 Electron 都从现有 Renderer Host 获得该服务，Workbench 注册同一个实例；产品调用不经过 `workbench/api`。
+
+在 Workbench 或 Sessions 的命令面板运行 **GitHub Pull Requests and Issues**（`workbench.action.github.open`），输入仓库 owner 和名称，即可浏览 PR 与 Issue。PR 页面提供文件 Diff、检查结果、逐行评论草稿、评审提交、讨论回复与解决、修改与关闭、合并和自动合并；Issue 页面提供创建、修改、标签、负责人、评论与关闭/重新打开。创建 PR 接收已经推送的源分支，也接受 `owner:branch`。审查和创建/编辑草稿保存在当前窗口，关闭页签不会丢失；切换 GitHub 账号时清空私有数据和草稿。旧提交的非空审查草稿阻止提交；写入结果不确定时阻止重复写入，用户查看 GitHub 后可明确确认结果。Alt+F1 打开键盘帮助，Accessible View 提供详情文本。
+
+账号选择框支持多个 GitHub.com 和 Enterprise Server 账号，菜单提供个人访问令牌连接和所选账号登出。PR 页面支持请求或移除用户与团队审查者，按 GitHub 返回的权限编辑或删除逐行评论；写入前核对评论所属仓库与 PR，收到明确确认才更新界面。
+
+本地检出和推送委托 `ash-git`，用户明确选择仓库与远端。检出从目标仓库的 PR ref 获取完整提交，核对审阅的 SHA 后创建本地分支；未保存文件或磁盘改动阻止检出。推送使用 PR 源仓库和源分支，确认本地分支及提交后只推送该提交，不强制覆盖远端历史。远端所有 fetch/push URL 都必须属于指定仓库；API 账号选择不改变 Git 的 SSH/HTTPS 凭据。创建 fork、通知和 Enterprise 浏览器授权尚未接入。
 
 `workbench/contrib/github/browser/` 为常规 Workbench 和 Sessions 的聊天 Markdown 注册 GitHub.com 仓库、Issue、PR 和提交链接详情。卡片使用同一领域接口读取数据；PR 检查在打开卡片时按页加载，源分支使用返回的 `headRepository` 身份跳转，源仓库删除后只显示分支名。链接共享 Issue、PR 与提交读取，移除最后一个引用或切换账号时释放缓存并取消请求。Enter 打开原链接，F2 进入卡片，Tab 遍历链接，Escape 返回原链接；Accessible View 可读取完整描述。
 

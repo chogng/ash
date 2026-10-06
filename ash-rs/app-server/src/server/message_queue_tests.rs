@@ -8,6 +8,7 @@ fn byte_leases_release_on_completion_and_control_has_independent_capacity() {
         ordinary: MessageBudget::new(8),
         control: MessageBudget::new(4),
         host_replies: MessageBudget::new(8),
+        host: Arc::new(HostInputBudgets::default()),
     };
     let ordinary = budgets.ordinary.try_reserve(8).unwrap();
     assert!(budgets.ordinary.try_reserve(1).is_none());

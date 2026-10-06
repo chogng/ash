@@ -53,12 +53,12 @@ export class ManageAccountsAction extends Action2 {
 				providerName: 'ChatGPT',
 				label: localize({ bundle: 'ash', key: 'workbench.signInWithChatGPT' }, 'Sign in with ChatGPT'),
 			}] : []),
-			...(!state.accounts.some(account => account.provider === 'github' && account.status === 'ready') ? [{
+			{
 				kind: 'github' as const,
 				label: github.isConnecting
 					? localize({ bundle: 'ash', key: 'workbench.cancelGitHubConnection' }, 'Cancel GitHub connection')
 					: localize({ bundle: 'ash', key: 'workbench.connectGitHub' }, 'Connect GitHub'),
-			}] : []),
+			},
 			...(!state.accounts.some(account => account.provider === 'bigmodel-start-plan' && account.status === 'ready') ? [{
 				kind: 'subscription' as const,
 				method: { type: 'bigModelStartPlanBrowser' as const },
@@ -125,7 +125,7 @@ function showAccountActions(quickInput: IQuickInputService, accounts: IAccountSe
 	picker.items = [{ label: localize({ bundle: 'ash', key: 'workbench.signOutAccount' }, 'Sign out of {0}', name) }];
 	resources.add(picker.onDidAccept(() => {
 		picker.hide();
-		void accounts.logout(account.provider).catch(() => {
+		void accounts.logout(account.provider, account.accountId).catch(() => {
 			notifications.error(localize({ bundle: 'ash', key: 'workbench.signOutFailed' }, 'Could not sign out of {0}.', name));
 		});
 	}));

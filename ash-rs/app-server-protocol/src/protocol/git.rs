@@ -732,6 +732,24 @@ pub enum GitIntegrationDto {
 )]
 #[ts(tag = "kind", rename_all = "camelCase")]
 pub enum GitCommandDto {
+    FetchAndCheckout {
+        remote: String,
+        #[ts(rename = "remoteIdentity")]
+        remote_identity: String,
+        reference: String,
+        #[ts(rename = "objectId")]
+        object_id: String,
+        name: String,
+    },
+    PushBranch {
+        remote: String,
+        #[ts(rename = "remoteIdentity")]
+        remote_identity: String,
+        name: String,
+        branch: String,
+        #[ts(rename = "expectedHead")]
+        expected_head: String,
+    },
     CreateBranchAt {
         name: String,
         #[ts(rename = "objectId")]

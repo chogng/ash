@@ -24,6 +24,7 @@ export default defineConfig({
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				github: resolve(import.meta.dirname, 'github.html'),
+				githubReview: resolve(import.meta.dirname, 'githubReview.html'),
 				markdown: resolve(import.meta.dirname, 'markdown.html'),
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),

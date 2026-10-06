@@ -210,7 +210,7 @@ function isGitHistoryActionTarget(value: unknown): value is GitHistoryActionTarg
 		typeof (value as GitHistoryActionTarget).runTitleOperation === 'function';
 }
 
-type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch'>;
+type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch' | 'fetchAndCheckout' | 'pushBranch'>;
 
 const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; readonly id: string; readonly key: string; readonly title: string; }[] = [
 	{ kind: 'renameBranch', id: 'git.renameBranch', key: 'git.renameBranchTitle', title: 'Git: Rename Branch' },

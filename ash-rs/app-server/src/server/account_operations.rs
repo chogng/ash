@@ -180,11 +180,17 @@ impl AppServer {
 
     pub(super) fn account_logout(&self, params: &Value) -> Result<Value, RpcError> {
         let params: AccountLogoutParams = decode(params)?;
-        let status = match self
-            .login_service()?
-            .logout_provider(&params.provider)
-            .map_err(login_error)?
-        {
+        let outcome = if let Some(account_id) = params.account_id {
+            self.login_service()?
+                .logout_account(&ash_login::AccountRef {
+                    provider: params.provider,
+                    account_id,
+                })
+        } else {
+            self.login_service()?.logout_provider(&params.provider)
+        }
+        .map_err(login_error)?;
+        let status = match outcome {
             LogoutOutcome::LoggedOut => AccountLogoutStatusDto::LoggedOut,
             LogoutOutcome::AlreadyLoggedOut => AccountLogoutStatusDto::AlreadyLoggedOut,
         };

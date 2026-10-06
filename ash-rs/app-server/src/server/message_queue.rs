@@ -5,6 +5,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::mpsc;
 
 const CONTROL_BYTES: usize = 16 * 1024 * 1024;
@@ -108,19 +109,46 @@ impl MessageBudget {
     }
 }
 
+/// Process-wide input and request ceilings are shared by every connection and directory.
+/// Separate control capacity remains available when ordinary requests are saturated.
+pub(crate) struct HostInputBudgets {
+    pub(crate) ordinary: MessageBudget,
+    pub(crate) control: MessageBudget,
+    pub(crate) requests: MessageBudget,
+    pub(crate) control_requests: MessageBudget,
+    pub(crate) network_requests: MessageBudget,
+    pub(crate) connections: MessageBudget,
+}
+
+impl Default for HostInputBudgets {
+    fn default() -> Self {
+        Self {
+            ordinary: MessageBudget::new(DEFAULT_MAX_MESSAGE_BYTES),
+            control: MessageBudget::new(CONTROL_BYTES),
+            requests: MessageBudget::new(256),
+            control_requests: MessageBudget::new(64),
+            network_requests: MessageBudget::new(32),
+            connections: MessageBudget::new(64),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct InputBudgets {
     pub(crate) ordinary: MessageBudget,
     pub(crate) control: MessageBudget,
     pub(crate) host_replies: MessageBudget,
+    pub(crate) host: Arc<HostInputBudgets>,
 }
 
 impl Default for InputBudgets {
     fn default() -> Self {
+        static HOST: OnceLock<Arc<HostInputBudgets>> = OnceLock::new();
         Self {
             ordinary: MessageBudget::new(DEFAULT_MAX_MESSAGE_BYTES),
             control: MessageBudget::new(CONTROL_BYTES),
             host_replies: MessageBudget::new(DEFAULT_MAX_MESSAGE_BYTES),
+            host: Arc::clone(HOST.get_or_init(|| Arc::new(HostInputBudgets::default()))),
         }
     }
 }

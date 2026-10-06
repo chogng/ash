@@ -43,8 +43,8 @@ export class AppServerAccountService extends Disposable implements IAccountServi
 		await this.api.cancelLogin({ loginId });
 	}
 
-	async logout(provider: string): Promise<void> {
-		await this.api.logout({ provider });
+	async logout(provider: string, accountId?: string): Promise<void> {
+		await this.api.logout({ provider, accountId });
 	}
 }
 

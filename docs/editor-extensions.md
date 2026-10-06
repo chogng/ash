@@ -154,7 +154,7 @@ GitHub 请求，以及 Git 和持久化。扩展取得所需业务结果，不�
 
 仓库已经有 [`IGitHubService`](../app-ts/src/ash/platform/github/common/githubService.ts) 和
 [`AppServerGitHubService`](../app-ts/src/ash/platform/github/browser/appServerGitHubService.ts)，
-后者通过生成协议调用 [`App Server GitHub operations`](../ash-rs/app-server/src/server/github_operations.rs)
+后者通过生成协议调用 [`App Server GitHub processor`](../ash-rs/app-server/src/server/request_processors/github.rs)
 和 [`ash-rs/github`](../ash-rs/github/README.md)。这条产品服务路径可以作为 SDK 接入的后端能力来源；
 当前产品账号授权不等于第三方扩展授权，不能把现有服务或完整连接直接交给扩展。
 GitHub 的独立 TS 扩展入口、TS SDK 的 GitHub API 和逐扩展权限接入尚未完成。

@@ -139,8 +139,8 @@ export class GlobalCompositeBar extends Disposable {
 			const name = account.displayName ?? account.email ?? account.provider;
 			const providerName = this.accountProviderName(account.provider);
 			const label = this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': name, '1': providerName });
-			return new SubmenuAction(`ash.activityBar.account.${account.provider}`, label, [
-				{ id: `ash.activityBar.signOut.${account.provider}`, label: signOutLabel, tooltip: signOutLabel, enabled: true, run: () => this.accountService.logout(account.provider) },
+			return new SubmenuAction(`ash.activityBar.account.${account.provider}.${account.accountId}`, label, [
+				{ id: `ash.activityBar.signOut.${account.provider}.${account.accountId}`, label: signOutLabel, tooltip: signOutLabel, enabled: true, run: () => this.accountService.logout(account.provider, account.accountId) },
 			]);
 		});
 		return Separator.join(accountActions, [

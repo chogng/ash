@@ -2,4 +2,4 @@
 import type { GitHubMergeMethod } from './GitHubMergeMethod.js';
 import type { IssueRepository } from './IssueRepository.js';
 
-export type GitHubPullRequestMergeParams = { operationId: string, repository: IssueRepository, number: number, commit: string, method: GitHubMergeMethod, };
+export type GitHubPullRequestMergeParams = { operationId: string, accountId?: string, repository: IssueRepository, number: number, commit: string, method: GitHubMergeMethod, };

@@ -1512,17 +1512,16 @@ pub fn open_app_server_with_codebase_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
-    let github_oauth = github_account
-        .map(|config| {
-            GitHubOAuth::new(
-                config.client_id,
-                config.broker_base_url,
-                Arc::clone(&application_http),
-                Arc::clone(&profile_secrets),
-            )
-        })
-        .transpose()
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let github_oauth = match github_account {
+        Some(config) => GitHubOAuth::new(
+            config.client_id,
+            config.broker_base_url,
+            Arc::clone(&application_http),
+            Arc::clone(&profile_secrets),
+        )
+        .map_err(|error| OpenAppServerError(error.to_string()))?,
+        None => GitHubOAuth::tokens(Arc::clone(&application_http), Arc::clone(&profile_secrets)),
+    };
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),
@@ -1534,9 +1533,7 @@ pub fn open_app_server_with_codebase_providers(
             .cloned()
             .map(|auth| auth as Arc<dyn InteractiveLoginDriver>),
     );
-    if let Some(github) = &github_oauth {
-        login_drivers.push(github.clone());
-    }
+    login_drivers.push(github_oauth.clone());
     let metadata_refreshers: Vec<Arc<dyn AccountMetadataRefresher>> =
         vec![kimi_oauth.clone(), supergrok_oauth.clone()];
     let login_service = Arc::new(
@@ -1557,11 +1554,9 @@ pub fn open_app_server_with_codebase_providers(
     supergrok_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    if let Some(github) = &github_oauth {
-        github
-            .install_login_service(&login_service)
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-    }
+    github_oauth
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
     let subscription_connections = vec![
         ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
         ash_kimi::KIMI_PROVIDER_ID,
@@ -1631,11 +1626,10 @@ pub fn open_app_server_with_codebase_providers(
     .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots);
-    if let Some(github) = github_oauth {
-        server = server
-            .with_github_credentials(github, application_http.clone())
-            .map_err(open_error)?;
-    }
+    server = server
+        .with_github_accounts(github_oauth.clone())
+        .with_github_credentials(github_oauth, application_http.clone())
+        .map_err(open_error)?;
     if let Some(target) = report_issue_url {
         server = server.with_issue_reporter(
             github::GitHubIssueReporter::new(&target, application_http.clone())

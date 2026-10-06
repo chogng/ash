@@ -35,6 +35,9 @@ pub enum GitHubCancelStatus {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubRepositoryParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
 }
 
@@ -42,6 +45,9 @@ pub struct GitHubRepositoryParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubNumberParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -51,6 +57,9 @@ pub struct GitHubNumberParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubPageParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -61,6 +70,9 @@ pub struct GitHubPageParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubIssueListParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub state: IssueState,
     pub query: String,
@@ -79,6 +91,9 @@ pub struct GitHubIssueListResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubIssueCreateParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub title: String,
     pub body: String,
@@ -90,6 +105,9 @@ pub struct GitHubIssueCreateParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubIssueUpdateParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -118,6 +136,9 @@ pub struct GitHubCommentListResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubCommentCreateParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -128,6 +149,9 @@ pub struct GitHubCommentCreateParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubCommentUpdateParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub comment_id: u64,
@@ -138,6 +162,9 @@ pub struct GitHubCommentUpdateParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubCommentDeleteParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub comment_id: u64,
@@ -147,6 +174,9 @@ pub struct GitHubCommentDeleteParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubPullRequestListParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub state: IssueState,
     pub page: u32,
@@ -181,6 +211,9 @@ pub struct GitHubPullRequestListResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubPullRequestCreateParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub title: String,
     pub body: String,
@@ -193,6 +226,9 @@ pub struct GitHubPullRequestCreateParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubPullRequestUpdateParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -248,18 +284,183 @@ pub struct GitHubPullRequestReviewsResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubPullRequestReviewParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
     pub commit: String,
     pub event: GitHubReviewEvent,
     pub body: String,
+    #[serde(default)]
+    pub comments: Vec<GitHubReviewCommentInput>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum GitHubDiffSide {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewCommentInput {
+    pub path: String,
+    pub line: u32,
+    pub side: GitHubDiffSide,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewDiffParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub commit: String,
+    pub page: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewDiffResult {
+    pub base_commit: String,
+    pub files: GitHubPullRequestFilesResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubFileReadParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    pub commit: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum GitHubFileContent {
+    Text { text: String },
+    Binary,
+    TooLarge,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewThreadsParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewThreadReadParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub thread_id: String,
+    pub cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewThreadReplyParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub thread_id: String,
+    pub body: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubReviewThreadState {
+    Resolved,
+    Unresolved,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewThreadResolveParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub thread_id: String,
+    pub state: GitHubReviewThreadState,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewComment {
+    pub id: String,
+    pub body: String,
+    pub url: String,
+    pub author: Option<String>,
+    pub can_update: bool,
+    pub can_delete: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewCommentsResult {
+    pub comments: Vec<GitHubReviewComment>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewThread {
+    pub id: String,
+    pub path: String,
+    pub line: Option<u32>,
+    pub side: GitHubDiffSide,
+    pub resolved: bool,
+    pub outdated: bool,
+    pub can_resolve: bool,
+    pub comments: GitHubReviewCommentsResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewThreadsResult {
+    pub threads: Vec<GitHubReviewThread>,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubPullRequestMergeParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
@@ -279,6 +480,9 @@ pub struct GitHubMergeResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubChecksParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub commit: String,
     pub page: u32,
@@ -288,6 +492,9 @@ pub struct GitHubChecksParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubCommitParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub sha: String,
 }
@@ -363,6 +570,9 @@ pub struct GitHubLabelsResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubLabelParams {
     pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
     pub repository: IssueRepository,
     pub name: String,
     pub color: String,
@@ -384,4 +594,101 @@ pub struct GitHubCancelParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitHubCancelResult {
     pub status: GitHubCancelStatus,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubAccount {
+    pub id: String,
+    pub host: String,
+    pub login: String,
+    pub status: crate::protocol::account::AccountStatusDto,
+    pub credential_revision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubAccountsResult {
+    pub accounts: Vec<GitHubAccount>,
+}
+
+/// Credentials are accepted only as explicit user input and never returned or formatted in diagnostics.
+#[derive(Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubAccountConnectParams {
+    pub operation_id: String,
+    pub host: String,
+    pub token: String,
+}
+
+impl std::fmt::Debug for GitHubAccountConnectParams {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GitHubAccountConnectParams")
+            .field("operation_id", &self.operation_id)
+            .field("host", &self.host)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubAccountListParams {
+    pub operation_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewCommentEditParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub comment_id: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewCommentDeleteParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub comment_id: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubReviewerChange {
+    Request,
+    Remove,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubReviewersChangeParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub change: GitHubReviewerChange,
+    pub users: Vec<String>,
+    pub teams: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRequestedReviewers {
+    pub users: Vec<String>,
+    pub teams: Vec<String>,
 }

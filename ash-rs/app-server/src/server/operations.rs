@@ -393,7 +393,7 @@ impl AppServer {
             attachments: true,
             file_system,
             git,
-            github: self.github_runtime.is_some(),
+            github: self.github_processor.is_some(),
             content_search,
             codebase,
             cloud_codebase,

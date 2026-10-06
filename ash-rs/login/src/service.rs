@@ -1,4 +1,6 @@
 use crate::AccountMetadataRefresher;
+use crate::AccountMultiplicity;
+use crate::AccountRef;
 use crate::AccountSnapshot;
 use crate::AccountState;
 use crate::AccountStatus;
@@ -96,15 +98,14 @@ impl LoginService {
                 ));
             }
             if initialize {
-                if let Some(account) = driver.read_account()? {
-                    validate_account_provider(provider, &account)?;
-                    accounts.push(account);
-                }
+                let catalog = driver.read_accounts()?;
+                validate_catalog(provider, &catalog)?;
+                accounts.extend(catalog);
                 initialized_providers.insert(provider.to_owned());
             }
             registered.insert(provider.to_owned(), driver);
         }
-        accounts.sort_by(|left, right| left.account.provider.cmp(&right.account.provider));
+        sort_accounts(&mut accounts);
         let provider_revisions = registered
             .keys()
             .map(|provider| (provider.clone(), 0))
@@ -304,10 +305,10 @@ impl LoginService {
             if let LoginCompletionOutcome::Succeeded { account } = &completion.outcome {
                 validate_account_provider(&provider, account)?;
                 state.advance_provider(&provider);
-                replace_provider_account(
+                upsert_account(
                     &mut state.account.accounts,
-                    &provider,
-                    Some(account.clone()),
+                    account.clone(),
+                    self.drivers[&provider].account_multiplicity(),
                 );
                 state.account.revision = state.account.revision.saturating_add(1);
             }
@@ -336,11 +337,9 @@ impl LoginService {
             .clone();
         let mut observed = Vec::with_capacity(self.drivers.len());
         for (provider, driver) in &self.drivers {
-            let account = driver.read_account().and_then(|account| {
-                if let Some(account) = &account {
-                    validate_account_provider(provider, account)?;
-                }
-                Ok(account)
+            let account = driver.read_accounts().and_then(|accounts| {
+                validate_catalog(provider, &accounts)?;
+                Ok(accounts)
             });
             observed.push((provider.clone(), account));
         }
@@ -362,16 +361,16 @@ impl LoginService {
                 state.advance_provider(&provider);
                 match result {
                     Ok(account) => {
-                        replace_provider_account(&mut state.account.accounts, &provider, account);
+                        replace_provider_accounts(&mut state.account.accounts, &provider, account);
                         state.initialized_providers.insert(provider);
                     }
                     Err(_) => {
                         state.initialized_providers.remove(&provider);
-                        if let Some(account) = state
+                        for account in state
                             .account
                             .accounts
                             .iter_mut()
-                            .find(|account| account.account.provider == provider)
+                            .filter(|account| account.account.provider == provider)
                         {
                             account.status = crate::AccountStatus::Unavailable;
                         }
@@ -409,7 +408,11 @@ impl LoginService {
             let mut state = self.state.lock().map_err(lock_error)?;
             state.advance_provider(&provider);
             let before = state.account.accounts.clone();
-            replace_provider_account(&mut state.account.accounts, &provider, Some(account));
+            upsert_account(
+                &mut state.account.accounts,
+                account,
+                self.drivers[&provider].account_multiplicity(),
+            );
             state.initialized_providers.insert(provider);
             if state.account.accounts == before {
                 return Ok(state.account.clone());
@@ -430,23 +433,59 @@ impl LoginService {
                 format!("login provider '{provider}' is unavailable"),
             )
         })?;
-        let account = self
+        let accounts: Vec<_> = self
             .read_or_refresh()?
             .accounts
             .into_iter()
-            .find(|account| account.account.provider == provider);
-        let Some(account) = account else {
+            .filter(|account| account.account.provider == provider)
+            .collect();
+        if accounts.is_empty() {
             return Ok(LogoutOutcome::AlreadyLoggedOut);
-        };
-        driver.logout(&account.account)?;
+        }
+        for account in accounts {
+            driver.logout(&account.account)?;
+        }
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
             state.advance_provider(provider);
             let before = state.account.accounts.len();
-            replace_provider_account(&mut state.account.accounts, provider, None);
+            replace_provider_accounts(&mut state.account.accounts, provider, Vec::new());
             if state.account.accounts.len() == before {
                 return Ok(LogoutOutcome::LoggedOut);
             }
+            state.account.revision = state.account.revision.saturating_add(1);
+            state.account.clone()
+        };
+        if let Some(events) = self.events()? {
+            events.account_updated(updated);
+        }
+        Ok(LogoutOutcome::LoggedOut)
+    }
+
+    /// Removes one exact account without disturbing other accounts owned by its provider.
+    pub fn logout_account(&self, account: &AccountRef) -> Result<LogoutOutcome, LoginError> {
+        let driver = self.drivers.get(&account.provider).ok_or_else(|| {
+            LoginError::new(
+                LoginErrorKind::Unavailable,
+                "account provider is unavailable",
+            )
+        })?;
+        if !self
+            .read_or_refresh()?
+            .accounts
+            .iter()
+            .any(|entry| entry.account == *account)
+        {
+            return Ok(LogoutOutcome::AlreadyLoggedOut);
+        }
+        driver.logout(account)?;
+        let updated = {
+            let mut state = self.state.lock().map_err(lock_error)?;
+            state.advance_provider(&account.provider);
+            state
+                .account
+                .accounts
+                .retain(|entry| entry.account != *account);
             state.account.revision = state.account.revision.saturating_add(1);
             state.account.clone()
         };
@@ -477,16 +516,50 @@ impl LoginService {
     }
 }
 
-fn replace_provider_account(
+fn replace_provider_accounts(
     accounts: &mut Vec<AccountSnapshot>,
     provider: &str,
-    account: Option<AccountSnapshot>,
+    catalog: Vec<AccountSnapshot>,
 ) {
     accounts.retain(|candidate| candidate.account.provider != provider);
-    if let Some(account) = account {
-        accounts.push(account);
-        accounts.sort_by(|left, right| left.account.provider.cmp(&right.account.provider));
+    accounts.extend(catalog);
+    sort_accounts(accounts);
+}
+
+fn upsert_account(
+    accounts: &mut Vec<AccountSnapshot>,
+    account: AccountSnapshot,
+    multiplicity: AccountMultiplicity,
+) {
+    accounts.retain(|candidate| {
+        candidate.account.provider != account.account.provider
+            || (multiplicity == AccountMultiplicity::Multiple
+                && candidate.account.account_id != account.account.account_id)
+    });
+    accounts.push(account);
+    sort_accounts(accounts);
+}
+
+fn sort_accounts(accounts: &mut [AccountSnapshot]) {
+    accounts.sort_by(|left, right| {
+        (&left.account.provider, &left.account.account_id)
+            .cmp(&(&right.account.provider, &right.account.account_id))
+    });
+}
+
+fn validate_catalog(provider: &str, accounts: &[AccountSnapshot]) -> Result<(), LoginError> {
+    let mut identities = BTreeSet::new();
+    for account in accounts {
+        validate_account_provider(provider, account)?;
+        if account.account.account_id.is_empty() || !identities.insert(&account.account.account_id)
+        {
+            return Err(LoginError::new(
+                LoginErrorKind::Driver,
+                "login driver returned duplicate or empty account identities",
+            ));
+        }
     }
+    Ok(())
 }
 
 fn validate_account_provider(provider: &str, account: &AccountSnapshot) -> Result<(), LoginError> {

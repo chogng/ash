@@ -6,7 +6,8 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
+import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
+import { IGitHubService } from '../../../../platform/github/common/githubService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
@@ -35,11 +36,13 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 	private newReport!: Button;
 	private created!: HTMLAnchorElement;
 	private shownIssues: IssueReporterState['similarIssues'] | undefined;
+	private accountGeneration = 0;
 	private readonly resultListeners = this._register(new DisposableStore());
 
 	constructor(
 		@IIssueFormService private readonly form: IIssueFormService,
 		@IAccountService private readonly accounts: IAccountService,
+		@IGitHubService private readonly repositories: IGitHubService,
 		@IGitHubConnectionService private readonly github: IGitHubConnectionService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
@@ -112,9 +115,9 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		content.append(hint);
 		// A login event can arrive before the initial account read completes.
 		let receivedAccountEvent = false;
-		this._register(this.accounts.onDidChangeAccounts(state => { receivedAccountEvent = true; this.renderAccount(state); }));
+		this._register(this.accounts.onDidChangeAccounts(() => { receivedAccountEvent = true; void this.renderAccount(); }));
 		this._register(this.form.onDidChange(state => this.render(state)));
-		void this.accounts.read().then(state => { if (!this.isDisposed && !receivedAccountEvent) { this.renderAccount(state); } }, () => { if (!this.isDisposed && !receivedAccountEvent) { this.account.textContent = localize('issue.accountUnavailable', 'GitHub account information is unavailable.'); } });
+		void this.accounts.read().then(() => { if (!this.isDisposed && !receivedAccountEvent) { void this.renderAccount(); } }, () => { if (!this.isDisposed && !receivedAccountEvent) { this.account.textContent = localize('issue.accountUnavailable', 'GitHub account information is unavailable.'); } });
 		this.render(this.form.state);
 	}
 
@@ -164,10 +167,19 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		}
 	}
 
-	private renderAccount(state: AccountState): void {
-		const account = state.accounts.find(account => account.provider === 'github' && account.status === 'ready');
-		this.account.textContent = account ? localize('issue.account', 'Submitting as {0}', account.displayName ?? account.accountId) : localize('issue.loginHint', 'You can search without signing in. Sign in to GitHub to submit.');
-		this.signIn.hidden = !!account;
+	private async renderAccount(): Promise<void> {
+		const generation = ++this.accountGeneration;
+		try {
+			// The reporter submits to GitHub.com using the primary grant, which leads
+			// the domain catalog. Generic login snapshots are sorted by identity.
+			const [account] = await this.repositories.listAccounts();
+			if (this.isDisposed || generation !== this.accountGeneration) { return; }
+			const ready = account?.host === 'github.com' && account.status === 'ready';
+			this.account.textContent = ready ? localize('issue.account', 'Submitting as {0}', account.login) : localize('issue.loginHint', 'You can search without signing in. Sign in to GitHub to submit.');
+			this.signIn.hidden = ready;
+		} catch {
+			if (!this.isDisposed && generation === this.accountGeneration) { this.account.textContent = localize('issue.accountUnavailable', 'GitHub account information is unavailable.'); this.signIn.hidden = false; }
+		}
 	}
 
 	private label(container: HTMLElement, text: string): HTMLLabelElement {

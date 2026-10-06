@@ -254,6 +254,87 @@ fn repository_credentials() -> Arc<Credentials> {
     }))))
 }
 
+#[test]
+fn github_account_rpc_connects_without_oauth_selects_host_credentials_and_logs_out_one_account() {
+    let http = Arc::new(RepositoryHttp::default());
+    let accounts = github::GitHubOAuth::tokens(
+        http.clone(),
+        Arc::new(ash_secrets::MemorySecretStore::default()),
+    );
+    let login = Arc::new(ash_login::LoginService::deferred(accounts.clone()));
+    accounts.install_login_service(&login).unwrap();
+    let server = server()
+        .with_login_service(login)
+        .with_github_accounts(accounts.clone())
+        .with_github_credentials(accounts, http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (id, host, token) in [
+        (2, "github.com", "fixture-cloud"),
+        (3, "ghe.example", "fixture-enterprise"),
+    ] {
+        http.reply(200, serde_json::json!({"id":42,"login":host}));
+        let reply = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"github/account/connect","params":{"operationId":format!("connect-{id}"),"host":host,"token":token}}),
+        );
+        assert_eq!(reply["result"]["host"], host);
+        assert!(!reply.to_string().contains(token));
+    }
+    let catalog = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"github/account/list","params":{"operationId":"catalog"}}),
+    );
+    assert_eq!(catalog["result"]["accounts"].as_array().unwrap().len(), 2);
+    assert_eq!(catalog["result"]["accounts"][0]["id"], "42");
+    http.reply(200, serde_json::json!({"node_id":"repository","full_name":"team/repo","default_branch":"main","allow_merge_commit":true,"allow_squash_merge":true,"allow_rebase_merge":false,"allow_auto_merge":false}));
+    let selected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"github/repository/read","params":{"operationId":"enterprise-read","accountId":"ghe.example/42","repository":{"host":"ghe.example","owner":"team","name":"repo"}}}),
+    );
+    assert_eq!(selected["result"]["fullName"], "team/repo");
+    let requests = http.requests.lock().unwrap();
+    assert_eq!(
+        requests[2].url(),
+        "https://ghe.example/api/v3/repos/team/repo"
+    );
+    assert!(
+        requests[2]
+            .headers()
+            .iter()
+            .any(|header| header.name().eq_ignore_ascii_case("authorization")
+                && header.value() == "Bearer fixture-enterprise")
+    );
+    drop(requests);
+    let foreign = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"github/repository/read","params":{"operationId":"foreign-host","accountId":"42","repository":{"host":"ghe.example","owner":"team","name":"repo"}}}),
+    );
+    assert_eq!(
+        foreign["error"]["data"]["kind"],
+        "AccountAuthenticationRequired"
+    );
+    assert_eq!(http.requests.lock().unwrap().len(), 3);
+    let logout = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"account/logout","params":{"provider":"github","accountId":"42"}}),
+    );
+    assert_eq!(logout["result"]["status"], "loggedOut");
+    let remaining = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":8,"method":"github/account/list","params":{"operationId":"remaining"}}),
+    );
+    assert_eq!(remaining["result"]["accounts"].as_array().unwrap().len(), 1);
+    assert_eq!(remaining["result"]["accounts"][0]["id"], "ghe.example/42");
+}
+
 struct CancelledRepositoryHttp {
     entered: std::sync::mpsc::Sender<()>,
     confirmed: bool,
@@ -371,9 +452,42 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
     let commit = "a".repeat(40);
     let pr = json!({"number":7,"node_id":"pr7","title":"PR","body":"Body","html_url":"https://github.com/team/repo/pull/7","state":"open","draft":false,"merged_at":null,"head":{"ref":"feature","sha":commit},"base":{"ref":"main","sha":"b".repeat(40)}});
     let review = json!({"id":10,"body":"Reviewed","state":"APPROVED","html_url":"https://github.com/team/repo/pull/7#pullrequestreview-10","commit_id":commit,"submitted_at":"now"});
+    let review_comment = json!({"id":"comment1","body":"Reply","url":"https://github.com/team/repo/pull/7#discussion-1","author":{"login":"alice"},"viewerCanUpdate":true,"viewerCanDelete":true});
+    let thread_parent = json!({"data":{"node":{"pullRequest":{"number":7,"repository":{"name":"repo","owner":{"login":"team"}}}}}});
+    let thread_comments =
+        json!({"nodes":[review_comment.clone()],"pageInfo":{"hasNextPage":false,"endCursor":null}});
+    let thread = json!({"id":"thread1","path":"main.rs","line":1,"diffSide":"RIGHT","isResolved":false,"isOutdated":false,"viewerCanResolve":true,"comments":thread_comments.clone()});
     let label = json!({"name":"bug","color":"ff0000","node_id":"label1"});
     let repository = json!({"node_id":"repo1","default_branch":"main","full_name":"team/repo","allow_merge_commit":true,"allow_squash_merge":true,"allow_rebase_merge":false,"allow_auto_merge":true});
     let cases = vec![
+        (
+            "github/pullRequest/reviewers",
+            json!({"number":7}),
+            vec![json!({"users":[{"login":"alice"}],"teams":[{"slug":"core"}]})],
+        ),
+        (
+            "github/pullRequest/reviewers/change",
+            json!({"number":7,"change":"request","users":["alice"],"teams":["core"]}),
+            vec![
+                json!({"number":7,"requested_reviewers":[{"login":"alice"}],"requested_teams":[{"slug":"core"}]}),
+            ],
+        ),
+        (
+            "github/pullRequest/comment/update",
+            json!({"number":7,"commentId":"comment1","body":"Updated"}),
+            vec![
+                thread_parent.clone(),
+                json!({"data":{"updatePullRequestReviewComment":{"pullRequestReviewComment":review_comment.clone()}}}),
+            ],
+        ),
+        (
+            "github/pullRequest/comment/delete",
+            json!({"number":7,"commentId":"comment1"}),
+            vec![
+                thread_parent.clone(),
+                json!({"data":{"deletePullRequestReviewComment":{"clientMutationId":"comment1"}}}),
+            ],
+        ),
         ("github/repository/read", json!({}), vec![repository]),
         (
             "github/commit/read",
@@ -459,7 +573,53 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
         (
             "github/pullRequest/review",
             json!({"number":7,"commit":commit,"event":"approve","body":"Reviewed"}),
-            vec![review],
+            vec![pr.clone(), review],
+        ),
+        (
+            "github/pullRequest/diff",
+            json!({"number":7,"commit":commit,"page":1}),
+            vec![
+                pr.clone(),
+                json!({"merge_base_commit":{"sha":"b".repeat(40)}}),
+                json!([{"filename":"main.rs","status":"modified","additions":1,"deletions":1,"changes":2,"patch":"@@ -1 +1 @@\n-old\n+new"}]),
+                pr.clone(),
+            ],
+        ),
+        (
+            "github/file/read",
+            json!({"commit":commit,"path":"main.rs"}),
+            vec![json!({"type":"file","size":4,"encoding":"base64","content":"bmV3Cg=="})],
+        ),
+        (
+            "github/pullRequest/threads",
+            json!({"number":7,"cursor":null}),
+            vec![
+                json!({"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[thread],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}),
+            ],
+        ),
+        (
+            "github/pullRequest/thread/read",
+            json!({"number":7,"threadId":"thread1","cursor":null}),
+            vec![
+                thread_parent.clone(),
+                json!({"data":{"node":{"comments":thread_comments}}}),
+            ],
+        ),
+        (
+            "github/pullRequest/thread/reply",
+            json!({"number":7,"threadId":"thread1","body":"Reply"}),
+            vec![
+                thread_parent.clone(),
+                json!({"data":{"addPullRequestReviewThreadReply":{"comment":review_comment}}}),
+            ],
+        ),
+        (
+            "github/pullRequest/thread/resolve",
+            json!({"number":7,"threadId":"thread1","state":"resolved"}),
+            vec![
+                thread_parent,
+                json!({"data":{"resolveReviewThread":{"thread":{"id":"thread1","isResolved":true}}}}),
+            ],
         ),
         (
             "github/pullRequest/merge",
@@ -835,4 +995,150 @@ fn reporter_cancel_before_search_stops_io_and_has_a_terminal_cancelled_response(
     );
     assert_eq!(search["error"]["message"], "RequestCancelled");
     assert!(http.requests.lock().unwrap().is_empty());
+}
+
+#[test]
+fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellation() {
+    use crate::server::request_dispatch::tests::Client;
+    use serde_json::json;
+    let (entered, started) = std::sync::mpsc::channel();
+    let backend = Arc::new(
+        server()
+            .with_github_credentials(
+                repository_credentials(),
+                Arc::new(CancelledRepositoryHttp {
+                    entered,
+                    confirmed: false,
+                }),
+            )
+            .unwrap(),
+    );
+    let serving = Arc::clone(&backend);
+    let (mut client, host) = Client::pair();
+    let (done, completed) = std::sync::mpsc::channel();
+    let served =
+        std::thread::spawn(move || {
+            done.send(serving.serve_product_host_stream(
+                std::io::BufReader::new(host.try_clone().unwrap()),
+                host,
+            ))
+            .unwrap();
+        });
+    client.initialize();
+    for id in 2..10 {
+        client.send(
+            id,
+            "github/labels/list",
+            json!({
+                "operationId":format!("held-{id}"),
+                "repository":{"host":"github.com","owner":"team","name":"repo"},
+            }),
+        );
+    }
+    // All eight requests must reach HTTP before any is released. This fails when
+    // waiting for the first HTTP request occupies the sole background worker.
+    for _ in 2..10 {
+        started.recv_timeout(Duration::from_secs(3)).unwrap();
+    }
+    client.send(
+        99,
+        "github/labels/list",
+        json!({
+            "operationId":"over-capacity",
+            "repository":{"host":"github.com","owner":"team","name":"repo"},
+        }),
+    );
+    let rejected = client.read();
+    assert_eq!(rejected["id"], 99);
+    assert_eq!(rejected["error"]["data"]["kind"], "ServerOverloaded");
+    client.send(100, "model/list", json!({}));
+    assert_eq!(client.read()["id"], 100);
+    client.send(
+        101,
+        "session/create",
+        json!({
+            "commandId":"network-independent-session", "title":"ready", "executionTarget":null,
+        }),
+    );
+    loop {
+        let response = client.read();
+        if response["id"] == 101 {
+            assert!(response["result"].is_object());
+            break;
+        }
+    }
+    for id in 2..10 {
+        client.send(
+            id + 10,
+            "github/cancel",
+            json!({"operationId":format!("held-{id}")}),
+        );
+    }
+    let mut replies = std::collections::BTreeMap::new();
+    while replies.len() < 16 {
+        let response = client.read();
+        if let Some(id) = response["id"].as_u64() {
+            replies.insert(id, response);
+        }
+    }
+    for id in 2..10 {
+        assert_eq!(replies[&id]["error"]["data"]["kind"], "RequestCancelled");
+        assert_eq!(replies[&(id + 10)]["result"]["status"], "requested");
+    }
+    client.close();
+    completed
+        .recv_timeout(Duration::from_secs(3))
+        .unwrap()
+        .unwrap();
+    served.join().unwrap();
+}
+
+#[test]
+fn disconnect_drains_all_running_github_reads() {
+    use crate::server::request_dispatch::tests::Client;
+    let (entered, started) = std::sync::mpsc::channel();
+    let backend = Arc::new(
+        server()
+            .with_github_credentials(
+                repository_credentials(),
+                Arc::new(CancelledRepositoryHttp {
+                    entered,
+                    confirmed: false,
+                }),
+            )
+            .unwrap(),
+    );
+    let (mut client, host) = Client::pair();
+    let (done, completed) = std::sync::mpsc::channel();
+    let served =
+        std::thread::spawn(move || {
+            done.send(backend.serve_product_host_stream(
+                std::io::BufReader::new(host.try_clone().unwrap()),
+                host,
+            ))
+            .unwrap();
+        });
+    client.initialize();
+    for id in 2..8 {
+        client.send(
+            id,
+            "github/labels/list",
+            serde_json::json!({
+                "operationId":format!("disconnect-{id}"),
+                "repository":{"host":"github.com","owner":"team","name":"repo"},
+            }),
+        );
+    }
+    for _ in 2..8 {
+        started.recv_timeout(Duration::from_secs(3)).unwrap();
+    }
+    client.close();
+    let result = completed.recv_timeout(Duration::from_secs(3)).unwrap();
+    assert!(result.as_ref().err().is_none_or(|error| matches!(
+        error.kind(),
+        std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+    )));
+    served.join().unwrap();
 }

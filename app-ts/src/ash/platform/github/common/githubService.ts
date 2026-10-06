@@ -1,3 +1,4 @@
+import type { AccountStatus } from '../../accounts/common/accountService.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
@@ -24,7 +25,11 @@ export class GitHubError extends Error {
 	}
 }
 
-export interface GitHubRepository { readonly host: string; readonly owner: string; readonly name: string; }
+export interface GitHubAccount { readonly id: string; readonly host: string; readonly login: string; readonly status: AccountStatus; readonly credentialRevision: bigint; }
+export enum GitHubReviewerChange { Request = 'request', Remove = 'remove' }
+export interface GitHubRequestedReviewers { readonly users: readonly string[]; readonly teams: readonly string[]; }
+/** Account selection is captured with a repository operation; omitted selection uses the login default. */
+export interface GitHubRepository { readonly accountId?: string; readonly host: string; readonly owner: string; readonly name: string; }
 export interface GitHubPage<T> { readonly items: readonly T[]; readonly nextPage: number | null; }
 export interface GitHubRepositoryInfo {
 	readonly defaultBranch: string;
@@ -76,7 +81,25 @@ export interface GitHubPullRequestFile {
 }
 export interface GitHubPullRequestFiles extends GitHubPage<GitHubPullRequestFile> { readonly limitReached: boolean; }
 export interface GitHubPullRequestReview { readonly id: number; readonly body: string; readonly state: string; readonly url: string; readonly commit: string; readonly submittedAt: string | null; }
-export interface GitHubReview { readonly commit: string; readonly event: GitHubReviewEvent; readonly body: string; }
+export enum GitHubDiffSide { Left = 'LEFT', Right = 'RIGHT' }
+export enum GitHubReviewThreadState { Resolved = 'resolved', Unresolved = 'unresolved' }
+export interface GitHubReviewCommentInput { readonly path: string; readonly line: number; readonly side: GitHubDiffSide; readonly body: string; }
+export interface GitHubReview { readonly commit: string; readonly event: GitHubReviewEvent; readonly body: string; readonly comments?: readonly GitHubReviewCommentInput[]; }
+export type GitHubFileContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'binary' | 'tooLarge' };
+export interface GitHubReviewComment { readonly id: string; readonly body: string; readonly url: string; readonly author: string | null; readonly canUpdate: boolean; readonly canDelete: boolean; }
+export interface GitHubReviewComments { readonly comments: readonly GitHubReviewComment[]; readonly nextCursor: string | null; }
+export interface GitHubReviewThread {
+	readonly id: string;
+	readonly path: string;
+	readonly line: number | null;
+	readonly side: GitHubDiffSide;
+	readonly resolved: boolean;
+	readonly outdated: boolean;
+	readonly canResolve: boolean;
+	readonly comments: GitHubReviewComments;
+}
+export interface GitHubReviewThreads { readonly threads: readonly GitHubReviewThread[]; readonly nextCursor: string | null; }
+export interface GitHubReviewDiff { readonly baseCommit: string; readonly files: GitHubPullRequestFiles; }
 /** The commit identifies the head the caller actually reviewed; GitHub enforces it during submission. */
 export interface GitHubMerge { readonly commit: string; readonly method: GitHubMergeMethod; }
 export interface GitHubMergeResult { readonly commit: string; readonly merged: boolean; readonly message: string; }
@@ -96,6 +119,13 @@ export interface GitHubLabel { readonly name: string; readonly color: string; }
 
 /** GitHub business operations use the account grant owned by the backend login service. */
 export interface IGitHubService {
+	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
+	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
+	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;
+	requestedReviewers(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubRequestedReviewers>;
+	changeReviewers(repository: GitHubRepository, number: number, change: GitHubReviewerChange, users: readonly string[], teams: readonly string[], token?: CancellationToken): Promise<GitHubRequestedReviewers>;
+	updateReviewComment(repository: GitHubRepository, number: number, commentId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;
+	deleteReviewComment(repository: GitHubRepository, number: number, commentId: string, token?: CancellationToken): Promise<void>;
 	readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit>;
 	readRepository(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubRepositoryInfo>;
 	listIssues(repository: GitHubRepository, state: GitHubIssueState, query: string, page: number, token?: CancellationToken): Promise<GitHubIssuePage>;
@@ -112,6 +142,12 @@ export interface IGitHubService {
 	updatePullRequest(repository: GitHubRepository, number: number, update: GitHubUpdatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;
 	listPullRequestFiles(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPullRequestFiles>;
 	listPullRequestReviews(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubPullRequestReview>>;
+	readReviewDiff(repository: GitHubRepository, number: number, commit: string, page: number, token?: CancellationToken): Promise<GitHubReviewDiff>;
+	readFile(repository: GitHubRepository, commit: string, path: string, token?: CancellationToken): Promise<GitHubFileContent>;
+	listReviewThreads(repository: GitHubRepository, number: number, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewThreads>;
+	readReviewThreadComments(repository: GitHubRepository, number: number, threadId: string, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewComments>;
+	replyReviewThread(repository: GitHubRepository, number: number, threadId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;
+	resolveReviewThread(repository: GitHubRepository, number: number, threadId: string, state: GitHubReviewThreadState, token?: CancellationToken): Promise<void>;
 	reviewPullRequest(repository: GitHubRepository, number: number, review: GitHubReview, token?: CancellationToken): Promise<GitHubPullRequestReview>;
 	mergePullRequest(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<GitHubMergeResult>;
 	enableAutoMerge(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<void>;

@@ -5,6 +5,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 export const enum AccessibleViewProviderId {
 	Disassembly = 'disassembly',
 	GitHub = 'github',
+	GitHubEditor = 'githubEditor',
 	Editor = 'editor',
 	WebviewEditor = 'webviewEditor',
 	ColorPicker = 'colorPicker',
@@ -59,6 +60,7 @@ export const enum AccessibleViewType {
 export const enum AccessibilityVerbositySettingId {
 	Disassembly = 'accessibility.verbosity.disassembly',
 	GitHub = 'accessibility.verbosity.github',
+	GitHubEditor = 'accessibility.verbosity.githubEditor',
 	Editor = 'accessibility.verbosity.editor',
 	WebviewEditor = 'accessibility.verbosity.webviewEditor',
 	ColorPicker = 'accessibility.verbosity.colorPicker',

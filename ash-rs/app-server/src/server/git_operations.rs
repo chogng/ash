@@ -869,6 +869,32 @@ fn comparison(
 }
 fn command(command: GitCommandDto) -> ash_git::GitCommand {
     match command {
+        GitCommandDto::FetchAndCheckout {
+            remote,
+            remote_identity,
+            reference,
+            object_id,
+            name,
+        } => ash_git::GitCommand::FetchAndCheckout {
+            remote,
+            remote_identity,
+            reference,
+            object_id,
+            name,
+        },
+        GitCommandDto::PushBranch {
+            remote,
+            remote_identity,
+            name,
+            branch,
+            expected_head,
+        } => ash_git::GitCommand::PushBranch {
+            remote,
+            remote_identity,
+            name,
+            branch,
+            expected_head,
+        },
         GitCommandDto::CreateBranchAt { name, object_id } => {
             ash_git::GitCommand::CreateBranchAt { name, object_id }
         }

@@ -9,6 +9,13 @@ use crate::LoginError;
 use crate::LoginId;
 use ash_async_utils::CancellationToken;
 
+/// Whether a provider replaces its single account or retains independent account identities.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum AccountMultiplicity {
+    Single,
+    Multiple,
+}
+
 /// Executes provider-owned interactive login operations without exposing credentials.
 ///
 /// Implementations keep provider credentials, OAuth protocol state, callbacks,
@@ -19,6 +26,15 @@ pub trait InteractiveLoginDriver: Send + Sync {
     fn provider_id(&self) -> &'static str;
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError>;
+
+    fn account_multiplicity(&self) -> AccountMultiplicity {
+        AccountMultiplicity::Single
+    }
+
+    /// Returns the complete provider catalog; single-account drivers expose zero or one item.
+    fn read_accounts(&self) -> Result<Vec<AccountSnapshot>, LoginError> {
+        Ok(self.read_account()?.into_iter().collect())
+    }
 
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError>;
 

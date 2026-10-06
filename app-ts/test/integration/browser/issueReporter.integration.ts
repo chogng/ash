@@ -10,6 +10,8 @@ import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/br
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
 import { AppServerIssueReporterService } from '../../../src/ash/platform/issue/browser/appServerIssueReporterService.js';
+import { AppServerGitHubService } from '../../../src/ash/platform/github/browser/appServerGitHubService.js';
+import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { IIssueReporterService } from '../../../src/ash/platform/issue/common/issue.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -27,9 +29,11 @@ import type { IEditorPane } from '../../../src/ash/workbench/browser/parts/edito
 import '../../../src/ash/workbench/contrib/issue/browser/issue.contribution.js';
 
 interface Request { id: number; method: string; params: Record<string, unknown>; }
+interface AccountMetadata { id: string; host: string; login: string; status: 'ready'; credentialRevision: string; }
 class ReporterTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Request[] = [];
+	accountCatalog: AccountMetadata[] = [];
 	private heldSearch: Request | undefined;
 	private heldSubmit: Request | undefined;
 	holdSearch = false;
@@ -51,6 +55,7 @@ class ReporterTransport implements AppServerTransport {
 				const result = createTestInitializeResult(); result.capabilities.contracts.issueReporter = { version: 1 }; this.respond(request, result); break;
 			}
 			case 'issueReporter/read': this.respond(request, { reportIssueUrl: 'https://github.com/chogng/ash/issues', version: '0.1.0-test', os: 'windows', arch: 'x86_64' }); break;
+			case 'github/account/list': this.respond(request, { accounts: this.accountCatalog }); break;
 			case 'issueReporter/search':
 				if (this.holdSearch) { this.heldSearch = request; } else { this.respond(request, { issues: [{ number: 7, url: 'https://github.com/chogng/ash/issues/7', title: 'Existing editor bug', state: 'open' }] }); }
 				break;
@@ -85,6 +90,7 @@ services.registerInstance(IExtensionService, {
 	onDidChange: Event.None, onDidFail: Event.None, start: async () => { }, reload: async () => { },
 } as unknown as IExtensionService);
 services.registerInstance(IIssueReporterService, backend);
+services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const accounts = resources.add(new Emitter<AccountState>());
 const accountState = (): AccountState => ({ revision: 1n, accounts: transport.signedIn ? [{ provider: 'github', accountId: '42', displayName: 'Test account', status: 'ready', credentialRevision: 1n }] : [] });
 let releaseAccountRead: (() => void) | undefined;
@@ -95,7 +101,7 @@ services.registerInstance(IAccountService, {
 		return snapshot;
 	}, startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => { }, logout: async () => { transport.signedIn = false; accounts.fire(accountState()); }
 });
-services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { transport.signedIn = true; accounts.fire(accountState()); }, cancel: async () => { } });
+services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { transport.signedIn = true; transport.accountCatalog = [{ id: '42', host: 'github.com', login: 'Test account', status: 'ready', credentialRevision: '1' }]; accounts.fire(accountState()); }, cancel: async () => { } });
 services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 const opened: string[] = [];
 services.registerInstance(IOpenerService, { open: async target => { opened.push(String(target)); return true; } } as IOpenerService);
@@ -123,6 +129,7 @@ window.ashIssueReporterIntegration = {
 	holdSubmit: () => { transport.holdSubmit = true; },
 	releaseSubmit: () => transport.releaseSubmit(),
 	releaseAccountRead: () => releaseAccountRead!(),
+	setAccounts: catalog => { transport.accountCatalog = catalog; accounts.fire(accountState()); },
 	fail: kind => { transport.failure = kind; },
 	theme: name => theme.setColorTheme(name === 'light' ? lightColorTheme : highContrastDarkColorTheme),
 	dispose: () => { pane?.dispose(); resources.dispose(); },
@@ -130,7 +137,7 @@ window.ashIssueReporterIntegration = {
 declare global {
 	interface Window {
 		ashIssueReporterIntegration: {
-			requests: Request[]; opened: string[]; open(): Promise<void>; close(): void; holdSearch(): void; holdSubmit(): void; releaseSubmit(): void; releaseAccountRead(): void; fail(kind: string): void; theme(name: 'light' | 'highContrast'): void; dispose(): void;
+			requests: Request[]; opened: string[]; open(): Promise<void>; close(): void; holdSearch(): void; holdSubmit(): void; releaseSubmit(): void; releaseAccountRead(): void; setAccounts(catalog: AccountMetadata[]): void; fail(kind: string): void; theme(name: 'light' | 'highContrast'): void; dispose(): void;
 		};
 	}
 }

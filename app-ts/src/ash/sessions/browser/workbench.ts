@@ -90,6 +90,8 @@ import { IStorageService, WillSaveStateReason, StorageScope } from "../../platfo
 import { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from "../../platform/workspace/common/workspace.js";
 import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
+import { GitService } from '../../workbench/contrib/git/browser/gitService.js';
+import { IGitService } from '../../workbench/contrib/git/common/gitService.js';
 import { SessionFileService } from '../contrib/providers/appServer/browser/sessionFileService.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
@@ -316,6 +318,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ISessionsService, view);
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
 		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IGitService, this._register(services.createInstance(GitService, { api: options.api.git, appServerApi: options.api.appServer, eventApi: options.api.events, workspaceContext: workspace, canCloneRepository: options.nativeHostApi !== undefined })));
 		const files = this._register(services.createInstance(SessionFileService, options.api));
 		const fileService = this._register(new MultiplexFileService(files));
 		this._register(userDataFileSystemProvider);

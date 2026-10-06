@@ -394,3 +394,105 @@ async fn graph_cherry_pick_replays_a_merge_relative_to_the_chosen_parent() {
     assert!(!source.path("topic.txt").exists());
     assert_eq!(source.git(&["rev-parse", "HEAD^"]), root);
 }
+
+#[tokio::test]
+async fn reviewed_remote_checkout_and_push_pin_repositories_commits_and_local_branches() {
+    let remote = crate::test_support::TestBareRepository::init();
+    let source = TestRepository::init();
+    source.write("file.txt", "initial\n");
+    source.commit_all("Initial");
+    let remote_url = format!("file://localhost{}", remote.root().display());
+    source.git(&["remote", "add", "origin", &remote_url]);
+    source.git(&["push", "origin", "main", "HEAD:refs/pull/7/head"]);
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let identity = client.remotes(&repository).await.unwrap()[0]
+        .identity()
+        .unwrap();
+    let remote_identity = format!(
+        "{}/{}/{}",
+        identity.host(),
+        identity.owner(),
+        identity.repository()
+    );
+    let checkout = |object_id: String, identity: String| GitCommand::FetchAndCheckout {
+        remote: "origin".into(),
+        remote_identity: identity,
+        reference: "refs/pull/7/head".into(),
+        object_id,
+        name: "pr/7".into(),
+    };
+    assert!(
+        client
+            .execute_command(
+                &repository,
+                &checkout(head.clone(), "github.com/other/repo".into())
+            )
+            .await
+            .is_err()
+    );
+    source.write("untracked", "keep\n");
+    assert!(
+        client
+            .execute_command(
+                &repository,
+                &checkout(head.clone(), remote_identity.clone())
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(source.read("untracked"), "keep\n");
+    std::fs::remove_file(source.path("untracked")).unwrap();
+    assert!(
+        client
+            .execute_command(
+                &repository,
+                &checkout("f".repeat(40), remote_identity.clone())
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(source.git(&["branch", "--show-current"]), "main");
+    client
+        .execute_command(
+            &repository,
+            &checkout(head.clone(), remote_identity.clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.git(&["branch", "--show-current"]), "pr/7");
+    source.write("file.txt", "reviewed locally\n");
+    source.commit_all("Review fix");
+    let updated = source.git(&["rev-parse", "HEAD"]);
+    let push = |expected_head: String| GitCommand::PushBranch {
+        remote: "origin".into(),
+        remote_identity: remote_identity.clone(),
+        name: "feature".into(),
+        branch: "pr/7".into(),
+        expected_head,
+    };
+    assert!(
+        client
+            .execute_command(&repository, &push(head))
+            .await
+            .is_err()
+    );
+    client
+        .execute_command(&repository, &push(updated.clone()))
+        .await
+        .unwrap();
+    assert_eq!(remote.git(&["rev-parse", "refs/heads/feature"]), updated);
+    source.git(&["switch", "main"]);
+    source.write("file.txt", "divergent\n");
+    source.commit_all("Other history");
+    source.git(&["branch", "-f", "pr/7", "HEAD"]);
+    source.git(&["switch", "pr/7"]);
+    assert!(
+        client
+            .execute_command(&repository, &push(source.git(&["rev-parse", "HEAD"])))
+            .await
+            .is_err()
+    );
+    assert_eq!(remote.git(&["rev-parse", "refs/heads/feature"]), updated);
+}

@@ -213,6 +213,10 @@ import type { GitFetchParams } from './types/GitFetchParams.js';
 import type { GitGraphParams } from './types/GitGraphParams.js';
 import type { GitGraphResult } from './types/GitGraphResult.js';
 import type { GitHistoryResult } from './types/GitHistoryResult.js';
+import type { GitHubAccount } from './types/GitHubAccount.js';
+import type { GitHubAccountConnectParams } from './types/GitHubAccountConnectParams.js';
+import type { GitHubAccountListParams } from './types/GitHubAccountListParams.js';
+import type { GitHubAccountsResult } from './types/GitHubAccountsResult.js';
 import type { GitHubAssigneesResult } from './types/GitHubAssigneesResult.js';
 import type { GitHubCancelParams } from './types/GitHubCancelParams.js';
 import type { GitHubCancelResult } from './types/GitHubCancelResult.js';
@@ -224,6 +228,8 @@ import type { GitHubCommentListResult } from './types/GitHubCommentListResult.js
 import type { GitHubCommentUpdateParams } from './types/GitHubCommentUpdateParams.js';
 import type { GitHubCommit } from './types/GitHubCommit.js';
 import type { GitHubCommitParams } from './types/GitHubCommitParams.js';
+import type { GitHubFileContent } from './types/GitHubFileContent.js';
+import type { GitHubFileReadParams } from './types/GitHubFileReadParams.js';
 import type { GitHubIssue } from './types/GitHubIssue.js';
 import type { GitHubIssueCreateParams } from './types/GitHubIssueCreateParams.js';
 import type { GitHubIssueListParams } from './types/GitHubIssueListParams.js';
@@ -247,6 +253,19 @@ import type { GitHubPullRequestReviewsResult } from './types/GitHubPullRequestRe
 import type { GitHubPullRequestUpdateParams } from './types/GitHubPullRequestUpdateParams.js';
 import type { GitHubRepositoryParams } from './types/GitHubRepositoryParams.js';
 import type { GitHubRepositoryResult } from './types/GitHubRepositoryResult.js';
+import type { GitHubRequestedReviewers } from './types/GitHubRequestedReviewers.js';
+import type { GitHubReviewComment } from './types/GitHubReviewComment.js';
+import type { GitHubReviewCommentDeleteParams } from './types/GitHubReviewCommentDeleteParams.js';
+import type { GitHubReviewCommentEditParams } from './types/GitHubReviewCommentEditParams.js';
+import type { GitHubReviewCommentsResult } from './types/GitHubReviewCommentsResult.js';
+import type { GitHubReviewDiffParams } from './types/GitHubReviewDiffParams.js';
+import type { GitHubReviewDiffResult } from './types/GitHubReviewDiffResult.js';
+import type { GitHubReviewThreadReadParams } from './types/GitHubReviewThreadReadParams.js';
+import type { GitHubReviewThreadReplyParams } from './types/GitHubReviewThreadReplyParams.js';
+import type { GitHubReviewThreadResolveParams } from './types/GitHubReviewThreadResolveParams.js';
+import type { GitHubReviewThreadsParams } from './types/GitHubReviewThreadsParams.js';
+import type { GitHubReviewThreadsResult } from './types/GitHubReviewThreadsResult.js';
+import type { GitHubReviewersChangeParams } from './types/GitHubReviewersChangeParams.js';
 import type { GitIndexDiffResult } from './types/GitIndexDiffResult.js';
 import type { GitIndexEditParams } from './types/GitIndexEditParams.js';
 import type { GitInitParams } from './types/GitInitParams.js';
@@ -844,6 +863,12 @@ export interface AppServerRequestMap {
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
+  "github/account/list": { params: GitHubAccountListParams; response: GitHubAccountsResult };
+  "github/account/connect": { params: GitHubAccountConnectParams; response: GitHubAccount };
+  "github/pullRequest/comment/update": { params: GitHubReviewCommentEditParams; response: GitHubReviewComment };
+  "github/pullRequest/comment/delete": { params: GitHubReviewCommentDeleteParams; response: null };
+  "github/pullRequest/reviewers": { params: GitHubNumberParams; response: GitHubRequestedReviewers };
+  "github/pullRequest/reviewers/change": { params: GitHubReviewersChangeParams; response: GitHubRequestedReviewers };
   "github/repository/read": { params: GitHubRepositoryParams; response: GitHubRepositoryResult };
   "github/commit/read": { params: GitHubCommitParams; response: GitHubCommit };
   "github/issue/list": { params: GitHubIssueListParams; response: GitHubIssueListResult };
@@ -860,6 +885,12 @@ export interface AppServerRequestMap {
   "github/pullRequest/update": { params: GitHubPullRequestUpdateParams; response: GitHubPullRequest };
   "github/pullRequest/files": { params: GitHubPageParams; response: GitHubPullRequestFilesResult };
   "github/pullRequest/reviews": { params: GitHubPageParams; response: GitHubPullRequestReviewsResult };
+  "github/pullRequest/diff": { params: GitHubReviewDiffParams; response: GitHubReviewDiffResult };
+  "github/file/read": { params: GitHubFileReadParams; response: GitHubFileContent };
+  "github/pullRequest/threads": { params: GitHubReviewThreadsParams; response: GitHubReviewThreadsResult };
+  "github/pullRequest/thread/read": { params: GitHubReviewThreadReadParams; response: GitHubReviewCommentsResult };
+  "github/pullRequest/thread/reply": { params: GitHubReviewThreadReplyParams; response: GitHubReviewComment };
+  "github/pullRequest/thread/resolve": { params: GitHubReviewThreadResolveParams; response: null };
   "github/pullRequest/review": { params: GitHubPullRequestReviewParams; response: GitHubPullRequestReview };
   "github/pullRequest/merge": { params: GitHubPullRequestMergeParams; response: GitHubMergeResult };
   "github/pullRequest/autoMerge": { params: GitHubPullRequestMergeParams; response: null };
@@ -1249,6 +1280,12 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
+  "github/account/list": { method: "github/account/list" },
+  "github/account/connect": { method: "github/account/connect" },
+  "github/pullRequest/comment/update": { method: "github/pullRequest/comment/update" },
+  "github/pullRequest/comment/delete": { method: "github/pullRequest/comment/delete" },
+  "github/pullRequest/reviewers": { method: "github/pullRequest/reviewers" },
+  "github/pullRequest/reviewers/change": { method: "github/pullRequest/reviewers/change" },
   "github/repository/read": { method: "github/repository/read" },
   "github/commit/read": { method: "github/commit/read" },
   "github/issue/list": { method: "github/issue/list" },
@@ -1265,6 +1302,12 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "github/pullRequest/update": { method: "github/pullRequest/update" },
   "github/pullRequest/files": { method: "github/pullRequest/files" },
   "github/pullRequest/reviews": { method: "github/pullRequest/reviews" },
+  "github/pullRequest/diff": { method: "github/pullRequest/diff" },
+  "github/file/read": { method: "github/file/read" },
+  "github/pullRequest/threads": { method: "github/pullRequest/threads" },
+  "github/pullRequest/thread/read": { method: "github/pullRequest/thread/read" },
+  "github/pullRequest/thread/reply": { method: "github/pullRequest/thread/reply" },
+  "github/pullRequest/thread/resolve": { method: "github/pullRequest/thread/resolve" },
   "github/pullRequest/review": { method: "github/pullRequest/review" },
   "github/pullRequest/merge": { method: "github/pullRequest/merge" },
   "github/pullRequest/autoMerge": { method: "github/pullRequest/autoMerge" },

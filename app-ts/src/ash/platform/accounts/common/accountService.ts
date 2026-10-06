@@ -52,7 +52,7 @@ export interface IAccountService {
 	read(): Promise<AccountState>;
 	startLogin(method: AccountLoginMethod): Promise<AccountLoginChallenge>;
 	cancelLogin(loginId: string): Promise<void>;
-	logout(provider: string): Promise<void>;
+	logout(provider: string, accountId?: string): Promise<void>;
 }
 
 export const IAccountService = createServiceIdentifier<IAccountService>('accountService');

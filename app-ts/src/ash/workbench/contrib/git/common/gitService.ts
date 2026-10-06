@@ -175,6 +175,8 @@ export type GitIntegration = 'merge' | 'rebase' | 'cherryPick';
 
 /** Finite repository intents owned by the frontend Git domain. */
 export type GitCommand =
+	| { readonly kind: 'fetchAndCheckout'; readonly remote: string; readonly remoteIdentity: string; readonly reference: string; readonly objectId: string; readonly name: string; }
+	| { readonly kind: 'pushBranch'; readonly branch: string; readonly remote: string; readonly remoteIdentity: string; readonly name: string; readonly expectedHead: string; }
 	| { readonly kind: 'createBranchAt'; readonly name: string; readonly objectId: string; }
 	| { readonly kind: 'checkoutDetached'; readonly objectId: string; }
 	| { readonly kind: 'checkoutRemoteBranch'; readonly name: string; readonly reference: string; }

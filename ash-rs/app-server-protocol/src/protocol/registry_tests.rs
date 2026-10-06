@@ -62,6 +62,30 @@ fn github_admission_uses_case_insensitive_hosted_repository_identity_and_connect
         (read, SerializationAccess::SharedRead),
         (commit_read, SerializationAccess::SharedRead),
         (write, SerializationAccess::Exclusive),
+        (
+            super::client_method_definition("github/pullRequest/diff").unwrap(),
+            SerializationAccess::SharedRead,
+        ),
+        (
+            super::client_method_definition("github/file/read").unwrap(),
+            SerializationAccess::SharedRead,
+        ),
+        (
+            super::client_method_definition("github/pullRequest/threads").unwrap(),
+            SerializationAccess::SharedRead,
+        ),
+        (
+            super::client_method_definition("github/pullRequest/thread/read").unwrap(),
+            SerializationAccess::SharedRead,
+        ),
+        (
+            super::client_method_definition("github/pullRequest/thread/reply").unwrap(),
+            SerializationAccess::Exclusive,
+        ),
+        (
+            super::client_method_definition("github/pullRequest/thread/resolve").unwrap(),
+            SerializationAccess::Exclusive,
+        ),
     ] {
         assert_eq!(
             method.serialization_scope(&params).unwrap(),
@@ -89,6 +113,29 @@ fn github_admission_uses_case_insensitive_hosted_repository_identity_and_connect
                 .serialization_scope(&serde_json::json!({"repository":{}}))
                 .is_err()
         );
+    }
+}
+
+#[test]
+fn review_comments_round_trip_and_thread_writes_preserve_remote_outcomes() {
+    use super::super::github::GitHubPullRequestReviewParams;
+    let value = serde_json::json!({"operationId":"review", "repository":{"host":"github.com","owner":"team","name":"repo"}, "number":7,"commit":"a".repeat(40),"event":"comment","body":"","comments":[{"path":"a.rs","line":5,"side":"LEFT","body":"Explain deletion"}]});
+    let request: GitHubPullRequestReviewParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+    for method in [
+        "github/pullRequest/comment/update",
+        "github/pullRequest/comment/delete",
+        "github/pullRequest/reviewers/change",
+        "github/pullRequest/thread/reply",
+        "github/pullRequest/thread/resolve",
+        "github/pullRequest/review",
+    ] {
+        assert!(matches!(
+            super::client_method_definition(method)
+                .unwrap()
+                .cancellation,
+            super::CancellationDefinition::OperationIdPreserveOutcome("operationId")
+        ));
     }
 }
 

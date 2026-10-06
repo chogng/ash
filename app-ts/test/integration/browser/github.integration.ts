@@ -89,7 +89,7 @@ services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 services.registerInstance(ILinkPresentationService, resources.add(services.createInstance(LinkPresentationService)));
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
-host.advance(WorkbenchPhase.BlockStartup);
+host.advance(WorkbenchPhase.BlockRestore);
 resources.add(bindColorTheme(theme, document.body));
 const opener = services.get(IOpenerService);
 const opened: string[] = [];

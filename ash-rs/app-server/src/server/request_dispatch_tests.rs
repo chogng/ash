@@ -55,21 +55,21 @@ fn stalled_marketplace_queries_leave_state_changes_available() {
             let ticket = handle.reserve(lane).unwrap();
             let release = Arc::clone(&release);
             let started = started.clone();
-            handle.enqueue(
+            handle.schedule(
                 ticket,
                 &server.request_scheduler,
                 connection.connection_id,
                 prepared.scope,
                 cancellation.token(),
                 lane,
-                Box::new(move |_| {
+                PendingJob::Blocking(Box::new(move |_| {
                     started.send(()).unwrap();
                     let mut released = release.0.lock().unwrap();
                     while !*released {
                         released = release.1.wait(released).unwrap();
                     }
                     Ok(())
-                }),
+                })),
             );
         }
         entered.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -993,4 +993,184 @@ fn cancelling_git_lock_wait_does_not_wait_for_background_repository_work() {
     assert!(completed.recv_timeout(Duration::from_secs(3)).unwrap());
     drop(held);
     waiter.join().unwrap();
+}
+
+#[test]
+fn dropping_idle_dispatcher_releases_scoped_workers() {
+    let (send, receive) = mpsc::channel();
+    let owner = thread::spawn(move || {
+        thread::scope(|scope| {
+            drop(RequestDispatcher::start(scope).unwrap());
+        });
+        send.send(()).unwrap();
+    });
+    receive.recv_timeout(Duration::from_secs(3)).unwrap();
+    owner.join().unwrap();
+}
+
+#[test]
+fn network_requests_require_connection_initialization() {
+    let server = Arc::new(server());
+    let connection = server.connection();
+    thread::scope(|scope| {
+        let requests = RequestDispatcher::start(scope).unwrap();
+        let (send, receive) = mpsc::channel();
+        requests
+            .dispatch(
+                Arc::clone(&server),
+                &connection,
+                json!({"jsonrpc":"2.0","id":1,"method":"github/labels/list","params":{"operationId":"before-initialize"}})
+                    .to_string(),
+                move |response| {
+                    send.send(serde_json::from_str::<Value>(&response).unwrap())
+                        .unwrap();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            receive.recv_timeout(Duration::from_secs(3)).unwrap()["error"]["message"],
+            "NotInitialized"
+        );
+        requests.finish().unwrap();
+    });
+    server.close_connection(connection);
+}
+
+#[test]
+fn host_capacity_spans_connections_and_keeps_control_available() {
+    use crate::server::message_queue::HostInputBudgets;
+    use crate::server::message_queue::MessageBudget;
+    let server = Arc::new(server());
+    let mut first = server.product_host_connection();
+    let mut second = server.product_host_connection();
+    for connection in [&mut first, &mut second] {
+        crate::tests::initialize(&server, connection);
+    }
+    let held = server
+        .request_scheduler
+        .acquire(
+            first.connection_id,
+            RequestSerializationScope::Global {
+                access: SerializationAccess::Exclusive,
+            },
+        )
+        .unwrap();
+    let host = Arc::new(HostInputBudgets {
+        requests: MessageBudget::new(1),
+        ..HostInputBudgets::default()
+    });
+    thread::scope(|scope| {
+        let held = held;
+        let mut first_dispatch = RequestDispatcher::start(scope).unwrap();
+        let mut second_dispatch = RequestDispatcher::start(scope).unwrap();
+        first_dispatch.handle.budgets.host = Arc::clone(&host);
+        second_dispatch.handle.budgets.host = Arc::clone(&host);
+        let (send, receive) = mpsc::channel();
+        for (dispatch, connection, id, method, params) in [
+            (&first_dispatch, &first, 2, "session/list", json!({})),
+            (&second_dispatch, &second, 3, "model/list", json!({})),
+            (
+                &second_dispatch,
+                &second,
+                4,
+                "github/cancel",
+                json!({"operationId":"not-started"}),
+            ),
+        ] {
+            let send = send.clone();
+            dispatch
+                .dispatch(
+                    Arc::clone(&server),
+                    connection,
+                    json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string(),
+                    move |response| {
+                        send.send(serde_json::from_str::<Value>(&response).unwrap())
+                            .unwrap();
+                        Ok(())
+                    },
+                )
+                .unwrap();
+        }
+        let rejected = receive.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert_eq!(rejected["id"], 3);
+        assert_eq!(rejected["error"]["message"], "ServerOverloaded");
+        let control = receive.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert_eq!(control["id"], 4);
+        assert_eq!(control["result"]["status"], "requested");
+        assert!(host.requests.try_reserve(1).is_none());
+        drop(held);
+        assert_eq!(
+            receive.recv_timeout(Duration::from_secs(3)).unwrap()["id"],
+            2
+        );
+        first_dispatch.finish().unwrap();
+        let send = send.clone();
+        second_dispatch
+            .dispatch(
+                Arc::clone(&server),
+                &second,
+                json!({"jsonrpc":"2.0","id":5,"method":"model/list","params":{}}).to_string(),
+                move |response| {
+                    send.send(serde_json::from_str::<Value>(&response).unwrap())
+                        .unwrap();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert!(receive.recv_timeout(Duration::from_secs(3)).unwrap()["result"].is_object());
+        second_dispatch.finish().unwrap();
+    });
+    assert!(host.requests.try_reserve(1).is_some());
+    server.close_connection(first);
+    server.close_connection(second);
+}
+
+#[test]
+fn host_input_bytes_follow_routed_clones_and_leave_control_capacity_available() {
+    use crate::server::message_queue::HostInputBudgets;
+    use crate::server::message_queue::MessageBudget;
+    let host = Arc::new(HostInputBudgets {
+        ordinary: MessageBudget::new(4),
+        control: MessageBudget::new(1),
+        ..HostInputBudgets::default()
+    });
+    let first = InputBudgets {
+        host: Arc::clone(&host),
+        ..InputBudgets::default()
+    };
+    let second = InputBudgets {
+        host: Arc::clone(&host),
+        ..InputBudgets::default()
+    };
+    let mut raw = IncomingRequest::from("1234".to_owned());
+    raw.retain(&first, RequestLane::Network).unwrap();
+    let mut routed = raw.clone();
+    routed.retain(&second, RequestLane::Network).unwrap();
+    let mut rejected = IncomingRequest::from("x".to_owned());
+    assert!(rejected.retain(&second, RequestLane::Interactive).is_err());
+    rejected.retain(&second, RequestLane::Control).unwrap();
+    raw.clear();
+    drop(raw);
+    assert!(host.ordinary.try_reserve(1).is_none());
+    drop(routed);
+    assert!(host.ordinary.try_reserve(4).is_some());
+    drop(rejected);
+    assert!(host.control.try_reserve(1).is_some());
+}
+
+#[test]
+fn registered_cancel_methods_have_reserved_control_execution() {
+    use ash_app_server_protocol::protocol::registry::CLIENT_METHODS;
+    for method in CLIENT_METHODS
+        .iter()
+        .filter(|method| method.method.ends_with("/cancel"))
+    {
+        assert_eq!(
+            RequestLane::for_message(method.method, &json!({})),
+            RequestLane::Control,
+            "{}",
+            method.method
+        );
+    }
 }

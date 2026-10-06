@@ -32,6 +32,20 @@ pub enum GitCommand {
         name: String,
         object_id: String,
     },
+    FetchAndCheckout {
+        remote: String,
+        remote_identity: String,
+        reference: String,
+        object_id: String,
+        name: String,
+    },
+    PushBranch {
+        remote: String,
+        remote_identity: String,
+        name: String,
+        branch: String,
+        expected_head: String,
+    },
     CheckoutDetached {
         object_id: String,
     },
@@ -196,6 +210,76 @@ impl GitClient {
                     .await?;
                 let commit = self.resolve_commit(repository, object_id).await?;
                 self.run_mutation(root, ["branch", "--", name, &commit])
+                    .await
+            }
+            GitCommand::FetchAndCheckout {
+                remote,
+                remote_identity,
+                reference,
+                object_id,
+                name,
+            } => {
+                self.require_remote_identity(repository, remote, remote_identity)
+                    .await?;
+                self.validate_ref(repository, reference).await?;
+                if !reference.starts_with("refs/") || !valid_commit_identity(object_id) {
+                    return Err(invalid(
+                        "expected a complete remote ref and commit identity",
+                    ));
+                }
+                self.validate_ref(repository, &format!("refs/heads/{name}"))
+                    .await?;
+                let status = self
+                    .run_query(
+                        root,
+                        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+                    )
+                    .await?
+                    .require_success()?;
+                if !status.stdout.is_empty() {
+                    return Err(invalid(
+                        "save and commit or stash local changes before checkout",
+                    ));
+                }
+                self.run_mutation(root, ["fetch", "--no-tags", "--", remote, reference])
+                    .await?
+                    .require_success()?;
+                let commit = self.resolve_commit(repository, "FETCH_HEAD").await?;
+                if commit != *object_id {
+                    return Err(invalid("remote commit changed since review"));
+                }
+                self.run_mutation(root, ["switch", "--no-track", "-c", name, "--", &commit])
+                    .await
+            }
+            GitCommand::PushBranch {
+                remote,
+                remote_identity,
+                name,
+                branch,
+                expected_head,
+            } => {
+                self.require_remote_identity(repository, remote, remote_identity)
+                    .await?;
+                self.validate_ref(repository, &format!("refs/heads/{name}"))
+                    .await?;
+                if !valid_commit_identity(expected_head) {
+                    return Err(invalid("expected a complete commit identity"));
+                }
+                let head = self.resolve_commit(repository, "HEAD").await?;
+                if head != *expected_head {
+                    return Err(invalid("local HEAD changed before push"));
+                }
+                let current_branch = self
+                    .run_query(root, ["symbolic-ref", "--quiet", "HEAD"])
+                    .await?
+                    .require_success()?;
+                if String::from_utf8_lossy(&current_branch.stdout).trim()
+                    != format!("refs/heads/{branch}")
+                {
+                    return Err(invalid("local branch changed before push"));
+                }
+                let target = format!("{head}:refs/heads/{name}");
+                self.run_mutation(root, ["push", "--", remote, &target])
                     .await
             }
             GitCommand::CheckoutDetached { object_id } => {
@@ -432,3 +516,10 @@ mod branch;
 
 pub use metadata::GitBranch;
 mod metadata;
+
+fn valid_commit_identity(value: &str) -> bool {
+    matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}

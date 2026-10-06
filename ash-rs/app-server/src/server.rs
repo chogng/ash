@@ -16,7 +16,6 @@ use ash_app_server_protocol::rpc::JsonRpcFailure;
 use ash_app_server_protocol::rpc::JsonRpcId;
 use ash_app_server_protocol::rpc::JsonRpcRequest;
 use ash_app_server_protocol::rpc::JsonRpcSuccess;
-use ash_app_server_protocol::rpc::JsonRpcVersion;
 use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use ash_app_server_transport::JsonlReader;
 use ash_app_server_transport::JsonlWriter;
@@ -114,7 +113,8 @@ mod git_turn_changes_runtime;
 #[cfg(test)]
 #[path = "github_issue_tests.rs"]
 mod github_issue_tests;
-mod github_operations;
+#[path = "server/request_processors/github.rs"]
+mod github_processor;
 mod home_context;
 mod hook_events;
 mod instruction_import;
@@ -159,6 +159,7 @@ mod project_projection;
 mod provider_operations;
 mod queue_operations;
 pub(crate) mod request_dispatch;
+mod request_processing;
 mod request_serialization;
 mod runtime_extensions;
 mod search_operations;
@@ -258,8 +259,8 @@ pub struct AppServer {
     testing: testing::TestingService,
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
-    github: Option<Arc<dyn github::GitHubCredentialProvider>>,
-    github_runtime: Option<github_operations::GitHubRuntime>,
+    github_accounts: Option<Arc<dyn github::GitHubAccountManager>>,
+    github_processor: Option<Arc<github_processor::GitHubRequestProcessor>>,
     issue_reporter: Option<github::GitHubIssueReporter>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
     kimi: Option<Arc<ash_kimi::KimiOAuth>>,
@@ -608,8 +609,8 @@ impl AppServer {
             testing: testing::TestingService::default(),
             approval_review_model: None,
             login: None,
-            github: None,
-            github_runtime: None,
+            github_accounts: None,
+            github_processor: None,
             issue_reporter: None,
             chatgpt: None,
             kimi: None,
@@ -1097,14 +1098,32 @@ impl AppServer {
         self
     }
 
+    pub fn with_github_accounts(mut self, accounts: Arc<dyn github::GitHubAccountManager>) -> Self {
+        self.github_accounts = Some(accounts);
+        self
+    }
+
     pub fn with_github_credentials(
         mut self,
         credentials: Arc<dyn github::GitHubCredentialProvider>,
         http: Arc<dyn ash_http_client::HttpClient>,
     ) -> Result<Self, String> {
-        self.github_runtime = Some(github_operations::GitHubRuntime::open(http)?);
-        self.github = Some(credentials);
+        request_dispatch::runtime().map_err(|error| error.to_string())?;
+        self.github_processor = Some(Arc::new(github_processor::GitHubRequestProcessor::new(
+            credentials,
+            http,
+        )));
         Ok(self)
+    }
+
+    fn github_processor(&self) -> Result<&Arc<github_processor::GitHubRequestProcessor>, RpcError> {
+        self.github_processor
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))
+    }
+
+    fn github_client(&self, cancellation: &CancellationToken) -> Result<github::GitHub, RpcError> {
+        self.github_processor()?.client(cancellation)
     }
 
     pub fn with_issue_reporter(mut self, reporter: github::GitHubIssueReporter) -> Self {
@@ -1905,272 +1924,6 @@ impl AppServer {
             .map_err(resource_error)
     }
 
-    pub fn handle_json(&self, connection: &mut ConnectionState, raw: &str) -> String {
-        self.handle_json_with_delivery(connection, raw, |response| response)
-    }
-
-    pub(crate) fn handle_json_with_delivery<R>(
-        &self,
-        connection: &mut ConnectionState,
-        raw: &str,
-        deliver: impl FnOnce(String) -> R,
-    ) -> R {
-        let prepared = match self.prepare_request(connection, raw) {
-            Ok(prepared) => prepared,
-            Err(response) => return deliver(response),
-        };
-        let permit = match prepared.scope.clone() {
-            Some(scope) => self
-                .request_scheduler
-                .acquire_with_cancellation(connection.connection_id, scope, &prepared.cancellation)
-                .map(Some),
-            None => Ok(None),
-        };
-        self.execute_request(
-            connection,
-            prepared,
-            request_dispatch::RequestAdmission {
-                permit,
-                ready_at: Instant::now(),
-            },
-            deliver,
-        )
-    }
-
-    fn prepare_request(
-        &self,
-        connection: &ConnectionState,
-        raw: &str,
-    ) -> Result<PreparedRequest, String> {
-        let received_at = Instant::now();
-        let received_time = SystemTime::now();
-        let raw_request: Value = match serde_json::from_str(raw) {
-            Ok(request) => request,
-            Err(_) => {
-                return Err(serialize_response(error_response(
-                    JsonRpcId::Null(()),
-                    -32700,
-                    AppServerErrorName::ParseError,
-                )));
-            }
-        };
-        let request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
-            Ok(request)
-                if request.jsonrpc == JsonRpcVersion::V2
-                    && request.id.as_u64().is_some_and(|request_id| request_id > 0) =>
-            {
-                request
-            }
-            _ => {
-                return Err(serialize_response(error_response(
-                    JsonRpcId::Null(()),
-                    -32600,
-                    AppServerErrorName::InvalidRequest,
-                )));
-            }
-        };
-        let request_id = request.id.as_u64().expect("validated request ID");
-        if connection.is_closed()
-            || self
-                .request_scheduler
-                .is_connection_cancelled(connection.connection_id)
-        {
-            return Err(serialize_response(error_response(
-                request.id,
-                -32800,
-                AppServerErrorName::RequestCancelled,
-            )));
-        }
-        if !connection.record_request_id(request_id) {
-            return Err(serialize_response(error_response(
-                request.id,
-                -32600,
-                AppServerErrorName::InvalidRequest,
-            )));
-        }
-        let operation_id = match client_method_definition(&request.method)
-            .map(|definition| definition.cancellation_operation_id(&request.params))
-            .transpose()
-        {
-            Ok(operation_id) => operation_id.flatten(),
-            Err(_) => {
-                return Err(serialize_response(error_response(
-                    request.id,
-                    -32602,
-                    AppServerErrorName::InvalidParams,
-                )));
-            }
-        };
-        let serialization_scope = if client_method(&request.method)
-            != Some(ClientMethod::Initialize)
-            && !connection.is_initialized()
-        {
-            None
-        } else {
-            match client_method_definition(&request.method)
-                .map(|definition| definition.serialization_scope(&request.params))
-                .transpose()
-            {
-                Ok(scope) => scope.flatten(),
-                Err(_) => {
-                    return Err(serialize_response(error_response(
-                        request.id,
-                        -32602,
-                        AppServerErrorName::InvalidParams,
-                    )));
-                }
-            }
-        };
-        let serialization_scope = serialization_scope.map(|scope| {
-            use ash_app_server_protocol::protocol::registry::ClientRequestSerializationScope as Declared;
-            use request_serialization::RequestSerializationScope as Resolved;
-            Ok(match scope {
-                Declared::Global { access } => Resolved::Global { access },
-                Declared::HostedRepository { host, owner, name, access } => Resolved::HostedRepository { host, owner, name, access },
-                Declared::Session { session_id, access } => Resolved::Session { session_id, access },
-                Declared::ConnectionResource { namespace, resource_id, access } => Resolved::ConnectionResource { namespace, resource_id, access },
-                Declared::Repository { repository_id, access } => Resolved::Repository {
-                    common_dir: self.git_runtime_service()?.common_dir_for(repository_id.as_deref()).map_err(git_operations::git_error)?,
-                    access,
-                },
-            })
-        }).transpose().map_err(|error: RpcError| serialize_response(error_response(request.id.clone(), error.code, error.message)))?;
-        let cancellation = match self.request_cancellations.start(
-            connection.connection_id,
-            request_id,
-            operation_id,
-        ) {
-            Ok(cancellation) => cancellation,
-            Err(_) => {
-                return Err(serialize_response(error_response(
-                    request.id,
-                    -32602,
-                    AppServerErrorName::InvalidParams,
-                )));
-            }
-        };
-        Ok(PreparedRequest {
-            request,
-            cancellation,
-            scope: serialization_scope,
-            received_at,
-            received_time,
-        })
-    }
-
-    fn execute_request<R>(
-        &self,
-        connection: &mut ConnectionState,
-        prepared: PreparedRequest,
-        admission: request_dispatch::RequestAdmission,
-        deliver: impl FnOnce(String) -> R,
-    ) -> R {
-        let PreparedRequest {
-            mut request,
-            cancellation,
-            received_at,
-            received_time,
-            scope,
-        } = prepared;
-        let request_id = request.id.as_u64().expect("validated request ID");
-        let initializing = client_method(&request.method) == Some(ClientMethod::Initialize);
-        let request_span = self
-            .telemetry
-            .start_at(diagnostics::Activity::Rpc, received_time);
-        request_span.record_duration(
-            "rpc.resource_wait_ms",
-            admission.ready_at.duration_since(received_at),
-        );
-        request_span.record_duration("rpc.execution_queue_wait_ms", admission.ready_at.elapsed());
-        let _permit = match admission.permit {
-            Ok(permit) => permit,
-            Err(_) => {
-                self.request_cancellations
-                    .finish(connection.connection_id, request_id);
-                let delivered = deliver(serialize_response(error_response(
-                    request.id,
-                    -32800,
-                    AppServerErrorName::RequestCancelled,
-                )));
-                request_span.finish(diagnostics::Outcome::Cancelled);
-                return delivered;
-            }
-        };
-        let execution_started = Instant::now();
-        let session_id = match &scope {
-            Some(request_serialization::RequestSerializationScope::Session {
-                session_id,
-                access: ash_app_server_protocol::protocol::registry::SerializationAccess::Exclusive,
-            }) => Some(session_id.as_str()),
-            _ => None,
-        };
-        // Turn producers can publish from another thread before their start response. Delay only
-        // that Session's events, while unrelated background events and host calls keep flowing.
-        let notifications = connection
-            .outbound_notifications
-            .defer_causal_notifications(session_id);
-        let dispatch_result = if cancellation.is_cancelled() {
-            None
-        } else {
-            Some(self.dispatch(connection, &mut request, &cancellation))
-        };
-        // A started remote write owns its outcome. Cancellation cannot erase an
-        // acknowledged effect or turn an uncertain submission into a safe retry.
-        let preserves_outcome = client_method_definition(&request.method).is_some_and(|definition| {
-            matches!(definition.cancellation, ash_app_server_protocol::protocol::registry::CancellationDefinition::OperationIdPreserveOutcome(_))
-        });
-        let cancelled =
-            cancellation.is_cancelled() && (dispatch_result.is_none() || !preserves_outcome);
-        let (response, outcome) = if cancelled {
-            (
-                serialize_response(error_response(
-                    request.id,
-                    -32800,
-                    AppServerErrorName::RequestCancelled,
-                )),
-                diagnostics::Outcome::Cancelled,
-            )
-        } else {
-            match dispatch_result.expect("uncancelled request must have a dispatch result") {
-                Ok(result) => (
-                    serde_json::to_string(&JsonRpcSuccess::new(request.id, result))
-                        .expect("JSON-RPC success response must serialize"),
-                    diagnostics::Outcome::Succeeded,
-                ),
-                Err(error) => {
-                    let mut failure = AppServerError::new(error.code, error.message);
-                    if let Some(detail) = error.detail {
-                        failure.message.push_str(&format!(": {detail}"));
-                    }
-                    (
-                        serde_json::to_string(&JsonRpcFailure::new(request.id, failure))
-                            .expect("JSON-RPC error response must serialize"),
-                        if error.message == AppServerErrorName::RequestCancelled {
-                            diagnostics::Outcome::Cancelled
-                        } else {
-                            diagnostics::Outcome::Failed
-                        },
-                    )
-                }
-            }
-        };
-        self.request_cancellations
-            .finish(connection.connection_id, request_id);
-        // State is committed before delivery. A slow connection's output queue must not retain
-        // resource admission shared with other connections.
-        drop(_permit);
-        request_span.record_duration("rpc.execution_ms", execution_started.elapsed());
-        let outbound_started = Instant::now();
-        let delivered = deliver(response);
-        if initializing && outcome == diagnostics::Outcome::Succeeded {
-            connection.outbound_notifications.initialized();
-        }
-        drop(notifications);
-        request_span.record_duration("rpc.outbound_queue_wait_ms", outbound_started.elapsed());
-        request_span.finish(outcome);
-        delivered
-    }
-
     pub fn serve_stdio(&self) -> Result<(), std::io::Error> {
         self.serve_product_host_jsonl(BufReader::new(std::io::stdin()), std::io::stdout())
     }
@@ -2260,6 +2013,13 @@ impl AppServer {
         let (outbound_tx, outbound_rx) =
             message_queue::outbound_queue(OUTBOUND_MESSAGE_QUEUE_CAPACITY);
         thread::scope(|scope| {
+            let requests = match request_dispatch::RequestDispatcher::start(scope) {
+                Ok(requests) => requests,
+                Err(error) => {
+                    self.close_connection(connection);
+                    return Err(error);
+                }
+            };
             let writer_handle = scope.spawn(move || {
                 let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
                 while let Ok(message) = outbound_rx.recv() {
@@ -2278,7 +2038,6 @@ impl AppServer {
                 }
                 Ok::<(), std::io::Error>(())
             });
-            let requests = request_dispatch::RequestDispatcher::start(scope)?;
             let read_result = (|| {
                 while let Some(line) = reader.read_message()? {
                     let mut line = request_dispatch::IncomingRequest::from(line);
@@ -2430,8 +2189,12 @@ impl AppServer {
                 self.document_collaboration_presence_read(&request.params)
             }
             Some(
-                method @ (ClientMethod::GitHubRepositoryRead
+                method @ (ClientMethod::GitHubReviewersRead
+                | ClientMethod::GitHubReviewersChange
+                | ClientMethod::GitHubReviewCommentEdit
+                | ClientMethod::GitHubReviewCommentDelete
                 | ClientMethod::GitHubCommitRead
+                | ClientMethod::GitHubRepositoryRead
                 | ClientMethod::GitHubIssueList
                 | ClientMethod::GitHubIssueRead
                 | ClientMethod::GitHubIssueCreate
@@ -2446,6 +2209,12 @@ impl AppServer {
                 | ClientMethod::GitHubPullRequestUpdate
                 | ClientMethod::GitHubPullRequestFiles
                 | ClientMethod::GitHubPullRequestReviews
+                | ClientMethod::GitHubPullRequestDiff
+                | ClientMethod::GitHubFileRead
+                | ClientMethod::GitHubReviewThreads
+                | ClientMethod::GitHubReviewThreadRead
+                | ClientMethod::GitHubReviewThreadReply
+                | ClientMethod::GitHubReviewThreadResolve
                 | ClientMethod::GitHubPullRequestReview
                 | ClientMethod::GitHubPullRequestMerge
                 | ClientMethod::GitHubPullRequestAutoMerge
@@ -2454,8 +2223,32 @@ impl AppServer {
                 | ClientMethod::GitHubLabelCreate
                 | ClientMethod::GitHubLabelUpdate
                 | ClientMethod::GitHubAssigneesList),
-            ) => self.github_request(method, &request.params, cancellation),
-            Some(ClientMethod::GitHubCancel) => self.github_cancel(connection, &request.params),
+            ) => request_dispatch::runtime()
+                .map_err(|error| {
+                    RpcError::with_details(
+                        -32070,
+                        AppServerErrorName::GitHubUnavailable,
+                        error.to_string(),
+                    )
+                })?
+                .block_on(
+                    self.github_processor()?
+                        .request(method, &request.params, cancellation),
+                ),
+            Some(
+                method @ (ClientMethod::GitHubAccountList | ClientMethod::GitHubAccountConnect),
+            ) => github_processor::account_request(
+                self.github_accounts.as_ref(),
+                method,
+                &request.params,
+                cancellation,
+            ),
+            Some(ClientMethod::GitHubCancel) => github_processor::cancel(
+                &self.request_scheduler,
+                &self.request_cancellations,
+                connection,
+                &request.params,
+            ),
             Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
             Some(ClientMethod::IssueList) => self.issue_list(&request.params, cancellation),
             Some(ClientMethod::IssueReporterRead) => self.issue_reporter_read(),

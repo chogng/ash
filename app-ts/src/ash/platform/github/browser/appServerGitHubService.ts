@@ -5,14 +5,34 @@ import type { AppServerProtocolClient } from '../../app-server/browser/appServer
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../app-server/common/generated/index.js';
-import { GitHubError, GitHubErrorCode } from '../common/githubService.js';
-import type { IGitHubService, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel } from '../common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
+import type { IGitHubService, GitHubAccount, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
 
 type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel'>;
 enum RequestKind { Read, Write }
 
 export class AppServerGitHubService implements IGitHubService {
 	constructor(private readonly connection: AppServerProtocolClient) { }
+
+	public async listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]> {
+		return (await this.request('github/account/list', {}, RequestKind.Read, token)).accounts.map(account => ({ ...account, credentialRevision: BigInt(account.credentialRevision) }));
+	}
+	public async connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount> {
+		const account = await this.request('github/account/connect', { host, token: accessToken }, RequestKind.Write, token);
+		return { ...account, credentialRevision: BigInt(account.credentialRevision) };
+	}
+	public async requestedReviewers(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubRequestedReviewers> {
+		return this.request('github/pullRequest/reviewers', { repository, number }, RequestKind.Read, token);
+	}
+	public async changeReviewers(repository: GitHubRepository, number: number, change: GitHubReviewerChange, users: readonly string[], teams: readonly string[], token?: CancellationToken): Promise<GitHubRequestedReviewers> {
+		return this.request('github/pullRequest/reviewers/change', { repository, number, change, users: [...users], teams: [...teams] }, RequestKind.Write, token);
+	}
+	public async updateReviewComment(repository: GitHubRepository, number: number, commentId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment> {
+		return this.request('github/pullRequest/comment/update', { repository, number, commentId, body }, RequestKind.Write, token);
+	}
+	public async deleteReviewComment(repository: GitHubRepository, number: number, commentId: string, token?: CancellationToken): Promise<void> {
+		await this.request('github/pullRequest/comment/delete', { repository, number, commentId }, RequestKind.Write, token);
+	}
 
 	public async readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit> {
 		return { ...await this.request('github/commit/read', { repository, sha }, RequestKind.Read, token) };
@@ -71,8 +91,29 @@ export class AppServerGitHubService implements IGitHubService {
 		const result = await this.request('github/pullRequest/reviews', { repository, number, page }, RequestKind.Read, token);
 		return { items: result.reviews.map(review => ({ ...review })), nextPage: result.nextPage };
 	}
+	public async readReviewDiff(repository: GitHubRepository, number: number, commit: string, page: number, token?: CancellationToken): Promise<GitHubReviewDiff> {
+		const result = await this.request('github/pullRequest/diff', { repository, number, commit, page }, RequestKind.Read, token);
+		return { baseCommit: result.baseCommit, files: { items: result.files.files.map(file => ({ ...file })), nextPage: result.files.nextPage, limitReached: result.files.limitReached } };
+	}
+	public async readFile(repository: GitHubRepository, commit: string, path: string, token?: CancellationToken): Promise<GitHubFileContent> {
+		return { ...await this.request('github/file/read', { repository, commit, path }, RequestKind.Read, token) };
+	}
+	public async listReviewThreads(repository: GitHubRepository, number: number, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewThreads> {
+		const result = await this.request('github/pullRequest/threads', { repository, number, cursor }, RequestKind.Read, token);
+		return { nextCursor: result.nextCursor, threads: result.threads.map(thread => ({ ...thread, side: thread.side === 'LEFT' ? GitHubDiffSide.Left : GitHubDiffSide.Right })) };
+	}
+	public async readReviewThreadComments(repository: GitHubRepository, number: number, threadId: string, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewComments> {
+		const result = await this.request('github/pullRequest/thread/read', { repository, number, threadId, cursor }, RequestKind.Read, token);
+		return { comments: result.comments.map(comment => ({ ...comment })), nextCursor: result.nextCursor };
+	}
+	public async replyReviewThread(repository: GitHubRepository, number: number, threadId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment> {
+		return { ...await this.request('github/pullRequest/thread/reply', { repository, number, threadId, body }, RequestKind.Write, token) };
+	}
+	public async resolveReviewThread(repository: GitHubRepository, number: number, threadId: string, state: GitHubReviewThreadState, token?: CancellationToken): Promise<void> {
+		await this.request('github/pullRequest/thread/resolve', { repository, number, threadId, state }, RequestKind.Write, token);
+	}
 	public async reviewPullRequest(repository: GitHubRepository, number: number, review: GitHubReview, token?: CancellationToken): Promise<GitHubPullRequestReview> {
-		return { ...await this.request('github/pullRequest/review', { repository, number, ...review }, RequestKind.Write, token) };
+		return { ...await this.request('github/pullRequest/review', { repository, number, ...review, comments: [...(review.comments ?? [])] }, RequestKind.Write, token) };
 	}
 	public async mergePullRequest(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<GitHubMergeResult> {
 		return { ...await this.request('github/pullRequest/merge', { repository, number, ...merge }, RequestKind.Write, token) };
@@ -103,7 +144,9 @@ export class AppServerGitHubService implements IGitHubService {
 		if (token.isCancellationRequested) { throw new CancellationError(); }
 		if (this.connection.state !== 'ready' || this.connection.capabilities?.github !== true || this.connection.capabilities.contracts.github?.version !== 1) { throw new GitHubError(GitHubErrorCode.Unavailable); }
 		const operationId = generateUuid();
-		const response = appServerRequest(this.connection, method, { ...params, operationId } as MethodParams<M>);
+		const bound = 'repository' in params ? params.repository as GitHubRepository : undefined;
+		const wire = bound ? { ...params, accountId: bound.accountId, repository: { host: bound.host, owner: bound.owner, name: bound.name } } : params;
+		const response = appServerRequest(this.connection, method, { ...wire, operationId } as MethodParams<M>);
 		const listener = token.onCancellationRequested(() => {
 			// Cancellation acknowledges intent; the original response owns the remote outcome.
 			void appServerRequest(this.connection, 'github/cancel', { operationId }).then(() => { }, onUnexpectedError);
@@ -123,11 +166,13 @@ export class AppServerGitHubService implements IGitHubService {
 export function createDisconnectedGitHubService(): IGitHubService {
 	const unavailable = async (): Promise<never> => { throw new GitHubError(GitHubErrorCode.Unavailable); };
 	return {
+		listAccounts: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
 		readCommit: unavailable,
 		readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,
 		listPullRequestFiles: unavailable, listPullRequestReviews: unavailable, reviewPullRequest: unavailable, mergePullRequest: unavailable, enableAutoMerge: unavailable,
+		readReviewDiff: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
 		readChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
 	};
 }

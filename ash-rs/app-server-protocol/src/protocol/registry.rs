@@ -1054,6 +1054,14 @@ use crate::protocol::issues::IssueConfigureParams;
 use crate::protocol::issues::IssueListParams;
 
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubAccount;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubAccountConnectParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubAccountListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubAccountsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubCommentCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubCommentDeleteParams;
@@ -1061,6 +1069,10 @@ use crate::protocol::github::GitHubCommentDeleteParams;
 use crate::protocol::github::GitHubCommentListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubCommentUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubFileContent;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubFileReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubIssue;
 #[cfg(any(test, feature = "export"))]
@@ -1087,6 +1099,32 @@ use crate::protocol::github::GitHubPullRequestListResult;
 use crate::protocol::github::GitHubPullRequestUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRequestedReviewers;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewComment;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewCommentDeleteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewCommentEditParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewCommentsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewDiffParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewDiffResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewThreadReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewThreadReplyParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewThreadResolveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewThreadsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewThreadsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubReviewersChangeParams;
 
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubChecksParams;
@@ -4170,6 +4208,12 @@ client_methods! {
         serialization: None,
         cancellation: "operationId",
     },
+    GitHubAccountList => "github/account/list" { params: GitHubAccountListParams, response: GitHubAccountsResult, serialization: None, cancellation: "operationId", },
+    GitHubAccountConnect => "github/account/connect" { params: GitHubAccountConnectParams, response: GitHubAccount, serialization: GlobalExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubReviewCommentEdit => "github/pullRequest/comment/update" { params: GitHubReviewCommentEditParams, response: GitHubReviewComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubReviewCommentDelete => "github/pullRequest/comment/delete" { params: GitHubReviewCommentDeleteParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubReviewersRead => "github/pullRequest/reviewers" { params: GitHubNumberParams, response: GitHubRequestedReviewers, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubReviewersChange => "github/pullRequest/reviewers/change" { params: GitHubReviewersChangeParams, response: GitHubRequestedReviewers, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubRepositoryRead => "github/repository/read" { params: GitHubRepositoryParams, response: GitHubRepositoryResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubCommitRead => "github/commit/read" { params: GitHubCommitParams, response: GitHubCommit, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubIssueList => "github/issue/list" { params: GitHubIssueListParams, response: GitHubIssueListResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
@@ -4186,6 +4230,12 @@ client_methods! {
     GitHubPullRequestUpdate => "github/pullRequest/update" { params: GitHubPullRequestUpdateParams, response: GitHubPullRequest, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestFiles => "github/pullRequest/files" { params: GitHubPageParams, response: GitHubPullRequestFilesResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubPullRequestReviews => "github/pullRequest/reviews" { params: GitHubPageParams, response: GitHubPullRequestReviewsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubPullRequestDiff => "github/pullRequest/diff" { params: GitHubReviewDiffParams, response: GitHubReviewDiffResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubFileRead => "github/file/read" { params: GitHubFileReadParams, response: GitHubFileContent, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubReviewThreads => "github/pullRequest/threads" { params: GitHubReviewThreadsParams, response: GitHubReviewThreadsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubReviewThreadRead => "github/pullRequest/thread/read" { params: GitHubReviewThreadReadParams, response: GitHubReviewCommentsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubReviewThreadReply => "github/pullRequest/thread/reply" { params: GitHubReviewThreadReplyParams, response: GitHubReviewComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubReviewThreadResolve => "github/pullRequest/thread/resolve" { params: GitHubReviewThreadResolveParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestReview => "github/pullRequest/review" { params: GitHubPullRequestReviewParams, response: GitHubPullRequestReview, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestMerge => "github/pullRequest/merge" { params: GitHubPullRequestMergeParams, response: GitHubMergeResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestAutoMerge => "github/pullRequest/autoMerge" { params: GitHubPullRequestMergeParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -4883,9 +4933,33 @@ typescript_bindings! {
     crate::protocol::issues::IssueReadParams,
     crate::protocol::issues::IssueReadResult,
     crate::protocol::issues::IssueComment,
+    crate::protocol::github::GitHubReviewDiffParams,
+    crate::protocol::github::GitHubReviewDiffResult,
+    crate::protocol::github::GitHubFileReadParams,
+    crate::protocol::github::GitHubFileContent,
+    crate::protocol::github::GitHubReviewThreadsParams,
+    crate::protocol::github::GitHubReviewThreadReadParams,
+    crate::protocol::github::GitHubReviewThreadReplyParams,
+    crate::protocol::github::GitHubReviewThreadResolveParams,
+    crate::protocol::github::GitHubReviewComment,
+    crate::protocol::github::GitHubReviewCommentsResult,
+    crate::protocol::github::GitHubReviewThread,
+    crate::protocol::github::GitHubReviewThreadsResult,
+    crate::protocol::github::GitHubDiffSide,
+    crate::protocol::github::GitHubReviewThreadState,
+    crate::protocol::github::GitHubReviewCommentInput,
     crate::protocol::github::GitHubMergeMethod,
     crate::protocol::github::GitHubReviewEvent,
     crate::protocol::github::GitHubCancelStatus,
+    crate::protocol::github::GitHubAccount,
+    crate::protocol::github::GitHubAccountsResult,
+    crate::protocol::github::GitHubAccountConnectParams,
+    crate::protocol::github::GitHubAccountListParams,
+    crate::protocol::github::GitHubReviewCommentEditParams,
+    crate::protocol::github::GitHubReviewCommentDeleteParams,
+    crate::protocol::github::GitHubReviewerChange,
+    crate::protocol::github::GitHubReviewersChangeParams,
+    crate::protocol::github::GitHubRequestedReviewers,
     crate::protocol::github::GitHubRepositoryParams,
     crate::protocol::github::GitHubNumberParams,
     crate::protocol::github::GitHubPageParams,

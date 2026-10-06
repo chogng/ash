@@ -2,7 +2,7 @@
 import type { GitIntegrationDto } from './GitIntegrationDto.js';
 import type { GitStashModeDto } from './GitStashModeDto.js';
 
-export type GitCommandDto = { "kind": "createBranchAt", name: string, objectId: string, } | { "kind": "checkoutDetached", objectId: string, } | { "kind": "checkoutRemoteBranch", name: string, reference: string, } | { "kind": "renameBranch", name: string, newName: string, } | { "kind": "deleteRemoteBranch", remote: string, name: string, } | { "kind": "merge", reference: string, } | { "kind": "rebase", reference: string, } | { "kind": "cherryPick", reference: string,
+export type GitCommandDto = { "kind": "fetchAndCheckout", remote: string, remoteIdentity: string, reference: string, objectId: string, name: string, } | { "kind": "pushBranch", remote: string, remoteIdentity: string, name: string, branch: string, expectedHead: string, } | { "kind": "createBranchAt", name: string, objectId: string, } | { "kind": "checkoutDetached", objectId: string, } | { "kind": "checkoutRemoteBranch", name: string, reference: string, } | { "kind": "renameBranch", name: string, newName: string, } | { "kind": "deleteRemoteBranch", remote: string, name: string, } | { "kind": "merge", reference: string, } | { "kind": "rebase", reference: string, } | { "kind": "cherryPick", reference: string,
 /**
  * One-based parent defining a merge commit's changes.
  */

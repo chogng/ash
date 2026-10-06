@@ -190,19 +190,29 @@ impl GitHub {
         commit: &str,
         event: ReviewEvent,
         body: &str,
+        comments: &[ReviewCommentInput],
     ) -> Result<PullRequestReview> {
         validate_number(number)?;
         validate_commit(commit)?;
         crate::issues::validate_body(body)?;
-        if event != ReviewEvent::Approve {
+        crate::reviews::validate_comments(comments)?;
+        if event == ReviewEvent::RequestChanges
+            || (event == ReviewEvent::Comment && comments.is_empty())
+        {
             crate::issues::validate_text(body, 65_536, "Review")?;
+        }
+        let current = self.pull_request(repository, number).await?;
+        if !current.head.sha.eq_ignore_ascii_case(commit) {
+            return Err(Error::Conflict(
+                "PR changed since it was opened for review".into(),
+            ));
         }
         let review: PullRequestReview = self
             .api(
                 repository,
                 HttpMethod::Post,
                 &repository.endpoint(&format!("pulls/{number}/reviews")),
-                Some(json!({"commit_id":commit,"event":event,"body":body})),
+                Some(json!({"commit_id":commit,"event":event,"body":body,"comments":comments})),
             )
             .await?;
         if review.id == 0 || !review.commit_id.eq_ignore_ascii_case(commit) {
@@ -452,14 +462,14 @@ fn valid_pull_request(repository: &Repository, pull_request: &PullRequest) -> bo
         ))
 }
 
-fn validate_number(number: u64) -> Result<()> {
+pub(crate) fn validate_number(number: u64) -> Result<()> {
     if number == 0 {
         return Err(Error::InvalidInput("PR number must be positive".into()));
     }
     Ok(())
 }
 
-fn validate_page(page: u32) -> Result<()> {
+pub(crate) fn validate_page(page: u32) -> Result<()> {
     if !(1..=10_000).contains(&page) {
         return Err(Error::InvalidInput(
             "Page must be between 1 and 10000".into(),

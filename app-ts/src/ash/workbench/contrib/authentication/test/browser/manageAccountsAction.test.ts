@@ -56,6 +56,23 @@ test('Manage Accounts command offers product login methods when no account is co
 	assert.deepEqual(operations, ['read', 'login:openAiChatGptBrowser', 'read', 'github:connect']);
 });
 
+test('connected GitHub accounts can add another account and sign out only the chosen identity', async () => {
+	const operations: string[] = []; const quickInput = new TestQuickInputService();
+	const accounts = accountFixture({ revision: 1n, accounts: ['alice', 'bob'].map(accountId => ({ provider: 'github', accountId, displayName: accountId, status: 'ready', credentialRevision: 1n })) }, operations);
+	accounts.logout = async (provider, accountId) => { operations.push(`logout:${provider}/${accountId}`); };
+	using environment = new AccountActionEnvironment(accounts, quickInput, operations);
+	using registration = registerAction2(ManageAccountsAction);
+	await environment.commands.executeCommand(ManageAccountsAction.ID);
+	quickInput.pickers[0]!.accept(quickInput.pickers[0]!.items[1]!);
+	quickInput.pickers[1]!.accept(quickInput.pickers[1]!.items[0]!);
+	assert.deepEqual(operations, ['read', 'logout:github/bob']);
+	await environment.commands.executeCommand(ManageAccountsAction.ID);
+	quickInput.pickers[2]!.accept(quickInput.pickers[2]!.items[2]!);
+	const connect = quickInput.pickers[3]!.items.find(item => item.label === 'Connect GitHub')!;
+	assert.ok(connect); quickInput.pickers[3]!.accept(connect);
+	assert.equal(operations.at(-1), 'github:connect');
+});
+
 test('Manage Accounts command offers sign in when an account needs reauthentication', async () => {
 	const operations: string[] = [];
 	const quickInput = new TestQuickInputService();
