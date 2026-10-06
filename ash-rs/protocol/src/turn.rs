@@ -25,6 +25,7 @@ mod tool_profile;
 pub use execution_kind::TurnKind;
 pub use instructions::InstructionText;
 pub use instructions::InvalidTurnInstructions;
+pub use instructions::ModelInstructionMessages;
 pub use instructions::ModelInstructionSelection;
 pub use instructions::TurnInstructions;
 pub use review_target::ReviewTarget;

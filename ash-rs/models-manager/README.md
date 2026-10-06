@@ -186,11 +186,11 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 - `for_turn` 在接受新 Turn 前选好并冻结基础提示词。命中模型条目时替换默认 Agent 正文；未登记时使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。宿主显式指定的基础正文优先；产品任务保留自己的正文，只替换共享的 Agent 基础正文。
 - 权限、Role、协作模式、项目指令、历史和工具定义仍由对应运行时组合。模型提示词不授予工具或权限。
 - App Server 和委托工具默认使用内置目录。嵌入方可在环境创建前通过 `with_model_instructions` 整体替换它，传入空目录建立 Generic 对照。
-- 每次选择记录准确模型、正文、id/revision 和摘要；结构校验通过不代表模型效果已评测。已接受 Turn 和角色/子 Agent 的冻结内容用于后续请求与恢复。
+- 每次选择记录准确模型、基础正文和分组指导的全文、id/revision 和摘要；结构校验通过不代表模型效果已评测。已接受 Turn 和角色/子 Agent 的冻结内容用于后续请求与恢复。
 
 ### 初版模板与修改入口
 
-1. 调整某个模型：编辑 `models.json` 中该模型的 `model_messages.system_instructions` 字符串，正文修改会自动改变冻结资产的 revision，无需填写版本号。它是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。
+1. 调整某个模型：编辑 `models.json` 中该模型的 `model_messages` 对应正文，正文修改会自动改变冻结资产的 revision，无需填写版本号。`system_instructions` 是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。工具说明放入 `tools.<tool>.description`，模式指导放入 `collaboration_modes`，根／子 Agent 指导放入 `multi_agent`；这些文本随选择冻结，由 Core 按实际状态使用。
 2. 新增沿用现有协议的模型：只在 JSON 的 `models` 数组增加规格与完整提示词；无需增加模板枚举、Markdown 或指令选择分支。新增供应商协议仍需实现对应接入。
 3. 修改未登记模型的默认行为：编辑 `base_prompt.md` 并提升 `prompts/src/agent.rs` 的资产 revision，不会影响已有模型条目的正文。
 4. 编译并重启宿主。新建 Agent 按新目录选择基础提示词；已有 Agent 在模型未变时沿用保存的正文，已接受的 Turn 保留本轮快照。验证新正文时创建新的相应 Agent。

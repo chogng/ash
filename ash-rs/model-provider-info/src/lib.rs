@@ -49,7 +49,9 @@ pub use providers::bigmodel::BIGMODEL_CODING_PLAN_BASE_URL;
 pub use providers::zai::ZAI_CODING_PLAN_BASE_URL;
 pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;
+pub use static_model_spec::ModelAgentMessages;
 pub use static_model_spec::ModelMessages;
+pub use static_model_spec::ModelToolMessage;
 pub use static_model_spec::StaticModelSpec;
 
 use schemars::{Schema, schema_for};

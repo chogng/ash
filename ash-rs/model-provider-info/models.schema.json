@@ -92,6 +92,25 @@
         }
       ]
     },
+    "ModelAgentMessages": {
+      "description": "Model-specific Agent responsibility guidance; it cannot enable delegation.",
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subagent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ModelCapabilitiesDeclaration": {
       "type": "object",
       "properties": {
@@ -145,9 +164,43 @@
       "description": "Model-owned prompt text, assembled with runtime instructions before provider encoding.",
       "type": "object",
       "properties": {
+        "collaboration_modes": {
+          "description": "Additional guidance selected by the active collaboration mode, without changing its permissions.",
+          "type": "object",
+          "properties": {
+            "agent": {
+              "type": "string"
+            },
+            "ask": {
+              "type": "string"
+            },
+            "debug": {
+              "type": "string"
+            },
+            "multitask": {
+              "type": "string"
+            },
+            "plan": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "multi_agent": {
+          "description": "Guidance selected by the Thread's actual root or delegated identity, separate from its task role.",
+          "$ref": "#/$defs/ModelAgentMessages"
+        },
         "system_instructions": {
           "description": "Complete model-specific Agent instructions; runtime permission and project instructions are separate.",
           "type": "string"
+        },
+        "tools": {
+          "description": "Additional model-specific descriptions for tools actually exposed by the host; parameters remain tool-owned.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelToolMessage"
+          }
         }
       },
       "additionalProperties": false,
@@ -301,6 +354,19 @@
       "type": "string",
       "enum": [
         "fast"
+      ]
+    },
+    "ModelToolMessage": {
+      "description": "Model-specific wording added to a tool's authoritative description.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "description"
       ]
     },
     "ModelToolOutputLimit": {

@@ -37769,6 +37769,63 @@
       ],
       "type": "string"
     },
+    "ModelInstructionMessages": {
+      "description": "Model-owned guidance frozen at selection; Core chooses only the active mode, identity and available tools.",
+      "properties": {
+        "collaborationModes": {
+          "additionalProperties": false,
+          "properties": {
+            "agent": {
+              "$ref": "#/$defs/InstructionText"
+            },
+            "ask": {
+              "$ref": "#/$defs/InstructionText"
+            },
+            "debug": {
+              "$ref": "#/$defs/InstructionText"
+            },
+            "multitask": {
+              "$ref": "#/$defs/InstructionText"
+            },
+            "plan": {
+              "$ref": "#/$defs/InstructionText"
+            }
+          },
+          "type": "object"
+        },
+        "root": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstructionText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subagent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstructionText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InstructionText"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "tools",
+        "collaborationModes"
+      ],
+      "type": "object"
+    },
     "ModelInstructionSelection": {
       "description": "The model guidance chosen for an invocation. Generic is an explicit supported choice.",
       "oneOf": [
@@ -37801,6 +37858,16 @@
             },
             "instructions": {
               "$ref": "#/$defs/InstructionText"
+            },
+            "messages": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelInstructionMessages"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "model": {
               "$ref": "#/$defs/ModelRef"

@@ -1,6 +1,106 @@
 use super::*;
 
 #[test]
+fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() {
+    let asset = |text: &str| ash_protocol::InstructionText {
+        owner: "models-manager".into(),
+        id: text.into(),
+        revision: ash_protocol::ContentDigest::sha256(text.as_bytes()).to_string(),
+        body: text.into(),
+    };
+    let tool = ash_protocol::ToolName::new("spawn_agent").unwrap();
+    let messages = ash_protocol::ModelInstructionMessages {
+        tools: [
+            (tool.clone(), asset("MODEL_TOOL")),
+            (
+                ash_protocol::ToolName::new("unavailable_tool").unwrap(),
+                asset("UNAVAILABLE_TOOL"),
+            ),
+        ]
+        .into(),
+        collaboration_modes: [
+            (ash_protocol::CollaborationMode::Plan, asset("MODEL_PLAN")),
+            (
+                ash_protocol::CollaborationMode::Multitask,
+                asset("MODEL_MULTITASK"),
+            ),
+        ]
+        .into(),
+        root: Some(asset("MODEL_ROOT")),
+        subagent: Some(asset("MODEL_WORKER")),
+    };
+    let base =
+        ash_protocol::TurnInstructions::new("models-manager", "model/test", "v1", "MODEL_BASE")
+            .unwrap();
+    let base =
+        base.clone()
+            .with_model_guidance(ash_protocol::ModelInstructionSelection::Specialized {
+                model: ash_protocol::ModelRef::new(
+                    ash_protocol::ProviderId::new("test").unwrap(),
+                    ash_protocol::ModelId::new("model").unwrap(),
+                ),
+                instructions: base.as_text(),
+                digest: ash_protocol::ContentDigest::sha256(base.body().as_bytes()),
+                messages: Some(messages),
+            });
+    let restored: ash_protocol::TurnInstructions =
+        serde_json::from_value(serde_json::to_value(&base).unwrap()).unwrap();
+    for (mode, role, selected_mode, selected_role, absent_mode, absent_role) in [
+        (
+            ash_protocol::CollaborationMode::Plan,
+            AgentInstructionRole::Root,
+            "MODEL_PLAN",
+            "MODEL_ROOT",
+            "MODEL_MULTITASK",
+            "MODEL_WORKER",
+        ),
+        (
+            ash_protocol::CollaborationMode::Multitask,
+            AgentInstructionRole::Subagent,
+            "MODEL_MULTITASK",
+            "MODEL_WORKER",
+            "MODEL_PLAN",
+            "MODEL_ROOT",
+        ),
+    ] {
+        let fragments = turn_instruction_fragments(
+            &restored,
+            ash_protocol::ApprovalMode::Manual,
+            mode,
+            role,
+            Vec::new(),
+        );
+        let bodies = fragments
+            .iter()
+            .map(InstructionFragment::body)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            bodies.iter().filter(|body| **body == selected_mode).count(),
+            1
+        );
+        assert_eq!(
+            bodies.iter().filter(|body| **body == selected_role).count(),
+            1
+        );
+        assert!(!bodies.contains(&absent_mode));
+        assert!(!bodies.contains(&absent_role));
+        assert!(!bodies.contains(&"MODEL_TOOL"));
+        assert!(!bodies.contains(&"UNAVAILABLE_TOOL"));
+    }
+    let original = ash_protocol::ToolDefinition {
+        name: tool,
+        description: "Authoritative host description with current roles".into(),
+        parameters: serde_json::json!({"type":"object", "properties":{"task":{"type":"string"}}, "required":["task"], "additionalProperties":false}),
+        strict: true,
+    };
+    let catalog = crate::ModelToolCatalogSnapshot::new(vec![original.clone()])
+        .with_model_descriptions(&restored);
+    let mut expected = original;
+    expected.description.push_str("\n\nMODEL_TOOL");
+    assert_eq!(catalog.definitions(), [expected]);
+}
+
+#[test]
 fn selected_files_keep_separate_sources_and_content_revisions() {
     let make = |path: &str, body: &str| {
         HarnessInstruction::new(
@@ -100,6 +200,7 @@ fn frozen_bases_and_distinct_guidance_render_once_with_runtime_instructions() {
         ),
         digest: ash_protocol::ContentDigest::sha256(model_base.body().as_bytes()),
         instructions: model_base.as_text(),
+        messages: None,
     };
     let custom =
         ash_protocol::TurnInstructions::new("host", "custom", "v1", "CUSTOM_BASE").unwrap();
@@ -143,6 +244,8 @@ fn frozen_bases_and_distinct_guidance_render_once_with_runtime_instructions() {
         let fragments = turn_instruction_fragments(
             &base.with_mode(&mode),
             ash_protocol::ApprovalMode::Manual,
+            ash_protocol::CollaborationMode::Agent,
+            AgentInstructionRole::Root,
             Vec::new(),
         );
         let bodies = fragments

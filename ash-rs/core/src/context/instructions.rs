@@ -223,10 +223,19 @@ fn escape_xml(value: &str) -> String {
 #[path = "instructions_tests.rs"]
 mod tests;
 
+/// Thread ancestry selects responsibility guidance independently of the task role and delegation permission.
+#[derive(Clone, Copy)]
+pub(crate) enum AgentInstructionRole {
+    Root,
+    Subagent,
+}
+
 /// One composition path for inspection and execution; file and extension fragments retain their provenance.
 pub(crate) fn turn_instruction_fragments(
     instructions: &ash_protocol::TurnInstructions,
     approval_mode: ash_protocol::ApprovalMode,
+    mode: ash_protocol::CollaborationMode,
+    agent_role: AgentInstructionRole,
     additional: Vec<InstructionFragment>,
 ) -> Vec<InstructionFragment> {
     let primary = instructions.as_text();
@@ -290,5 +299,45 @@ pub(crate) fn turn_instruction_fragments(
             asset.body.clone(),
         ));
     }
+    if let Some(messages) = instructions
+        .model_guidance()
+        .and_then(|selection| selection.messages())
+    {
+        let role = match agent_role {
+            AgentInstructionRole::Root => messages.root.as_ref(),
+            AgentInstructionRole::Subagent => messages.subagent.as_ref(),
+        };
+        for asset in messages
+            .collaboration_modes
+            .get(&mode)
+            .into_iter()
+            .chain(role)
+        {
+            instruction_fragments.push(InstructionFragment::new(
+                InstructionSource::new(&asset.owner, &asset.id, &asset.revision),
+                InstructionPlacement::System,
+                InstructionRetention::Required,
+                &asset.body,
+            ));
+        }
+    }
     instruction_fragments
+}
+
+/// Adds model wording only to available definitions, retaining tool-owned semantics and parameters.
+pub(crate) fn apply_model_tool_descriptions(
+    instructions: &ash_protocol::TurnInstructions,
+    tools: &mut [ash_protocol::ToolDefinition],
+) {
+    if let Some(messages) = instructions
+        .model_guidance()
+        .and_then(|selection| selection.messages())
+    {
+        for tool in tools {
+            if let Some(asset) = messages.tools.get(&tool.name) {
+                tool.description.push_str("\n\n");
+                tool.description.push_str(&asset.body);
+            }
+        }
+    }
 }

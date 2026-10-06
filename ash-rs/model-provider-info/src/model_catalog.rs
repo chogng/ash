@@ -88,15 +88,21 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
                 "default reasoning effort is not supported",
             ));
         }
-        if spec.model_messages.system_instructions.trim().is_empty() {
-            return Err(serde_json::Error::custom(
-                "model system instructions are empty",
-            ));
+        let messages = &spec.model_messages;
+        let texts = std::iter::once(&messages.system_instructions)
+            .chain(messages.tools.values().map(|tool| &tool.description))
+            .chain(messages.collaboration_modes.values())
+            .chain(messages.multi_agent.root.iter())
+            .chain(messages.multi_agent.subagent.iter());
+        let mut bytes = 0;
+        for text in texts {
+            if text.trim().is_empty() {
+                return Err(serde_json::Error::custom("model instruction text is empty"));
+            }
+            bytes += text.len();
         }
-        if spec.model_messages.system_instructions.len() > 64 * 1024 {
-            return Err(serde_json::Error::custom(
-                "model instructions exceed 64 KiB",
-            ));
+        if bytes > 64 * 1024 {
+            return Err(serde_json::Error::custom("model messages exceed 64 KiB"));
         }
     }
     Ok(catalog.models)

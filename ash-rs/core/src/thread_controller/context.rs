@@ -272,6 +272,12 @@ impl ThreadController {
             let instruction_fragments = crate::context::turn_instruction_fragments(
                 instructions,
                 turn.approval_mode,
+                turn.mode,
+                if loaded.snapshot.parent_thread_id.is_some() {
+                    crate::context::AgentInstructionRole::Subagent
+                } else {
+                    crate::context::AgentInstructionRole::Root
+                },
                 additional,
             );
             let tools = crate::multi_agent::scope_agent_tools(

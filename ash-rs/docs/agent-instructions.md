@@ -84,10 +84,10 @@
 ```text
 启动阶段选定的 provider/model 身份
     → ModelInstructionCatalog::resolve
-    → Generic { model } 或 Specialized { model, instructions, digest }
+    → Generic { model } 或 Specialized { model, instructions, digest, messages }
 
-新 Turn 冻结：选中的完整模型基础正文，或未登记模型的 base_prompt.md
-Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
+新 Turn 冻结：选中的完整模型基础正文及分组指导，或未登记模型的 base_prompt.md
+Core 接收：冻结基础正文 + 按实际模式和根／子身份选择的模型指导 + 当前 Role + 实际工具/环境 + 任务
     → 有来源的 ContextPlan
     → ModelRequest
 ```
@@ -116,7 +116,7 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 | 每个模型维护完整基础提示词            | 当前采用；每个模型可独立修改 | Role、权限与模式仍独立，公共要求修改要同步适用条目 |
 | 任意 section 覆盖或运行脚本改写提示词 | 扩大验证面、增加组合歧义     | 不作为普通 Role 或 Plugin 能力                     |
 
-当前模型条目提供完整基础提示词，上限 64 KiB；空白资产、重复登记或不一致的已保存摘要会失败。没有引入通用模板语言、动态注册中心、模型族匹配或工具条件模板。增加这些能力必须有具体消费者、兼容规则和对应评测，不能用未经验证的隐式规则代替。
+当前模型条目提供完整基础提示词与工具、模式、根／子 Agent 的分组指导，全部文本合计上限 64 KiB；空白资产、重复登记或不一致的已保存摘要会失败。没有引入通用模板语言、动态注册中心、模型族匹配或工具条件模板。增加这些能力必须有具体消费者、兼容规则和对应评测，不能用未经验证的隐式规则代替。
 
 每个专化记录适用模型、正文 revision、设计假设和证据状态。本轮按“先补上、后续再修改”的要求默认启用初版；真实失败案例和对照结果仍标为未完成，不能因为已经启用就声称更优。后续优化须以同模型对照评测判断收益，保留空目录作为 Generic 对照。
 
@@ -126,7 +126,7 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 当前内置模型的完整基础提示词与规格统一登记在 [`models.json`](../model-provider-info/models.json)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
 
-目录不填写 revision，`models-manager` 按正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。当前正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、委托、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
+目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`collaboration_modes` 按当前五种模式选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
 
 这些初始正文尚未做真实模型效果评测。以下保留原指导的设计假设与来源，来源复核日期为 2026-09-09，不代表本轮验证了远端型号的在线可用性。
 
@@ -141,7 +141,7 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 ### 修改、生效与检查
 
-- 修改一个模型只编辑 JSON 中它的 `model_messages.system_instructions` 字符串；新增沿用现有协议的模型只增加 JSON 条目。具体入口见 [crate README](../models-manager/README.md#初版模板与修改入口)。
+- 修改一个模型只编辑 JSON 中它的 `model_messages` 对应正文分组；新增沿用现有协议的模型只增加 JSON 条目。具体入口见 [crate README](../models-manager/README.md#初版模板与修改入口)。
 - `model-provider-info` 校验 JSON 并提供共享规格；`models-manager` 生成准确指令目录和内容摘要。选择不扫描目录、不查询网络；未知型号、自定义 provider 与不同大小写不会自动套用已知模型正文。
 - `for_turn` 在新 Turn 接受前选好完整基础正文；宿主自定义基础正文优先，产品任务只替换共享 Agent 基础正文。Core 渲染冻结资产，选中模型正文不会重复加入；已保存的独立指导资产仍按其保存含义组合。
 - `ModelInstructionCatalog::default()` 为明确的空目录。嵌入方通过 `with_model_instructions` 整体替换目录，也可用空目录建立同模型 Generic 对照。

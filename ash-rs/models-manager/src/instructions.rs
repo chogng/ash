@@ -1,5 +1,6 @@
 use ash_protocol::ContentDigest;
 use ash_protocol::InstructionText;
+use ash_protocol::ModelInstructionMessages;
 use ash_protocol::ModelInstructionSelection;
 use ash_protocol::ModelRef;
 use ash_protocol::TurnInstructions;
@@ -14,11 +15,19 @@ use std::sync::LazyLock;
 pub struct ModelInstructionProfile {
     pub model: ModelRef,
     pub instructions: InstructionText,
+    pub messages: Option<ModelInstructionMessages>,
 }
 
 impl ModelInstructionProfile {
     fn from_spec(spec: &model_provider_info::StaticModelSpec) -> Self {
         let body = &spec.model_messages.system_instructions;
+        let asset = |kind: &str, text: &String| InstructionText {
+            owner: "models-manager".into(),
+            id: format!("model/{}/{}/{kind}", spec.provider_id, spec.model_id),
+            revision: ContentDigest::sha256(text.as_bytes()).to_string(),
+            body: text.clone(),
+        };
+        let messages = &spec.model_messages;
         Self {
             model: spec.model_ref(),
             instructions: InstructionText {
@@ -28,6 +37,42 @@ impl ModelInstructionProfile {
                 revision: ContentDigest::sha256(body.as_bytes()).to_string(),
                 body: body.clone(),
             },
+            messages: Some(ModelInstructionMessages {
+                tools: messages
+                    .tools
+                    .iter()
+                    .map(|(name, tool)| {
+                        (
+                            name.clone(),
+                            asset(&format!("tools/{name}"), &tool.description),
+                        )
+                    })
+                    .collect(),
+                collaboration_modes: messages
+                    .collaboration_modes
+                    .iter()
+                    .map(|(mode, text)| {
+                        let name = serde_json::to_value(mode).expect("mode serializes");
+                        (
+                            *mode,
+                            asset(
+                                &format!("modes/{}", name.as_str().expect("mode is a string")),
+                                text,
+                            ),
+                        )
+                    })
+                    .collect(),
+                root: messages
+                    .multi_agent
+                    .root
+                    .as_ref()
+                    .map(|text| asset("multi-agent/root", text)),
+                subagent: messages
+                    .multi_agent
+                    .subagent
+                    .as_ref()
+                    .map(|text| asset("multi-agent/subagent", text)),
+            }),
         }
     }
 }
@@ -61,13 +106,19 @@ impl ModelInstructionCatalog {
         let mut catalog = Self::default();
         for profile in profiles {
             let key = profile.model.clone();
-            if profile.instructions.body.len() > 64 * 1024 {
+            let additional_bytes = profile.messages.as_ref().map_or(0, |messages| {
+                messages
+                    .assets()
+                    .map(|asset| asset.body.len())
+                    .sum::<usize>()
+            });
+            if profile.instructions.body.len() + additional_bytes > 64 * 1024 {
                 return Err(ModelInstructionError::InvalidProfile {
                     model: profile.model,
                     reason: "guidance exceeds 64 KiB".into(),
                 });
             }
-            let instructions = ash_protocol::TurnInstructions::new(
+            let frozen = ash_protocol::TurnInstructions::new(
                 profile.instructions.owner,
                 profile.instructions.id,
                 profile.instructions.revision,
@@ -76,13 +127,21 @@ impl ModelInstructionCatalog {
             .map_err(|error| ModelInstructionError::InvalidProfile {
                 model: profile.model.clone(),
                 reason: error.to_string(),
-            })?
-            .as_text();
+            })?;
+            let instructions = frozen.as_text();
             let selection = ModelInstructionSelection::Specialized {
                 model: profile.model,
                 digest: ContentDigest::sha256(instructions.body.as_bytes()),
                 instructions,
+                messages: profile.messages,
             };
+            frozen
+                .with_model_guidance(selection.clone())
+                .validate()
+                .map_err(|error| ModelInstructionError::InvalidProfile {
+                    model: key.clone(),
+                    reason: error.to_string(),
+                })?;
             if catalog.profiles.insert(key.clone(), selection).is_some() {
                 return Err(ModelInstructionError::DuplicateModel(key));
             }

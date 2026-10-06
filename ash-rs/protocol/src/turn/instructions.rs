@@ -3,6 +3,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use ts_rs::TS;
@@ -69,12 +70,23 @@ impl TurnInstructions {
         if let Some(ModelInstructionSelection::Specialized {
             instructions,
             digest,
+            messages,
             ..
         }) = &self.model_guidance
         {
             instructions.validate()?;
             if crate::ContentDigest::sha256(instructions.body.as_bytes()) != *digest {
                 return Err(InvalidTurnInstructions("model guidance digest"));
+            }
+            if let Some(messages) = messages {
+                for asset in messages.assets() {
+                    asset.validate()?;
+                    if crate::ContentDigest::sha256(asset.body.as_bytes()).as_str()
+                        != asset.revision
+                    {
+                        return Err(InvalidTurnInstructions("model message digest"));
+                    }
+                }
             }
         }
         Ok(())
@@ -202,16 +214,47 @@ pub enum ModelInstructionSelection {
         model: crate::ModelRef,
         instructions: InstructionText,
         digest: crate::ContentDigest,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        messages: Option<ModelInstructionMessages>,
     },
 }
 
 impl ModelInstructionSelection {
+    /// Returns model-owned wording captured with this selection, never a live catalog lookup.
+    pub fn messages(&self) -> Option<&ModelInstructionMessages> {
+        match self {
+            Self::Specialized { messages, .. } => messages.as_ref(),
+            Self::Generic { .. } => None,
+        }
+    }
     /// The exact model selected before these instructions were frozen.
     pub fn model(&self) -> Option<&crate::ModelRef> {
         match self {
             Self::Generic { model } => model.as_ref(),
             Self::Specialized { model, .. } => Some(model),
         }
+    }
+}
+
+/// Model-owned guidance frozen at selection; Core chooses only the active mode, identity and available tools.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInstructionMessages {
+    pub tools: BTreeMap<crate::ToolName, InstructionText>,
+    pub collaboration_modes: BTreeMap<crate::CollaborationMode, InstructionText>,
+    pub root: Option<InstructionText>,
+    pub subagent: Option<InstructionText>,
+}
+
+impl ModelInstructionMessages {
+    /// Iterates every frozen text for boundary validation and aggregate catalog limits.
+    pub fn assets(&self) -> impl Iterator<Item = &InstructionText> {
+        self.tools
+            .values()
+            .chain(self.collaboration_modes.values())
+            .chain(self.root.iter())
+            .chain(self.subagent.iter())
     }
 }
 

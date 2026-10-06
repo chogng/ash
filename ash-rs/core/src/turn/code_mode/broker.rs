@@ -388,8 +388,17 @@ impl CodeModeBroker {
             }
             _ => frozen_catalog,
         };
-        let frozen_definitions = frozen_catalog.definitions().to_vec();
-        let projected = projected_tools(&frozen_definitions)?;
+        // Nested execution checks the tool-owned definition; model wording belongs only to runtime declarations.
+        let mut model_definitions = frozen_catalog.definitions().to_vec();
+        if let Some(instructions) = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == context.turn_id())
+            .and_then(|turn| turn.instructions.as_ref())
+        {
+            crate::context::apply_model_tool_descriptions(instructions, &mut model_definitions);
+        }
+        let projected = projected_tools(&model_definitions)?;
         let runtime = self.session_for(&key)?;
         let invoker = Arc::new(BrokerToolInvoker::new(
             Arc::downgrade(&self.inner),

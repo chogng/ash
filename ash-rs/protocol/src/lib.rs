@@ -282,6 +282,7 @@ pub use tool_name::InvalidToolName;
 pub use tool_name::ToolName;
 pub use turn::InstructionText;
 pub use turn::InvalidTurnInstructions;
+pub use turn::ModelInstructionMessages;
 pub use turn::ModelInstructionSelection;
 pub use turn::ReviewTarget;
 pub use turn::ToolProfileSnapshot;

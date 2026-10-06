@@ -63,4 +63,6 @@ pub use instructions::HarnessInstruction;
 pub use instructions::InstructionActivation;
 pub use instructions::InstructionScope;
 
+pub(crate) use instructions::AgentInstructionRole;
+pub(crate) use instructions::apply_model_tool_descriptions;
 pub(crate) use instructions::turn_instruction_fragments;

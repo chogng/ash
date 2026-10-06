@@ -163,6 +163,15 @@ impl ModelToolCatalogSnapshot {
         &self.definitions
     }
 
+    /// Applies captured model wording without changing tool identity, binding or parameter contracts.
+    pub(crate) fn with_model_descriptions(
+        mut self,
+        instructions: &ash_protocol::TurnInstructions,
+    ) -> Self {
+        crate::context::apply_model_tool_descriptions(instructions, &mut self.definitions);
+        self
+    }
+
     /// Restricts a host-selected invocation while preserving its exact catalog binder.
     pub(crate) fn restrict_to_names(mut self, names: &[ash_protocol::ToolName]) -> Self {
         self.definitions

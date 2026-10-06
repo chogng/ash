@@ -4,7 +4,20 @@ use serde::Serialize;
 use ts_rs::TS;
 
 /// Selects the approach an Agent should use for one user-requested Turn.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Eq,
+    JsonSchema,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    TS,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum CollaborationMode {
     #[default]

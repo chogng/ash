@@ -246,7 +246,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 | 请求偏好     | `host_policy.request_defaults`                          | Ash 默认 effort/verbosity 等必须通过所选接入校验；不改写官方默认值                       |
 | 基础指导     | `model_messages.system_instructions`            | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态                     |
 
-`model_messages` 保存本地模型指令声明；当前只包含必填字符串 `system_instructions`，没有手写版本号。`models-manager` 按正文的 SHA-256 摘要标识冻结资产，历史保留当时的全文。该容器不直接作为供应商请求发送；Core 组装指令后由接入层编码，具体字段见第 2 节。Codex 的 `persistent_instructions` 是 persistent mode 的额外 developer 指令，省略或 `null` 使用其内置正文，空字符串关闭这项指导；Ash 当前没有对应字段，不为了名字相似而增加空声明；Role、权限、项目、工具和协作指导仍由各自负责方维护。
+`model_messages` 保存本地模型指令声明，包含必填字符串 `system_instructions`，以及可选的 `tools.<tool>.description`、`collaboration_modes.<mode>`、`multi_agent.root/subagent`，没有手写版本号。工具参数由工具实现维护，模型文本追加到当前可用工具的说明；模式和身份指导按实际状态选择，保留宿主规则。省略可选字段表示没有额外指导，已声明文本不得空白，全部文本合计最多 64 KiB。`models-manager` 按每段正文的 SHA-256 摘要标识冻结资产，历史保留当时的全文及分组。该容器不直接作为供应商请求发送；Core 组装指令后由接入层编码，具体字段见第 2 节。Codex 的 `persistent_instructions` 是 persistent mode 的额外 developer 指令，省略或 `null` 使用其内置正文，空字符串关闭这项指导；Ash 当前没有对应字段。Role、权限、项目、工具参数和实际协作状态由各自负责方维护。
 
 基础正文可以统一包含工作目标、工具和结果使用、编辑与验证、权限边界、任务完成和报告规则。型号专用指导只写有官方依据或评测证据的差异。Role、权限、项目指令、动态工具和用户当前任务由运行时加入；提示词不能开启推理档位、扩大 API 上限或授予工具权限。现有规则见 [Agent 指令设计](../../docs/agent-instructions.md)。
 
@@ -290,7 +290,7 @@ Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_m
 | `supported_in_api`、`available_access_programs`                                                             | 接入定义、凭据与运行时权限                                                    | API 和订阅接入独立校验；型号元数据不证明账户权益                          |
 | `availability_nux`、`upgrade`                                                                              | 产品展示与型号生命周期                                                        | 尚无对应的 Ash 展示消费者，不复制 Codex 提示                              |
 | `model_specialty`                                                                                           | 专用型号分类，以及权限和审批策略                                              | 尚未接入；Codex 的 `cyber` 会影响前缀规则和审批行为，不作为普通展示标签导入 |
-| `model_messages`                                                                                            | `model_messages.system_instructions`、Core 指令组装与各功能负责方                                   | 仅模型基础正文进入目录；工具、权限、协作和运行时指导由其所属模块组装      |
+| `model_messages`                                                                                            | `model_messages` 的基础、工具、模式与根／子 Agent 指导；Core 与各功能负责方 | 模型专用文本进入目录并随选择冻结；实际工具参数、模式、Role 与权限由所属模块维护 |
 | `include_skills_usage_instructions`、`include_plugin_usage_instructions`、`include_apps_usage_instructions` | Skills、插件和连接工具指令组装                                                | 属于 Ash 功能策略，不从型号名字或 Codex 标志开关功能                      |
 | `shell_type`、`apply_patch_tool_type`                                                                       | Shell、文件修改工具与工具运行时                                               | 使用 Ash 工具契约，不复制 Codex 工具实现选择                              |
 | `web_search_tool_type`、`supports_search_tool`、`experimental_supported_tools`                              | 搜索和工具声明、工具注册                                                      | 工具开放、协议和权限由工具负责方校验，不由静态目录授权                    |

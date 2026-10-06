@@ -890,6 +890,7 @@ export type { ModelCostLineItem } from './ModelCostLineItem.js';
 export type { ModelId } from './ModelId.js';
 export type { ModelInputEstimate } from './ModelInputEstimate.js';
 export type { ModelInputModality } from './ModelInputModality.js';
+export type { ModelInstructionMessages } from './ModelInstructionMessages.js';
 export type { ModelInstructionSelection } from './ModelInstructionSelection.js';
 export type { ModelInvocationId } from './ModelInvocationId.js';
 export type { ModelInvocationOutcome } from './ModelInvocationOutcome.js';

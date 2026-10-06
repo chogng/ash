@@ -24,12 +24,14 @@ fn specialization_is_exact_and_does_not_cross_provider_or_model_identity() {
     let catalog = ModelInstructionCatalog::new([ModelInstructionProfile {
         model: target.clone(),
         instructions: GUIDANCE.freeze().as_text(),
+        messages: None,
     }])
     .unwrap();
     let ModelInstructionSelection::Specialized {
         model: selected,
         instructions,
         digest,
+        ..
     } = catalog.resolve(Some(&target))
     else {
         panic!("exact profile was not selected")
@@ -55,6 +57,7 @@ fn duplicate_model_profiles_fail_before_any_instruction_is_used() {
     let profile = ModelInstructionProfile {
         model: model("a", "model-v1"),
         instructions: GUIDANCE.freeze().as_text(),
+        messages: None,
     };
     assert!(
         ModelInstructionCatalog::new([profile.clone(), profile])
@@ -74,6 +77,7 @@ fn invalid_guidance_is_rejected_without_silently_selecting_generic() {
             revision: "test-v1".into(),
             body: " ".into(),
         },
+        messages: None,
     };
     assert!(matches!(
         ModelInstructionCatalog::new([profile]),
@@ -100,6 +104,7 @@ fn built_in_guidance_covers_the_static_catalog_with_valid_exact_registrations() 
             model: frozen_model,
             instructions,
             digest,
+            ..
         } = &selected
         else {
             panic!("missing initial guidance for {model:?}");
@@ -148,6 +153,17 @@ fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_histo
     let saved = serde_json::to_string(&original).unwrap();
 
     spec.model_messages.system_instructions = "Updated instructions for this exact model.\n".into();
+    let name = ash_protocol::ToolName::new("spawn_agent").unwrap();
+    spec.model_messages
+        .tools
+        .get_mut(&name)
+        .unwrap()
+        .description = "UPDATED TOOL GUIDANCE".into();
+    spec.model_messages.collaboration_modes.insert(
+        ash_protocol::CollaborationMode::Plan,
+        "UPDATED PLAN GUIDANCE".into(),
+    );
+    spec.model_messages.multi_agent.root = Some("UPDATED ROOT GUIDANCE".into());
     let updated =
         ModelInstructionCatalog::new([ModelInstructionProfile::from_spec(&spec)]).unwrap();
     let restored: TurnInstructions = serde_json::from_str(&saved).unwrap();
@@ -163,6 +179,21 @@ fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_histo
         ContentDigest::sha256(next.body().as_bytes()).as_str()
     );
     assert_eq!(serde_json::to_string(&restored).unwrap(), saved);
+    let old_messages = restored.model_guidance().unwrap().messages().unwrap();
+    let new_messages = next.model_guidance().unwrap().messages().unwrap();
+    assert_ne!(
+        old_messages.tools[&name].revision,
+        new_messages.tools[&name].revision
+    );
+    assert_eq!(new_messages.tools[&name].body, "UPDATED TOOL GUIDANCE");
+    assert_eq!(
+        new_messages.collaboration_modes[&ash_protocol::CollaborationMode::Plan].body,
+        "UPDATED PLAN GUIDANCE"
+    );
+    assert_eq!(
+        new_messages.root.as_ref().unwrap().body,
+        "UPDATED ROOT GUIDANCE"
+    );
 }
 
 #[test]
@@ -200,6 +231,7 @@ fn each_model_has_its_own_instruction_identity_even_with_the_same_initial_body()
         ModelInstructionProfile {
             model: model("test", name),
             instructions,
+            messages: None,
         }
     }))
     .unwrap();
@@ -209,6 +241,7 @@ fn each_model_has_its_own_instruction_identity_even_with_the_same_initial_body()
         model: first_model,
         instructions: first_text,
         digest: first_digest,
+        ..
     } = catalog.resolve(Some(&first))
     else {
         panic!("first model instructions missing");
@@ -217,6 +250,7 @@ fn each_model_has_its_own_instruction_identity_even_with_the_same_initial_body()
         model: second_model,
         instructions: second_text,
         digest: second_digest,
+        ..
     } = catalog.resolve(Some(&second))
     else {
         panic!("second model instructions missing");

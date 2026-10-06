@@ -49,6 +49,7 @@ fn instruction_benchmark_selection() {
             )
             .freeze()
             .as_text(),
+            messages: None,
         },
     ])
     .unwrap();

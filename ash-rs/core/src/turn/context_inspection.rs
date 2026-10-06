@@ -86,6 +86,15 @@ impl TurnExecutor {
         let instructions = crate::context::turn_instruction_fragments(
             &request.instructions,
             request.approval_mode,
+            latest.map(|turn| turn.mode).unwrap_or_default(),
+            if snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.parent_thread_id.is_some())
+            {
+                crate::context::AgentInstructionRole::Subagent
+            } else {
+                crate::context::AgentInstructionRole::Root
+            },
             additional,
         );
         let activated = match (snapshot.as_ref(), latest) {
@@ -96,10 +105,13 @@ impl TurnExecutor {
             )?,
             _ => Default::default(),
         };
-        let tools = self
-            .context_tool_catalog(&activated, latest, request.tool_mode)?
-            .definitions()
-            .to_vec();
+        let catalog = self.context_tool_catalog(
+            &activated,
+            latest,
+            request.tool_mode,
+            Some(&request.instructions),
+        )?;
+        let tools = catalog.definitions().to_vec();
         let tools = match &snapshot {
             Some(snapshot) => {
                 crate::multi_agent::scope_agent_tools(snapshot, request.tool_mode, tools)

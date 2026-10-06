@@ -38,6 +38,38 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("model_messages", json!({"system_instructions":null})),
         (
             "model_messages",
+            json!({"system_instructions":"base", "tools":{"spawn_agent":{"description":" "}}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"base", "tools":{"bad.name":{"description":"tool"}}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"base", "tools":{"spawn_agent":{"description":"tool", "parameters":{}}}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"base", "collaboration_modes":{"unsupported":"mode"}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"base", "collaboration_modes":{"plan":" "}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"base", "multi_agent":{"root":" "}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"base", "multi_agent":{"enabled":true}}),
+        ),
+        (
+            "model_messages",
+            json!({"system_instructions":"x".repeat(32768), "multi_agent":{"root":"x".repeat(32769)}}),
+        ),
+        (
+            "model_messages",
             json!({"system_instructions":"base", "revision":"v1"}),
         ),
         ("instructions", json!({"revision":"v1", "body":"base"})),

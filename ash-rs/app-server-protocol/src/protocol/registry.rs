@@ -4959,6 +4959,7 @@ typescript_bindings! {
     ash_protocol::AgentRoleSelection,
     ash_protocol::InstructionText,
     ash_protocol::ModelInstructionSelection,
+    ash_protocol::ModelInstructionMessages,
     crate::protocol::issues::IssueConfigDto,
     crate::protocol::issues::IssueConfigureParams,
     crate::protocol::issues::IssueRepository,

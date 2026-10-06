@@ -45,7 +45,7 @@ JSON 命名按完整接口契约推广；当前统一范围是模型声明、目
 | `provider_id`、`model_id`    | `StaticModelSpec` 保存编辑值，`model/identity.rs` 定义准确身份；连接 ID 不属于模型身份                                   |
 | 容量、能力、推理选项和默认值 | `StaticModelSpec` 转换成 `model/catalog.rs` 的 `ModelInfo`；档位语义见 `model/reasoning_effort.rs`                       |
 | `settings`                   | `model/parameters.rs` 的参数声明与约束；JSON 用 `true / false / null` 表达支持、不支持、未知，协议用 `CapabilitySupport` |
-| `model_messages.system_instructions` | `StaticModelSpec` 的完整基础提示词；版本标识由正文摘要生成，Turn 接受时冻结，不包含运行时权限与项目指令                 |
+| `model_messages` | `StaticModelSpec` 的基础正文、工具说明、模式与根／子 Agent 指导；每段正文摘要生成版本标识，随选择冻结，不包含实际授权或工具参数 |
 | 某次请求的参数与输入         | `model/invocation.rs`、`model/message.rs`；不写入静态模型目录                                                            |
 | 上下文检查、用量与费用结果   | `model/context_inspection.rs`、`model/usage.rs`、`model/accounting.rs`；由执行过程产生，不是模型规格                     |
 

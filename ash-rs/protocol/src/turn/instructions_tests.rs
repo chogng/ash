@@ -1,6 +1,52 @@
 use super::*;
 
 #[test]
+fn frozen_model_messages_restore_all_assets_and_reject_changed_text() {
+    let asset = |name: &str| InstructionText {
+        owner: "models-manager".into(),
+        id: name.into(),
+        revision: crate::ContentDigest::sha256(name.as_bytes()).to_string(),
+        body: name.into(),
+    };
+    let base = TurnInstructions::new("models-manager", "model/test", "v1", "BASE").unwrap();
+    let selection = ModelInstructionSelection::Specialized {
+        model: crate::ModelRef::new(
+            crate::ProviderId::new("test").unwrap(),
+            crate::ModelId::new("model").unwrap(),
+        ),
+        instructions: base.as_text(),
+        digest: crate::ContentDigest::sha256(base.body().as_bytes()),
+        messages: Some(ModelInstructionMessages {
+            tools: [(crate::ToolName::new("spawn_agent").unwrap(), asset("TOOL"))].into(),
+            collaboration_modes: [(crate::CollaborationMode::Plan, asset("PLAN"))].into(),
+            root: Some(asset("ROOT")),
+            subagent: Some(asset("WORKER")),
+        }),
+    };
+    let original = base.with_model_guidance(selection);
+    let encoded = serde_json::to_value(&original).unwrap();
+    let restored: TurnInstructions = serde_json::from_value(encoded.clone()).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(restored, original);
+    for path in [
+        "/modelGuidance/messages/tools/spawn_agent/body",
+        "/modelGuidance/messages/collaborationModes/plan/body",
+        "/modelGuidance/messages/root/body",
+        "/modelGuidance/messages/subagent/body",
+    ] {
+        let mut corrupted = encoded.clone();
+        *corrupted.pointer_mut(path).unwrap() = "CHANGED".into();
+        assert!(
+            serde_json::from_value::<TurnInstructions>(corrupted)
+                .unwrap()
+                .validate()
+                .is_err(),
+            "{path}"
+        );
+    }
+}
+
+#[test]
 fn composed_instructions_preserve_sources_and_survive_serialization() {
     let shared =
         TurnInstructions::new("prompts", "agent/common", "common-v1", "common rules").unwrap();
@@ -22,6 +68,7 @@ fn composed_instructions_preserve_sources_and_survive_serialization() {
             model,
             digest: crate::ContentDigest::sha256(guidance.body.as_bytes()),
             instructions: guidance,
+            messages: None,
         });
     assert_eq!(instructions.shared().len(), 1);
     assert_eq!(instructions.shared()[0].body, "common rules");

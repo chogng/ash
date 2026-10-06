@@ -191,6 +191,7 @@ impl TurnExecutor {
         activated: &BTreeSet<ash_protocol::ToolName>,
         turn: Option<&crate::TurnSnapshot>,
         mode: ash_protocol::ToolMode,
+        instructions: Option<&ash_protocol::TurnInstructions>,
     ) -> Result<crate::ModelToolCatalogSnapshot, CoreError> {
         let catalog = self.tools.model_catalog_snapshot(activated)?;
         let profile = turn.and_then(|turn| turn.tool_profile.as_ref());
@@ -220,7 +221,11 @@ impl TurnExecutor {
         } else {
             catalog
         };
-        self.code_mode.augment_catalog(catalog, mode)
+        let catalog = self.code_mode.augment_catalog(catalog, mode)?;
+        Ok(match instructions {
+            Some(instructions) => catalog.with_model_descriptions(instructions),
+            None => catalog,
+        })
     }
 
     /// Freezes the exact durable binding for a host-created Tool Call.
@@ -961,7 +966,12 @@ impl TurnExecutor {
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
             let tool_catalog = self
-                .context_tool_catalog(&activated, Some(turn), turn.tool_mode)
+                .context_tool_catalog(
+                    &activated,
+                    Some(turn),
+                    turn.tool_mode,
+                    turn.instructions.as_ref(),
+                )
                 .map_err(ExecutionFailure::model)?;
             let tools = tool_catalog.definitions().to_vec();
             let frozen_model = turn.model.clone();

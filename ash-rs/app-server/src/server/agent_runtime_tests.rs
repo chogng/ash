@@ -579,7 +579,40 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             .start(child_id, &child.turns[0].turn_id)
             .unwrap();
         let worker = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
-        for request in [first, continued, worker] {
+        for (index, request) in [first, continued, worker].into_iter().enumerate() {
+            if let Some(messages) = expected.messages() {
+                let body = request.instructions.as_deref().unwrap();
+                let (selected_role, other_role) = if index == 2 {
+                    (
+                        messages.subagent.as_ref().unwrap(),
+                        messages.root.as_ref().unwrap(),
+                    )
+                } else {
+                    (
+                        messages.root.as_ref().unwrap(),
+                        messages.subagent.as_ref().unwrap(),
+                    )
+                };
+                assert_eq!(body.matches(selected_role.body.trim()).count(), 1);
+                assert!(!body.contains(other_role.body.trim()));
+                for (mode, asset) in &messages.collaboration_modes {
+                    assert_eq!(
+                        body.matches(asset.body.trim()).count(),
+                        usize::from(*mode == ash_protocol::CollaborationMode::Agent)
+                    );
+                }
+                for tool in &request.tools {
+                    if let Some(asset) = messages.tools.get(&tool.name) {
+                        assert_eq!(tool.description.matches(asset.body.as_str()).count(), 1);
+                    }
+                }
+                for asset in messages.tools.values() {
+                    assert!(
+                        !body.contains(&asset.body),
+                        "tool guidance belongs to available tool definitions"
+                    );
+                }
+            }
             let context = serde_json::to_string(&request.input).unwrap();
             assert_eq!(
                 context

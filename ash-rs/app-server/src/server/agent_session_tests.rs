@@ -347,6 +347,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         ash_models_manager::ModelInstructionProfile {
             model: model(),
             instructions: guidance.freeze().as_text(),
+            messages: None,
         },
     ])
     .unwrap();
@@ -690,6 +691,20 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
             assert_eq!(turn.mode, mode);
             let frozen = turn.instructions.as_ref().unwrap();
             assert_eq!(frozen.model_guidance(), Some(&expected));
+            let messages = expected.messages().unwrap();
+            let body = request.instructions.as_deref().unwrap();
+            for (candidate, asset) in &messages.collaboration_modes {
+                assert_eq!(
+                    body.matches(asset.body.trim()).count(),
+                    usize::from(*candidate == mode)
+                );
+            }
+            assert_eq!(
+                body.matches(messages.root.as_ref().unwrap().body.trim())
+                    .count(),
+                1
+            );
+            assert!(!body.contains(messages.subagent.as_ref().unwrap().body.trim()));
             assert_eq!(
                 request
                     .instructions

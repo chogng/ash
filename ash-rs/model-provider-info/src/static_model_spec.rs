@@ -3,6 +3,7 @@
 //! Field comments also become descriptions in the generated editor schema.
 
 use ash_protocol::CapabilitySupport;
+use ash_protocol::CollaborationMode;
 use ash_protocol::ContextWindow;
 use ash_protocol::Model;
 use ash_protocol::ModelAcceleration;
@@ -19,8 +20,10 @@ use ash_protocol::ModelToolOutputLimit;
 use ash_protocol::ModelVerbosity;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
+use ash_protocol::ToolName;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 /// Model-owned prompt text, assembled with runtime instructions before provider encoding.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
@@ -28,6 +31,30 @@ use serde::Deserialize;
 pub struct ModelMessages {
     /// Complete model-specific Agent instructions; runtime permission and project instructions are separate.
     pub system_instructions: String,
+    /// Additional model-specific descriptions for tools actually exposed by the host; parameters remain tool-owned.
+    #[serde(default)]
+    pub tools: BTreeMap<ToolName, ModelToolMessage>,
+    /// Additional guidance selected by the active collaboration mode, without changing its permissions.
+    #[serde(default)]
+    pub collaboration_modes: BTreeMap<CollaborationMode, String>,
+    /// Guidance selected by the Thread's actual root or delegated identity, separate from its task role.
+    #[serde(default)]
+    pub multi_agent: ModelAgentMessages,
+}
+
+/// Model-specific wording added to a tool's authoritative description.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ModelToolMessage {
+    pub description: String,
+}
+
+/// Model-specific Agent responsibility guidance; it cannot enable delegation.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ModelAgentMessages {
+    pub root: Option<String>,
+    pub subagent: Option<String>,
 }
 
 /// One row in Ash's bundled JSON model catalog, independent of account access.

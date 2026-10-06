@@ -1282,6 +1282,7 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
                                 const args = version ? {version: version.const} : {};
                                 results.push({
                                     name: entry.toolName,
+                                    description: entry.description,
                                     schema: entry.inputSchema,
                                     result: await tools[entry.name](args)
                                 });
@@ -1366,15 +1367,15 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
     );
     let expected = [
         json!([
-            {"name": "catalog_removed", "schema": dynamic_schema, "result": "dynamic-removed"},
-            {"name": "catalog_status", "schema": mcp_schema("v1"), "result": "mcp-v1"}
+            {"name": "catalog_removed", "description":"catalog_removed\nCode mode: await tools.catalog_removed(<arguments>)", "schema": dynamic_schema, "result": "dynamic-removed"},
+            {"name": "catalog_status", "description":"MCP status v1\n\nMODEL STATUS GUIDANCE\nCode mode: await tools.catalog_status(<arguments>)", "schema": mcp_schema("v1"), "result": "mcp-v1"}
         ]),
         json!([
-            {"name": "catalog_added", "schema": dynamic_schema, "result": "dynamic-added"},
-            {"name": "catalog_status", "schema": mcp_schema("v2"), "result": "mcp-v2"}
+            {"name": "catalog_added", "description":"catalog_added\nCode mode: await tools.catalog_added(<arguments>)", "schema": dynamic_schema, "result": "dynamic-added"},
+            {"name": "catalog_status", "description":"MCP status v2\n\nMODEL STATUS GUIDANCE\nCode mode: await tools.catalog_status(<arguments>)", "schema": mcp_schema("v2"), "result": "mcp-v2"}
         ]),
         json!([
-            {"name": "catalog_added", "schema": dynamic_schema, "result": "dynamic-added"}
+            {"name": "catalog_added", "description":"catalog_added\nCode mode: await tools.catalog_added(<arguments>)", "schema": dynamic_schema, "result": "dynamic-added"}
         ]),
     ];
     let replacements = [
@@ -1387,6 +1388,35 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
         )),
         Some(catalog(3, None, "catalog_added", "dynamic-added")),
     ];
+    let guidance_model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("test").unwrap(),
+        ash_protocol::ModelId::new("catalog").unwrap(),
+    );
+    let asset = |text: &str| ash_protocol::InstructionText {
+        owner: "models-manager".into(),
+        id: text.into(),
+        revision: ash_protocol::ContentDigest::sha256(text.as_bytes()).to_string(),
+        body: text.into(),
+    };
+    let base = ash_prompts::AGENT_INSTRUCTIONS.freeze();
+    let instructions =
+        base.clone()
+            .with_model_guidance(ash_protocol::ModelInstructionSelection::Specialized {
+                model: guidance_model.clone(),
+                instructions: base.as_text(),
+                digest: ash_protocol::ContentDigest::sha256(base.body().as_bytes()),
+                messages: Some(ash_protocol::ModelInstructionMessages {
+                    tools: [
+                        (
+                            ToolName::new("catalog_status").unwrap(),
+                            asset("MODEL STATUS GUIDANCE"),
+                        ),
+                        (ToolName::new("exec").unwrap(), asset("MODEL EXEC GUIDANCE")),
+                    ]
+                    .into(),
+                    ..Default::default()
+                }),
+            });
     for (stage, (replacement, expected)) in replacements.into_iter().zip(expected).enumerate() {
         if let Some(replacement) = replacement {
             ports.replace(replacement);
@@ -1400,10 +1430,10 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
                     advisor: None,
                     command_id: CommandId::new(format!("catalog-turn-{stage}")).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
-                    model: None,
+                    model: Some(guidance_model.clone()),
                     reasoning_effort: None,
                     kind: ash_protocol::TurnKind::Coding,
-                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    instructions: instructions.clone(),
                     policy_revision: ports.policy().revision(),
                     approval_mode: ash_protocol::ApprovalMode::Manual,
                     tool_mode: ToolMode::CodeModeOnly,
@@ -1457,6 +1487,21 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
     }
 
     let requests = model.requests.lock().unwrap();
+    assert!(
+        requests[0]
+            .tools
+            .iter()
+            .find(|tool| tool.name.as_str() == "exec")
+            .unwrap()
+            .description
+            .ends_with("\n\nMODEL EXEC GUIDANCE")
+    );
+    assert!(requests.iter().all(|request| {
+        !request
+            .tools
+            .iter()
+            .any(|tool| tool.description.contains("MODEL STATUS GUIDANCE"))
+    }));
     assert_eq!(requests.len(), 6);
     assert_eq!(
         requests[0]
