@@ -13,7 +13,8 @@
 	padding: var(--ash-spacing-size80) 0;
 }
 
-.ash-sessions-activity-content.compact {
+.ash-sessions-activity-content.compact,
+.ash-sessions-activity-content.horizontal {
 	--ash-sessions-activity-bar-icon-size: 16px;
 }
 

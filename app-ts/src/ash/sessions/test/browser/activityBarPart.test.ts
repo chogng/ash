@@ -24,10 +24,11 @@ const { HoverService, IHoverService } = await import('../../../platform/hover/br
 const { Event } = await import('../../../base/common/event.js');
 const { setARIAContainer } = await import('../../../base/browser/ui/aria/aria.js');
 const { ActivityBarPart } = await import('../../browser/parts/activitybar/activityBarPart.js');
+const { TitlebarPart } = await import('../../browser/parts/titlebar/titlebarPart.js');
 const { MenusRegistry, IMenuService } = await import('../../../platform/actions/common/actions.js');
 const { MenuService } = await import('../../../platform/actions/common/menuService.js');
 const { ContextKeyService, IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
-const { CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
+const { CommandRegistry, CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
 const { IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
@@ -78,7 +79,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 		})), [
 			{ icon: 'chat-2-filled', disabled: false },
 			{ icon: 'colab', disabled: false },
-			{ icon: 'library', disabled: false },
+			{ icon: 'projects', disabled: false },
 			{ icon: 'code', disabled: false },
 			{ icon: 'symbol-color', disabled: false },
 			{ icon: 'account', disabled: false },
@@ -90,11 +91,11 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
 		assert.deepEqual([buttons[0], buttons[1], buttons[2]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
-			['chat-2', null], ['colab-filled', 'page'], ['library', null],
+			['chat-2', null], ['colab-filled', 'page'], ['projects', null],
 		]);
 		buttons[2]?.click();
 		assert.deepEqual([buttons[0], buttons[1], buttons[2]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
-			['chat-2', null], ['colab', null], ['library-filled', 'page'],
+			['chat-2', null], ['colab', null], ['projects-filled', 'page'],
 		]);
 		buttons[3]?.click();
 		assert.deepEqual(buttons.slice(0, 4).map(button => [button.classList.contains('selected'), button.getAttribute('aria-current')]), [
@@ -111,6 +112,19 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 		buttons[5]?.click();
 		await Promise.resolve();
 		assert.equal(accountAnchor, buttons[5]);
+		using titlebar = services.createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
+		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
+		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
+			bar.setLocation(position, ownerDocument.body);
+			renderTitlebarAccount(true);
+			const account = titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.activity.accounts"] button')!;
+			assert.deepEqual({ railAccounts: bar.focusContainer.querySelectorAll('[data-action-id="sessions.activity.accounts"]').length, titlebarAccounts: titlebar.domNode.querySelectorAll('[data-action-id="sessions.activity.accounts"]').length, menu: account.getAttribute('aria-haspopup') }, { railAccounts: 0, titlebarAccounts: 1, menu: 'menu' });
+			account.click();
+			assert.equal(accountAnchor, account);
+		}
+		bar.setLocation(ActivityBarPosition.DEFAULT, undefined);
+		renderTitlebarAccount(false);
+		assert.deepEqual({ railAccounts: bar.focusContainer.querySelectorAll('[data-action-id="sessions.activity.accounts"]').length, titlebarAccounts: titlebar.domNode.querySelectorAll('[data-action-id="sessions.activity.accounts"]').length }, { railAccounts: 1, titlebarAccounts: 0 });
 	} finally {
 		bar.dispose();
 		configuration.dispose();
@@ -172,6 +186,9 @@ test('Sessions Activity Bar requires its window Hover service during creation', 
 		showContextMenu() { },
 		hideContextMenu() { },
 	});
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
+	services.registerInstance(IStorageService, storage);
+	using menuServices = registerMenus(services);
 	assert.throws(() => services.createInstance(ActivityBarPart, browser.window.document.body, {
 		showAccountMenu() { },
 	}), /hoverService/);
@@ -241,13 +258,17 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const resources = new DisposableStore();
 	const contexts = resources.add(new ContextKeyService());
 	services.registerInstance(IContextKeyService, contexts);
-	const commands = resources.add(new CommandService(services));
+	const registry = new CommandRegistry();
+	const commands = resources.add(new CommandService(services, registry));
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
 	const keys = new Map(['chat', 'teams', 'library', 'code', 'creator'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { for (const [candidate, key] of keys) { key.set(candidate === id); } });
-	for (const id of ['chat', 'teams', 'code']) { resources.add(CommandsRegistry.register(`sessions.open.${id}`, () => select(id))); }
-	for (const id of ['library', 'creator']) { resources.add(CommandsRegistry.register(`sessions.show.${id}`, () => select(id))); }
+	for (const id of ['chat', 'teams', 'code']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
+	for (const id of ['library', 'creator']) {
+		resources.add(registry.register(`sessions.open.${id}`, CommandsRegistry.getCommand(`sessions.open.${id}`)!));
+		resources.add(registry.register(`sessions.show.${id}`, () => select(id)));
+	}
 	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/creator/browser/designEditorService.js').IDesignEditorService);
 	return resources;

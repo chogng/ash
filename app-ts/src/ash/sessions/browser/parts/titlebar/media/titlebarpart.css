@@ -28,6 +28,13 @@
 	align-self: stretch;
 }
 
+.ash-sessions-titlebar-right {
+	display: flex;
+	align-items: center;
+	margin-left: auto;
+	-webkit-app-region: no-drag;
+}
+
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {
 	-webkit-app-region: drag;
 }

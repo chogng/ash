@@ -521,7 +521,14 @@ export abstract class Workbench extends Disposable {
 		}));
 		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
 		activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));
-		activitybar.setLocation(activityBarLocation, sidebar.setActivityBarLocation(activityBarLocation));
+		const setActivityBarLocation = (location: ActivityBarPosition): void => {
+			activitybar.setLocation(location, sidebar.setActivityBarLocation(location));
+			titlebar.setActivityActions(
+				location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM ? [activitybar.accountAction] : [],
+				(action, options) => activitybar.createAccountActionViewItem(action, options, 'titlebar'),
+			);
+		};
+		setActivityBarLocation(activityBarLocation);
 		const activityBarContext = this._register(contextKeys.createScoped(activitybar.focusContainer));
 		activityBarContext.createKey('sessionsActivityBarFocused', true);
 		this._register(AccessibleViewRegistry.register({
@@ -652,7 +659,7 @@ export abstract class Workbench extends Disposable {
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
 				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
-				activitybar.setLocation(location, sidebar.setActivityBarLocation(location));
+				setActivityBarLocation(location);
 				layout.setActivityBarLocation(location);
 			}
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarCompact)) {

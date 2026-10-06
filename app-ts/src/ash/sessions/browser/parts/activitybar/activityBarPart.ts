@@ -1,9 +1,11 @@
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Button, type ButtonOptions } from '../../../../base/browser/ui/button/button.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -13,7 +15,7 @@ import { ActivityBarPosition } from '../../../../workbench/common/configuration.
 import { WorkbenchPart } from '../../../../workbench/browser/part.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
-import { ActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { autorun, observableValue } from '../../../../base/common/observable.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -29,6 +31,9 @@ export interface ActivityBarPartDelegate {
 /** Primary view selector and account entry for the Sessions window. */
 export class ActivityBarPart extends WorkbenchPart {
 	private readonly navigation: ActionBar;
+	private readonly accounts: ActionBar;
+	public readonly accountAction: IAction;
+	private readonly showAccountMenu: (anchor: HTMLElement) => void;
 	private readonly actions = new Map<string, ActivityAction>();
 	private order: string[];
 	private orderedActions: ActivityAction[] = [];
@@ -108,17 +113,14 @@ export class ActivityBarPart extends WorkbenchPart {
 		updateActions();
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
-		const accountButton = this.createActivityButton(bottom, {
-			label: accountLabel,
-			icon: Lxicon.account,
-			iconOnly: true,
+		this.accountAction = { id: 'sessions.activity.accounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run() { } };
+		this.showAccountMenu = anchor => delegate.showAccountMenu(anchor);
+		this.accounts = this._register(new ActionBar(bottom, {
 			ariaLabel: accountLabel,
-			title: accountLabel,
-			onClick: () => delegate.showAccountMenu(accountButton.domNode),
-		});
-		accountButton.domNode.classList.add('ash-sessions-activity-item');
-		accountButton.domNode.setAttribute('aria-haspopup', 'menu');
-		accountButton.domNode.setAttribute('aria-expanded', 'false');
+			orientation: 'vertical',
+			actionViewItemProvider: (action, options) => this.createAccountActionViewItem(action, options, 'activitybar'),
+		}));
+		this.accounts.setActions([this.accountAction]);
 		this.contentDomNode.append(top, bottom);
 		this._register(addDisposableListener(this.contentDomNode, 'contextmenu', event => this.showContextMenu(event)));
 		this._register(addDisposableListener(this.contentDomNode, 'keydown', event => {
@@ -143,6 +145,14 @@ export class ActivityBarPart extends WorkbenchPart {
 		const horizontal = location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM;
 		this.contentDomNode.classList.toggle('horizontal', horizontal);
 		this.navigation.setOrientation(horizontal ? 'horizontal' : 'vertical');
+		this.accounts.setActions(horizontal ? [] : [this.accountAction]);
+	}
+
+	public createAccountActionViewItem(action: IAction, options: ActionViewItemOptions, presentation: 'activitybar' | 'titlebar'): ActionViewItem {
+		return new AccountActionViewItem(action, options, presentation, this.showAccountMenu, event => this.showContextMenu(event), anchor => this.hoverService.setupDelayedHover(anchor, () => ({
+			content: action.label,
+			position: { hoverPosition: presentation === 'titlebar' ? HoverPosition.BELOW : getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
+		}), { groupId: 'actions' }));
 	}
 
 	private showContextMenu(event: MouseEvent | KeyboardEvent): void {
@@ -174,18 +184,6 @@ export class ActivityBarPart extends WorkbenchPart {
 			]));
 		}
 		return actions;
-	}
-
-	private createActivityButton(container: HTMLElement, options: ButtonOptions & { title: string; }): Button {
-		const button = this._register(new Button(container, { ...options, title: undefined }));
-		this._register(this.hoverService.setupDelayedHover(button.domNode, () => ({
-			content: options.title,
-			position: {
-				// Sessions keeps its own placement setting and always hosts the side rail on the left.
-				hoverPosition: getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left'),
-			},
-		}), { groupId: 'actions' }));
-		return button;
 	}
 
 	private getOrderActions(target: Element): readonly IAction[] {
@@ -240,6 +238,34 @@ export class ActivityBarPart extends WorkbenchPart {
 		const label = localize('sessions.activity.navigation', 'Navigation');
 		this.navigation.element.setAttribute('aria-label', hint ? localize('sessions.activity.helpHint', '{0}. {1}', label, hint) : label);
 	}
+}
+
+class AccountActionViewItem extends ActionViewItem {
+	private button!: Button;
+
+	constructor(
+		action: IAction,
+		options: ActionViewItemOptions,
+		private readonly presentation: 'activitybar' | 'titlebar',
+		private readonly showMenu: (anchor: HTMLElement) => void,
+		private readonly showContextMenu: (event: MouseEvent | KeyboardEvent) => void,
+		private readonly createHover: (anchor: HTMLElement) => IDisposable,
+	) { super(action, options); }
+
+	public override render(container: HTMLElement): void {
+		this.button = this._register(new Button(container, { label: this.action.label, icon: this.action.icon, iconOnly: true, onClick: () => this.showMenu(this.button.domNode) }));
+		if (this.presentation === 'activitybar') { this.button.domNode.classList.add('ash-sessions-activity-item'); }
+		this.button.domNode.setAttribute('aria-haspopup', 'menu');
+		this.button.domNode.setAttribute('aria-expanded', 'false');
+		this._register(this.createHover(this.button.domNode));
+		this._register(addDisposableListener(this.button.domNode, 'contextmenu', event => this.showContextMenu(event)));
+		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) { this.showContextMenu(event); }
+		}));
+	}
+
+	public override focus(): void { this.button.focus(); }
+	public override setTabbable(tabbable: boolean): void { this.button.domNode.tabIndex = tabbable ? 0 : -1; }
 }
 
 /** Retain the button identity while menus resolve changing context keys. */

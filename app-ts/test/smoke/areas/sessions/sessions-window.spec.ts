@@ -1785,7 +1785,18 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	await expect(navigation).toHaveCSS('justify-content', 'space-between');
 	await expect.poll(() => navigation.evaluate(element => getComputedStyle(element).flexDirection === (element.classList.contains('horizontal') ? 'row' : 'column'))).toBe(true);
 	const icons = navigation.locator('button svg.ash-icon');
-	await expect(icons).toHaveCount(6);
+	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
+	await expect(icons).toHaveCount(horizontal ? 5 : 6);
+	const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
+	await expect(accounts).toHaveCount(1);
+	const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
+	await expect(titlebarAccounts).toHaveCount(horizontal ? 1 : 0);
+	if (horizontal) {
+		await expect(navigation.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
+		await expect(titlebarAccounts.locator('svg')).toHaveCSS('width', '16px');
+		await expect(titlebarAccounts.locator('svg')).toHaveCSS('height', '16px');
+		await expect(titlebarAccounts).toHaveAttribute('aria-haspopup', 'menu');
+	}
 	for (const icon of await icons.all()) {
 		await expect(icon).toHaveCSS('width', `${size}px`);
 		await expect(icon).toHaveCSS('height', `${size}px`);
@@ -1927,7 +1938,7 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 	await library.click();
-	await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'library-filled');
+	await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 	await expect(library).toHaveAttribute('aria-current', 'page');
 	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab');
 	await chat.click();
@@ -2090,6 +2101,12 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	const topHost = page.locator('.ash-sessions-activity-host.top');
 	await expect(topHost).toBeVisible();
 	await expectActivityIconSize(activityNavigation, 16);
+	const titlebarAccounts = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
+	await titlebarAccounts.press('Enter');
+	await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByRole('menuitem', { name: 'Settings', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'false');
 	await expect(topHost.locator('button').first()).toHaveAttribute('aria-label', /Chat/);
 	await topHost.locator('button').first().click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
@@ -2111,8 +2128,14 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
 	await expect(topHost).toBeVisible();
-	await expectActivityIconSize(activityNavigation, 24);
+	await expectActivityIconSize(activityNavigation, 16);
 	await topHost.locator('button').first().click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
+	const bottomHost = page.locator('.ash-sessions-activity-host.bottom');
+	await expect(bottomHost).toBeVisible();
+	await expectActivityIconSize(activityNavigation, 16);
+	await titlebarAccounts.press('Shift+F10');
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
 	await expectActivityIconSize(activityNavigation, 24);
@@ -2253,7 +2276,7 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
 		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
 		await library.click();
-		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'library-filled');
+		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 		await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Chat' }).click();
@@ -2272,12 +2295,19 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await page.reload();
 		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 16);
+		const titlebarAccounts = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
+		const accountItems = await new Menus(page).inspect(application, () => titlebarAccounts.press('Enter'));
+		expect(accountItems.map(item => item.label)).toEqual(expect.arrayContaining(['Settings', 'Return to Workbench']));
+		await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'false');
 		await updateSettings('bottom', true);
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 16);
 		await updateSettings('top', false);
 		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 24);
+		await expectActivityIconSize(activityNavigation, 16);
+		await updateSettings('bottom', false);
+		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
+		await expectActivityIconSize(activityNavigation, 16);
 		await updateSettings('default', false);
 		await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 24);
@@ -2688,7 +2718,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}
 	await expect(sessionsPage.locator("[data-part='activitybar']")).toBeVisible();
 	const activityButtons = sessionsPage.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'symbol-color', 'account']);
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'projects', 'code', 'symbol-color', 'account']);
 	await expect(sessionsPage.locator('.ash-sessions-activity-bottom button')).toHaveCount(1);
 	const chatButton = activityButtons.first();
 	const chatButtonBounds = await chatButton.boundingBox();

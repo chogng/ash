@@ -1342,7 +1342,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(page.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
 		await expect(page.locator("[data-part='activitybar']")).toBeVisible();
 		const activityButtons = page.locator("[data-part='activitybar'] button");
-		expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'library', 'code', 'symbol-color', 'account']);
+		expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'projects', 'code', 'symbol-color', 'account']);
 		await expect(activityButtons.first()).toHaveAttribute('aria-current', 'page');
 		await expect(page.getByRole('button', { name: 'Collaboration', exact: true })).toBeEnabled();
 		await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeEnabled();

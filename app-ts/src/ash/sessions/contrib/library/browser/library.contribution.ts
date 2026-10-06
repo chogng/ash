@@ -50,8 +50,8 @@ for (const [id, title, key, location, ctorDescriptor] of [
 registerAction2(class OpenLibrary extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.library', title: localize2({ bundle: 'ash', key: 'sessions.activity.library' }, 'Library'), icon: Lxicon.library,
-			toggled: { condition: ContextKeyExpr.has('sessions.activity.librarySelected'), icon: Lxicon.libraryFilled },
+			id: 'sessions.open.library', title: localize2({ bundle: 'ash', key: 'sessions.activity.library' }, 'Library'), icon: Lxicon.projects,
+			toggled: { condition: ContextKeyExpr.has('sessions.activity.librarySelected'), icon: Lxicon.projectsFilled },
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
 		});
 	}
