@@ -81,8 +81,15 @@ Mode–model 与 model–effort 的按钮边缘间距必须相同；两处都消
 
 宽度不足时，模型名称可收缩并显示省略号，effort 保留自身宽度约束；
 不通过缩小其中一个按钮的字号、内边距或间距来腾出空间。
+
+展开后的 model 与 mode 菜单都由 `ActionWidget` 提供主选项字体，使用
+`fontSize.body1`（13px）与 `fontWeight.regular`。`modelPicker.css` 只约束模型菜单尺寸，
+不覆盖主选项字号；分组标题、说明和徽标仍按各自的文本角色使用次级字号。
+输入栏按钮与展开菜单分别由各自组件维护字体，按钮样式不能代替菜单字体约定。
+
 相关回归由 [Chat 输入区 Playwright 测试](../app-ts/test/integration/browser/chatInput.integration.spec.ts)
 覆盖：中英文下的 800、400、280px 窗口检查计算样式与实际边缘间距，
+并比较 model 与 mode 菜单主选项的字体、字号和字重；
 另有悬停、Tab、方向键、菜单选择及焦点恢复验证。
 
 ## Retained DOM 写入所有权

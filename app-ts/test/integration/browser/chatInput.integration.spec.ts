@@ -1,6 +1,28 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`model and mode menus share primary option typography in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const typography = [];
+		for (const [trigger, popup] of [
+			['.ash-chat-input-mode-action', '.ash-chat-input-mode-menu'],
+			['.ash-chat-input-model-action', '.ash-chat-model-picker'],
+		]) {
+			await page.locator(trigger).press('ArrowDown');
+			const option = page.locator(popup).getByRole('menuitemradio').first();
+			await expect(option).toBeVisible();
+			typography.push(await option.evaluate(element => {
+				const style = getComputedStyle(element);
+				return { fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight };
+			}));
+			await page.keyboard.press('Escape');
+			await expect(page.locator(trigger)).toBeFocused();
+		}
+		expect(typography[0].fontSize).toBe('13px');
+		expect(typography[1]).toEqual(typography[0]);
+	});
+
 	test(`model and effort buttons share typography, pill corners and adjacent spacing in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
