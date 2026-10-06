@@ -8,7 +8,7 @@ import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { PaneCompositePartService } from '../../../src/ash/workbench/browser/parts/paneCompositePartService.js';
 import { PanelPart } from '../../../src/ash/workbench/browser/parts/panel/panelPart.js';
 import { ViewPane, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
@@ -23,7 +23,7 @@ import { ViewDescriptorService } from '../../../src/ash/workbench/services/views
 import { ViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
-import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
@@ -50,6 +50,7 @@ declare global {
 			hide(): void;
 			openView(id: string): Promise<void>;
 			dispose(): void;
+			flushPaneState(): Promise<number | undefined>;
 			reattachDisposed(): void;
 			readonly editorEvents: readonly string[];
 			readonly partEvents: readonly { id: string; focus?: boolean; visible: boolean; }[];
@@ -85,7 +86,8 @@ for (const id of ['first', 'second']) {
 const services = resources.add(new InstantiationService());
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);
-services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'composite', backend: window.localStorage, flushInterval: 0 })));
+const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'composite', backend: window.localStorage, flushInterval: 0 }));
+services.registerInstance(IStorageService, storage);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry })));
 const commands = resources.add(new CommandService(services));
@@ -95,7 +97,7 @@ services.registerInstance(IContextMenuService, {
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });
-const panel = resources.add(services.createInstance(PanelPart, document.body));
+const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
 panel.domNode.style.cssText = 'position:relative;width:800px;height:160px';
 panel.layout({ width: 800, height: 160 });
 services.registerInstance(IWorkbenchLayoutService, {
@@ -169,6 +171,12 @@ window.ashCompositeIntegration = {
 	hide: () => views.closeViewContainer(panes.getActivePaneComposite(ViewContainerLocation.Panel)!.getId()),
 	openView: async id => { await views.openView(id, true); },
 	dispose: () => panel.dispose(),
+	flushPaneState: async () => {
+		const key = 'workbench.viewContainer.first.first.view.size';
+		storage.remove(key, StorageScope.WORKSPACE);
+		await storage.flush();
+		return storage.getNumber(key, StorageScope.WORKSPACE);
+	},
 	reattachDisposed: () => {
 		const input = h(document, 'input');
 		input.setAttribute('aria-label', 'Disposed input');

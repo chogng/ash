@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -238,7 +239,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	const cowork = resources.add(services.createInstance(CoworkPaneFactory));
-	const part = services.createInstance(SessionsPart, dom.window.document.body, {
+	const part = registerTestComponentServices(services).createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
 		chatService,
 		contextMenuService,

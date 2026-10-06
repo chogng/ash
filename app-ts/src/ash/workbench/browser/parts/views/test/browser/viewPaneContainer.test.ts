@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -49,7 +50,7 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 			throw new Error("fixed view visibility cannot be changed");
 		},
 	} satisfies IViewContainerModel;
-	using container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	using container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer,
 		model,
 		contextKeyService: contextKeys,
@@ -90,7 +91,7 @@ test('ViewPaneContainer derives preferred width from visible view content', asyn
 	services.registerInstance(IContextKeyService, contextKeys);
 	using descriptors = services.createInstance(ViewDescriptorService, { registry });
 	const model = descriptors.getViewContainerModel(descriptor.id)!;
-	using container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	using container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: descriptor, model, contextKeyService: contextKeys, instantiationService: services,
 	});
 	assert.equal(container.getOptimalWidth(), 376);
@@ -115,7 +116,7 @@ test("ViewPaneContainer opens a collapsed view and focuses only when requested",
 	const viewContainer: IViewContainerDescriptor = { id: "test", title: "Test", location: ViewContainerLocation.Panel };
 	const descriptor = { id: "test.view", title: "Test View", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) };
 	const views = [descriptor];
-	using container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	using container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer,
 		model: {
 			viewContainer,
@@ -174,7 +175,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	const options = { viewContainer, model: descriptors.getViewContainerModel(viewContainer.id), instantiationService: services, contextKeyService: contextKeys };
 	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service: storageService/);
 	services.registerInstance(IStorageService, storage);
-	const container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
+	const container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 	container.layout({ height: 600, width: 280 });
 	const first = container.getView("test.first") as TestView;
 	const second = container.getView("test.second") as TestView;
@@ -197,7 +198,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	assert.deepEqual([container.getViewSize(first), container.getViewSize(second)], [572, 28]);
 	container.dispose();
 	assert.equal(disposed, 2);
-	using restored = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
+	using restored = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 	const restoredSecond = restored.getView(second.id)!;
 	restored.layout({ height: 600, width: 280 });
 	assert.equal(restoredSecond.isExpanded(), false);

@@ -174,7 +174,7 @@ import type { BrowserStorageServiceOptions } from "../services/storage/browser/s
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IContentSearchService, IContentSearchConfigurationService } from "../../platform/search/common/search.js";
 import { BrowserContentSearchService, FileContentSearchService } from "../../platform/search/browser/searchService.js";
-import type { WorkbenchPart } from "./part.js";
+import type { Part } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
 import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor/editorPart.js";
@@ -893,8 +893,8 @@ export class Workbench extends Disposable {
 		performance.mark('ash.workbench.services-ready');
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
-		const sidebar = this._register(new SidebarPart(workbenchRoot, {
-			openComposite: (id, preserveFocus) => services.invokeFunction(accessor => {
+		const sidebar = this._register(services.createInstance(SidebarPart, workbenchRoot, {
+			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => {
 				const panes = accessor.get(IPaneCompositePartService);
 				if (panes.getActivePaneComposite(ViewContainerLocation.Sidebar)?.getId() === id) {
 					panes.hideActivePaneComposite(ViewContainerLocation.Sidebar);
@@ -912,7 +912,6 @@ export class Workbench extends Disposable {
 			viewDescriptorService: viewDescriptors,
 			compositeBarContextMenuProvider: contextMenus,
 			contextKeyService: contextKeys,
-			storageService: storage,
 			localizationService,
 			ariaLabelKey: { bundle: "ash.regions", key: "primarySidebar" },
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "primarySidebarViews" },
@@ -930,11 +929,10 @@ export class Workbench extends Disposable {
 		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
 		const activityService = this._register(new ActivityService(sidebar.compositeBar));
 		services.registerInstance(IActivityService, activityService);
-		const agentSidebar = this._register(new SidebarPart(workbenchRoot, {
-			openComposite: (id, preserveFocus) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+		const agentSidebar = this._register(services.createInstance(SidebarPart, workbenchRoot, {
+			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
-			storageService: storage,
 			localizationService,
 			id: "agentSidebar",
 			location: ViewContainerLocation.AgentSidebar,
@@ -999,7 +997,7 @@ export class Workbench extends Disposable {
 		}
 		const auxiliaryWindows = this._register(services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
-		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {
+		const editorParts = this._register(services.createInstance(EditorParts, editor, auxiliaryWindows, (container: HTMLElement) => {
 			const resources = new DisposableStore();
 			const contextKeyService = resources.add(contextKeys.createScoped(container));
 			const part = instantiationService.createInstance(EditorPart, container, {
@@ -1035,15 +1033,14 @@ export class Workbench extends Disposable {
 		}
 		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
-		const auxiliarybar = this._register(new AuxiliarybarPart(workbenchRoot, {
-			openComposite: (id, preserveFocus) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+		const auxiliarybar = this._register(services.createInstance(AuxiliarybarPart, workbenchRoot, {
+			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
-			storageService: storage,
 			localizationService,
 		}));
-		const statusbar = this._register(new StatusbarPart(workbenchRoot, statusbarService));
-		const parts = new Map<WorkbenchPartId, WorkbenchPart>([
+		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot, statusbarService));
+		const parts = new Map<WorkbenchPartId, Part>([
 			["titlebar", titlebar],
 			["statusbar", statusbar],
 			["activitybar", activitybar],

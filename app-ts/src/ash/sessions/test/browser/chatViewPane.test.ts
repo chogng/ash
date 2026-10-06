@@ -741,14 +741,13 @@ test('sending from one session preserves a later draft during first-session crea
 	using domLifetime = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
-	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources)));
+	const composerStorage = editorResources.add(createTestStorage());
+	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
 	editorServices.registerInstance(IDictationService, undefined);
 	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
-	const composerStorage = editorResources.add(createTestStorage());
-	editorServices.registerInstance(IStorageService, composerStorage);
 	registerTestDictationOnboarding(editorServices);
 	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });

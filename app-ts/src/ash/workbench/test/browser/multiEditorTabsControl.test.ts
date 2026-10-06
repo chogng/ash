@@ -78,9 +78,10 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 		const file = { ...input('engine #1.ts'), resource: URI.file('/Users/lx/Desktop/ash/源 码/engine #1.ts') };
 		group.openEditor(file);
 		control.setEditors([descriptor(file)], file);
-		const labels = (): (string | null)[] => [...control.domNode.querySelectorAll('.ash-editor-breadcrumbs button')].map(button => button.textContent);
+		const labels = (): (string | null)[] => [...control.domNode.querySelectorAll('.ash-breadcrumb-item')].map(button => button.textContent);
 		assert.deepEqual(labels(), ['ash', '源 码', 'engine #1.ts']);
-		control.domNode.querySelectorAll<HTMLButtonElement>('.ash-editor-breadcrumbs button')[1]!.click();
+		assert.equal(control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumbs-editor-type')!.hidden, true);
+		control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item')[1]!.click();
 		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
 
 		workspace.updateWorkspace({
@@ -90,7 +91,7 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 			]
 		});
 		assert.deepEqual(labels(), ['Source', 'engine #1.ts']);
-		control.domNode.querySelector<HTMLButtonElement>('.ash-editor-breadcrumbs button')!.click();
+		control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumb-item')!.click();
 		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
 		await configuration.updateValue(BreadcrumbsFilePathConfiguration, 'last');
 		assert.deepEqual(labels(), ['engine #1.ts']);
@@ -122,7 +123,7 @@ test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and 
 		for (const scenario of cases) {
 			workspace.updateWorkspace({ id: 'test', folders: [{ id: 'root', uri: URI.parse(scenario.root), name: 'ash', index: 0 }] });
 			control.setInput({ ...input('main.ts'), resource: URI.parse(scenario.file) });
-			assert.deepEqual([...control.domNode.querySelectorAll('button')].map(button => button.textContent), scenario.labels, scenario.file);
+			assert.deepEqual([...control.domNode.querySelectorAll('.ash-breadcrumb-item')].map(button => button.textContent), scenario.labels, scenario.file);
 		}
 	} finally {
 		dom.window.close();
@@ -398,7 +399,7 @@ test("EditorTitleControl follows nested document symbols and opens outline selec
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	assert.match(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /symbols\.ts.*Alpha.*Beta/u);
-	const buttons = control.domNode.querySelectorAll<HTMLButtonElement>(".ash-editor-breadcrumbs button");
+	const buttons = control.domNode.querySelectorAll<HTMLButtonElement>(".ash-breadcrumb-item");
 	buttons[buttons.length - 1]?.click();
 	assert.equal(chosen?.name, "Beta");
 	assert.deepEqual(revealed, innerRange);

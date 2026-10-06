@@ -1,9 +1,11 @@
+import { createTestComponentServices, createTestEditorServices } from '../common/testEditorServices.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput } from '../../common/editor.js';
 import { EditorPane } from '../../browser/parts/editor/editorPane.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createBinaryDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 import { DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration } from '../../browser/parts/editor/editorConfiguration.js';
-import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -179,7 +181,11 @@ test('binary comparisons select the diff association using the modified file pat
 });
 
 class TestEditorPane extends EditorPane {
-	constructor(readonly id: string = "test.editor") { super(); }
+	constructor(readonly id: string = "test.editor") {
+		const services = createTestComponentServices(undefined, undefined, globalThis.window.document);
+		super(id, services.get(IThemeService), services.get(IStorageService));
+		this._register(services);
+	}
 
 	public override create(_parent: HTMLElement): void {
 		super.create(_parent);

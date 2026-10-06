@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import type { IEditorPaneDescriptor } from '../../../../browser/editor.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { type URI } from '../../../../../base/common/uri.js';
@@ -20,8 +22,10 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		@IEditorService private readonly editors: IEditorService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super(files, instantiationService);
+		super(files, instantiationService, themeService, storageService);
 	}
 
 	override create(parent: HTMLElement): void {

@@ -1,3 +1,6 @@
+import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -10,7 +13,6 @@ import type { IFileChangeEvent } from "../../../../../platform/files/common/file
 import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { DocumentEditorTextModelService } from '../../../../services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../services/documentEditor/common/documentTypes.js';
-import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -51,17 +53,17 @@ const testDialogs: IDialogService = {
 };
 
 class EditorPane extends DocumentEditorPane {
-	constructor(files: ITextFileService, options: Partial<EditorPaneOptions> = {}) {
+	constructor(document: Document, files: ITextFileService, options: Partial<EditorPaneOptions> = {}) {
 		const copies = new BrowserWorkingCopyService();
 		const models = new DocumentEditorTextModelService(files, copies);
-		const services = new InstantiationService();
+		const services = createTestComponentServices(undefined, undefined, document);
 		const codeEditors = new StandaloneCodeEditorService();
 		services.registerInstance(ICodeEditorService, codeEditors);
 		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		const opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		services.registerInstance(DialogServiceId, testDialogs);
-		super({ contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models, services);
+		super({ contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models, services, services.get(IThemeService), services.get(IStorageService));
 		this._register(services);
 		this._register(codeEditors);
 		this._register(opener);
@@ -77,7 +79,7 @@ test('registered Academic panes share one model, save baseline and working copy 
 	const files = new MemoryTextFiles(serializeDocument(document, schema));
 	using copies = new BrowserWorkingCopyService();
 	using models = new DocumentEditorTextModelService(files, copies);
-	using services = new InstantiationService();
+	using services = createTestComponentServices(undefined, undefined, environment.window.document);
 	services.registerInstance(IDocumentEditorTextModelService, models);
 	services.registerInstance(DialogServiceId, testDialogs);
 	using codeEditors = new StandaloneCodeEditorService();
@@ -148,7 +150,7 @@ test("Stanza editor edits and saves a structured paragraph", async () => {
 	const files = new MemoryTextFiles("Title\nBody");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
 
@@ -188,7 +190,7 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
 	const environment = new JSDOM("<!doctype html><body></body>");
 	let saveCalls = 0;
 	const parent = h(environment.window.document, "main");
-	const pane = new EditorPane(new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
+	const pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.parse("untitled:academic/draft"), initialText: "Draft" }, new AbortController().signal);
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
@@ -207,7 +209,7 @@ test("Stanza refuses a stale conditional save even before a file-change notifica
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Initial");
 	const parent = h(environment.window.document, "main");
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
@@ -226,7 +228,7 @@ test("Stanza refuses a stale conditional save even before a file-change notifica
 test('Document pane owns and releases the working copy when its input is cleared', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	try {
-		using pane = new EditorPane(new MemoryTextFiles('Original'));
+		using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Original'));
 		const parent = environment.window.document.body;
 		pane.create(parent);
 		await pane.setInput({ resource: URI.parse('untitled:document/lifetime') }, new AbortController().signal);
@@ -250,7 +252,7 @@ test("Stanza routes block keyboard commands through Stanza", async () => {
 	const files = new MemoryTextFiles("Hello\nWorld\nStanza");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -313,7 +315,7 @@ test("Stanza projects plugin decorations onto rich text runs", async () => {
 		},
 		apply: (value, context) => value.map(context.previousDocument, context.schema, context.transaction),
 	}, { decorations: state => state });
-	using pane = new EditorPane(files, { plugins: [plugin] });
+	using pane = new EditorPane(environment.window.document, files, { plugins: [plugin] });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -335,7 +337,7 @@ test("Stanza commits textarea composition as one Stanza transaction", async () =
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -368,7 +370,7 @@ test("Stanza accepts a schema and custom node view without changing Stanza commo
 	environment.window.document.body.append(parent);
 	let updates = 0;
 	let disposals = 0;
-	using pane = new EditorPane(new MemoryTextFiles(""), {
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), {
 		schema,
 		nodeViews: {
 			blockquote: ({ previousElement, renderChildren }) => {
@@ -427,7 +429,7 @@ test("Stanza projects and edits the generic group, typed-block, and line hierarc
 	})], "article-1");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), { schema });
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { schema });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\hierarchy.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -453,7 +455,7 @@ test("Stanza projects Academic wrappers while editing Stanza child blocks", asyn
 	], "academic-document");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -499,7 +501,7 @@ test("Stanza renders and deletes Academic citation inline nodes", async () => {
 	const document = schema.createDocument([schema.createNode("title", { id: "citation-title", content: [schema.createNode("heading", { id: "citation-title-heading", content: [schema.createText("Citations", { id: "citation-title-text" })] })] }), schema.createNode("abstract", { id: "citation-abstract", content: [schema.createNode("paragraph", { id: "citation-abstract-paragraph" })] }), schema.createNode("section", { id: "citation-section", content: [schema.createNode("heading", { id: "citation-section-heading", content: [schema.createText("References", { id: "citation-section-text" })] }), paragraph] })], "citation-document");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\citations.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -528,7 +530,7 @@ test("Stanza exposes Academic citation insertion as a toolbar action", async () 
 	const document = schema.createDocument([paragraph], "toolbar-document");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\toolbar.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -561,7 +563,7 @@ test("Stanza renders resolved citations and bibliography references", async () =
 	], "resolved-document");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\resolved.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -584,7 +586,7 @@ test("Stanza exposes reference insertion as a citation toolbar action", async ()
 	const document = schema.createDocument([paragraph], "reference-toolbar-document");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\reference-toolbar.ash-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
@@ -607,7 +609,7 @@ test("Stanza uses the Academic empty document through revert", async () => {
 	const schema = createAcademicDocumentSchema();
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles(""), {
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles(""), {
 		schema,
 		createEmptyDocument: () => createEmptyAcademicDocument(schema),
 		nodeViews: profileNodeViews,
@@ -636,7 +638,7 @@ test("Stanza uses the Academic empty document through revert", async () => {
 test("Stanza projects read-only inputs without accepting model mutations", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
-	const pane = new EditorPane(new MemoryTextFiles("Hello"));
+	const pane = new EditorPane(environment.window.document, new MemoryTextFiles("Hello"));
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic"), readOnly: true }, new AbortController().signal);
 
@@ -661,7 +663,7 @@ test("Stanza routes text undo and redo through Stanza history", async () => {
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -697,7 +699,7 @@ test("Stanza creates a hard break with Shift+Enter", async () => {
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -739,7 +741,7 @@ test("Stanza deletes a selection spanning a hard break", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -793,7 +795,7 @@ test("Stanza renders semantic lists and splits list items", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -836,7 +838,7 @@ test("Stanza indents and outdents list items with Tab", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -872,7 +874,7 @@ test("Stanza exits an empty list item on the second Enter", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -892,7 +894,7 @@ test("Stanza exposes a block toolbar for block and list formats", async () => {
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -928,7 +930,7 @@ test("Stanza formats selected text with persistent typography marks", async () =
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles("Hello"));
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles("Hello"));
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\formatted.ash-academic") }, new AbortController().signal);
 
@@ -978,7 +980,7 @@ test("Stanza toggles blockquotes and inserts horizontal rules", async () => {
 	const files = new MemoryTextFiles("Quoted");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1006,7 +1008,7 @@ test("Stanza navigates table cells with Tab and exposes row and column operation
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1082,7 +1084,7 @@ test("Stanza renders inline image nodes in the rich surface", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1112,7 +1114,7 @@ test("Stanza turns an image clipboard paste into an image node", async () => {
 	const files = new MemoryTextFiles("Before");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1156,7 +1158,7 @@ test("Stanza inserts a pasted image at a rich-text selection", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1228,7 +1230,7 @@ test("Stanza renders and edits marked inline runs", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1279,7 +1281,7 @@ test("Stanza carries collapsed mark toggles into later input", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(new MemoryTextFiles("Hello"));
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles("Hello"));
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1345,7 +1347,7 @@ test("Stanza applies, updates, and removes link marks", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1411,7 +1413,7 @@ test("Stanza routes rich-text copy and cut through Stanza", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1497,7 +1499,7 @@ test("Stanza pastes external HTML through a schema-valid structured fragment", a
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1564,7 +1566,7 @@ test("Stanza handles whole-document select all, copy, and cut", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1628,7 +1630,7 @@ test("Stanza replaces a rich-text selection spanning sibling blocks", async () =
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1690,7 +1692,7 @@ test("Stanza pastes multiline text as structured blocks", async () => {
 	}));
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1734,7 +1736,7 @@ test("Stanza restores serialized blocks and releases its model", async () => {
 		},
 	}));
 	const parent = h(environment.window.document, "main");
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1768,7 +1770,7 @@ test("Stanza edits Academic code-block lines through the owning TextModel", asyn
 		},
 	}));
 	const parent = h(environment.window.document, "main");
-	using pane = new EditorPane(files);
+	using pane = new EditorPane(environment.window.document, files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.ash-academic") }, new AbortController().signal);
 
@@ -1837,7 +1839,7 @@ test('switching a document cancels a pending room and disposes a late connection
 	const pending = new Promise<void>(resolve => { finishOpen = resolve; });
 	let openingSignal: AbortSignal | undefined;
 	let disposed = false;
-	using pane = new EditorPane(new MemoryTextFiles('First'), {
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles('First'), {
 		createDocumentCollaborationService: () => ({
 			dispose() { },
 			[Symbol.dispose]() { },

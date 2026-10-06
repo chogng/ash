@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
@@ -157,8 +158,8 @@ disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHa
 const copies = disposables.add(new BrowserWorkingCopyService());
 const files = { onDidChangeFiles: codeBlockFiles.onDidChangeFiles, resolve: (request: TextFileResolveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(request, signal), save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal) };
 services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
-const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json' }));
-const structuredPane = disposables.add(services.createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
+const codeBlockPane = disposables.add(registerTestComponentServices(services).createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json' }));
+const structuredPane = disposables.add(registerTestComponentServices(services).createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
 
 codeBlockPane.create(requiredElement("#code-block"));
 structuredPane.create(requiredElement("#document-editor"));

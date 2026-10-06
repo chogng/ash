@@ -1,3 +1,4 @@
+import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import assert from "node:assert/strict";
@@ -20,7 +21,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const resource = URI.file("C:\\project\\sample.bin");
-	using services = new InstantiationService();
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	const pane = binaryEditorDescriptor().create({ instantiationService: services });
 	pane.create(dom.window.document.body);
@@ -61,7 +62,7 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 				return super.readFileBytes(resource);
 			}
 		}
-		using services = new InstantiationService();
+		using services = createTestComponentServices(undefined, undefined, dom.window.document);
 		services.registerInstance(IFileService, new OversizedFileService(new Uint8Array()));
 		using pane = binaryEditorDescriptor().create({ instantiationService: services });
 		pane.create(dom.window.document.body);
@@ -90,7 +91,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => { throw new Error('Unexpected input'); },
 	};
-	using services = new InstantiationService();
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
@@ -118,7 +119,7 @@ test("Binary diff keeps both byte previews and metadata through working-set seri
 	const input = createBinaryDiffEditorInput(original, modified);
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Default);
-	using services = new InstantiationService();
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
 	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
 	const pane = binaryDiffEditorDescriptor().create({ instantiationService: services });
 	assert.ok(pane instanceof BinaryResourceDiffEditor);

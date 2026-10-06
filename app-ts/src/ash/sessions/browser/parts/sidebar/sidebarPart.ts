@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
 import { h } from '../../../../base/browser/dom.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -70,11 +71,18 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
 		return Math.max(SESSION_SIDEBAR_DEFAULT_WIDTH, width);
 	}
-	constructor(container: HTMLElement, @IViewDescriptorService descriptors: IViewDescriptorService, @IContextKeyService contextKeys: IContextKeyService, @IStorageService storage: IStorageService, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(
+		container: HTMLElement,
+		@IViewDescriptorService descriptors: IViewDescriptorService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IStorageService storage: IStorageService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+	) {
 		super(container, {
-			viewDescriptorService: descriptors, contextKeyService: contextKeys, storageService: storage, compositeBarVisible: false,
+			viewDescriptorService: descriptors, contextKeyService: contextKeys, compositeBarVisible: false,
 			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-		});
+		}, themeService, storage);
 		this.topActivityBarHost = h(container.ownerDocument, 'div');
 		this.topActivityBarHost.className = 'ash-sessions-activity-host top';
 		this.topActivityBarHost.hidden = true;

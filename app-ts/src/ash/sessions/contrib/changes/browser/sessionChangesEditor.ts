@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../workbench/common/editor.js';
 import { Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
@@ -33,8 +35,10 @@ export class SessionChangesEditor extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super('ash.sessions.changesEditor', themeService, storageService);
 		this._register(chat.onDidUpdateTurnChanges(event => {
 			if (this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) {
 				void this.refresh();

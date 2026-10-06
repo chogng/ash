@@ -9,6 +9,7 @@ import type { ColorIdentifier, ResolvedColorContribution } from "./colorRegistry
 import type { SizeContribution } from "./sizeRegistry.js";
 import type { SizeValue } from "./sizeUtils.js";
 import type { ColorScheme } from "./theme.js";
+import { Disposable } from '../../../base/common/lifecycle.js';
 
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 
@@ -87,3 +88,23 @@ export interface IThemeService {
 
 export const IThemeService =
 	createServiceIdentifier<IThemeService>("themeService");
+
+/** Keeps a component's resolved theme current for its entire lifetime. */
+export class Themable extends Disposable {
+	protected theme: IColorTheme;
+
+	constructor(
+		protected readonly themeService: IThemeService,
+	) {
+		super();
+		this.theme = themeService.getColorTheme();
+		this._register(themeService.onDidColorThemeChange(theme => this.onThemeChange(theme)));
+	}
+
+	protected onThemeChange(theme: IColorTheme): void {
+		this.theme = theme;
+		this.updateStyles();
+	}
+
+	public updateStyles(): void { }
+}

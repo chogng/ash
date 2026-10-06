@@ -1,3 +1,5 @@
+import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
@@ -16,18 +18,20 @@ import { ContextKeyService } from '../../../platform/contextkey/browser/contextK
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
-import { WorkbenchPart } from '../../../workbench/browser/part.js';
+import { Part } from '../../../workbench/browser/part.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { TitlebarPart } from '../../browser/parts/titlebar/titlebarPart.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
-class TestPart extends WorkbenchPart {
+class TestPart extends Part {
 	public getTabsHeight(): number { return 35; }
 	public setContentRightInset(_inset: number): void { }
 	public setEditorContentVisible(_visible: boolean): void { }
-	constructor(container: HTMLElement, id: SessionsPartId) { super(container, id); }
+	constructor(container: HTMLElement, id: SessionsPartId) { const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
+		super(container, id, services.get(IThemeService), services.get(IStorageService));
+		this._register(services); }
 }
 
 test('Sessions titlebar initializes localized actions and closes the application menu before refreshing or disposal', () => {
@@ -81,8 +85,8 @@ test('Sessions titlebar initializes localized actions and closes the application
 	});
 	services.registerInstance(IMenuService, menus);
 	services.registerInstance(IContextMenuService, contextMenus);
-	const titlebar = services.createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
-	const parts = new Map<SessionsPartId, WorkbenchPart>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
+	const titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
+	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
@@ -103,7 +107,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(closedMenus, 2);
-		using systemMenuTitlebar = services.createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
+		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
 		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Toggle Code panel']);
 		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;
 		sidebarToggle.click();
@@ -127,7 +131,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();

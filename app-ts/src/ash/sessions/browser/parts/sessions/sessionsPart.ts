@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import "./media/sessionsPart.css";
 import { Dimension } from "../../../../base/browser/dom.js";
@@ -7,7 +9,7 @@ import type { IContextMenuService } from "../../../../platform/contextview/brows
 import type { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../../workbench/services/chat/common/chatService.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
-import { WorkbenchPart } from "../../../../workbench/browser/part.js";
+import { Part } from "../../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../../services/sessions/browser/sessionsService.js";
 import { SessionsChatView, type SessionsChatViewOptions } from "./sessionsChatView.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -35,7 +37,7 @@ export interface SessionsPartOptions {
 }
 
 /** Passive primary Part that renders the visible Sessions supplied by its owner. */
-export class SessionsPart extends WorkbenchPart implements ISessionsConversationService {
+export class SessionsPart extends Part implements ISessionsConversationService {
 	private view: SessionsChatView;
 	private readonly views = new Map<SessionsConversationKind, SessionsChatView>();
 	private kind: SessionsConversationKind = 'code';
@@ -46,8 +48,14 @@ export class SessionsPart extends WorkbenchPart implements ISessionsConversation
 
 	override get minimumWidth(): number { return 420; }
 
-	constructor(container: HTMLElement, private readonly options: SessionsPartOptions, @IInstantiationService private readonly services: IInstantiationService) {
-		super(container, "sessions");
+	constructor(
+		container: HTMLElement,
+		private readonly options: SessionsPartOptions,
+		@IInstantiationService private readonly services: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
+		super(container, "sessions", themeService, storageService);
 		this.view = this.createView('code');
 		this.view.setVisible(true);
 		this.updateVisibleSelections([], undefined);

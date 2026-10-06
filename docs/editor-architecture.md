@@ -267,7 +267,7 @@ soft wrap 与基础 accessibility projection。
 的帧任务；绘制期间新增的请求进入下一批。
 通用帧原语由 `base/browser/scheduler` 提供，跨编辑器协调由
 `editor/browser/view.ts` 拥有。
-Workbench Grid 发布的外部尺寸经过 `WorkbenchPart.layoutContents` 转为内容区
+Workbench Grid 发布的外部尺寸经过 `Part.layoutContents` 转为内容区
 尺寸。`EditorPart` 按当前布局样式和窗口缩放计算边框，不在拖拽后读取 DOM 尺寸，
 也不再用内容区 observer 重复驱动编辑器 Grid。主窗口与独立编辑器窗口使用同一入口。
 minimap 直接读取 `EditorConfiguration` 已计算的 `layoutInfo.minimap`，不在 View

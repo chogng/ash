@@ -1,3 +1,5 @@
+import { createTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
@@ -13,7 +15,7 @@ import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { WorkbenchPart } from '../../../workbench/browser/part.js';
+import { Part } from '../../../workbench/browser/part.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
@@ -21,12 +23,14 @@ import { Menus } from '../../browser/menus.js';
 import { CanGoBackContext, CanGoForwardContext } from '../../common/contextkeys.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
-class TestPart extends WorkbenchPart {
+class TestPart extends Part {
 	public getTabsHeight(): number { return 35; }
 	public setContentRightInset(_inset: number): void { }
 	public setEditorContentVisible(_visible: boolean): void { }
 	constructor(container: HTMLElement, id: SessionsPartId) {
-		super(container, id);
+		const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
+		super(container, id, services.get(IThemeService), services.get(IStorageService));
+		this._register(services);
 	}
 }
 
@@ -92,7 +96,7 @@ test('Sessions layout commands update menu state from their owners and release w
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();

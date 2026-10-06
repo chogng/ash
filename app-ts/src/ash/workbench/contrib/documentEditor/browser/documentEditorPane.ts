@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -57,8 +59,15 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		return this.modelReference.value;
 	}
 
-	constructor(options: EditorPaneOptions, @IDialogService private readonly dialogs: IDialogService, @IDocumentEditorTextModelService private readonly modelService: IDocumentEditorTextModelService, @IInstantiationService private readonly instantiation: IInstantiationService) {
-		super();
+	constructor(
+		options: EditorPaneOptions,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IDocumentEditorTextModelService private readonly modelService: IDocumentEditorTextModelService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
+		super(DOCUMENT_EDITOR_ID, themeService, storageService);
 		this.options = options;
 		this._register(toDisposable(() => this.stopCollaboration()));
 		this.schema = options.schema ?? createDefaultDocumentSchema();

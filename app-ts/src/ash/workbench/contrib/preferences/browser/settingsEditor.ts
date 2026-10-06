@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { SearchSettingsContent } from '../../search/browser/searchSettingsContent.js';
 import { NetworkSettingsContent } from './networkSettingsContent.js';
@@ -93,8 +95,10 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(SettingsEditorId, themeService, storageService);
 		this.configurationService = configurationService;
 		this.localizationService = localizationService;
 		this.settingsModel = this._register(new SettingsEditorModel([

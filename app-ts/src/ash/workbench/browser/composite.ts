@@ -1,10 +1,11 @@
 import { trackFocus, type IFocusTracker } from '../../base/browser/focus.js';
 import { Emitter } from '../../base/common/event.js';
-import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
+import { toDisposable } from '../../base/common/lifecycle.js';
 import type { IComposite, ICompositeControl } from '../common/composite.js';
+import { Component } from '../common/component.js';
 
 /** Owns focus for the complete hosted content, across all of its child controls. */
-export abstract class Composite extends Disposable implements IComposite {
+export abstract class Composite<MementoType extends object = object> extends Component<MementoType> implements IComposite {
 	public abstract readonly id: string;
 	private readonly focused = this._register(new Emitter<void>());
 	private readonly blurred = this._register(new Emitter<void>());
@@ -31,10 +32,6 @@ export abstract class Composite extends Disposable implements IComposite {
 
 	public getContainer(): HTMLElement | undefined {
 		return this.compositeContainer;
-	}
-
-	public getId(): string {
-		return this.id;
 	}
 
 	public getTitle(): string | undefined {

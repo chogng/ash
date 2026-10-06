@@ -47,6 +47,10 @@ PaneCompositePart
 
 `common/composite.ts` 的 `IComposite` 规定工作台读取内容 ID、标题、内部控件和操作焦点的公共接口。`IEditorPane` 与 `IPaneComposite` 继承它；视图的内部控件就是它已经持有的视图容器，不另建对象。焦点进入或离开整块内容时才发出 `onDidFocus` / `onDidBlur`，在内部控件之间移动不会重复发出事件。监听器随内容实例释放。
 
+`Part` 与浏览器 `Composite` 共用 `common/component.ts` 的 `Component`。它通过 `Themable` 持有当前主题和主题监听，在存储服务发出保存事件时先调用 `saveState()` 收集控件状态，再保存各作用域的 Memento。两类监听都随组件释放；隐藏内容仍保留实例及监听。主题和存储服务由创建该组件的实例化容器注入，不再通过 Part options 提供第二份存储服务。
+
+`ViewPaneContainer` 继承 `Composite`，在自己的 `saveState()` 中保存窗格尺寸和折叠选择，仍沿用 `workbench.viewContainer.*` 键。Memento 负责对象状态的作用域、保存和重新读取，具体字段的校验由调用方负责；Workbench 全局布局和多窗口编辑器协调仍由各自原有的 owner 管理。
+
 `CompositeBar` 通过 `openComposite` 回调打开内容，打开行为由 `IViewsService` 和区域服务执行。`CompositePart` 在内容显示、隐藏或切换时发出打开、关闭事件；打开事件携带本次是否请求聚焦。隐藏区域保留实例，再次打开使用同一实例。F6 / Shift+F6 只访问可见区域；方向导航先访问编辑器分组，再根据 Grid 的实际位置进入相邻区域。多文件 diff 的 `getControl()` 返回当前文件的 diff 控件，移走焦点后仍保留当前文件选择。
 
 Activity Bar 的首选 tooltip 方向由组件层的 `getActivityHoverPosition` 统一计算：侧栏向内、顶部向下、底部向上。Workbench 和 Sessions 的宿主各自读取所属窗口的位置配置，在 `setupDelayedHover` 的回调中取值；位置切换保留按钮和监听器。Hover 服务负责显示生命周期，底层布局负责坐标计算和空间不足时的方向调整。

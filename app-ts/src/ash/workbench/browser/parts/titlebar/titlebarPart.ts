@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { localize } from '../../../../nls.js';
 import "./titlebarpart.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
@@ -8,7 +10,7 @@ import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolb
 import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { WorkbenchPart } from "../../part.js";
+import { Part } from "../../part.js";
 import type { GlobalCompositeBar } from "../globalCompositeBar.js";
 import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
@@ -121,7 +123,7 @@ export class BrowserTitleService extends Disposable implements ITitleService {
 }
 
 /** The host-neutral workbench title area and its actions. */
-export class BrowserTitlebarPart extends WorkbenchPart implements ITitlebarPart {
+export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 	protected readonly menubarVisibilityChanged = this._register(new Emitter<boolean>());
 	public readonly onMenubarVisibilityChange = this.menubarVisibilityChanged.event;
 	private readonly menubar: IMenubarControl;
@@ -141,8 +143,10 @@ export class BrowserTitlebarPart extends WorkbenchPart implements ITitlebarPart 
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@ILocalizationService localizationService: ILocalizationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super(container, "titlebar");
+		super(container, "titlebar", themeService, storageService);
 		const ownerDocument = container.ownerDocument;
 		this.menubar = this._register(createMenubar(menuService, contextMenuService, localizationService));
 		const appIconDomNode = h(ownerDocument, "span");
@@ -241,11 +245,13 @@ export class AuxiliaryBrowserTitlebarPart extends BrowserTitlebarPart implements
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@ILocalizationService localizationService: ILocalizationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
 		const windowTitle = instantiationService.createInstance(WindowTitle, container.ownerDocument.defaultView!, productName, editorGroupsContainer);
 		super(container, { windowTitle },
 			(menus, contextMenus, localization) => new BrowserMenubarControl(container, menus, contextMenus, localization),
-			instantiationService, menuService, contextMenuService, localizationService);
+			instantiationService, menuService, contextMenuService, localizationService, themeService, storageService);
 		this._register(windowTitle);
 		this._register(toDisposable(onDispose));
 		this.domNode.classList.add('ash-auxiliary-titlebar');

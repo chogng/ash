@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { addDisposableListener, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
@@ -46,8 +48,10 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(IMAGE_PREVIEW_ID, themeService, storageService);
 	}
 
 	public static getFocused(element: HTMLElement): ImagePreview | undefined {

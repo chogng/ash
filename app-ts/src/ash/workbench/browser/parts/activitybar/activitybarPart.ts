@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './media/activitybarpart.css';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
@@ -6,10 +8,10 @@ import type { CompositeBar } from '../compositeBar.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { GlobalCompositeBar } from '../globalCompositeBar.js';
-import { WorkbenchPart } from '../../part.js';
+import { Part } from '../../part.js';
 
 /** Fixed rail for the primary sidebar's View Container selector. */
-export class ActivitybarPart extends WorkbenchPart {
+export class ActivitybarPart extends Part {
 	private layoutStyle: WorkbenchLayoutStyle;
 	private compact: boolean;
 	private sideBarLocation: SideBarLocation;
@@ -25,8 +27,10 @@ export class ActivitybarPart extends WorkbenchPart {
 		private readonly globalCompositeBar: Pick<GlobalCompositeBar, 'domNode' | 'getContextMenuActions'>,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILocalizationService private readonly localizationService: ILocalizationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super(container, 'activitybar');
+		super(container, 'activitybar', themeService, storageService);
 		this.contentDomNode.classList.add('ash-activity-bar-content');
 		this.layoutStyle = this.configurationService.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 		this.compact = this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarCompact);

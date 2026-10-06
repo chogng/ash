@@ -2,8 +2,10 @@ import { KeybindingTestServices } from '../../../../services/keybinding/test/bro
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IKeyboardLayoutService } from '../../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 
-import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { createTestEditorServices, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -92,13 +94,13 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		id: 'test.settings',
 		name: 'Settings',
 		canOpen: input => isSettingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => new TestSettingsEditor(),
+		create: () => registerTestComponentServices(services).createInstance(TestSettingsEditor),
 	});
 	registry.registerEditorPane({
 		id: KeyboardShortcutsEditorId,
 		name: 'Keyboard Shortcuts',
 		canOpen: input => isKeyboardShortcutsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => services.createInstance(KeyboardShortcutsEditor),
+		create: () => registerTestComponentServices(services).createInstance(KeyboardShortcutsEditor),
 	});
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, ownerDocument.body, {
@@ -192,6 +194,10 @@ function waitForStatus(document: Document, message: string): Promise<void> {
 class TestSettingsEditor extends EditorPane {
 	readonly id = 'test.settings';
 	private element: HTMLElement | undefined;
+
+	constructor(@IThemeService themeService: IThemeService, @IStorageService storageService: IStorageService) {
+		super('test.settings', themeService, storageService);
+	}
 
 	public override create(parent: HTMLElement): void {
 		this.element = h(parent.ownerDocument, 'div');

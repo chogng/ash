@@ -10,7 +10,6 @@ import { DesignEditorWidget } from './widget/designEditorWidget.js';
 import { createDesignEditorContributions } from '../design.main.js';
 import type { DesignEditorContributionContext } from './designEditorBrowser.js';
 import { CreatorMode } from '../common/creator.js';
-import { WorkbenchPart } from '../../../../workbench/browser/part.js';
 
 /** The page retains canvas state; the window editor service owns one document per Creator mode. */
 export class DesignEditorPage extends Disposable {

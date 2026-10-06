@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/searchEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
@@ -49,8 +51,10 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(SearchEditorID, themeService, storageService);
 		this._register(textEditor);
 	}
 

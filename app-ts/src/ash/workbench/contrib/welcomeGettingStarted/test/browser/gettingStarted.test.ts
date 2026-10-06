@@ -1,3 +1,6 @@
+import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -25,6 +28,7 @@ suite('Welcome page', () => {
 		const dispatched = new Promise<void>(resolve => { commandDispatched = resolve; });
 		const commands = { executeCommand: async (id: string) => { calls.push(id); commandDispatched?.(); } } as ICommandService;
 		using contextKeys = new ContextKeyService();
+		using services = createTestComponentServices(undefined, undefined, dom.window.document);
 		using page = new GettingStartedPage(
 			recent,
 			workspace,
@@ -32,6 +36,8 @@ suite('Welcome page', () => {
 			contextKeys,
 			{} as IGitHubConnectionService,
 			git,
+			services.get(IThemeService),
+			services.get(IStorageService),
 		);
 		page.create(dom.window.document.body);
 		const clone = [...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Clone repo');

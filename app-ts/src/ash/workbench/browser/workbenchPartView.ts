@@ -3,7 +3,7 @@ import { Dimension } from "../../base/browser/dom.js";
 import { type IPositionedRectangle } from "../../base/browser/geometry.js";
 import type { Event } from "../../base/common/event.js";
 import type { WorkbenchPartId } from "../services/layout/browser/layoutService.js";
-import type { WorkbenchPart } from "./part.js";
+import type { Part } from "./part.js";
 
 export interface WorkbenchPartFrameInsets {
 	readonly top: number;
@@ -32,7 +32,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 
 	constructor(
 		readonly partId: TPartId,
-		readonly part: WorkbenchPart,
+		readonly part: Part,
 		options: WorkbenchPartViewOptions = {},
 	) {
 		const frame = h(part.domNode.ownerDocument, "div");

@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -66,8 +68,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	constructor(
 		private readonly options: MultiDiffEditorOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(MULTI_DIFF_EDITOR_ID, themeService, storageService);
 		if (!options || typeof options !== 'object' || typeof options.createComputationService !== 'function') {
 			this.dispose();
 			throw new TypeError('Multi-diff editor pane requires a Workbench diff computation service');

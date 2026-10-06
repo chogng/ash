@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPart as WorkbenchEditorPart, type IEditorPartOptions } from '../../../../workbench/browser/parts/editor/editorPart.js';
@@ -7,8 +9,14 @@ import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 export class EditorPart extends WorkbenchEditorPart {
 	public readonly pageGroupId: string;
 
-	constructor(container: HTMLElement, options: IEditorPartOptions, @IInstantiationService instantiation: IInstantiationService) {
-		super(container, options, instantiation);
+	constructor(
+		container: HTMLElement,
+		options: IEditorPartOptions,
+		@IInstantiationService instantiation: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
+		super(container, options, instantiation, themeService, storageService);
 		// A separate identity cannot collide with document group IDs restored from an older session.
 		const pages = this.insertGroup(this.activeGroup, Direction.Right, 'sessions-product-pages').group;
 		this.pageGroupId = pages.id;

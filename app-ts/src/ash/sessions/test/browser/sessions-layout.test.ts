@@ -1,3 +1,5 @@
+import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import assert from "node:assert/strict";
@@ -20,7 +22,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { Dimension } = await import("../../../base/browser/dom.js");
-const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
+const { Part } = await import("../../../workbench/browser/part.js");
 const { WorkbenchWindowBarHeight } = await import("../../../workbench/browser/parts/workbenchPartDimensions.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { IStorageService, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
@@ -32,9 +34,9 @@ const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../w
 const { WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/browser/configurationService.js');
 
 type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
-type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
+type WorkbenchPartInstance = import("../../../workbench/browser/part.js").Part;
 
-class TestSessionsPart extends WorkbenchPart {
+class TestSessionsPart extends Part {
 	public getTabsHeight(): number { return 35; }
 	public contentInset = 0;
 	public contentVisible = true;
@@ -43,7 +45,9 @@ class TestSessionsPart extends WorkbenchPart {
 	readonly layouts: import('../../../base/browser/dom.js').Dimension[] = [];
 
 	constructor(readonly id: SessionsPartId, container: HTMLElement) {
-		super(container, id);
+		const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
+		super(container, id, services.get(IThemeService), services.get(IStorageService));
+		this._register(services);
 	}
 
 	override layout(dimension: import('../../../base/browser/dom.js').Dimension): void {
@@ -426,7 +430,7 @@ test('Sessions product page group survives legacy document group restoration', a
 	const { EditorPart } = await import('../../browser/parts/editor/editorPart.js');
 	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
 	using services = createTestEditorServices();
-	using editor = services.createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
 	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
 	await editor.applyWorkingSet({ id: 'legacy', activeGroupIndex: 1, groups: [1, 2].map(id => ({ id: 'editor-group-' + id, editors: [], activeEditorIndex: -1, size: 0.5 })) }, { preserveGroups: [pages.id] });
 	assert.equal(editor.groups.find(group => group.id === pages.id), pages);

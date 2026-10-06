@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/keyboardShortcutsEditor.css';
 import { h, stopEvent } from '../../../../base/browser/dom.js';
@@ -50,8 +52,10 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IKeyboardLayoutService private readonly keyboardLayoutService: IKeyboardLayoutService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(KeyboardShortcutsEditorId, themeService, storageService);
 		this.model = this._register(instantiationService.createInstance(KeyboardShortcutsEditorModel, {
 			commandLabel: commandLabel,
 		}));

@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
@@ -31,8 +33,10 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
 		@IGitService private readonly gitService: IGitService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(GettingStartedPageId, themeService, storageService);
 		this._register(this.recentWorkspaces.onDidChange(() => this.content?.setRecentProjects(this.projects())));
 	}
 

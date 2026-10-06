@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { h } from "../../../../base/browser/dom.js";
@@ -29,8 +31,10 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 	constructor(
 		@IFileService protected readonly files: IFileService,
 		@IInstantiationService protected readonly instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(BINARY_EDITOR_ID, themeService, storageService);
 	}
 
 	public override create(parent: HTMLElement): void {

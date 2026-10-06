@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './githubEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
@@ -115,7 +117,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
-	) { super(); }
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) { super(githubEditorId, themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		this.root = h(parent.ownerDocument, 'div'); this.root.className = 'ash-github-editor'; parent.append(this.root);

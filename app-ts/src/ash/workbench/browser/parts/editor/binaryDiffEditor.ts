@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { BINARY_DIFF_EDITOR_ID, type IResourceEditorInput } from '../../../common/editor.js';
 import { isBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
@@ -8,11 +10,15 @@ import { SideBySideEditor } from "./sideBySideEditor.js";
 
 /** Keeps each side's file-size metadata visible to comparison commands and status UI. */
 export class BinaryResourceDiffEditor extends SideBySideEditor {
-	constructor(@IInstantiationService instantiationService: IInstantiationService) {
+	constructor(
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
 		super(
 			BINARY_DIFF_EDITOR_ID,
 			instantiationService.createInstance(BaseBinaryResourceEditor),
-			instantiationService.createInstance(BaseBinaryResourceEditor),
+			instantiationService.createInstance(BaseBinaryResourceEditor), themeService, storageService
 		);
 	}
 

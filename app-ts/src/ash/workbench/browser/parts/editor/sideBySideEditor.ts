@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebysideeditor.css";
 import { h, type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
@@ -13,8 +15,10 @@ export class SideBySideEditor extends EditorPane implements IEditorPane {
 		readonly id: string,
 		private readonly secondaryPane: EditorPane,
 		private readonly primaryPane: EditorPane,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(id, themeService, storageService);
 		this._register(secondaryPane);
 		this._register(primaryPane);
 	}

@@ -7,7 +7,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { onUnexpectedError } from "../../../../base/common/errors.js";
 import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService, createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
@@ -68,6 +68,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		private readonly createPart: AuxiliaryEditorPartFactory,
 		private readonly accessibility: IAccessibilityService,
 		private readonly storage: IStorageService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this._activePart = mainPart;
@@ -149,7 +150,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			auxiliaryWindow[Symbol.dispose]();
 			throw error;
 		}
-		const handle = new AuxiliaryEditorPart(auxiliaryWindow, creation, this.accessibility);
+		const handle = this.instantiationService.createInstance(AuxiliaryEditorPart, auxiliaryWindow, creation, this.accessibility);
 		this.auxiliary.set(creation.part, handle);
 		this.registerPart(creation.part, auxiliaryWindow);
 		this.setActivePart(creation.part);

@@ -1,6 +1,8 @@
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { Emitter } from "../../../base/common/event.js";
 import { DisposableMap } from "../../../base/common/lifecycle.js";
-import { WorkbenchPart } from "../part.js";
+import { Part } from "../part.js";
 import type { IComposite } from '../../common/composite.js';
 import type { Composite } from '../composite.js';
 
@@ -10,7 +12,7 @@ import type { Composite } from '../composite.js';
  * The shared content area hosts the active Composite. Pane-like subclasses
  * add their standard title and CompositeBar through PaneCompositePart.
  */
-export abstract class CompositePart<T extends Composite> extends WorkbenchPart {
+export abstract class CompositePart<T extends Composite> extends Part {
 	private readonly composites = this._register(new DisposableMap<string, T>());
 	private activeComposite: T | undefined;
 	private pendingFocus = false;
@@ -19,8 +21,13 @@ export abstract class CompositePart<T extends Composite> extends WorkbenchPart {
 	public readonly onDidCompositeOpen = this.compositeOpened.event;
 	public readonly onDidCompositeClose = this.compositeClosed.event;
 
-	protected constructor(container: HTMLElement, id: string) {
-		super(container, id);
+	protected constructor(
+		container: HTMLElement,
+		id: string,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
+		super(container, id, themeService, storageService);
 		this.contentDomNode.classList.add("ash-composite-content");
 	}
 

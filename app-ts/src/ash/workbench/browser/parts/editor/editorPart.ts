@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
@@ -32,7 +34,7 @@ import { IInstantiationService } from "../../../../platform/instantiation/common
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import { WorkbenchPart } from "../../part.js";
+import { Part } from "../../part.js";
 import { EditorGroupView, type EditorGroupOptions } from "./editorGroupView.js";
 import type { IEditorGroupView } from "./editor.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
@@ -54,7 +56,7 @@ import type { IBulkEditService } from "../../../../editor/browser/services/bulkE
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
-import { ModalEditorPart } from "./modalEditorPart.js";
+import { ModalEditorPart, type ModalEditorPartOptions } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { editorInputKey } from "./editorTabsControl.js";
 import { WorkbenchConfiguration } from "../../../common/configuration.js";
@@ -158,7 +160,7 @@ export interface IEditorPartOptions {
 }
 
 /** Owns EditorGroupView layout and delegates editor behavior to the active group. */
-export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGroupsContainer {
+export class EditorPart extends Part implements IEditorPart, IEditorGroupsContainer {
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent> = this.editorChangeEmitter.event;
 	public readonly onDidChangeActiveGroup: Event<IEditorGroup> = (listener, thisArgs, disposables) =>
@@ -193,8 +195,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		container: HTMLElement,
 		options: IEditorPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super(container, "editor", {
+		super(container, "editor", themeService, storageService, {
 			borderWidth: () => this.getFloatingBorderWidth() * 2,
 		});
 		const ownerDocument = container.ownerDocument;
@@ -253,7 +257,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			target => this._groups.find(host => host.group.domNode.contains(target))?.group,
 			this.tabDragAndDrop,
 		));
-		this.modalEditor = this._register(new ModalEditorPart({
+		this.modalEditor = this._register(instantiationService.createInstance(ModalEditorPart, {
 			container,
 			registry: this.groupOptions.registry,
 			resolveOpenError: this.groupOptions.resolveOpenError,
@@ -285,7 +289,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 					},
 				} : {}),
 			},
-		}));
+		} satisfies ModalEditorPartOptions));
 		this.onDidChangeModalVisibility = this.modalEditor.onDidChangeVisibility;
 		this.editorsObserver = this._register(new EditorsObserver(this));
 		this._register(this.modalEditor.onDidRequestClose(input => {

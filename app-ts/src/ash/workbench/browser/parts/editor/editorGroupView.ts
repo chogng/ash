@@ -602,7 +602,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private async showOpenError(input: IResourceEditorInput, options: EditorOpenOptions, error: unknown, existing: EditorGroupEntry | undefined): Promise<IEditorPane> {
 		if (options.ignoreError || isCancellationError(error)) throw error;
 		const displayError = this.resolveOpenError ? this.resolveOpenError(error, input, options, openOptions => this.openEditor(input, openOptions)) : error;
-		const pane = new ErrorPlaceholderEditor(
+		const pane = this.instantiationService.createInstance(ErrorPlaceholderEditor,
 			displayError,
 			() => this.openEditor(input, { ...options, source: EditorOpenSource.USER }),
 			() => this.closeEditor(input),

@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -68,8 +70,10 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 		private readonly resourceStore: ITextResourceStore,
 		private readonly options: DiffEditorPaneOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(DIFF_EDITOR_ID, themeService, storageService);
 		if (!resourceStore || typeof resourceStore.resolve !== "function") {
 			this.dispose();
 			throw new TypeError("Diff editor pane requires a text resource store");

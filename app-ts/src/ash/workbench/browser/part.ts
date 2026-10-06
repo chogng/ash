@@ -1,8 +1,11 @@
 import "./media/part.css";
 import { Dimension, type IDimension } from "../../base/browser/dom.js";
 import { Emitter, type Event } from "../../base/common/event.js";
-import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
+import { toDisposable } from "../../base/common/lifecycle.js";
 import { h } from "../../base/browser/dom.js";
+import type { IThemeService } from '../../platform/theme/common/themeService.js';
+import type { IStorageService } from '../../platform/storage/common/storage.js';
+import { Component } from '../common/component.js';
 
 export interface IPartOptions {
 	/** Total horizontal border width, supplied by the Part's presentation owner. */
@@ -19,7 +22,7 @@ export interface ILayoutContentResult {
  * Parts own their layout constraints. WorkbenchLayout decides topology and
  * delegates the resulting pixel dimensions through `layout`.
  */
-export abstract class WorkbenchPart extends Disposable {
+export abstract class Part extends Component {
 	readonly domNode: HTMLElement;
 	protected readonly titleDomNode: HTMLDivElement;
 	protected readonly contentDomNode: HTMLDivElement;
@@ -28,8 +31,14 @@ export abstract class WorkbenchPart extends Disposable {
 	readonly onDidChangeConstraints: Event<void> =
 		this._onDidChangeConstraints.event;
 
-	protected constructor(container: HTMLElement, id: string, private readonly partOptions: IPartOptions = {}) {
-		super();
+	protected constructor(
+		container: HTMLElement,
+		id: string,
+		themeService: IThemeService,
+		storageService: IStorageService,
+		private readonly partOptions: IPartOptions = {},
+	) {
+		super(id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
 		const domNode = h(ownerDocument, "section");
 		this.domNode = domNode;

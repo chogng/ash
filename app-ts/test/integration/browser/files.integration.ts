@@ -18,7 +18,7 @@ import type { ITextResourceStore } from '../../../src/ash/workbench/services/tex
 import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { binaryDiffEditorDescriptor } from '../../../src/ash/workbench/browser/parts/editor/binaryDiffEditor.js';
-import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 
 const provider = await IndexedDBFileSystemProvider.create(indexedDB, Schemas.vscodeUserData);
 const resource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/test.jsonc' });
@@ -50,7 +50,7 @@ const integration = {
 		const input = EditorInputSerializers.deserialize(JSON.parse(localStorage.getItem('binary-comparison')!));
 		const services = binaryResources.add(new InstantiationService());
 		services.registerInstance(IFileService, files);
-		const pane = binaryResources.add(services.createInstance(BinaryResourceDiffEditor));
+		const pane = binaryResources.add(registerTestComponentServices(services).createInstance(BinaryResourceDiffEditor));
 		const container = document.createElement('div');
 		container.id = 'binary-comparison';
 		container.style.width = '640px';
@@ -87,7 +87,7 @@ const integration = {
 		container.id = 'comparison-groups';
 		document.body.append(container);
 		binaryResources.add(toDisposable(() => container.remove()));
-		comparisonGroups = binaryResources.add(services.createInstance(EditorPart, container, { registry }));
+		comparisonGroups = binaryResources.add(registerTestComponentServices(services).createInstance(EditorPart, container, { registry }));
 		comparisonGroups.layout({ width: 960, height: 480 });
 		await comparisonGroups.openEditor(input);
 		if (!restored) await comparisonGroups.openEditor(input, {}, 'sideGroup');
@@ -134,7 +134,7 @@ const integration = {
 		container.id = 'text-groups';
 		document.body.append(container);
 		binaryResources.add(toDisposable(() => container.remove()));
-		textGroups = binaryResources.add(services.createInstance(EditorPart, container, { registry }));
+		textGroups = binaryResources.add(registerTestComponentServices(services).createInstance(EditorPart, container, { registry }));
 		textGroups.layout({ width: 960, height: 480 });
 		await textGroups.openEditor(textInput);
 		await textGroups.openEditor(textInput, {}, 'sideGroup');

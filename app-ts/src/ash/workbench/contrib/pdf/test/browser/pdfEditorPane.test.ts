@@ -1,3 +1,4 @@
+import { createTestComponentServices, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -24,7 +25,8 @@ test("PDF editor renders pages, creates annotations, and saves a companion docum
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const annotations = new TestAnnotationStore();
 	const renderer = new TestRenderer();
-	const pane = new PdfEditorPane({ load: async () => new Uint8Array([37, 80, 68, 70]) }, annotations, renderer);
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37, 80, 68, 70]) }, annotations, renderer);
 	pane.create(dom.window.document.body);
 
 	await pane.setInput(input("paper.pdf"), new AbortController().signal);
@@ -92,7 +94,8 @@ test("PDF editor renders pages, creates annotations, and saves a companion docum
 test("PDF editor observes cancellation before rendering pages", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const renderer = new TestRenderer();
-	const pane = new PdfEditorPane({ load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer);
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer);
 	pane.create(dom.window.document.body);
 	const controller = new AbortController();
 	controller.abort("closed");

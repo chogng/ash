@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -33,7 +34,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 		onDidBecomeReady: ready.event,
 		listTurnChanges: () => ++requests === 1 ? pending.p : Promise.resolve([]),
 	} as unknown as IChatService);
-	using pane = services.createInstance(SessionChangesEditor, {});
+	using pane = registerTestComponentServices(services).createInstance(SessionChangesEditor, {});
 	pane.create(dom.window.document.body);
 	await pane.setInput({ resource: URI.parse('ash-session-changes:/a?thread=a-thread') }, new AbortController().signal);
 	pane.setVisible(true);

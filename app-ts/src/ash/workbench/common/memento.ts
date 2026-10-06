@@ -15,7 +15,8 @@ export class Memento<T extends object = object> {
 	private readonly scopes = new Map<StorageScope, MementoScope<T>>();
 
 	constructor(id: string, private readonly storageService: IStorageService) {
-		if (!/^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(id)) {
+		// IDs also come from extension editor registrations; they are storage identities, not file paths.
+		if (id.trim().length === 0) {
 			throw new TypeError(`Invalid Workbench Memento ID: ${id}`);
 		}
 		this.storageKey = `memento/${id}`;

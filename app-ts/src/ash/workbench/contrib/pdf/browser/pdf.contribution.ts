@@ -12,8 +12,9 @@ registerEditorPane({
 	name: "PDF Reader",
 	canOpen: matchPdfEditor,
 	create: options => {
+		if (!options.instantiationService) throw new Error('PDF Reader requires the Workbench instantiation service');
 		if (!options.fileService) throw new Error("PDF Reader requires the Workbench file service");
-		return new PdfEditorPane(
+		return options.instantiationService.createInstance(PdfEditorPane,
 			new WorkspacePdfDocumentLoader(options.fileService),
 			new WorkspacePdfAnnotationStore(options.fileService),
 			new PdfJsRenderer(),

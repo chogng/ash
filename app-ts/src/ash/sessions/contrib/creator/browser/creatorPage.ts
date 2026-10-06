@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import './creatorPage.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
@@ -21,7 +22,11 @@ const navigationViews = new WeakMap<Element, CreatorNavigationView>();
 export class CreatorEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.creator';
 	public page!: CreatorPage;
-	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
+	constructor(
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) { super('sessions.editor.creator', themeService, storageService); }
 	public override create(parent: HTMLElement): void {
 		this.page = this._register(this.instantiation.createInstance(CreatorPage, parent.ownerDocument));
 		parent.append(this.page.domNode);

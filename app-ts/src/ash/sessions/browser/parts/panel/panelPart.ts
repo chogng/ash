@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { PanelPart as WorkbenchPanelPart } from '../../../../workbench/browser/parts/panel/panelPart.js';
@@ -18,7 +19,8 @@ export class PanelPart extends WorkbenchPanelPart {
 		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
 	) {
-		super(container, descriptors, contextKeys, storage, localization, menus, contextMenus, instantiationService);
+		super(container, descriptors, contextKeys, storage, localization, menus, contextMenus, instantiationService, themeService);
 	}
 }

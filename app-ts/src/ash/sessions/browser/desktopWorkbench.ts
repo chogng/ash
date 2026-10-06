@@ -7,7 +7,7 @@ import { BrowserLayoutService, type ILayoutOffsetInfo } from '../../platform/lay
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
-import type { WorkbenchPart } from '../../workbench/browser/part.js';
+import type { Part } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
@@ -262,7 +262,7 @@ export interface SessionsWorkbenchLayoutOptions {
 
 /** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
 class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
-	constructor(partId: SessionsPartId, part: WorkbenchPart, private readonly isEditorPrimary: () => boolean, private readonly isLayoutDeferred: () => boolean, private readonly dockedMinimumWidth: () => number, private readonly compositionChanged: Event<void>) { super(partId, part); }
+	constructor(partId: SessionsPartId, part: Part, private readonly isEditorPrimary: () => boolean, private readonly isLayoutDeferred: () => boolean, private readonly dockedMinimumWidth: () => number, private readonly compositionChanged: Event<void>) { super(partId, part); }
 	public override get minimumWidth(): number {
 		if (this.partId !== 'editor') { return super.minimumWidth; }
 		return Math.max(EDITOR_PART_MINIMUM_WIDTH, super.minimumWidth, this.isEditorPrimary() ? 0 : this.dockedMinimumWidth());
@@ -334,7 +334,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
-	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>): void {
+	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void {
 		validateParts(parts);
 		if (this.grid) {
 			throw new Error('Sessions Parts are already attached');
@@ -605,12 +605,12 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 }
 
-function validateParts(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>): void {
+function validateParts(parts: ReadonlyMap<SessionsPartId, Part>): void {
 	const missing = sessionsPartIds.filter(partId => !parts.has(partId));
 	if (missing.length > 0) throw new TypeError(`Sessions layout is missing Parts: ${missing.join(', ')}`);
 }
 
-function requiredPart(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, partId: SessionsPartId): WorkbenchPart {
+function requiredPart(parts: ReadonlyMap<SessionsPartId, Part>, partId: SessionsPartId): Part {
 	const part = parts.get(partId);
 	if (!part) throw new Error(`Sessions Part is not registered: ${partId}`);
 	return part;

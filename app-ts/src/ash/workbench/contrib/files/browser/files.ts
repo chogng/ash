@@ -32,6 +32,7 @@ export interface IExplorerService {
 	getContext(): readonly ExplorerItem[];
 	/** The caller opens the Explorer view before requesting selection. */
 	select(resource: URI, reveal?: boolean | string): Promise<void>;
+	shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean;
 	getAccessibleContent(): string | undefined;
 	focus(): void;
 	registerView(view: IExplorerView): IDisposable;

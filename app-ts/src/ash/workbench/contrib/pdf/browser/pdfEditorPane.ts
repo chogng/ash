@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { addDisposableListener, h, svg as createSvgElement } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
@@ -76,8 +78,10 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		private readonly documentLoader: IPdfDocumentLoader,
 		private readonly annotationStore: IPdfAnnotationStore,
 		private readonly renderer: IPdfRenderer,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(PDF_EDITOR_ID, themeService, storageService);
 		this._register(this.annotationModel.onDidChange(() => this.onAnnotationsChanged()));
 		this._register(toDisposable(() => {
 			this.clearInput();

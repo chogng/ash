@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter } from "../../../../base/common/event.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
@@ -58,8 +59,13 @@ export class ViewPaneContainer extends Composite {
 	public readonly onDidFocusView = this.viewFocus.event;
 	public readonly onDidBlurView = this.viewBlur.event;
 
-	constructor(container: HTMLElement, options: ViewPaneContainerOptions, @IStorageService private readonly storageService: IStorageService) {
-		super();
+	constructor(
+		container: HTMLElement,
+		options: ViewPaneContainerOptions,
+		@IStorageService private readonly storageService: IStorageService,
+		@IThemeService themeService: IThemeService,
+	) {
+		super(options.viewContainer.id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
@@ -220,7 +226,7 @@ export class ViewPaneContainer extends Composite {
 		return size !== undefined && size >= 0 ? size : undefined;
 	}
 
-	private saveState(): void {
+	protected override saveState(): void {
 		if (this.syncing || !this.didLayout) return;
 		for (const pane of this.mountedPanes) {
 			// A merged header is presentation only and must not overwrite the user's collapse choice.

@@ -7,6 +7,11 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { EditorPaneSelectionChangeReason, isEditorPaneWithSelection } from '../../../common/editor.js';
 import type { EditorPartChangeEvent } from '../../editor/common/editorState.js';
 import { GoFilter, type IHistoryService } from '../common/history.js';
+import type { IExpression } from '../../../../base/common/glob.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { ResourceGlobMatcher } from '../../../common/resources.js';
+import '../../filesConfiguration/common/filesConfigurationService.js';
 
 interface HistoryEntry {
 	readonly editorId: string;
@@ -34,12 +39,16 @@ export class HistoryService extends Disposable implements IHistoryService {
 	private readonly canNavigateBackInNavigation: IContextKey<boolean>;
 	private readonly canNavigateForwardInNavigation: IContextKey<boolean>;
 	private isNavigating = false;
+	private readonly resourceExcludeMatcher: ResourceGlobMatcher;
 
 	constructor(
 		@IEditorPart private readonly editorPart: IEditorPart,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@IConfigurationService configuration: IConfigurationService,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
 		super();
+		this.resourceExcludeMatcher = this._register(new ResourceGlobMatcher(() => ({ ...configuration.getValue<IExpression>('files.exclude'), ...configuration.getValue<IExpression>('search.exclude') }), event => event.affectsConfiguration('files.exclude') || event.affectsConfiguration('search.exclude'), workspace, configuration));
 		this.canNavigateBack = contextKeyService.createKey('canNavigateBack', false);
 		this.canNavigateForward = contextKeyService.createKey('canNavigateForward', false);
 		this.canNavigateBackInEdits = contextKeyService.createKey('canNavigateBackInEditLocations', false);
@@ -52,6 +61,10 @@ export class HistoryService extends Disposable implements IHistoryService {
 			}
 		}));
 		this._register(editorPart.onDidChangeEditors(event => this.onEditorsChanged(event)));
+		this._register(this.resourceExcludeMatcher.onExpressionChange(() => {
+			this.pruneClosedEditors();
+			this.updateContextKeys();
+		}));
 		this.recordActiveEditor();
 		this.listenToActivePane();
 	}
@@ -85,7 +98,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 	private recordActiveEditor(): void {
 		if (this.isNavigating) return;
 		const editorId = this.editorPart.getEditorState().activeEditor?.instanceId;
-		if (!editorId) return;
+		if (!editorId || !this.includeInHistory(editorId)) return;
 		const timeline = this.timeline(GoFilter.NONE);
 		if (timeline.entries[timeline.index]?.editorId === editorId) return;
 		const pane = this.editorPart.activePane;
@@ -100,7 +113,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 		if (!isEditorPaneWithSelection(pane)) return;
 		const editorId = this.editorPart.getEditorState().activeEditor?.instanceId;
 		const selection = pane.getSelection();
-		if (!editorId || !selection) return;
+		if (!editorId || !selection || !this.includeInHistory(editorId)) return;
 		const all = this.timeline(GoFilter.NONE);
 		const previous = all.entries[all.index];
 		const entry: HistoryEntry = { editorId, selection, fromActivation: false };
@@ -132,6 +145,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 	}
 
 	private appendIfDistinct(timeline: HistoryTimeline, entry: HistoryEntry, reason: EditorPaneSelectionChangeReason): void {
+		if (!this.includeInHistory(entry.editorId)) return;
 		const current = timeline.entries[timeline.index];
 		if (current && !this.isDistinct(current, entry, reason)) {
 			timeline.entries.splice(timeline.index + 1);
@@ -151,6 +165,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 	}
 
 	private append(timeline: HistoryTimeline, entry: HistoryEntry): void {
+		if (!this.includeInHistory(entry.editorId)) return;
 		timeline.entries.splice(timeline.index + 1);
 		timeline.entries.push(entry);
 		if (timeline.entries.length > 50) timeline.entries.shift();
@@ -190,7 +205,7 @@ export class HistoryService extends Disposable implements IHistoryService {
 	}
 
 	private pruneClosedEditors(): void {
-		const openIds = new Set(this.editorPart.groups.flatMap(group => group.editors.map(editor => editor.instanceId)));
+		const openIds = new Set(this.editorPart.groups.flatMap(group => group.editors.filter(editor => this.includeInHistory(editor.instanceId)).map(editor => editor.instanceId)));
 		for (const timeline of this.timelines.values()) {
 			for (let index = timeline.entries.length - 1; index >= 0; index -= 1) {
 				if (openIds.has(timeline.entries[index]!.editorId)) continue;
@@ -198,6 +213,11 @@ export class HistoryService extends Disposable implements IHistoryService {
 				if (index <= timeline.index) timeline.index -= 1;
 			}
 		}
+	}
+
+	private includeInHistory(editorId: string): boolean {
+		const input = this.editorPart.groups.flatMap(group => group.editors).find(editor => editor.instanceId === editorId)?.input;
+		return !!input && !this.resourceExcludeMatcher.matches(input.resource);
 	}
 
 	private timeline(filter: GoFilter): HistoryTimeline {

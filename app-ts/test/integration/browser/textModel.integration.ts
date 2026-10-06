@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
@@ -190,7 +191,7 @@ registerCodeEditorServices(services);
 disposables.add(services.createInstance(SaveParticipantsContribution));
 services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);
-const pane = disposables.add(services.createInstance(TextResourceEditor, resourceStore, {
+const pane = disposables.add(registerTestComponentServices(services).createInstance(TextResourceEditor, resourceStore, {
 	createPart: options => {
 		editorPart = createBrowserEditorPart(services, options);
 		return editorPart;

@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -45,8 +47,10 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IChatSessionNavigationService private readonly conversations: IChatSessionNavigationService,
 		@IBrowserViewService private readonly pageService: IBrowserViewService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(BrowserEditor.ID, themeService, storageService);
 		this._register(dialogs.onWillShowDialog(() => this.refreshLayout()));
 		this._register(dialogs.onDidCloseDialog(() => this.refreshLayout()));
 		this._register(menus.onDidShowContextMenu(() => { this.menuVisible = true; this.refreshLayout(); }));

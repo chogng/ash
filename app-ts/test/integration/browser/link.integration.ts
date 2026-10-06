@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
@@ -139,7 +140,7 @@ resources.add(services.get(ICodeEditorService).registerCodeEditorOpenHandler(asy
 const liveEditorContainer = document.createElement('section');
 liveEditorContainer.id = 'live-output-editor';
 document.body.append(liveEditorContainer);
-const liveEditor = resources.add(services.createInstance(TextResourceEditor, store, {}));
+const liveEditor = resources.add(registerTestComponentServices(services).createInstance(TextResourceEditor, store, {}));
 liveEditor.create(liveEditorContainer);
 pane.setVisible(true);
 channel.appendLine({ text: 'src/main.ts:12:7: check this file', severity: 'warning' });

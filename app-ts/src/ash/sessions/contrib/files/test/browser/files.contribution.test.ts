@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -39,7 +40,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 	using storageOwner = toDisposable(() => storageEnvironment.window.close());
 	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
-	using host = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	using host = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: model.viewContainer,
 		model,
 		instantiationService: services,
@@ -52,7 +53,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 	try {
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		assert.equal(message?.textContent, 'Folders and files will appear here.');
-		using translated = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+		using translated = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 			viewContainer: model.viewContainer, model, instantiationService: services, contextKeyService: contexts,
 			onDidFailCreateView: (error: unknown) => { throw error; },
 		});

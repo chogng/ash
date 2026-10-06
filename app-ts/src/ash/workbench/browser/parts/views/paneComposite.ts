@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { compositePanelId, compositeTabId } from "../compositeBar.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { localize } from "../../../services/localization/common/localizationService.js";
@@ -28,8 +29,13 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	private mergedPane: ViewPane | undefined;
 	private mergedPaneWasCollapsed = false;
 
-	constructor(container: HTMLElement, options: PaneCompositeOptions, @IStorageService storageService: IStorageService) {
-		super(container, options, storageService);
+	constructor(
+		container: HTMLElement,
+		options: PaneCompositeOptions,
+		@IStorageService storageService: IStorageService,
+		@IThemeService themeService: IThemeService,
+	) {
+		super(container, options, storageService, themeService);
 		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
 		this.element.classList.add("ash-pane-composite");
 		this.element.classList.toggle("ash-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");

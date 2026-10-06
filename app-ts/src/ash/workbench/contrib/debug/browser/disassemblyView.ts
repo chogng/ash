@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/disassemblyView.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
@@ -59,7 +61,9 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IKeybindingService private readonly keybindings: IKeybindingService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
-	) { super(); }
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) { super(DISASSEMBLY_VIEW_ID, themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;

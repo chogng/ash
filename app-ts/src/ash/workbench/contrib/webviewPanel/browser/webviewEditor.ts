@@ -1,3 +1,4 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -41,8 +42,9 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IKeybindingService private readonly keybindings: IKeybindingService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(provider.viewType, themes, storageService);
 		this.id = provider.viewType;
 	}
 

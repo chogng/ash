@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { TextResourceEditorInput } from '../../../common/editor/textResourceEditorInput.js';
@@ -179,8 +181,10 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ITextModelService private readonly textModelService: ITextModelService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super(CODE_EDITOR_ID, themeService, storageService);
 		if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
 			this.dispose();
 			throw new TypeError("Code editor pane requires a text resource store");

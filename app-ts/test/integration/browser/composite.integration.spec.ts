@@ -80,3 +80,11 @@ test('real text editor panes report focus across tab switches and stop after clo
 	await page.evaluate(() => window.ashCompositeIntegration.closeEditor('alpha'));
 	await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorState()[0]!.focused)).toBe(false);
 });
+
+test('storage flush captures the live pane size and stops after the panel is disposed', async ({ page }) => {
+	const height = await page.locator('[data-view-id="first.view"]').evaluate(element => element.getBoundingClientRect().height);
+	expect(height).toBeGreaterThan(0);
+	expect(await page.evaluate(() => window.ashCompositeIntegration.flushPaneState())).toBeCloseTo(height, 0);
+	await page.evaluate(() => window.ashCompositeIntegration.dispose());
+	expect(await page.evaluate(() => window.ashCompositeIntegration.flushPaneState())).toBeUndefined();
+});

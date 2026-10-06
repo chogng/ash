@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { MultiDiffEditorOptions } from '../../browser/multiDiffEditor.js';
@@ -142,7 +143,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
 	const seenLimits: number[] = [];
-	const pane = services.createInstance(MultiDiffEditor, {
+	const pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(options => {
 			seenOptions.push(options.ignoreTrimWhitespace);
@@ -306,7 +307,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = services.createInstance(MultiDiffEditor, {
+	using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 		modelService: trackedModels,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	} satisfies MultiDiffEditorOptions);
@@ -357,7 +358,7 @@ test('Multi-diff pane keeps available files open when one comparison fails to lo
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = services.createInstance(MultiDiffEditor, {
+	using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 		modelService: partialModels,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	} satisfies MultiDiffEditorOptions);
@@ -407,7 +408,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 			dispose: () => models.dispose(),
 			[Symbol.dispose]: () => models.dispose(),
 		};
-		using pane = services.createInstance(MultiDiffEditor, {
+		using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 			modelService: delayedModels,
 			createComputationService: () => new PaneTestDiffComputationService(),
 		} satisfies MultiDiffEditorOptions);
@@ -443,7 +444,7 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
-	const pane = services.createInstance(MultiDiffEditor, {
+	const pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 	} satisfies MultiDiffEditorOptions);

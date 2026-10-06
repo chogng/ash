@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/editorplaceholder.css";
 import { h, type IDimension } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
@@ -28,8 +30,10 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		private error: unknown,
 		private readonly onRetry: () => Promise<unknown>,
 		private readonly onClose: () => Promise<unknown>,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super("workbench.editor.openError", themeService, storageService);
 	}
 
 	public override create(parent: HTMLElement): void {

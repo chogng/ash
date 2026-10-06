@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert as ariaAlert } from '../../../../base/browser/ui/aria/aria.js';
@@ -55,8 +56,9 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
 	) {
-		super();
+		super(SCM_MERGE_EDITOR_ID, themeService, storageService);
 		this.mergeView = this._register(instantiationService.createInstance(MergeEditor, resultEditor));
 	}
 

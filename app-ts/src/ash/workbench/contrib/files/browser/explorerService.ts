@@ -6,6 +6,10 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { ExplorerModel, type ExplorerItem } from '../common/explorerModel.js';
 import type { IExplorerClipboard, IExplorerClipboardItem, IExplorerService, IExplorerView } from './files.js';
 import { WorkspaceWatcher } from './workspaceWatcher.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { IExpression } from '../../../../base/common/glob.js';
+import { ResourceGlobMatcher } from '../../../common/resources.js';
+import '../../../services/filesConfiguration/common/filesConfigurationService.js';
 
 /** Owns the Explorer model and exposes the active view to file commands. */
 export class ExplorerService extends Disposable implements IExplorerService {
@@ -18,10 +22,12 @@ export class ExplorerService extends Disposable implements IExplorerService {
 	readonly onDidChangeRoot: Event<void>;
 	readonly onDidChangeResources: Event<readonly URI[] | undefined>;
 	private clipboard: IExplorerClipboard = { items: [], cut: false };
+	private readonly revealExcludeMatcher: ResourceGlobMatcher;
 
 	constructor(
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 		@IFileService files: IFileService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		this.model = this._register(new ExplorerModel(workspace));
@@ -29,6 +35,11 @@ export class ExplorerService extends Disposable implements IExplorerService {
 		this.onDidChangeRoot = this.model.onDidChangeRoot;
 		this.onDidChangeResources = this.watcher.onDidChange;
 		this._register(workspace.onDidChangeWorkspace(() => this.setToCopy([], false)));
+		this.revealExcludeMatcher = this._register(new ResourceGlobMatcher(() => configuration.getValue<IExpression>('explorer.autoRevealExclude'), event => event.affectsConfiguration('explorer.autoRevealExclude'), workspace, configuration));
+	}
+
+	public shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean {
+		return this.configuration.getValue<boolean>('explorer.autoReveal') && !this.revealExcludeMatcher.matches(resource, hasSibling);
 	}
 
 	public getRoot(): ExplorerItem | undefined { return this.model.root; }

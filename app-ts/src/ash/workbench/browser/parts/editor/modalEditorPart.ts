@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
@@ -54,7 +55,10 @@ export class ModalEditorPart extends Disposable {
 	private openSequence = 0;
 	private visible = false;
 
-	constructor(private readonly options: ModalEditorPartOptions) {
+	constructor(
+		private readonly options: ModalEditorPartOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
 		this.hostDomNode = h(ownerDocument, 'div');
@@ -132,7 +136,7 @@ export class ModalEditorPart extends Disposable {
 			if (openOptions.ignoreError || isCancellationError(error)) throw error;
 			const displayError = this.options.resolveOpenError
 				? this.options.resolveOpenError(error, input, openOptions, options => this.openEditor(input, options)) : error;
-			const pane = new ErrorPlaceholderEditor(displayError,
+			const pane = this.instantiationService.createInstance(ErrorPlaceholderEditor, displayError,
 				() => this.openEditor(input, { ...openOptions, source: EditorOpenSource.USER }),
 				async () => this.closeEditor(input),
 			);

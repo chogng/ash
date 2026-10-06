@@ -1199,6 +1199,7 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"externalUriOpener.settings.title": "URL opening rules",
 			"files.binaryTextPreviewFailed": "Could not open a text preview of this file: {0}",
 			"files.binaryTextPreviewFailedTitle": "Could not open text preview",
+			"files.configuredReadonly": "This file is read-only because it matches the configured read-only patterns.",
 			"files.copy": "Copy",
 			"files.cut": "Cut",
 			"files.deleteConfirm": "Permanently delete {0}?",

@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
@@ -774,7 +775,7 @@ function paneServices(models: ITextModelResourceService, languages?: LanguageFea
 }
 
 function createPane(services: InstantiationService, resourceStore: ConstructorParameters<typeof EditorPane>[0], options: EditorPaneOptions): InstanceType<typeof EditorPane> {
-	return services.createInstance(EditorPane, resourceStore, options);
+	return registerTestComponentServices(services).createInstance(EditorPane, resourceStore, options);
 }
 
 function createInertEditorPart(): EditorPanePart {

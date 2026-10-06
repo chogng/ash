@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -85,7 +86,7 @@ const services = store.add(new InstantiationService(support.register(new Service
 ))));
 const disassemblyContainer = document.createElement('div');
 document.body.append(disassemblyContainer);
-const disassembly = store.add(services.createInstance(DisassemblyView));
+const disassembly = store.add(registerTestComponentServices(services).createInstance(DisassemblyView));
 disassembly.create(disassemblyContainer);
 disassembly.layout({ width: 900, height: 420 });
 disassembly.domNode.hidden = true;

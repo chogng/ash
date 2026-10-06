@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import './library.css';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
@@ -55,7 +57,9 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		@IHoverService private readonly hover: IHoverService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-	) { super(); }
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) { super('sessions.editor.library', themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		this.domNode = h(parent.ownerDocument, 'section', { className: 'ash-library', attributes: { 'aria-label': localize('library.title', 'Library') } });

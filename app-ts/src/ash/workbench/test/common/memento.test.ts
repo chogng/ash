@@ -77,7 +77,7 @@ test('Memento changes are limited to its key and scope and stop when the listene
 
 test('Memento rejects invalid identifiers and malformed persisted objects', () => {
 	using storage = new TestStorageService();
-	assert.throws(() => new Memento('../view', storage), /Invalid Workbench Memento ID/);
+	assert.throws(() => new Memento('', storage), /Invalid Workbench Memento ID/);
 	for (const source of ['{broken', '[]', 'null', '{"constructor":{}}']) {
 		storage.store('memento/test.view', source, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const memento = new Memento<TestMementoState>('test.view', storage);
@@ -91,6 +91,16 @@ test('Memento rejects non-JSON component state before storing it', () => {
 	memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE).size = Number.NaN;
 	assert.throws(() => memento.saveMemento(), /finite number/);
 	assert.equal(storage.get('memento/test.view', StorageScope.WORKSPACE), undefined);
+});
+
+test('Memento preserves state for extension editor identifiers', () => {
+	using storage = new TestStorageService();
+	const id = 'publisher.custom_editor:preview';
+	const memento = new Memento<TestMementoState>(id, storage);
+	memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE).selected = 'preview';
+	memento.saveMemento();
+	const restored = new Memento<TestMementoState>(id, storage);
+	assert.deepEqual(restored.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE), { selected: 'preview' });
 });
 
 class TestStorageService extends Disposable implements IStorageService {

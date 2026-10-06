@@ -1,3 +1,6 @@
+import { createTestComponentServices } from '../../../../../test/common/testEditorServices.js';
+import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { SaveReason, type ISaveOptions } from '../../../../../common/editor.js';
 import type { IResourceEditorInput, IEditorPane, EditorPaneStatus } from '../../../../../common/editor.js';
 import assert from "node:assert/strict";
@@ -166,7 +169,7 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const editorChanges = new Emitter<void>();
 	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\status.ts"));
-	const pane = new TestStatusPane(workingCopy);
+	const pane = new TestStatusPane(dom.window.document, workingCopy);
 	const input: IResourceEditorInput = { resource: workingCopy.resource, languageId: "typescript" };
 	const state: { activeInput: IResourceEditorInput | undefined; activePane: IEditorPane | undefined; } = { activeInput: input, activePane: pane };
 	const editorPart = {
@@ -185,7 +188,7 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	state.activeInput = { ...input, readOnly: true };
 	editorChanges.fire();
 	assert.equal(statusTexts(statusbar)[0], "Read-only");
-	using welcomePane = new TestStatusPane(undefined);
+	using welcomePane = new TestStatusPane(dom.window.document, undefined);
 	state.activeInput = { resource: URI.parse('ash-welcome:/welcome'), readOnly: true };
 	state.activePane = welcomePane;
 	editorChanges.fire();
@@ -288,7 +291,11 @@ class TestStatusPane extends EditorPane implements IEditorPane {
 	readonly onDidChangeStatus = this.statusEmitter.event;
 	private status: EditorPaneStatus = { lineNumber: 4, columnNumber: 9, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" };
 
-	constructor(readonly workingCopy: IWorkingCopy | undefined) { super(); }
+	constructor(document: Document, readonly workingCopy: IWorkingCopy | undefined) {
+		const services = createTestComponentServices(undefined, undefined, document);
+		super("test.status", services.get(IThemeService), services.get(IStorageService));
+		this._register(services);
+	}
 	getStatus(): EditorPaneStatus { return this.status; }
 	setStatus(status: EditorPaneStatus): void { this.status = status; this.statusEmitter.fire(); }
 	public override create(parent: HTMLElement): void {

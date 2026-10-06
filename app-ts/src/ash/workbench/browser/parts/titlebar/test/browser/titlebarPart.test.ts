@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -160,7 +161,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ILabelService, resources.add(new LabelService(workspace)));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IContextKeyService, contextKeys);
-	const titleService = resources.add(services.createInstance(BrowserTitleService, ownerDocument.body, 'Ash Code', createBrowserTitlebarPart, groups));
+	const titleService = resources.add(registerTestComponentServices(services).createInstance(BrowserTitleService, ownerDocument.body, 'Ash Code', createBrowserTitlebarPart, groups));
 	services.registerInstance(ITitleService, titleService);
 	const shared = services.get(ITitleService);
 	const part = titleService.getPart(ownerDocument.body);
@@ -289,7 +290,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 		},
 	};
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
-	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
+	const titlebar = disposables.add(registerTestComponentServices(services).createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 		menuService,
 		contextMenuService,
@@ -385,7 +386,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 	const titleChanged = disposables.add(new Emitter<void>());
 	const windowTitle = { value: '研究项目 — Ash Code', onDidChange: titleChanged.event };
 	services.registerInstance(LocalizationServiceId, localizationService);
-	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
+	const titlebar = disposables.add(registerTestComponentServices(services).createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		windowTitle,
 	}, () => menubar));
 

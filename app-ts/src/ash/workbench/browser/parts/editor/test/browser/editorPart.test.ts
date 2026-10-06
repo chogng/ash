@@ -1,9 +1,9 @@
+import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { WorkbenchWindowBarHeight } from '../../../workbenchPartDimensions.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
 import { Dimension } from '../../../../../../base/browser/dom.js';
-import { createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorPartOptions } from '../../editorPart.js';
 import Severity from '../../../../../../base/common/severity.js';
 import { CancellationError } from '../../../../../../base/common/errors.js';
@@ -127,7 +127,7 @@ suiteTeardown(() => { editorTestServices.dispose(); browserEnvironment.window.cl
 
 function createEditorPart(container: HTMLElement, options: IEditorPartOptions, parent?: InstantiationService): InstanceType<typeof EditorPart> {
 	const services = editorTestServices.add(createTestEditorServices(options.configurationService, parent));
-	return services.createInstance(EditorPart, container, options);
+	return registerTestComponentServices(services).createInstance(EditorPart, container, options);
 }
 
 /** Editor lifecycle tests use fixed window chrome; title calculation is exercised in the title service suite. */
@@ -979,7 +979,7 @@ test('editor commands share group state for keep open, selected pins and close o
 	const contextKeys = services.get(IContextKeyService);
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
-	using editor = services.createInstance(EditorPart, container, { registry, contextKeyService: contextKeys });
+	using editor = registerTestComponentServices(services).createInstance(EditorPart, container, { registry, contextKeyService: contextKeys });
 	using groups = new BrowserEditorService(editor);
 	services.registerInstance(IEditorPart, editor);
 	services.registerInstance(IEditorGroupsService, groups);
@@ -1848,7 +1848,7 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	const main = createEditorPart(dom.window.document.body, { registry });
 	const windows = new TestAuxiliaryWindowService();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
-	const editorParts = new EditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+	const editorParts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
 	} as unknown as IAccessibilityService, storage);
@@ -1903,7 +1903,7 @@ test('tab split commands route to an inactive auxiliary window by source group',
 		using main = createEditorPart(dom.window.document.body, { registry });
 		using windows = new TestAuxiliaryWindowService();
 		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
-		using parts = new EditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
 			onDidChangeScreenReaderOptimized: Event.None,
 			isScreenReaderOptimized: () => false,
 		} as unknown as IAccessibilityService, storage);
@@ -1940,7 +1940,7 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	const firstMain = createEditorPart(firstDom.window.document.body, { registry });
 	using firstWindows = new TestAuxiliaryWindowService();
 	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
-	using firstParts = new EditorParts(firstMain, firstWindows, container => createAuxiliaryPart(container, registry), accessibility, firstStorage);
+	using firstParts = createEditorParts(firstMain, firstWindows, container => createAuxiliaryPart(container, registry), accessibility, firstStorage);
 	await firstParts.restoreSavedState(true);
 	const mainInput: IResourceEditorInput = { resource: URI.parse('file:///C:/project/main.txt') };
 	const detachedInput: IResourceEditorInput = { resource: URI.parse('file:///C:/project/detached.txt') };
@@ -1958,7 +1958,7 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	const restoredMain = createEditorPart(restoredDom.window.document.body, { registry });
 	using restoredWindows = new TestAuxiliaryWindowService();
 	using restoredStorage = new BrowserStorageService({ ownerWindow: restoredDom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
-	using restoredParts = new EditorParts(restoredMain, restoredWindows, container => createAuxiliaryPart(container, registry), accessibility, restoredStorage);
+	using restoredParts = createEditorParts(restoredMain, restoredWindows, container => createAuxiliaryPart(container, registry), accessibility, restoredStorage);
 	restoredStorage.store('editorparts.state', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	await restoredParts.restoreSavedState(true);
 	assert.deepEqual(restoredParts.parts.map(part => part.groups.flatMap(group => group.inputs.map(editor => editor.resource.toString()))), [
@@ -1978,7 +1978,7 @@ test('EditorParts replaces an untitled resource in every group and window', asyn
 	const main = createEditorPart(dom.window.document.body, { registry });
 	using windows = new TestAuxiliaryWindowService();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
-	const editorParts = new EditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+	const editorParts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
 	} as unknown as IAccessibilityService, storage);
@@ -2112,7 +2112,9 @@ class TestEditorPane extends EditorPane implements IEditorPane {
 	get disposed(): boolean { return this.isDisposed; }
 
 	constructor(readonly id: string, readonly workingCopy?: IWorkingCopy) {
-		super();
+		const services = createTestComponentServices(undefined);
+		super(id, services.get(IThemeService), services.get(IStorageService));
+		this._register(services);
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -2561,3 +2563,8 @@ test('a missing file offers creation and retries into the same pinned tab', asyn
 		dom.window.close();
 	}
 });
+
+function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], windows: ConstructorParameters<typeof EditorParts>[1], factory: ConstructorParameters<typeof EditorParts>[2], accessibility: ConstructorParameters<typeof EditorParts>[3], storage: ConstructorParameters<typeof EditorParts>[4]): InstanceType<typeof EditorParts> {
+	const services = editorTestServices.add(createTestComponentServices(storage));
+	return services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
+}

@@ -1,10 +1,11 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IActivityHoverOptions } from "../compositeBarActions.js";
 import "./sidebarpart.css";
 import { h } from "../../../../base/browser/dom.js";
 import { MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
-import type { IStorageService } from "../../../../platform/storage/common/storage.js";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../common/views.js";
@@ -18,7 +19,6 @@ export interface SidebarPartOptions {
 	readonly activityHoverOptions?: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
-	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly id?: string;
 	readonly location?: ViewContainerLocation;
@@ -47,14 +47,18 @@ export class SidebarPart extends PaneCompositePart {
 		return width === undefined ? undefined : Math.max(width, 300);
 	}
 
-	constructor(container: HTMLElement, options: SidebarPartOptions) {
+	constructor(
+		container: HTMLElement,
+		options: SidebarPartOptions,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
 		super(container, {
 			openComposite: options.openComposite,
 			activityHoverOptions: options.activityHoverOptions,
 			viewDescriptorService: options.viewDescriptorService,
 			contextKeyService: options.contextKeyService,
-			storageService: options.storageService,
 			localizationService: options.localizationService,
 			id: options.id ?? "sidebar",
 			location,
@@ -67,7 +71,7 @@ export class SidebarPart extends PaneCompositePart {
 			compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
 			compositeBarOrientation: location === ViewContainerLocation.Sidebar ? "vertical" : "horizontal",
 			titleActions: options.titleActions,
-		});
+		}, themeService, storageService);
 		this.domNode.classList.add("ash-sidebar-part");
 		if (location === ViewContainerLocation.Sidebar) {
 			// In top and bottom mode the view selector belongs to the sidebar, so the sidebar keeps its full grid height.

@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './releaseNotesEditor.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
@@ -25,7 +27,9 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		@ILocaleService private readonly locale: ILocaleService,
 		@IOnboardingTryoutService private readonly tryouts: IOnboardingTryoutService,
 		@IOpenerService private readonly opener: IOpenerService,
-	) { super(); }
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) { super(releaseNotesEditorId, themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		this.root = h(parent.ownerDocument, 'div');

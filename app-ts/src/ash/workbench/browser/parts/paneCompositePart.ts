@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { PaneCompositeOptions } from './views/paneComposite.js';
 import type { PaneComposite } from './views/paneComposite.js';
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
@@ -18,7 +19,7 @@ import { CompositePart } from "./compositePart.js";
 import { CompositeBar, type CompositeBarPresentation, type ICompositeBarOptions } from "./compositeBar.js";
 import type { PartTitleProjection } from "./views/viewPane.js";
 import { h } from "../../../base/browser/dom.js";
-import { type IStorageService, StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
+import { IStorageService, StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
 
 /** Menu-backed actions rendered at the right edge of a Pane Composite title. */
 export interface PaneCompositeTitleActions {
@@ -34,7 +35,6 @@ export interface PaneCompositePartOptions {
 	readonly activityHoverOptions?: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
-	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly id: string;
 	readonly location: ViewContainerLocation;
@@ -62,7 +62,6 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 	readonly compositeBar: CompositeBar;
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly activeCompositeContext: IContextKey<string> | undefined;
-	private readonly storageService: IStorageService | undefined;
 	private readonly location: ViewContainerLocation;
 	protected readonly titleContentDomNode: HTMLDivElement;
 	protected readonly titleActionsSlotDomNode: HTMLDivElement;
@@ -76,14 +75,18 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		const fill = this.location === ViewContainerLocation.Panel || this.location === ViewContainerLocation.AuxiliaryBar;
 		return { paneHeaders: fill ? 'hidden' : 'visible', paneLayout: fill ? 'fill' : 'stack' };
 	}
-	constructor(container: HTMLElement, options: PaneCompositePartOptions) {
-		super(container, options.id);
+	constructor(
+		container: HTMLElement,
+		options: PaneCompositePartOptions,
+		@IThemeService themeService: IThemeService,
+		@IStorageService private readonly storageService: IStorageService,
+	) {
+		super(container, options.id, themeService, storageService);
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.activeCompositeContext = options.contextKeyService
 			? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService)
 			: undefined;
 		this._register(toDisposable(() => this.activeCompositeContext?.reset()));
-		this.storageService = options.storageService;
 		this.location = options.location;
 		this._register(this.onDidCompositeOpen(({ composite }) => {
 			const id = composite.getId();
@@ -112,7 +115,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 			presentation: options.compositeBarPresentation,
 			orientation: options.compositeBarOrientation,
 			contextMenuProvider: options.compositeBarContextMenuProvider,
-			storageService: options.storageService,
+			storageService,
 			containerFilter: options.compositeBarContainerFilter,
 		}));
 		this.titleActionsSlotDomNode = h(ownerDocument, "div");
@@ -151,7 +154,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
 	getCompositeIdToRestore(): string | undefined {
-		const stored = this.storageService?.get(
+		const stored = this.storageService.get(
 			activeCompositeStorageKeys[this.location],
 			StorageScope.WORKSPACE,
 		);
@@ -193,7 +196,6 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	private storeActiveComposite(compositeId: string): void {
 		const storage = this.storageService;
-		if (!storage) return;
 		const key = activeCompositeStorageKeys[this.location];
 		if (compositeId === this.viewDescriptorService.getDefaultViewContainer(this.location)?.id) {
 			storage.remove(key, StorageScope.WORKSPACE);

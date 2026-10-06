@@ -11,7 +11,7 @@ import { IStorageService, StorageScope, StorageTarget } from "../../platform/sto
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
-import type { WorkbenchPart } from "./part.js";
+import type { Part } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 
 const WINDOW_LEFT_EDGE_INSET = 6;
@@ -147,7 +147,7 @@ export class WorkbenchLayout
 	}
 
 	/** Parts are assembled once, after container services and their dependencies have been registered. */
-	createParts(parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>): void {
+	createParts(parts: ReadonlyMap<WorkbenchPartId, Part>): void {
 		validateParts(parts);
 		for (const partId of workbenchPartIds) {
 			this.views.set(
@@ -461,7 +461,7 @@ export class WorkbenchLayout
 }
 
 function validateParts(
-	parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
+	parts: ReadonlyMap<WorkbenchPartId, Part>,
 ): void {
 	const missing = workbenchPartIds.filter((partId) => !parts.has(partId));
 	if (missing.length > 0) {
@@ -472,9 +472,9 @@ function validateParts(
 }
 
 function requiredPart(
-	parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
+	parts: ReadonlyMap<WorkbenchPartId, Part>,
 	partId: WorkbenchPartId,
-): WorkbenchPart {
+): Part {
 	const part = parts.get(partId);
 	if (!part) throw new Error(`Workbench Part is not registered: ${partId}`);
 	return part;

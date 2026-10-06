@@ -258,6 +258,29 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		}));
 		this.render();
 		this.initialization = this.initialize();
+		const revealActiveEditor = (): void => {
+			const resource = editorService.activeEditor?.resource;
+			if (!resource || !workspaceContextService.getWorkspaceFolder(resource)) return;
+			void this.autoReveal(resource).catch(error => {
+				if (!this.isDisposed && !isCancellationError(error)) console.error('Could not reveal the active editor', error);
+			});
+		};
+		this._register(editorService.onDidActiveEditorChange(revealActiveEditor));
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('explorer.autoReveal') || event.affectsConfiguration('explorer.autoRevealExclude')) revealActiveEditor();
+		}));
+		revealActiveEditor();
+	}
+
+	private async autoReveal(resource: URI): Promise<void> {
+		await this.initialization;
+		if (this.isDisposed) return;
+		// The condition rule must see siblings even when the parent is still collapsed.
+		const siblings = await this.fileService.readDirectory(dirname(resource));
+		if (this.isDisposed || !this.editorService.activeEditor || !extUriBiasedIgnorePathCase.isEqual(this.editorService.activeEditor.resource, resource)) return;
+		if (this.explorerService.shouldAutoReveal(resource, name => siblings.some(sibling => sibling.name === name))) {
+			await this.selectResource(resource, false);
+		}
 	}
 
 	public async selectResource(resource: URI | undefined, reveal: boolean | string = true): Promise<void> {

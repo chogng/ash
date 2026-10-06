@@ -1,5 +1,6 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./auxiliarybarpart.css";
-import type { IStorageService } from "../../../../platform/storage/common/storage.js";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
@@ -12,7 +13,6 @@ export interface AuxiliarybarPartOptions {
 	readonly openComposite: ICompositeBarOptions['openComposite'];
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
-	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 }
 
@@ -31,12 +31,16 @@ export class AuxiliarybarPart extends PaneCompositePart {
 		return active ? Math.max(this.getComposite(active)!.getOptimalWidth(), 300) : undefined;
 	}
 
-	constructor(container: HTMLElement, options: AuxiliarybarPartOptions) {
+	constructor(
+		container: HTMLElement,
+		options: AuxiliarybarPartOptions,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
+	) {
 		super(container, {
 			openComposite: options.openComposite,
 			viewDescriptorService: options.viewDescriptorService,
 			contextKeyService: options.contextKeyService,
-			storageService: options.storageService,
 			localizationService: options.localizationService,
 			id: "auxiliarybar",
 			location: ViewContainerLocation.AuxiliaryBar,
@@ -45,7 +49,7 @@ export class AuxiliarybarPart extends PaneCompositePart {
 			viewsAriaLabel: "Auxiliary sidebar views",
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "auxiliarySidebarViews" },
 			compositeBarVisible: false,
-		});
+		}, themeService, storageService);
 		this.contentDomNode.classList.add("ash-auxiliarybar-content");
 	}
 

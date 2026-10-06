@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import './media/emptyFileEditor.css';
@@ -16,8 +18,10 @@ export class EmptyFileEditor extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super();
+		super('ash.sessions.emptyFileEditor', themeService, storageService);
 	}
 	public override create(parent: HTMLElement): void {
 		this.domNode = h(parent.ownerDocument, 'p');

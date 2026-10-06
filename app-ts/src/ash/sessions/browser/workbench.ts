@@ -130,7 +130,7 @@ import { IViewsService } from '../../workbench/services/views/common/viewsServic
 import { ViewsService } from '../../workbench/services/views/browser/viewsService.js';
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { pickWorkspaceFolder } from './workspaceSelection.js';
-import type { WorkbenchPart } from "../../workbench/browser/part.js";
+import type { Part } from "../../workbench/browser/part.js";
 import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
@@ -638,7 +638,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		const parts = new Map<SessionsPartId, WorkbenchPart>([
+		const parts = new Map<SessionsPartId, Part>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
 			["sidebar", sidebar],
@@ -728,7 +728,7 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 }
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
-	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, WorkbenchPart>): void;
+	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void;
 	setActivityBarLocation(location: ActivityBarPosition): void;
 	layout(dimension?: IDimension): void;
 	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;

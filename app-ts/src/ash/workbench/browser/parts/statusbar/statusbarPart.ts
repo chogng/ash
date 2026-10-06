@@ -1,13 +1,15 @@
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import "./statusbarpart.css";
 import { addDisposableListener, isNode, h } from "../../../../base/browser/dom.js";
-import { WorkbenchPart } from "../../part.js";
+import { Part } from "../../part.js";
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
 import { StatusbarEntryItem } from "./statusbarItem.js";
 import { type IStatusbarEntryItem, type IStatusbarService, StatusbarAlignment } from "../../../services/statusbar/browser/statusbar.js";
 
 /** Browser view of the window-scoped status bar entry service. */
-export class StatusbarPart extends WorkbenchPart {
+export class StatusbarPart extends Part {
 	private readonly statusbarService: IStatusbarService;
 	private readonly leftItems: HTMLDivElement;
 	private readonly rightItems: HTMLDivElement;
@@ -21,8 +23,10 @@ export class StatusbarPart extends WorkbenchPart {
 	constructor(
 		container: HTMLElement,
 		statusbarService: IStatusbarService,
+		@IThemeService themeService: IThemeService,
+		@IStorageService storageService: IStorageService,
 	) {
-		super(container, "statusbar");
+		super(container, "statusbar", themeService, storageService);
 		const ownerDocument = container.ownerDocument;
 		this.statusbarService = statusbarService;
 		this.titleDomNode.remove();

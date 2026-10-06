@@ -1,3 +1,6 @@
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -9,7 +12,6 @@ import { MenuId, registerAction2 } from '../../../../../platform/actions/common/
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -38,7 +40,11 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		class TrackingMultiDiffEditor extends MultiDiffEditor {
 			public readonly calls: string[] = [];
 
-			constructor(@IInstantiationService instantiationService: IInstantiationService) {
+			constructor(
+				@IInstantiationService instantiationService: IInstantiationService,
+				@IThemeService themes: IThemeService,
+				@IStorageService storage: IStorageService,
+			) {
 				super({
 					modelService: {
 						acquire: async () => { throw new Error('Not used'); },
@@ -51,7 +57,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 						dispose() { },
 						[Symbol.dispose]() { },
 					}),
-				}, instantiationService);
+				}, instantiationService, themes, storage);
 			}
 
 			public override nextChange(): undefined {
@@ -79,7 +85,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffCollapseAllAction));
 		registrations.add(registerAction2(MultiDiffExpandAllAction));
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
-		const services = new InstantiationService();
+		const services = registrations.add(createTestComponentServices(undefined, undefined, browser.window.document));
 		const pane = services.createInstance(TrackingMultiDiffEditor);
 		registrations.add(pane);
 		services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);

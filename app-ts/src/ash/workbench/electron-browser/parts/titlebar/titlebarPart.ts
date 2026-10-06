@@ -1,3 +1,4 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
@@ -39,6 +40,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		@ILocalizationService localizationService: ILocalizationService,
 		@IThemeService themeService: IThemeService,
 		@INativeHostService hostService: INativeHostApi,
+		@IStorageService storageService: IStorageService,
 	) {
 		super(
 			container,
@@ -47,7 +49,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 			instantiationService,
 			menuService,
 			contextMenuService,
-			localizationService,
+			localizationService, themeService, storageService
 		);
 		this.domNode.classList.add("ash-electron-titlebar");
 		this._register(bindWindowControlTheme(themeService, hostService));

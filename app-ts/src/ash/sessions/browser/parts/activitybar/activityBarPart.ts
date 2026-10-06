@@ -1,3 +1,4 @@
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -11,7 +12,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { CompositeActionViewItem, getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
-import { WorkbenchPart } from '../../../../workbench/browser/part.js';
+import { Part } from '../../../../workbench/browser/part.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -27,7 +28,7 @@ export interface ActivityBarPartDelegate {
 }
 
 /** Primary view selector and account entry for the Sessions window. */
-export class ActivityBarPart extends WorkbenchPart {
+export class ActivityBarPart extends Part {
 	private readonly navigation: ActionBar;
 	private readonly accounts: ActionBar;
 	public readonly accountAction: IAction;
@@ -52,8 +53,9 @@ export class ActivityBarPart extends WorkbenchPart {
 		@IMenuService menus: IMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService private readonly storage: IStorageService,
+		@IThemeService themeService: IThemeService,
 	) {
-		super(container, 'activitybar');
+		super(container, 'activitybar', themeService, storage);
 		this.domNode.classList.replace('ash-workbench-activitybar', 'ash-sessions-activitybar');
 		this.contentDomNode.classList.add('ash-sessions-activity-content');
 		this.order = this.readOrder();

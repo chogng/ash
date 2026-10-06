@@ -7,7 +7,7 @@ import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
-import { noFileIconTheme } from '../../../platform/theme/common/themeService.js';
+import { noFileIconTheme, IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ILabelService, LabelService } from '../../../platform/label/common/labelService.js';
 import { IUntitledTextEditorService, UntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
@@ -23,10 +23,43 @@ import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } fr
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
 import { ILinkPresentationService } from '../../../platform/dataChannel/common/dataChannel.js';
 import { LinkPresentationService } from '../../services/dataChannel/browser/dataChannelService.js';
+import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
+
+/** Uses real component services with an isolated browser-storage backend for each test scope. */
+export function createTestComponentServices(storage?: IStorageService, parent?: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	const services = parent ? parent.createChild() : new InstantiationService();
+	if (storage) {
+		services.registerInstance(IStorageService, storage);
+	}
+	return registerTestComponentServices(services, document);
+}
+
+export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IThemeService)) {
+		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
+	}
+	if (!services.has(IStorageService)) {
+		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: 'test-components', backend: new TestStorageBackend(), flushInterval: 0 }));
+	}
+	return services;
+}
+
+class TestStorageBackend implements Storage {
+	private readonly values = new Map<string, string>();
+	public get length(): number { return this.values.size; }
+	public clear(): void { this.values.clear(); }
+	public getItem(key: string): string | null { return this.values.get(key) ?? null; }
+	public key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
+	public removeItem(key: string): void { this.values.delete(key); }
+	public setItem(key: string, value: string): void { this.values.set(key, value); }
+}
 
 /** Assembles the real label owner for editor tests without an extension icon theme. */
-export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService, document: Document = globalThis.document): InstantiationService {
-	const services = parent ? parent.createChild() : new InstantiationService();
+export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService, document: Document = globalThis.document, storage?: IStorageService): InstantiationService {
+	const services = createTestComponentServices(storage, parent, document);
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(ILinkPresentationService)) services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
 	if (configuration) {

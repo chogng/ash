@@ -1,3 +1,4 @@
+import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
@@ -2802,7 +2803,7 @@ window.ashStandaloneIntegration = {
 				document.body.append(host);
 				actionPreviewResources.add(bindColorTheme(parent.get(IThemeService), host));
 				actionPreviewResources.add(toDisposable(() => host.remove()));
-				const diff = actionPreviewResources.add(services.createInstance(MultiDiffEditor, {
+				const diff = actionPreviewResources.add(registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 					modelService: services.get(ITextModelResourceService),
 					createComputationService: () => new DiffService().createComputationService(),
 				}));
