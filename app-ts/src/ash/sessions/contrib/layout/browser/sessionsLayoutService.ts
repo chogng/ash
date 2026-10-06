@@ -1,4 +1,5 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { derived, observableValue } from '../../../../base/common/observable.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -38,6 +39,9 @@ const activeEntryKey = 'sessions.layout.activeEntry';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
 export class SessionsLayoutService extends Disposable implements ISessionsLayoutService, IDesktopLayoutContext {
+	private readonly conversationChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeConversationVisibility = this.conversationChanged.event;
+	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
 	public readonly documentContent = derived(reader => this.activeEntry.read(reader)?.content === 'documents');
@@ -72,7 +76,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (!isRecord(state) || ['sidebar', 'details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
 					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 				}
-				this.visibility.set(id, state as unknown as EntryVisibility);
+				this.visibility.set(id, { sidebar: state.sidebar, details: state.details, panel: state.panel, documents: state.documents } as EntryVisibility);
 			}
 			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.layout.modeState', StorageScope.PROFILE);
@@ -135,8 +139,12 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				for (const group of this.editor.groups) { this.editor.setGroupVisible(group.id, (group.id === this.pageGroupId) === productEditor); }
 				if (!productEditor) { this.editor.activateGroup(this.editor.groups.find(group => group.id !== this.pageGroupId)!.id); }
 				this.layout.updateParts(() => {
+					// Hide an outgoing conversation before separating editor details so transient minimum widths cannot shrink navigation.
+					if (!productEditor) { this.layout.setPrimaryPart('sessions'); }
 					this.layout.setPartAvailable('panel', documents);
+					// Optional conversations require a new user action on each entry, including window restoration.
 					this.layout.setPartAvailable('sessions', !productEditor);
+					if (productEditor) { this.layout.setPrimaryPart('editor'); }
 					this.setVisible('editor', productEditor || (documents && state.documents));
 					this.setVisible('sidebar', state.sidebar);
 					this.setVisible('auxiliarybar', state.details);
@@ -156,7 +164,17 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				if (entry.focus === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { this.editors.focusActiveEditor(); }
-			} finally { this.isChangingContent = false; }
+			} finally { this.isChangingContent = false; this.conversationChanged.fire(); }
+		});
+	}
+
+	public setConversationVisible(visible: boolean): Promise<void> {
+		return this.runOperation(async () => {
+			if (this.activeEntry.get()?.conversation !== 'optional') { throw new Error('The active entry does not support a conversation beside its editor.'); }
+			this.layout.updateParts(() => this.layout.setPartAvailable('sessions', visible));
+			this.conversationChanged.fire();
+			if (visible) { this.layout.focus(); }
+			else { this.editors.focusActiveEditor(); }
 		});
 	}
 

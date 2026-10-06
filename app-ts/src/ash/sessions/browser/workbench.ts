@@ -494,6 +494,12 @@ export abstract class Workbench extends Disposable {
 			sessionsPart!.appendToDraft(request.prompt || localize('sessions.creator.make.request', 'Build an application from the attached Creator document.'));
 			sessionsPart!.focus();
 		}));
+		this._register(CommandsRegistry.register('sessions.addContextToAgent', async (_accessor, value) => {
+			const context = value as { readonly id: string; readonly name: string; readonly content: string };
+			await services.get(ISessionsLayoutService).setConversationVisible(true);
+			sessionsPart!.addContext({ id: context.id, name: context.name, kind: 'file', resolve: async () => ({ name: context.name, content: context.content }) });
+			sessionsPart!.focus();
+		}));
 		this._register(CommandsRegistry.register('sessions.library.addToChat', async (_accessor, value) => {
 			const version = value as AssetVersion;
 			const bytes = await options.api.assets.readVersion(version);
@@ -717,6 +723,8 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	layout(dimension?: IDimension): void;
 	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
 	setLayoutStyle(style: SessionsLayoutStyle): void;
+	/** Determines which center absorbs window resizing; supporting Parts retain their user widths. */
+	setPrimaryPart(partId: 'sessions' | 'editor'): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
 	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;

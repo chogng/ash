@@ -167,6 +167,7 @@ function createSessionsWorkbenchGridDescriptor(
 	dimension: IDimension,
 	state: SessionsWorkbenchLayoutState,
 	activityBarLocation: ActivityBarPosition = ActivityBarPosition.DEFAULT,
+	primaryPart: 'sessions' | 'editor' = 'sessions',
 ): SerializedGridDescriptor {
 	const leaf = (partId: SessionsPartId, size: number, visible = true, priority: 'normal' | 'high' = 'normal'): SerializedGridDescriptor => ({
 		type: 'leaf',
@@ -179,7 +180,8 @@ function createSessionsWorkbenchGridDescriptor(
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
 	const activityBarWidth = requiredView(views, 'activitybar').minimumWidth;
 	const mainWidth = Math.max(0, dimension.width - (activityBarLocation === ActivityBarPosition.DEFAULT ? activityBarWidth : 0) - (state.sidebar.visible ? state.sidebar.width : 0));
-	const sidePaneWidth = state.editor.visible ? state.editor.width : state.auxiliarybar.visible ? state.auxiliarybar.width : 0;
+	const editorPrimary = primaryPart === 'editor';
+	const sidePaneWidth = editorPrimary ? (state.auxiliarybar.visible ? state.auxiliarybar.width : 0) : state.editor.visible ? state.editor.width : state.auxiliarybar.visible ? state.auxiliarybar.width : 0;
 	const sessionsWidth = Math.max(0, mainWidth - sidePaneWidth);
 	return {
 		type: 'branch',
@@ -208,9 +210,9 @@ function createSessionsWorkbenchGridDescriptor(
 								size: Math.max(0, bodyHeight - (state.panel.visible ? state.panel.height : 0)),
 								priority: SESSIONS_LAYOUT_PRIORITY,
 								children: [
-									leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
-									leaf('editor', state.editor.visible ? state.editor.width : state.auxiliarybar.width, state.editor.visible || state.auxiliarybar.visible),
-									leaf('auxiliarybar', state.auxiliarybar.width, false),
+									leaf('sessions', sessionsWidth, !editorPrimary, editorPrimary ? 'normal' : SESSIONS_LAYOUT_PRIORITY),
+									leaf('editor', editorPrimary ? sessionsWidth : state.editor.visible ? state.editor.width : state.auxiliarybar.width, state.editor.visible || state.auxiliarybar.visible, editorPrimary ? SESSIONS_LAYOUT_PRIORITY : 'normal'),
+									leaf('auxiliarybar', state.auxiliarybar.width, editorPrimary && state.auxiliarybar.visible),
 								],
 							},
 							leaf('panel', state.panel.height, state.panel.visible),
@@ -271,7 +273,7 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 		return this.partId === 'sidebar' || this.partId === 'auxiliarybar' ? this.part.preferredWidth : super.preferredWidth;
 	}
 	public get priority(): 'high' | 'normal' {
-		return this.partId === 'sessions' || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
+		return (this.partId === 'sessions' && !this.isEditorPrimary()) || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
 	}
 
 	public override layout(bounds: IPositionedRectangle): void {
@@ -299,12 +301,14 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private dockedAuxiliaryBar!: DockedAuxiliaryBarController;
 	private sidePaneWidth: number;
 	private detailsWidth: number;
-	private get isDocked(): boolean { return !this.unavailableParts.has('sessions'); }
+	private conversationWidth: number;
+	private primaryPart: 'sessions' | 'editor' = 'sessions';
+	private get isDocked(): boolean { return this.primaryPart === 'sessions'; }
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
 
-	constructor(container: HTMLElement, options: SessionsWorkbenchLayoutOptions, @IStorageService storageService: IStorageService) {
+	constructor(container: HTMLElement, options: SessionsWorkbenchLayoutOptions, @IStorageService private readonly storageService: IStorageService) {
 		super({ root: container, focus: options.focus });
 		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
 		this.layoutStyle = options.layoutStyle ?? 'modern';
@@ -321,6 +325,11 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		const state = this.stateModel.state;
 		this.sidePaneWidth = state.editor.width;
 		this.detailsWidth = state.auxiliarybar.width;
+		this.conversationWidth = storageService.getNumber('sessions.layout.conversation.width', StorageScope.PROFILE, 420);
+		const primaryPart = storageService.get('sessions.layout.primaryPart', StorageScope.PROFILE, 'sessions');
+		if (primaryPart !== 'sessions' && primaryPart !== 'editor') { throw new TypeError('Saved primary Part is invalid.'); }
+		this.primaryPart = primaryPart;
+		if (primaryPart === 'editor') { this.unavailableParts.add('sessions'); }
 		this.desiredVisibility = { sessions: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: state.editor.visible, panel: state.panel.visible };
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
@@ -331,7 +340,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			throw new Error('Sessions Parts are already attached');
 		}
 		for (const partId of sessionsPartIds) {
-			this.views.set(partId, new SessionsWorkbenchPartView(partId, requiredPart(parts, partId), () => this.unavailableParts.has('sessions'), () => this.partUpdateDepth > 0, () => {
+			this.views.set(partId, new SessionsWorkbenchPartView(partId, requiredPart(parts, partId), () => this.primaryPart === 'editor', () => this.partUpdateDepth > 0, () => {
 				const editorWidth = this.desiredVisibility.editor && !this.unavailableParts.has('editor') ? requiredPart(parts, 'editor').minimumWidth : 0;
 				const detailsWidth = this.desiredVisibility.auxiliarybar && !this.unavailableParts.has('auxiliarybar') ? requiredPart(parts, 'auxiliarybar').minimumWidth : 0;
 				return editorWidth + detailsWidth + this.layoutPolicy.getFrameMetrics(this.layoutStyle).rightEdge;
@@ -344,12 +353,13 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.grid = this._register(SerializableGrid.deserialize(
 			this.domNode,
-			createSessionsWorkbenchGridDescriptor(this.views, this.initialDimension, state, this.activityBarLocation),
+			createSessionsWorkbenchGridDescriptor(this.views, this.initialDimension, state, this.activityBarLocation, this.primaryPart),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 		));
 		this._register(this.grid.onDidChange(() => {
 			if (this.partUpdateDepth === 0) {
 				if (!this.isDocked && this.grid.isViewVisible(this.view('auxiliarybar'))) { this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width; }
+				if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) { this.conversationWidth = this.grid.getViewSize(this.view('sessions')).width; }
 				this.saveState();
 			}
 		}));
@@ -412,6 +422,9 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		if (this.isDocked && this.desiredVisibility.editor && this.grid.isViewVisible(this.view('editor'))) {
 			this.sidePaneWidth = this.grid.getViewSize(this.view('editor')).width;
 		}
+		if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) {
+			this.conversationWidth = this.grid.getViewSize(this.view('sessions')).width;
+		}
 		const editorSize = this.grid.getViewSize(this.view('editor'));
 		this.dockedAuxiliaryBar.layout(this.view('editor').getContentSize(editorSize), this.isDocked, this.desiredVisibility.editor && !this.unavailableParts.has('editor'), this.desiredVisibility.auxiliarybar && !this.unavailableParts.has('auxiliarybar'));
 		this.publishPartVisibility();
@@ -428,8 +441,30 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			update();
 		} finally {
 			this.partUpdateDepth--;
-			if (this.partUpdateDepth === 0) this.layout(new Dimension(this.grid.width, this.grid.height));
+			if (this.partUpdateDepth === 0) {
+				// Restore the supporting width after all centers are visible; an isolated visible leaf must fill its branch.
+				if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) {
+					this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height));
+				}
+				this.layout(new Dimension(this.grid.width, this.grid.height));
+			}
 		}
+	}
+
+	public setPrimaryPart(partId: 'sessions' | 'editor'): void {
+		if (partId === this.primaryPart) { return; }
+		this.primaryPart = partId;
+		this.compositionChanged.fire();
+		if (this.isDocked) { this.updateDockedVisibility(); }
+		else {
+			// Product editors keep their own side views even when the shared conversation is present.
+			this.grid.setViewVisible(this.view('editor'), this.desiredVisibility.editor && !this.unavailableParts.has('editor'));
+			this.grid.setViewVisible(this.view('auxiliarybar'), this.desiredVisibility.auxiliarybar && !this.unavailableParts.has('auxiliarybar'));
+			this.grid.resizeView(this.view('auxiliarybar'), new Dimension(this.detailsWidth, this.grid.getViewSize(this.view('auxiliarybar')).height));
+			this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height));
+		}
+		this.projectFrameInsets();
+		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
 	isPartVisible(partId: SessionsPartId): boolean {
@@ -481,6 +516,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			if (available) this.unavailableParts.delete(partId);
 			else this.unavailableParts.add(partId);
 			this.grid.setViewVisible(this.view('sessions'), available);
+			if (available && !this.isDocked) { this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height)); }
 			if (this.isDocked) {
 				this.updateDockedVisibility();
 			} else {
@@ -515,7 +551,11 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		}
 	}
 
-	private saveState(): void { this.stateModel.save(this.state); }
+	private saveState(): void {
+		this.stateModel.save(this.state);
+		this.storageService.store('sessions.layout.conversation.width', this.conversationWidth, StorageScope.PROFILE, StorageTarget.MACHINE);
+		this.storageService.store('sessions.layout.primaryPart', this.primaryPart, StorageScope.PROFILE, StorageTarget.MACHINE);
+	}
 
 	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
 		const { leftEdge, rightEdge } = this.layoutPolicy.getFrameMetrics(this.layoutStyle);

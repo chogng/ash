@@ -88,6 +88,8 @@
 | 文档                   | 类型            | 一句话                                                                      |
 | ---------------------- | --------------- | --------------------------------------------------------------------------- |
 | [`delta.md`](delta.md) | 参考 / 体验指南 | Delta 核心能力、评论与审查操作、GitHub 与 Land 边界、完整体验请求及证据记录 |
+| [`figma-dev-mode-sites-make.md`](figma-dev-mode-sites-make.md) | 产品比较 | Figma Dev Mode、Sites 与 Make 的区别、重叠和使用建议 |
+| [`figma-dev-mode.md`](figma-dev-mode.md) | 参考 / 产品建议 | Design 开发检查、Code Connect、MCP、版本交接、权限与 Ash Design 的长期设计 |
 
 ## 计划与迁移
 

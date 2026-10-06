@@ -24,13 +24,29 @@ All non-phone Sessions product modes use the shared `SidebarPart`. A mode select
 
 Layout variants arrange these shared hosts differently. Desktop-specific editor/detail docking and phone navigation may require separate layout implementations; they do not justify `LibraryPart`, `CreatorPart` or another Part for each page. Conversation-grid ownership remains governed by the Sessions model and its own composition contract, independently of document editing.
 
-Library and Creator contribute EditorPanes to the retained Sessions EditorPart. Their navigation and details use the shared sidebar and auxiliary view-container hosts. Library registers its containers and Views from its contribution, independently of editor creation. Its editor and each View own their DOM, visibility and preview resources; the window-scoped Library service owns their shared observable browsing state. SessionsPart remains the permanent conversation host and is hidden while a product page occupies the central region.
+Library and Creator contribute EditorPanes to the retained Sessions EditorPart. Their navigation and details use the shared sidebar and auxiliary view-container hosts. Library registers its containers and Views from its contribution, independently of editor creation. Its editor and each View own their DOM, visibility and preview resources; the window-scoped Library service owns their shared observable browsing state. SessionsPart remains the permanent conversation host. A product page may show it alongside EditorPart when its contributed composition includes Agent work; a page without conversation content hides it. Design implements this composition with an optional shared conversation.
 
 ### Creator entries and the Library repository
 
 Creator aggregates independently contributed creation tools. Contributions register their Views against a shared Creator container ID; `ViewPaneContainer` owns their arrangement, expansion, sizing and focus. Creator owns workspace selection and retained workspace documents. A contribution entry registers capabilities rather than running a window-wide product-mode state machine.
 
 Library is one classified file and asset repository. Its categories, favorites, collections, search and sorting are browsing state within that repository, not creation tools or window entries. The Library browsing editor and its independently registered navigation and details Views share `ILibraryService`; `IAssetService` remains the asset-storage owner. Adding a category does not register another product entry or change the window layout.
+
+### Creator conversation and editor composition
+
+This is the cross-Part contract. Design implements the editor-primary composition with an optional conversation; the other workspace compositions remain targets. Make prepares an unsent Code draft rather than keeping the conversation beside its preview. These implementation limits remain documented in [Creator README](contrib/creator/README.md); they do not define the target composition.
+
+Creator reuses SidebarPart for navigation, layers, templates and resources; EditorPart for the retained creation EditorPane; AuxiliaryBarPart for properties and detail Views; and SessionsPart for full Agent conversations. The [Creator Part mapping](contrib/creator/DESIGN.md#七项工作区的-part-分工) owns the seven workspaces' content and task-specific display requirements. Single-purpose AI controls belong with the affected content; they do not introduce another conversation host or selection model.
+
+Make keeps SidebarPart, SessionsPart and EditorPart visible by default, with navigation, Agent conversation and preview/code arranged from left to right. AuxiliaryBarPart appears when element properties are needed. Other creation workspaces make EditorPart their primary surface and show SessionsPart when the user opens the associated conversation. Creator home retains SidebarPart and its central entry page. Sidebar and property visibility otherwise follow the workspace's task, existing visibility preferences and narrow-window behavior; the contract does not require every host to remain expanded.
+
+Feature entry descriptors must express the retained product editor and conversation visibility independently. ISessionsLayoutService applies that composition without switches over Creator workspace names; the concrete desktop layout owns placement, resizing and focus geometry. Showing or focusing the conversation keeps Creator selected in the Activity Bar and keeps its EditorPane active. This is a composition of the existing Parts, not another window Grid or a new Part per workspace.
+
+Sessions services and SessionsPart retain conversation identity, selection, live widgets, drafts, attachments and execution state. Creator's editor and working copy retain document identity, edits, history and save state. Features associate document and conversation identities through their owning contracts; a side View borrows the same editor content and selection. Showing, hiding or switching these hosts does not duplicate either model, discard unsent work, cancel a running Turn, archive a conversation or close a dirty document. Actual close and shutdown retain the existing save/discard/cancel lifecycle.
+
+PanelPart hosts optional tools such as terminal and build output. Presenter notes, bulk content tables, CMS editing and running previews remain content of the relevant EditorPane. ActivityBarPart owns the Creator product entry; Creator navigation selects its seven workspaces. TitlebarPart keeps window navigation and window-scoped actions.
+
+Implementation must verify the composed entry path, independent host visibility, Creator selected state, retained editor and conversation state, focus and size restoration, and narrow-window behavior using Playwright in Browser, Electron UI and Electron. This specification records the target contract, not completed behavior tests.
 
 ### Activity Bar entry switching
 
@@ -55,7 +71,7 @@ Entry switching reuses the existing Parts, container instances and editor lifecy
 
 Feature commands own entry selection. The shared layout service stores the active entry's layout descriptor and projects its contributed Activity Bar context key. It has no enum or switch over product names. Focusing SessionsPart inside Code keeps Code selected; focusing a View or changing a Library category does not select a different window entry.
 
-SessionsPart remains the shared Agent conversation host, including its multi-session grid. Code composes SessionsPart beside EditorPart; chat surfaces do not become document editor groups. Creator and Library enter the shared EditorPart lifecycle. Switching a mode activates retained content without closing other tabs, discarding edits, recreating chat widgets or replacing document models. Actual close and window shutdown continue to use the existing save/discard/cancel checks.
+SessionsPart remains the shared Agent conversation host, including its multi-session grid. Code and Creator compositions can show SessionsPart beside EditorPart; chat surfaces do not become document editor groups. Creator and Library enter the shared EditorPart lifecycle. Switching a mode activates retained content without closing other tabs, discarding edits, recreating chat widgets or replacing document models. Actual close and window shutdown continue to use the existing save/discard/cancel checks.
 
 Feature commands supply the sidebar ViewContainer, central content and auxiliary ViewContainer together. Views consume the active document and selection; they do not maintain another document model. Creator home and Make keep their sidebar. Library categories and asset details belong to SidebarPart and AuxiliaryBarPart instead of columns inside the central editor.
 
@@ -127,17 +143,17 @@ changing the surrounding layout never creates a second conversation or composer.
 | Panel            | Terminal and other panel views                                                          |
 | Custom View Grid | Full-surface contributed views that replace session content                             |
 
-Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: Layers, the retained CreatorEditorPane and Shape properties. Creator home and Make keep the Creator navigation container and hide the canvas properties. Library uses categories in SidebarPart, its browsing EditorPane in EditorPart and asset details in AuxiliaryBarPart. These views borrow their page's document, selection and browsing state. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
+Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: Layers, the retained CreatorEditorPane and Shape properties. Design can additionally show SessionsPart while retaining its editor and independent properties. Entry descriptors declare `conversation: 'optional'`; ISessionsLayoutService owns its visibility preference and conversation focus, while DesktopWorkbenchLayout independently selects the primary Part and remembers supporting conversation width. Current Creator home and Make keep the Creator navigation container and hide the canvas properties. Other workspaces still need their task-specific [Creator composition](#creator-conversation-and-editor-composition). Library uses categories in SidebarPart, its browsing EditorPane in EditorPart and asset details in AuxiliaryBarPart. These views borrow their page's document, selection and browsing state. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
 
 The Sessions Part contains its own nested two-dimensional split grid. Its leaves are not workbench editor groups, nor the chat groups inside an individual session.
 
 ## Grid behavior
 
-The main workbench grid is non-proportional. The Sessions Part is the flexible surface that absorbs container resize and part-visibility deltas. The Sidebar, Editor, Auxiliary Bar, and Panel preserve user-established sizes within their constraints.
+The main workbench grid is non-proportional. The composition's primary surface absorbs container resize and part-visibility deltas: SessionsPart for conversation-led entries and EditorPart for Creator workspaces. Supporting Parts preserve user-established sizes within their constraints.
 
 The Sessions grid retains user-established proportions even when a narrower composition temporarily clamps leaves to their minimum widths. The preferred widths are restored when the available area grows again.
 
-The primary surface absorbs general window resize: SessionsPart for conversations, or EditorPart while a product page replaces the conversation region. Design preserves both side-panel widths as the editor expands and shrinks. This prevents fixed side parts from absorbing general window resize.
+The primary surface absorbs general window resize: SessionsPart for conversations, or EditorPart for product editing, including a Creator composition with a supporting Agent conversation. Creator preserves supporting conversation and side-panel widths as the editor expands and shrinks. The owning layout remembers user-established sizes when a host is hidden and restores them when it reappears.
 
 The desktop presentation may place the Auxiliary Bar inside the Editor's grid node. Consumers must distinguish the actual Editor content area from the shared grid node when interpreting visibility or size.
 

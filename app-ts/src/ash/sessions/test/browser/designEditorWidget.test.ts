@@ -34,6 +34,7 @@ import { IAccessibleViewService } from '../../../platform/accessibility/browser/
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
+import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -60,6 +61,7 @@ const { DesignEditorService, IDesignEditorService } = await import('../../contri
 const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/creator/browser/designViews.js');
 const { CreatorMode } = await import('../../contrib/creator/common/creator.js');
 const { CreatorPage } = await import('../../contrib/creator/browser/creatorPage.js');
+await import('../../contrib/creator/browser/creator.contribution.js');
 await import('../../contrib/creator/contrib/design/browser/design.contribution.js');
 await import('../../contrib/creator/contrib/whiteboard/browser/whiteboard.contribution.js');
 await import('../../contrib/creator/contrib/slides/browser/slides.contribution.js');
@@ -105,6 +107,7 @@ services.registerInstance(IContextMenuService, {
 services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource] });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
+services.registerInstance(ISessionsLayoutService, { conversationVisible: false, onDidChangeConversationVisibility: AshEvent.None, setConversationVisible: unexpected, openEntry: unexpected, restore: unexpected });
 services.registerInstance(IFileService, {
 	onDidChangeFiles: AshEvent.None,
 	stat: async target => {

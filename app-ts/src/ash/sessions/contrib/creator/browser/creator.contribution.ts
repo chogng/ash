@@ -43,7 +43,8 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 		if (workspace === 'home') { page.showHome(); }
 		else if (workspace) { page.openMode(workspace); }
 		return page.usesCanvasPanels ? {
-			...entry, id: 'creator.canvas', sidebarContainerId: DESIGN_LAYERS_CONTAINER_ID,
+			...entry, id: page.activeMode === CreatorMode.Design ? 'creator.design' : 'creator.canvas',
+			conversation: page.activeMode === CreatorMode.Design ? 'optional' : undefined, sidebarContainerId: DESIGN_LAYERS_CONTAINER_ID,
 			detailsContainerId: DESIGN_PROPERTIES_CONTAINER_ID,
 		} : entry;
 	});

@@ -63,6 +63,7 @@ export class CreatorPage extends Disposable {
 	private readonly modeButtons = new Map<CreatorMode, Button>();
 	private readonly workspaces = this._register(new DisposableMap<CreatorMode, ICreatorWorkspace>());
 	private mode: CreatorMode | undefined;
+	public get activeMode(): CreatorMode | undefined { return this.mode; }
 	private visible = false;
 	private dimension: IDimension = { width: 0, height: 0 };
 	public get usesCanvasPanels(): boolean { return this.mode !== undefined && this.workspaces.get(this.mode)!.usesCanvasPanels; }

@@ -46,15 +46,18 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 		this.page.create(this.contentDomNode);
 		this.toolbar = this._register(new WorkbenchToolBar(this.actionsDomNode, this.contextMenus, { ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions') }));
 		this.createModeContent();
-		const updateActions = (): void => this.toolbar.setActions(this.getModeActions(), [
+		this._register(this.document.model.onDidChange(() => this.updateActions()));
+		this._register(this.document.onDidChange(() => this.updateActions()));
+		this._register(this.editor.onDidChangeView(() => this.updateActions()));
+		this.updateActions();
+	}
+
+	protected updateActions(): void {
+		this.toolbar.setActions(this.getModeActions(), [
 			this.action('open', localize('sessions.creator.open', 'Open document'), () => this.document.openDocument()),
 			this.action('save', localize('sessions.creator.save', 'Save document'), () => this.editor.saveDocument()),
 			this.action('exportSvg', localize('sessions.design.export', 'Export SVG'), () => this.document.exportDocument()),
 		]);
-		this._register(this.document.model.onDidChange(updateActions));
-		this._register(this.document.onDidChange(updateActions));
-		this._register(this.editor.onDidChangeView(updateActions));
-		updateActions();
 	}
 
 	protected createModeContent(): void { }

@@ -358,6 +358,7 @@ test('Design replaces Sessions with a flexible page and preserves both side pane
 	const sidebarWidth = layout.getPartSize('sidebar').width;
 	const auxiliaryWidth = layout.getPartSize('auxiliarybar').width;
 	layout.updateParts(() => {
+		layout.setPrimaryPart('editor');
 		layout.showPart('editor');
 		layout.setPartAvailable('sessions', false);
 	});
@@ -378,6 +379,7 @@ test('Design replaces Sessions with a flexible page and preserves both side pane
 	assert.equal(parts.get('editor')!.domNode.classList.contains('ash-sessions-frame-start'), true);
 	layout.showPart('sidebar');
 	layout.updateParts(() => {
+		layout.setPrimaryPart('sessions');
 		layout.setPartAvailable('sessions', true);
 		layout.hidePart('editor');
 	});
@@ -386,6 +388,38 @@ test('Design replaces Sessions with a flexible page and preserves both side pane
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
+});
+
+test('Design keeps the editor primary beside Agent and preserves conversation width through switching and restoration', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
+	const parts = createParts(dom.window.document);
+	const layout = createLayout(dom.window.document.body, parts, { storageService: storage, initialDimension: new Dimension(1600, 900) });
+	try {
+		layout.layout(new Dimension(1600, 900));
+		layout.updateParts(() => { layout.setPrimaryPart('editor'); layout.showPart('editor'); layout.showPart('auxiliarybar'); });
+		layout.resizePart('sessions', new Dimension(380, 900));
+		const widths = () => ['sidebar', 'sessions', 'editor', 'auxiliarybar'].map(id => layout.getPartSize(id as SessionsPartId).width);
+		const before = widths();
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
+		layout.layout(new Dimension(1800, 900));
+		assert.deepEqual(widths(), [before[0], before[1], before[2]! + 200, before[3]]);
+		layout.setPartAvailable('sessions', false);
+		layout.layout(new Dimension(1600, 900));
+		layout.setPartAvailable('sessions', true);
+		assert.deepEqual(widths(), before);
+		layout.updateParts(() => { layout.setPrimaryPart('sessions'); layout.hidePart('editor'); layout.hidePart('auxiliarybar'); });
+		layout.updateParts(() => { layout.setPrimaryPart('editor'); layout.showPart('editor'); layout.showPart('auxiliarybar'); });
+		assert.deepEqual(widths(), before);
+		await storage.flush(WillSaveStateReason.SHUTDOWN);
+	} finally { layout.dispose(); for (const part of parts.values()) part.dispose(); }
+	const restoredParts = createParts(dom.window.document);
+	const restored = createLayout(dom.window.document.body, restoredParts, { storageService: storage, initialDimension: new Dimension(1600, 900) });
+	try {
+		restored.layout(new Dimension(1600, 900));
+		restored.updateParts(() => { restored.setPrimaryPart('editor'); restored.showPart('editor'); restored.showPart('auxiliarybar'); restored.setPartAvailable('sessions', true); });
+		assert.equal(restored.getPartSize('sessions').width, 380);
+	} finally { restored.dispose(); for (const part of restoredParts.values()) part.dispose(); dom.window.close(); }
 });
 
 test('Sessions product page group survives legacy document group restoration', async () => {
