@@ -34,7 +34,7 @@ pub struct ModelMetadataPatch {
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilitiesPatch,
     pub supported_reasoning_efforts: Option<Vec<ash_protocol::ModelReasoningEffortOption>>,
-    pub model_reasoning_effort: Option<ReasoningEffort>,
+    pub default_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     pub lifecycle: Option<ModelLifecycle>,
 }

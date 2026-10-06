@@ -95,7 +95,7 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
                 "auto compact token limit must be positive",
             ));
         }
-        if let Some(effort) = spec.model_reasoning_effort
+        if let Some(effort) = spec.default_reasoning_effort
             && !spec
                 .supported_reasoning_efforts
                 .iter()

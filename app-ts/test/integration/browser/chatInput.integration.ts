@@ -40,7 +40,7 @@ let models: readonly ModelCatalogEntry[] = [{
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model', contextWindowOptions: [],
 	description: 'A model for everyday tasks',
 	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
-	modelReasoningEffort: 'low',
+	defaultReasoningEffort: 'low',
 	supportsFast: true, fast: false, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' },
 }];
 services.registerInstance(ILanguageModelsService, {

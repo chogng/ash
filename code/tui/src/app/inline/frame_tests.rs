@@ -555,7 +555,7 @@ fn model_list_opens_inline_and_restores_input_after_close() {
         ash_protocol::ReasoningEffort::Medium.into(),
         ash_protocol::ReasoningEffort::High.into(),
     ];
-    info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
+    info.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(

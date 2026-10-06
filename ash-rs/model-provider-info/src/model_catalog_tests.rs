@@ -34,7 +34,8 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("capabilities", json!({"personality":true})),
         ("capabilities", json!({"fastMode":true})),
         ("capabilities", json!({"tools":"invalid"})),
-        ("model_reasoning_effort", json!("minimal")),
+        ("default_reasoning_effort", json!("minimal")),
+        ("model_reasoning_effort", json!("medium")),
         ("instructions", json!({"revision":"v1", "body":" "})),
         ("instructions", json!({"revision":" ", "body":"base"})),
         (
@@ -68,6 +69,8 @@ fn editable_catalog_schema_matches_its_generated_file_and_wire_defaults() {
     for name in ["context_window", "capabilities", "settings"] {
         assert!(fields[name].get("default").is_none(), "{name}");
     }
+    assert!(fields.get("default_reasoning_effort").is_some());
+    assert!(fields.get("model_reasoning_effort").is_none());
     assert_eq!(
         generated["$defs"]["ModelCapabilitiesDeclaration"]["properties"]["tools"]["type"],
         json!(["boolean", "null"])
@@ -120,7 +123,7 @@ fn sparse_declarations_preserve_unknowns_and_known_capacity_without_presets() {
     assert!(spec.context_window_options.is_empty());
     assert_eq!(spec.capabilities, ash_protocol::ModelCapabilities::UNKNOWN);
     assert!(spec.supported_reasoning_efforts.is_empty());
-    assert_eq!(spec.model_reasoning_effort, None);
+    assert_eq!(spec.default_reasoning_effort, None);
     assert_eq!(spec.auto_compact_token_limit, None);
 
     let mut fixed = minimal;

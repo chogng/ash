@@ -455,6 +455,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
         "capabilities: ModelCapabilities,",
         "description: string | null,",
         "supported_reasoning_efforts: Array<ModelReasoningEffortOption>,",
+        "default_reasoning_effort: ReasoningEffort | null,",
     ] {
         assert!(typescript.contains(field), "missing catalog field: {field}");
     }

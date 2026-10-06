@@ -321,7 +321,7 @@ fn status_line_context_follows_thread_snapshots() {
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],
-                model_reasoning_effort: None,
+                default_reasoning_effort: None,
                 default_personality: None,
             },
         ],

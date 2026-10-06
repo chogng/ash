@@ -37391,6 +37391,17 @@
             }
           ]
         },
+        "default_reasoning_effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Catalog default, used when no reasoning effort is selected for the invocation."
+        },
         "description": {
           "type": [
             "string",
@@ -37422,16 +37433,6 @@
         },
         "model": {
           "$ref": "#/$defs/ModelRef"
-        },
-        "model_reasoning_effort": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ReasoningEffort"
-            },
-            {
-              "type": "null"
-            }
-          ]
         },
         "settings": {
           "$ref": "#/$defs/ModelSettings",

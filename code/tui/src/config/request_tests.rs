@@ -252,7 +252,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             capabilities: ModelCapabilities::UNKNOWN,
             settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),
-            model_reasoning_effort: None,
+            default_reasoning_effort: None,
             default_personality: None,
         }],
     };

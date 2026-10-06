@@ -25,7 +25,7 @@ export interface ModelCatalogEntry {
 	readonly acceleration?: ModelAccelerationOption;
 	readonly fast?: boolean;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
-	readonly modelReasoningEffort?: ModelReasoningEffort;
+	readonly defaultReasoningEffort?: ModelReasoningEffort;
 }
 
 export function modelRefIdentity(model: ModelRef): string {

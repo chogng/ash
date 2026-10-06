@@ -231,7 +231,7 @@ fn effort_values_do_not_change_model_name_search() {
         ash_protocol::ReasoningEffort::Low.into(),
         ash_protocol::ReasoningEffort::High.into(),
     ];
-    entry.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
+    entry.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
     let choices = model_choices(
         &ModelListResult {
             models: vec![entry],
@@ -260,7 +260,7 @@ fn effort_labels_align_across_models_with_different_level_counts() {
         ReasoningEffort::Medium.into(),
         ReasoningEffort::High.into(),
     ];
-    entries[0].model_reasoning_effort = Some(ReasoningEffort::Medium);
+    entries[0].default_reasoning_effort = Some(ReasoningEffort::Medium);
     entries[1].supported_reasoning_efforts = vec![
         ReasoningEffort::Minimal.into(),
         ReasoningEffort::Low.into(),
@@ -268,9 +268,9 @@ fn effort_labels_align_across_models_with_different_level_counts() {
         ReasoningEffort::High.into(),
         ReasoningEffort::ExtraHigh.into(),
     ];
-    entries[1].model_reasoning_effort = Some(ReasoningEffort::Medium);
+    entries[1].default_reasoning_effort = Some(ReasoningEffort::Medium);
     entries[2].supported_reasoning_efforts = vec![ReasoningEffort::None.into()];
-    entries[2].model_reasoning_effort = Some(ReasoningEffort::None);
+    entries[2].default_reasoning_effort = Some(ReasoningEffort::None);
     let choices = model_choices(
         &ModelListResult {
             models: entries.into(),
@@ -716,7 +716,7 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
         } else {
             vec![ReasoningEffort::None.into()]
         };
-        entry.model_reasoning_effort = Some(ReasoningEffort::None);
+        entry.default_reasoning_effort = Some(ReasoningEffort::None);
         if bits & 2 != 0 {
             entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
         }
@@ -910,7 +910,7 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
         ReasoningEffort::Medium.into(),
         ReasoningEffort::High.into(),
     ];
-    entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
+    entry.default_reasoning_effort = Some(ReasoningEffort::Medium);
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
     entry.context_window = Some(272_000);
@@ -989,7 +989,7 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
                         ReasoningEffort::Medium.into(),
                         ReasoningEffort::High.into(),
                     ];
-                    entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
+                    entry.default_reasoning_effort = Some(ReasoningEffort::Medium);
                 }
                 if bits & 2 != 0 {
                     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;

@@ -129,7 +129,7 @@ pub struct ModelInfo {
     /// Selectable request values with optional display explanations; not fixed token budgets.
     pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
     /// Catalog default when the user has not selected an effort; not the provider's implicit default.
-    pub model_reasoning_effort: Option<ReasoningEffort>,
+    pub default_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
     /// Supported parameters and Ash defaults, not the values selected for a particular invocation.
@@ -182,7 +182,7 @@ impl ModelInfo {
             auto_compact_token_limit: None,
             capabilities: ModelCapabilities::UNKNOWN,
             supported_reasoning_efforts: Vec::new(),
-            model_reasoning_effort: None,
+            default_reasoning_effort: None,
             default_personality: None,
             settings: crate::ModelSettings::default(),
         }

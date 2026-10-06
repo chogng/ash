@@ -405,6 +405,17 @@
             "minimum": 0
           }
         },
+        "default_reasoning_effort": {
+          "description": "Ash's default effort; when present it must reference a declared selectable value.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -420,17 +431,6 @@
         "model_id": {
           "description": "Exact catalog model ID; connection-specific upstream aliases are configured separately.",
           "type": "string"
-        },
-        "model_reasoning_effort": {
-          "description": "Ash's default effort; when present it must reference a declared selectable value.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ReasoningEffort"
-            },
-            {
-              "type": "null"
-            }
-          ]
         },
         "provider_id": {
           "description": "Exact model vendor ID, independent of API-key or subscription connection identity.",

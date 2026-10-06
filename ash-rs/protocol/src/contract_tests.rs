@@ -41,7 +41,7 @@ fn model_declarations_and_presets_use_snake_case_json_fields() {
             "tools":"unknown", "reasoning":"unknown", "parallel_tool_calls":"unknown",
             "personality":"unknown", "image_detail_original":"unknown", "fast_mode":"unknown"
         },
-        "supported_reasoning_efforts":[], "model_reasoning_effort":null, "default_personality":null,
+        "supported_reasoning_efforts":[], "default_reasoning_effort":null, "default_personality":null,
         "settings":{
             "input_modalities":null, "verbosity":"unknown", "default_verbosity":null,
             "reasoning_summary":"unknown", "default_reasoning_summary":null, "service_tiers":null,

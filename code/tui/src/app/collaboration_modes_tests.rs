@@ -943,7 +943,7 @@ fn effort_data() -> crate::models::ModelPickerData {
                         description: Some("Maximum reasoning. May use more tokens and take longer; use for the hardest tasks.".into()),
                     },
                 ],
-                model_reasoning_effort: Some(ReasoningEffort::Low),
+                default_reasoning_effort: Some(ReasoningEffort::Low),
                 default_personality: None,
             },
         ],

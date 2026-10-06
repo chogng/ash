@@ -27,4 +27,8 @@ fast_enabled: boolean,
 /**
  * Model or custom connection ceiling before applying its context budget preference.
  */
-maximum_context_window: number | null, auto_compact_token_limit: number | null, available_context_window?: number | null, capabilities: ModelCapabilities, supported_reasoning_efforts: Array<ModelReasoningEffortOption>, model_reasoning_effort: ReasoningEffort | null, default_personality: Personality | null, settings: ModelSettings, };
+maximum_context_window: number | null, auto_compact_token_limit: number | null, available_context_window?: number | null, capabilities: ModelCapabilities, supported_reasoning_efforts: Array<ModelReasoningEffortOption>,
+/**
+ * Catalog default, used when no reasoning effort is selected for the invocation.
+ */
+default_reasoning_effort: ReasoningEffort | null, default_personality: Personality | null, settings: ModelSettings, };

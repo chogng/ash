@@ -318,7 +318,10 @@ impl ModelCatalogSource for XaiCatalogSource {
                                 .then_some(CapabilitySupport::Supported),
                             ..ModelCapabilitiesPatch::default()
                         },
-                        model_reasoning_effort: model.reasoning_effort.as_deref().and_then(effort),
+                        default_reasoning_effort: model
+                            .reasoning_effort
+                            .as_deref()
+                            .and_then(effort),
                         supported_reasoning_efforts: Some(efforts),
                         ..ModelMetadataPatch::default()
                     }))

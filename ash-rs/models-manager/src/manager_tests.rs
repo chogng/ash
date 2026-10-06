@@ -136,7 +136,7 @@ fn gpt_6_1_sol_is_selectable_and_resolves_its_declared_metadata() {
     assert_eq!(info.display_name, "GPT-6.1 Sol");
     assert_eq!(info.context_window, ContextWindow::Known(1_050_000));
     assert_eq!(info.capabilities.tools, CapabilitySupport::Supported);
-    assert_eq!(info.model_reasoning_effort, Some(ReasoningEffort::Medium));
+    assert_eq!(info.default_reasoning_effort, Some(ReasoningEffort::Medium));
     assert!(
         !info
             .supported_reasoning_efforts
@@ -761,7 +761,7 @@ async fn previous_catalog_cache_version_requires_a_new_observation() {
     let path = directory.join("flexible.json");
     let mut document: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    document["schema_version"] = serde_json::json!(2);
+    document["schema_version"] = serde_json::json!(3);
     std::fs::write(path, serde_json::to_vec(&document).unwrap()).unwrap();
 
     let restarted = ModelsManager::new(registry()).with_disk_cache(directory);

@@ -67,7 +67,7 @@ pub struct StaticModelSpec {
     #[serde(default)]
     pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
     /// Ash's default effort; when present it must reference a declared selectable value.
-    pub model_reasoning_effort: Option<ReasoningEffort>,
+    pub default_reasoning_effort: Option<ReasoningEffort>,
     /// Parameter support, Ash defaults, acceleration mechanism, and model-visible tool-result budget.
     #[serde(default, deserialize_with = "model_settings")]
     #[schemars(with = "ModelSettingsDeclaration", transform = remove_runtime_default)]
@@ -94,7 +94,7 @@ impl StaticModelSpec {
         model.auto_compact_token_limit = self.auto_compact_token_limit;
         model.capabilities = self.capabilities;
         model.supported_reasoning_efforts = self.supported_reasoning_efforts.clone();
-        model.model_reasoning_effort = self.model_reasoning_effort;
+        model.default_reasoning_effort = self.default_reasoning_effort;
         model.settings = self.settings.clone();
         model
     }

@@ -357,7 +357,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
         );
         let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "Test model");
         info.supported_reasoning_efforts = catalog_levels(levels);
-        info.model_reasoning_effort = levels.last().copied();
+        info.default_reasoning_effort = levels.last().copied();
         let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
             models: vec![
                 ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(

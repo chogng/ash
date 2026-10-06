@@ -46,7 +46,7 @@ pub(super) fn selected_efforts<'a>(
         &entry.supported_reasoning_efforts,
         config
             .model_reasoning_effort
-            .or(entry.model_reasoning_effort),
+            .or(entry.default_reasoning_effort),
     ))
 }
 

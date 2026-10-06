@@ -438,7 +438,7 @@ pub(crate) fn model_choices(
                 }
             });
         let default_effort = entry
-            .model_reasoning_effort
+            .default_reasoning_effort
             .filter(|effort| supported_efforts.contains(effort))
             .or_else(|| supported_efforts.first().copied());
         let provider = config.providers.get(&model.provider);

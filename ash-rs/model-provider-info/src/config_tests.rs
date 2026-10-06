@@ -647,7 +647,7 @@ fn static_model_catalog_has_unique_valid_rows() {
     for spec in STATIC_MODEL_CATALOG.iter() {
         assert!(identities.insert((&spec.provider_id, &spec.model_id)));
         assert_eq!(find_static_model(&spec.model_ref()), Some(spec));
-        if let Some(effort) = spec.model_reasoning_effort {
+        if let Some(effort) = spec.default_reasoning_effort {
             assert!(
                 spec.supported_reasoning_efforts
                     .iter()
@@ -658,7 +658,7 @@ fn static_model_catalog_has_unique_valid_rows() {
 }
 
 #[test]
-fn static_catalog_exposes_only_model_specific_reasoning_levels() {
+fn static_catalog_exposes_only_model_specific_reasoning_efforts() {
     let cases: &[(&str, &str, &[ReasoningEffort])] = &[
         (
             "openai",

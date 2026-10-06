@@ -78,7 +78,7 @@ impl ModelSummary {
         let (display_name, model_reasoning_effort, context_capacity) = match entry {
             Some(entry) => (
                 Some(entry.display_name.clone()),
-                model_reasoning_effort.or(entry.model_reasoning_effort),
+                model_reasoning_effort.or(entry.default_reasoning_effort),
                 entry.available_context_window.map(u64::from),
             ),
             None => (None, model_reasoning_effort, None),

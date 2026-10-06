@@ -352,7 +352,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderToolbarActions(): void {
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
-		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.modelReasoningEffort);
+		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.defaultReasoningEffort);
 		this.modelAction.label = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model";
 		this.modelAction.tooltip = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model";
 		const effortAction = !this.toolbarState.isAutomaticModel && selectedModel?.supportedReasoningEfforts?.length

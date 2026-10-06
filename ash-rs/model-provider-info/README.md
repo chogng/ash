@@ -169,7 +169,7 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
     { "effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks" },
     { "effort": "high", "description": "Greater reasoning depth for complex problems" }
   ],
-  "model_reasoning_effort": "medium",
+  "default_reasoning_effort": "medium",
   "instructions": {
     "revision": "model-base-v2",
     "body": "Complete Agent base instructions for this model.\n"
@@ -184,9 +184,11 @@ just generate-model-catalog-schema
 just generate-model-catalog-schema --check
 ```
 
-`description` 是可选的模型简介；每个推理选项包含请求值 `effort` 和可选的 `description`。缺少说明表示未知，不生成型号能力或固定 token 预算；已填写说明不能空白，同一档位不能重复。App Server revision 15／capability version 18 使用 `snake_case` 模型字段，旧客户端会在初始化时拒绝不兼容的版本，服务端与客户端需一起更新。目录、App Server、桌面和 TUI 保留这些信息，模型选择器显示简介，推理菜单向读屏提供档位说明，TUI 推理面板显示档位说明。已与 Codex 准确匹配的型号保留原始简介和说明，其他型号使用 Ash 的通用档位说明；同名档位不保证跨供应商有相同推理投入。
+`description` 是可选的模型简介；每个推理选项包含请求值 `effort` 和可选的 `description`。缺少说明表示未知，不生成型号能力或固定 token 预算；已填写说明不能空白，同一档位不能重复。App Server revision 16／capability version 19 使用 `snake_case` 模型字段，并以 `default_reasoning_effort` 表示目录默认档位，旧客户端会在初始化时拒绝不兼容的版本，服务端与客户端需一起更新。目录、App Server、桌面和 TUI 保留这些信息，模型选择器显示简介，推理菜单向读屏提供档位说明，TUI 推理面板显示档位说明。已与 Codex 准确匹配的型号保留原始简介和说明，其他型号使用 Ash 的通用档位说明；同名档位不保证跨供应商有相同推理投入。
 
-只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallel_tool_calls`、`image_detail_original` 或 `fast_mode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallel_tool_calls`、`image_detail_original` 或 `fast_mode`，没有已知能力时省略整个对象。没有推理档位、默认推理档位或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`default_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理档位会使目录校验失败。
+
+`default_reasoning_effort` 声明该模型在 Ash 中的默认档位，省略后没有目录默认值，不会自动设为 `medium`。用户配置中的 `model_reasoning_effort` 保存用户选择，单次请求中的 `reasoning_effort` 保存本次选择；优先级为单次请求、用户配置、模型目录默认值。目录解析器只接受 `default_reasoning_effort`；Codex 返回的 `default_reasoning_level` 和 `supported_reasoning_levels` 由供应商接入层转换。
 
 `settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务等级选项及默认值、加速机制、工具输出限额。`verbosity` 和 `reasoning_summary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/parameters.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
 

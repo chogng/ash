@@ -102,7 +102,7 @@ fn codex_ultra_is_not_imported_as_model_reasoning_or_a_default() {
             ReasoningEffort::Max
         ])
     );
-    assert_eq!(imported[0].metadata.model_reasoning_effort, None);
+    assert_eq!(imported[0].metadata.default_reasoning_effort, None);
 }
 
 #[test]

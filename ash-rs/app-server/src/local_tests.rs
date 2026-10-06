@@ -2853,7 +2853,7 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
             },
         })
         .unwrap();
-    config
+    let selected = config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("select-model-with-effort").unwrap(),
             expected_revision: configured.revision,
@@ -2884,6 +2884,26 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
             .unwrap(),
         Some(ash_protocol::ReasoningConfig {
             effort: ReasoningEffort::High,
+            summary: false,
+        })
+    );
+    service
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("clear-selected-effort").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model_reasoning_effort: Patch::Null,
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        Some(ash_protocol::ReasoningConfig {
+            effort: ReasoningEffort::Medium,
             summary: false,
         })
     );

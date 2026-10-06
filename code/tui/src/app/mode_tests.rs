@@ -747,7 +747,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         ash_protocol::ReasoningEffort::Medium.into(),
         ash_protocol::ReasoningEffort::High.into(),
     ];
-    info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
+    info.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![{
             let mut entry = ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(

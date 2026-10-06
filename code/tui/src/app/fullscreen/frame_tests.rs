@@ -2621,7 +2621,7 @@ fn configured_model_summary() -> ModelSummary {
                     ReasoningEffort::Medium.into(),
                     ReasoningEffort::High.into(),
                 ],
-                model_reasoning_effort: Some(ReasoningEffort::High),
+                default_reasoning_effort: Some(ReasoningEffort::High),
                 default_personality: None,
             },
         ],
@@ -2750,7 +2750,7 @@ fn custom_model_choices(
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],
-                model_reasoning_effort: None,
+                default_reasoning_effort: None,
                 default_personality: None,
             },
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
@@ -3151,7 +3151,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
         ReasoningEffort::Medium.into(),
         ReasoningEffort::High.into(),
     ];
-    info.model_reasoning_effort = Some(ReasoningEffort::Medium);
+    info.default_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info),
@@ -3170,7 +3170,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
                         ReasoningEffort::Medium.into(),
                         ReasoningEffort::High.into(),
                     ];
-                    other.model_reasoning_effort = Some(ReasoningEffort::Low);
+                    other.default_reasoning_effort = Some(ReasoningEffort::Low);
                     other
                 },
             ),

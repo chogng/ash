@@ -181,7 +181,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
 		supportedReasoningEfforts: Object.freeze(entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option }))),
-		...(entry.model_reasoning_effort != null ? { modelReasoningEffort: entry.model_reasoning_effort } : {}),
+		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
 	});
 }
 
@@ -201,7 +201,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.acceleration?.name === candidate.acceleration?.name
 			&& entry.acceleration?.description === candidate.acceleration?.description
 			&& entry.contextWindowOptions.join('\0') === candidate.contextWindowOptions.join('\0')
-			&& entry.modelReasoningEffort === candidate.modelReasoningEffort
+			&& entry.defaultReasoningEffort === candidate.defaultReasoningEffort
 			&& entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length
 			&& (entry.supportedReasoningEfforts?.every((option, index) => option.effort === candidate.supportedReasoningEfforts?.[index]?.effort && option.description === candidate.supportedReasoningEfforts?.[index]?.description) ?? true);
 	});

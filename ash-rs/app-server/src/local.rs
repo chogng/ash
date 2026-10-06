@@ -2402,7 +2402,7 @@ impl ModelService for ConfigBackedModelService {
         let default_effort = self
             .context_catalog(&config)?
             .info(&config)?
-            .model_reasoning_effort;
+            .default_reasoning_effort;
         let effort = config.model_reasoning_effort.or(default_effort);
         Ok(effort.map(|effort| ash_protocol::ReasoningConfig {
             effort,
@@ -3087,7 +3087,7 @@ impl FrozenModelSource {
         let reasoning = config
             .model_reasoning_effort
             .or_else(|| match &info {
-                Ok(info) => info.model_reasoning_effort,
+                Ok(info) => info.default_reasoning_effort,
                 Err(_) => None,
             })
             .map(|effort| ash_protocol::ReasoningConfig {

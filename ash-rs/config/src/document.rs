@@ -578,7 +578,7 @@ fn approval_review_effort(
                 {
                     Some(ReasoningEffort::Low)
                 } else {
-                    spec.model_reasoning_effort
+                    spec.default_reasoning_effort
                 }
             })
         }

@@ -17,7 +17,7 @@ fn model_summary_resolves_the_selected_models_access_path() {
     };
     let mut selected = entry("openai", "gpt-5.6", ModelAccess::Subscription);
     selected.display_name = "GPT-5.6".into();
-    selected.model_reasoning_effort = Some(ReasoningEffort::High);
+    selected.default_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
         models: vec![selected],
     };
@@ -53,7 +53,7 @@ fn model_reasoning_effort_overrides_catalog_value() {
     };
     let mut selected = entry("openai", "gpt-5.6", ModelAccess::Subscription);
     selected.display_name = "GPT-5.6".into();
-    selected.model_reasoning_effort = Some(ReasoningEffort::Medium);
+    selected.default_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ModelListResult {
         models: vec![selected],
     };
@@ -87,7 +87,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
         capabilities: ModelCapabilities::UNKNOWN,
         settings: Default::default(),
         supported_reasoning_efforts: Vec::new(),
-        model_reasoning_effort: None,
+        default_reasoning_effort: None,
         default_personality: None,
     }
 }
@@ -179,7 +179,7 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
     .into_iter()
     .map(Into::into)
     .collect();
-    selected.model_reasoning_effort = Some(ReasoningEffort::High);
+    selected.default_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
         models: vec![selected],
     };
@@ -357,7 +357,7 @@ fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
                 let mut model = entry(provider, model, ModelAccess::ApiKey);
                 model.supported_reasoning_efforts =
                     levels.iter().copied().map(Into::into).collect();
-                model.model_reasoning_effort = Some(*default);
+                model.default_reasoning_effort = Some(*default);
                 model
             })
             .collect(),

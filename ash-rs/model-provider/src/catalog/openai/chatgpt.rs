@@ -300,7 +300,7 @@ fn normalize_models(
                     ..ModelCapabilitiesPatch::default()
                 },
                 supported_reasoning_efforts: Some(efforts),
-                model_reasoning_effort: entry
+                default_reasoning_effort: entry
                     .default_reasoning_level
                     .as_deref()
                     .and_then(ReasoningEffort::parse),

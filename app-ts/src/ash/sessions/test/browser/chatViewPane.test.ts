@@ -290,7 +290,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		displayName: "GPT-6.1 Sol",
 		contextWindow: 128000,
 		supportedReasoningEfforts: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }] as const,
-		modelReasoningEffort: 'medium' as const,
+		defaultReasoningEffort: 'medium' as const,
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -1780,7 +1780,7 @@ interface FakeOptions {
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
 		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null; }[];
-		readonly modelReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
+		readonly defaultReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
@@ -2139,7 +2139,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 		description: 'Private model overview',
 		context_window: null, default_context_window: null, maximum_context_window: null, context_window_options: [], fast_enabled: false,
 		auto_compact_token_limit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallel_tool_calls: 'unknown', personality: 'unknown', image_detail_original: 'unknown', fast_mode: 'unknown' },
-		supported_reasoning_efforts: [{ effort: 'low', description: 'Quick tasks' }], model_reasoning_effort: null, default_personality: null,
+		supported_reasoning_efforts: [{ effort: 'low', description: 'Quick tasks' }], default_reasoning_effort: null, default_personality: null,
 	});
 	discovered.capabilities.fast_mode = 'supported';
 	discovered.settings.service_tiers = [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }];
@@ -2680,7 +2680,7 @@ function fakeApi(options: FakeOptions = {}): {
 				return { models: (options.models ?? []).map(entry => createTestModel({
 					model: entry.model, display_name: entry.displayName,
 					context_window: entry.contextWindow ?? null,
-					model_reasoning_effort: entry.modelReasoningEffort ?? null,
+					default_reasoning_effort: entry.defaultReasoningEffort ?? null,
 					supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
 				})) };
 			},
