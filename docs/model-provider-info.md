@@ -235,7 +235,9 @@ definition/runtime 显式声明。
 
 模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
 
-`builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 选择保存的接入定义并规范化参数；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
+`builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 将保存的内置接入、已注册供应商和完整自定义声明组装为 registry；未知供应商返回 `UnknownProvider`。端点和默认参数由 `normalize` / `normalize_for` 规范化；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
+
+动态目录观察不注册接入定义。Config 在保存、导入和严格读取时校验连接，接入规则见 [模型接入配置](config.md#模型接入配置)。字段扩展的设计建议见 [通用模型声明规范](../ash-rs/model-provider-info/docs/model-template.md)；该建议尚未成为当前 JSON 格式。
 
 `model/list` 返回固定内置目录，不接受视图分支。远端目录由 `models-manager` 管理，作为接入范围内的观察和自定义接入发现能力，不作为内置模型调用许可。没有远端记录的内置模型仍能发请求，服务返回的认证、权限或模型错误直接交给调用方。
 

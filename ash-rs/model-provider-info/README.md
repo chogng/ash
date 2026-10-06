@@ -44,6 +44,8 @@
 `model_provider_config_schema()` 与 `provider_definition_schema()` 从 Rust types 生成 JSON Schema；
 schema 没有第二份手写来源。
 
+`ProviderConfigRegistry::with_configs` 只接受内置接入、已注册供应商或具有完整声明的自定义接入。未知供应商返回 `UnknownProvider`；插件定义必须先注册，不能仅靠配置中的 ID 声明。配置存储在保存、导入和严格读取时校验连接，规则见 [模型接入配置](../../docs/config.md#模型接入配置)。
+
 ## 语音选择
 
 - `ProviderDefinition.voice_models` 声明语音模型目录，`resolve_voice` 完成目录与音色校验。
@@ -77,6 +79,7 @@ src/
 | `attach_static_models` | crate-private function | catalog rows → provider models | registry validation 前自动执行 |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
+| `ProviderConfigRegistry::with_configs` | public method | 将接入配置组装为 immutable registry | 未知供应商报错；自定义声明和已注册插件定义保留 |
 | `ProviderConfigRegistry::normalize` | public method | config + definition → normalized snapshot | endpoint/default/profile precedence 在此唯一实现 |
 | `normalize_for` | public method | 先 enforce selected/configured provider identity | 防止 model ref 与 config 串线 |
 | `automatic_approval_review_model` | public method | provider default 或 active model fallback | 不证明远端 entitlement |
@@ -134,9 +137,9 @@ tokens。Kimi、Google 和 Z.AI 的额外 allow-unlisted count model 是 transpo
 模型列表由 `STATIC_MODEL_CATALOG` 提供；计数支持范围由每条接入显式声明，不按模型 ID 前缀猜测。
 Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction pattern。
 
-OpenAI definition 另外声明 `WebSocketApiProfile::OpenAiResponses`。其他 built-in definition 当前均为
-`Unavailable`，包括 HTTP-compatible provider；xAI 的上游 Responses WebSocket 也不会覆盖当前
-Chat Completions definition。真实调用仍需 runtime target 和 `ash-api` codec/session client 共同允许。
+OpenAI definition 另外声明 `WebSocketApiProfile::OpenAiResponses`。其他 built-in definition 的 Responses WebSocket profile 当前均为
+`Unavailable`，包括 HTTP-compatible provider。xAI 的 API 和订阅接入使用 HTTP Responses，
+但没有启用 Responses WebSocket。真实调用仍需 runtime target 和 `ash-api` codec/session client 共同允许。
 
 Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API 文档](https://dev.meta.ai/docs/overview)使用 Responses 协议与 Bearer 认证。Muse Spark 1.3 的标准层模型 ID、上下文窗口和推理档位来自[模型目录](https://dev.meta.ai/docs/models)与[推理文档](https://dev.meta.ai/docs/reasoning)。
 
@@ -154,8 +157,8 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
   "context_window": 1000000,
   "context_window_options": [200000, 1000000],
   "capabilities": {
-    "tools": "supported",
-    "reasoning": "supported"
+    "tools": true,
+    "reasoning": true
   },
   "supported_reasoning_efforts": ["low", "medium", "high"],
   "model_reasoning_effort": "medium",
@@ -166,9 +169,9 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 }
 ```
 
-条目放在顶层 `models` 数组中。只有身份、显示名和完整提示词必填；省略上下文容量表示未知，省略能力表示 `unknown`，不代表不支持，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+条目放在顶层 `models` 数组中。只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
 
-`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务档位及默认值、工具输出限额。类型与校验由 [`ModelSettings`](../protocol/src/model/settings.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
+`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务档位及默认值、工具输出限额。`verbosity` 和 `reasoningSummary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/settings.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
 
 已与本地 Codex 清单准确匹配的 8 个 OpenAI 型号补入已声明的模态、verbosity、摘要和工具输出预算，并补齐并行工具与原图能力。服务档位使用 Ash 现有的 standard/fast/priority 契约，由接入 adapter 编码；声明不证明账号权益。其他型号保留未知值，不根据名字补造能力。Codex 的展示、升级提示、搜索工具类型及尚无调用方的字段未进入这份数据。
 

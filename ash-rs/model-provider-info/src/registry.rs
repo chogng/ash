@@ -78,6 +78,8 @@ impl ProviderConfigRegistry {
     }
 
     /// Resolves user-defined connections into one immutable registry snapshot.
+    /// Unknown definitions fail here so configuration stores reject unusable connections before
+    /// persisting them. Explicitly registered plugin definitions remain valid.
     pub fn with_configs<'a>(
         &self,
         configs: impl IntoIterator<Item = &'a ModelProviderConfig>,
@@ -103,6 +105,10 @@ impl ProviderConfigRegistry {
                 registry
                     .providers
                     .insert(config.provider.clone(), custom.definition(config)?);
+            } else if !registry.providers.contains_key(&config.provider) {
+                return Err(ProviderConfigError::UnknownProvider(
+                    config.provider.clone(),
+                ));
             }
         }
         Ok(registry)

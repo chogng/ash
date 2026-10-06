@@ -20,7 +20,7 @@
 | `ManagedLocalTokenizerService` | 首次使用时后台发现/下载、持久化摘要清单并维护内存 LRU | 网络失败不得阻塞模型调用或每次请求重复下载 |
 | `TokenizerAssetDiscoverer` | 宿主按完整 `ModelRef` 提供固定版本的资产清单 | 返回前解析不可变 revision 并计算内容摘要 |
 
-`hf-chat-template` 负责 Hugging Face 的 special token、Python/Jinja 兼容方法、`tojson`、
+`hf-chat-template` 负责 tokenizer 配置中的 special token、Python/Jinja 兼容方法、`tojson`、
 `strftime_now` 与 named template 语义；Ash 仍拥有 revision/SHA、磁盘目录、后台准备和 LRU。
 
 ## 2. 内部接口地图与调用路径

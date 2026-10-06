@@ -3621,7 +3621,7 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
 impl OperationClient for OllamaCatalogClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         let body = match request.url() {
-            "http://localhost:11434/api/tags" => br#"{"models":[{"name":"qwen3:8b"}]}"#.to_vec(),
+            "http://localhost:11434/api/tags" => br#"{"models":[{"name":"llama3.1:8b"}]}"#.to_vec(),
             "http://localhost:11434/api/show" => {
                 br#"{"capabilities":["completion","tools"]}"#.to_vec()
             }
@@ -3672,7 +3672,7 @@ fn local_catalog_includes_models_installed_in_configured_ollama() {
     assert_eq!(model.list().unwrap(), initial);
 
     assert!(models.iter().any(|entry| {
-        entry.model.provider.as_str() == "ollama" && entry.model.model.as_str() == "qwen3:8b"
+        entry.model.provider.as_str() == "ollama" && entry.model.model.as_str() == "llama3.1:8b"
     }));
     remove_config_files(&path);
 }

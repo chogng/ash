@@ -2,7 +2,9 @@
 
 通用模板可以覆盖这六家，但必须同时描述**模型规格、参数约束和接入差异**。统一字段名后，还要知道它适用于哪个型号、哪个协议、什么条件，以及如何编码成请求。每个模型都使用同一套结构，按官方证据填写；字段多或提示词长，都不能单独证明完整性。
 
-本文供维护模型目录、请求构造器和模型设置界面的开发者使用。官方文档核对日期为 **2026-10-05**。下面的字段结构是设计建议，尚未成为当前 `models.json` 的解析格式；本次没有扩展 Rust 协议或请求参数。当前目录格式和已有调用链见 [crate README](../README.md#统一静态模型清单)。本次已移除 Qwen、MiMo、MiniMax、Hugging Face 的内置模型与专用接入，保留其他既有供应商。
+本文供维护模型目录、请求构造器和模型设置界面的开发者使用。官方文档核对日期为 **2026-10-05**。下面的字段结构是设计建议，尚未成为当前 `models.json` 的解析格式，也不代表 Rust 协议和请求构造器已支持这些字段。当前可解析字段和已有调用链见 [crate README](../README.md#统一静态模型清单)。
+
+官方字段对照覆盖标题中的六家；产品目录也包含 DeepSeek、Meta 等供应商，具体条目以 [`models.json`](../models.json) 为准。接入配置规则见 [模型接入配置](../../../docs/config.md#模型接入配置)。
 
 ## 1. 声明归属
 
@@ -20,7 +22,7 @@
 
 有效能力必须同时满足模型声明、所选接入协议和 Ash 已实现的调用能力；账户权限在运行时确认。API、订阅代理和第三方托管接入分别声明，不能从厂商公共 API 继承全部能力。
 
-Hugging Face 的 [Inference Providers](https://huggingface.co/docs/inference-providers/en/index) 可以按最快、最便宜或指定服务商路由同一个模型，因此完整适配还要记录实际服务商与路由约束。Ash 当前移除其内置推理接入和专用 tokenizer 自动发现入口，优先维护上述厂商的明确接入；自定义兼容端点、通用 tokenizer 资产绑定和聊天模板执行继续保留。通用声明规范仍需区分模型事实与托管接入能力。
+自定义兼容端点按其明确声明的协议和约束接入；通用 tokenizer 资产绑定与聊天模板执行独立于推理接入，安装和绑定见 [tokenizer 文档](../../model-tokenizer/README.md)。第三方托管接入还需记录实际服务商与路由约束，通用声明规范应区分模型事实与托管接入能力。
 
 ## 2. 官方接口逐家对照
 
@@ -127,11 +129,11 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 ## 4. 参数描述器
 
-每个可配置参数复用一种描述器，减少重复，又保留限制。`unknown` 与 `unsupported` 有不同含义：前者尚无足够证据，后者已确认不能使用。
+每个可配置参数复用一种描述器，减少重复，又保留限制。`support` 使用 `true / false / null`：分别表示已确认支持、已确认不支持、尚无足够证据；省略字段同样表示未知。布尔与空值表达支持状态，范围、固定值和支持条件由各自字段描述。
 
 | 属性 | 建议类型 | 规则 |
 | --- | --- | --- |
-| `support` | `supported / unsupported / unknown` | 支持状态，不能由字段缺省推导“不支持” |
+| `support` | `boolean 或 null` | `true` 支持、`false` 不支持、`null` 或省略为未知 |
 | `value_type` | 有类型的值类别 | boolean、integer、number、enum、schema 等 |
 | `mutability` | `configurable / fixed` | 固定参数仍有有效值，但界面不能提供可调滑块 |
 | `allowed_values`／`range`／`fixed_value` | 枚举、边界或固定值 | 范围含单位与开闭边界；三者按类型选择 |
@@ -158,14 +160,14 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
       "display_name": "Kimi K3",
       "reasoning": {
         "mode": {
-          "support": "supported",
+          "support": true,
           "value_type": "enum",
           "mutability": "fixed",
           "fixed_value": "enabled",
           "evidence": ["kimi-parameters-2026-10-05"]
         },
         "effort": {
-          "support": "supported",
+          "support": true,
           "value_type": "enum",
           "mutability": "configurable",
           "allowed_values": ["low", "high", "max"],
@@ -174,14 +176,14 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
           "evidence": ["kimi-parameters-2026-10-05"]
         },
         "history": {
-          "support": "supported",
+          "support": true,
           "policy": "preserve_complete_assistant_message",
           "evidence": ["kimi-thinking-2026-10-05"]
         }
       },
       "sampling": {
         "temperature": {
-          "support": "supported",
+          "support": true,
           "value_type": "number",
           "mutability": "fixed",
           "fixed_value": 1.0,

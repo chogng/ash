@@ -3,7 +3,13 @@ use ash_protocol::ContextWindow;
 use ash_protocol::Model;
 use ash_protocol::ModelCapabilities;
 use ash_protocol::ModelId;
+use ash_protocol::ModelInputModality;
+use ash_protocol::ModelReasoningSummary;
 use ash_protocol::ModelRef;
+use ash_protocol::ModelServiceTier;
+use ash_protocol::ModelSettings;
+use ash_protocol::ModelToolOutputLimit;
+use ash_protocol::ModelVerbosity;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
 use serde::Deserialize;
@@ -41,8 +47,8 @@ pub struct StaticModelSpec {
     #[serde(default)]
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
-    #[serde(default)]
-    pub settings: ash_protocol::ModelSettings,
+    #[serde(default, deserialize_with = "ModelSettingsDeclaration::deserialize")]
+    pub settings: ModelSettings,
 }
 
 impl StaticModelSpec {
@@ -86,25 +92,59 @@ fn model_capabilities<'de, D: serde::Deserializer<'de>>(
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct Declaration {
-        tools: Option<CapabilitySupport>,
-        reasoning: Option<CapabilitySupport>,
-        parallel_tool_calls: Option<CapabilitySupport>,
-        image_detail_original: Option<CapabilitySupport>,
-        fast_mode: Option<CapabilitySupport>,
+        tools: Option<bool>,
+        reasoning: Option<bool>,
+        parallel_tool_calls: Option<bool>,
+        image_detail_original: Option<bool>,
+        fast_mode: Option<bool>,
     }
     let declaration = Declaration::deserialize(deserializer)?;
     Ok(ModelCapabilities {
-        tools: declaration.tools.unwrap_or(CapabilitySupport::Unknown),
-        reasoning: declaration.reasoning.unwrap_or(CapabilitySupport::Unknown),
-        parallel_tool_calls: declaration
-            .parallel_tool_calls
-            .unwrap_or(CapabilitySupport::Unknown),
-        image_detail_original: declaration
-            .image_detail_original
-            .unwrap_or(CapabilitySupport::Unknown),
-        fast_mode: declaration.fast_mode.unwrap_or(CapabilitySupport::Unknown),
+        tools: capability_support(declaration.tools),
+        reasoning: capability_support(declaration.reasoning),
+        parallel_tool_calls: capability_support(declaration.parallel_tool_calls),
+        image_detail_original: capability_support(declaration.image_detail_original),
+        fast_mode: capability_support(declaration.fast_mode),
         personality: CapabilitySupport::Unknown,
     })
+}
+
+// Only the editable catalog uses nullable booleans. Remote derive constructs the shared settings
+// type directly; its defaults and validation remain owned by the protocol contract.
+#[derive(Deserialize)]
+#[serde(
+    remote = "ModelSettings",
+    rename_all = "camelCase",
+    default = "ModelSettings::default",
+    deny_unknown_fields
+)]
+struct ModelSettingsDeclaration {
+    input_modalities: Option<Vec<ModelInputModality>>,
+    #[serde(deserialize_with = "deserialize_capability_support")]
+    verbosity: CapabilitySupport,
+    default_verbosity: Option<ModelVerbosity>,
+    #[serde(deserialize_with = "deserialize_capability_support")]
+    reasoning_summary: CapabilitySupport,
+    default_reasoning_summary: Option<ModelReasoningSummary>,
+    service_tiers: Option<Vec<ModelServiceTier>>,
+    default_service_tier: Option<ModelServiceTier>,
+    tool_output_limit: Option<ModelToolOutputLimit>,
+}
+
+fn deserialize_capability_support<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<CapabilitySupport, D::Error> {
+    Ok(capability_support(Option::<bool>::deserialize(
+        deserializer,
+    )?))
+}
+
+fn capability_support(value: Option<bool>) -> CapabilitySupport {
+    match value {
+        Some(true) => CapabilitySupport::Supported,
+        Some(false) => CapabilitySupport::Unsupported,
+        None => CapabilitySupport::Unknown,
+    }
 }
 
 // JSON uses a token count or null; it never fabricates a size for unknown metadata.

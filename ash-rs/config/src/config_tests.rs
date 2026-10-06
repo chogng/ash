@@ -1585,6 +1585,44 @@ fn explicit_review_freezes_its_connection_and_effort_independently() {
 }
 
 #[test]
+fn unknown_provider_connection_cannot_be_saved_or_configured() {
+    let path = config_path("unknown-provider-connection");
+    let store = ConfigStore::open(&path).unwrap();
+    let before = store.read_snapshot().unwrap();
+    let config = ModelProviderConfig::new(provider_id("unknown-provider"));
+    for (index, command) in [
+        UserConfigCommand::SaveConnection {
+            connection: config.connection.clone(),
+            config: config.clone(),
+        },
+        UserConfigCommand::ConfigureConnection {
+            connection: config.connection.clone(),
+            config: config.clone(),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let error = store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new(format!("unknown-provider-{index}")).unwrap(),
+                expected_revision: before.revision,
+                command,
+            })
+            .unwrap_err();
+        assert!(matches!(error, ConfigCommandError::Config(_)));
+        assert_eq!(store.read_snapshot().unwrap(), before);
+    }
+    let mut document = UserConfigDocument::default();
+    document
+        .connections
+        .insert(config.connection.clone(), config);
+    assert!(document.validate().is_err());
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn provider_entries_validate_their_key_and_static_settings() {
     let path = config_path("provider-validation");
     let store = ConfigStore::open(&path).unwrap();

@@ -243,11 +243,14 @@ fn invocation_pricing_rejects_subscription_prices() {
 }
 
 #[test]
-fn retired_provider_does_not_resume_invocation_pricing_from_historical_rates() {
-    let card = RateCard::bundled_accelerated_public_prices().unwrap();
+fn unknown_provider_is_not_priced_automatically_even_with_matching_rates() {
+    let rates = TEST_RATE_CARD
+        .replace("\"openai\"", "\"unknown-provider\"")
+        .replace("\"gpt-5.6-sol\"", "\"test-model\"");
+    let card = RateCard::from_json(&rates).unwrap();
     let model = ModelRef::new(
-        ProviderId::new("minimax").unwrap(),
-        ModelId::new("MiniMax-M3").unwrap(),
+        ProviderId::new("unknown-provider").unwrap(),
+        ModelId::new("test-model").unwrap(),
     );
     let usage = ModelUsage {
         input_tokens: Some(1_000),
@@ -256,6 +259,21 @@ fn retired_provider_does_not_resume_invocation_pricing_from_historical_rates() {
         cache_write_input_tokens: Some(0),
         reasoning_tokens: None,
     };
+    let quantities = TokenQuantities::from_model_usage(&usage).unwrap();
+    assert!(matches!(
+        card.rate(
+            &context(
+                "unknown-provider",
+                "openai_api",
+                "test-model",
+                "default",
+                1_000
+            ),
+            &quantities,
+        )
+        .unwrap(),
+        ModelReferenceCost::Complete(_)
+    ));
     let priced = card
         .price_invocation(
             Some(&model),

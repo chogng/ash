@@ -178,7 +178,7 @@ impl ash_client::OperationClient for CatalogClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         *self.request.lock().unwrap() = Some(request.clone());
         let body = if request.url().ends_with("/api/tags") {
-            br#"{"models":[{"name":"qwen3:8b"},{"name":"nomic-embed-text"}]}"#.to_vec()
+            br#"{"models":[{"name":"llama3.1:8b"},{"name":"nomic-embed-text"}]}"#.to_vec()
         } else if request
             .body()
             .windows("nomic-embed-text".len())
@@ -221,7 +221,7 @@ fn ollama_catalog_uses_shared_client_and_adds_installed_models() {
             .iter()
             .map(|entry| entry.model().model.as_str())
             .collect::<Vec<_>>(),
-        vec!["qwen3:8b"]
+        vec!["llama3.1:8b"]
     );
     assert_eq!(
         client.request.lock().unwrap().as_ref().unwrap().url(),

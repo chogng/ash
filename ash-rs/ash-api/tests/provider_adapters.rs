@@ -756,7 +756,7 @@ fn chat_completions_endpoint_converts_tools_and_text() {
     let mut request = tool_request();
     request.reasoning = None;
     let response = ApiEndpoint::OpenAiChatCompletions
-        .complete_with_client(&target(), "qwen-test", &request, &transport)
+        .complete_with_client(&target(), "chat-test", &request, &transport)
         .unwrap();
 
     let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
@@ -782,7 +782,7 @@ fn chat_completions_streams_wire_deltas_and_reassembles_tool_calls() {
     let response = ApiEndpoint::OpenAiChatCompletions
         .stream_with_client_and_cancellation(
             &target(),
-            "qwen-test",
+            "chat-test",
             &tool_request(),
             &transport,
             &CancellationSource::new().token(),

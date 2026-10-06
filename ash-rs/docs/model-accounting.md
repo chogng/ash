@@ -153,8 +153,6 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 价格表必须按 `billing_platform` 区分按量 API 与订阅套餐。Ash 当前 catalog 中通过 ChatGPT subscription 或 Kimi Code subscription 调用的模型不产生可验证的逐 token 扣费，记录 token 用量但成本为 `Unpriced(SubscriptionPlan)`，不能套用同名 API 价格。
 
-MiniMax 已从内置接入和自动调用计价中移除。已发布的不可变价目表保留历史规则，供审计原有记录使用。
-
 ### 当前内置模型覆盖
 
 | Ash 模型 | 接入方式 | 首版计价状态 |

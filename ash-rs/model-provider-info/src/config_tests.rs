@@ -10,26 +10,42 @@ fn provider_id(value: &str) -> ProviderId {
 }
 
 #[test]
-fn retired_providers_are_absent_from_catalog_connections_and_invocation() {
+fn unknown_provider_is_rejected_by_catalog_connections_and_invocation() {
     let registry = ProviderConfigRegistry::builtin();
-    for name in ["qwen", "mimo", "minimax", "huggingface"] {
-        let provider = provider_id(name);
-        assert!(registry.get(&provider).is_none());
-        assert!(
-            registry
-                .connection(&ModelConnectionId::new(name).unwrap())
-                .is_none()
-        );
-        assert!(
-            STATIC_MODEL_CATALOG
-                .iter()
-                .all(|model| model.provider_id != name)
-        );
-        assert_eq!(
-            registry.normalize(&ModelProviderConfig::new(provider.clone())),
-            Err(ProviderConfigError::UnknownProvider(provider))
-        );
-    }
+    let provider = provider_id("unknown-provider");
+    let config = ModelProviderConfig::new(provider.clone());
+    assert!(registry.get(&provider).is_none());
+    assert!(registry.connection(&config.connection).is_none());
+    assert!(
+        STATIC_MODEL_CATALOG
+            .iter()
+            .all(|model| model.provider_id != provider.as_str())
+    );
+    assert_eq!(
+        registry.normalize(&config),
+        Err(ProviderConfigError::UnknownProvider(provider.clone()))
+    );
+    assert_eq!(
+        registry.with_configs([&config]).unwrap_err(),
+        ProviderConfigError::UnknownProvider(provider)
+    );
+}
+
+#[test]
+fn registered_plugin_configuration_remains_available_without_a_builtin_connection() {
+    let registry = ProviderConfigRegistry::from_definitions([definition(
+        "plugin",
+        EndpointPolicy::ProviderDefault {
+            base_url: "https://plugin.test/v1".into(),
+        },
+    )])
+    .unwrap();
+    let config = ModelProviderConfig::new(provider_id("plugin"));
+    let configured = registry.with_configs([&config]).unwrap();
+    assert_eq!(
+        configured.normalize(&config).unwrap().base_url,
+        "https://plugin.test/v1"
+    );
 }
 
 #[test]

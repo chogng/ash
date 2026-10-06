@@ -31,14 +31,14 @@ impl OperationClient for FakeClient {
             "http://localhost:11434/api/version" => br#"{"version":"0.32.3"}"#.to_vec(),
             "http://localhost:11434/api/tags" => br#"{
                 "models": [{
-                    "name": "qwen3:8b",
+                    "name": "llama3.1:8b",
                     "modified_at": "2026-09-03T00:00:00Z",
                     "size": 512,
                     "digest": "sha256:test",
                     "details": {
                         "format": "gguf",
-                        "family": "qwen3",
-                        "families": ["qwen3"],
+                        "family": "llama",
+                        "families": ["llama"],
                         "parameter_size": "8B",
                         "quantization_level": "Q4_K_M"
                     }
@@ -109,10 +109,10 @@ fn status_uses_explicit_ollama_endpoints_and_preserves_model_metadata() {
 
     assert_eq!(status.version, Version::new(0, 32, 3));
     assert_eq!(status.models.len(), 1);
-    assert_eq!(status.models[0].name, "qwen3:8b");
+    assert_eq!(status.models[0].name, "llama3.1:8b");
     assert_eq!(
         status.models[0].details.as_ref().unwrap().family.as_deref(),
-        Some("qwen3")
+        Some("llama")
     );
     let requests = transport.requests.lock().unwrap();
     assert_eq!(requests[0].url(), "http://localhost:11434/api/version");
@@ -140,14 +140,14 @@ fn show_model_reads_declared_capabilities() {
     .unwrap();
 
     let model = client
-        .show_model("qwen3:8b", &CancellationSource::new().token())
+        .show_model("llama3.1:8b", &CancellationSource::new().token())
         .unwrap();
 
     assert_eq!(model.supports("completion"), Some(true));
     assert_eq!(model.supports("tools"), Some(true));
     let request = transport.requests.lock().unwrap()[0].clone();
     assert_eq!(request.url(), "http://localhost:11434/api/show");
-    assert_eq!(request.body(), br#"{"model":"qwen3:8b"}"#);
+    assert_eq!(request.body(), br#"{"model":"llama3.1:8b"}"#);
 }
 
 #[test]
@@ -171,7 +171,11 @@ fn pull_decodes_split_ndjson_progress_and_requires_success() {
     let mut events = Events::default();
 
     client
-        .pull_model("qwen3:8b", &CancellationSource::new().token(), &mut events)
+        .pull_model(
+            "llama3.1:8b",
+            &CancellationSource::new().token(),
+            &mut events,
+        )
         .unwrap();
 
     assert_eq!(
@@ -206,7 +210,7 @@ fn pull_rejects_an_oversized_complete_progress_line() {
     let mut progress = Events::default();
 
     let error = client
-        .pull_model("qwen3:8b", &cancellation.token(), &mut progress)
+        .pull_model("llama3.1:8b", &cancellation.token(), &mut progress)
         .unwrap_err();
 
     assert_eq!(

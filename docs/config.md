@@ -52,7 +52,7 @@ Runtime snapshot
 v6 将旧 `xai-subscription` 模型引用和提供商配置迁到 `xai`。模型引用只包含供应商与型号；当前接入方式由可用凭据决定，订阅账户就绪时优先订阅，退出后使用已保存的 API key。旧的 OpenAI 与 Kimi 模型引用不改名；切换后型号不在有效目录中时，需重新选择。
 v8 将 BigModel 与 Z.AI 的 GLM 模型引用统一为 `glm`，保留四条连接和各自凭据，并移除旧的 `activeConnections` 选择字段。已就绪连接按 BigModel 订阅、Z.AI 订阅、BigModel API、Z.AI API 排序。
 
-用户文档的主要 section 是 `agent`、`gui`、`tui`、`providers`、`mcp`、`skills`、`plugins`、
+用户文档的主要 section 是 `agent`、`gui`、`tui`、`connections`、`mcp`、`skills`、`plugins`、
 `hooks`、`toolSearch`、`execPolicy`、`dirPermissions`、`codebase`、`network` 和 `git`。Config 保存非敏感引用，不保存
 API key、OAuth token、authorization header 或 refresh 状态。
 
@@ -98,6 +98,12 @@ inputMode = "standard"
 
 Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不校验字段含义。更新任一表时，
 前端必须先读取当前值、保留自己不认识的键，再携带 `expectedRevision` 替换完整表；两个表彼此独立。
+
+## 模型接入配置
+
+用户文件以 `connections` 保存接入，模型选择以厂商＋模型 ID 表达，两者独立。保存、导入和严格读取配置时，Config 使用 `model-provider-info` 的接入声明校验连接；未知供应商返回 `UnknownProvider`，不会等到模型调用时才报错。保存失败不提交新的快照、revision 或默认模型。
+
+自定义兼容端点仍受支持，但必须使用具有完整 `custom` 声明的自定义接入，或已声明的 `openai-compatible` 接入；只为未知供应商填写 base URL 不能注册它。公共 registry 接口也允许宿主先注册插件定义，再合并其配置；这不意味着配置文件能凭一个陌生 ID 加载插件。声明和注册边界见 [`model-provider-info`](../ash-rs/model-provider-info/README.md#公共模型)。Ollama 和自定义接入使用用户指定的模型 ID，不按型号名称排除供应商。
 
 ## 供应商默认模型
 

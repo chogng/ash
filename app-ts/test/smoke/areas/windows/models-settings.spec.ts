@@ -161,9 +161,7 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		await search.fill('');
 		await expect(rows).toHaveCount(defaultVisibleModelNames.length);
 		const builtins = settings.locator('.ash-models-settings-api-row h5');
-		for (const removed of ['Qwen', 'MiMo', 'MiniMax', 'Hugging Face', 'OpenAI-compatible']) {
-			expect(await builtins.allTextContents()).not.toContain(removed);
-		}
+		await expect(builtins).not.toContainText(['OpenAI-compatible']);
 		await settings.getByRole('button', { name: 'New provider', exact: true }).click();
 		const card = settings.locator('.ash-chat-models-widget').first();
 		await card.getByRole('textbox', { name: 'Provider name', exact: true }).fill('Local test gateway');

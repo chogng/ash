@@ -21,8 +21,8 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("auto_compact_token_limit", json!(0)),
         ("default_context_window", json!(272000)),
         ("default_personality", json!(null)),
-        ("capabilities", json!({"personality":"supported"})),
-        ("capabilities", json!({"fast_mode":"supported"})),
+        ("capabilities", json!({"personality":true})),
+        ("capabilities", json!({"fast_mode":true})),
         ("capabilities", json!({"tools":"invalid"})),
         ("model_reasoning_effort", json!("minimal")),
         ("instructions", json!({"revision":"v1", "body":" "})),
@@ -99,7 +99,7 @@ fn sparse_declarations_preserve_unknowns_and_known_capacity_without_presets() {
 
     let mut fixed = minimal;
     fixed["context_window"] = json!(300000);
-    fixed["capabilities"] = json!({"tools":"unsupported", "imageDetailOriginal":"supported"});
+    fixed["capabilities"] = json!({"tools":false, "imageDetailOriginal":true});
     fixed["auto_compact_token_limit"] = json!(160000);
     let parsed = parse_catalog(&json!({"models":[fixed]}).to_string()).unwrap();
     let spec = &parsed[0];
@@ -138,8 +138,11 @@ fn invalid_request_defaults_fail_before_catalog_publication() {
         json!({"inputModalities":["image"]}),
         json!({"inputModalities":["text","text"]}),
         json!({"defaultVerbosity":"low"}),
-        json!({"verbosity":"unsupported","defaultVerbosity":"low"}),
+        json!({"verbosity":false,"defaultVerbosity":"low"}),
+        json!({"verbosity":null,"defaultVerbosity":"low"}),
         json!({"defaultReasoningSummary":"auto"}),
+        json!({"reasoningSummary":false,"defaultReasoningSummary":"auto"}),
+        json!({"reasoningSummary":null,"defaultReasoningSummary":"auto"}),
         json!({"serviceTiers":["standard"],"defaultServiceTier":"fast"}),
         json!({"serviceTiers":["standard","standard"]}),
         json!({"toolOutputLimit":{"mode":"tokens","limit":0}}),
@@ -153,6 +156,105 @@ fn invalid_request_defaults_fail_before_catalog_publication() {
             "{settings}"
         );
     }
+}
+
+#[test]
+fn nullable_boolean_capabilities_reach_runtime_metadata_without_losing_unknowns() {
+    use ash_protocol::CapabilitySupport;
+
+    for (value, expected) in [
+        (json!(true), CapabilitySupport::Supported),
+        (json!(false), CapabilitySupport::Unsupported),
+        (json!(null), CapabilitySupport::Unknown),
+    ] {
+        let mut model = row();
+        model["capabilities"] = json!({
+            "tools":value, "reasoning":value, "parallelToolCalls":value,
+            "imageDetailOriginal":value, "fastMode":value
+        });
+        model["settings"] = json!({"verbosity":value, "reasoningSummary":value});
+        let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
+        let model = parsed[0].model();
+        assert_eq!(model.capabilities.tools, expected);
+        assert_eq!(model.capabilities.reasoning, expected);
+        assert_eq!(model.capabilities.parallel_tool_calls, expected);
+        assert_eq!(model.capabilities.image_detail_original, expected);
+        assert_eq!(model.capabilities.fast_mode, expected);
+        assert_eq!(model.capabilities.personality, CapabilitySupport::Unknown);
+        assert_eq!(model.settings.verbosity, expected);
+        assert_eq!(model.settings.reasoning_summary, expected);
+    }
+
+    let mut model = row();
+    model["capabilities"] = json!({});
+    model["settings"] = json!({});
+    let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
+    assert_eq!(
+        parsed[0].capabilities,
+        ash_protocol::ModelCapabilities::UNKNOWN
+    );
+    assert_eq!(parsed[0].settings, ash_protocol::ModelSettings::default());
+}
+
+#[test]
+fn capability_declarations_reject_strings_and_other_non_boolean_values() {
+    for value in [
+        json!("supported"),
+        json!("unsupported"),
+        json!("unknown"),
+        json!("true"),
+        json!(0),
+        json!(1),
+        json!([]),
+        json!({}),
+    ] {
+        for (group, fields) in [
+            (
+                "capabilities",
+                &[
+                    "tools",
+                    "reasoning",
+                    "parallelToolCalls",
+                    "imageDetailOriginal",
+                    "fastMode",
+                ][..],
+            ),
+            ("settings", &["verbosity", "reasoningSummary"][..]),
+        ] {
+            for field in fields {
+                let mut model = row();
+                model[group] = json!({});
+                model[group][field] = value.clone();
+                assert!(
+                    parse_catalog(&json!({"models":[model]}).to_string()).is_err(),
+                    "{group}.{field} accepted {value}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn catalog_settings_use_booleans_without_changing_the_runtime_contract() {
+    let mut model = row();
+    let mut settings = json!({
+        "inputModalities":["text","image","audio"],
+        "verbosity":true,
+        "defaultVerbosity":"high",
+        "reasoningSummary":true,
+        "defaultReasoningSummary":"detailed",
+        "serviceTiers":["standard","fast","priority"],
+        "defaultServiceTier":"priority",
+        "toolOutputLimit":{"mode":"bytes","limit":4096}
+    });
+    model["settings"] = settings.clone();
+    let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
+    settings["verbosity"] = json!("supported");
+    settings["reasoningSummary"] = json!("supported");
+    let runtime_settings =
+        serde_json::from_value::<ash_protocol::ModelSettings>(settings.clone()).unwrap();
+    assert_eq!(parsed[0].model().settings, runtime_settings);
+    assert_eq!(serde_json::to_value(&runtime_settings).unwrap(), settings);
 }
 
 #[test]
