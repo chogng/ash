@@ -10,10 +10,20 @@ fn row(id: &str) -> Value {
 #[tokio::test(flavor = "current_thread")]
 async fn notifications_paginate_and_validate_browser_destinations_without_repository_input() {
     let http = Arc::new(FakeHttp::default());
-    http.push(
-        200,
-        json!((1..=50).map(|id| row(&id.to_string())).collect::<Vec<_>>()),
-    );
+    http.responses
+        .lock()
+        .unwrap()
+        .push_back(Ok(ash_http_client::HttpResponse::new(
+            200,
+            vec![HttpHeader::new(
+                "Link",
+                "<https://api.github.com/notifications?per_page=50&page=2>; rel=\"next\"",
+            )],
+            serde_json::to_vec(&json!(
+                (1..=50).map(|id| row(&id.to_string())).collect::<Vec<_>>()
+            ))
+            .unwrap(),
+        )));
     let client = github(http.clone());
     let page = client
         .notifications(NotificationFilter::Participating, 1)
@@ -46,6 +56,85 @@ async fn notifications_paginate_and_validate_browser_destinations_without_reposi
         client.notifications(NotificationFilter::Unread, 0).await,
         Err(Error::InvalidInput(_))
     ));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn notification_pagination_uses_links_instead_of_row_counts() {
+    for (count, link, expected) in [
+        (0, None, None),
+        (49, None, None),
+        (50, None, None),
+        (
+            50,
+            Some("<https://api.github.com/notifications?page=1>; rel=\"prev\""),
+            None,
+        ),
+        (
+            1,
+            Some(
+                "<https://api.github.com/notifications?page=1>; rel=\"prev\", <https://api.github.com/notifications?per_page=50&page=3>; rel=\"next last\"",
+            ),
+            Some(3),
+        ),
+    ] {
+        let http = Arc::new(FakeHttp::default());
+        http.responses
+            .lock()
+            .unwrap()
+            .push_back(Ok(ash_http_client::HttpResponse::new(
+                200,
+                link.map(|link| vec![HttpHeader::new("lInK", link)])
+                    .unwrap_or_default(),
+                serde_json::to_vec(&json!(
+                    (1..=count)
+                        .map(|id| row(&id.to_string()))
+                        .collect::<Vec<_>>()
+                ))
+                .unwrap(),
+            )));
+        let page = github(http.clone())
+            .notifications(NotificationFilter::All, 2)
+            .await
+            .unwrap();
+        assert_eq!(
+            (page.notifications.len(), page.next_page),
+            (count, expected)
+        );
+        assert_eq!(http.requests.lock().unwrap().len(), 1);
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn invalid_notification_pagination_is_reported_as_an_invalid_response() {
+    for link in [
+        "malformed",
+        "<not-a-url>; rel=\"next\"",
+        "<https://api.github.com/notifications>; rel=\"next\"",
+        "<https://api.github.com/notifications?page=0>; rel=\"next\"",
+        "<https://api.github.com/notifications?page=1>; rel=\"next\"",
+        "<https://api.github.com/notifications?page=10001>; rel=\"next\"",
+        "<https://api.github.com/notifications?page=invalid>; rel=\"next\"",
+    ] {
+        let http = Arc::new(FakeHttp::default());
+        http.responses
+            .lock()
+            .unwrap()
+            .push_back(Ok(ash_http_client::HttpResponse::new(
+                200,
+                vec![HttpHeader::new("Link", link)],
+                b"[]".to_vec(),
+            )));
+        assert!(
+            matches!(
+                github(http.clone())
+                    .notifications(NotificationFilter::Unread, 1)
+                    .await,
+                Err(Error::InvalidResponse(_))
+            ),
+            "{link}"
+        );
+        assert_eq!(http.requests.lock().unwrap().len(), 1);
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]

@@ -20,6 +20,11 @@ pub(crate) enum Operation {
     Write,
 }
 
+pub(crate) struct ApiResponse<T> {
+    pub data: T,
+    pub headers: Vec<HttpHeader>,
+}
+
 impl GitHub {
     pub(crate) async fn api<T: DeserializeOwned>(
         &self,
@@ -40,6 +45,7 @@ impl GitHub {
         };
         self.request(&repository.host, method, endpoint, body, operation)
             .await
+            .map(|response| response.data)
     }
 
     pub(crate) async fn account_api<T: DeserializeOwned>(
@@ -48,6 +54,17 @@ impl GitHub {
         endpoint: &str,
         body: Option<Value>,
     ) -> Result<T> {
+        self.account_api_response(method, endpoint, body)
+            .await
+            .map(|response| response.data)
+    }
+
+    pub(crate) async fn account_api_response<T: DeserializeOwned>(
+        &self,
+        method: HttpMethod,
+        endpoint: &str,
+        body: Option<Value>,
+    ) -> Result<ApiResponse<T>> {
         let operation = if method == HttpMethod::Get {
             Operation::Read
         } else {
@@ -77,6 +94,7 @@ impl GitHub {
             operation,
         )
         .await
+        .map(|response| response.data)
     }
 
     async fn request<T: DeserializeOwned>(
@@ -86,7 +104,7 @@ impl GitHub {
         endpoint: &str,
         body: Option<Value>,
         operation: Operation,
-    ) -> Result<T> {
+    ) -> Result<ApiResponse<T>> {
         if !host.eq_ignore_ascii_case(&self.authorization.host) {
             return Err(Error::AuthenticationRequired);
         }
@@ -175,7 +193,9 @@ impl GitHub {
             self.validate_authorization().map_err(Error::from)?;
             self.cancellation.check().map_err(|_| Error::Cancelled)?;
         }
-        decode_response(response, endpoint == "graphql", operation)
+        let headers = response.headers().to_vec();
+        let data = decode_response(response, endpoint == "graphql", operation)?;
+        Ok(ApiResponse { data, headers })
     }
 }
 

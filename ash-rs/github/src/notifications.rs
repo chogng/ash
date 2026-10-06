@@ -2,6 +2,7 @@ use crate::Error;
 use crate::GitHub;
 use crate::Repository;
 use crate::Result;
+use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
 use serde::Deserialize;
 use serde_json::Value;
@@ -46,8 +47,8 @@ impl GitHub {
         }
         let all = filter == NotificationFilter::All;
         let participating = filter == NotificationFilter::Participating;
-        let rows: Vec<RemoteNotification> = self
-            .account_api(
+        let response = self
+            .account_api_response::<Vec<RemoteNotification>>(
                 HttpMethod::Get,
                 &format!(
                     "notifications?all={all}&participating={participating}&per_page={PAGE_SIZE}&page={page}"
@@ -55,8 +56,9 @@ impl GitHub {
                 None,
             )
             .await?;
-        let next_page = (rows.len() == PAGE_SIZE && page < 10_000).then_some(page + 1);
-        let notifications = rows
+        let next_page = next_page(&response.headers, page)?;
+        let notifications = response
+            .data
             .into_iter()
             .map(|row| {
                 validate_thread(&row.id)
@@ -104,6 +106,47 @@ impl GitHub {
             .await?;
         Ok(())
     }
+}
+
+fn next_page(headers: &[HttpHeader], current_page: u32) -> Result<Option<u32>> {
+    for link in headers
+        .iter()
+        .filter(|header| header.name().eq_ignore_ascii_case("link"))
+        .flat_map(|header| header.value().split(','))
+    {
+        let Some((target, parameters)) = link.trim().split_once('>') else {
+            return Err(Error::InvalidResponse(
+                "Invalid notification pagination link".into(),
+            ));
+        };
+        let is_next = parameters.split(';').any(|parameter| {
+            parameter.split_once('=').is_some_and(|(name, value)| {
+                name.trim() == "rel"
+                    && value
+                        .trim()
+                        .trim_matches('"')
+                        .split_ascii_whitespace()
+                        .any(|rel| rel == "next")
+            })
+        });
+        if !is_next {
+            continue;
+        }
+        let url = target
+            .strip_prefix('<')
+            .and_then(|target| url::Url::parse(target).ok())
+            .ok_or_else(|| Error::InvalidResponse("Invalid notification pagination URL".into()))?;
+        // Consume only the page number: subsequent requests keep the selected
+        // account, host and filter instead of following a server-supplied URL.
+        let page = url
+            .query_pairs()
+            .find(|(name, _)| name == "page")
+            .and_then(|(_, value)| value.parse::<u32>().ok())
+            .filter(|page| *page > current_page && *page <= 10_000)
+            .ok_or_else(|| Error::InvalidResponse("Invalid notification next page".into()))?;
+        return Ok(Some(page));
+    }
+    Ok(None)
 }
 
 fn subject_url(repository: &Repository, subject: &Subject) -> String {

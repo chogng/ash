@@ -49,7 +49,8 @@ async fn cancelling_live_http_ends_reads_and_marks_dispatched_writes_uncertain()
                 None,
                 operation,
             )
-            .await;
+            .await
+            .map(|response| response.data);
         canceller.join().unwrap();
         assert_eq!(
             response,

@@ -223,16 +223,26 @@ struct RepositoryHttp {
 }
 impl RepositoryHttp {
     fn reply(&self, status: u16, body: serde_json::Value) {
+        self.reply_with_headers(status, vec![], body);
+    }
+
+    fn reply_with_headers(
+        &self,
+        status: u16,
+        headers: Vec<ash_http_client::HttpHeader>,
+        body: serde_json::Value,
+    ) {
         self.replies
             .lock()
             .unwrap()
             .push_back(Ok(ash_http_client::HttpResponse::new(
                 status,
-                vec![],
+                headers,
                 serde_json::to_vec(&body).unwrap(),
             )));
     }
 }
+
 impl ash_http_client::HttpClient for RepositoryHttp {
     fn execute(
         &self,
@@ -1220,4 +1230,77 @@ fn github_notifications_and_fork_rpc_use_typed_account_and_repository_boundaries
         requests[3].url(),
         "https://api.github.com/repos/team/repo/forks"
     );
+}
+
+#[test]
+fn github_notifications_rpc_preserves_link_pagination_for_full_and_short_pages() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_credentials(repository_credentials(), http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    for (page, count, next_page) in [(1, 50, Some(2)), (2, 1, Some(3)), (3, 50, None)] {
+        let rows = (1..=count)
+            .map(|index| {
+                json!({
+                    "id": (page * 100 + index).to_string(),
+                    "subject": {
+                        "type":"Issue",
+                        "title":"Mention",
+                        "url":"https://api.github.com/repos/team/repo/issues/7"
+                    },
+                    "repository": {"full_name":"team/repo"},
+                    "reason":"mention",
+                    "unread":true,
+                    "updated_at":"now"
+                })
+            })
+            .collect::<Vec<_>>();
+        let headers = next_page
+            .map(|next| {
+                vec![ash_http_client::HttpHeader::new(
+                    "Link",
+                    format!(
+                        "<https://api.github.com/notifications?all=false&participating=true&per_page=50&page={next}>; rel=\"next\""
+                    ),
+                )]
+            })
+            .unwrap_or_default();
+        http.reply_with_headers(200, headers, json!(rows));
+        let response = call(
+            &server,
+            &mut connection,
+            json!({
+                "jsonrpc":"2.0", "id": page + 1, "method":"github/notifications/list",
+                "params": {"operationId":format!("inbox-page-{page}"), "accountId":"42", "filter":"participating", "page":page}
+            }),
+        );
+        assert_eq!(
+            response["result"]["notifications"]
+                .as_array()
+                .unwrap()
+                .len(),
+            count as usize,
+            "{response}"
+        );
+        assert_eq!(
+            response["result"]["notifications"][0]["id"],
+            (page * 100 + 1).to_string()
+        );
+        assert_eq!(response["result"]["nextPage"], json!(next_page));
+    }
+    let requests = http.requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    for (index, request) in requests.iter().enumerate() {
+        let page = index + 1;
+        assert_eq!(
+            request.url(),
+            format!(
+                "https://api.github.com/notifications?all=false&participating=true&per_page=50&page={page}"
+            )
+        );
+    }
 }
