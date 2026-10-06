@@ -32,14 +32,22 @@ export const sessionsAccentGlow = registerColor("sessions.accentGlow", {
 	highContrastLight: null,
 }, { description: "Glow around the sessions title bar accent.", owner: "sessions.titlebar", needsTransparency: true });
 
-// Sessions owns navigation feedback independently of Workbench. Keep explicit defaults
-// instead of aliasing toolbar colors so changes to either window do not recolor the other.
-registerColor('sessions.activityBar.hoverBackground', {
-	dark: '#5a5d5e50',
-	light: '#5a5d5e29',
-	highContrastDark: '#333333',
-	highContrastLight: '#dddddd',
-}, { description: 'Hovered Activity Bar item background in the Sessions window.', owner: 'sessions.activitybar' });
+// Sessions owns navigation colors independently of Workbench: idle icons are muted,
+// while hover and selection use the same strong foreground and Sessions selection background.
+registerColor('sessions.activityBar.foreground', {
+	dark: '#ffffff',
+	light: '#000000',
+	highContrastDark: '#ffffff',
+	highContrastLight: '#000000',
+}, { description: 'Hovered or selected Activity Bar icon color in the Sessions window.', owner: 'sessions.activitybar' });
+
+// High-contrast themes retain full icon contrast; the outline also identifies hover and selection.
+registerColor('sessions.activityBar.inactiveForeground', {
+	dark: '#999999',
+	light: '#808080',
+	highContrastDark: '#ffffff',
+	highContrastLight: '#000000',
+}, { description: 'Unselected Activity Bar icon color in the Sessions window.', owner: 'sessions.activitybar' });
 
 registerColor('sessions.selectionBackground', {
 	dark: '#303030',

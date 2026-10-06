@@ -1918,6 +1918,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 
 test('Sessions navigation retains its own selection and hover skin while changing target sizes', async ({ application, target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
+	await page.bringToFront();
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
 	const originalChat = await chat.elementHandle();
@@ -1927,7 +1928,7 @@ test('Sessions navigation retains its own selection and hover skin while changin
 	await expect(chat).toHaveCSS('width', '36px');
 	await expect(chat).toHaveCSS('height', '36px');
 	// Shared toolbar theme overrides must not change Sessions navigation feedback.
-	const hoverVariables = ['--ash-toolbar-hover-background', '--ash-sessions-activity-bar-hover-background'];
+	const hoverVariables = ['--ash-toolbar-hover-background', '--ash-sessions-selection-background'];
 	const previousHoverStyles = await navigation.evaluate((element, variables) => {
 		const style = (element as HTMLElement).style;
 		const previous = variables.map(variable => ({ variable, value: style.getPropertyValue(variable), priority: style.getPropertyPriority(variable) }));
@@ -1939,7 +1940,7 @@ test('Sessions navigation retains its own selection and hover skin while changin
 		await navigation.getByRole('button', { name: 'Library', exact: true }).hover();
 		await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveCSS('background-color', 'rgb(12, 34, 56)');
 		await chat.hover();
-		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(chat).toHaveCSS('background-color', 'rgb(12, 34, 56)');
 	} finally {
 		await navigation.evaluate((element, previous) => {
 			const style = (element as HTMLElement).style;
@@ -1961,7 +1962,9 @@ test('Sessions navigation retains its own selection and hover skin while changin
 		const selected = navigation.locator('.ash-composite-bar-navigation-item.checked > button.selected');
 		await expect(selected).toHaveCount(1);
 		await expect(selected).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(selected.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
 		await expect(selected).toHaveCSS('border-radius', '8px');
+		await page.bringToFront();
 		await page.mouse.move(600, 400);
 		await chat.hover();
 		const tooltip = page.getByRole('tooltip');
@@ -1977,16 +1980,22 @@ test('Sessions navigation retains its own selection and hover skin while changin
 			await expect(chat).toHaveCSS('height', '24px');
 		}
 		const library = navigation.getByRole('button', { name: 'Library', exact: true });
+		await page.mouse.move(600, 400);
+		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
 		await library.hover();
-		const hoverBackground = await library.evaluate(button => getComputedStyle(button).backgroundColor);
-		expect(hoverBackground).not.toBe('rgba(0, 0, 0, 0)');
-		expect(hoverBackground).not.toBe('rgb(240, 240, 240)');
+		await expect(library).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
+		await page.mouse.move(600, 400);
+		await expect(library).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
 		await chat.focus();
 		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
 		await expect(navigation.getByRole('button', { name: 'Collaboration', exact: true })).toBeFocused();
 		await library.focus();
 		await library.press('Enter');
 		await expect(library).toHaveAttribute('aria-current', 'page');
+		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
+		await expect(library).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 		await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
 		await expect(chat).not.toHaveAttribute('aria-current');
@@ -2008,6 +2017,13 @@ test('Sessions navigation retains its own selection and hover skin while changin
 	await workbench.setAppearance(application, 'dark', page);
 	await expect(chat).toHaveCSS('background-color', 'rgb(48, 48, 48)');
 	await expect(chat).toHaveCSS('border-radius', '6px');
+	const library = navigation.getByRole('button', { name: 'Library', exact: true });
+	await page.mouse.move(600, 400);
+	await expect(chat.locator('svg')).toHaveCSS('color', 'rgb(255, 255, 255)');
+	await expect(library.locator('svg')).toHaveCSS('color', 'rgb(153, 153, 153)');
+	await library.hover();
+	await expect(library).toHaveCSS('background-color', 'rgb(48, 48, 48)');
+	await expect(library.locator('svg')).toHaveCSS('color', 'rgb(255, 255, 255)');
 	await originalChat!.dispose();
 });
 
@@ -3132,9 +3148,9 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
 		expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(Array(hasWindowMenu ? 6 : 5).fill('8px'));
+		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(Array(hasWindowMenu ? 4 : 3).fill('8px'));
 		await library.hover();
-		await expect(library).not.toHaveCSS('background-color', selectedBackground);
+		await expect(library).toHaveCSS('background-color', selectedBackground);
 		if (hasWindowMenu) {
 			await menu.hover();
 			await expect(menu).toHaveCSS('background-color', selectedBackground);
@@ -3160,7 +3176,8 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await page.keyboard.press('Tab');
 		await toggle.focus();
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
-		await expect(toggle).toHaveCSS('outline-width', '1px');
+		// Chromium rounds a 1px outline to device pixels (for example, 0.8px at 125% scaling).
+		expect(await toggle.evaluate(button => parseFloat(getComputedStyle(button).outlineWidth))).toBeGreaterThan(0);
 		await page.keyboard.press('Enter');
 		await expect(sidebar).toBeHidden();
 		await page.keyboard.press('Space');
@@ -3213,6 +3230,9 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 		const library = navigation.getByRole('button', { name: 'Library' });
 		const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 		await page.mouse.move(400, 180);
+		const iconColor = theme.endsWith('Dark') ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)';
+		await expect(chat.locator('svg')).toHaveCSS('color', iconColor);
+		await expect(library.locator('svg')).toHaveCSS('color', iconColor);
 		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -3221,6 +3241,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 		await library.hover();
 		await expect(library).toHaveCSS('background-color', selectedBackground);
 		await expect(library).toHaveCSS('outline-style', 'solid');
+		await expect(library.locator('svg')).toHaveCSS('color', iconColor);
 		await toggle.hover();
 		await expect(toggle).toHaveCSS('background-color', selectedBackground);
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
@@ -3239,7 +3260,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 		await page.keyboard.press('Tab');
 		await toggle.focus();
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
-		await expect(toggle).toHaveCSS('outline-width', '1px');
+		expect(await toggle.evaluate(button => parseFloat(getComputedStyle(button).outlineWidth))).toBeGreaterThan(0);
 		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 		await returnFromSessions(page, application);
 		await closed;

@@ -57,7 +57,7 @@
 	padding: 0;
 	border: 0;
 	border-radius: var(--ash-corner-radius-large);
-	color: var(--ash-foreground);
+	color: var(--ash-sessions-activity-bar-inactive-foreground);
 	background: transparent;
 }
 
@@ -73,13 +73,9 @@
 	min-height: var(--ash-spacing-size240);
 }
 
-.ash-sessions-activity-item:not(:disabled):hover {
-	color: var(--ash-foreground);
-	background: var(--ash-sessions-activity-bar-hover-background);
-}
-
+.ash-sessions-activity-item:not(:disabled):hover,
 .ash-sessions-activity-item.selected:not(:disabled) {
-	color: var(--ash-foreground);
+	color: var(--ash-sessions-activity-bar-foreground);
 	background: var(--ash-sessions-selection-background);
 }
 
