@@ -314,11 +314,15 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.restoreWindows'), 'startup');
+	assert.equal(findSettingCategory(layout, 'window.newWindowDimensions'), 'startup');
+	assert.equal(findSettingCategory(layout, 'window.restoreFullscreen'), 'startup');
 	assert.equal(findSettingCategory(layout, 'workbench.editor.restoreEditors'), 'startup');
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
+	assert.equal(chinese?.bundles.ash?.['window.newWindowDimensions.title'], '新窗口尺寸');
+	assert.equal(chinese?.bundles.ash?.['window.restoreFullscreen.title'], '恢复全屏');
 	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');
 	assert.equal(chinese?.bundles.ash?.['workbench.tips.enabled.title'], '空编辑器提示');
 	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');

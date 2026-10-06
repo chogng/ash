@@ -56,7 +56,7 @@ import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
 import { colorSchemeChannel, fileDialogIpcRoutes, nativeHostIpcRoutes, windowAppearanceIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateOpenAgentsWindow, validateSystemWideKeybindings, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateOpenAgentsWindow, validateSystemWideKeybindings, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, validateReturnToWorkbench, type IAgentsWindowHandoffResult } from '../../sessions/common/windowNavigation.js';
@@ -74,7 +74,7 @@ import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { IWindowsMainService, WindowControlsOverlay, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
-import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
+import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
@@ -693,7 +693,7 @@ export class AshApplication extends Disposable {
 		}
 		const workspaces = this.workspaces;
 		assertDefined(workspaces, 'Workspace service is not initialized');
-		const activeWindow = this.windowsMainService.getLastActiveWindow();
+		const activeWindow = this.windowsMainService.getLastActiveWindow('workbench');
 		const active = activeWindow ? this.workbenchWindowData.get(activeWindow.id) : undefined;
 		const workspace = launch.args.workspace
 			? await this.windowsMainService.resolveWorkspaceOpenTarget(launch.args.workspace, launch.cwd)
@@ -724,12 +724,12 @@ export class AshApplication extends Disposable {
 			await this.launchMainService.start({ args: parseLaunchArguments(arguments_), cwd: process.cwd() });
 			return true;
 		}
-		if (windowId === '_blank' || (!windowId && !this.windowsMainService.getLastActiveWindow())) {
+		if (windowId === '_blank' || (!windowId && !this.windowsMainService.getLastActiveWindow('workbench'))) {
 			await this.launchMainService.start({ args: parseLaunchArguments(['--new-window']), cwd: process.cwd() });
 		}
 		const window = windowId && windowId !== '_blank'
 			? this.windowsMainService.getWindows().find(window => String(window.id) === windowId)
-			: this.windowsMainService.getLastActiveWindow();
+			: this.windowsMainService.getLastActiveWindow('workbench');
 		if (!window) {
 			return false;
 		}
@@ -810,11 +810,6 @@ export class AshApplication extends Disposable {
 		const active = this.windowsMainService.getLastActiveWindow();
 		if (active) {
 			focusWindow(active);
-			return;
-		}
-		const sessionsWindow = this.windowsMainService.managedWindowValues()[0];
-		if (sessionsWindow) {
-			focusWindow(sessionsWindow);
 			return;
 		}
 		const workspaces = this.workspaces;
@@ -1132,8 +1127,7 @@ export class AshApplication extends Disposable {
 		resources: DisposableStore,
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
-		const lastActiveWindow = BrowserWindow.getFocusedWindow() ?? this.windowsMainService.getLastActiveWindow() ?? this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
-		const windowState = windowsStateHandler.restoreWindowState(lastActiveWindow?.getBounds());
+		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, configurationValues(this.services.configuration.read().document), this.lifecycleMainService.wasRestarted);
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			workspace: workspaceContext.getWorkspace(),
@@ -1526,12 +1520,11 @@ export class AshApplication extends Disposable {
 		const sessionsEntry = this.resolveRendererEntry("sessions");
 		const sessionsWindowState = this.createWindowsStateHandler(UNKNOWN_EMPTY_WINDOW_WORKSPACE, {
 			storageKey: 'sessionsWindowState',
-			// Agents uses workspace window dimensions even before a project is selected.
+			// Agents uses the user-requested 1200 × 800 workspace default even before a project is selected.
 			defaultState: defaultWindowState(WorkbenchState.WORKSPACE),
 		});
 		const titleBarStyle = this.titleBarStyle;
 		const wasOpen = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY) !== undefined;
-		const lastActiveWindow = BrowserWindow.getFocusedWindow() ?? this.windowsMainService.getLastActiveWindow() ?? this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 		await this.windowsMainService.openManagedWindow(
 			AGENTS_WINDOW_KEY,
 			options => new BrowserWindow(options),
@@ -1539,7 +1532,7 @@ export class AshApplication extends Disposable {
 				title: `${AshWorkbenchName} Sessions`,
 				titleBarStyle,
 				icon: this.windowIconPath,
-				state: sessionsWindowState.restoreWindowState(lastActiveWindow?.getBounds()),
+				state: this.windowsMainService.getNewWindowState(sessionsWindowState, configurationValues(this.services.configuration.read().document), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
 					this.configureWindowNavigation(window, windowDisposables);
@@ -1620,6 +1613,16 @@ export class AshApplication extends Disposable {
 							setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
 						}),
 						windowOperationIpcRoute(this.windowsMainService, window),
+						{
+							channel: NATIVE_HOST_OPEN_WINDOW_CHANNEL,
+							validate: validateOpenEmptyWindowOptions,
+							invoke: async (value: unknown) => {
+								const options = value as IOpenEmptyWindowOptions;
+								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
+								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.
+								await this.openWorkspace(workspace, workspaces);
+							},
+						},
 						{
 							channel: NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
 							validate: validateOpenAgentsWindow,
@@ -1930,15 +1933,18 @@ export class AshApplication extends Disposable {
 
 		this.quitSaveStarted = true;
 		const sessionsState = this.sessionsWindow.value?.windowState;
+		for (const record of records) record.windowsStateHandler.stopAutomaticSaves();
+		sessionsState?.handler.stopAutomaticSaves();
+		const activeWindowId = this.windowsMainService.getLastActiveWindow()?.id;
 		void (async () => {
 			try {
 				await this.windowSessionStateHandler.saveSession();
-				for (const record of records) {
-					if (!record.window.isDestroyed()) await record.windowsStateHandler.saveWindowState(record.window);
-				}
-				// Capture the session before Electron starts closing its windows.
-				if (sessionsState && !sessionsState.window.isDestroyed()) {
-					await sessionsState.handler.saveWindowState(sessionsState.window);
+				const placements = records.map(record => ({ window: record.window, handler: record.windowsStateHandler }));
+				if (sessionsState) placements.push(sessionsState);
+				// The global first-window placement follows activity, not the order that window kinds are saved.
+				placements.sort((a, b) => Number(a.window.id === activeWindowId) - Number(b.window.id === activeWindowId));
+				for (const placement of placements) {
+					if (!placement.window.isDestroyed()) await placement.handler.saveWindowState(placement.window);
 				}
 			} catch (error) {
 				console.error("Failed to flush application state before quit", error);
@@ -1970,6 +1976,8 @@ export class AshApplication extends Disposable {
 		this.quitSaveStarted = false;
 		this.quitAfterStateSaved = false;
 		this.windowSessionStateHandler.resumeAutomaticSaves();
+		for (const record of this.workbenchWindowData.values()) record.windowsStateHandler.resumeAutomaticSaves();
+		this.sessionsWindow.value?.windowState?.handler.resumeAutomaticSaves();
 	}
 
 	private readonly onWillQuit = (event: ElectronEvent): void => {
@@ -2087,6 +2095,7 @@ export class AshApplication extends Disposable {
 				getAllDisplays: () => screen.getAllDisplays(),
 				getPrimaryDisplay: () => screen.getPrimaryDisplay(),
 				getDisplayMatching: (bounds) => screen.getDisplayMatching(bounds),
+				getCursorDisplay: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),
 			},
 			onError: (error) => {
 				console.error("Failed to save window state", error);

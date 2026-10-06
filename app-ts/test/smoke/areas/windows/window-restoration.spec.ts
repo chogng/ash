@@ -1,6 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { launchElectronApplication, type ElectronApplicationLaunchResult } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
@@ -22,27 +23,23 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			const page = await application.firstWindow();
 			await new Workbench(page).waitForReady();
 			const defaults = await application.evaluate(({ screen }) => {
-				const area = screen.getPrimaryDisplay().workArea;
+				const { bounds, workArea: area } = screen.getPrimaryDisplay();
 				const width = Math.min(1200, area.width);
 				const height = Math.min(800, area.height);
-				return { x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height };
+				return { x: Math.round(Math.max(area.x, Math.min(bounds.x + (bounds.width - 1200) / 2, area.x + area.width - width))), y: Math.round(Math.max(area.y, Math.min(bounds.y + (bounds.height - 800) / 2, area.y + area.height - height))), width, height };
 			});
 			await expect.poll(() => geometryDelta(application!, defaults, 'current')).toBeLessThanOrEqual(2);
 			const opened = application.waitForEvent('window');
 			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 			const agents = await opened;
 			await expect(agents.locator('.ash-sessions-window')).toBeVisible();
-			const agentsDefaults = await application.evaluate(({ screen }) => {
-				const area = screen.getPrimaryDisplay().workArea;
-				const width = Math.min(1440, area.width);
-				const height = Math.min(900, area.height);
-				return { x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height };
-			});
 			const agentsWindow = await application.browserWindow(agents);
 			try {
+				// DPI frame rounding can suppress an exact-coordinate collision and its
+				// placement offset. Both windows must still have the same default size.
 				await expect.poll(async () => {
 					const bounds = await agentsWindow.evaluate(window => window.getBounds());
-					return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(bounds[key] - agentsDefaults[key])));
+					return Math.max(Math.abs(bounds.width - defaults.width), Math.abs(bounds.height - defaults.height));
 				}).toBeLessThanOrEqual(2);
 			} finally {
 				await agentsWindow.dispose();
@@ -116,6 +113,78 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 	});
 }
 
+for (const scenario of [
+	{ resolution: '1920 × 1080', scaleFactor: 1, width: 1920, height: 1080, expected: { width: 1200, height: 800 } },
+	{ resolution: '1280 × 720', scaleFactor: 1, width: 1280, height: 720, expected: { width: 1200, height: 680 } },
+	{ resolution: '1024 × 768', scaleFactor: 1, width: 1024, height: 768, expected: { width: 1024, height: 728 } },
+	{ resolution: '1920 × 1080', scaleFactor: 1.5, width: 1280, height: 720, expected: { width: 1200, height: 680 } },
+	{ resolution: '3840 × 2160', scaleFactor: 2, width: 1920, height: 1080, expected: { width: 1200, height: 800 } },
+]) {
+	test(`Desktop new windows fit simulated ${scenario.resolution} at ${scenario.scaleFactor * 100}% scaling`, async ({}, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(userDataDirectory, { recursive: true });
+		// The screen adapter supplies DIP rectangles; physical frame rounding is
+		// exercised separately by the actual display-scaling scenarios above.
+		const session = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1']);
+		const application = session.application;
+		try {
+			const page = await application.firstWindow();
+			const workbench = new Workbench(page);
+			await workbench.waitForReady();
+			await application.evaluate(({ BrowserWindow, screen }, scenario) => {
+				const originalAll = screen.getAllDisplays;
+				const originalPrimary = screen.getPrimaryDisplay;
+				const originalMatching = screen.getDisplayMatching;
+				const display = {
+					...screen.getPrimaryDisplay(),
+					scaleFactor: scenario.scaleFactor,
+					bounds: { x: 0, y: 0, width: scenario.width, height: scenario.height },
+					workArea: { x: 0, y: 0, width: scenario.width, height: scenario.height - 40 },
+				};
+				(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
+					screen.getAllDisplays = originalAll;
+					screen.getPrimaryDisplay = originalPrimary;
+					screen.getDisplayMatching = originalMatching;
+				};
+				screen.getAllDisplays = () => [display];
+				screen.getPrimaryDisplay = () => display;
+				screen.getDisplayMatching = () => display;
+				BrowserWindow.getAllWindows()[0]!.setBounds({ x: 0, y: 0, width: 800, height: 500 });
+			}, scenario);
+			const agents = await workbench.openAgentsWindow('electron');
+			const opened = application.waitForEvent('window');
+			await page.evaluate(async () => {
+				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+				await bridge.invoke('ash:window:open', {});
+			});
+			const empty = await opened;
+			await new Workbench(empty).waitForReady();
+			for (const target of [agents, empty]) {
+				const window = await application.browserWindow(target);
+				try {
+					await expect.poll(async () => {
+						const { width, height } = await window.evaluate(window => window.getBounds());
+						return { width, height };
+					}).toEqual(scenario.expected);
+				} finally {
+					await window.dispose();
+				}
+			}
+			await testInfo.attach('window-sizing', {
+				body: JSON.stringify({ ...scenario, actual: await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.getBounds())) }, null, 2),
+				contentType: 'application/json',
+			});
+		} finally {
+			await application.evaluate(() => {
+				const context = globalThis as { restoreTestDisplay?: () => void };
+				context.restoreTestDisplay?.();
+				delete context.restoreTestDisplay;
+			});
+			await session.close();
+		}
+	});
+}
+
 test('Desktop places a new Agents window on the active display of a simulated mixed-DPI desktop', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
@@ -150,8 +219,8 @@ test('Desktop places a new Agents window on the active display of a simulated mi
 				return overlap(primary) > overlap(secondary) ? primary : secondary;
 			};
 			BrowserWindow.getAllWindows()[0]!.setBounds(primary.workArea);
-			const width = Math.min(1440, primary.workArea.width);
-			const height = Math.min(900, primary.workArea.height);
+			const width = Math.min(1200, primary.workArea.width);
+			const height = Math.min(800, primary.workArea.height);
 			return { x: Math.round(primary.workArea.x + (primary.workArea.width - width) / 2), y: Math.round(primary.workArea.y + (primary.workArea.height - height) / 2), width, height };
 		});
 		const opened = application.waitForEvent('window');
@@ -175,7 +244,7 @@ test('Desktop places a new Agents window on the active display of a simulated mi
 });
 
 for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
-	test(`Desktop new windows use VS Code defaults after resizing the active window at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
+	test(`Desktop new windows share the 1200 by 800 default after resizing the active window at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		const session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
@@ -204,13 +273,9 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 			const agentsWindow = await application.browserWindow(agents);
 			try {
-				const agentsDefaults = await application.evaluate(({ screen }) => {
-					const area = screen.getPrimaryDisplay().workArea;
-					return { width: Math.min(1440, area.width), height: Math.min(900, area.height) };
-				});
 				await expect.poll(async () => {
 					const bounds = await agentsWindow.evaluate(window => window.getBounds());
-					return Math.max(Math.abs(bounds.width - agentsDefaults.width), Math.abs(bounds.height - agentsDefaults.height));
+				return Math.max(Math.abs(bounds.width - defaults.width), Math.abs(bounds.height - defaults.height));
 				}).toBeLessThanOrEqual(2);
 			} finally {
 				await agentsWindow.dispose();
@@ -299,6 +364,120 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 	}
 });
 
+for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) {
+	test(`Desktop shares the ${policy} dimension setting across Workbench and Agents windows`, async ({}, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.newWindowDimensions': policy }));
+		const session = await launch(userDataDirectory);
+		try {
+			const application = session.application;
+			const page = await application.firstWindow();
+			await new Workbench(page).waitForReady();
+			await application.evaluate(({ BrowserWindow }) => {
+				const window = BrowserWindow.getAllWindows()[0]!;
+				window.setFullScreen(false);
+				window.unmaximize();
+			});
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.isFullScreen() || window.isMaximized()))).toBe(false);
+			const original = await application.evaluate(({ BrowserWindow, screen }) => {
+				const area = screen.getPrimaryDisplay().workArea;
+				const window = BrowserWindow.getAllWindows()[0]!;
+				window.setBounds({ x: area.x + 40, y: area.y + 40, width: Math.min(800, area.width - 100), height: Math.min(500, area.height - 100) });
+				return window.getBounds();
+			});
+			const openedAgents = application.waitForEvent('window');
+			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+			const agents = await openedAgents;
+			await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+			const agentsWindow = await application.browserWindow(agents);
+			try {
+				await expect.poll(() => agentsWindow.evaluate(window => ({ maximized: window.isMaximized(), fullscreen: window.isFullScreen() }))).toEqual({ maximized: policy === 'maximized', fullscreen: policy === 'fullscreen' });
+				if (policy === 'inherit' || policy === 'offset') {
+					const expected = { ...original, x: original.x + (policy === 'offset' ? 30 : 0), y: original.y + (policy === 'offset' ? 30 : 0) };
+					await expect.poll(async () => {
+						const actual = await agentsWindow.evaluate(window => window.getBounds());
+						return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(actual[key] - expected[key])));
+					}).toBeLessThanOrEqual(2);
+				}
+				await agentsWindow.evaluate(window => window.focus());
+				const openedEmpty = application.waitForEvent('window');
+				await agents.evaluate(() => {
+					const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+					return bridge.invoke('ash:window:open', {});
+				});
+				const empty = await openedEmpty;
+				await new Workbench(empty).waitForReady();
+				const emptyWindow = await application.browserWindow(empty);
+				try {
+					await expect.poll(() => emptyWindow.evaluate(window => ({ maximized: window.isMaximized(), fullscreen: window.isFullScreen() }))).toEqual({ maximized: policy === 'maximized', fullscreen: policy === 'fullscreen' });
+					if (policy === 'inherit' || policy === 'offset') {
+						const source = await agentsWindow.evaluate(window => window.getNormalBounds());
+						const expected = { ...source, x: source.x + (policy === 'offset' ? 30 : 0), y: source.y + (policy === 'offset' ? 30 : 0) };
+						await expect.poll(async () => {
+							const actual = await emptyWindow.evaluate(window => window.getBounds());
+							return Math.max(...(['x', 'y', 'width', 'height'] as const).map(key => Math.abs(actual[key] - expected[key])));
+						}).toBeLessThanOrEqual(2);
+					}
+				} finally { await emptyWindow.dispose(); }
+			} finally { await agentsWindow.dispose(); }
+			await session.quit();
+		} finally { await session.close(); }
+	});
+}
+
+for (const restoreFullscreen of [false, true]) {
+	test(`Desktop restores saved fullscreen for both window kinds only when enabled (${restoreFullscreen})`, async ({}, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreFullscreen': restoreFullscreen }));
+		let session = await launch(userDataDirectory);
+		try {
+			let application = session.application;
+			const page = await application.firstWindow();
+			await new Workbench(page).waitForReady();
+			await new Workbench(page).openAgentsWindow('electron');
+			await application.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.setFullScreen(true); });
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.isFullScreen()))).toEqual([true, true]);
+			await session.quit();
+			session = await launch(userDataDirectory);
+			application = session.application;
+			await expect.poll(() => application.windows().length).toBe(2);
+			const restoredWorkbench = new Workbench(await application.firstWindow());
+			await restoredWorkbench.waitForReady();
+			await restoredWorkbench.openAgentsWindow('electron');
+			await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.isFullScreen()))).toEqual([restoreFullscreen, restoreFullscreen]);
+			await session.quit();
+		} finally { await session.close(); }
+	});
+}
+
+test('Desktop window sizing settings expose Chinese labels and keyboard selection', async ({}, testInfo) => {
+	const userDataDirectory = testInfo.outputPath('user-data');
+	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.locale":"zh-CN"}');
+	const session = await launch(userDataDirectory);
+	try {
+		const page = await session.application.firstWindow();
+		const workbench = new Workbench(page);
+		await workbench.waitForReady();
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = workbench.settingsEditor.element;
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await workbench.settingsEditor.selectCategory('startup');
+		const dimensions = settings.locator('[data-settings-item-id="window.newWindowDimensions"]');
+		await expect(dimensions).toContainText('新窗口尺寸');
+		const select = dimensions.getByRole('combobox');
+		await select.focus();
+		await select.press('Space');
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect(select).toBeFocused();
+		await expect.poll(async () => JSON.parse(await readFile(join(userDataDirectory, 'profile', 'settings.json'), 'utf8'))['window.newWindowDimensions']).toBe('inherit');
+		await expect(settings.locator('[data-settings-item-id="window.restoreFullscreen"]')).toContainText('恢复全屏');
+	} finally { await session.close(); }
+});
+
 test('Desktop restores open Workbench and Agents windows and honors startup intent', async ({}, testInfo) => {
 	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
@@ -349,7 +528,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const targeted = await application.firstWindow();
 		await new Workbench(targeted).waitForReady();
-		await expect.poll(() => workspaceFolder(targeted)).toBe(folder);
+		await expect.poll(() => workspaceFolder(targeted)).toBe(URI.file(folder).fsPath);
 		const reopenedAgents = application.waitForEvent('window');
 		await targeted.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		await expect((await reopenedAgents).locator('.ash-sessions-window')).toBeVisible();
@@ -401,7 +580,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const folderWorkbench = await application.firstWindow();
 		await new Workbench(folderWorkbench).waitForReady();
-		await expect.poll(() => workspaceFolder(folderWorkbench)).toBe(folder);
+		await expect.poll(() => workspaceFolder(folderWorkbench)).toBe(URI.file(folder).fsPath);
 	} finally {
 		await session?.close();
 	}
@@ -530,6 +709,9 @@ test('updated version restores all windows once despite a none preference', asyn
 		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(2);
 		await expect.poll(async () => (JSON.parse(await readFile(statePath, 'utf8')) as Record<string, unknown>).updateRestartVersion).toBeUndefined();
+		const restoredWorkbench = new Workbench(await application.firstWindow());
+		await restoredWorkbench.waitForReady();
+		await restoredWorkbench.openAgentsWindow('electron');
 		await session.quit();
 		application = undefined;
 

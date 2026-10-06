@@ -9,9 +9,9 @@ import './parts/dialogs/dialog.contribution.js';
 import '../contrib/files/electron-browser/fileActions.contribution.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../common/contributions.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
+import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, NEW_WINDOW_DIMENSIONS_SETTING, RESTORE_FULLSCREEN_SETTING, parseNewWindowDimensions, parseRestoreFullscreen, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
 import { localize } from '../../nls.js';
 import { NativeWindow } from './window.js';
 import {
@@ -65,6 +65,41 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 				{ value: 'none', label: localize('window.restoreWindows.none', 'None') },
 			] as const;
 		},
+	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	key: NEW_WINDOW_DIMENSIONS_SETTING,
+	defaultValue: 'default',
+	parse: parseNewWindowDimensions,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'string', enum: ['default', 'inherit', 'offset', 'maximized', 'fullscreen'] },
+	setting: {
+		valueType: 'select',
+		get title() { return localize('window.newWindowDimensions.title', 'New window dimensions'); },
+		get description() { return localize('window.newWindowDimensions.description', 'Choose the size and position of new windows. Previously opened windows restore their saved size and position.'); },
+		get options() {
+			return [
+				{ value: 'default', label: localize('window.newWindowDimensions.default', 'Default size, centered on screen') },
+				{ value: 'inherit', label: localize('window.newWindowDimensions.inherit', 'Same size and position as the last active window') },
+				{ value: 'offset', label: localize('window.newWindowDimensions.offset', 'Same size as the last active window, with an offset') },
+				{ value: 'maximized', label: localize('window.newWindowDimensions.maximized', 'Maximized') },
+				{ value: 'fullscreen', label: localize('window.newWindowDimensions.fullscreen', 'Full screen') },
+			] as const;
+		},
+	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	key: RESTORE_FULLSCREEN_SETTING,
+	defaultValue: false,
+	parse: parseRestoreFullscreen,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('window.restoreFullscreen.title', 'Restore full screen'); },
+		get description() { return localize('window.restoreFullscreen.description', 'Reopen windows in full screen if they were closed in full screen.'); },
 	},
 });
 

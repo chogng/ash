@@ -16,6 +16,9 @@ import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } fr
 import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse } from '../../../window/common/window.js';
+import { WindowsStateHandler } from '../../electron-main/windowsStateHandler.js';
+import { Event } from '../../../../base/common/event.js';
+import { WorkspaceOpenTargetKind } from '../../../environment/common/argv.js';
 
 let windowServices: InstantiationService;
 setup(() => {
@@ -141,9 +144,11 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public getTitle(): string { return this.title; }
 	public isFocused(): boolean { return this.focused; }
 	public isFullScreen(): boolean { return this.fullscreen; }
+	public isMaximized(): boolean { return this.maximized > 0; }
 	public close(): void { this.calls.push('close'); let prevented = false; for (const listener of this.closeListeners) listener({ preventDefault: () => { prevented = true; } }); if (!prevented && !this.deferClose) this.destroy(); }
 	public show(): void { this.shown++; }
 	public getBounds(): IWindowBounds { return this.bounds; }
+	public getNormalBounds(): IWindowBounds { return this.bounds; }
 	public setBounds(bounds: IWindowBounds): void { this.bounds = bounds; }
 	public maximize(): void { this.maximized++; }
 	public setFullScreen(fullscreen: boolean): void { this.fullscreen = fullscreen; }
@@ -662,6 +667,39 @@ test('platform window owner tracks activation, workspace changes and close witho
 	assert.equal(service.getLastActiveWindow(), undefined);
 	assert.equal(service.getWindowCount(), 0);
 	assert.throws(() => service.updateWorkspace(first.id, { id: 'changed' }), /not registered/);
+});
+
+test('managed windows share activation, sizing and last-closed placement without taking workspace reuse', async () => {
+	const workbench = new TestWindow(1, 'Workbench');
+	let reused: TestWindow | undefined;
+	using service = createWindowsService(() => [workbench], async (_configuration, window) => { reused = window; return window; });
+	const agents = new TestWindow(2, 'Agents');
+	agents.bounds = { x: 180, y: 140, width: 900, height: 600 };
+	await service.openManagedWindow('agents', () => agents, {
+		title: 'Agents', state: { ...agents.bounds, mode: WindowMode.Normal },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async () => {},
+	}, () => {});
+	assert.equal(service.getLastActiveWindow(), agents);
+	workbench.emitFocus();
+	assert.equal(service.getLastActiveWindow(), workbench);
+	agents.emitFocus();
+	assert.equal(service.getLastActiveWindow(), agents);
+	const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
+	const handler = new WindowsStateHandler({
+		workspace: createEmptyWorkspaceIdentifier(),
+		stateService: { getItem: () => undefined, setItem: () => {}, removeItem: () => {}, flush: async () => {}, close: async () => {} },
+		displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
+	});
+	assert.deepEqual(service.getNewWindowState(handler, { 'window.newWindowDimensions': 'offset' }, false), {
+		mode: WindowMode.Normal, x: 210, y: 170, width: 900, height: 600, displayId: display.id, workArea: display.workArea,
+	});
+	assert.throws(() => service.getNewWindowState(handler, { 'window.newWindowDimensions': 'unknown' }, false), TypeError);
+	await service.open({ workspace: { kind: WorkspaceOpenTargetKind.Folder, path: '/project' }, files: [], forceReuseWindow: true, forceNewWindow: false, cwd: '/', waitForFiles: false });
+	assert.equal(reused, workbench);
+	workbench.close();
+	agents.close();
+	assert.deepEqual(service.getNewWindowState(handler, {}, false), { ...agents.bounds, mode: WindowMode.Normal });
 });
 
 test('platform window owner reuses the most recently active folder or workspace file', () => {

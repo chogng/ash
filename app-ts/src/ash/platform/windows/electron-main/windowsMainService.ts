@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { IAuxiliaryWindowsMainService } from '../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
-import { WORKSPACE_RECOVERY_CHANNEL, validateWorkspaceRecovery } from '../../window/common/window.js';
+import { WORKSPACE_RECOVERY_CHANNEL, validateWorkspaceRecovery, NEW_WINDOW_DIMENSIONS_SETTING, RESTORE_FULLSCREEN_SETTING, parseNewWindowDimensions, parseRestoreFullscreen } from '../../window/common/window.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
@@ -17,7 +17,8 @@ import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, isSingleFolder
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
-import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
+import { focusWindow, WindowMode, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
+import type { WindowsStateHandler } from './windowsStateHandler.js';
 import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
 import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
@@ -45,9 +46,11 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	getTitle(): string;
 	isFocused(): boolean;
 	isFullScreen(): boolean;
+	isMaximized(): boolean;
 	close(): void;
 	show(): void;
 	getBounds(): IWindowBounds;
+	getNormalBounds(): IWindowBounds;
 	setBounds(bounds: IWindowBounds): void;
 	maximize(): void;
 	setFullScreen(fullscreen: boolean): void;
@@ -171,6 +174,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 	private readonly workspaceOpenings = new Map<string, Promise<TWindow | undefined>>();
 	private readonly recoveredWorkspaces = new Set<string>();
 	private readonly activationOrder = new Map<number, number>();
+	private lastClosedWindowState: IWindowState | undefined;
 	private nextFileRequest = 0;
 	constructor(
 		private readonly createEmptyWindow: (configuration?: IOpenConfiguration, reuseWindow?: TWindow) => Promise<TWindow | undefined>,
@@ -200,27 +204,67 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		return this.getWindows().length;
 	}
 
-	public getLastActiveWindow(): TWindow | undefined {
-		const focusedMain = this.getWindows().find(window => window.isFocused());
+	public getLastActiveWindow(kind: 'all' | 'workbench' = 'all'): TWindow | undefined {
+		const windows = kind === 'all' ? [...this.getWindows(), ...this.managedWindowValues()] : this.getWindows();
+		const focusedMain = windows.find(window => window.isFocused());
 		if (focusedMain) {
 			return focusedMain;
 		}
 		const focusedAuxiliary = this.auxiliaryWindowsMainService.getFocusedWindow();
 		if (focusedAuxiliary) {
-			const parent = this.getWindowById(focusedAuxiliary.parentId);
+			const parent = windows.find(window => window.id === focusedAuxiliary.parentId);
 			if (parent) {
 				return parent;
 			}
 		}
 		const lastAuxiliary = this.auxiliaryWindowsMainService.getLastActiveWindow();
-		const auxiliaryParent = lastAuxiliary && this.getWindowById(lastAuxiliary.parentId);
+		const auxiliaryParent = lastAuxiliary && windows.find(window => window.id === lastAuxiliary.parentId);
 		for (const [id, time] of [...this.activationOrder].reverse()) {
-			const window = this.getWindowById(id);
+			const window = windows.find(window => window.id === id);
 			if (window) {
 				return lastAuxiliary && auxiliaryParent && lastAuxiliary.lastFocusTime > time ? auxiliaryParent : window;
 			}
 		}
 		return auxiliaryParent;
+	}
+
+	/** Live window identity and configuration enter the sizing policy together for both window kinds. */
+	public getNewWindowState(handler: WindowsStateHandler, settings: Readonly<Record<string, unknown>>, wasRestarted: boolean): IWindowState {
+		const active = this.getLastActiveWindow();
+		return handler.getNewWindowState({
+			lastActiveWindow: active ? { state: this.serializeWindowState(active), bounds: active.getBounds() } : undefined,
+			lastClosedWindow: this.lastClosedWindowState,
+			existingWindows: [...this.getWindows(), ...this.managedWindowValues()].map(window => window.getBounds()),
+			newWindowDimensions: parseNewWindowDimensions(settings[NEW_WINDOW_DIMENSIONS_SETTING] ?? 'default'),
+			restoreFullscreen: parseRestoreFullscreen(settings[RESTORE_FULLSCREEN_SETTING] ?? false),
+			wasRestarted,
+		});
+	}
+
+	private serializeWindowState(window: TWindow): IWindowState & IWindowBounds {
+		return { ...window.getNormalBounds(), mode: window.isFullScreen() ? WindowMode.Fullscreen : window.isMaximized() ? WindowMode.Maximized : WindowMode.Normal };
+	}
+
+	private trackActivation(window: TWindow, resources: DisposableStore): void {
+		const activate = (): void => {
+			this.activationOrder.delete(window.id);
+			this.activationOrder.set(window.id, performance.now());
+		};
+		let closingState: IWindowState | undefined;
+		const closing = (): void => { closingState = this.serializeWindowState(window); };
+		activate();
+		window.on('focus', activate);
+		window.on('close', closing);
+		resources.add(toDisposable(() => {
+			if (!window.isDestroyed()) {
+				window.off('focus', activate);
+				window.off('close', closing);
+			}
+		}));
+		window.once('closed', () => {
+			this.activationOrder.delete(window.id);
+			if (this.getWindows().length + this.managedWindowValues().length === 0) this.lastClosedWindowState = closingState;
+		});
 	}
 
 	public updateWorkspace(id: number, workspace: IAnyWorkspaceIdentifier): void {
@@ -303,8 +347,8 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 
 	public async open(configuration: IOpenConfiguration): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void> }> {
 		this.assertNotDisposed();
-		const windows = this.getWindows().filter(window => !window.isDestroyed());
-		const active = windows.find(window => window.isFocused()) ?? this.getLastActiveWindow() ?? (!configuration.workspace && configuration.files.length === 0 ? this.managedWindowValues()[0] : undefined);
+		const needsWorkbench = !!configuration.workspace || configuration.files.length > 0;
+		const active = this.getLastActiveWindow(needsWorkbench ? 'workbench' : 'all');
 		const reuse = !configuration.forceNewWindow && (configuration.forceReuseWindow || !configuration.workspace) ? active : undefined;
 		const window = await this.createEmptyWindow(configuration, reuse);
 		if (!window) {
@@ -376,15 +420,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			throw new Error(`Workbench window ${window.id} is already registered`);
 		}
 		this.workbenchWindows.set(window.id, host);
-		const activate = (): void => {
-			this.activationOrder.delete(window.id);
-			this.activationOrder.set(window.id, performance.now());
-		};
-		activate();
-		window.on('focus', activate);
-		resources.add(toDisposable(() => {
-			if (!window.isDestroyed()) window.off('focus', activate);
-		}));
+		this.trackActivation(window, resources);
 		this.rendererReadiness.set(window.id, new DeferredPromise<void>());
 		window.once('closed', () => {
 			this.activationOrder.delete(window.id);
@@ -424,7 +460,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			this.managedWindows.set(key, created);
 			host = created;
 		}
-		return host.open(options);
+		return host.open({ ...options, initialize: (window, resources) => {
+			this.trackActivation(window, resources);
+			return options.initialize(window, resources);
+		} });
 	}
 
 	public managedWindow(key: string): TWindow | undefined {

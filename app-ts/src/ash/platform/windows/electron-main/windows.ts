@@ -205,6 +205,9 @@ export function validateWindowState(
 		const target = usableDisplays.find(({ display }) => display.id === state.displayId) ??
 			usableDisplays.reduce((nearest, entry) => distance(entry.area) < distance(nearest.area) ? entry : nearest);
 		const { display, area } = target;
+		// User-requested Ash policy: restoring recorded display placement keeps the
+		// whole window in the target work area so controls and content remain reachable.
+		// VS Code's multi-display check permits a partially off-screen window instead.
 		// Electron bounds are already in DIP. A resolution or DPI change must not
 		// multiply the user's saved size by the change in display work area.
 		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, stateWidth));

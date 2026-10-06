@@ -7,7 +7,7 @@ import type { IStateService } from "../../state/node/state.js";
 import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, parseWorkspaceIdentifier, serializeWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from "../../window/electron-main/window.js";
 import { validateWindowState, type IWindowDisplay } from "./windows.js";
-import { WINDOW_MINIMUM_SIZE } from "../../window/common/window.js";
+import { WINDOW_MINIMUM_SIZE, type NewWindowDimensions } from "../../window/common/window.js";
 import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
 
 const WINDOWS_STATE_STORAGE_KEY = "windowsState";
@@ -21,6 +21,16 @@ export interface IWindowDisplayService {
 	getAllDisplays(): readonly IWindowDisplay[];
 	getPrimaryDisplay(): IWindowDisplay;
 	getDisplayMatching(bounds: IWindowBounds): IWindowDisplay;
+	getCursorDisplay(): IWindowDisplay;
+}
+
+export interface INewWindowStateOptions {
+	readonly lastActiveWindow?: { readonly state: IWindowState & IWindowBounds; readonly bounds: IWindowBounds };
+	readonly lastClosedWindow?: IWindowState;
+	readonly existingWindows: readonly IWindowBounds[];
+	readonly newWindowDimensions: NewWindowDimensions;
+	readonly restoreFullscreen: boolean;
+	readonly wasRestarted: boolean;
 }
 
 /**
@@ -61,15 +71,16 @@ export interface IWindowsStateHandlerOptions {
 	readonly backupPath?: string;
 	readonly storageKey?: string;
 	readonly defaultState?: IWindowState;
+	readonly platform?: NodeJS.Platform;
 	readonly onError?: (error: unknown) => void;
 }
 
 /**
  * Owns the persisted schema and lifecycle for one Electron window role.
  *
- * Window placement is associated with a concrete workspace, folder, or empty
- * window backup. Separate storage keys keep a dedicated window's placement
- * from replacing the main window's last-active placement.
+ * Known placement belongs to a concrete workspace, folder, or empty window
+ * backup. Window kinds retain their records separately and share last-active
+ * placement for the first unmatched window.
  */
 export class WindowsStateHandler {
 	private readonly stateService: IStateService;
@@ -79,9 +90,11 @@ export class WindowsStateHandler {
 	private readonly storageKey: string;
 	private readonly defaultState: IWindowState | undefined;
 	private readonly workbenchState: WorkbenchState;
+	private readonly platform: NodeJS.Platform;
 	private readonly onError: (error: unknown) => void;
 	private windowsState: IWindowsState;
 	private lastNormalState: IWindowState | undefined;
+	private shuttingDown = false;
 
 	constructor({
 		stateService,
@@ -90,6 +103,7 @@ export class WindowsStateHandler {
 		backupPath,
 		storageKey = WINDOWS_STATE_STORAGE_KEY,
 		defaultState,
+		platform = process.platform,
 		onError = () => undefined,
 	}: IWindowsStateHandlerOptions) {
 		this.stateService = stateService;
@@ -98,6 +112,7 @@ export class WindowsStateHandler {
 		this.backupPath = backupPath;
 		this.storageKey = storageKey;
 		this.defaultState = defaultState;
+		this.platform = platform;
 		this.workbenchState = workbenchStateFromWorkspaceIdentifier(workspace);
 		this.onError = onError;
 		this.windowsState = parseWindowsState(
@@ -106,7 +121,9 @@ export class WindowsStateHandler {
 	}
 
 	/** Restores known windows; only the first window restores unmatched last-active placement. */
-	restoreWindowState(lastActiveWindow?: IWindowBounds): IWindowState {
+	getNewWindowState(options: INewWindowStateOptions): IWindowState {
+		const { lastActiveWindow: active, newWindowDimensions } = options;
+		const lastActiveWindow = active?.state;
 		const exactState = this.windowsState.openedWindows.find((windowState) =>
 			matchesWindowIdentity(
 				windowState,
@@ -116,7 +133,7 @@ export class WindowsStateHandler {
 		);
 		const candidates = [
 			exactState?.uiState,
-			lastActiveWindow ? undefined : this.windowsState.lastActiveWindow?.uiState,
+			lastActiveWindow ? undefined : options.lastClosedWindow ?? parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY)).lastActiveWindow?.uiState,
 		];
 
 		for (const candidate of candidates) {
@@ -129,27 +146,57 @@ export class WindowsStateHandler {
 				this.workbenchState,
 			);
 			if (restoredState) {
-				this.lastNormalState = restoredState;
-				return restoredState;
+				this.lastNormalState = restoredState.mode === WindowMode.Fullscreen && !options.wasRestarted && !options.restoreFullscreen
+					? { ...restoredState, mode: WindowMode.Normal }
+					: restoredState;
+				return this.lastNormalState;
 			}
 		}
 
-		const state = this.defaultState ?? defaultWindowState(this.workbenchState);
-		// A default size is not a saved position: matching a rectangle at the
-		// origin can select a larger secondary display on a mixed-DPI desktop.
-		const placement = lastActiveWindow ?? (state.x !== undefined && state.y !== undefined
-			? { x: state.x, y: state.y, width: state.width, height: state.height }
-			: undefined);
-		const display = placement
-			? this.displayService.getDisplayMatching(placement)
-			: this.displayService.getPrimaryDisplay();
+		let state = this.defaultState ?? defaultWindowState(this.workbenchState);
+		const displays = this.displayService.getAllDisplays();
+		let display: IWindowDisplay;
+		if (displays.length === 1) {
+			display = displays[0];
+		} else if (this.platform === 'darwin') {
+			display = this.displayService.getCursorDisplay();
+		} else {
+			display = active ? this.displayService.getDisplayMatching(active.bounds) : this.displayService.getPrimaryDisplay();
+		}
+		state = {
+			...state,
+			x: Math.round(display.bounds.x + (display.bounds.width - state.width) / 2),
+			y: Math.round(display.bounds.y + (display.bounds.height - state.height) / 2),
+		};
+		let offset = newWindowDimensions !== 'maximized' && newWindowDimensions !== 'fullscreen';
+		if (newWindowDimensions === 'maximized') state = { ...state, mode: WindowMode.Maximized };
+		if (newWindowDimensions === 'fullscreen') state = { ...state, mode: WindowMode.Fullscreen };
+		if ((newWindowDimensions === 'inherit' || newWindowDimensions === 'offset') && lastActiveWindow) {
+			// Fullscreen inherits its mode only: screen-sized bounds must not replace the new window's normal size.
+			if (lastActiveWindow.mode === WindowMode.Fullscreen) {
+				state = { ...state, mode: WindowMode.Fullscreen };
+				offset = false;
+			} else {
+				state = { ...lastActiveWindow };
+				display = this.displayService.getDisplayMatching(lastActiveWindow);
+				offset = newWindowDimensions === 'offset';
+			}
+		}
+		if (offset) {
+			while (options.existingWindows.some(bounds => bounds.x === state.x || bounds.y === state.y)) {
+				state = { ...state, x: state.x! + 30, y: state.y! + 30 };
+			}
+		}
 		const area = display.workArea;
+		// User-requested Ash policy: newly placed windows stay wholly inside the
+		// target work area, including multi-display desktops, so controls remain reachable.
+		// This intentionally differs from VS Code's intersection-only multi-display check.
 		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, state.width));
 		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, state.height));
 		this.lastNormalState = {
 			...state,
-			x: Math.round(Math.max(area.x, Math.min(state.x ?? area.x + (area.width - width) / 2, area.x + area.width - width))),
-			y: Math.round(Math.max(area.y, Math.min(state.y ?? area.y + (area.height - height) / 2, area.y + area.height - height))),
+			x: Math.round(Math.max(area.x, Math.min(state.x!, area.x + area.width - width))),
+			y: Math.round(Math.max(area.y, Math.min(state.y!, area.y + area.height - height))),
 			width,
 			height,
 			displayId: display.id,
@@ -163,6 +210,7 @@ export class WindowsStateHandler {
 		const resources = new DisposableStore();
 		this.lastNormalState = this.captureWindowState(window);
 		const save = (): void => {
+			if (this.shuttingDown) return;
 			void this.saveWindowState(window).catch(this.onError);
 		};
 		const updatePlacement = (): void => {
@@ -244,6 +292,10 @@ export class WindowsStateHandler {
 		return resources;
 	}
 
+	/** Quit captures windows in activation order before close events can replace the shared placement. */
+	stopAutomaticSaves(): void { this.shuttingDown = true; }
+	resumeAutomaticSaves(): void { this.shuttingDown = false; }
+
 	/** Captures normal bounds and flushes the complete window-session state. */
 	async saveWindowState(window: IStatefulWindow): Promise<void> {
 		const uiState = this.captureWindowState(window);
@@ -263,10 +315,12 @@ export class WindowsStateHandler {
 			openedWindows: [currentWindow, ...otherWindows].slice(0, MAX_OPENED_WINDOW_RECORDS),
 		};
 		this.windowsState = windowsState;
-		this.stateService.setItem(
-			this.storageKey,
-			serializeWindowsState(windowsState),
-		);
+		this.stateService.setItem(this.storageKey, serializeWindowsState(windowsState));
+		if (this.storageKey !== WINDOWS_STATE_STORAGE_KEY) {
+			// Known-window records stay scoped; the first unmatched window follows the last active window of either kind.
+			const sharedState = parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY));
+			this.stateService.setItem(WINDOWS_STATE_STORAGE_KEY, serializeWindowsState({ ...sharedState, lastActiveWindow: currentWindow }));
+		}
 		await this.stateService.flush();
 	}
 

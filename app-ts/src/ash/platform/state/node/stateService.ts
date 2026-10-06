@@ -1,10 +1,10 @@
 import {
 	mkdir,
 	readFile,
-	rename,
 	writeFile,
 } from "node:fs/promises";
 import { dirname } from "node:path";
+import { Promises } from '../../../base/node/pfs.js';
 import { isRecord } from "../../../base/common/types.js";
 import type { IStateService } from "./state.js";
 
@@ -92,7 +92,7 @@ export class StateService implements IStateService {
 
 				await mkdir(dirname(this.filePath), { recursive: true });
 				await writeFile(this.temporaryFilePath, contents, "utf8");
-				await rename(this.temporaryFilePath, this.filePath);
+				await Promises.rename(this.temporaryFilePath, this.filePath);
 				this.lastSavedContents = contents;
 			});
 		this.writeQueue = write;

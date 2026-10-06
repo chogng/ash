@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { Promises } from '../../../base/node/pfs.js';
 import { dirname } from 'node:path';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -124,7 +125,7 @@ export class StorageMainService extends Disposable {
 	private async write(storages: ReadonlyMap<string, IStorageSnapshot>): Promise<void> {
 		const temporary = `${this.filePath}.${process.pid}.tmp`;
 		await writeFile(temporary, JSON.stringify({ version: 2, storages: [...storages.values()].map(snapshot => ({ ...snapshot, isNew: false })) }), 'utf8');
-		await rename(temporary, this.filePath);
+		await Promises.rename(temporary, this.filePath);
 	}
 }
 

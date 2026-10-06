@@ -8,6 +8,9 @@ import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, ty
 import { defaultWindowState, WindowMode, type IWindowBounds } from "../../../../platform/window/electron-main/window.js";
 import { applyWindowState, resolveBrowserWindowOptions, validateWindowState, type IWindowDisplay } from "../../../../platform/windows/electron-main/windows.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IStatefulWindow, type IWindowSessionEntry, type IWindowSessionWindow } from "../../../../platform/windows/electron-main/windowsStateHandler.js";
+import { parseNewWindowDimensions, parseRestoreFullscreen } from '../../../../platform/window/common/window.js';
+
+const defaultOptions = { existingWindows: [], newWindowDimensions: 'default', restoreFullscreen: false, wasRestarted: false } as const;
 
 const primaryDisplay: IWindowDisplay = {
 	id: 1,
@@ -178,13 +181,13 @@ function createHandler(
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
-			getPrimaryDisplay: () => primaryDisplay,
+			getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
 			getDisplayMatching: () => primaryDisplay,
 		},
 	});
 }
 
-test("default window states match the VS Code workbench sizes", () => {
+test("default window states share the user-requested 1200 by 800 size", () => {
 	assert.deepEqual(defaultWindowState(WorkbenchState.EMPTY), {
 		mode: WindowMode.Normal,
 		width: 1200,
@@ -192,14 +195,129 @@ test("default window states match the VS Code workbench sizes", () => {
 	});
 	assert.deepEqual(defaultWindowState(WorkbenchState.FOLDER), {
 		mode: WindowMode.Normal,
-		width: 1440,
-		height: 900,
+		width: 1200,
+		height: 800,
 	});
 	assert.deepEqual(defaultWindowState(WorkbenchState.WORKSPACE), {
 		mode: WindowMode.Normal,
-		width: 1440,
-		height: 900,
+		width: 1200,
+		height: 800,
 	});
+});
+
+test('window dimension settings validate their complete persisted values', () => {
+	for (const value of ['default', 'inherit', 'offset', 'maximized', 'fullscreen']) assert.equal(parseNewWindowDimensions(value), value);
+	for (const value of ['center', true, 1440, null]) assert.throws(() => parseNewWindowDimensions(value), TypeError);
+	assert.equal(parseRestoreFullscreen(true), true);
+	assert.equal(parseRestoreFullscreen(false), false);
+	assert.throws(() => parseRestoreFullscreen('true'), TypeError);
+});
+
+test('new windows apply each dimension policy to normal bounds and retain their own fullscreen normal size', () => {
+	const active = { mode: WindowMode.Normal, x: 160, y: 100, width: 900, height: 600 };
+	for (const [policy, mode, bounds] of [
+		['default', WindowMode.Normal, { x: 360, y: 140, width: 1200, height: 800 }],
+		['inherit', WindowMode.Normal, { x: 160, y: 100, width: 900, height: 600 }],
+		['offset', WindowMode.Normal, { x: 190, y: 130, width: 900, height: 600 }],
+		['maximized', WindowMode.Maximized, { x: 360, y: 140, width: 1200, height: 800 }],
+		['fullscreen', WindowMode.Fullscreen, { x: 360, y: 140, width: 1200, height: 800 }],
+	] as const) {
+		const handler = createHandler(new TestStateService(), folderWorkspace);
+		assert.deepEqual(handler.getNewWindowState({ ...defaultOptions, newWindowDimensions: policy, lastActiveWindow: { state: active, bounds: active }, existingWindows: [active] }), {
+			...bounds, mode, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+		});
+	}
+	for (const policy of ['inherit', 'offset'] as const) {
+		const handler = createHandler(new TestStateService(), folderWorkspace);
+		assert.deepEqual(handler.getNewWindowState({ ...defaultOptions, newWindowDimensions: policy, lastActiveWindow: { state: { ...active, mode: WindowMode.Fullscreen }, bounds: primaryDisplay.bounds }, existingWindows: [primaryDisplay.bounds] }), {
+			mode: WindowMode.Fullscreen, x: 360, y: 140, width: 1200, height: 800, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+		});
+	}
+	const handler = createHandler(new TestStateService(), folderWorkspace);
+	assert.equal(handler.getNewWindowState({ ...defaultOptions, newWindowDimensions: 'offset', lastActiveWindow: { state: { ...active, mode: WindowMode.Maximized }, bounds: primaryDisplay.bounds }, existingWindows: [primaryDisplay.bounds] }).mode, WindowMode.Maximized);
+});
+
+test('default placement avoids every existing window sharing either coordinate', () => {
+	const handler = createHandler(new TestStateService(), folderWorkspace);
+	assert.deepEqual(handler.getNewWindowState({ ...defaultOptions, existingWindows: [
+		{ x: 360, y: 10, width: 500, height: 500 },
+		{ x: 10, y: 170, width: 500, height: 500 },
+	] }), {
+		mode: WindowMode.Normal, x: 420, y: 200, width: 1200, height: 800, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+	});
+});
+
+test('known fullscreen windows restore fullscreen only when enabled or restarted', async () => {
+	const state = new TestStateService();
+	const handler = createHandler(state, folderWorkspace);
+	const window = new TestWindow();
+	window.fullscreen = true;
+	await handler.saveWindowState(window);
+	for (const [restoreFullscreen, wasRestarted, mode] of [
+		[false, false, WindowMode.Normal], [true, false, WindowMode.Fullscreen], [false, true, WindowMode.Fullscreen],
+	] as const) {
+		for (const newWindowDimensions of ['default', 'fullscreen'] as const) {
+			assert.equal(createHandler(state, folderWorkspace).getNewWindowState({ ...defaultOptions, restoreFullscreen, wasRestarted, newWindowDimensions }).mode, mode);
+		}
+	}
+});
+
+test('macOS new windows use the cursor display while other platforms use the active display', () => {
+	const secondary = { id: 2, bounds: { x: 1920, y: 0, width: 2560, height: 1440 }, workArea: { x: 1920, y: 24, width: 2560, height: 1416 } };
+	for (const platform of ['darwin', 'win32', 'linux'] as const) {
+		const handler = new WindowsStateHandler({
+			stateService: new TestStateService(), workspace: folderWorkspace, platform,
+			displayService: {
+				onDidChangeDisplays: Event.None,
+				getAllDisplays: () => [primaryDisplay, secondary],
+				getPrimaryDisplay: () => primaryDisplay,
+				getCursorDisplay: () => secondary,
+				getDisplayMatching: () => primaryDisplay,
+			},
+		});
+		const state = handler.getNewWindowState({ ...defaultOptions, lastActiveWindow: { state: { ...primaryDisplay.workArea, mode: WindowMode.Normal }, bounds: primaryDisplay.workArea } });
+		assert.equal(state.displayId, platform === 'darwin' ? secondary.id : primaryDisplay.id);
+	}
+});
+
+test('new windows follow the fullscreen display while retaining each kind\'s default normal size', () => {
+	const secondary = { id: 2, bounds: { x: 1920, y: 0, width: 2560, height: 1440 }, workArea: { x: 1920, y: 0, width: 2560, height: 1400 } };
+	for (const [workspace, width, height] of [[UNKNOWN_EMPTY_WINDOW_WORKSPACE, 1200, 800], [folderWorkspace, 1200, 800]] as const) {
+		const handler = new WindowsStateHandler({
+			stateService: new TestStateService(), workspace, platform: 'win32',
+			displayService: {
+				onDidChangeDisplays: Event.None, getAllDisplays: () => [primaryDisplay, secondary],
+				getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
+				getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondary,
+			},
+		});
+		for (const newWindowDimensions of ['default', 'inherit', 'offset'] as const) {
+			assert.deepEqual(handler.getNewWindowState({
+				...defaultOptions, newWindowDimensions,
+				lastActiveWindow: { state: { ...primaryDisplay.workArea, mode: WindowMode.Fullscreen }, bounds: secondary.bounds },
+			}), {
+				mode: newWindowDimensions === 'default' ? WindowMode.Normal : WindowMode.Fullscreen,
+				x: secondary.bounds.x + (secondary.bounds.width - width) / 2,
+				y: (secondary.bounds.height - height) / 2, width, height, displayId: secondary.id, workArea: secondary.workArea,
+			});
+		}
+	}
+});
+
+test('quit snapshots remain authoritative until a close is vetoed', async () => {
+	const state = new TestStateService();
+	const handler = createHandler(state, folderWorkspace);
+	const window = new TestWindow();
+	using tracking = handler.trackWindow(window);
+	handler.stopAutomaticSaves();
+	await handler.saveWindowState(window);
+	const saved = state.getItem('windowsState');
+	window.bounds = { x: 100, y: 100, width: 900, height: 600 };
+	window.emit('close');
+	assert.equal(state.getItem('windowsState'), saved);
+	handler.resumeAutomaticSaves();
+	window.emit('blur');
+	assert.notEqual(state.getItem('windowsState'), saved);
 });
 
 test("window state falls back to defaults when persisted data is invalid", () => {
@@ -216,8 +334,8 @@ test("window state falls back to defaults when persisted data is invalid", () =>
 	});
 
 	assert.deepEqual(
-		createHandler(stateService, folderWorkspace).restoreWindowState(),
-		{ ...defaultWindowState(WorkbenchState.FOLDER), x: 240, y: 70, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
+		createHandler(stateService, folderWorkspace).getNewWindowState(defaultOptions),
+		{ ...defaultWindowState(WorkbenchState.FOLDER), x: 360, y: 140, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
 	);
 });
 
@@ -233,15 +351,15 @@ test("legacy per-kind window state keys are not restored", () => {
 		createHandler(
 			stateService,
 			UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-		).restoreWindowState(),
-		{ ...defaultWindowState(WorkbenchState.EMPTY), x: 360, y: 120, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
+		).getNewWindowState(defaultOptions),
+		{ ...defaultWindowState(WorkbenchState.EMPTY), x: 360, y: 140, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
 	);
 });
 
 test('new window defaults are centered and constrained to the current logical work area', () => {
 	for (const [workspace, size] of [
 		[UNKNOWN_EMPTY_WINDOW_WORKSPACE, { width: 1200, height: 800 }],
-		[folderWorkspace, { width: 1440, height: 900 }],
+		[folderWorkspace, { width: 1200, height: 800 }],
 	] as const) {
 		for (const workArea of [
 			{ x: 100, y: 50, width: 1920, height: 1040 },
@@ -254,11 +372,11 @@ test('new window defaults are centered and constrained to the current logical wo
 			const display = { id: 1, bounds: workArea, workArea };
 			const handler = new WindowsStateHandler({
 				stateService: new TestStateService(), workspace,
-				displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getDisplayMatching: () => display },
+				displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
 			});
 			const width = Math.min(size.width, workArea.width);
 			const height = Math.min(size.height, workArea.height);
-			assert.deepEqual(handler.restoreWindowState(), {
+			assert.deepEqual(handler.getNewWindowState(defaultOptions), {
 				mode: WindowMode.Normal,
 				x: workArea.x + (workArea.width - width) / 2,
 				y: workArea.y + (workArea.height - height) / 2,
@@ -274,11 +392,11 @@ test('first startup uses the primary display when a larger secondary display ove
 	const displayService = {
 		onDidChangeDisplays: Event.None,
 		getAllDisplays: () => [primary, secondary],
-		getPrimaryDisplay: () => primary,
+		getPrimaryDisplay: () => primary, getCursorDisplay: () => primary,
 		getDisplayMatching: () => secondary,
 	};
 	const handler = new WindowsStateHandler({ stateService: new TestStateService(), workspace: folderWorkspace, displayService });
-	assert.deepEqual(handler.restoreWindowState(), {
+	assert.deepEqual(handler.getNewWindowState(defaultOptions), {
 		mode: WindowMode.Normal, x: 0, y: 0, width: 800, height: 560, displayId: primary.id, workArea: primary.workArea,
 	});
 });
@@ -333,7 +451,7 @@ test("window state restores exact folder and workspace records", () => {
 	});
 
 	assert.deepEqual(
-		createHandler(stateService, folderWorkspace).restoreWindowState(primaryDisplay.bounds),
+		createHandler(stateService, folderWorkspace).getNewWindowState({ ...defaultOptions, lastActiveWindow: { state: { ...primaryDisplay.bounds, mode: WindowMode.Normal }, bounds: primaryDisplay.bounds } }),
 		{
 			mode: WindowMode.Normal,
 			x: 100,
@@ -344,7 +462,7 @@ test("window state restores exact folder and workspace records", () => {
 		},
 	);
 	assert.deepEqual(
-		createHandler(stateService, multiRootWorkspace).restoreWindowState(primaryDisplay.bounds),
+		createHandler(stateService, multiRootWorkspace).getNewWindowState({ ...defaultOptions, lastActiveWindow: { state: { ...primaryDisplay.bounds, mode: WindowMode.Normal }, bounds: primaryDisplay.bounds } }),
 		{
 			mode: WindowMode.Maximized,
 			x: 140,
@@ -380,7 +498,7 @@ test("empty windows restore by backup path", () => {
 			stateService,
 			UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 			"C:\\backups\\empty-1",
-		).restoreWindowState(),
+		).getNewWindowState(defaultOptions),
 		{
 			mode: WindowMode.Normal,
 			x: 180,
@@ -412,7 +530,7 @@ test("first unmatched window inherits the last active window state", () => {
 	});
 
 	assert.deepEqual(
-		createHandler(stateService, folderWorkspace).restoreWindowState(),
+		createHandler(stateService, folderWorkspace).getNewWindowState(defaultOptions),
 		{
 			mode: WindowMode.Normal,
 			x: 200,
@@ -424,7 +542,7 @@ test("first unmatched window inherits the last active window state", () => {
 	);
 });
 
-test('new unmatched windows use VS Code defaults on the active display instead of saved last-active dimensions', () => {
+test('new unmatched windows use the required default size on the active display instead of saved last-active dimensions', () => {
 	const stateService = new TestStateService();
 	stateService.setItem('windowsState', {
 		version: 1,
@@ -440,14 +558,14 @@ test('new unmatched windows use VS Code defaults on the active display instead o
 		const display = { id: 2, bounds: workArea, workArea };
 		for (const [workspace, size] of [
 			[UNKNOWN_EMPTY_WINDOW_WORKSPACE, { width: 1200, height: 800 }],
-			[folderWorkspace, { width: 1440, height: 900 }],
+			[folderWorkspace, { width: 1200, height: 800 }],
 		] as const) {
 			const handler = new WindowsStateHandler({
 				stateService, workspace,
 				displayService: {
 					onDidChangeDisplays: Event.None,
 					getAllDisplays: () => [primaryDisplay, display],
-					getPrimaryDisplay: () => primaryDisplay,
+					getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
 					getDisplayMatching: bounds => {
 						assert.deepEqual(bounds, activeBounds);
 						return display;
@@ -456,7 +574,7 @@ test('new unmatched windows use VS Code defaults on the active display instead o
 			});
 			const width = Math.min(size.width, workArea.width);
 			const height = Math.min(size.height, workArea.height);
-			assert.deepEqual(handler.restoreWindowState(activeBounds), {
+			assert.deepEqual(handler.getNewWindowState({ ...defaultOptions, lastActiveWindow: { state: { ...activeBounds, mode: WindowMode.Normal }, bounds: activeBounds } }), {
 				mode: WindowMode.Normal,
 				x: Math.round(workArea.x + (workArea.width - width) / 2),
 				y: Math.round(workArea.y + (workArea.height - height) / 2),
@@ -632,11 +750,11 @@ test("empty windows keep independent placement by workspace ID", async () => {
 
 	const state = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly emptyWorkspaceId?: string }> };
 	assert.deepEqual(state.openedWindows.map(record => record.emptyWorkspaceId), [secondWorkspace.id, firstWorkspace.id]);
-	assert.equal(createHandler(stateService, firstWorkspace).restoreWindowState().x, 120);
-	assert.equal(createHandler(stateService, secondWorkspace).restoreWindowState().x, 320);
+	assert.equal(createHandler(stateService, firstWorkspace).getNewWindowState(defaultOptions).x, 120);
+	assert.equal(createHandler(stateService, secondWorkspace).getNewWindowState(defaultOptions).x, 320);
 });
 
-test("dedicated window state restores without changing the main window state", async () => {
+test("dedicated windows keep known placement separate and share first-window placement", async () => {
 	const stateService = new TestStateService();
 	const main = createHandler(stateService, folderWorkspace);
 	const dedicatedOptions = {
@@ -647,22 +765,25 @@ test("dedicated window state restores without changing the main window state", a
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay],
-			getPrimaryDisplay: () => primaryDisplay,
+			getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
 			getDisplayMatching: () => primaryDisplay,
 		},
 	};
 	const dedicated = new WindowsStateHandler(dedicatedOptions);
-	assert.deepEqual(dedicated.restoreWindowState(), {
-		...dedicatedOptions.defaultState, x: 240, y: 70, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+	assert.deepEqual(dedicated.getNewWindowState(defaultOptions), {
+		...dedicatedOptions.defaultState, x: 360, y: 140, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 	});
 	const mainWindow = new TestWindow();
 	await main.saveWindowState(mainWindow);
-	const mainState = stateService.getItem('windowsState');
+	const mainState = stateService.getItem('windowsState') as { openedWindows: unknown[] };
 	const dedicatedWindow = new TestWindow();
 	dedicatedWindow.bounds = { x: 180, y: 140, width: 1180, height: 780 };
 	await dedicated.saveWindowState(dedicatedWindow);
-	assert.deepEqual(stateService.getItem('windowsState'), mainState);
-	assert.deepEqual(new WindowsStateHandler(dedicatedOptions).restoreWindowState(), {
+	assert.deepEqual((stateService.getItem('windowsState') as { openedWindows: unknown[] }).openedWindows, mainState.openedWindows);
+	assert.deepEqual(createHandler(stateService, { id: 'new-empty' }).getNewWindowState(defaultOptions), {
+		mode: WindowMode.Normal, x: 180, y: 140, width: 1180, height: 780, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+	});
+	assert.deepEqual(new WindowsStateHandler(dedicatedOptions).getNewWindowState(defaultOptions), {
 		mode: WindowMode.Normal, x: 180, y: 140, width: 1180, height: 780, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 	});
 });
@@ -719,26 +840,26 @@ test('window persistence retains logical size and position when display resoluti
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [display],
-			getPrimaryDisplay: () => display,
+			getPrimaryDisplay: () => display, getCursorDisplay: () => display,
 			getDisplayMatching: () => display,
 		},
 	};
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
 	await new WindowsStateHandler(options).saveWindowState(window);
-	assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+	assert.deepEqual(new WindowsStateHandler(options).getNewWindowState(defaultOptions), {
 		mode: WindowMode.Normal, ...window.bounds, displayId: display.id, workArea: display.workArea,
 	});
 
 	display = { id: 1, bounds: { x: 0, y: 0, width: 3840, height: 2160 }, workArea: { x: 0, y: 0, width: 3840, height: 2080 } };
-	const restored = new WindowsStateHandler(options).restoreWindowState();
+	const restored = new WindowsStateHandler(options).getNewWindowState(defaultOptions);
 	assert.deepEqual(restored, {
 		mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, displayId: 1, workArea: display.workArea,
 	});
 	window.setBounds({ x: restored.x!, y: restored.y!, width: restored.width, height: restored.height });
 	await new WindowsStateHandler(options).saveWindowState(window);
 	display = primaryDisplay;
-	assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+	assert.deepEqual(new WindowsStateHandler(options).getNewWindowState(defaultOptions), {
 		mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, displayId: 1, workArea: display.workArea,
 	});
 });
@@ -769,7 +890,7 @@ test('resolution changes apply once after OS resize events and defer maximized g
 		displayService: {
 			onDidChangeDisplays: changes.event,
 			getAllDisplays: () => [display],
-			getPrimaryDisplay: () => display,
+			getPrimaryDisplay: () => display, getCursorDisplay: () => display,
 			getDisplayMatching: () => display,
 		},
 	};
@@ -792,7 +913,7 @@ test('resolution changes apply once after OS resize events and defer maximized g
 		display = primaryDisplay;
 		changes.fire();
 		assert.deepEqual(window.bounds, { x: 0, y: 0, width: 960, height: 520 });
-		const restored = new WindowsStateHandler(options).restoreWindowState();
+		const restored = new WindowsStateHandler(options).getNewWindowState(defaultOptions);
 		assert.deepEqual(restored, {
 			mode: WindowMode.Maximized, x: 0, y: 0, width: 960, height: 520, displayId: 1, workArea: primaryDisplay.workArea,
 		});
@@ -817,7 +938,7 @@ test('display changes preserve fullscreen mode and normal bounds for leaving ful
 	let display = primaryDisplay;
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
-		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getDisplayMatching: () => display },
+		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
 	});
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
@@ -838,8 +959,8 @@ test('invalid persisted work areas are rejected at the storage boundary', () => 
 		stateService.setItem('windowsState', { version: 1, openedWindows: [{
 			folder: folderWorkspace.uri.toString(), uiState: { mode: WindowMode.Normal, bounds: { x: 120, y: 80, width: 1100, height: 760 }, workArea },
 		}] });
-		assert.deepEqual(createHandler(stateService, folderWorkspace).restoreWindowState(), {
-			...defaultWindowState(WorkbenchState.FOLDER), x: 240, y: 70, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
+		assert.deepEqual(createHandler(stateService, folderWorkspace).getNewWindowState(defaultOptions), {
+			...defaultWindowState(WorkbenchState.FOLDER), x: 360, y: 140, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 		});
 	}
 });
@@ -851,7 +972,7 @@ test('dragging between displays preserves logical size and the dropped position'
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay, secondDisplay],
-			getPrimaryDisplay: () => primaryDisplay,
+			getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
 			getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondDisplay,
 		},
 	});
@@ -882,7 +1003,7 @@ test('mixed-DPI displays retain logical placement across moves, restarts, scalin
 			displayService: {
 				onDidChangeDisplays: changes.event,
 				getAllDisplays: () => displays,
-				getPrimaryDisplay: () => primaryDisplay,
+				getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
 				getDisplayMatching: () => currentDisplay,
 			},
 		};
@@ -896,7 +1017,7 @@ test('mixed-DPI displays retain logical placement across moves, restarts, scalin
 		window.emit('move');
 		window.emit('moved');
 		await handler.saveWindowState(window);
-		assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+		assert.deepEqual(new WindowsStateHandler(options).getNewWindowState(defaultOptions), {
 			mode: WindowMode.Normal, ...expected, displayId: secondary.id, workArea: secondary.workArea,
 		});
 		target = { ...secondary, scaleFactor: 1, bounds: { ...secondary.bounds, width: secondary.bounds.width * 2, height: secondary.bounds.height * 2 }, workArea: { ...secondary.workArea, width: secondary.workArea.width * 2, height: secondary.workArea.height * 2 } };
@@ -905,11 +1026,11 @@ test('mixed-DPI displays retain logical placement across moves, restarts, scalin
 		changes.fire();
 		assert.deepEqual(window.bounds, expected);
 		await handler.saveWindowState(window);
-		assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+		assert.deepEqual(new WindowsStateHandler(options).getNewWindowState(defaultOptions), {
 			mode: WindowMode.Normal, ...expected, displayId: target.id, workArea: target.workArea,
 		});
 		displays = [primaryDisplay];
-		assert.deepEqual(new WindowsStateHandler(options).restoreWindowState(), {
+		assert.deepEqual(new WindowsStateHandler(options).getNewWindowState(defaultOptions), {
 			mode: WindowMode.Normal, x: 50, y: 80, width: 980, height: 640, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 		});
 	}
@@ -920,7 +1041,7 @@ test('work areas smaller than the default minimum remain reachable through Elect
 	let display = primaryDisplay;
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
-		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getDisplayMatching: () => display },
+		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
 	});
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
@@ -945,7 +1066,7 @@ test('fullscreen persistence uses the current display and retains logical normal
 		displayService: {
 			onDidChangeDisplays: Event.None,
 			getAllDisplays: () => [primaryDisplay, secondDisplay],
-			getPrimaryDisplay: () => primaryDisplay,
+			getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
 			getDisplayMatching: bounds => bounds.x < 1920 ? primaryDisplay : secondDisplay,
 		},
 	});
@@ -955,7 +1076,7 @@ test('fullscreen persistence uses the current display and retains logical normal
 	window.fullscreen = true;
 	window.bounds = secondDisplay.bounds;
 	await handler.saveWindowState(window);
-	assert.deepEqual(handler.restoreWindowState(), {
+	assert.deepEqual(handler.getNewWindowState({ ...defaultOptions, restoreFullscreen: true }), {
 		mode: WindowMode.Fullscreen, x: 2040, y: 80, width: 1100, height: 760, displayId: 2, workArea: secondDisplay.workArea,
 	});
 });

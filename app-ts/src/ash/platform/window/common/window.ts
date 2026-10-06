@@ -46,6 +46,19 @@ export const DEFAULT_MENU_STYLE: MenuStyleConfiguration = isMacintosh ? 'system'
 export const DEFAULT_TITLE_BAR_STYLE: TitleBarStyleConfiguration = 'custom';
 export type RestoreWindowsSetting = 'preserve' | 'all' | 'folders' | 'one' | 'none';
 export const RESTORE_WINDOWS_SETTING = 'window.restoreWindows';
+export const NEW_WINDOW_DIMENSIONS_SETTING = 'window.newWindowDimensions';
+export const RESTORE_FULLSCREEN_SETTING = 'window.restoreFullscreen';
+export type NewWindowDimensions = 'default' | 'inherit' | 'offset' | 'maximized' | 'fullscreen';
+
+export function parseNewWindowDimensions(value: unknown): NewWindowDimensions {
+	if (value === 'default' || value === 'inherit' || value === 'offset' || value === 'maximized' || value === 'fullscreen') return value;
+	throw new TypeError(`Unknown new window dimensions: ${String(value)}`);
+}
+
+export function parseRestoreFullscreen(value: unknown): boolean {
+	if (typeof value === 'boolean') return value;
+	throw new TypeError('Window restore fullscreen must be a boolean');
+}
 
 export function parseRestoreWindowsSetting(value: unknown): RestoreWindowsSetting {
 	if (value === 'preserve' || value === 'all' || value === 'folders' || value === 'one' || value === 'none') return value;
@@ -77,16 +90,19 @@ export function resolveContextMenuStyle(menuStyle: MenuStyleConfiguration, title
 	return titleBarStyle === 'system' ? 'system' : 'custom';
 }
 
-/** Dimensions used for a new window without an opened workspace. */
+/**
+ * Explicit user-requested Ash product requirement: new empty, workspace and Agents
+ * windows all default to 1200 × 800 logical pixels, before display-area constraints.
+ */
 export const DEFAULT_EMPTY_WINDOW_SIZE = {
 	width: 1200,
 	height: 800,
 } as const;
 
-/** Dimensions used for a new window with an opened workspace. */
+/** User-requested 1200 × 800 default, matching empty windows and Agents windows. */
 export const DEFAULT_WORKSPACE_WINDOW_SIZE = {
-	width: 1440,
-	height: 900,
+	width: 1200,
+	height: 800,
 } as const;
 
 /** Lower bounds that keep the workbench usable while resizing. */

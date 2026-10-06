@@ -319,19 +319,36 @@ Desktop 在创建窗口前由 `WorkspacesMainService.resolveStartupWorkspace()` 
 `resolveWorkspaceOpenTarget()` 只在 Node/Electron Main 中规范化路径、判断文件类型并为
 Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
 `{ id, configPath }` 的结构，不存储重复的 `WorkbenchState` 判别字段。窗口状态策略从标识
-推导状态：`EMPTY` 映射到 `1200 × 800` 默认窗口，`FOLDER` 和 `WORKSPACE` 映射到
-`1440 × 900` 默认窗口。Agents 窗口即使尚未选择项目，也复用工作区的 `1440 × 900`
-默认尺寸；位置和用户调整后的尺寸通过独立的 `sessionsWindowState` 保存。
-`WindowsStateHandler` 在单个 `windowsState` 记录中持有
-`lastActiveWindow` 和 `openedWindows`；每个窗口使用 `workspaceIdentifier`、`folder` 或
-`backupPath` 绑定其 UI state。恢复时先匹配具体 Workspace/Folder/空窗口备份，再回退到
-last-active state，最后才使用默认尺寸。旧的 `windowState` 与 `windowState.empty` 键不会迁移
-或读取。
+推导状态：按用户明确指定的 Ash 产品要求，`EMPTY`、`FOLDER`、`WORKSPACE` 与 Agents
+新窗口统一使用 `1200 × 800` 默认尺寸，单位为逻辑像素。这是对本地 VS Code 默认值的明确
+调整：VS Code 的空窗口为 `1200 × 800`，工作区和 Agents 窗口为 `1440 × 900`。
+`WindowsMainService` 统一记录 Workbench 与 Agents 的活动顺序，
+为两类新窗口提供最后活动窗口、最后关闭窗口、已有窗口位置和共享 profile 设置。
+`WindowsStateHandler.getNewWindowState()` 先恢复具体 Workspace/Folder/空窗口备份的已存位置；
+只有没有活动窗口时，才使用最后关闭窗口或共享 `windowsState.lastActiveWindow` 的位置。
+其余新窗口遵循 `window.newWindowDimensions`：`default` 按屏幕边界居中，
+`inherit` 继承最后活动窗口的普通尺寸和位置，`offset` 继承并按 30 个逻辑像素错开，
+`maximized` 和 `fullscreen` 指定启动模式。默认窗口也避开与已有窗口相同的横坐标或纵坐标。
+全屏继承只继承模式，普通尺寸仍取新窗口所属种类的默认值。多屏时 macOS 选择鼠标所在屏幕，
+Windows/Linux 选择最后活动窗口当前所在屏幕；最终普通矩形限制在屏幕可用区域内。
+大屏不会放大默认窗口；可用区域不足时，宽高分别缩小到可用区域上限，扣除任务栏等占用。
+系统缩放通过屏幕的逻辑可用区域影响这个上限，不重复乘除默认尺寸。单屏下这与 VS Code
+的尺寸限制规则一致。多屏边缘处理按用户要求保留 Ash 的规则：新窗口和带有 `workArea`
+记录的窗口在恢复、调整屏幕位置时，把完整窗口限制在目标可用区域内，保证标题栏、窗口按钮
+和内容可见。这是有意保留的产品差异；本地 VS Code 的多屏校验只要求普通窗口与目标屏幕
+相交，允许部分窗口超出边缘。
+
+具体窗口位置由 Workbench 的 `windowsState.openedWindows` 与 Agents 的
+`sessionsWindowState.openedWindows` 分别保存；每个记录用 `workspaceIdentifier`、`folder`、
+`backupPath` 或 `emptyWorkspaceId` 绑定 UI state。两类窗口共同更新
+`windowsState.lastActiveWindow`；退出时按活动顺序保存，关闭事件不能覆盖这份退出记录。
+`window.newWindowDimensions` 与 `window.restoreFullscreen` 均为应用级设置。
+已保存的全屏模式仅在 `window.restoreFullscreen` 开启或应用更新重启时恢复。
+旧的 `windowState` 与 `windowState.empty` 键不会迁移或读取。
 
 窗口 UI state 同时保存普通窗口矩形、显示器 ID 和该显示器的逻辑可用区域 `workArea`。
-可用区域不变时恢复原尺寸；分辨率、系统缩放或显示器位置变化时，宽高使用同一个缩放系数，
-窗口中心按可用区域的相对位置换算，并限制在目标区域内。仅当目标区域无法同时满足宽高比和
-窗口最小尺寸时，按各轴最小尺寸调整；屏幕本身小于最小尺寸时，以可用区域为限。
+分辨率、系统缩放或显示器位置变化时保留用户保存的逻辑宽高，并按可用区域原点的移动调整位置；
+仅在目标可用区域放不下窗口时缩小窗口。屏幕本身小于最小尺寸时，以可用区域为限。
 显示器移除时选择距原窗口中心最近的可用显示器。
 `WindowsStateHandler` 统一处理重启恢复与运行中的显示器变化，并在窗口资源释放时移除监听。
 跨显示器拖动结束后按目标可用区域调整尺寸，保留拖放位置的中心，拖动过程中不主动调整大小。
