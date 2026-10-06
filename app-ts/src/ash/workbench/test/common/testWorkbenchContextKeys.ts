@@ -42,15 +42,15 @@ const emptyGroup: IEditorGroup = Object.freeze({
 	selectedInputs: Object.freeze([]),
 	activeInput: undefined,
 	isLocked: false,
-	setLocked() {},
+	setLocked() { },
 	getEditorState: () => emptyGroupState,
 	isPreview: () => false,
 	isSticky: () => false,
-	pinEditor() {},
-	stickEditor() {},
-	unstickEditor() {},
+	pinEditor() { },
+	stickEditor() { },
+	unstickEditor() { },
 	closeEditor: async () => true,
-	focus() {},
+	focus() { },
 });
 
 const emptyWorkspaceContextService: IWorkspaceContextService = Object.freeze({
@@ -74,8 +74,8 @@ const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 
 const emptyEditorService: IEditorService = Object.freeze({
 	...emptyEditorServiceState,
-	openEditor: async () => {},
-	focusActiveEditor: () => {},
+	openEditor: async () => { },
+	focusActiveEditor: () => { },
 });
 
 const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
@@ -92,19 +92,19 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	whenContainerStylesLoaded: () => undefined,
 	mainContainerOffset: { top: 0, quickInputTop: 0 },
 	activeContainerOffset: { top: 0, quickInputTop: 0 },
-	focus: () => {},
-	layout: () => {},
-	setLayoutStyle: () => {},
+	focus: () => { },
+	layout: () => { },
+	setLayoutStyle: () => { },
 	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
 	isPanelMaximized: () => false,
-	toggleMaximizedPanel: () => {},
-	showPart: () => {},
-	showParts: () => {},
-	hidePart: () => {},
-	hideParts: () => {},
+	toggleMaximizedPanel: () => { },
+	showPart: () => { },
+	showParts: () => { },
+	hidePart: () => { },
+	hideParts: () => { },
 	getPartSize: () => ({ width: 0, height: 0 }),
-	resizePart: () => {},
+	resizePart: () => { },
 });
 
 const emptyWorkingCopyService: IWorkingCopyService = Object.freeze({
@@ -115,6 +115,6 @@ const emptyWorkingCopyService: IWorkingCopyService = Object.freeze({
 	register: () => noneDisposable,
 	get: () => Object.freeze([]),
 	getAll: () => Object.freeze([]),
-	dispose: () => {},
-	[Symbol.dispose]: () => {},
+	dispose: () => { },
+	[Symbol.dispose]: () => { },
 });

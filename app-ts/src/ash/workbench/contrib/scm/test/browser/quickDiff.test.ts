@@ -143,8 +143,8 @@ test('Quick Diff passes its standard one-second computation limit to the diff pr
 				limits.push(options.maxComputationTimeMs);
 				return { identical: false, quitEarly: false, changes: [], moves: [] };
 			},
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { },
+			[Symbol.dispose]() { },
 		}),
 	}, configuration);
 	using model = new TextModel('after', { resource: URI.file('/workspace/limit.ts') });
@@ -163,7 +163,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 	}
 	try {
 		const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
-const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffWidget.js');
 		await import('../../browser/quickDiff.contribution.js');
 		const fixture = gitFixture();
@@ -218,11 +218,11 @@ const { createTestCodeEditor } = await import('../../../../../editor/test/browse
 	}
 });
 
-function gitFixture(): { readonly gitService: IGitService; readonly requests: Array<{ readonly path: string; readonly comparison: string }>; dispose(): void } {
+function gitFixture(): { readonly gitService: IGitService; readonly requests: Array<{ readonly path: string; readonly comparison: string; }>; dispose(): void; } {
 	const statusChanged = new Emitter<GitStatus>();
 	const repositoriesChanged = new Emitter<never>();
 	const becameReady = new Emitter<void>();
-	const requests: Array<{ readonly path: string; readonly comparison: string }> = [];
+	const requests: Array<{ readonly path: string; readonly comparison: string; }> = [];
 	const status: GitStatus = {
 		repositoryId: 'repo-1',
 		streamInstanceId: 'git-1',

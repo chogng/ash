@@ -11,8 +11,8 @@ interface SavedDirectory {
 }
 
 interface PermissionedDirectoryHandle extends FileSystemDirectoryHandle {
-	queryPermission(descriptor?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
-	requestPermission(descriptor?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
+	queryPermission(descriptor?: { mode: 'read' | 'readwrite'; }): Promise<PermissionState>;
+	requestPermission(descriptor?: { mode: 'read' | 'readwrite'; }): Promise<PermissionState>;
 }
 
 interface IterableDirectoryHandle extends FileSystemDirectoryHandle {
@@ -257,7 +257,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		return current;
 	}
 
-	private async parent(resource: URI): Promise<{ parent: FileSystemDirectoryHandle; name: string }> {
+	private async parent(resource: URI): Promise<{ parent: FileSystemDirectoryHandle; name: string; }> {
 		const { saved, parts } = await this.directory(resource, false);
 		if (parts.length === 0) throw new FileOperationNotSupportedError(resource, 'modifyRoot');
 		let parent = saved.handle;
@@ -268,7 +268,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		return { parent, name: parts[parts.length - 1]! };
 	}
 
-	private async directory(resource: URI, requestPermission: boolean): Promise<{ saved: SavedDirectory; parts: readonly string[] }> {
+	private async directory(resource: URI, requestPermission: boolean): Promise<{ saved: SavedDirectory; parts: readonly string[]; }> {
 		const { id, name, parts } = partsOf(resource);
 		let saved = this.directories.get(id);
 		if (!saved) {
@@ -287,7 +287,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 	}
 }
 
-function partsOf(resource: URI): { id: string; name: string; parts: readonly string[] } {
+function partsOf(resource: URI): { id: string; name: string; parts: readonly string[]; } {
 	const encodedPath = resource.toEncodedComponents().path;
 	if (resource.scheme !== 'file' || resource.authority || resource.query || resource.fragment || !encodedPath.startsWith(ROOT_PREFIX)) {
 		throw new FileNotFoundError(resource);

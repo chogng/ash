@@ -120,7 +120,7 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly backupKind = "text" as const;
 	readonly onDidChangeDirty = this.dirtyChanges.event;
 	readonly onDidChangeContent = this.contentChanges.event;
-	readonly onDidChangeExternalChange = () => ({ dispose() {}, [Symbol.dispose]() {} });
+	readonly onDidChangeExternalChange = () => ({ dispose() { }, [Symbol.dispose]() { } });
 	isDirty = false;
 	readonly hasExternalChange = false;
 	private content = "";

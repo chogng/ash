@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,9 +24,37 @@ class Command:
     args: tuple[str, ...]
 
 
-def commands(check: bool) -> tuple[Command, ...]:
+def rust_command(check: bool) -> Command:
+    metadata = json.loads(
+        subprocess.check_output(
+            ["cargo", "metadata", "--no-deps", "--format-version", "1"],
+            cwd=REPOSITORY_ROOT,
+            encoding="utf-8",
+        )
+    )
+    members = set(metadata["workspace_members"])
+    packages = []
+    for package in metadata["packages"]:
+        if package["id"] not in members:
+            continue
+        manifest = Path(package["manifest_path"]).relative_to(REPOSITORY_ROOT)
+        # Cargo can include path dependencies from copied upstream workspaces.
+        if "vendor" not in manifest.parts and "third_party" not in manifest.parts:
+            packages.append(package["name"])
+    if not packages:
+        raise ValueError("No first-party Rust workspace packages found.")
+    args = ["cargo", "fmt", "--manifest-path", "Cargo.toml"]
+    for package in sorted(packages):
+        args.extend(("--package", package))
+    if check:
+        args.extend(("--", "--check"))
+    return Command("Rust", tuple(args))
+
+
+def commands(check: bool, language: str | None = None) -> tuple[Command, ...]:
+    if language == "rust":
+        return (rust_command(check),)
     just = ["just", "--unstable", "--fmt"]
-    rust = ["cargo", "fmt", "--manifest-path", "Cargo.toml", "--all", "--"]
     ruff = (
         REPOSITORY_ROOT
         / "scripts"
@@ -34,7 +64,6 @@ def commands(check: bool) -> tuple[Command, ...]:
     python = [str(ruff), "format"]
     if check:
         just.append("--check")
-        rust.append("--check")
         python.append("--check")
     python.extend(
         (
@@ -42,10 +71,16 @@ def commands(check: bool) -> tuple[Command, ...]:
             "scripts",
         )
     )
+    pnpm = shutil.which("pnpm")
+    if pnpm is None:
+        raise FileNotFoundError("Install the pnpm version declared in package.json.")
+    action = "" if check else ":fix"
     return (
         Command("Just", tuple(just)),
-        Command("Rust", tuple(rust)),
+        rust_command(check),
         Command("Python", tuple(python)),
+        Command("TypeScript/JavaScript", (pnpm, f"format:ts{action}")),
+        Command("Configuration/documentation", (pnpm, f"format:config{action}")),
     )
 
 
@@ -71,10 +106,15 @@ def main() -> int:
         action="store_true",
         help="check formatting without modifying files",
     )
+    parser.add_argument(
+        "--language",
+        choices=("rust",),
+        help="run only the selected language's formatter",
+    )
     args = parser.parse_args()
 
     failures: list[str] = []
-    configured = commands(args.check)
+    configured = commands(args.check, args.language)
     with ThreadPoolExecutor(max_workers=len(configured)) as executor:
         futures = [executor.submit(run, command) for command in configured]
         for future in as_completed(futures):

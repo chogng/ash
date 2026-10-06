@@ -28,15 +28,15 @@
 
 ## 快速理解
 
-| 审计问题 | 当前结论 | 深入阅读 |
-| --- | --- | --- |
-| 哪些已经落地，哪些还是纸面设计？ | 单 Agent、durable policy binding、上下文、主力 Provider 流式和多 Agent 纵向切片已实现；完整运行时快照仍为部分设计 | [组件状态总账](#2-组件状态总账) |
-| Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [分层与执行链](#3-分层与执行链) |
-| 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
-| Turn 中途策略会漂移吗？ | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed | [R1](#41-r1策略冻结-durable-化) |
-| Agent 请求的模型不可用时怎么办？ | 目标设计是在运行创建前按策略选择同 scope、同 provider 或其他允许 provider 的兼容模型并警告；运行开始后不再换模型 | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换) |
-| 上下文溢出怎么办？ | 已由纯 planner 返回显式 overflow/compaction outcome；checkpoint durable commit 后才重规划 | [R3](#43-r3上下文系统裁剪落地) |
-| 多 Agent 什么时候做？ | 阶段 D 契约与阶段 E 的上下文模式、委托、消息、等待、取消树、恢复和 UI 投影已落地；会话入口与委托运行共用的 Agent 定义仍按统一契约推进 | [R4](#44-r4多-agent-契约冻结先行)、[`agents.md`](agents.md) |
+| 审计问题                         | 当前结论                                                                                                                              | 深入阅读                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 哪些已经落地，哪些还是纸面设计？ | 单 Agent、durable policy binding、上下文、主力 Provider 流式和多 Agent 纵向切片已实现；完整运行时快照仍为部分设计                     | [组件状态总账](#2-组件状态总账)                                                                         |
+| Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化                                                                            | [分层与执行链](#3-分层与执行链)                                                                         |
+| 执行内核会异步化（tokio）吗？    | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成                                                                           | [R2](#42-r2同步执行内核流式经-sink)                                                                     |
+| Turn 中途策略会漂移吗？          | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed                                             | [R1](#41-r1策略冻结-durable-化)                                                                         |
+| Agent 请求的模型不可用时怎么办？ | 目标设计是在运行创建前按策略选择同 scope、同 provider 或其他允许 provider 的兼容模型并警告；运行开始后不再换模型                      | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换) |
+| 上下文溢出怎么办？               | 已由纯 planner 返回显式 overflow/compaction outcome；checkpoint durable commit 后才重规划                                             | [R3](#43-r3上下文系统裁剪落地)                                                                          |
+| 多 Agent 什么时候做？            | 阶段 D 契约与阶段 E 的上下文模式、委托、消息、等待、取消树、恢复和 UI 投影已落地；会话入口与委托运行共用的 Agent 定义仍按统一契约推进 | [R4](#44-r4多-agent-契约冻结先行)、[`agents.md`](agents.md)                                             |
 
 ## 1. 重审结论
 
@@ -62,24 +62,24 @@
 本次重审修订四项设计决策，编号 R1–R4；文档形态修订为 R5。详细设计见
 [第 4 节](#4-修订决策详细设计)。
 
-| # | 原设计 | 修订立场 | 核心理由 |
-| --- | --- | --- | --- |
-| R1 | `TurnPolicySnapshot` 为进程内不可变结构 | policy 冻结改为 **durable fact**：Turn 接受时持久化 policy revision，恢复时据此重建 | 进程内快照不能跨 crash-resume 存活；恢复后的 Turn 会从当前配置重建 policy，违反"不得静默放宽"的验收标准。模型选择已经这样做（`TurnAccepted` 携带 model），policy 应对齐 |
-| R2 | 端口演进为 async streaming（隐含运行时异步化） | **不承诺 tokio 迁移**：保留同步端口 + per-Thread OS 线程邮箱；真实流式经 wire-level SSE decoder → `ModelStreamSink`；App Server 使用独立 outbound writer 线程 | 桌面级并发上限是几十个 Thread；同步代码对 durability 不变量更易验证；cancellation 已闭环；sink 契约已为流式预留。异步化收益不成比例 |
-| R3 | ContextManager 完整形态（cache / baseline / estimate）一步到位 | **裁剪落地**：纯函数 planner + `ContextPlan` 先行；ContextManager 只做薄协调（无 cache）；compaction checkpoint 的 durable schema 提前进 protocol | 纯函数可独立验证 precedence / budget / 配对 / 确定性；cache 失效是最难验对的部分，推迟到有真实性能证据 |
-| R4 | 多 Agent 按十步顺序整体落地 | **契约冻结与运行时分离**：先只冻结身份语义进 protocol（阶段 D）；coordinator 运行时 gate 在上下文系统完成之后（阶段 E） | context isolation 与 seed 依赖 `ContextPlan`；先冻结契约避免后续 protocol 破坏性变更 |
-| R5 | 文档以现在时描述未实现组件，差异只在"当前状态"小节标注 | 每个组件在其权威文档中挂**显式状态标记**（已实现/部分/仅设计/推迟），本文维护跨层状态总账 | 重审当时 `ContextManager`、`MultiAgentCoordinator`、两级快照在代码中零引用，但组件章节读起来像现状；后续以状态总账消除这一风险 |
+| #   | 原设计                                                         | 修订立场                                                                                                                                                      | 核心理由                                                                                                                                                                |
+| --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | `TurnPolicySnapshot` 为进程内不可变结构                        | policy 冻结改为 **durable fact**：Turn 接受时持久化 policy revision，恢复时据此重建                                                                           | 进程内快照不能跨 crash-resume 存活；恢复后的 Turn 会从当前配置重建 policy，违反"不得静默放宽"的验收标准。模型选择已经这样做（`TurnAccepted` 携带 model），policy 应对齐 |
+| R2  | 端口演进为 async streaming（隐含运行时异步化）                 | **不承诺 tokio 迁移**：保留同步端口 + per-Thread OS 线程邮箱；真实流式经 wire-level SSE decoder → `ModelStreamSink`；App Server 使用独立 outbound writer 线程 | 桌面级并发上限是几十个 Thread；同步代码对 durability 不变量更易验证；cancellation 已闭环；sink 契约已为流式预留。异步化收益不成比例                                     |
+| R3  | ContextManager 完整形态（cache / baseline / estimate）一步到位 | **裁剪落地**：纯函数 planner + `ContextPlan` 先行；ContextManager 只做薄协调（无 cache）；compaction checkpoint 的 durable schema 提前进 protocol             | 纯函数可独立验证 precedence / budget / 配对 / 确定性；cache 失效是最难验对的部分，推迟到有真实性能证据                                                                  |
+| R4  | 多 Agent 按十步顺序整体落地                                    | **契约冻结与运行时分离**：先只冻结身份语义进 protocol（阶段 D）；coordinator 运行时 gate 在上下文系统完成之后（阶段 E）                                       | context isolation 与 seed 依赖 `ContextPlan`；先冻结契约避免后续 protocol 破坏性变更                                                                                    |
+| R5  | 文档以现在时描述未实现组件，差异只在"当前状态"小节标注         | 每个组件在其权威文档中挂**显式状态标记**（已实现/部分/仅设计/推迟），本文维护跨层状态总账                                                                     | 重审当时 `ContextManager`、`MultiAgentCoordinator`、两级快照在代码中零引用，但组件章节读起来像现状；后续以状态总账消除这一风险                                          |
 
 ### 1.3 明确推迟的决策
 
-| 决策 | 重新评审的触发条件 |
-| --- | --- |
-| 执行内核 tokio / async 化 | 出现需要数百以上并发 Thread 的真实宿主，或仅支持 async 的必需 transport |
-| 提取独立 `ash-agent` crate | 至少两个真实执行宿主，且 Agent loop 不依赖 Thread projection、store、receipt 或 App Server |
-| `ProviderHandoff` 协议 | [第 6 节](#6-history上下文与供应商切换)的 continuity 评测持续失败 |
-| 跨 Thread 长期记忆 | 单独 RFC 接受 consent、scope、删除、保留期与评测契约 |
-| ContextManager cache / reference baseline | 阶段 B 完成后有真实性能证据表明重复组装是瓶颈 |
-| 与 Thread 一一对应的 `AgentId` aggregate | 出现一个 Agent 身份跨多个 Thread 延续的真实需求 |
+| 决策                                      | 重新评审的触发条件                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 执行内核 tokio / async 化                 | 出现需要数百以上并发 Thread 的真实宿主，或仅支持 async 的必需 transport                    |
+| 提取独立 `ash-agent` crate                | 至少两个真实执行宿主，且 Agent loop 不依赖 Thread projection、store、receipt 或 App Server |
+| `ProviderHandoff` 协议                    | [第 6 节](#6-history上下文与供应商切换)的 continuity 评测持续失败                          |
+| 跨 Thread 长期记忆                        | 单独 RFC 接受 consent、scope、删除、保留期与评测契约                                       |
+| ContextManager cache / reference baseline | 阶段 B 完成后有真实性能证据表明重复组装是瓶颈                                              |
+| 与 Thread 一一对应的 `AgentId` aggregate  | 出现一个 Agent 身份跨多个 Thread 延续的真实需求                                            |
 
 ## 2. 组件状态总账
 
@@ -87,41 +87,41 @@
 
 ### 2.1 执行面（已验证部分）
 
-| 组件 | 状态 | 代码证据 |
-| --- | --- | --- |
-| ThreadController create/fork/rewind、单写者 / receipt / replay / conflict | 已实现 | `core/src/thread_controller.rs` |
-| per-Thread loaded projection + FIFO mutation gate + incarnation + idle eviction | 已实现 | `core/src/thread_controller/loaded_thread.rs` |
-| 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收） | 已实现 | `core/src/thread_controller/mailbox.rs` |
-| TurnExecutor 顺序 model → tool → model 循环 | 已实现 | `core/src/turn/executor.rs` |
-| same-Turn steering + delivery marker | 已实现 | `core/src/runtime.rs`、`core/src/thread_controller/steering.rs` |
-| ToolScheduler：durable one-time approval、sandbox escalation、rejection/repeated-failure circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs`、`core/src/tool_repetition.rs` |
-| Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
-| 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
-| `ContextAssembler`（`ContextPlan` → `ModelRequest`） | 已实现 | `core/src/context/assembler.rs` |
-| `ModelService` / `ModelStreamSink` 契约 | 已实现；声明真实流式的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core-api/src/model.rs`、`model-provider/src/providers/` |
-| 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
-| App Server 可唤醒 outbound 通知源与独立 writer | 已实现 | `app-server/src/server.rs` |
+| 组件                                                                                                     | 状态                                                                                              | 代码证据                                                         |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ThreadController create/fork/rewind、单写者 / receipt / replay / conflict                                | 已实现                                                                                            | `core/src/thread_controller.rs`                                  |
+| per-Thread loaded projection + FIFO mutation gate + incarnation + idle eviction                          | 已实现                                                                                            | `core/src/thread_controller/loaded_thread.rs`                    |
+| 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收）                                                       | 已实现                                                                                            | `core/src/thread_controller/mailbox.rs`                          |
+| TurnExecutor 顺序 model → tool → model 循环                                                              | 已实现                                                                                            | `core/src/turn/executor.rs`                                      |
+| same-Turn steering + delivery marker                                                                     | 已实现                                                                                            | `core/src/runtime.rs`、`core/src/thread_controller/steering.rs`  |
+| ToolScheduler：durable one-time approval、sandbox escalation、rejection/repeated-failure circuit breaker | 已实现                                                                                            | `core/src/turn/tool_scheduler.rs`、`core/src/tool_repetition.rs` |
+| Tool unknown-outcome 基线（start marker / escalation marker，不自动重放）                                | 已实现                                                                                            | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs`           |
+| 模型选择冻结（`TurnAccepted` 携带 model）                                                                | 已实现                                                                                            | `core/src/thread_controller.rs`                                  |
+| `ContextAssembler`（`ContextPlan` → `ModelRequest`）                                                     | 已实现                                                                                            | `core/src/context/assembler.rs`                                  |
+| `ModelService` / `ModelStreamSink` 契约                                                                  | 已实现；声明真实流式的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core-api/src/model.rs`、`model-provider/src/providers/`         |
+| 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool                             | 已实现                                                                                            | [`core.md`](core.md) §7.3                                        |
+| App Server 可唤醒 outbound 通知源与独立 writer                                                           | 已实现                                                                                            | `app-server/src/server.rs`                                       |
 
 ### 2.2 设计面（本计划的工作对象）
 
-| 组件 | 状态 | 归属阶段 | 权威文档 |
-| --- | --- | --- | --- |
-| policy 冻结（durable policy revision binding） | 已实现 | A | `TurnAccepted.policy_revision`、`ToolScheduler` recovery checks |
-| `ModelInvocationSnapshot` | 部分 | B | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模 |
-| Agent 运行创建前的模型继承、覆盖与兼容替换 | 仅设计 | E 之后 | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换) |
-| `ContextInput` / `ContextPlan` / 纯内容选择 planner | 已实现 | B | [`core-context.md`](core-context.md) |
-| 通用 context budget / token measurement 判定 | 已实现 | B | [`ash-context-engine`](../ash-rs/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
-| `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
-| compaction checkpoint schema + 压缩流程 | 已实现 | B | 预算压缩和供应商溢出单次恢复均复用 durable checkpoint，见 [`core-context.md`](core-context.md) §8 |
-| `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 部分 | B / 按需 | model-backed compaction 已实现；其余仍按需设计 |
-| provider wire-level SSE streaming | 已实现 | C | OpenAI Responses、OpenAI-compatible Chat、Google 与 Anthropic；其他 Provider 显式 unary |
-| App Server 独立 outbound writer 线程 | 已实现 | C | 本文 §4.2 |
-| Desktop projection gap/resync | 已实现 | C | stream gap 触发 canonical refresh，新 incarnation 淘汰旧 incarnation |
-| `DelegationId` / `AgentMessageId` / `ThreadOrigin::AgentSpawn` / seed schema | 已实现 | D | [`core-multi-agent.md`](core-multi-agent.md) |
-| `MultiAgentCoordinator`、Fresh spawn saga、delivery、结构性 tree budget | 已实现 | E | [`core-multi-agent.md`](core-multi-agent.md) |
-| Selected/ForkedPrefix inheritance、durable join、cancellation tree、Agent-tree UI projection | 已实现 | E | [`core-multi-agent.md`](core-multi-agent.md) |
-| 并行工具计划、通用 deadline、声明式 retry、reconciliation | 仅设计 | E 之后按需 | [`core.md`](core.md) §11 |
-| 跨 Thread 长期记忆 | 推迟 | 单独 RFC | 本文 §1.3 |
+| 组件                                                                                         | 状态   | 归属阶段   | 权威文档                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------- | ------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| policy 冻结（durable policy revision binding）                                               | 已实现 | A          | `TurnAccepted.policy_revision`、`ToolScheduler` recovery checks                                                                                                  |
+| `ModelInvocationSnapshot`                                                                    | 部分   | B          | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模                                                                |
+| Agent 运行创建前的模型继承、覆盖与兼容替换                                                   | 仅设计 | E 之后     | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换)                                                          |
+| `ContextInput` / `ContextPlan` / 纯内容选择 planner                                          | 已实现 | B          | [`core-context.md`](core-context.md)                                                                                                                             |
+| 通用 context budget / token measurement 判定                                                 | 已实现 | B          | [`ash-context-engine`](../ash-rs/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
+| `ContextManager`（薄协调，无 cache）                                                         | 已实现 | B          | `core/src/context_manager.rs`、`loaded_thread.rs`                                                                                                                |
+| compaction checkpoint schema + 压缩流程                                                      | 已实现 | B          | 预算压缩和供应商溢出单次恢复均复用 durable checkpoint，见 [`core-context.md`](core-context.md) §8                                                                |
+| `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口               | 部分   | B / 按需   | model-backed compaction 已实现；其余仍按需设计                                                                                                                   |
+| provider wire-level SSE streaming                                                            | 已实现 | C          | OpenAI Responses、OpenAI-compatible Chat、Google 与 Anthropic；其他 Provider 显式 unary                                                                          |
+| App Server 独立 outbound writer 线程                                                         | 已实现 | C          | 本文 §4.2                                                                                                                                                        |
+| Desktop projection gap/resync                                                                | 已实现 | C          | stream gap 触发 canonical refresh，新 incarnation 淘汰旧 incarnation                                                                                             |
+| `DelegationId` / `AgentMessageId` / `ThreadOrigin::AgentSpawn` / seed schema                 | 已实现 | D          | [`core-multi-agent.md`](core-multi-agent.md)                                                                                                                     |
+| `MultiAgentCoordinator`、Fresh spawn saga、delivery、结构性 tree budget                      | 已实现 | E          | [`core-multi-agent.md`](core-multi-agent.md)                                                                                                                     |
+| Selected/ForkedPrefix inheritance、durable join、cancellation tree、Agent-tree UI projection | 已实现 | E          | [`core-multi-agent.md`](core-multi-agent.md)                                                                                                                     |
+| 并行工具计划、通用 deadline、声明式 retry、reconciliation                                    | 仅设计 | E 之后按需 | [`core.md`](core.md) §11                                                                                                                                         |
+| 跨 Thread 长期记忆                                                                           | 推迟   | 单独 RFC   | 本文 §1.3                                                                                                                                                        |
 
 ## 3. 分层与执行链
 

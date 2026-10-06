@@ -12,7 +12,7 @@ import type { ChatAgent } from '../../../../../workbench/services/chat/common/ch
 export interface AppServerSessionsProviderHost {
 	readonly session: ISessionApi;
 	readonly workspace: () => SessionWorkspaceSelection;
-	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[]) => Promise<SessionExecutionTarget | undefined>;
+	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 	readonly model?: IModelApi;
 	readonly turn?: ITurnApi;
 	readonly events?: IServerEventApi;
@@ -26,7 +26,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	private model: ModelRef | null = null;
 	private readonly _onDidChangeCatalog = this._register(new Emitter<void>());
 	readonly onDidChangeCatalog = this._onDidChangeCatalog.event;
-	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean }>());
+	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
 	readonly onDidChangeSession = this._onDidChangeSession.event;
 
 	constructor(private readonly host: AppServerSessionsProviderHost, @IAppServerApi appServer: IAppServerApi) {

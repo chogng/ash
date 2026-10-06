@@ -14,21 +14,21 @@ Return every qualifying finding, ordered by priority. Use the smallest changed l
 Output only JSON matching this schema exactly:
 
 {
-  "findings": [
-    {
-      "title": "[P0-P3] imperative title of at most 80 characters",
-      "body": "valid Markdown explaining the concrete defect and impact",
-      "confidence_score": 0.0,
-      "priority": 0,
-      "code_location": {
-        "absolute_file_path": "/absolute/path/to/file",
-        "line_range": { "start": 1, "end": 1 }
-      }
-    }
-  ],
-  "overall_correctness": "patch is correct",
-  "overall_explanation": "one to three sentences explaining the verdict and verification limits",
-  "overall_confidence_score": 0.0
+"findings": [
+{
+"title": "[P0-P3] imperative title of at most 80 characters",
+"body": "valid Markdown explaining the concrete defect and impact",
+"confidence_score": 0.0,
+"priority": 0,
+"code_location": {
+"absolute_file_path": "/absolute/path/to/file",
+"line_range": { "start": 1, "end": 1 }
+}
+}
+],
+"overall_correctness": "patch is correct",
+"overall_explanation": "one to three sentences explaining the verdict and verification limits",
+"overall_confidence_score": 0.0
 }
 
 `overall_correctness` must be either `patch is correct` or `patch is incorrect`. A correct patch should not break existing behavior and should contain no blocking defect; ignore non-blocking style and documentation nits for this verdict. Each code location must overlap the reviewed diff. Do not wrap the JSON in Markdown fences or add prose outside it.

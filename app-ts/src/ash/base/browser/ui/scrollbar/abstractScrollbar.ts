@@ -194,7 +194,7 @@ export abstract class AbstractScrollbar extends Disposable {
 				this.pointerCoordinate(next) - startCoordinate;
 			this.setPosition(
 				startMetrics.position +
-					pointerDelta * startMetrics.maximumPosition / thumbTravel,
+				pointerDelta * startMetrics.maximumPosition / thumbTravel,
 			);
 		};
 		const stop = () => {
@@ -250,8 +250,8 @@ export abstract class AbstractScrollbar extends Disposable {
 			next = thumbTravel <= 0
 				? 0
 				: targetThumbPosition *
-					metrics.maximumPosition /
-					thumbTravel;
+				metrics.maximumPosition /
+				thumbTravel;
 		}
 		this.setPosition(next);
 	}

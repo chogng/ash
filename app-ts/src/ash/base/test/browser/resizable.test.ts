@@ -69,7 +69,7 @@ test("ResizableHTMLElement reports edge drag lifecycle", () => {
 	dom.window.document.body.append(resizable.domNode);
 	resizable.layout(100, 200);
 	resizable.enableSashes(false, true, false, false);
-	const events: Array<{ readonly done: boolean; readonly east?: boolean; readonly width: number }> = [];
+	const events: Array<{ readonly done: boolean; readonly east?: boolean; readonly width: number; }> = [];
 	let willResize = 0;
 	resizable.onDidWillResize(() => willResize++);
 	resizable.onDidResize((event) => {
@@ -102,8 +102,8 @@ test("ResizableHTMLElement reports edge drag lifecycle", () => {
 });
 
 test("bindResizableLayout connects and releases a generic layout target", () => {
-	const emitter = new Emitter<{ readonly width: number; readonly height: number }>();
-	const dimensions: Array<{ readonly width: number; readonly height: number }> = [];
+	const emitter = new Emitter<{ readonly width: number; readonly height: number; }>();
+	const dimensions: Array<{ readonly width: number; readonly height: number; }> = [];
 	const registration = bindResizableLayout(emitter.event, {
 		layout: (dimension) => dimensions.push(dimension),
 	});

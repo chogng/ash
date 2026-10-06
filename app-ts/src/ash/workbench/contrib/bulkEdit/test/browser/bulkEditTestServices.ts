@@ -19,7 +19,7 @@ export class TestEditorService implements IEditorService {
 	public async openEditor(input: EditorInput): Promise<void> {
 		this.opened.push(input);
 	}
-	public focusActiveEditor(): void {}
+	public focusActiveEditor(): void { }
 }
 
 export class TestDialogService implements IDialogService {
@@ -29,13 +29,13 @@ export class TestDialogService implements IDialogService {
 	public readonly confirmations: IConfirmationDialogOptions[] = [];
 	public readonly errors: string[] = [];
 	public async confirm(options: IConfirmationDialogOptions) { this.confirmations.push(options); return { confirmed: this.confirmed }; }
-	public async showMessage(): Promise<void> {}
-	public async info(): Promise<void> {}
-	public async warn(): Promise<void> {}
+	public async showMessage(): Promise<void> { }
+	public async info(): Promise<void> { }
+	public async warn(): Promise<void> { }
 	public async error(message: string): Promise<void> { this.errors.push(message); }
-	public async prompt<T>(): Promise<{ result?: T }> { return {}; }
+	public async prompt<T>(): Promise<{ result?: T; }> { return {}; }
 	public async input() { return { confirmed: false }; }
-	public async about(): Promise<void> {}
+	public async about(): Promise<void> { }
 }
 
 export class BulkEditTestServices extends Disposable {
@@ -60,7 +60,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 	private readonly changes = new Emitter<TextResourceChangeEvent>();
 	readonly onDidChange = this.changes.event;
 	readonly saved: string[] = [];
-	private readonly resources = new Map<string, { text: string; revision: number }>();
+	private readonly resources = new Map<string, { text: string; revision: number; }>();
 
 	constructor(resources: readonly (readonly [URI, string])[]) {
 		for (const [resource, text] of resources) this.resources.set(resource.toString(), { text, revision: 1 });
@@ -77,7 +77,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 		return { resource: request.resource, text: entry.text, revision: String(entry.revision) };
 	}
 
-	async save(request: TextResourceSaveRequest): Promise<{ readonly revision: string }> {
+	async save(request: TextResourceSaveRequest): Promise<{ readonly revision: string; }> {
 		if (this.failNextSave) {
 			const error = this.failNextSave;
 			this.failNextSave = undefined;
@@ -102,7 +102,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 		this.dispose();
 	}
 
-	private require(resource: URI): { text: string; revision: number } {
+	private require(resource: URI): { text: string; revision: number; } {
 		const entry = this.resources.get(resource.toString());
 		if (!entry) throw new Error(`Unknown resource ${resource.toString()}`);
 		return entry;
@@ -124,7 +124,7 @@ export class MemoryFileService implements IFileService {
 	async readDirectory(): Promise<readonly never[]> { return []; }
 	async readFile(resource: URI) { return { resource, content: this.text(resource), revision: this.text(resource) }; }
 	async readFileBytes(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
-	async writeFile(request: { readonly resource: URI; readonly content: string }) { this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content }; }
+	async writeFile(request: { readonly resource: URI; readonly content: string; }) { this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content }; }
 	async writeFileBytes(resource: URI, bytes: Uint8Array) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.has(resource)) {

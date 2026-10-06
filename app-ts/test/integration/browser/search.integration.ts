@@ -42,21 +42,23 @@ const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContr
 const theme = store.add(new TestThemeService(themes.light));
 store.add(bindColorTheme(theme, document.body));
 const queries: IContentSearchQuery[] = [];
-const opened: { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined }[] = [];
+const opened: { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[] = [];
 let finishLateSearch: (() => void) | undefined;
 let cancelled = 0;
 const instantiation = store.add(new InstantiationService());
 const configuration = store.add(new WorkbenchConfigurationService());
 instantiation.registerInstance(IConfigurationService, configuration);
 instantiation.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
-const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} };
+const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
 const contextView = store.add(new BrowserContextViewService(document.body));
 instantiation.registerInstance(IContextMenuService, menus);
 instantiation.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
-const workspace = store.add(new WorkspaceContextService({ id: 'workspace', folders: [
-	{ id: 'first', name: 'workspace', index: 0, uri: URI.file('/workspace') },
-	{ id: 'second', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
-] }));
+const workspace = store.add(new WorkspaceContextService({
+	id: 'workspace', folders: [
+		{ id: 'first', name: 'workspace', index: 0, uri: URI.file('/workspace') },
+		{ id: 'second', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
+	]
+}));
 instantiation.registerInstance(IWorkspaceContextService, workspace);
 instantiation.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'search-integration', flushInterval: 0 })));
 const editing = store.add(new BulkEditTestServices([[URI.file('/workspace/src/main.ts'), 'const needle = true;']]));
@@ -69,7 +71,7 @@ instantiation.registerInstance(IReplaceService, instantiation.createInstance(Rep
 instantiation.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 	openEditor: async (input, options, target) => { opened.push({ resource: input.resource.toString(), options, target }); },
-	focusActiveEditor() {},
+	focusActiveEditor() { },
 });
 instantiation.registerInstance(IContentSearchService, {
 	search: async (query, options) => {
@@ -117,7 +119,7 @@ declare global {
 	interface Window {
 		ashSearchIntegration: {
 			readonly queries: readonly IContentSearchQuery[];
-			readonly opened: readonly { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined }[];
+			readonly opened: readonly { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[];
 			finishLateSearch(): void;
 			cancelled(): number;
 			closeWorkspace(): void;

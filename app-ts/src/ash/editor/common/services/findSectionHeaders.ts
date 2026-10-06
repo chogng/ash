@@ -89,7 +89,7 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 	return headers;
 }
 
-function getHeaderText(text: string): { text: string; hasSeparatorLine: boolean } {
+function getHeaderText(text: string): { text: string; hasSeparatorLine: boolean; } {
 	text = text.trim();
 	const hasSeparatorLine = text.startsWith('-');
 	return { text: text.replace(trimDashesRegex, ''), hasSeparatorLine };

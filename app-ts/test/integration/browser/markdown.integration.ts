@@ -47,7 +47,7 @@ declare global {
 	interface Window {
 		ashMarkdownIntegration: {
 			dispose(): void;
-			checkDomPurify(): { version: string; fragment: string; inPlace: string; hooked: string };
+			checkDomPurify(): { version: string; fragment: string; inPlace: string; hooked: string; };
 			checkSanitizerPolicy(): Record<string, string>;
 			openedLinks(): string[];
 			loadedResources(): string[];
@@ -97,7 +97,7 @@ window.ashMarkdownIntegration = {
 			fragment: (fragment.firstElementChild as Element).outerHTML,
 		};
 	},
-	checkDomPurify(): { version: string; fragment: string; inPlace: string; hooked: string } {
+	checkDomPurify(): { version: string; fragment: string; inPlace: string; hooked: string; } {
 		const fragment = dompurify.sanitize('<a href="javascript:alert(1)" onclick="alert(1)">safe</a><script>alert(1)</script>', { RETURN_DOM_FRAGMENT: true });
 		const fragmentContainer = document.createElement('div');
 		fragmentContainer.append(fragment);

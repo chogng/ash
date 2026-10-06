@@ -216,7 +216,9 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                     | super::EditorExtensionCapability::LanguageProvider
             )
         }) {
-            return invalid("JavaScript SDK v1 supports only command and language provider registrations");
+            return invalid(
+                "JavaScript SDK v1 supports only command and language provider registrations",
+            );
         }
     }
 

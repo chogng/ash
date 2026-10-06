@@ -6,7 +6,7 @@ import { isRecord } from '../common/types.js';
 export const Promises = {
 	async rename(source: string, target: string, windowsRetryTimeout: number | false = 60_000): Promise<void> {
 		const deadline = process.platform === 'win32' && windowsRetryTimeout !== false ? Date.now() + windowsRetryTimeout : 0;
-		for (;;) {
+		for (; ;) {
 			try {
 				await fs.rename(source, target);
 				return;

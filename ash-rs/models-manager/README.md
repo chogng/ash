@@ -13,21 +13,21 @@
 
 ## 公共契约
 
-| Symbol | 调用方用途 | 关键语义 |
-| --- | --- | --- |
-| `ModelsManager` | read、refresh、list、resolve | clone 共享同一个进程内 scope/cache authority |
-| `CatalogScopeKey` | 标识 provider + endpoint/account/config revision | source scope 必须是不含秘密的一向指纹 |
-| `ModelCatalogSource` | provider runtime 实现 discovery port | 返回完整或 partial observation，不提交半页结果 |
-| `ModelCatalogSnapshot` | 上层读取 immutable catalog | 仅消费者可见内容变化时 generation 递增 |
-| `CatalogReadPolicy` | `CachePreferred` / `RequireFresh` / `CacheOnly` | 禁止用 `fresh: bool` 模糊表达阻塞语义 |
-| `CatalogQuery` | list filter | availability 与 unknown capability policy 显式命名 |
-| `ModelRequirements` | invocation-safe resolution | unknown、unsupported、unavailable 和 retired 分开处理 |
-| `DiscoveredCatalog` | source 的一次完整提交 | `models` 保留来源展示顺序；`CompleteAgentCatalog` 缺席可下架，`Partial` 缺席不改变 availability |
-| `ModelMetadataPatch` | provider 明确返回的字段 | `Unknown` 不覆盖已有 known metadata |
-| `ResolvedModel` | exact model + catalog generation + warnings | `AllowUnlisted` 产生 unverified synthetic metadata |
-| `ModelCatalogEntry::model_info` | 取得配置生效后的 `ModelInfo` | 校验 provider 身份、裁剪上下文和压缩阈值；不修改原始条目 |
-| `ModelInstructionCatalog` | 按准确 provider/model 选择指导 | 返回 Generic 或冻结的专化资产；拒绝重复与无效定义 |
-| `ModelInstructionProfile` | 登记代码维护的模型指导 | 记录准确模型和有版本的 InstructionText，不授予工具或权限 |
+| Symbol                          | 调用方用途                                       | 关键语义                                                                                        |
+| ------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `ModelsManager`                 | read、refresh、list、resolve                     | clone 共享同一个进程内 scope/cache authority                                                    |
+| `CatalogScopeKey`               | 标识 provider + endpoint/account/config revision | source scope 必须是不含秘密的一向指纹                                                           |
+| `ModelCatalogSource`            | provider runtime 实现 discovery port             | 返回完整或 partial observation，不提交半页结果                                                  |
+| `ModelCatalogSnapshot`          | 上层读取 immutable catalog                       | 仅消费者可见内容变化时 generation 递增                                                          |
+| `CatalogReadPolicy`             | `CachePreferred` / `RequireFresh` / `CacheOnly`  | 禁止用 `fresh: bool` 模糊表达阻塞语义                                                           |
+| `CatalogQuery`                  | list filter                                      | availability 与 unknown capability policy 显式命名                                              |
+| `ModelRequirements`             | invocation-safe resolution                       | unknown、unsupported、unavailable 和 retired 分开处理                                           |
+| `DiscoveredCatalog`             | source 的一次完整提交                            | `models` 保留来源展示顺序；`CompleteAgentCatalog` 缺席可下架，`Partial` 缺席不改变 availability |
+| `ModelMetadataPatch`            | provider 明确返回的字段                          | `Unknown` 不覆盖已有 known metadata                                                             |
+| `ResolvedModel`                 | exact model + catalog generation + warnings      | `AllowUnlisted` 产生 unverified synthetic metadata                                              |
+| `ModelCatalogEntry::model_info` | 取得配置生效后的 `ModelInfo`                     | 校验 provider 身份、裁剪上下文和压缩阈值；不修改原始条目                                        |
+| `ModelInstructionCatalog`       | 按准确 provider/model 选择指导                   | 返回 Generic 或冻结的专化资产；拒绝重复与无效定义                                               |
+| `ModelInstructionProfile`       | 登记代码维护的模型指导                           | 记录准确模型和有版本的 InstructionText，不授予工具或权限                                        |
 
 `CatalogSourceScopeId` 不是 endpoint 或 credential reference。Host 必须先对 normalized endpoint、tenant、
 credential revision 和 provider config revision 生成不可逆、无秘密的稳定指纹；任一输入变化都使用新
@@ -56,16 +56,16 @@ src/
 └── manager_tests.rs
 ```
 
-| Private symbol | 当前职责 | 不能扩张到 |
-| --- | --- | --- |
-| `ManagedScope` | 一个 scope 的 snapshot state 与 async refresh gate | provider transport 或 Config mutation |
-| `ScopeState` | records、validator、freshness evidence、last refresh result | durable Config/Thread authority |
-| `ModelsManager::ensure_scope` | lazy seed snapshot construction | network discovery |
-| `ModelsManager::commit_discovery` | scope/duplicate validation 后原子提交 observation | provider payload decoding |
-| `rebuild_snapshot` | 比较 consumer-visible contents 后决定 generation | 每次 read 无条件 bump generation |
-| `CatalogRecord` | 合并中的 `ModelInfo`、availability、lifecycle、provenance | 暴露 provider raw DTO |
-| `apply_discovery` | complete/partial availability 与 live patch merge | 按 model ID 猜 capability |
-| `matches_query` / `validate_requirements` | list 与 resolve 的 canonical gate | UI 搜索或排序偏好 persistence |
+| Private symbol                            | 当前职责                                                    | 不能扩张到                            |
+| ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| `ManagedScope`                            | 一个 scope 的 snapshot state 与 async refresh gate          | provider transport 或 Config mutation |
+| `ScopeState`                              | records、validator、freshness evidence、last refresh result | durable Config/Thread authority       |
+| `ModelsManager::ensure_scope`             | lazy seed snapshot construction                             | network discovery                     |
+| `ModelsManager::commit_discovery`         | scope/duplicate validation 后原子提交 observation           | provider payload decoding             |
+| `rebuild_snapshot`                        | 比较 consumer-visible contents 后决定 generation            | 每次 read 无条件 bump generation      |
+| `CatalogRecord`                           | 合并中的 `ModelInfo`、availability、lifecycle、provenance   | 暴露 provider raw DTO                 |
+| `apply_discovery`                         | complete/partial availability 与 live patch merge           | 按 model ID 猜 capability             |
+| `matches_query` / `validate_requirements` | list 与 resolve 的 canonical gate                           | UI 搜索或排序偏好 persistence         |
 
 如果 manager 开始拼 discovery URL、读取 API key、发送 inference、解释 SSE，或者 provider runtime/UI
 重新实现 `ListedOnly` / `AllowUnlisted` 判断，说明 ownership 已漂移。
@@ -117,12 +117,12 @@ App Server 的列表返回有效 `settings`，每轮调用把同一目录中的�
 
 Freshness 使用 manager policy 与 source 明确给出的 cache hint 中更保守的时长：
 
-| 状态 | `CachePreferred` | `RequireFresh` | `CacheOnly` |
-| --- | --- | --- | --- |
-| Fresh | 立即返回 | 立即返回 | 立即返回 |
-| StaleUsable | 返回并后台 refresh | 等待/join refresh | 返回 stale |
-| Expired | 等待/join refresh | 等待/join refresh | 返回 expired |
-| 只有静态 seed | 离线时返回；有动态 source 时首次发现 | 有 source 时刷新，否则报错 | 返回 static |
+| 状态          | `CachePreferred`                     | `RequireFresh`             | `CacheOnly`  |
+| ------------- | ------------------------------------ | -------------------------- | ------------ |
+| Fresh         | 立即返回                             | 立即返回                   | 立即返回     |
+| StaleUsable   | 返回并后台 refresh                   | 等待/join refresh          | 返回 stale   |
+| Expired       | 等待/join refresh                    | 等待/join refresh          | 返回 expired |
+| 只有静态 seed | 离线时返回；有动态 source 时首次发现 | 有 source 时刷新，否则报错 | 返回 static  |
 
 Authentication/permission failure 把先前 `Available` 降为 `Unverified` 并保留 metadata；unsupported、
 rate limit、transient、invalid payload 均保留 last-known records，并产生不包含 secret/raw body 的 warning。
@@ -166,12 +166,12 @@ App Server DTO/schema fixture。
 
 与 Codex 的职责对应：
 
-| Codex 位置 | Ash 归属 |
-| --- | --- |
-| `model-provider-info` 的供应商声明、默认值和校验 | `model-provider-info` |
-| `model-provider-info` 的凭据读取、请求 Header 和 API target 转换 | `model-provider`、登录服务和 client |
-| `models-manager/model_info` 的模型信息与配置覆盖 | 本 crate 的 `model_info.rs` |
-| 模型专化指导 | 本 crate 的 `instructions.rs` 选择；完整正文在 model-provider-info/models.json，默认正文在 prompts |
+| Codex 位置                                                       | Ash 归属                                                                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `model-provider-info` 的供应商声明、默认值和校验                 | `model-provider-info`                                                                              |
+| `model-provider-info` 的凭据读取、请求 Header 和 API target 转换 | `model-provider`、登录服务和 client                                                                |
+| `models-manager/model_info` 的模型信息与配置覆盖                 | 本 crate 的 `model_info.rs`                                                                        |
+| 模型专化指导                                                     | 本 crate 的 `instructions.rs` 选择；完整正文在 model-provider-info/models.json，默认正文在 prompts |
 
 供应商与模型声明统一归 `model-provider-info`；本 crate 与请求实现共享这份数据，不重复维护声明，也不读取凭据或创建客户端。
 Codex 针对未知模型写入的固定规格不适用于这里的多供应商目录。

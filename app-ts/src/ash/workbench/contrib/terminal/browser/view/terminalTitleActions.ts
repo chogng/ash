@@ -212,7 +212,7 @@ class TerminalProfileSelectorAction implements IAction {
 	readonly tooltip = localize('terminal.title.selectProfile', "Select Terminal Profile");
 	readonly checked = undefined;
 
-	constructor(readonly enabled: boolean, private readonly createTerminalWithProfile: (profileId: unknown) => unknown) {}
+	constructor(readonly enabled: boolean, private readonly createTerminalWithProfile: (profileId: unknown) => unknown) { }
 
 	run(...args: readonly unknown[]): unknown {
 		return this.createTerminalWithProfile(args[0]);

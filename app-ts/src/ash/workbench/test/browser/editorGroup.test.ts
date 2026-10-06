@@ -32,7 +32,7 @@ test('EditorGroupView keeps the caller language when resource detection has no l
 		assert.deepEqual(group.inputs, [input]);
 	} finally {
 		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
-		else delete (globalThis as { window?: Window }).window;
+		else delete (globalThis as { window?: Window; }).window;
 		dom.window.close();
 	}
 });
@@ -53,8 +53,8 @@ test("EditorGroupView reorders tabs and moves them between groups", async () => 
 			create: () => new TestEditorPane(),
 		});
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
-		const source = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
-		const target = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
+		const source = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
+		const target = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
 		const first = input("first");
 		const second = input("second");
 		await source.openEditor(first);
@@ -105,7 +105,7 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
-		const group = services.createInstance(EditorGroupView,dom.window.document.body, { registry });
+		const group = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
 		try {
 			const first = input("first");
 			const second = input("second");
@@ -151,13 +151,13 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 class TestEditorPane implements IEditorPane {
 	readonly id = "test.editor";
 
-	create(_parent: HTMLElement): void {}
-	async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> {}
-	clearInput(): void {}
-	layout(_dimension: { readonly width: number; readonly height: number }): void {}
-	setVisible(_visibility: number): void {}
-	focus(): void {}
-	dispose(): void {}
+	create(_parent: HTMLElement): void { }
+	async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	clearInput(): void { }
+	layout(_dimension: { readonly width: number; readonly height: number; }): void { }
+	setVisible(_visibility: number): void { }
+	focus(): void { }
+	dispose(): void { }
 	[Symbol.dispose](): void {
 		this.dispose();
 	}

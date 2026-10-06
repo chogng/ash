@@ -56,7 +56,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		const connection = appServer.onConnectionState(state => {
-			if (state === 'ready') { void this.refreshModels().catch(() => {}); }
+			if (state === 'ready') { void this.refreshModels().catch(() => { }); }
 		});
 		this._register(toDisposable(() => connection.dispose()));
 	}

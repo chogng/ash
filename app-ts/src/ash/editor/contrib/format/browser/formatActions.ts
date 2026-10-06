@@ -59,21 +59,23 @@ class FormatSelectionAction extends EditorAction {
 
 registerEditorAction(FormatSelectionAction);
 
-registerEditorContribution({ id: 'editor.contrib.format', install: context => {
-	if (context.kind !== 'text') {
-		return;
+registerEditorContribution({
+	id: 'editor.contrib.format', install: context => {
+		if (context.kind !== 'text') {
+			return;
+		}
+		context.register(context.editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
+			const action = context.editor.getAction(formatDocumentAction.id);
+			if (!action?.isSupported()) return;
+			event.stop();
+			void action.run().catch(context.onLanguageError);
+		}));
+		if (!context.options.formatOnSave || !context.registerBeforeSave) {
+			return;
+		}
+		context.register(context.registerBeforeSave(() => formatEditor(
+			context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent,
+		).catch(context.onLanguageError)));
 	}
-	context.register(context.editor.onKeyDown(event => {
-		if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
-		const action = context.editor.getAction(formatDocumentAction.id);
-		if (!action?.isSupported()) return;
-		event.stop();
-		void action.run().catch(context.onLanguageError);
-	}));
-	if (!context.options.formatOnSave || !context.registerBeforeSave) {
-		return;
-	}
-	context.register(context.registerBeforeSave(() => formatEditor(
-		context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent,
-	).catch(context.onLanguageError)));
-} });
+});

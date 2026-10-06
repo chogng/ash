@@ -65,9 +65,9 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		if (signal.aborted) throw signal.reason;
 	}
 
-	public clearInput(): void {}
+	public clearInput(): void { }
 
-	public layout(_dimension: IDimension): void {}
+	public layout(_dimension: IDimension): void { }
 
 	public setVisible(visibility: EditorPaneVisibility): void {
 		if (visibility === EditorPaneVisibility.Hidden) this.focusedContext?.set(false);

@@ -14,12 +14,12 @@
 
 默认 coding profile 同时向模型提供 `apply_patch` 与 `edit`：模型通常用 `apply_patch` 表达一个完整的多位置或多文件变更，只在唯一字符串微编辑或窄 patch 上下文失配时使用 `edit`。`apply_patch` 在写入前校验完整 patch，`edit` 要求本 Thread 先读并以 exact revision 条件写入；两者都受路径授权和 unknown outcome 不重放边界约束。本文件固定它们以及其余内置工具的模型可见 schema、描述、校验和错误文案。
 
-| 决策 | 固定契约 |
-| --- | --- |
-| 默认代码修改 | `apply_patch`，一次表达一个逻辑变更 |
-| 小范围确定性修改 | `edit`，要求 exact match 且默认唯一命中 |
-| 多文件安全 | patch 在第一次写入前完成整体验证；多文件 envelope 不承诺事务性，unknown outcome 不重放 |
-| 模型差异 | 不按模型或 Provider 名称切工具；有版本化评测或隐私受控聚合证据后再评审候选 profile |
+| 决策             | 固定契约                                                                               |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| 默认代码修改     | `apply_patch`，一次表达一个逻辑变更                                                    |
+| 小范围确定性修改 | `edit`，要求 exact match 且默认唯一命中                                                |
+| 多文件安全       | patch 在第一次写入前完成整体验证；多文件 envelope 不承诺事务性，unknown outcome 不重放 |
+| 模型差异         | 不按模型或 Provider 名称切工具；有版本化评测或隐私受控聚合证据后再评审候选 profile     |
 
 ## 1. 模式约定
 
@@ -39,11 +39,11 @@
 
 ## 2. shell
 
-| | |
-| --- | --- |
-| 状态 | 已接入（`ash-shell-command` + `local_tools.rs`），schema 需按本节收敛 |
-| 执行 | 沙箱 + 审批走 `ash-action-policy`；执行上限 256 KiB / 默认 30s（已有） |
-| 模型侧限幅 | 30 KiB，头尾各半，中间标注 `[... N bytes truncated ...]` |
+|            |                                                                        |
+| ---------- | ---------------------------------------------------------------------- |
+| 状态       | 已接入（`ash-shell-command` + `local_tools.rs`），schema 需按本节收敛  |
+| 执行       | 沙箱 + 审批走 `ash-action-policy`；执行上限 256 KiB / 默认 30s（已有） |
+| 模型侧限幅 | 30 KiB，头尾各半，中间标注 `[... N bytes truncated ...]`               |
 
 **description（模型可见）：**
 
@@ -90,23 +90,23 @@ Usage notes:
 
 **校验与错误文案：**
 
-| 情形 | 结果（`is_error: true` 的 Tool Result 文本） |
-| --- | --- |
-| `command` 为空/全空白 | `command must not be empty` |
+| 情形                             | 结果（`is_error: true` 的 Tool Result 文本）                      |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `command` 为空/全空白            | `command must not be empty`                                       |
 | `working_directory` 在授权目录外 | `working_directory is outside the authorized directories: {path}` |
-| `timeout_ms` 超上限 | `timeout_ms exceeds the maximum of 600000` |
-| 超时 | `command timed out after {n} ms. Partial output:\n{截断输出}` |
-| 非零退出 | 正常结果：输出 + `exit code: {n}`（非零退出不是工具错误） |
+| `timeout_ms` 超上限              | `timeout_ms exceeds the maximum of 600000`                        |
+| 超时                             | `command timed out after {n} ms. Partial output:\n{截断输出}`     |
+| 非零退出                         | 正常结果：输出 + `exit code: {n}`（非零退出不是工具错误）         |
 
 **输出格式：**合并流文本 + 末行 `exit code: {n}`。沙箱拒绝走 `SandboxDenialOutput` 结构化
 路径（[`core.md`](core.md) §11），不进本表。
 
 ## 3. read_file
 
-| | |
-| --- | --- |
-| 状态 | 已实现；由 canonical direct `LocalToolSuite` 提供，Agent 不再看到 operation-enum `file-system` |
-| 模型侧限幅 | 默认 2000 行；单行 > 2000 字符截断并标注 |
+|            |                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| 状态       | 已实现；由 canonical direct `LocalToolSuite` 提供，Agent 不再看到 operation-enum `file-system` |
+| 模型侧限幅 | 默认 2000 行；单行 > 2000 字符截断并标注                                                       |
 
 **description：**
 
@@ -149,13 +149,13 @@ Usage notes:
 
 **校验与错误文案：**
 
-| 情形 | 文案 |
-| --- | --- |
-| 文件不存在 | `file not found: {path}`；若同目录有相近命名，附 `did you mean {candidate}?` |
-| 是目录 | `{path} is a directory. Use glob to list its files` |
-| 二进制且非图片 | `{path} is a binary file and cannot be displayed as text` |
-| 超出授权目录 | `path is outside the authorized directories: {path}` |
-| 空文件 | 正常结果：`(file is empty)` |
+| 情形           | 文案                                                                         |
+| -------------- | ---------------------------------------------------------------------------- |
+| 文件不存在     | `file not found: {path}`；若同目录有相近命名，附 `did you mean {candidate}?` |
+| 是目录         | `{path} is a directory. Use glob to list its files`                          |
+| 二进制且非图片 | `{path} is a binary file and cannot be displayed as text`                    |
+| 超出授权目录   | `path is outside the authorized directories: {path}`                         |
+| 空文件         | 正常结果：`(file is empty)`                                                  |
 
 **输出格式：**`cat -n` 风格行号 + 制表符；截断尾注
 `[... {n} more lines, continue with offset={next}]`。durable Tool Result 存完整读取结果的
@@ -163,10 +163,10 @@ Usage notes:
 
 ## 4. write_file
 
-| | |
-| --- | --- |
-| 状态 | 已实现；与 `read_file`/`edit` 共享 Thread-scoped 读后写入状态和磁盘 revision 校验 |
-| capability | 写路径进入 `ActionReviewRequest`，沙箱/审批按路径判定 |
+|            |                                                                                   |
+| ---------- | --------------------------------------------------------------------------------- |
+| 状态       | 已实现；与 `read_file`/`edit` 共享 Thread-scoped 读后写入状态和磁盘 revision 校验 |
+| capability | 写路径进入 `ActionReviewRequest`，沙箱/审批按路径判定                             |
 
 **description：**
 
@@ -204,11 +204,11 @@ Usage notes:
 
 **校验与错误文案：**
 
-| 情形 | 文案 |
-| --- | --- |
+| 情形                 | 文案                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
 | 覆盖未读过的既有文件 | `{path} exists but has not been read in this conversation. Read it first, or choose a new path` |
-| 超出授权目录 | `path is outside the authorized directories: {path}` |
-| 目标是目录 | `{path} is a directory` |
+| 超出授权目录         | `path is outside the authorized directories: {path}`                                            |
+| 目标是目录           | `{path} is a directory`                                                                         |
 
 "读过"判定由 App Server runtime 按 Thread scope 维护成功的 `read_file` 路径和内容 revision；
 另一个 Thread 的读取不能授权当前 Thread。写入使用 expected revision 条件提交，因此读取后发生的
@@ -216,10 +216,10 @@ Usage notes:
 
 ## 5. edit（微编辑与降级工具）
 
-| | |
-| --- | --- |
-| 状态 | 已实现；由 canonical direct `LocalToolSuite` 提供并进入 `coding-v1` |
-| 核心不变量 | `old_string` 唯一命中，否则拒绝——这条校验挡住大部分错误编辑 |
+|            |                                                                     |
+| ---------- | ------------------------------------------------------------------- |
+| 状态       | 已实现；由 canonical direct `LocalToolSuite` 提供并进入 `coding-v1` |
+| 核心不变量 | `old_string` 唯一命中，否则拒绝——这条校验挡住大部分错误编辑         |
 
 **description：**
 
@@ -269,13 +269,13 @@ Usage notes:
 
 **校验与错误文案：**
 
-| 情形 | 文案 |
-| --- | --- |
-| 未读过该文件 | `{path} has not been read in this conversation. Read it first` |
-| 0 命中 | `old_string not found in {path}. Re-read the file: the content may differ from what you expect (check whitespace and indentation)` |
+| 情形                    | 文案                                                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 未读过该文件            | `{path} has not been read in this conversation. Read it first`                                                                      |
+| 0 命中                  | `old_string not found in {path}. Re-read the file: the content may differ from what you expect (check whitespace and indentation)`  |
 | ≥2 命中且非 replace_all | `old_string matches {n} locations in {path}. Extend it with more surrounding context to make it unique, or set replace_all to true` |
-| old == new | `new_string must differ from old_string` |
-| 读后被外部修改 | `{path} changed on disk after your last read. Read it again before editing` |
+| old == new              | `new_string must differ from old_string`                                                                                            |
+| 读后被外部修改          | `{path} changed on disk after your last read. Read it again before editing`                                                         |
 
 **执行约束：**执行阶段在写入前完成已读校验、磁盘版本校验和命中计数，再以 expected revision 做同文件原子替换；任何校验失败都不得修改文件。
 
@@ -283,10 +283,10 @@ Usage notes:
 
 ## 6. apply_patch（默认代码修改工具）
 
-| | |
-| --- | --- |
+|      |                                                                          |
+| ---- | ------------------------------------------------------------------------ |
 | 状态 | 已实现；`ash-apply-patch` 是 `coding-v1` 中唯一的 `apply_patch` executor |
-| 格式 | V4A envelope（canonical 格式，不按模型或 Provider 发明方言） |
+| 格式 | V4A envelope（canonical 格式，不按模型或 Provider 发明方言）             |
 
 **description（模型可见）：**
 
@@ -320,10 +320,10 @@ local replacement.
 
 ## 7. glob
 
-| | |
-| --- | --- |
+|      |                                                           |
+| ---- | --------------------------------------------------------- |
 | 状态 | 已实现；`LocalToolSuite` 使用冻结的 `rg --files` 枚举文件 |
-| 限幅 | 100 条，按修改时间降序 |
+| 限幅 | 100 条，按修改时间降序                                    |
 
 **description：**
 
@@ -360,10 +360,10 @@ Finds files by glob pattern, sorted by most recently modified.
 
 ## 8. grep
 
-| | |
-| --- | --- |
+|      |                                                                   |
+| ---- | ----------------------------------------------------------------- |
 | 状态 | 已实现；`LocalToolSuite` 调用公共 `grep::Search` 并格式化模型结果 |
-| 限幅 | 100 条命中；单行 > 500 字符截断 |
+| 限幅 | 100 条命中；单行 > 500 字符截断                                   |
 
 **description：**
 
@@ -411,10 +411,10 @@ Searches file contents with a regular expression.
 
 ## 9. update_plan
 
-| | |
-| --- | --- |
+|      |                                                                                    |
+| ---- | ---------------------------------------------------------------------------------- |
 | 状态 | 已实现；薄工具 durable 提交 `ThreadEvent::PlanUpdated`，reducer 投影到 `Turn.plan` |
-| 组装 | 模型调用从 canonical Turn snapshot 读取最新计划；Desktop 只投影 `Turn.plan` |
+| 组装 | 模型调用从 canonical Turn snapshot 读取最新计划；Desktop 只投影 `Turn.plan`        |
 
 **description：**
 
@@ -515,10 +515,10 @@ digest 缺失/伪造或 catalog 已刷新时拒绝并要求重新 `search_tools`
 
 ## 11. Agent 委托工具
 
-| | |
-| --- | --- |
-| 状态 | 已接入具备有效目录 Grant 的 App Server Tool composition |
-| 执行 | `MultiAgentCoordinator` + 独立委托 Thread；不经 MCP 自调用 |
+|      |                                                                          |
+| ---- | ------------------------------------------------------------------------ |
+| 状态 | 已接入具备有效目录 Grant 的 App Server Tool composition                  |
+| 执行 | `MultiAgentCoordinator` + 独立委托 Thread；不经 MCP 自调用               |
 | 权限 | 被委托运行只获得 spawn 时冻结的 tool name ceiling 与 active Skill digest |
 
 ### 11.1 spawn_agent

@@ -395,7 +395,7 @@ function createSnapshot(version: number, text: string, lineCount = countLines(te
 	});
 }
 
-function assertSnapshotMetadata(value: { readonly version: unknown; readonly length: unknown; readonly lineCount: unknown }): void {
+function assertSnapshotMetadata(value: { readonly version: unknown; readonly length: unknown; readonly lineCount: unknown; }): void {
 	assertPositiveSafeInteger(value.version, "Language worker snapshot version");
 	assertNonNegativeSafeInteger(value.length, "Language worker snapshot length");
 	assertPositiveSafeInteger(value.lineCount, "Language worker snapshot line count");

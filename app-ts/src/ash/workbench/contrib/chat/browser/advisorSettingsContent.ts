@@ -125,11 +125,13 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 	}
 
 	public getNodes(): readonly SettingsTreeNode<SettingsContentItem>[] {
-		return [{ element: {
-			kind: 'item', id: 'chat.advisor', title: localize('advisor.settings.title', 'Advisor'),
-			description: this.note.textContent ?? '', keywords: ['advisor', 'model', 'second opinion', localize('advisor.settings.model', 'Advisor model'), localize('advisor.settings.enabled', 'Enable Advisor')],
-			value: { domNode: this.domNode },
-		} }];
+		return [{
+			element: {
+				kind: 'item', id: 'chat.advisor', title: localize('advisor.settings.title', 'Advisor'),
+				description: this.note.textContent ?? '', keywords: ['advisor', 'model', 'second opinion', localize('advisor.settings.model', 'Advisor model'), localize('advisor.settings.enabled', 'Enable Advisor')],
+				value: { domNode: this.domNode },
+			}
+		}];
 	}
 
 	public setVisible(visible: boolean): void {

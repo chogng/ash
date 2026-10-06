@@ -240,10 +240,12 @@ export class LanguageHierarchyController extends Disposable {
 }
 
 function callSession(prepared: PreparedCallHierarchy): HierarchySession {
-	return { kind: "call", roots: prepared.roots, query: async (item, direction) => {
-		const entries = direction === "outgoing" ? await prepared.outgoing(item) : await prepared.incoming(item);
-		return entries.map(entry => entry.item);
-	} };
+	return {
+		kind: "call", roots: prepared.roots, query: async (item, direction) => {
+			const entries = direction === "outgoing" ? await prepared.outgoing(item) : await prepared.incoming(item);
+			return entries.map(entry => entry.item);
+		}
+	};
 }
 
 function typeSession(prepared: PreparedTypeHierarchy): HierarchySession {

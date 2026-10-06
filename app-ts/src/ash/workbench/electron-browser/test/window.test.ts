@@ -48,7 +48,7 @@ test('desktop initialization reads privileges and installation proofs through in
 	services.registerInstance(INativeHostService, { isAdmin: async () => true } as INativeHostApi);
 	services.registerInstance(INotificationService, notifications);
 	const errors: unknown[][] = [];
-	services.registerInstance(ILogService, { trace() {}, debug() {}, info() {}, warn() {}, error: (...args: unknown[]) => { errors.push(args); } });
+	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error: (...args: unknown[]) => { errors.push(args); } });
 	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IEditorGroupsService, { onDidChangeGroups: Event.None } as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
 	const properties: ITitleProperties[] = [];
@@ -56,7 +56,7 @@ test('desktop initialization reads privileges and installation proofs through in
 	services.registerInstance(ITitleService, { updateProperties: (value: ITitleProperties) => { properties.push(value); if ('isPure' in value) { updated(); } } } as unknown as import('../../services/title/browser/titleService.js').ITitleService);
 	const ipc = {
 		invoke: async <T>() => undefined as T,
-		subscribe: () => ({ dispose() {} }),
+		subscribe: () => ({ dispose() { } }),
 	};
 	const development = new Promise<void>(resolve => { updated = resolve; });
 	using desktop = services.createInstance(ElectronWindow, ipc);
@@ -108,10 +108,10 @@ test('desktop disposal prevents pending environment reads from updating titles',
 	services.registerInstance(ITitleService, { updateProperties: () => assert.fail('Disposed window must not update titles') } as unknown as import('../../services/title/browser/titleService.js').ITitleService);
 	using notifications = new NotificationService();
 	services.registerInstance(INotificationService, notifications);
-	services.registerInstance(ILogService, { trace() {}, debug() {}, info() {}, warn() {}, error() {} });
+	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
 	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IEditorGroupsService, { onDidChangeGroups: Event.None } as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
-	using desktop = services.createInstance(ElectronWindow, { invoke: async () => undefined, subscribe: () => ({ dispose() {} }) });
+	using desktop = services.createInstance(ElectronWindow, { invoke: async () => undefined, subscribe: () => ({ dispose() { } }) });
 	await desktop.initialize();
 	desktop.dispose();
 	finish(true);
@@ -130,7 +130,7 @@ test('desktop zoom follows the profile setting and persists a window zoom change
 		getZoomLevel: async () => zoom,
 		setZoomLevel: async (level: number) => { zoom = level; changed?.(level); applied(level); },
 		onDidChangeZoomLevel: (listener: (level: number) => void) => { changed = listener; return { dispose: () => { changed = undefined; } }; },
-		onDidRequestOpenExternalUri: () => ({ dispose() {} }),
+		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 	} as unknown as INativeHostApi;
 	using services = new InstantiationService();
 	using codeEditors = new StandaloneCodeEditorService();

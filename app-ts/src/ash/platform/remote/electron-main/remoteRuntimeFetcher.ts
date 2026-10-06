@@ -11,7 +11,7 @@ const ARTIFACT_KEYS = new Set(["archivePath", "version", "target", "archiveSize"
 export interface RemoteRuntimeFetcherOptions {
 	readonly remoteExecutable: string;
 	readonly environment: NodeJS.ProcessEnv;
-	readonly source: Extract<RemoteRuntimeCatalogSource, { readonly kind: "network" }>;
+	readonly source: Extract<RemoteRuntimeCatalogSource, { readonly kind: "network"; }>;
 	readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void;
 	readonly runCommand?: RunRemoteCommand;
 }
@@ -26,8 +26,8 @@ export class RemoteRuntimeFetcher {
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
-	async fetch(target: string, request: { readonly signal?: AbortSignal; readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void } = {}): Promise<TrustedRemoteRuntimeArtifact> {
-		const args = [ "fetch-runtime",
+	async fetch(target: string, request: { readonly signal?: AbortSignal; readonly onProgress?: (progress: RemoteRuntimeInstallProgress) => void; } = {}): Promise<TrustedRemoteRuntimeArtifact> {
+		const args = ["fetch-runtime",
 			"--catalog-url", this.options.source.catalogUrl,
 			"--catalog-sha256", this.options.source.expectedSha256,
 			"--target", target,
@@ -50,7 +50,7 @@ export class RemoteRuntimeFetcher {
 class RemoteRuntimeDownloadProgressDecoder {
 	private buffered = "";
 
-	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) {}
+	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) { }
 
 	accept(chunk: string): void {
 		this.buffered += chunk;

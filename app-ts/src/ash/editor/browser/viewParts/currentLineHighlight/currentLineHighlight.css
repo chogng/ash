@@ -35,10 +35,22 @@
 	border: 2px solid var(--ash-editor-line-highlight-border);
 }
 
-[data-color-scheme="high-contrast-dark"] .stanza-editor .view-overlays .current-line-exact,
-[data-color-scheme="high-contrast-dark"] .stanza-editor .margin-view-overlays .current-line-exact-margin,
-[data-color-scheme="high-contrast-light"] .stanza-editor .view-overlays .current-line-exact,
-[data-color-scheme="high-contrast-light"] .stanza-editor .margin-view-overlays .current-line-exact-margin {
+[data-color-scheme="high-contrast-dark"]
+	.stanza-editor
+	.view-overlays
+	.current-line-exact,
+[data-color-scheme="high-contrast-dark"]
+	.stanza-editor
+	.margin-view-overlays
+	.current-line-exact-margin,
+[data-color-scheme="high-contrast-light"]
+	.stanza-editor
+	.view-overlays
+	.current-line-exact,
+[data-color-scheme="high-contrast-light"]
+	.stanza-editor
+	.margin-view-overlays
+	.current-line-exact-margin {
 	border-width: var(--ash-stroke-thickness);
 }
 

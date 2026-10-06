@@ -1,9 +1,7 @@
 {
   "name": "bazelrc",
   "scopeName": "source.bazelrc",
-  "fileTypes": [
-    "bazelrc"
-  ],
+  "fileTypes": ["bazelrc"],
   "patterns": [
     {
       "include": "#comment"

@@ -12,15 +12,15 @@
 
 ## 公共契约
 
-| Symbol | 职责 | 调用约束 |
-| --- | --- | --- |
-| `ShellCompletionEngine` | 持有 registry、PATH、工作目录、工作区候选和 alias 快照 | 每个 Shell 环境持有一个实例；环境变化后显式更新 |
-| `ShellCommandRegistry` | 注册递归 `ShellCommandSpec` | 调用者显式注册的顶层命令视为权威事实；注册过程不能启动 generator 或授权执行 |
-| `ShellCommandSpec` | 描述一个 command/subcommand 的 option 和 argument grammar | 未知 option 和无法验证的 opaque value 不产生 token evidence |
-| `ShellTokenSnapshot` | 返回输入中每个 token 的位置和可选结构描述 | classifier 只把 `description.is_some()` 当作确定性证据 |
-| `ShellCompletion` | 返回 replacement、display、kind 和 byte replace range | 产品宿主负责展示和应用，不得越过 editor authority |
-| `ShellCompletionSnapshot` | 返回有界候选和当前 token 是否已有精确匹配 | inline UI 必须用精确匹配标记避免把 `git` 错续写成 `git-*`；不应自己重建 command 语义 |
-| `ShellAlias` | 表达宿主已解析的一个 alias | 本 crate 只做最多三层展开；不自行读取 dotfile 或 PTY |
+| Symbol                    | 职责                                                      | 调用约束                                                                             |
+| ------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `ShellCompletionEngine`   | 持有 registry、PATH、工作目录、工作区候选和 alias 快照    | 每个 Shell 环境持有一个实例；环境变化后显式更新                                      |
+| `ShellCommandRegistry`    | 注册递归 `ShellCommandSpec`                               | 调用者显式注册的顶层命令视为权威事实；注册过程不能启动 generator 或授权执行          |
+| `ShellCommandSpec`        | 描述一个 command/subcommand 的 option 和 argument grammar | 未知 option 和无法验证的 opaque value 不产生 token evidence                          |
+| `ShellTokenSnapshot`      | 返回输入中每个 token 的位置和可选结构描述                 | classifier 只把 `description.is_some()` 当作确定性证据                               |
+| `ShellCompletion`         | 返回 replacement、display、kind 和 byte replace range     | 产品宿主负责展示和应用，不得越过 editor authority                                    |
+| `ShellCompletionSnapshot` | 返回有界候选和当前 token 是否已有精确匹配                 | inline UI 必须用精确匹配标记避免把 `git` 错续写成 `git-*`；不应自己重建 command 语义 |
+| `ShellAlias`              | 表达宿主已解析的一个 alias                                | 本 crate 只做最多三层展开；不自行读取 dotfile 或 PTY                                 |
 
 `ShellValueHint::Opaque` 只声明 argument slot，不会把任意字符串当作已识别 token。只有静态 choice、
 合法 integer、已注册 command、现有 path、精确 directory target 等可验证值才产生描述。这一约束防止

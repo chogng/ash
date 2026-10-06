@@ -53,7 +53,7 @@ async function waitForServer(url: string, child: ChildProcess): Promise<void> {
 			if (response.ok) {
 				return;
 			}
-		} catch {}
+		} catch { }
 		await new Promise(resolvePromise => setTimeout(resolvePromise, 100));
 	}
 	throw new Error(`Editor browser server did not become ready at ${url}`);

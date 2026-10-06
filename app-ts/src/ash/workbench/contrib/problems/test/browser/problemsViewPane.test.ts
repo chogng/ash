@@ -19,7 +19,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 		marker(main, MarkerSeverity.Warning, "unused import", 2),
 		marker(library, MarkerSeverity.Information, "consider simplifying", 4),
 	]);
-	let opened: { readonly input: EditorInput; readonly options?: EditorOpenOptions } | undefined;
+	let opened: { readonly input: EditorInput; readonly options?: EditorOpenOptions; } | undefined;
 	let focusCount = 0;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,

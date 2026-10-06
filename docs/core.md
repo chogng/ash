@@ -23,14 +23,14 @@ Core Runtime
 
 ## 2. 主要职责
 
-| 组件 | 负责 | 不负责 |
-| --- | --- | --- |
-| `Runtime` | 对外完整操作、重试判断、执行投递、交互接续、失败终态 | 环境装配、连接授权、产品排队策略 |
-| `ThreadController` | Thread 创建、fork、rewind、Turn、Item、交互、目标、事件提交与恢复 | JSON-RPC、SQLite、产品导航状态 |
-| Thread reducer | 从有序 `ThreadEvent` 重建确定状态 | I/O、副作用、订阅发送 |
-| `MultiAgentCoordinator` | 基于 Thread 拓扑 spawn、message、wait、cancel descendants | Session event saga |
-| `TurnExecutor` | 模型循环、工具调度、取消、失败收口 | 持久层实现 |
-| Context 组件 | 输入选择、预算、压缩与 checkpoint | Session 级共享可变历史 |
+| 组件                    | 负责                                                              | 不负责                           |
+| ----------------------- | ----------------------------------------------------------------- | -------------------------------- |
+| `Runtime`               | 对外完整操作、重试判断、执行投递、交互接续、失败终态              | 环境装配、连接授权、产品排队策略 |
+| `ThreadController`      | Thread 创建、fork、rewind、Turn、Item、交互、目标、事件提交与恢复 | JSON-RPC、SQLite、产品导航状态   |
+| Thread reducer          | 从有序 `ThreadEvent` 重建确定状态                                 | I/O、副作用、订阅发送            |
+| `MultiAgentCoordinator` | 基于 Thread 拓扑 spawn、message、wait、cancel descendants         | Session event saga               |
+| `TurnExecutor`          | 模型循环、工具调度、取消、失败收口                                | 持久层实现                       |
+| Context 组件            | 输入选择、预算、压缩与 checkpoint                                 | Session 级共享可变历史           |
 
 crate 的重点是能力与依赖隔离：Core 依赖 `ash-core-api` 中的宿主契约，不依赖 App Server、SQLite、TUI 或具体产品宿主。
 

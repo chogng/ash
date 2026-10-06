@@ -3,13 +3,18 @@ import { test } from 'mocha';
 import { decodeTrace, exportTrace, TraceBuffer, traceEndpoint } from '../../browser/traceConnection.js';
 
 function request(id = 1, name = 'rpc') {
-	return { resourceSpans: [{ resource: { attributes: [{ key: 'service.name', value: { stringValue: 'ash' } }] }, schemaUrl: 'resource-schema',
-		scopeSpans: [{ scope: { name: 'ash' }, schemaUrl: 'scope-schema', spans: [{
-			traceId: '0123456789abcdef0123456789abcdef', spanId: id.toString(16).padStart(16, '0'), parentSpanId: '00000000000000ff',
-			name, startTimeUnixNano: '1700000000000000100', endTimeUnixNano: '1700000000000004300',
-			status: { code: 1 }, attributes: [{ key: 'outcome', value: { stringValue: 'succeeded' } }],
-		}] }],
-	}] };
+	return {
+		resourceSpans: [{
+			resource: { attributes: [{ key: 'service.name', value: { stringValue: 'ash' } }] }, schemaUrl: 'resource-schema',
+			scopeSpans: [{
+				scope: { name: 'ash' }, schemaUrl: 'scope-schema', spans: [{
+					traceId: '0123456789abcdef0123456789abcdef', spanId: id.toString(16).padStart(16, '0'), parentSpanId: '00000000000000ff',
+					name, startTimeUnixNano: '1700000000000000100', endTimeUnixNano: '1700000000000004300',
+					status: { code: 1 }, attributes: [{ key: 'outcome', value: { stringValue: 'succeeded' } }],
+				}]
+			}],
+		}]
+	};
 }
 
 test('OTLP timestamps retain precision and export preserves resource, scope, status and parent IDs', () => {

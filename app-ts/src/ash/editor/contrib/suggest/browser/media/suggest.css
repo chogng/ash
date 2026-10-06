@@ -1,88 +1,86 @@
 .stanza-editor-completion {
-  position: absolute;
-  z-index: 6;
-  display: none;
-  box-sizing: border-box;
-  min-width: 220px;
-  max-width: min(480px, calc(100% - 16px));
-  max-height: 240px;
-  overflow: auto;
-  color: var(--ash-editor-foreground);
-  white-space: normal;
-  background: var(--ash-dialog-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  border-radius: var(--ash-corner-radius-small);
-  box-shadow: 0 4px 12px var(--ash-widget-shadow);
+	position: absolute;
+	z-index: 6;
+	display: none;
+	box-sizing: border-box;
+	min-width: 220px;
+	max-width: min(480px, calc(100% - 16px));
+	max-height: 240px;
+	overflow: auto;
+	color: var(--ash-editor-foreground);
+	white-space: normal;
+	background: var(--ash-dialog-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-corner-radius-small);
+	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
 .stanza-editor-completion.visible {
-  display: block;
+	display: block;
 }
 
 .stanza-editor-completion-option {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
-  gap: 8px;
-  align-items: center;
-  box-sizing: border-box;
-  min-height: 24px;
-  padding: 4px 8px;
-  cursor: default;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+	gap: 8px;
+	align-items: center;
+	box-sizing: border-box;
+	min-height: 24px;
+	padding: 4px 8px;
+	cursor: default;
 }
 
 .stanza-editor-completion-option.focused {
-  color: var(--ash-list-active-selection-foreground);
-  background: var(--ash-list-active-selection-background);
+	color: var(--ash-list-active-selection-foreground);
+	background: var(--ash-list-active-selection-background);
 }
 
 .stanza-editor-completion-kind {
-  min-width: 64px;
-  color: var(--ash-description-foreground);
-  font-size: 0.85em;
+	min-width: 64px;
+	color: var(--ash-description-foreground);
+	font-size: 0.85em;
 }
 
-.stanza-editor-completion-option.focused
-  .stanza-editor-completion-kind {
-  color: inherit;
+.stanza-editor-completion-option.focused .stanza-editor-completion-kind {
+	color: inherit;
 }
 
 .stanza-editor-completion-label,
 .stanza-editor-completion-detail {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-editor-completion-detail {
-  color: var(--ash-description-foreground);
-  font-size: 0.9em;
+	color: var(--ash-description-foreground);
+	font-size: 0.9em;
 }
 
 .stanza-editor-completion-label strong,
 .stanza-editor-completion-detail strong {
-  color: var(--ash-editor-foreground);
-  font-weight: var(--ash-font-weight-semi-bold);
+	color: var(--ash-editor-foreground);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .stanza-editor-completion-option.focused strong {
-  color: inherit;
+	color: inherit;
 }
 
 .stanza-editor-completion-option.resolving
-  .stanza-editor-completion-detail::after {
-  content: " …";
+	.stanza-editor-completion-detail::after {
+	content: " …";
 }
 
 .stanza-editor-completion-documentation {
-  grid-column: 2 / -1;
-  overflow: hidden;
-  color: inherit;
-  font-size: 0.9em;
-  line-height: 1.35;
-  white-space: pre-wrap;
+	grid-column: 2 / -1;
+	overflow: hidden;
+	color: inherit;
+	font-size: 0.9em;
+	line-height: 1.35;
+	white-space: pre-wrap;
 }
 
-.stanza-editor-completion-option.focused
-  .stanza-editor-completion-detail {
-  color: inherit;
+.stanza-editor-completion-option.focused .stanza-editor-completion-detail {
+	color: inherit;
 }

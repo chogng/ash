@@ -1,14 +1,16 @@
 .ash-electron-titlebar {
-  padding-left: calc(12px + env(titlebar-area-x, 0px));
-  padding-right: calc(12px + 100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%));
-  -webkit-app-region: drag;
+	padding-left: calc(12px + env(titlebar-area-x, 0px));
+	padding-right: calc(
+		12px + 100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%)
+	);
+	-webkit-app-region: drag;
 }
 
 .ash-workbench[data-os="mac"] .ash-electron-titlebar {
-  /* The overlay inset already ends after the macOS window controls. */
-  padding-left: env(titlebar-area-x, 12px);
+	/* The overlay inset already ends after the macOS window controls. */
+	padding-left: env(titlebar-area-x, 12px);
 }
 
 .ash-electron-titlebar .ash-titlebar-interactive-region {
-  -webkit-app-region: no-drag;
+	-webkit-app-region: no-drag;
 }

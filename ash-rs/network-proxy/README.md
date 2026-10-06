@@ -43,14 +43,14 @@ Core 复用既有 `AgentRequest::Approval` / `AgentResponse::Approval` 协议，
 
 ## 职责边界
 
-| 组件 | 负责 |
-| --- | --- |
-| `network-proxy` | 协议解析、地址检查、代理环境、监听与连接生命周期 |
-| `execpolicy` / `action-policy` | 规则优先级、拒绝、授权与审查 |
-| Core | Turn 审批模式、持久交互和取消 |
-| `tool-executor` | 创建代理、应用启动环境、输出预算、取消与超时 |
-| `sandboxing` / `mxc-sandbox` | 进程生命周期、平台限制与对应代理端口开放 |
-| `http-client` / `websocket-client` | 普通客户端的路由、TLS、连接池与握手 |
+| 组件                               | 负责                                             |
+| ---------------------------------- | ------------------------------------------------ |
+| `network-proxy`                    | 协议解析、地址检查、代理环境、监听与连接生命周期 |
+| `execpolicy` / `action-policy`     | 规则优先级、拒绝、授权与审查                     |
+| Core                               | Turn 审批模式、持久交互和取消                    |
+| `tool-executor`                    | 创建代理、应用启动环境、输出预算、取消与超时     |
+| `sandboxing` / `mxc-sandbox`       | 进程生命周期、平台限制与对应代理端口开放         |
+| `http-client` / `websocket-client` | 普通客户端的路由、TLS、连接池与握手              |
 
 配置读取、持久化、组织策略分发和凭据来源不由代理持有。代理不读取宿主的代理环境作为自身上游，
 避免子进程代理设置形成递归转发。

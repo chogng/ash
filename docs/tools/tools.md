@@ -22,13 +22,13 @@
 工具系统把本地工具、MCP 和动态来源转换成统一、可验证的能力目录；它定义和绑定工具，但最终
 授权、执行顺序与持久化仍由相邻系统负责。
 
-| 读者首先会问 | 直接答案 | 深入阅读 |
-| --- | --- | --- |
-| 不同来源的工具为什么能统一调用？ | 每个来源先转换成统一定义、规格、绑定和调用值 | [三层工具契约](#3-三层工具契约) |
-| 工具名称就是执行身份吗？ | 不是；稳定身份还包含来源、绑定和快照 generation | [身份、来源与绑定](#5-身份来源与绑定) |
-| Agent 当前能看到哪些工具？ | 由不可变注册表快照和暴露范围决定，运行中不会被静默改写 | [注册表与快照](#7-注册表与快照) |
-| 谁决定工具能不能执行？ | 权限系统决定授权；Core 调度；工具执行器落实调用 | [当前本地工具来源](#41-当前本地工具来源运行时) |
-| 当前完成到哪里？ | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已落地；Plugin 安装 authority 尚未完成 | [当前仓库审计](#2-当前仓库审计) |
+| 读者首先会问                     | 直接答案                                                                                                             | 深入阅读                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| 不同来源的工具为什么能统一调用？ | 每个来源先转换成统一定义、规格、绑定和调用值                                                                         | [三层工具契约](#3-三层工具契约)                |
+| 工具名称就是执行身份吗？         | 不是；稳定身份还包含来源、绑定和快照 generation                                                                      | [身份、来源与绑定](#5-身份来源与绑定)          |
+| Agent 当前能看到哪些工具？       | 由不可变注册表快照和暴露范围决定，运行中不会被静默改写                                                               | [注册表与快照](#7-注册表与快照)                |
+| 谁决定工具能不能执行？           | 权限系统决定授权；Core 调度；工具执行器落实调用                                                                      | [当前本地工具来源](#41-当前本地工具来源运行时) |
+| 当前完成到哪里？                 | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已落地；Plugin 安装 authority 尚未完成 | [当前仓库审计](#2-当前仓库审计)                |
 
 ## 当前 Turn 的模式切换
 
@@ -40,13 +40,13 @@ App Server 注册工具并处理用户选择；Core 的 `ThreadController.change
 指令。事件包含 `fromMode`，用于识别过期切换和同步输入框。桌面与 TUI 跟随切换，但保留用户为下一条
 消息选择的不同模式。
 
-| 切换情况 | 行为 |
-| --- | --- |
-| Agent / Debug / Multitask 之间，或进入 Plan / Ask | 直接切换 |
-| Plan 与 Ask 之间 | 直接切换 |
-| Plan / Ask → Agent / Debug / Multitask | 通过现有用户输入交互等待明确选择；拒绝后保留原模式 |
-| 已在目标模式 | 返回 `changed: false`，不重复写事件 |
-| Turn 已结束、不是 coding Turn，或确认期间原模式改变 | 拒绝变更 |
+| 切换情况                                            | 行为                                               |
+| --------------------------------------------------- | -------------------------------------------------- |
+| Agent / Debug / Multitask 之间，或进入 Plan / Ask   | 直接切换                                           |
+| Plan 与 Ask 之间                                    | 直接切换                                           |
+| Plan / Ask → Agent / Debug / Multitask              | 通过现有用户输入交互等待明确选择；拒绝后保留原模式 |
+| 已在目标模式                                        | 返回 `changed: false`，不重复写事件                |
+| Turn 已结束、不是 coding Turn，或确认期间原模式改变 | 拒绝变更                                           |
 
 成功输出为 `{ "changed": true, "from_mode": "agent", "mode": "plan", "sequence": 8 }`；
 拒绝确认输出为 `{ "changed": false, "mode": "plan", "rejected": true }`。
@@ -167,11 +167,11 @@ provider wire 继续属于 `ash-api`，durable scheduling/recovery 继续属于 
 
 工具系统固定分为三层：
 
-| 层 | Owner | 典型类型 | 生命周期 |
-| --- | --- | --- | --- |
-| Canonical product contract | `ash-protocol` | `ToolName`、`ToolCallId`、durable Tool Item、dynamic interaction | 可序列化、可持久化 |
-| Host tool contract | `ash-tools` | `ToolDefinition`、`ToolSpec`、binding、invocation、output、executor | process-local 或 snapshot-scoped |
-| Execution orchestration | `ash-core` | `ToolScheduler`、`ToolService` port、approval、retry、recovery | Turn/operation-scoped |
+| 层                         | Owner          | 典型类型                                                            | 生命周期                         |
+| -------------------------- | -------------- | ------------------------------------------------------------------- | -------------------------------- |
+| Canonical product contract | `ash-protocol` | `ToolName`、`ToolCallId`、durable Tool Item、dynamic interaction    | 可序列化、可持久化               |
+| Host tool contract         | `ash-tools`    | `ToolDefinition`、`ToolSpec`、binding、invocation、output、executor | process-local 或 snapshot-scoped |
+| Execution orchestration    | `ash-core`     | `ToolScheduler`、`ToolService` port、approval、retry、recovery      | Turn/operation-scoped            |
 
 ### 3.1 `ash-protocol` 继续拥有
 
@@ -288,13 +288,13 @@ MCP adapter 的公开输入使用 `ash-tools` 自己的纯 `McpToolProjection`�
 本地 Directory 的 Agent 工具由 App Server composition root 统一注册；模型侧只看到 canonical
 direct 工具名，不看到基础库或 legacy operation enum：
 
-| Crate / tool name | 可做的事 | 明确不做的事 |
-| --- | --- | --- |
-| `ash-shell-command` / `shell-command` | 在批准的相对 Directory 工作目录执行显式 program/arguments；复用 `ash-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
-| App Server `LocalToolSuite` / `shell-session` | 启动长任务；读取输出、写入 stdin、等待退出、调整 PTY 和终止已有进程 | 不允许其他 Session 或 Thread 操作该进程 |
-| App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索 | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint |
-| `ash-file-system` / 非 Agent 基础库 | 提供 directory-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
-| `ash-apply-patch` / `apply_patch` | 预检后更新、添加、移动或删除普通文件；提交复用文件系统层的版本检查与单文件原子写入 | executor 不接受绝对/`..` 路径；移动目标必须不存在，父目录必须存在；多文件提交不承诺事务性 |
+| Crate / tool name                                                               | 可做的事                                                                                                            | 明确不做的事                                                                              |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ash-shell-command` / `shell-command`                                           | 在批准的相对 Directory 工作目录执行显式 program/arguments；复用 `ash-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy                                                   |
+| App Server `LocalToolSuite` / `shell-session`                                   | 启动长任务；读取输出、写入 stdin、等待退出、调整 PTY 和终止已有进程                                                 | 不允许其他 Session 或 Thread 操作该进程                                                   |
+| App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索                                                     | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint                 |
+| `ash-file-system` / 非 Agent 基础库                                             | 提供 directory-scoped 条件写入与 host-only filesystem 能力                                                          | 默认 coding profile 不暴露 `file-system` 工具                                             |
+| `ash-apply-patch` / `apply_patch`                                               | 预检后更新、添加、移动或删除普通文件；提交复用文件系统层的版本检查与单文件原子写入                                  | executor 不接受绝对/`..` 路径；移动目标必须不存在，父目录必须存在；多文件提交不承诺事务性 |
 
 Agent 通过这两个命令工具执行 Git、测试和构建；Workbench 的 Git UI 通过 Git RPC 调用 Rust
 Git 服务。通用命令工具不按 Git 子命令逐个注册，也不需要先打开可见终端。
@@ -319,12 +319,12 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 
 搜索分成 Agent 内容搜索、编辑器内容搜索和交互式路径搜索：
 
-| Surface | 所有权 | 模型可见 |
-| --- | --- | --- |
+| Surface                           | 所有权                                                                                    | 模型可见    |
+| --------------------------------- | ----------------------------------------------------------------------------------------- | ----------- |
 | App Server `LocalToolSuite::grep` | Agent 内容搜索；调用公共 grep，由 `grep.backend` 在包内 `tgrep`（默认）与冻结 `rg` 间选择 | `grep` Tool |
-| `ash-grep` | 共用引擎、目录索引与结构化搜索；编辑器通过分页任务使用 | 否 |
-| `ash-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
-| `ash-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
+| `ash-grep`                        | 共用引擎、目录索引与结构化搜索；编辑器通过分页任务使用                                    | 否          |
+| `ash-file-search`                 | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI                          | 否          |
+| `ash-file-watcher`                | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint    | 否          |
 
 模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认使用包内 tgrep；公共配置 `grep.backend = "ripgrep"` 可显式选择 `rg`。编辑器与 Codebase 也使用同一 grep 服务；`glob` 继续通过 `rg --files` 枚举文件。交互式路径搜索契约由 [`ash-rs/file-search/README.md`](../ash-rs/file-search/README.md) 维护。
 
@@ -1335,15 +1335,15 @@ provider tool call/result
 
 共享层负责提供确定性输入，provider 层负责 wire 差异：
 
-| 能力 | `ash-tools` | `ash-api` |
-| --- | --- | --- |
-| name/schema validation | canonical 规则 | provider-specific final gate |
-| namespace | binding 与 flatten plan | wire encoding |
-| strict schema | typed intent/capability requirement | provider bool/field |
-| deferred loading | search/loadable spec | native feature encoding 或 host fallback |
-| freeform | canonical format | provider grammar/custom tool DTO |
-| image detail | effective decision | provider string/field |
-| output content | `ToolOutput` | provider request item |
+| 能力                   | `ash-tools`                         | `ash-api`                                |
+| ---------------------- | ----------------------------------- | ---------------------------------------- |
+| name/schema validation | canonical 规则                      | provider-specific final gate             |
+| namespace              | binding 与 flatten plan             | wire encoding                            |
+| strict schema          | typed intent/capability requirement | provider bool/field                      |
+| deferred loading       | search/loadable spec                | native feature encoding 或 host fallback |
+| freeform               | canonical format                    | provider grammar/custom tool DTO         |
+| image detail           | effective decision                  | provider string/field                    |
+| output content         | `ToolOutput`                        | provider request item                    |
 
 Provider adapter 不能：
 
@@ -1581,12 +1581,12 @@ grant。
 
 当前受控检索回归包含 20 个代表工具、140 个 collision/distractor 工具和中英文 semantic cases：
 
-| 路径 | Corpus | Top-1 | Top-3 | 说明 |
-| --- | ---: | ---: | ---: | --- |
-| BM25 | 20 | 95% | 100% | 默认、离线、零模型成本 |
-| BM25 | 160 | 91% | 100% | 验证大 catalog 下的 lexical precision |
-| BM25 | 10 个中文/同义 case | 0% | 0% | 明确暴露纯词法边界 |
-| controlled semantic + RRF | 同上 | 100% | 100% | 验证 hybrid 编排；不代表任何具体 embedding 模型质量 |
+| 路径                      |              Corpus | Top-1 | Top-3 | 说明                                                |
+| ------------------------- | ------------------: | ----: | ----: | --------------------------------------------------- |
+| BM25                      |                  20 |   95% |  100% | 默认、离线、零模型成本                              |
+| BM25                      |                 160 |   91% |  100% | 验证大 catalog 下的 lexical precision               |
+| BM25                      | 10 个中文/同义 case |    0% |    0% | 明确暴露纯词法边界                                  |
+| controlled semantic + RRF |                同上 |  100% |  100% | 验证 hybrid 编排；不代表任何具体 embedding 模型质量 |
 
 真实 embedding 的模型质量必须按具体 provider/model 另做可重复 eval；CI 中的 controlled semantic
 ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge 接线不会退化成伪 fallback。

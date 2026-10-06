@@ -74,10 +74,10 @@ export class QuickDiffDecorator extends Disposable {
 			}
 		}
 		this.collection.replaceAll(Object.freeze([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
-				range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				options: this.resolve(metadata),
-				metadata,
+			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			options: this.resolve(metadata),
+			metadata,
 		}))));
 	}
 }

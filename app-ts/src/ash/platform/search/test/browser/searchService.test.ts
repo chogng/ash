@@ -146,7 +146,7 @@ test('an already cancelled search creates no backend job', async () => {
 
 test('cancelling during job creation releases the returned job without reading it', async () => {
 	const controller = new AbortController();
-	const started = new DeferredPromise<{ searchId: string }>();
+	const started = new DeferredPromise<{ searchId: string; }>();
 	const released: string[] = [];
 	const api: IContentSearchApi = {
 		start() { return started.p; },

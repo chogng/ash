@@ -3,7 +3,7 @@ import type { IToolSearchApi } from "../../../../platform/toolSearch/common/tool
 import type { IToolSearchService, ToolSearchConfiguration, ToolSearchEmbeddingStatus, ToolSearchSettings } from "../../../../platform/toolSearch/common/toolSearchService.js";
 
 export class AppServerToolSearchService implements IToolSearchService {
-	constructor(private readonly api: IToolSearchApi) {}
+	constructor(private readonly api: IToolSearchApi) { }
 
 	async readConfig(): Promise<ToolSearchSettings> {
 		const config = await this.api.readConfig();

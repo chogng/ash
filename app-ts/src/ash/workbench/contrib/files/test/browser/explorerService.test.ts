@@ -17,7 +17,7 @@ test('Explorer service exposes the current view and releases it on disposal', ()
 	const view = {
 		getContext: () => [selected],
 		getAccessibleContent: () => 'main.ts',
-		selectResource: async () => {},
+		selectResource: async () => { },
 		focus: () => { focused++; },
 	};
 	const registration = service.registerView(view);

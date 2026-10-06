@@ -30,42 +30,42 @@ MenusRegistry + ContextKeyService
 Menu 系统解决的是 **action 的跨模块发现、条件投影、排序和呈现组合**，不是任意模块之间
 相互调用的总线。真正执行功能的是 Command；真正决定 CSS 视觉的是控件及其 presentation。
 
-| 读者的问题 | 应该查看的概念 | 它负责什么 |
-| --- | --- | --- |
-| 点击后做什么 | Command | 执行业务行为 |
-| 动作出现在哪里 | `MenuId` | 标识稳定贡献位置 |
-| 什么时候显示或可用 | Context Key | 投影当前上下文条件 |
-| 如何分组和排序 | Menu contribution | 声明组合关系 |
-| 最终长什么样 | Toolbar、Menu 和组件样式 | 渲染与交互视觉 |
+| 读者的问题         | 应该查看的概念           | 它负责什么         |
+| ------------------ | ------------------------ | ------------------ |
+| 点击后做什么       | Command                  | 执行业务行为       |
+| 动作出现在哪里     | `MenuId`                 | 标识稳定贡献位置   |
+| 什么时候显示或可用 | Context Key              | 投影当前上下文条件 |
+| 如何分组和排序     | Menu contribution        | 声明组合关系       |
+| 最终长什么样       | Toolbar、Menu 和组件样式 | 渲染与交互视觉     |
 
 ## 核心概念与所有权
 
-| 层 | 当前实现 | 负责 | 不负责 |
-| --- | --- | --- | --- |
-| Command | `CommandsRegistry`、`ICommandService` | 命令 ID、执行入口、依赖服务访问 | UI 出现位置、排序和样式 |
-| Action 声明 | `Action2`、`registerAction2()` | 把一个内建 action 的 command、menu、keybinding、F1 声明集中注册 | host 布局和 DOM |
-| 位置标识 | `MenuId` | 标识一个稳定的 action 贡献槽位 | 菜单实例、DOM ID、业务服务定位 |
-| 静态注册表 | `MenusRegistry` | 保存 `MenuId → contribution[]`，提供注册和释放事件 | 判断当前 context、执行命令 |
-| 条件状态 | `IContextKeyService` | 提供 visibility、enablement、checked 等规则的输入 | 业务权限和最终执行校验 |
-| 菜单契约 | `platform/actions/common/actions.ts` 中的 `IMenu`、`IMenuService`、`IMenuChangeEvent` | 定义菜单查询、变化事件和服务注入入口 | 具体解析流程 |
-| 解析层 | `platform/actions/common/menuService.ts` 中的 `MenuService` | 按 context 过滤、排序、分组、解析 submenu，并生成 runtime action | 控件布局和视觉样式 |
-| Runtime action | `MenuItemAction`、`SubmenuItemAction` | 暴露 label、icon、enabled、checked，并桥接到 `CommandService` | Command 的业务实现 |
-| Base 呈现 | `ToolBar` | primary/secondary 排列、More Actions、键盘与 DOM | platform action 类型、MenuId |
-| Workbench 适配 | `WorkbenchToolBar` | 接受调用方提供的 actions，并把 platform menu action 适配为 base action view item | 自动查询 MenuId |
-| Menu 驱动 | `MenuWorkbenchToolBar` | 消费一个 `MenuId`、监听 Menu/Context 变化并更新 `WorkbenchToolBar` | Command 业务实现、host 布局 |
-| 菜单呈现 | Menubar control、popup `Menu` | 把 action 呈现为 `menubar/menu/menuitem` | Toolbar 语义 |
-| Host | Titlebar、Editor、Chat 等 | 选择要消费的 `MenuId`，拥有区域布局 | 直接 import 其他功能模块来收集 action |
+| 层             | 当前实现                                                                              | 负责                                                                             | 不负责                                |
+| -------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------- |
+| Command        | `CommandsRegistry`、`ICommandService`                                                 | 命令 ID、执行入口、依赖服务访问                                                  | UI 出现位置、排序和样式               |
+| Action 声明    | `Action2`、`registerAction2()`                                                        | 把一个内建 action 的 command、menu、keybinding、F1 声明集中注册                  | host 布局和 DOM                       |
+| 位置标识       | `MenuId`                                                                              | 标识一个稳定的 action 贡献槽位                                                   | 菜单实例、DOM ID、业务服务定位        |
+| 静态注册表     | `MenusRegistry`                                                                       | 保存 `MenuId → contribution[]`，提供注册和释放事件                               | 判断当前 context、执行命令            |
+| 条件状态       | `IContextKeyService`                                                                  | 提供 visibility、enablement、checked 等规则的输入                                | 业务权限和最终执行校验                |
+| 菜单契约       | `platform/actions/common/actions.ts` 中的 `IMenu`、`IMenuService`、`IMenuChangeEvent` | 定义菜单查询、变化事件和服务注入入口                                             | 具体解析流程                          |
+| 解析层         | `platform/actions/common/menuService.ts` 中的 `MenuService`                           | 按 context 过滤、排序、分组、解析 submenu，并生成 runtime action                 | 控件布局和视觉样式                    |
+| Runtime action | `MenuItemAction`、`SubmenuItemAction`                                                 | 暴露 label、icon、enabled、checked，并桥接到 `CommandService`                    | Command 的业务实现                    |
+| Base 呈现      | `ToolBar`                                                                             | primary/secondary 排列、More Actions、键盘与 DOM                                 | platform action 类型、MenuId          |
+| Workbench 适配 | `WorkbenchToolBar`                                                                    | 接受调用方提供的 actions，并把 platform menu action 适配为 base action view item | 自动查询 MenuId                       |
+| Menu 驱动      | `MenuWorkbenchToolBar`                                                                | 消费一个 `MenuId`、监听 Menu/Context 变化并更新 `WorkbenchToolBar`               | Command 业务实现、host 布局           |
+| 菜单呈现       | Menubar control、popup `Menu`                                                         | 把 action 呈现为 `menubar/menu/menuitem`                                         | Toolbar 语义                          |
+| Host           | Titlebar、Editor、Chat 等                                                             | 选择要消费的 `MenuId`，拥有区域布局                                              | 直接 import 其他功能模块来收集 action |
 
 一句话记忆：
 
-| 问题 | 去哪里找 |
-| --- | --- |
-| 点击后做什么？ | Command |
-| 出现在哪里？ | MenuId placement |
-| 何时出现、可用或选中？ | Context Key expression |
-| 如何排序和组成 submenu？ | Menu contribution + MenuService |
-| 渲染成什么控件？ | Toolbar / Menubar host |
-| hover、checked、focus 长什么样？ | 对应控件 CSS 与 presentation |
+| 问题                             | 去哪里找                        |
+| -------------------------------- | ------------------------------- |
+| 点击后做什么？                   | Command                         |
+| 出现在哪里？                     | MenuId placement                |
+| 何时出现、可用或选中？           | Context Key expression          |
+| 如何排序和组成 submenu？         | Menu contribution + MenuService |
+| 渲染成什么控件？                 | Toolbar / Menubar host          |
+| hover、checked、focus 长什么样？ | 对应控件 CSS 与 presentation    |
 
 ## MenuId 到底是什么
 
@@ -192,13 +192,13 @@ const itemRegistration = MenusRegistry.appendMenuItem(RefactorMenu, {
 
 下面几个字段看起来相似，但 owner 和效果不同：
 
-| 字段 | 判断对象 | 当前效果 |
-| --- | --- | --- |
-| placement `when` | 这个位置 | 条件不满足时，该 action 不出现在这个 `MenuId` 中 |
-| command `precondition` | 这个 Command action | action 仍可出现，但 `enabled` 为 `false` |
-| command `toggled` | 这个 Command action | 解析为 `checked`，并可替换 checked 时的 title、tooltip、icon |
-| keybinding `when` | 这个快捷键入口 | 与 `precondition` 合并后决定快捷键是否匹配 |
-| `f1: true` | Command Palette placement | 自动贡献到 `MenuId.CommandPalette`；当前以 `precondition` 作为该 placement 的 `when` |
+| 字段                   | 判断对象                  | 当前效果                                                                             |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| placement `when`       | 这个位置                  | 条件不满足时，该 action 不出现在这个 `MenuId` 中                                     |
+| command `precondition` | 这个 Command action       | action 仍可出现，但 `enabled` 为 `false`                                             |
+| command `toggled`      | 这个 Command action       | 解析为 `checked`，并可替换 checked 时的 title、tooltip、icon                         |
+| keybinding `when`      | 这个快捷键入口            | 与 `precondition` 合并后决定快捷键是否匹配                                           |
+| `f1: true`             | Command Palette placement | 自动贡献到 `MenuId.CommandPalette`；当前以 `precondition` 作为该 placement 的 `when` |
 
 `when` 和 `precondition` 都只是 UI/输入层规则。Command 不能假设所有调用都来自该 Menu，
 仍需在执行路径中维护业务不变量和权限边界。
@@ -220,9 +220,9 @@ Toolbar/Button 等呈现层负责，详见
 `MenuWorkbenchToolBar` 默认按以下规则呈现 group；host 可以通过 `toolbarOptions` 指定
 primary group、内联 submenu 和 primary separator：
 
-| Group | 当前 Toolbar 呈现 |
-| --- | --- |
-| `navigation` | primary action，直接显示 |
+| Group                 | 当前 Toolbar 呈现                                      |
+| --------------------- | ------------------------------------------------------ |
+| `navigation`          | primary action，直接显示                               |
 | 其他 group 或无 group | secondary action，以 separator 分组后进入 More Actions |
 
 因此 `group` 既参与稳定排序，也会影响菜单型 Toolbar 的 primary/secondary 布局。不要仅为
@@ -265,11 +265,11 @@ WorkbenchToolBar
 MenuWorkbenchToolBar
 ```
 
-| 层 | 调用方式 | 典型用途 |
-| --- | --- | --- |
-| `ToolBar` | `setActions(primary, secondary)` | base 控件和不应依赖 platform actions 的底层调用方 |
-| `WorkbenchToolBar` | `setActions(primary, secondary)` | 调用方已经拥有 actions，但其中可能包含 platform menu actions |
-| `MenuWorkbenchToolBar` | 构造时传入 `MenuId` | Host 只拥有贡献槽位，actions 由 MenuService 提供 |
+| 层                     | 调用方式                         | 典型用途                                                     |
+| ---------------------- | -------------------------------- | ------------------------------------------------------------ |
+| `ToolBar`              | `setActions(primary, secondary)` | base 控件和不应依赖 platform actions 的底层调用方            |
+| `WorkbenchToolBar`     | `setActions(primary, secondary)` | 调用方已经拥有 actions，但其中可能包含 platform menu actions |
+| `MenuWorkbenchToolBar` | 构造时传入 `MenuId`              | Host 只拥有贡献槽位，actions 由 MenuService 提供             |
 
 `WorkbenchToolBar` 当前的真实职责是 action representation 适配：调用方可以手工传入
 `MenuItemAction`、`SubmenuItemAction` 或普通 `IAction`，它会选择正确的 toolbar view item。
@@ -282,22 +282,22 @@ primary/secondary 的投影和刷新。它的 `Menu` 表示 action 来源，不�
 
 ## 什么时候使用哪一层
 
-| 场景 | 推荐 |
-| --- | --- |
-| 多个模块会向同一区域贡献 action | 使用 MenuId-backed Toolbar/Menu |
-| action 需要随 Context Key 动态出现、禁用或 checked | 使用 MenuId + MenuService |
+| 场景                                                              | 推荐                            |
+| ----------------------------------------------------------------- | ------------------------------- |
+| 多个模块会向同一区域贡献 action                                   | 使用 MenuId-backed Toolbar/Menu |
+| action 需要随 Context Key 动态出现、禁用或 checked                | 使用 MenuId + MenuService       |
 | 同一 Command 要进入 Titlebar、Menubar、Command Palette 等多个入口 | 使用 `Action2` 的多个 placement |
-| Workbench 调用方已经拥有完整 action 列表 | 使用 `WorkbenchToolBar` |
-| base 控件内部一次性构造固定 action，且不应依赖 platform actions | 使用 `ToolBar` |
-| 只需要程序调用或快捷键，不需要 UI 入口 | 只注册 Command/Keybinding |
+| Workbench 调用方已经拥有完整 action 列表                          | 使用 `WorkbenchToolBar`         |
+| base 控件内部一次性构造固定 action，且不应依赖 platform actions   | 使用 `ToolBar`                  |
+| 只需要程序调用或快捷键，不需要 UI 入口                            | 只注册 Command/Keybinding       |
 
 选择 Toolbar 时按以下顺序机械判断，不根据外观或所在 Part 猜测：
 
-| 判断 | 是 | 否 |
-| --- | --- | --- |
-| action 是否来自 `MenuId` / `MenuService`？ | 使用 `MenuWorkbenchToolBar` | 继续判断 |
+| 判断                                                     | 是                                        | 否                            |
+| -------------------------------------------------------- | ----------------------------------------- | ----------------------------- |
+| action 是否来自 `MenuId` / `MenuService`？               | 使用 `MenuWorkbenchToolBar`               | 继续判断                      |
 | 调用方是否已经拥有完整的 primary/secondary action 列表？ | Workbench 产品代码使用 `WorkbenchToolBar` | 先明确 action 的 owner 和来源 |
-| 是否是 `src/ash/base` 内部的领域无关控件？ | 可以使用 `ToolBar` | 不得直接构造 base `ToolBar` |
+| 是否是 `src/ash/base` 内部的领域无关控件？               | 可以使用 `ToolBar`                        | 不得直接构造 base `ToolBar`   |
 
 只有 base UI 和 `platform/actions` 中实现标准适配层的代码可以直接依赖 base `ToolBar`。
 Workbench Part、View、Contribution 等产品代码必须在 `WorkbenchToolBar` 与
@@ -315,12 +315,12 @@ Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 打开时聚焦哪里由弹层用途决定，不能给所有菜单统一预选首项。焦点、高亮和
 `checked` 是不同状态：高亮表示当前导航位置，`checked` 表示已保存的选择。
 
-| 用途 | 初始焦点 |
-| --- | --- |
+| 用途                         | 初始焦点                                                 |
+| ---------------------------- | -------------------------------------------------------- |
 | 齿轮、更多操作、右键命令菜单 | 默认聚焦菜单容器；调用方明确请求首项时才聚焦首个可用动作 |
-| 模型、模式等单选菜单 | 聚焦当前选项；当前选项不在菜单中时只聚焦容器 |
-| 代码动作、粘贴方式等候选列表 | 有当前选项时优先聚焦它，否则可预选首个可用候选 |
-| 命令面板 | 焦点留在搜索输入，结果列表可以预选第一项 |
+| 模型、模式等单选菜单         | 聚焦当前选项；当前选项不在菜单中时只聚焦容器             |
+| 代码动作、粘贴方式等候选列表 | 有当前选项时优先聚焦它，否则可预选首个可用候选           |
+| 命令面板                     | 焦点留在搜索输入，结果列表可以预选第一项                 |
 
 Base `Menu` 负责导航和焦点呈现，`ContextMenuHandler`、`ActionList` 和各选择器
 负责各自的打开策略。菜单出现在静止的鼠标下方时不改变导航位置，也不展开子菜单；
@@ -357,19 +357,19 @@ Base `Menu` 负责导航和焦点呈现，`ContextMenuHandler`、`ActionList` �
 
 ## 当前实现状态
 
-| 能力 | 状态 |
-| --- | --- |
-| 一个 Action 统一注册 Command、Menu、Keybinding 和 F1 | ✅ |
-| 一个 Command 贡献到多个 MenuId | ✅ |
-| Context 驱动 visibility、enablement、checked | ✅ |
-| Group/order 排序与递归 Submenu | ✅ |
-| Registry 与 Context 变化后刷新 Menu-backed Toolbar | ✅ |
-| Submenu 循环检测和空 Submenu 策略 | ✅ |
-| `ToolBar → WorkbenchToolBar → MenuWorkbenchToolBar` 分层 | ✅ |
-| Terminal title actions 接入 `MenuId.TerminalTitle` | ✅ |
-| 只通知受影响 MenuId 和相关 Context Key | ✅ |
-| 每个 MenuId 的显式 owner catalog | 尚未完成 |
-| 每个 Toolbar 自定义 group 到 primary/secondary 的策略 | ✅ |
+| 能力                                                     | 状态     |
+| -------------------------------------------------------- | -------- |
+| 一个 Action 统一注册 Command、Menu、Keybinding 和 F1     | ✅       |
+| 一个 Command 贡献到多个 MenuId                           | ✅       |
+| Context 驱动 visibility、enablement、checked             | ✅       |
+| Group/order 排序与递归 Submenu                           | ✅       |
+| Registry 与 Context 变化后刷新 Menu-backed Toolbar       | ✅       |
+| Submenu 循环检测和空 Submenu 策略                        | ✅       |
+| `ToolBar → WorkbenchToolBar → MenuWorkbenchToolBar` 分层 | ✅       |
+| Terminal title actions 接入 `MenuId.TerminalTitle`       | ✅       |
+| 只通知受影响 MenuId 和相关 Context Key                   | ✅       |
+| 每个 MenuId 的显式 owner catalog                         | 尚未完成 |
+| 每个 Toolbar 自定义 group 到 primary/secondary 的策略    | ✅       |
 
 ### 当前限制
 

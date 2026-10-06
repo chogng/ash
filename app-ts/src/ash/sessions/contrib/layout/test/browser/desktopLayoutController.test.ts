@@ -27,7 +27,7 @@ import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../..
 const { IEditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { DesktopLayoutController } = await import('../../browser/desktopLayoutController.js');
 const { BaseLayoutController } = await import('../../browser/baseSessionLayoutController.js');
-class WorkingSetController extends BaseLayoutController {}
+class WorkingSetController extends BaseLayoutController { }
 const storageKey = 'sessions.singlePane.layoutState';
 
 suite('DesktopLayoutController', () => {
@@ -41,7 +41,7 @@ suite('DesktopLayoutController', () => {
 		assert.deepEqual(fixture.editor.current, saved);
 		await fixture.storage.flush();
 		const persisted = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!);
-		assert.deepEqual(persisted.find((entry: { sessionResource: string }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
+		assert.deepEqual(persisted.find((entry: { sessionResource: string; }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
 	});
 
 	test('Code restores each session panel view only while the panel is visible', async () => {
@@ -62,7 +62,7 @@ suite('DesktopLayoutController', () => {
 		await fixture.open('a');
 		assert.equal(fixture.panelView, 'tools.a');
 		await fixture.storage.flush();
-		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; panelViewContainerId: string }[];
+		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; panelViewContainerId: string; }[];
 		assert.equal(saved.find(entry => entry.sessionResource === 'session:b')?.panelViewContainerId, 'tools.a');
 	});
 	test('switching sessions restores their editors and layout visibility does not change selection', async () => {
@@ -90,7 +90,7 @@ suite('DesktopLayoutController', () => {
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.applied.length, 0);
 		await fixture.storage.flush();
-		assert.deepEqual(JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string }) => entry.sessionResource), ['session:a']);
+		assert.deepEqual(JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string; }) => entry.sessionResource), ['session:a']);
 		fixture.workspace.updateWorkspace({ id: 'b', folders: [] });
 		await fixture.controller.whenSettled();
 		assert.equal(fixture.editor.current, 'empty');
@@ -174,7 +174,7 @@ suite('DesktopLayoutController', () => {
 		fixture.catalog.remove('a');
 		await fixture.controller.whenSettled();
 		await fixture.storage.flush();
-		assert.deepEqual(JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string }) => entry.sessionResource), ['session:b']);
+		assert.deepEqual(JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!).map((entry: { sessionResource: string; }) => entry.sessionResource), ['session:b']);
 	});
 
 	test('draft materialization during restoration preserves the created identity for later saves', async () => {
@@ -236,7 +236,7 @@ suite('DesktopLayoutController', () => {
 		assert.equal(closed, false);
 		await pending.complete();
 		await closing;
-		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; editorWorkingSet: EditorWorkingSet }[];
+		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; editorWorkingSet: EditorWorkingSet; }[];
 		assert.deepEqual(saved.find(entry => entry.sessionResource === 'session:b')?.editorWorkingSet, workingSet('session:b', 'b.ts'));
 	});
 
@@ -252,7 +252,7 @@ class TestEditors extends Disposable {
 	public started = new DeferredPromise<void>();
 	public current: EditorWorkingSetTarget = 'empty';
 	public readonly applied: EditorWorkingSetTarget[] = [];
-	public readonly options: { preserveFocus?: boolean }[] = [];
+	public readonly options: { preserveFocus?: boolean; }[] = [];
 	public pending: Promise<void> | undefined;
 	public get visibleEditors(): readonly unknown[] {
 		return this.current === 'empty' ? [] : this.current.groups.flatMap(group => group.editors);
@@ -264,7 +264,7 @@ class TestEditors extends Disposable {
 	public saveWorkingSet(id: string): EditorWorkingSet {
 		return this.current === 'empty' ? workingSet(id) : { ...this.current, id };
 	}
-	public async applyWorkingSet(value: EditorWorkingSetTarget, options: { preserveFocus?: boolean }): Promise<void> {
+	public async applyWorkingSet(value: EditorWorkingSetTarget, options: { preserveFocus?: boolean; }): Promise<void> {
 		this.applied.push(value);
 		this.options.push(options);
 		this.set('empty');
@@ -281,14 +281,14 @@ class TestEditors extends Disposable {
 class TestCatalog extends Disposable {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
-	public readonly materializedSessions = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string }>>(this, new Map());
+	public readonly materializedSessions = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>(this, new Map());
 	public sessions: readonly ISession[] = ['a', 'b', 'c'].map(id => ({ sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] }));
 	public untitledSessions: readonly IUntitledChatSession[] = [];
 	public active: IActiveSessionThread | undefined = { session: this.sessions[0]!, threadId: 'a-thread' };
 	public activeUntitledSession: IUntitledChatSession | undefined;
 	public readonly state = 'ready';
 	public readonly error = undefined;
-	public async initialize(): Promise<void> {}
+	public async initialize(): Promise<void> { }
 	public selectThread(sessionId: string, threadId: string): void {
 		this.active = { session: this.sessions.find(session => session.sessionId === sessionId)!, threadId };
 		this.activeUntitledSession = undefined;
@@ -394,7 +394,7 @@ async function createFixture(saved?: readonly unknown[]): Promise<LayoutFixture>
 	return fixture;
 }
 
-class TestLifecycle extends AbstractLifecycleService {}
+class TestLifecycle extends AbstractLifecycleService { }
 
 function workingSet(id: string, file?: string): EditorWorkingSet {
 	return { id, activeGroupIndex: 0, groups: [{ editors: file ? [{ input: { typeId: 'workbench.editorInput.resource', value: { resource: `file:///${file}` } }, preview: false }] : [], activeEditorIndex: file ? 0 : -1, size: 1 }] };

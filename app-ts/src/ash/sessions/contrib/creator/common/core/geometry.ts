@@ -30,7 +30,7 @@ export function cubicBezierPoint(start: DesignPoint, outgoing: DesignPoint, inco
 }
 
 /** Axis-aligned bounds include the rotated frame of every object. */
-export function designBounds(shapes: readonly DesignFrame[]): { x: number; y: number; width: number; height: number } {
+export function designBounds(shapes: readonly DesignFrame[]): { x: number; y: number; width: number; height: number; } {
 	if (shapes.length === 0) { return { x: 0, y: 0, width: 1, height: 1 }; }
 	const points = shapes.flatMap(shape => {
 		const radians = shape.rotation * Math.PI / 180;

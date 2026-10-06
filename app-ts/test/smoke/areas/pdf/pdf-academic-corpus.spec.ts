@@ -4,7 +4,7 @@ import { expect, test as base } from "../../../automation/test.js";
 import { academicPdfCorpus, downloadAcademicPdfCorpus } from "../../../automation/academicPdfCorpus.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
 
-const test = base.extend<{ readonly testWorkspace: TestWorkspace }>({
+const test = base.extend<{ readonly testWorkspace: TestWorkspace; }>({
 	testWorkspace: async ({ target }, use) => {
 		const workspace = await createTestWorkspace();
 		try {
@@ -60,7 +60,7 @@ test("Code renders and annotates the open-access academic PDF corpus", async ({ 
 		await expect.poll(
 			async () => {
 				try {
-					const annotationDocument = JSON.parse(await readFile(annotationFile, "utf8")) as { annotations: unknown[] };
+					const annotationDocument = JSON.parse(await readFile(annotationFile, "utf8")) as { annotations: unknown[]; };
 					return annotationDocument.annotations.length;
 				} catch {
 					return 0;

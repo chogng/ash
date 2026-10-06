@@ -207,7 +207,7 @@ export class MergeEditorModel extends Disposable {
 		this.updateHunks();
 	}
 
-	private acceptEdits(indices: readonly number[], edits: readonly { range: Range; text: string }[]): void {
+	private acceptEdits(indices: readonly number[], edits: readonly { range: Range; text: string; }[]): void {
 		if (!this.ready || !this.handledStates) throw new Error('Merge differences are still computing');
 		const beforeVersion = this.result.getVersionId();
 		this.applyingChoice = true;
@@ -220,7 +220,7 @@ export class MergeEditorModel extends Disposable {
 		if (this.result.getVersionId() === beforeVersion) this.updateHunks();
 	}
 
-	private classifyHunk(hunk: SourceHunk & { readonly result: LineRange }): MergeEditorResolution {
+	private classifyHunk(hunk: SourceHunk & { readonly result: LineRange; }): MergeEditorResolution {
 		const result = textInRange(this.result, hunk.result);
 		if (/^(?:<{7}|={7}|>{7})/m.test(result)) return 'unresolved';
 		for (const side of ['current', 'incoming', 'base'] as const) {
@@ -233,7 +233,7 @@ export class MergeEditorModel extends Disposable {
 		return 'manual';
 	}
 
-	public editForHunk(index: number, choice: MergeEditorChoice): { range: Range; text: string } {
+	public editForHunk(index: number, choice: MergeEditorChoice): { range: Range; text: string; } {
 		if (!this.ready) throw new Error('Merge differences are still computing');
 		const hunk = this.hunksValue[index];
 		if (!hunk) throw new RangeError('Merge conflict does not exist');
@@ -323,7 +323,7 @@ function buildSourceHunks(base: TextModel, current: TextModel, incoming: TextMod
 	const incomingMapping = new DocumentLineRangeMap(incomingChanges.map(change => new LineRangeMapping(change.original, change.modified)), base.getLineCount());
 	const changes = [...currentChanges.map(change => ({ range: change.original, side: 'current' as const })), ...incomingChanges.map(change => ({ range: change.original, side: 'incoming' as const }))]
 		.sort((left, right) => left.range.startLineNumber - right.range.startLineNumber || left.range.endLineNumberExclusive - right.range.endLineNumberExclusive);
-	const groups: { base: LineRange; currentChanged: boolean; incomingChanged: boolean }[] = [];
+	const groups: { base: LineRange; currentChanged: boolean; incomingChanged: boolean; }[] = [];
 	for (const change of changes) {
 		const last = groups.at(-1);
 		if (last && last.base.endLineNumberExclusive >= change.range.startLineNumber) {

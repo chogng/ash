@@ -12,15 +12,15 @@ materialize 的 action、sandbox compatibility、exact one-action grants 和 adv
 
 ## 公共契约与所有权
 
-| 领域 | 关键类型 | 所有权 |
-| --- | --- | --- |
-| Action identity | `ResolvedAction`；protocol 的 `ActionDigest`, `ActionKind`, `ActionProvenance` | 本 crate 保存规则求值所需的完整动作；共享身份和来源由 protocol 定义，host 负责准确解析 |
-| Capability | protocol 的 `Capability`, `CapabilityKind`, `CapabilitySet` | exact `kind + scope`，canonical ordering；规则映射和授权约束由本 crate 执行 |
-| Safe point | `ActionReviewRequest`；protocol 的 `ActionPolicyRevision`, `ActionReviewPhase` | 本 crate 持有沙箱与执行上下文；共享数据保持与具体策略引擎无关，request 与当前 snapshot 必须 revision 相等 |
-| Deterministic input | `ash_execpolicy::ExecPolicySnapshot` | 只消费；selector、layer、revision 与 rule source 属于 `ash-execpolicy` |
-| Exact grants | `DeterministicPolicyGrant`, `UnsandboxedGrant`, `AutoReviewGrant`, `PermissionBypassGrant` | 都绑定 action digest、完整 capabilities 和 action-policy revision |
-| Advisory port | `ActionClassifier`；protocol 的 `ClassifierAssessment`, `ClassifierRecommendation` | 分类器接口及建议校验由本 crate 定义；建议和绑定结果直接使用 protocol 类型 |
-| Final outcome | `ExecutionDecision`, `BlockReason`, `ApprovalRequest`, `SaferActionRequest` | caller 必须按 typed branch durable 记录并执行 |
+| 领域                | 关键类型                                                                                   | 所有权                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Action identity     | `ResolvedAction`；protocol 的 `ActionDigest`, `ActionKind`, `ActionProvenance`             | 本 crate 保存规则求值所需的完整动作；共享身份和来源由 protocol 定义，host 负责准确解析                    |
+| Capability          | protocol 的 `Capability`, `CapabilityKind`, `CapabilitySet`                                | exact `kind + scope`，canonical ordering；规则映射和授权约束由本 crate 执行                               |
+| Safe point          | `ActionReviewRequest`；protocol 的 `ActionPolicyRevision`, `ActionReviewPhase`             | 本 crate 持有沙箱与执行上下文；共享数据保持与具体策略引擎无关，request 与当前 snapshot 必须 revision 相等 |
+| Deterministic input | `ash_execpolicy::ExecPolicySnapshot`                                                       | 只消费；selector、layer、revision 与 rule source 属于 `ash-execpolicy`                                    |
+| Exact grants        | `DeterministicPolicyGrant`, `UnsandboxedGrant`, `AutoReviewGrant`, `PermissionBypassGrant` | 都绑定 action digest、完整 capabilities 和 action-policy revision                                         |
+| Advisory port       | `ActionClassifier`；protocol 的 `ClassifierAssessment`, `ClassifierRecommendation`         | 分类器接口及建议校验由本 crate 定义；建议和绑定结果直接使用 protocol 类型                                 |
+| Final outcome       | `ExecutionDecision`, `BlockReason`, `ApprovalRequest`, `SaferActionRequest`                | caller 必须按 typed branch durable 记录并执行                                                             |
 
 共享审核类型的唯一入口是 [`protocol/guardian.rs`](../protocol/src/guardian.rs)，本 crate 不重新导出
 这些类型；调用方直接依赖 protocol，避免为读取数据而依赖授权实现。
@@ -61,27 +61,27 @@ classifier failure 按显式 `ReviewFailurePolicy` fail closed 或转人工。
 
 ## 关键实现符号
 
-| Symbol | 职责 | 漂移信号 |
-| --- | --- | --- |
-| `ActionPolicyEngine::decide` | 唯一 top-level final decision entry | host 在外部重新实现 precedence |
-| `evaluate_exec_policy` | 把 trusted action fields 投影为 `ExecPolicySubject` | 用 summary 或未 materialize 字符串参与授权 |
-| `apply_exec_policy` | 把纯 effect 映射为 sandbox、approval、block 或 exact grant | `ash-execpolicy` 自己签发执行 authority |
-| `ensure_revision` | request/engine safe-point equality | mismatch 被降级为普通 Tool failure |
-| `UserAllowlist::matching_grant` | exact digest + capabilities + revision lookup | Tool 名称或 command prefix 被当成 historical grant |
-| `apply_assessment` | classifier identity 与 capability constraints 复检 | 约束只存在于某个 classifier implementation |
-| `automatic_approval_decision` | automatic review risk/authorization gate | classifier 或外层直接构造 `AutoReviewGrant` |
-| `DeterministicPolicyGrant::matches` | Core execution-time recheck | durable authority 不再绑定 exact action/revision |
+| Symbol                              | 职责                                                       | 漂移信号                                           |
+| ----------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
+| `ActionPolicyEngine::decide`        | 唯一 top-level final decision entry                        | host 在外部重新实现 precedence                     |
+| `evaluate_exec_policy`              | 把 trusted action fields 投影为 `ExecPolicySubject`        | 用 summary 或未 materialize 字符串参与授权         |
+| `apply_exec_policy`                 | 把纯 effect 映射为 sandbox、approval、block 或 exact grant | `ash-execpolicy` 自己签发执行 authority            |
+| `ensure_revision`                   | request/engine safe-point equality                         | mismatch 被降级为普通 Tool failure                 |
+| `UserAllowlist::matching_grant`     | exact digest + capabilities + revision lookup              | Tool 名称或 command prefix 被当成 historical grant |
+| `apply_assessment`                  | classifier identity 与 capability constraints 复检         | 约束只存在于某个 classifier implementation         |
+| `automatic_approval_decision`       | automatic review risk/authorization gate                   | classifier 或外层直接构造 `AutoReviewGrant`        |
+| `DeterministicPolicyGrant::matches` | Core execution-time recheck                                | durable authority 不再绑定 exact action/revision   |
 
 ## 失败语义
 
-| Condition | Outcome |
-| --- | --- |
-| engine/request revision 不同 | `Err(PolicyError::RevisionMismatch)` |
-| allow effect 缺少 exact rule source | `Err(PolicyError::ExecPolicyAuthorityMissing)` |
-| classifier digest/revision 不匹配 | `Err(PolicyError::ClassifierBindingMismatch)` |
-| require-sandbox 但 action 不支持或已确认 denial | `Block(SandboxRequiredButUnavailable)` |
-| classifier failure | 按 `ReviewFailurePolicy` 返回 `Block` 或 `AskUser` |
-| approve/revise capability 违反约束 | `Block(ReviewFailed)` |
+| Condition                                       | Outcome                                            |
+| ----------------------------------------------- | -------------------------------------------------- |
+| engine/request revision 不同                    | `Err(PolicyError::RevisionMismatch)`               |
+| allow effect 缺少 exact rule source             | `Err(PolicyError::ExecPolicyAuthorityMissing)`     |
+| classifier digest/revision 不匹配               | `Err(PolicyError::ClassifierBindingMismatch)`      |
+| require-sandbox 但 action 不支持或已确认 denial | `Block(SandboxRequiredButUnavailable)`             |
+| classifier failure                              | 按 `ReviewFailurePolicy` 返回 `Block` 或 `AskUser` |
+| approve/revise capability 违反约束              | `Block(ReviewFailed)`                              |
 
 `PolicyError` 是调用与 binding contract 被破坏；`Block` 是合法请求的 policy outcome，两者不能互换。
 

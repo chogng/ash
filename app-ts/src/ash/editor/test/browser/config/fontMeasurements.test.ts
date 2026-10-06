@@ -130,7 +130,7 @@ test('FontMeasurements expires unreliable readings independently in every window
 });
 
 /** Runs the window-owned expiry callbacks without waiting for the five-second cache lifetime. */
-function installWindowTimeouts(dom: JSDOM): { runPending(): void; [Symbol.dispose](): void } {
+function installWindowTimeouts(dom: JSDOM): { runPending(): void;[Symbol.dispose](): void; } {
 	const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(dom.window, 'setTimeout');
 	const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(dom.window, 'clearTimeout');
 	assert.ok(setTimeoutDescriptor);

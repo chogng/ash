@@ -24,7 +24,7 @@ export class FoldingDecorationProvider implements IDecorationProvider {
 	public showFoldingControls: 'always' | 'never' | 'mouseover' = 'mouseover';
 	public showFoldingHighlights = true;
 
-	constructor(private readonly editor: ICodeEditor) {}
+	constructor(private readonly editor: ICodeEditor) { }
 
 	getDecorationOption(isCollapsed: boolean, isHidden: boolean, isManual: boolean): IModelDecorationOptions {
 		if (isHidden) return hiddenRange;

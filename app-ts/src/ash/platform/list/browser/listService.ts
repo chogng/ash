@@ -26,7 +26,7 @@ export interface ResourceNavigatorOptions {
 	readonly openOnSingleClick?: boolean;
 }
 
-export interface WorkbenchObjectTreeOptions<T> extends ObjectTreeOptions<T>, ResourceNavigatorOptions {}
+export interface WorkbenchObjectTreeOptions<T> extends ObjectTreeOptions<T>, ResourceNavigatorOptions { }
 
 /** Platform-integrated ObjectTree with canonical resource-opening semantics. */
 export class WorkbenchObjectTree<T> extends ObjectTree<T> {
@@ -52,7 +52,7 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 	}
 }
 
-export interface WorkbenchAsyncDataTreeOptions<T> extends AsyncDataTreeOptions<T>, ResourceNavigatorOptions {}
+export interface WorkbenchAsyncDataTreeOptions<T> extends AsyncDataTreeOptions<T>, ResourceNavigatorOptions { }
 
 /** Platform-integrated AsyncDataTree with the same open contract as other Workbench trees. */
 export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> {

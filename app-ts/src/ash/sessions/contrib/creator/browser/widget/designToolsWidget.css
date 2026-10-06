@@ -1,6 +1,10 @@
 .ash-design-tools-widget {
 	--ash-button-foreground: var(--ash-sessions-design-chrome-foreground);
-	--ash-action-bar-toggled-background: color-mix(in srgb, var(--ash-sessions-design-chrome-foreground) 20%, var(--ash-sessions-design-chrome-background));
+	--ash-action-bar-toggled-background: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chrome-foreground) 20%,
+		var(--ash-sessions-design-chrome-background)
+	);
 
 	display: flex;
 	align-items: center;
@@ -27,7 +31,10 @@
 	width: 20px;
 }
 
-.ash-design-tool-split .ash-dropdown-with-primary-dropdown > .ash-button > .ash-button-content {
+.ash-design-tool-split
+	.ash-dropdown-with-primary-dropdown
+	> .ash-button
+	> .ash-button-content {
 	display: none;
 }
 
@@ -36,15 +43,27 @@
 	--ash-editor-background: var(--ash-sessions-design-chrome-background);
 	--ash-foreground: var(--ash-sessions-design-chrome-foreground);
 	--ash-button-foreground: var(--ash-sessions-design-chrome-foreground);
-	--ash-border: color-mix(in srgb, var(--ash-sessions-design-chrome-foreground) 20%, var(--ash-sessions-design-chrome-background));
-	--ash-menu-selection-background: color-mix(in srgb, var(--ash-sessions-design-chrome-foreground) 20%, var(--ash-sessions-design-chrome-background));
-	--ash-menu-selection-foreground: var(--ash-sessions-design-chrome-foreground);
+	--ash-border: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chrome-foreground) 20%,
+		var(--ash-sessions-design-chrome-background)
+	);
+	--ash-menu-selection-background: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chrome-foreground) 20%,
+		var(--ash-sessions-design-chrome-background)
+	);
+	--ash-menu-selection-foreground: var(
+		--ash-sessions-design-chrome-foreground
+	);
 	--ash-muted-foreground: var(--ash-sessions-design-chrome-foreground);
 	border-radius: var(--ash-corner-radius-x-large);
 }
 
-[data-color-scheme="high-contrast-dark"] .ash-context-view-menu:has(> .ash-design-menu),
-[data-color-scheme="high-contrast-light"] .ash-context-view-menu:has(> .ash-design-menu) {
+[data-color-scheme="high-contrast-dark"]
+	.ash-context-view-menu:has(> .ash-design-menu),
+[data-color-scheme="high-contrast-light"]
+	.ash-context-view-menu:has(> .ash-design-menu) {
 	--ash-border: var(--ash-contrast-border);
 	box-shadow: none;
 }

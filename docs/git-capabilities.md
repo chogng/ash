@@ -15,19 +15,19 @@ Session 的未提交修改带入。已提交部分文件的 Turn 仍可查看全
 
 ## 能力边界
 
-| 能力 | 目标行为 | 明确限制 |
-| --- | --- | --- |
-| 修改归属 | 按 Session / Thread / Turn / repository 保存文件变化 | 不依据文件名推断唯一 Session；不从共享工作目录的并发修改猜测来源 |
-| 编辑隔离 | 每个执行 Thread 使用独立工作目录，同仓库共享对象库 | 单独的提交锁不能代替编辑隔离；非 Git 隔离目录不生成 Git ChangeSet |
-| 文件选择 | 选择一轮中的部分文件，或同一 Thread 多轮的文件变化 | 一项文件变化整体选择；本次不实现行或块级 Turn 提交 |
-| 多仓库 | 每个仓库独立提交并显示结果 | 不宣称不同仓库之间存在原子提交 |
-| 提交归属 | 每个 commit 记录精确选择，部分提交后剩余变化可继续提交 | 不把整个 Turn 标记为全部已提交；不重复提交同一项变化 |
-| 提交目标 | 发布到所属仓库的目标本地分支，使用仓库配置的作者与提交者 | 不自动 push；对象提交不执行 commit hooks |
-| 历史读取 | 使用捕获并保留的 before / after Git 对象 | 不用当前磁盘内容替换历史版本；不携带后续 Turn 的内容 |
-| 变化应用 | 将选中 delta 重放到目标分支，预览最终差异并确认该版本 | 文本应用成功不代表业务依赖或构建正确；冲突须先解决再提交 |
-| 并发提交 | 目标发布与交互 Git 写入共用操作锁，并使用 ref 条件更新 | 进程锁不阻止外部 Git；外部修改通过 ref 和 checkout 版本比较检测 |
-| 恢复与重放 | 提交请求、结果和事务恢复信息持久化 | 相同 command ID 改参数返回冲突；未知结果不产生第二次提交 |
-| 保留与清理 | 未提交变化的快照随记录保留，目录清理由所属领域协调 | 未提交文件不能因其他文件已提交而失去快照或被误清理；内部快照目前不自动回收 |
+| 能力       | 目标行为                                                 | 明确限制                                                                   |
+| ---------- | -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 修改归属   | 按 Session / Thread / Turn / repository 保存文件变化     | 不依据文件名推断唯一 Session；不从共享工作目录的并发修改猜测来源           |
+| 编辑隔离   | 每个执行 Thread 使用独立工作目录，同仓库共享对象库       | 单独的提交锁不能代替编辑隔离；非 Git 隔离目录不生成 Git ChangeSet          |
+| 文件选择   | 选择一轮中的部分文件，或同一 Thread 多轮的文件变化       | 一项文件变化整体选择；本次不实现行或块级 Turn 提交                         |
+| 多仓库     | 每个仓库独立提交并显示结果                               | 不宣称不同仓库之间存在原子提交                                             |
+| 提交归属   | 每个 commit 记录精确选择，部分提交后剩余变化可继续提交   | 不把整个 Turn 标记为全部已提交；不重复提交同一项变化                       |
+| 提交目标   | 发布到所属仓库的目标本地分支，使用仓库配置的作者与提交者 | 不自动 push；对象提交不执行 commit hooks                                   |
+| 历史读取   | 使用捕获并保留的 before / after Git 对象                 | 不用当前磁盘内容替换历史版本；不携带后续 Turn 的内容                       |
+| 变化应用   | 将选中 delta 重放到目标分支，预览最终差异并确认该版本    | 文本应用成功不代表业务依赖或构建正确；冲突须先解决再提交                   |
+| 并发提交   | 目标发布与交互 Git 写入共用操作锁，并使用 ref 条件更新   | 进程锁不阻止外部 Git；外部修改通过 ref 和 checkout 版本比较检测            |
+| 恢复与重放 | 提交请求、结果和事务恢复信息持久化                       | 相同 command ID 改参数返回冲突；未知结果不产生第二次提交                   |
+| 保留与清理 | 未提交变化的快照随记录保留，目录清理由所属领域协调       | 未提交文件不能因其他文件已提交而失去快照或被误清理；内部快照目前不自动回收 |
 
 跨 Session 合并提交不是本次入口；各 Session 分别选择自己的变化。跨 Thread 的执行目录和变化
 记录保持独立。文件重命名同时保留原路径与新路径，二进制文件、删除和模式变化仍按 Git 对象处理，
@@ -39,23 +39,23 @@ Session 删除会删除账本与提交记录，但本次未实现 `refs/ash/chan
 
 ## 领域所有权
 
-| 所有者 | 职责 | 不承担的职责 |
-| --- | --- | --- |
-| Git 基础设施 | system Git 执行、仓库身份与探测、进程期限与取消、按 common directory 协调写入 | Session / Thread / Turn 生命周期 |
-| Git 工作区能力 | status、index、部分暂存、工作文件比较、普通提交与 checkout 状态保持 | Turn 修改归属 |
-| Git 历史能力 | graph 分页、提交详情、历史内容和版本比较 | stash / 内部快照作为历史遍历起点 |
-| Git 引用与整合能力 | 分支、标签、stash、检出、merge / rebase / cherry-pick | 受管目录的位置与 Thread 归属 |
-| Git 远端能力 | remote 配置、身份与 fetch / pull / push | GitHub API 授权 |
-| Git 对象能力 | tree / blob、捕获、保留、选择 delta、重放与对象包完整性 | 任务投递包、重试和回执 |
-| Git 工作树能力 | worktree 清单、创建、锁定、修复与删除 | Thread 绑定与删除资格 |
-| Git 提交事务 | 提交准备、条件发布、checkout 安装、事务日志与恢复 | ChangeSet 的可选范围和提交进度 |
-| `worktree` | Git / 非 Git 受管目录物化、绑定、恢复与清理 | Turn 文件变化记录和 Git 命令解析 |
-| `git-turn-changes` | 捕获归属、Turn 文件变化、选择校验、提交记录与进度 | Git 子进程、目录物化和传输 DTO |
-| `state` | 领域存储接口的 SQLite 实现、原子写入与存储格式迁移 | 提交资格和变化组合规则 |
-| `task-delivery` | 任务包、来源和目标身份、持久重试、接收与回执 | Git 对象编码、Thread 目录管理和 Turn 执行状态 |
-| `github` | GitHub 授权、Issue / PR / checks API | 本地 Git 状态与工作树 |
-| App Server | 授权、请求调度、协议转换、通知与跨领域装配 | ChangeSet 提交资格、依赖结算和 SQLite 业务状态 |
-| Renderer | 展示、文件选择、Diff、提交消息和交互资源 | 持久化修改归属与 Git 执行 |
+| 所有者             | 职责                                                                          | 不承担的职责                                   |
+| ------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| Git 基础设施       | system Git 执行、仓库身份与探测、进程期限与取消、按 common directory 协调写入 | Session / Thread / Turn 生命周期               |
+| Git 工作区能力     | status、index、部分暂存、工作文件比较、普通提交与 checkout 状态保持           | Turn 修改归属                                  |
+| Git 历史能力       | graph 分页、提交详情、历史内容和版本比较                                      | stash / 内部快照作为历史遍历起点               |
+| Git 引用与整合能力 | 分支、标签、stash、检出、merge / rebase / cherry-pick                         | 受管目录的位置与 Thread 归属                   |
+| Git 远端能力       | remote 配置、身份与 fetch / pull / push                                       | GitHub API 授权                                |
+| Git 对象能力       | tree / blob、捕获、保留、选择 delta、重放与对象包完整性                       | 任务投递包、重试和回执                         |
+| Git 工作树能力     | worktree 清单、创建、锁定、修复与删除                                         | Thread 绑定与删除资格                          |
+| Git 提交事务       | 提交准备、条件发布、checkout 安装、事务日志与恢复                             | ChangeSet 的可选范围和提交进度                 |
+| `worktree`         | Git / 非 Git 受管目录物化、绑定、恢复与清理                                   | Turn 文件变化记录和 Git 命令解析               |
+| `git-turn-changes` | 捕获归属、Turn 文件变化、选择校验、提交记录与进度                             | Git 子进程、目录物化和传输 DTO                 |
+| `state`            | 领域存储接口的 SQLite 实现、原子写入与存储格式迁移                            | 提交资格和变化组合规则                         |
+| `task-delivery`    | 任务包、来源和目标身份、持久重试、接收与回执                                  | Git 对象编码、Thread 目录管理和 Turn 执行状态  |
+| `github`           | GitHub 授权、Issue / PR / checks API                                          | 本地 Git 状态与工作树                          |
+| App Server         | 授权、请求调度、协议转换、通知与跨领域装配                                    | ChangeSet 提交资格、依赖结算和 SQLite 业务状态 |
+| Renderer           | 展示、文件选择、Diff、提交消息和交互资源                                      | 持久化修改归属与 Git 执行                      |
 
 Git 能力模块拥有实际实现和类型。提交事务具有独立持久化生命周期，放入独立 crate，依赖 Git
 对象、引用和工作区的类型化接口。Git 底层不反向依赖事务、`worktree`、`git-turn-changes` 或
@@ -119,15 +119,15 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 
 ## 实施与验收
 
-| 工作 | 完成条件 |
-| --- | --- |
-| Git 能力与提交事务拆分 | 实现、类型、全部生产调用方和测试同步迁移；无重复执行器、任意命令出口或反向依赖 |
-| Turn 选择与提交记录 | 单轮部分选择、多轮选择、重复与已提交选择校验、状态与消息冻结，以及旧数据迁移均有测试 |
-| Git 对象选择与发布 | 新增 / 删除 / 重命名 / 二进制 / mode、多轮同文件、冲突和目标移动由真实 Git 仓库验证 |
-| 多 Session | 同仓库不同 Thread 目录同时编辑；分别提交、同文件冲突、无串入修改和共享锁均有流程测试 |
-| 持久化与恢复 | command 重放、断线、进程中断、已发布未记账、部分提交后继续提交、清理资格均有测试 |
-| 协议与界面 | 生成与 strict check 通过；Browser、Electron UI 和连接真实后端的 Electron Playwright 场景通过 |
-| 文档 | 所属 README、Git 总览、Turn 文档及协议说明与最终代码一致，目标与验证状态准确 |
+| 工作                   | 完成条件                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| Git 能力与提交事务拆分 | 实现、类型、全部生产调用方和测试同步迁移；无重复执行器、任意命令出口或反向依赖               |
+| Turn 选择与提交记录    | 单轮部分选择、多轮选择、重复与已提交选择校验、状态与消息冻结，以及旧数据迁移均有测试         |
+| Git 对象选择与发布     | 新增 / 删除 / 重命名 / 二进制 / mode、多轮同文件、冲突和目标移动由真实 Git 仓库验证          |
+| 多 Session             | 同仓库不同 Thread 目录同时编辑；分别提交、同文件冲突、无串入修改和共享锁均有流程测试         |
+| 持久化与恢复           | command 重放、断线、进程中断、已发布未记账、部分提交后继续提交、清理资格均有测试             |
+| 协议与界面             | 生成与 strict check 通过；Browser、Electron UI 和连接真实后端的 Electron Playwright 场景通过 |
+| 文档                   | 所属 README、Git 总览、Turn 文档及协议说明与最终代码一致，目标与验证状态准确                 |
 
 先完成拥有实际生产调用方的 Git 对象与事务接口，再完成 Turn 选择 / 存储 / 提交服务，最后接入
 协议与界面。每个切片都运行所属包构建、定向行为测试和 warning 检查；依赖变更运行依赖检查。
@@ -135,14 +135,14 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 
 落地后的代码位置：
 
-| 能力 | 当前实现位置 |
-| --- | --- |
-| Git 查询、普通修改与对象能力 | `ash-rs/git/src/{working_copy,history,references,remote,objects,worktree}.rs` 及所属子目录 |
-| 目标发布、checkout 保持与事务恢复 | `ash-rs/git-transaction/src/lib.rs` |
-| Turn 捕获、选择、预览与提交进度 | `ash-rs/git-turn-changes/src/{ledger,model,commit}.rs` |
-| SQLite 记录、原子占用与迁移 | `ash-rs/state/src/sqlite/{git_turn_changes,git_turn_commits}.rs` |
-| 协议与领域装配 | `ash-rs/app-server-protocol/src/protocol/turn_changes.rs`、App Server 的 `git_turn_changes_*` 与 `thread_dir_binding.rs` |
-| 文件选择与预览确认 | Sessions Changes、`turnMultiDiffSource` 与共享 MultiDiff toolbar |
+| 能力                              | 当前实现位置                                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Git 查询、普通修改与对象能力      | `ash-rs/git/src/{working_copy,history,references,remote,objects,worktree}.rs` 及所属子目录                               |
+| 目标发布、checkout 保持与事务恢复 | `ash-rs/git-transaction/src/lib.rs`                                                                                      |
+| Turn 捕获、选择、预览与提交进度   | `ash-rs/git-turn-changes/src/{ledger,model,commit}.rs`                                                                   |
+| SQLite 记录、原子占用与迁移       | `ash-rs/state/src/sqlite/{git_turn_changes,git_turn_commits}.rs`                                                         |
+| 协议与领域装配                    | `ash-rs/app-server-protocol/src/protocol/turn_changes.rs`、App Server 的 `git_turn_changes_*` 与 `thread_dir_binding.rs` |
+| 文件选择与预览确认                | Sessions Changes、`turnMultiDiffSource` 与共享 MultiDiff toolbar                                                         |
 
 原 `git/src/graph.rs` 和测试已迁至 `git/src/history/graph.rs` 与 `graph_tests.rs`。
 原 `tree_commit.rs` 的提交事务迁入新 crate；对象选择仍属于 Git。`worktree` 继续拥有目录归属和
@@ -159,22 +159,22 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 
 ### 实际验证（2026-10-05，macOS）
 
-| 验证入口 | 实际结果 |
-| --- | --- |
-| `just verify ash-git` | 正常 check、87 项测试和 warning gate 通过；包含 stash / 内部引用图过滤与真实 Git 文件选择 |
-| `just verify ash-git-transaction` | 正常 check、10 项测试和 warning gate 通过；覆盖 checkout 各层保持、条件发布与恢复后外部分支推进 |
-| `just verify git-turn-changes` | 正常 check、9 项测试和 warning gate 通过；覆盖归属、版本、证据、捕获完成与迟到刷新 |
-| `just verify ash-state` | 正常 check、92 项测试和 warning gate 通过，1 项既有测试忽略；真实 Git / SQLite 覆盖部分提交、多轮、双 Session、冻结消息、请求重放、迁移与中断恢复 |
-| `just verify worktree` | 正常 check、20 项测试和 warning gate 通过 |
-| `just verify ash-app-server-protocol`、`just generate-protocol` | 协议生成完成；正常 check、88 项单测、1 项注册同步测试和 warning gate 通过 |
-| `just verify ash-app-server --filter local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc` | 正常 check、真实 RPC 流程和 warning gate 通过；部分提交后丢弃剩余文件、删除执行目录并 GC 后仍可读历史、命令重放不重复提交 |
-| `pnpm --dir app-ts run typecheck:protocol` / `typecheck:renderer` | strict TypeScript 检查通过 |
-| `pnpm --dir app-ts build` / `prepare:backend` | 正常 Renderer / Electron 构建和后端产品包构建通过 |
-| 定向前端单测（6 个文件） | 19 项通过；覆盖中英文文案、选择刷新、Session 切换、迟到响应、非默认分支预览操作与入口注册 |
-| Browser UI / Electron UI Playwright | 各 1 项通过；真实后端场景按目标条件跳过，各 1 项，未计作通过 |
-| Electron + App Server Playwright | 2 项通过；真实后端双 Session 分别预览提交、未选文件保留，使用最新后端产品包 |
-| `just dependencies` | 218 个 workspace members 的依赖检查通过 |
-| 文档与格式 | 本次文档本地链接、Rust 改动格式与 `git diff --check` 通过 |
+| 验证入口                                                                                              | 实际结果                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `just verify ash-git`                                                                                 | 正常 check、87 项测试和 warning gate 通过；包含 stash / 内部引用图过滤与真实 Git 文件选择                                                         |
+| `just verify ash-git-transaction`                                                                     | 正常 check、10 项测试和 warning gate 通过；覆盖 checkout 各层保持、条件发布与恢复后外部分支推进                                                   |
+| `just verify git-turn-changes`                                                                        | 正常 check、9 项测试和 warning gate 通过；覆盖归属、版本、证据、捕获完成与迟到刷新                                                                |
+| `just verify ash-state`                                                                               | 正常 check、92 项测试和 warning gate 通过，1 项既有测试忽略；真实 Git / SQLite 覆盖部分提交、多轮、双 Session、冻结消息、请求重放、迁移与中断恢复 |
+| `just verify worktree`                                                                                | 正常 check、20 项测试和 warning gate 通过                                                                                                         |
+| `just verify ash-app-server-protocol`、`just generate-protocol`                                       | 协议生成完成；正常 check、88 项单测、1 项注册同步测试和 warning gate 通过                                                                         |
+| `just verify ash-app-server --filter local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc` | 正常 check、真实 RPC 流程和 warning gate 通过；部分提交后丢弃剩余文件、删除执行目录并 GC 后仍可读历史、命令重放不重复提交                         |
+| `pnpm --dir app-ts run typecheck:protocol` / `typecheck:renderer`                                     | strict TypeScript 检查通过                                                                                                                        |
+| `pnpm --dir app-ts build` / `prepare:backend`                                                         | 正常 Renderer / Electron 构建和后端产品包构建通过                                                                                                 |
+| 定向前端单测（6 个文件）                                                                              | 19 项通过；覆盖中英文文案、选择刷新、Session 切换、迟到响应、非默认分支预览操作与入口注册                                                         |
+| Browser UI / Electron UI Playwright                                                                   | 各 1 项通过；真实后端场景按目标条件跳过，各 1 项，未计作通过                                                                                      |
+| Electron + App Server Playwright                                                                      | 2 项通过；真实后端双 Session 分别预览提交、未选文件保留，使用最新后端产品包                                                                       |
+| `just dependencies`                                                                                   | 218 个 workspace members 的依赖检查通过                                                                                                           |
+| 文档与格式                                                                                            | 本次文档本地链接、Rust 改动格式与 `git diff --check` 通过                                                                                         |
 
 Rust 验证使用 `ci-test` profile。Windows / Linux 产品运行未在本机验证；未运行整个 workspace 测试。
 内部引用自动回收、行块级 Turn 选择、跨 Session 合并提交与跨仓库原子发布不属于本次已完成范围。

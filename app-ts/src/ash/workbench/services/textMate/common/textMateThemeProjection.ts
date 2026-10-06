@@ -50,7 +50,7 @@ export function resolveTextMateTokenStyle(rules: NonNullable<IColorTheme['tokenC
 	if (!resolver) { resolver = createTextMateScopeThemeResolver({ revision: 1, rules: compileRules({ tokenColors: rules }) }); scopeResolvers.set(rules, resolver); }
 	const result = resolver(scopes);
 	if (!result || result.foreground === undefined && result.fontStyle === undefined) { return undefined; }
-	const style: { foreground?: string; bold?: boolean; italic?: boolean; underline?: boolean; strikethrough?: boolean } = { foreground: result.foreground };
+	const style: { foreground?: string; bold?: boolean; italic?: boolean; underline?: boolean; strikethrough?: boolean; } = { foreground: result.foreground };
 	if (result.fontStyle) {
 		Object.assign(style, { bold: result.fontStyle.includes('bold'), italic: result.fontStyle.includes('italic'), underline: result.fontStyle.includes('underline'), strikethrough: result.fontStyle.includes('strikethrough') });
 	}

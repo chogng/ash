@@ -20,15 +20,15 @@
 模型调用。当前静态目录、动态 source port、snapshot/generation、singleflight、merge/filter/resolve
 已经落地；Ollama、ChatGPT、xAI、Kimi 和部分 API 连接的目录读取已接入，其他 provider discovery 与完整客户端协议仍按后续阶段推进。
 
-| 读者首先会问 | 直接答案 | 深入阅读 |
-| --- | --- | --- |
-| 模型列表来自哪里？ | 桌面选择器显示内置固定目录；TUI 显示当前连接发现或缓存观察到的模型；目录元数据由来源合并 | [当前实现状态与仓库审计](#2-当前实现状态与仓库审计) |
-| 订阅模型按什么顺序显示？ | 同一供应商内优先采用目录明确给出的排序值；否则保留目录返回的顺序，不根据型号或发布日期猜测 | [列表展示顺序](#104-列表展示顺序) |
-| 为什么某个模型没有出现？ | 可能是供应商不支持发现、缓存尚未刷新、生命周期过滤或能力不匹配 | [供应商发现策略](#6-供应商发现策略) |
-| 什么时候访问供应商？ | 依据新鲜度、显式刷新和缓存状态决定，并使用 singleflight 合并并发刷新 | [何时请求](#7-何时请求) |
-| 模型目录能否证明模型支持某项能力？ | 不能；缺失字段表示未知，不能被解释为明确不支持 | [发现能力不是模型能力](#63-发现能力不是模型能力) |
-| Agent 请求的模型不可用时怎么办？ | 计划由同一个控制面按明确策略先选择同 provider 兼容模型，再选择其他允许 provider，并把替换警告随运行冻结；当前尚未实现 | [模型选择与替换](#103-模型选择与替换) |
-| 谁真正调用模型？ | 已选模型交给模型运行时，目录系统不拥有请求、重试或传输 | [职责与非职责](#3-职责与非职责) |
+| 读者首先会问                       | 直接答案                                                                                                              | 深入阅读                                            |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 模型列表来自哪里？                 | 桌面选择器显示内置固定目录；TUI 显示当前连接发现或缓存观察到的模型；目录元数据由来源合并                              | [当前实现状态与仓库审计](#2-当前实现状态与仓库审计) |
+| 订阅模型按什么顺序显示？           | 同一供应商内优先采用目录明确给出的排序值；否则保留目录返回的顺序，不根据型号或发布日期猜测                            | [列表展示顺序](#104-列表展示顺序)                   |
+| 为什么某个模型没有出现？           | 可能是供应商不支持发现、缓存尚未刷新、生命周期过滤或能力不匹配                                                        | [供应商发现策略](#6-供应商发现策略)                 |
+| 什么时候访问供应商？               | 依据新鲜度、显式刷新和缓存状态决定，并使用 singleflight 合并并发刷新                                                  | [何时请求](#7-何时请求)                             |
+| 模型目录能否证明模型支持某项能力？ | 不能；缺失字段表示未知，不能被解释为明确不支持                                                                        | [发现能力不是模型能力](#63-发现能力不是模型能力)    |
+| Agent 请求的模型不可用时怎么办？   | 计划由同一个控制面按明确策略先选择同 provider 兼容模型，再选择其他允许 provider，并把替换警告随运行冻结；当前尚未实现 | [模型选择与替换](#103-模型选择与替换)               |
+| 谁真正调用模型？                   | 已选模型交给模型运行时，目录系统不拥有请求、重试或传输                                                                | [职责与非职责](#3-职责与非职责)                     |
 
 ## 1. 结论
 
@@ -66,18 +66,18 @@ model provider 负责“如何用已选模型执行一次调用”
 
 当前模型相关职责分布如下：
 
-| 位置 | 已有职责 | 不应继续扩张的方向 |
-| --- | --- | --- |
-| `ash-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value | 请求调度、缓存、provider DTO、refresh state |
-| `ash-model-provider-info` | provider definition、endpoint/default、静态 seed models、每个模型的完整基础提示词、配置归一化 | HTTP、凭据读取、动态 discovery、TTL |
-| `ash-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；模型与提示词选择、Turn 接受前冻结基础提示词 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
-| `ash-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
-| `ash-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
-| `ash-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
-| `ash-websocket-client` | WebSocket handshake/message execution | Provider event、session state、catalog policy、模型选择 |
-| `ash-client` | operation retry、SSE/NDJSON framing、telemetry | Provider DTO、catalog policy、模型选择 |
-| `ash-config` | 用户配置 authority、patch/merge/persistence | provider 请求和进程内 refresh task |
-| App Server / clients | 组合、RPC、展示与交互；Local App Server 已投影 shared manager | 各自维护模型表或推断 capability |
+| 位置                           | 已有职责                                                                                                                                                         | 不应继续扩张的方向                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `ash-protocol::model::catalog` | identity、`ModelInfo`、capability、availability/freshness/lifecycle/quality value                                                                                | 请求调度、缓存、provider DTO、refresh state                        |
+| `ash-model-provider-info`      | provider definition、endpoint/default、静态 seed models、每个模型的完整基础提示词、配置归一化                                                                    | HTTP、凭据读取、动态 discovery、TTL                                |
+| `ash-models-manager`           | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、有效模型信息和 snapshot generation；模型与提示词选择、Turn 接受前冻结基础提示词 | provider DTO、secret、调用、Agent 定义解析、Config persistence、UI |
+| `ash-model-provider`           | provider runtime、adapter 选择、模型调用、manager static resolution consumer                                                                                     | catalog policy、跨 provider merge、UI 查询                         |
+| `ash-api`                      | endpoint/request/event 的 Provider wire codec                                                                                                                    | transport、retry、catalog authority、用户筛选                      |
+| `ash-http-client`              | HTTP execution 与共享 proxy/TLS/target policy                                                                                                                    | Provider DTO、catalog policy、模型选择                             |
+| `ash-websocket-client`         | WebSocket handshake/message execution                                                                                                                            | Provider event、session state、catalog policy、模型选择            |
+| `ash-client`                   | operation retry、SSE/NDJSON framing、telemetry                                                                                                                   | Provider DTO、catalog policy、模型选择                             |
+| `ash-config`                   | 用户配置 authority、patch/merge/persistence                                                                                                                      | provider 请求和进程内 refresh task                                 |
+| App Server / clients           | 组合、RPC、展示与交互；Local App Server 已投影 shared manager                                                                                                    | 各自维护模型表或推断 capability                                    |
 
 `ProviderDefinition.models` 当前只作为启动 seed 和内置 metadata 来源，不兼任动态可用性缓存。
 `ModelProviderRuntime::resolve_model` 已消费 manager 的 static resolution；Local App Server 的
@@ -87,20 +87,20 @@ model provider 负责“如何用已选模型执行一次调用”
 
 当前实现边界如下：
 
-| 能力 | 状态 | 实现证据 |
-| --- | --- | --- |
-| 静态 seed、确定排序、typed resolution | ✅ | `ModelsManager::{static_snapshot,list_static,resolve_static}` |
-| 动态 source port、scope 校验、partial/complete merge | ✅ | `ModelCatalogSource`、`commit_discovery`、`apply_discovery` |
-| per-scope memory cache、freshness、singleflight | ✅ | `ManagedScope`、`ScopeState`、`ModelsManager::{read,refresh}` |
-| 按账户持久缓存和最新发现身份筛选 | ✅ | `ModelCatalogDiskCache`、`ModelsManager::list_discovered` |
-| 字段 provenance 与 Unknown 保留 | ✅ | `CatalogRecord`、`ModelMetadataProvenance` |
-| 配置生效后的模型信息、上下文裁剪和压缩建议 | ✅ | `ModelCatalogEntry::model_info`；保留原始目录证据，App Server 消费结果 |
-| model-provider/App Server 静态目录统一 | ✅ | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService` |
-| 真实 provider discovery adapters | 部分具备 | Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入；其他 provider 留在后续阶段 |
-| Agent 启动时的继承、覆盖和跨 provider 替换 | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告 |
-| persisted observation cache | ✅ | profile 内的 `cache/models/<provider>.json`，按供应商分文件、按账户 scope 隔离、原子写入 |
-| backoff/jitter、并发总闸 | 尚未完成 | 后续 core hardening |
-| `model/refresh`、`model/updated`、完整 snapshot DTO | 尚未完成 | Phase 3 |
+| 能力                                                 | 状态     | 实现证据                                                                                 |
+| ---------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| 静态 seed、确定排序、typed resolution                | ✅       | `ModelsManager::{static_snapshot,list_static,resolve_static}`                            |
+| 动态 source port、scope 校验、partial/complete merge | ✅       | `ModelCatalogSource`、`commit_discovery`、`apply_discovery`                              |
+| per-scope memory cache、freshness、singleflight      | ✅       | `ManagedScope`、`ScopeState`、`ModelsManager::{read,refresh}`                            |
+| 按账户持久缓存和最新发现身份筛选                     | ✅       | `ModelCatalogDiskCache`、`ModelsManager::list_discovered`                                |
+| 字段 provenance 与 Unknown 保留                      | ✅       | `CatalogRecord`、`ModelMetadataProvenance`                                               |
+| 配置生效后的模型信息、上下文裁剪和压缩建议           | ✅       | `ModelCatalogEntry::model_info`；保留原始目录证据，App Server 消费结果                   |
+| model-provider/App Server 静态目录统一               | ✅       | `ModelProviderRuntime::models_manager`、`ConfigBackedModelService`                       |
+| 真实 provider discovery adapters                     | 部分具备 | Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入；其他 provider 留在后续阶段             |
+| Agent 启动时的继承、覆盖和跨 provider 替换           | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告         |
+| persisted observation cache                          | ✅       | profile 内的 `cache/models/<provider>.json`，按供应商分文件、按账户 scope 隔离、原子写入 |
+| backoff/jitter、并发总闸                             | 尚未完成 | 后续 core hardening                                                                      |
+| `model/refresh`、`model/updated`、完整 snapshot DTO  | 尚未完成 | Phase 3                                                                                  |
 
 现有 `ModelInfo` 也存在后续需要修正的语义缺口：
 
@@ -150,12 +150,12 @@ authority；实际费用以 provider 账单和调用 usage 为准。
 
 厂商文档中的 cache、keep-alive 和 heartbeat 不是同一个概念，必须按运行时边界拆开：
 
-| 机制 | 含义 | 所属层 |
-| --- | --- | --- |
-| Catalog cache | Ash 缓存模型列表、availability 和 metadata observation | `ash-models-manager` |
-| Prompt/context cache | 厂商复用 prompt prefix/KV tensor，影响推理延迟、费用和 usage | `ash-api` provider adapter |
-| Stream liveness | raw byte activity/读超时属于 `ash-http-client`；SSE/NDJSON frame activity 属于 `ash-client` | Provider event 语义由 `ash-api` 解释 |
-| Model residency | 本地模型是否继续驻留 CPU/GPU 内存 | `ash-model-provider` 本地 runtime；wire 参数仍由 `ash-api` 编码 |
+| 机制                 | 含义                                                                                        | 所属层                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Catalog cache        | Ash 缓存模型列表、availability 和 metadata observation                                      | `ash-models-manager`                                            |
+| Prompt/context cache | 厂商复用 prompt prefix/KV tensor，影响推理延迟、费用和 usage                                | `ash-api` provider adapter                                      |
+| Stream liveness      | raw byte activity/读超时属于 `ash-http-client`；SSE/NDJSON frame activity 属于 `ash-client` | Provider event 语义由 `ash-api` 解释                            |
+| Model residency      | 本地模型是否继续驻留 CPU/GPU 内存                                                           | `ash-model-provider` 本地 runtime；wire 参数仍由 `ash-api` 编码 |
 
 官方行为已经证明这些机制不能抽象成 manager 中的统一 `heartbeat`：
 
@@ -362,17 +362,17 @@ App Server、Desktop 和 contract tests 比较。
 `Discovery mode` 描述 Ash 如何组合实时 availability 与 curated metadata，不代表厂商承诺了
 客户端刷新频率。
 
-| Provider | Discovery mode | 推荐 discovery | 官方响应可提供的信息 | 初始策略 |
-| --- | --- | --- | --- | --- |
-| OpenAI | Hybrid | [`GET /v1/models`](https://developers.openai.com/api/reference/resources/models/methods/list) | ID、created、owner；官方描述为基础信息 | 动态 availability + 内置能力 metadata |
-| Anthropic | Dynamic/Hybrid | [`GET /v1/models`](https://platform.claude.com/docs/en/api/models/list) | ID、display name、token limits，并可返回 thinking、effort、image、structured output 等 capability | 优先使用动态字段，内置补缺 |
-| Google Gemini | Dynamic/Hybrid | [`models.list`](https://ai.google.dev/api/models) | display name、input/output limit、generation methods、thinking 等 | 使用原生 Gemini endpoint，不走 OpenAI-compatible base URL |
-| xAI | Dynamic/Hybrid | [`GET /v1/language-models`](https://docs.x.ai/developers/rest-api-reference/inference/models) | modality、aliases、fingerprint、部分价格；比 `/v1/models` 丰富 | Agent text 使用 language-models |
-| Kimi | Unknown/StaticOnly | 当前可访问的[官方平台文档](https://platform.moonshot.ai/docs/)未确认本设计所需的 authenticated list contract | `Unknown` | 使用 curated metadata；取得官方 reference/fixture 前不猜 `/models` |
-| DeepSeek | Hybrid | [`GET /models`](https://api-docs.deepseek.com/api/list-models) | 基础 ID、owner | 动态 availability + 内置能力 metadata |
-| Ollama | Dynamic local | [`GET /api/tags`](https://docs.ollama.com/api/tags) + 按需 `/api/show` | 本地已安装模型、family、size、quantization；详情可补 template/model info/capability | 高频短 TTL；只对可见候选按需取详情 |
-| Z.AI | StaticOnly（待核实） | [官方模型矩阵](https://docs.z.ai/guides/overview/overview) | 模型类型、context 和能力由静态文档描述 | 动态 endpoint 需官方文档确认 |
-| OpenAI-compatible | Unknown/Hybrid | best-effort `GET /models` | 完全取决于 gateway | adapter capability 检测；失败后转静态/用户配置 |
+| Provider          | Discovery mode       | 推荐 discovery                                                                                               | 官方响应可提供的信息                                                                              | 初始策略                                                           |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| OpenAI            | Hybrid               | [`GET /v1/models`](https://developers.openai.com/api/reference/resources/models/methods/list)                | ID、created、owner；官方描述为基础信息                                                            | 动态 availability + 内置能力 metadata                              |
+| Anthropic         | Dynamic/Hybrid       | [`GET /v1/models`](https://platform.claude.com/docs/en/api/models/list)                                      | ID、display name、token limits，并可返回 thinking、effort、image、structured output 等 capability | 优先使用动态字段，内置补缺                                         |
+| Google Gemini     | Dynamic/Hybrid       | [`models.list`](https://ai.google.dev/api/models)                                                            | display name、input/output limit、generation methods、thinking 等                                 | 使用原生 Gemini endpoint，不走 OpenAI-compatible base URL          |
+| xAI               | Dynamic/Hybrid       | [`GET /v1/language-models`](https://docs.x.ai/developers/rest-api-reference/inference/models)                | modality、aliases、fingerprint、部分价格；比 `/v1/models` 丰富                                    | Agent text 使用 language-models                                    |
+| Kimi              | Unknown/StaticOnly   | 当前可访问的[官方平台文档](https://platform.moonshot.ai/docs/)未确认本设计所需的 authenticated list contract | `Unknown`                                                                                         | 使用 curated metadata；取得官方 reference/fixture 前不猜 `/models` |
+| DeepSeek          | Hybrid               | [`GET /models`](https://api-docs.deepseek.com/api/list-models)                                               | 基础 ID、owner                                                                                    | 动态 availability + 内置能力 metadata                              |
+| Ollama            | Dynamic local        | [`GET /api/tags`](https://docs.ollama.com/api/tags) + 按需 `/api/show`                                       | 本地已安装模型、family、size、quantization；详情可补 template/model info/capability               | 高频短 TTL；只对可见候选按需取详情                                 |
+| Z.AI              | StaticOnly（待核实） | [官方模型矩阵](https://docs.z.ai/guides/overview/overview)                                                   | 模型类型、context 和能力由静态文档描述                                                            | 动态 endpoint 需官方文档确认                                       |
+| OpenAI-compatible | Unknown/Hybrid       | best-effort `GET /models`                                                                                    | 完全取决于 gateway                                                                                | adapter capability 检测；失败后转静态/用户配置                     |
 
 该表只说明“可从哪里发现什么”，不把某个具体 model ID 固化成架构。内置 metadata 需要带
 `reviewed_at` 和官方 source URL，并通过定期维护更新。
@@ -451,13 +451,13 @@ pub enum CatalogReadPolicy {
 
 语义固定为：
 
-| 当前状态 | `CachePreferred` | `RequireFresh` | `CacheOnly` |
-| --- | --- | --- | --- |
-| Fresh | 立即返回 | 立即返回，除非调用方显式执行 refresh | 立即返回 |
-| StaleUsable | 立即返回并触发后台 refresh | 等待/join refresh | 返回 stale |
-| Expired | 等待/join refresh；失败按 stale-if-error policy 决定 | 等待 refresh，失败返回错误 | 返回 expired snapshot |
-| 无 cache | 等待首次 discovery | 等待首次 discovery | 返回 cache miss |
-| StaticOnly | 返回静态 snapshot | 返回静态 snapshot 和不可动态刷新的状态 | 返回静态 snapshot |
+| 当前状态    | `CachePreferred`                                     | `RequireFresh`                         | `CacheOnly`           |
+| ----------- | ---------------------------------------------------- | -------------------------------------- | --------------------- |
+| Fresh       | 立即返回                                             | 立即返回，除非调用方显式执行 refresh   | 立即返回              |
+| StaleUsable | 立即返回并触发后台 refresh                           | 等待/join refresh                      | 返回 stale            |
+| Expired     | 等待/join refresh；失败按 stale-if-error policy 决定 | 等待 refresh，失败返回错误             | 返回 expired snapshot |
+| 无 cache    | 等待首次 discovery                                   | 等待首次 discovery                     | 返回 cache miss       |
+| StaticOnly  | 返回静态 snapshot                                    | 返回静态 snapshot 和不可动态刷新的状态 | 返回静态 snapshot     |
 
 ### 7.2 刷新触发条件
 
@@ -532,12 +532,12 @@ pub struct CatalogFreshnessPolicy {
 
 以下是 Ash 的建议默认值，不是厂商官方 TTL，也不是跨 provider 的协议保证：
 
-| Source | Fresh | 后台刷新可用期 | 临时错误最大 stale |
-| --- | --- | --- | --- |
-| 远程 provider | 15 分钟 | 24 小时 | 7 天 |
-| 本地 Ollama | 2 秒 | 30 秒 | 5 分钟 |
-| StaticOnly | 不过期 | 不适用 | 不适用 |
-| Unsupported discovery negative cache | 24 小时 | 不适用 | 配置变化时立即失效 |
+| Source                               | Fresh   | 后台刷新可用期 | 临时错误最大 stale |
+| ------------------------------------ | ------- | -------------- | ------------------ |
+| 远程 provider                        | 15 分钟 | 24 小时        | 7 天               |
+| 本地 Ollama                          | 2 秒    | 30 秒          | 5 分钟             |
+| StaticOnly                           | 不过期  | 不适用         | 不适用             |
+| Unsupported discovery negative cache | 24 小时 | 不适用         | 配置变化时立即失效 |
 
 这些值由 manager policy/config 调整，不进入 `ash-protocol`。测试必须使用注入 clock，禁止真实
 sleep。
@@ -758,11 +758,11 @@ pub struct ModelSelectionDecision {
 目录来源提交的 `DiscoveredCatalog.models` 是有序列表，manager 在合并和按账户持久缓存后保留
 该顺序，App Server 在投影成 `model/list` 前按目录顺序排列，TUI 按收到的顺序显示。
 
-| 订阅来源 | 当前展示规则 | 边界 |
-| --- | --- | --- |
-| ChatGPT | 已认证目录的 `priority` 数值越小越靠前；相同值保持原顺序。Codex 本地 `model/list` 已按同一规则排列 | 只展示目录标为可见的模型 |
-| xAI | 保留已登录账户 `models-v2.data` 中可用模型的原顺序 | 当前适配器没有读取排序值；接口顺序变化时列表也会变化，不能承诺“最新优先” |
-| Kimi Code、GLM Coding Plan | 保留来源发布的顺序 | 当前各只有一个 Ash 支持的订阅模型，无多模型排序 |
+| 订阅来源                   | 当前展示规则                                                                                       | 边界                                                                     |
+| -------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| ChatGPT                    | 已认证目录的 `priority` 数值越小越靠前；相同值保持原顺序。Codex 本地 `model/list` 已按同一规则排列 | 只展示目录标为可见的模型                                                 |
+| xAI                        | 保留已登录账户 `models-v2.data` 中可用模型的原顺序                                                 | 当前适配器没有读取排序值；接口顺序变化时列表也会变化，不能承诺“最新优先” |
+| Kimi Code、GLM Coding Plan | 保留来源发布的顺序                                                                                 | 当前各只有一个 Ash 支持的订阅模型，无多模型排序                          |
 
 这条规则只决定展示，不改变收藏分组、已选模型或自动替换策略。`builtIn` 视图继续按内置目录
 顺序显示。发布日期不是订阅目录的通用字段，也可能与模型别名或可用时间不同；不能解析型号
@@ -862,18 +862,18 @@ requested ModelRef
 
 建议错误分类：
 
-| 类别 | 对 cache 的处理 | 对用户的结果 |
-| --- | --- | --- |
-| Authentication / permission | 当前 availability 降为需认证或未验证；保留 metadata | 展示配置提示，不泄露响应 |
-| Discovery unsupported | negative cache；使用 static/config | 正常返回 `StaticOnly` + warning |
-| Rate limited / timeout / network | stale-if-error + backoff | 返回 stale snapshot 和刷新诊断 |
-| Provider 5xx | stale-if-error + backoff | 同上 |
-| Invalid provider payload | 不提交坏 snapshot；保留 last-known | provider schema error |
-| Pagination incomplete | 只可提交 Partial，或整体失败 | 不因缺席下架模型 |
-| Empty complete result | 提交空 live availability，保留 configured/history tombstone | 明确显示当前 scope 无可用模型 |
-| No compatible selection | 不修改 catalog；返回候选检查摘要 | Agent 或工作流不启动，说明准确模型和替换策略均无法满足要求 |
-| Cache corrupt/schema mismatch | 丢弃可删除 cache，重新发现 | 不影响 Config/Thread recovery |
-| User override invalid | 拒绝该配置事务 | typed config error |
+| 类别                             | 对 cache 的处理                                             | 对用户的结果                                               |
+| -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| Authentication / permission      | 当前 availability 降为需认证或未验证；保留 metadata         | 展示配置提示，不泄露响应                                   |
+| Discovery unsupported            | negative cache；使用 static/config                          | 正常返回 `StaticOnly` + warning                            |
+| Rate limited / timeout / network | stale-if-error + backoff                                    | 返回 stale snapshot 和刷新诊断                             |
+| Provider 5xx                     | stale-if-error + backoff                                    | 同上                                                       |
+| Invalid provider payload         | 不提交坏 snapshot；保留 last-known                          | provider schema error                                      |
+| Pagination incomplete            | 只可提交 Partial，或整体失败                                | 不因缺席下架模型                                           |
+| Empty complete result            | 提交空 live availability，保留 configured/history tombstone | 明确显示当前 scope 无可用模型                              |
+| No compatible selection          | 不修改 catalog；返回候选检查摘要                            | Agent 或工作流不启动，说明准确模型和替换策略均无法满足要求 |
+| Cache corrupt/schema mismatch    | 丢弃可删除 cache，重新发现                                  | 不影响 Config/Thread recovery                              |
+| User override invalid            | 拒绝该配置事务                                              | typed config error                                         |
 
 错误对象应携带 provider、scope-safe identity、phase、retryability 和 last-known freshness，但不得
 携带 API key、Authorization header 或未经裁剪的 provider body。

@@ -1,5 +1,29 @@
 {
 	"files.eol": "\n",
+	"[typescript][typescriptreact][javascript][javascriptreact]": {
+		"editor.defaultFormatter": "vscode.typescript-language-features",
+		"editor.insertSpaces": false,
+		"editor.tabSize": 4,
+		"editor.formatOnSave": true
+	},
+	"js/ts.tsdk.path": "build/node_modules/typescript/lib",
+	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
+	"js/ts.preferences.quoteStyle": "single",
+	"js/ts.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+	"js/ts.format.insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
+	"js/ts.format.semicolons": "insert",
+	"[rust]": {
+		"editor.defaultFormatter": "rust-lang.rust-analyzer",
+		"editor.formatOnSave": true
+	},
+	"[python]": {
+		"editor.defaultFormatter": "charliermarsh.ruff",
+		"editor.formatOnSave": true
+	},
+	"[json][jsonc][yaml][markdown][css][html]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode",
+		"editor.formatOnSave": true
+	},
 	"bazel.commandLine.queryExpression": "//...:*",
 	"bazel.queriesShareServer": false,
 	"terminal.integrated.env.windows": {

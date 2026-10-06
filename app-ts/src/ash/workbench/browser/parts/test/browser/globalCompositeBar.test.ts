@@ -50,7 +50,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	const menus = new MenuService(commands, contextKeys);
 	services.registerInstance(IMenuService, menus);
 	let actions: readonly IAction[] = [];
-	let closeMenu: (didCancel: boolean) => void = () => {};
+	let closeMenu: (didCancel: boolean) => void = () => { };
 	let placement: Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'> = {};
 	let sideBarLocation: SideBarLocation = 'left';
 	const contextMenu: IContextMenuService = {
@@ -59,24 +59,26 @@ test('Activity Bar global actions open account and management menus', async () =
 		showContextMenu(options) {
 			actions = options.getActions?.() ?? [];
 			placement = { anchorAlignment: options.anchorAlignment, anchorAxisAlignment: options.anchorAxisAlignment };
-			closeMenu = options.onHide ?? (() => {});
+			closeMenu = options.onHide ?? (() => { });
 		},
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	services.registerInstance(ContextMenuServiceId, contextMenu);
 	services.registerInstance(ConfigurationServiceId, { getValue: () => sideBarLocation } as unknown as IConfigurationService);
 	const accountsChanged = disposables.add(new Emitter<AccountState>());
-	let accountState: AccountState = { revision: 1n, accounts: [
-		{ provider: 'chatgpt-subscription', accountId: 'one', email: 'lanxiang484@gmail.com', status: 'ready', credentialRevision: 1n },
-		{ provider: 'github', accountId: 'octocat', displayName: 'octocat', status: 'ready', credentialRevision: 1n },
-	] };
+	let accountState: AccountState = {
+		revision: 1n, accounts: [
+			{ provider: 'chatgpt-subscription', accountId: 'one', email: 'lanxiang484@gmail.com', status: 'ready', credentialRevision: 1n },
+			{ provider: 'github', accountId: 'octocat', displayName: 'octocat', status: 'ready', credentialRevision: 1n },
+		]
+	};
 	const loggedOutProviders: string[] = [];
 	const accountService: IAccountService = {
 		onDidChangeAccounts: accountsChanged.event,
 		onDidCompleteLogin: Event.None,
 		read: async () => accountState,
 		startLogin: async () => ({ type: 'connected', loginId: 'one' }),
-		cancelLogin: async () => {},
+		cancelLogin: async () => { },
 		logout: async provider => { loggedOutProviders.push(provider); },
 	};
 	services.registerInstance(AccountServiceId, accountService);
@@ -94,7 +96,7 @@ test('Activity Bar global actions open account and management menus', async () =
 		translate: (_bundle, key, fallback, parameters) => key === 'workbench.manage' ? manageLabel : formatNlsMessage(fallback, parameters),
 	};
 	services.registerInstance(LocalizationServiceId, localization);
-	const logService: ILogService = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
+	const logService: ILogService = { trace() { }, debug() { }, info() { }, warn() { }, error() { } };
 	services.registerInstance(LogServiceId, logService);
 	const storage = disposables.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	services.registerInstance(StorageServiceId, storage);

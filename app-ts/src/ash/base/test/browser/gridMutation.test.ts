@@ -38,7 +38,7 @@ class TestView {
 		this.element = h(ownerDocument, "div");
 	}
 
-	layout(_bounds: IPositionedRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void { }
 }
 
 class SerializableTestView extends TestView {

@@ -95,7 +95,7 @@ function createLauncher(rollbackRuntime: () => Promise<string>): RemoteAppServer
 }
 
 class TestRecoveryHost implements RemoteConnectionRecoveryHost {
-	constructor(private readonly lifecycle: string[], public state: AppServerConnectionState = "ready", private startFailures = 0) {}
+	constructor(private readonly lifecycle: string[], public state: AppServerConnectionState = "ready", private startFailures = 0) { }
 
 	async stop(): Promise<void> {
 		this.lifecycle.push("stop");
@@ -113,7 +113,7 @@ class TestRecoveryHost implements RemoteConnectionRecoveryHost {
 	}
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };

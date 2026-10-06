@@ -10,17 +10,17 @@
 
 ## 所有权与依赖方向
 
-| 责任 | Owner | 本 crate 的边界 |
-| --- | --- | --- |
-| 工具、轮次和压缩安全点 | `ash-core` | 不决定调用时机 |
-| 会话、配置、目录、工作树和客户端通知事件 | App Server | 不决定调用时机 |
-| MCP 用户输入事件 | MCP extension | 不决定调用时机 |
-| Hooks 类型化请求和服务接口 | `ash-core-api` | 实现 `HookService` |
-| `beforeTool` 拒绝后的模型可见工具失败 | `ash-core` | 返回 `BeforeToolHookDecision`，不直接写 Thread |
-| `HookId`、matcher、action 与 desired enablement | `ash-config` | 消费完整 `HooksConfig` 快照，不读写配置文件 |
-| 匹配、JSON codec、动作评估与沙箱进程 | `ash-hooks` | 唯一 Hook 运行时 owner |
-| 目录 `ExecuteProcess` capability 与 Authorization | App Server / file-access | 宿主取得 Authorization 后才能调用 `bind_dir` |
-| RPC DTO、配置 mutation 与运行状态通知 | App Server protocol / App Server | 当前只组合 runtime，尚未记录 `recent_runs` |
+| 责任                                              | Owner                            | 本 crate 的边界                                |
+| ------------------------------------------------- | -------------------------------- | ---------------------------------------------- |
+| 工具、轮次和压缩安全点                            | `ash-core`                       | 不决定调用时机                                 |
+| 会话、配置、目录、工作树和客户端通知事件          | App Server                       | 不决定调用时机                                 |
+| MCP 用户输入事件                                  | MCP extension                    | 不决定调用时机                                 |
+| Hooks 类型化请求和服务接口                        | `ash-core-api`                   | 实现 `HookService`                             |
+| `beforeTool` 拒绝后的模型可见工具失败             | `ash-core`                       | 返回 `BeforeToolHookDecision`，不直接写 Thread |
+| `HookId`、matcher、action 与 desired enablement   | `ash-config`                     | 消费完整 `HooksConfig` 快照，不读写配置文件    |
+| 匹配、JSON codec、动作评估与沙箱进程              | `ash-hooks`                      | 唯一 Hook 运行时 owner                         |
+| 目录 `ExecuteProcess` capability 与 Authorization | App Server / file-access         | 宿主取得 Authorization 后才能调用 `bind_dir`   |
+| RPC DTO、配置 mutation 与运行状态通知             | App Server protocol / App Server | 当前只组合 runtime，尚未记录 `recent_runs`     |
 
 依赖方向是 `ash-hooks → ash-core-api`；`ash-core` 消费相同契约，不得反向
 依赖本 crate。Hooks 不依赖 Core 执行实现。`ash-hooks → ash-config` 只消费无运行时状态的声明；有界 `HookRunRecord` 只存在于
@@ -80,17 +80,17 @@ binding。没有目录 binding 时，事件成功执行为空操作；缺少执�
 
 ## 内部接口与调用关系
 
-| Symbol | 职责 | 不得承担 |
-| --- | --- | --- |
-| `DeclarativeHookRuntime::run_event` | 冻结快照、按 `BTreeMap` identity 匹配、协调 policy/process/record | 不读取 mutable Config authority 或安排 Core 安全点 |
-| `matcher::matches_event` | 将 Core 类型化 invocation 与 declaration event/tool matcher 对齐 | 不添加隐式 glob/regex 语义 |
-| `protocol::encode_input` | 构造并限制 Ash stdin JSON | 不引用 Provider 或外部 Hook 方言字段 |
-| `outcome::parse_output` | 校验退出状态、截断标记和严格 decision JSON | 不决定 Core 如何应用拒绝 |
-| `policy::execution_authority` | 构造 review 并把 exact grant 转换成 process authority | 不自行授予权限 |
-| `policy::review_request` | 将 Hook ID、program、arguments 与 canonical directory 绑定为动作摘要 | 不执行进程 |
-| `process::HookProcessExecutor` | 隔离可测试的目录进程 seam | 不成为公共插件扩展面 |
-| [系统进程执行器](../src/process.rs) | 使用统一 `CommandExecutor`、系统沙箱和固定限制 | 不读取信任配置或放宽策略决定 |
-| `records::HookRunLog` | 保留最近 128 条 running/continued/denied/failed 记录 | 不成为 durable authority |
+| Symbol                              | 职责                                                                 | 不得承担                                           |
+| ----------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- |
+| `DeclarativeHookRuntime::run_event` | 冻结快照、按 `BTreeMap` identity 匹配、协调 policy/process/record    | 不读取 mutable Config authority 或安排 Core 安全点 |
+| `matcher::matches_event`            | 将 Core 类型化 invocation 与 declaration event/tool matcher 对齐     | 不添加隐式 glob/regex 语义                         |
+| `protocol::encode_input`            | 构造并限制 Ash stdin JSON                                            | 不引用 Provider 或外部 Hook 方言字段               |
+| `outcome::parse_output`             | 校验退出状态、截断标记和严格 decision JSON                           | 不决定 Core 如何应用拒绝                           |
+| `policy::execution_authority`       | 构造 review 并把 exact grant 转换成 process authority                | 不自行授予权限                                     |
+| `policy::review_request`            | 将 Hook ID、program、arguments 与 canonical directory 绑定为动作摘要 | 不执行进程                                         |
+| `process::HookProcessExecutor`      | 隔离可测试的目录进程 seam                                            | 不成为公共插件扩展面                               |
+| [系统进程执行器](../src/process.rs) | 使用统一 `CommandExecutor`、系统沙箱和固定限制                       | 不读取信任配置或放宽策略决定                       |
+| `records::HookRunLog`               | 保留最近 128 条 running/continued/denied/failed 记录                 | 不成为 durable authority                           |
 
 ```text
 Core typed Hook safe point

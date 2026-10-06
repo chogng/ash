@@ -39,22 +39,22 @@ Remote App Server，不跟随当前 Workspace 或 Environment 切换。
 
 ## 三种错误拆法
 
-| 拆法 | 结论 | 原因 |
-| --- | --- | --- |
-| 三端各写完整实现 | 不采用 | 签名格式、通道语义、限流、回滚和安全修复会产生三个权威实现 |
+| 拆法                            | 结论   | 原因                                                                                           |
+| ------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
+| 三端各写完整实现                | 不采用 | 签名格式、通道语义、限流、回滚和安全修复会产生三个权威实现                                     |
 | App Server 统一检查、下载并安装 | 不采用 | App Server 可能连接远端或脱离外层产品存活，不拥有 Electron、Rust Desktop 和 CLI 的安装生命周期 |
-| 共享检查下载，Renderer 自己安装 | 不采用 | Renderer 不能获得任意文件路径或替换产品文件的权限，Electron 安装必须留在可信宿主 |
+| 共享检查下载，Renderer 自己安装 | 不采用 | Renderer 不能获得任意文件路径或替换产品文件的权限，Electron 安装必须留在可信宿主               |
 
 ## 分层与 owner
 
-| 层 | 唯一 owner | 负责 | 明确不负责 |
-| --- | --- | --- | --- |
-| 发布控制面 | CI 与 Release 工作流 | 版本、通道晋升、签名、各产品与平台产物 | 用户设置、进程退出、安装目录 |
-| 更新领域 | 目标 `ash-rs/product-update` | 描述解析、签名验证、版本比较、目标选择、有界下载、摘要校验、检查调度、状态与错误 | UI、Electron IPC、窗口、启动入口 |
-| Electron update host | 目标 Rust update host + Electron Main adapter | 启动可信更新进程、接收类型化结果、调用 Desktop 安装与退出能力 | 解析发布规则、接受 Renderer 提供的路径 |
-| Rust Desktop 宿主 | `app` composition root 与 distribution adapter | 选择 app 安装器、协调窗口退出和重启 | 再实现一套签名与下载协议 |
-| Ash Code 宿主 | `cli` | CLI 包安装、版本目录、启动入口切换、TUI 通知 | 把安装副作用放进 `ash-tui` |
-| 三端 UI | Renderer、Rust GUI、TUI | 策略编辑、进度、成功、失败、重启操作 | 下载、校验、路径选择、文件替换 |
+| 层                   | 唯一 owner                                     | 负责                                                                             | 明确不负责                             |
+| -------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
+| 发布控制面           | CI 与 Release 工作流                           | 版本、通道晋升、签名、各产品与平台产物                                           | 用户设置、进程退出、安装目录           |
+| 更新领域             | 目标 `ash-rs/product-update`                   | 描述解析、签名验证、版本比较、目标选择、有界下载、摘要校验、检查调度、状态与错误 | UI、Electron IPC、窗口、启动入口       |
+| Electron update host | 目标 Rust update host + Electron Main adapter  | 启动可信更新进程、接收类型化结果、调用 Desktop 安装与退出能力                    | 解析发布规则、接受 Renderer 提供的路径 |
+| Rust Desktop 宿主    | `app` composition root 与 distribution adapter | 选择 app 安装器、协调窗口退出和重启                                              | 再实现一套签名与下载协议               |
+| Ash Code 宿主        | `cli`                                          | CLI 包安装、版本目录、启动入口切换、TUI 通知                                     | 把安装副作用放进 `ash-tui`             |
+| 三端 UI              | Renderer、Rust GUI、TUI                        | 策略编辑、进度、成功、失败、重启操作                                             | 下载、校验、路径选择、文件替换         |
 
 crate 用来隔离共享更新能力和依赖，不代表所有产品必须使用同一个进程。Rust Desktop 与 CLI 可以
 直接组合更新领域；Electron Main 不能复制 Rust 规则，应用一个只连接本机可信子进程的窄 adapter。
@@ -66,17 +66,17 @@ crate 用来隔离共享更新能力和依赖，不代表所有产品必须使�
 
 签名 payload 至少包含：
 
-| 字段 | 含义 |
-| --- | --- |
-| schema version | 描述格式版本 |
-| product | `ash-desktop`、`ash-app` 或 `ash-code` |
-| channel | `latest` 或 `stable` |
-| version | 语义版本 |
-| release identity | 不可变发布身份，防止指针换包 |
-| target | 操作系统、CPU 和 ABI |
-| package format | 该产品宿主支持的安装格式 |
-| size | 下载与磁盘预算 |
-| SHA-256 | 完整产物摘要 |
+| 字段             | 含义                                   |
+| ---------------- | -------------------------------------- |
+| schema version   | 描述格式版本                           |
+| product          | `ash-desktop`、`ash-app` 或 `ash-code` |
+| channel          | `latest` 或 `stable`                   |
+| version          | 语义版本                               |
+| release identity | 不可变发布身份，防止指针换包           |
+| target           | 操作系统、CPU 和 ABI                   |
+| package format   | 该产品宿主支持的安装格式               |
+| size             | 下载与磁盘预算                         |
+| SHA-256          | 完整产物摘要                           |
 
 外层 envelope 只包含原始 payload 和签名。签名工具、发布工作流和运行时验证必须消费同一组 Rust
 类型与 canonical encoding，不能分别维护结构相似的 DTO。`stable` 是签名指针，只能由显式晋升
@@ -118,11 +118,11 @@ Idle
 
 这三件事解决的是不同问题，不能互相代替：
 
-| 检查 | 用户机器相信什么 | 实现位置 |
-| --- | --- | --- |
-| macOS / Windows 系统签名 | “这个可执行文件确实由 Ash 发布，且签名证书有效” | `build/lib/signing.py` |
-| macOS 公证 | “Apple 已扫描并接受这个最终发布包” | `build/darwin/notarize.py` |
-| Ed25519 更新描述签名 | “更新器拿到的版本、通道、下载地址和 SHA-256 没被替换” | `ash-product-update` 与 `ash-update-sign` |
+| 检查                     | 用户机器相信什么                                      | 实现位置                                  |
+| ------------------------ | ----------------------------------------------------- | ----------------------------------------- |
+| macOS / Windows 系统签名 | “这个可执行文件确实由 Ash 发布，且签名证书有效”       | `build/lib/signing.py`                    |
+| macOS 公证               | “Apple 已扫描并接受这个最终发布包”                    | `build/darwin/notarize.py`                |
+| Ed25519 更新描述签名     | “更新器拿到的版本、通道、下载地址和 SHA-256 没被替换” | `ash-product-update` 与 `ash-update-sign` |
 
 发布顺序固定为：构建可执行文件 → 组包 → 系统签名并验证所有可执行文件 → 重算包内摘要与
 `buildId` → 生成最终安装包或压缩包 → macOS 公证或 Windows 安装包签名 → 为最终产物生成
@@ -137,24 +137,24 @@ Windows 代码签名私钥不进入 GitHub secret，也不落到 runner 文件�
 
 三个产品共用下列发布凭据，产品代码和安装包都不能读取它们：
 
-| GitHub 配置 | 类型 | 用途 |
-| --- | --- | --- |
-| `ASH_MACOS_SIGNING_IDENTITY` | repository variable | Developer ID 证书名称 |
-| `ASH_MACOS_CERTIFICATE_P12` | secret | base64 编码的 Developer ID 证书与私钥 |
-| `ASH_MACOS_CERTIFICATE_PASSWORD` | secret | P12 密码 |
-| `ASH_MACOS_NOTARY_KEY_P8` | secret | base64 编码的 App Store Connect API key |
-| `ASH_MACOS_NOTARY_KEY_ID` | secret | API key ID |
-| `ASH_MACOS_NOTARY_ISSUER` | secret | API issuer ID |
-| `ASH_AZURE_CLIENT_ID` | repository variable | 与 GitHub OIDC 绑定的 Entra 应用 ID |
-| `ASH_AZURE_TENANT_ID` | repository variable | Entra tenant ID |
-| `ASH_AZURE_SUBSCRIPTION_ID` | repository variable | Artifact Signing 所在订阅 |
-| `ASH_WINDOWS_SIGNING_ENDPOINT` | repository variable | Artifact Signing 区域 endpoint |
-| `ASH_WINDOWS_SIGNING_ACCOUNT` | repository variable | Artifact Signing account 名称 |
-| `ASH_WINDOWS_CERTIFICATE_PROFILE` | repository variable | 发布证书 profile 名称 |
-| `ASH_WINDOWS_SIGNING_THUMBPRINT` | 本地/自管 runner 环境变量 | 已安装证书的指纹；GitHub Release 不使用 |
-| `ASH_WINDOWS_TIMESTAMP_URL` | 本地/自管 runner 环境变量，可省略 | RFC 3161 服务；省略时使用 DigiCert |
-| `ASH_UPDATE_PUBLIC_KEY` | repository variable | 随产品分发的 Ed25519 公钥 |
-| `ASH_UPDATE_SIGNING_KEY` | secret | 只在发布工作流使用的 Ed25519 私钥种子 |
+| GitHub 配置                       | 类型                              | 用途                                    |
+| --------------------------------- | --------------------------------- | --------------------------------------- |
+| `ASH_MACOS_SIGNING_IDENTITY`      | repository variable               | Developer ID 证书名称                   |
+| `ASH_MACOS_CERTIFICATE_P12`       | secret                            | base64 编码的 Developer ID 证书与私钥   |
+| `ASH_MACOS_CERTIFICATE_PASSWORD`  | secret                            | P12 密码                                |
+| `ASH_MACOS_NOTARY_KEY_P8`         | secret                            | base64 编码的 App Store Connect API key |
+| `ASH_MACOS_NOTARY_KEY_ID`         | secret                            | API key ID                              |
+| `ASH_MACOS_NOTARY_ISSUER`         | secret                            | API issuer ID                           |
+| `ASH_AZURE_CLIENT_ID`             | repository variable               | 与 GitHub OIDC 绑定的 Entra 应用 ID     |
+| `ASH_AZURE_TENANT_ID`             | repository variable               | Entra tenant ID                         |
+| `ASH_AZURE_SUBSCRIPTION_ID`       | repository variable               | Artifact Signing 所在订阅               |
+| `ASH_WINDOWS_SIGNING_ENDPOINT`    | repository variable               | Artifact Signing 区域 endpoint          |
+| `ASH_WINDOWS_SIGNING_ACCOUNT`     | repository variable               | Artifact Signing account 名称           |
+| `ASH_WINDOWS_CERTIFICATE_PROFILE` | repository variable               | 发布证书 profile 名称                   |
+| `ASH_WINDOWS_SIGNING_THUMBPRINT`  | 本地/自管 runner 环境变量         | 已安装证书的指纹；GitHub Release 不使用 |
+| `ASH_WINDOWS_TIMESTAMP_URL`       | 本地/自管 runner 环境变量，可省略 | RFC 3161 服务；省略时使用 DigiCert      |
+| `ASH_UPDATE_PUBLIC_KEY`           | repository variable               | 随产品分发的 Ed25519 公钥               |
+| `ASH_UPDATE_SIGNING_KEY`          | secret                            | 只在发布工作流使用的 Ed25519 私钥种子   |
 
 没有这些凭据时，Release 工作流应直接失败，而不是上传一个看似成功但系统不信任的包。证书到期后，
 带可信时间戳的旧版本仍可验证；新版本必须换用续期后的证书。Ed25519 密钥与系统证书分别轮换，不能
@@ -224,11 +224,11 @@ CLI 使用版本目录和稳定启动入口切换完整包；当前进程继续�
 
 三个产品共享 `UpdatePolicy` 的语义和值，但不共享一份可写用户配置：
 
-| 产品 | 用户设置位置 | 作用域 |
-| --- | --- | --- |
-| Electron Desktop | 注册到 profile `settings.json` | 本机 Electron UI profile |
-| Rust Desktop | profile `config.toml` 的 `[gui]` | 本机 Rust GUI profile |
-| Ash Code | profile `config.toml` 的 `[tui]` | 本机 CLI/TUI profile |
+| 产品             | 用户设置位置                     | 作用域                   |
+| ---------------- | -------------------------------- | ------------------------ |
+| Electron Desktop | 注册到 profile `settings.json`   | 本机 Electron UI profile |
+| Rust Desktop     | profile `config.toml` 的 `[gui]` | 本机 Rust GUI profile    |
+| Ash Code         | profile `config.toml` 的 `[tui]` | 本机 CLI/TUI profile     |
 
 连接 Remote workspace 不改变本机更新策略。组织将来可以提供只读的强制策略层，但不能让三个 UI
 相互改写设置。发布 URL、公钥、产品身份和平台目标属于可信包配置，不属于用户设置。
@@ -250,16 +250,16 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 
 ## 当前状态
 
-| 能力 | 当前实现 | 目标状态 |
-| --- | --- | --- |
-| Ash Code 策略 UI | `Latest / Stable / Never` 已在 TUI 实现 | 保留 UI，类型迁到共享领域后由 adapter 映射 |
-| Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
-| Rust Desktop 更新 | `app-rs/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
-| Electron Desktop 更新 | Manage 菜单和每日自动检查可选择最新或稳定通道；签名验证后下载完整安装包，核对大小与 SHA-256，再由 Main 执行 Windows 安装器或 macOS 应用包替换与重启。当前状态只在运行中的 Main 保存，未验证真实跨版本升级 | 将检查时间、下载进度和已准备版本迁入共享状态；完成安装失败恢复与真实跨版本验证 |
-| 系统签名 | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证；Electron Desktop 的 macOS `.app` 已签名并公证，Windows bundle 可执行文件和最终 `.exe` 安装器已接入发布签名与验证 | 三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据 |
-| 更新描述签名 | `code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
-| 发布工作流 | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流；Electron Desktop 的 macOS zip 和 Windows exe 已接入签名描述生成与发布，也有独立的稳定通道晋升工作流 | 扩展 Rust Desktop 产物并完成三端稳定通道 |
-| 共享更新 crate | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名验证及有界下载与摘要校验 | 继续迁入通用调度、状态与错误 |
+| 能力                  | 当前实现                                                                                                                                                                                                                                     | 目标状态                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Ash Code 策略 UI      | `Latest / Stable / Never` 已在 TUI 实现                                                                                                                                                                                                      | 保留 UI，类型迁到共享领域后由 adapter 映射                                     |
+| Ash Code 更新         | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-cli/src/update.rs`                                                                                                                                                             | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断                            |
+| Rust Desktop 更新     | `app-rs/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui`                                                                                                                                                | 继续迁出通用下载，`zui` 只保留 facade                                          |
+| Electron Desktop 更新 | Manage 菜单和每日自动检查可选择最新或稳定通道；签名验证后下载完整安装包，核对大小与 SHA-256，再由 Main 执行 Windows 安装器或 macOS 应用包替换与重启。当前状态只在运行中的 Main 保存，未验证真实跨版本升级                                    | 将检查时间、下载进度和已准备版本迁入共享状态；完成安装失败恢复与真实跨版本验证 |
+| 系统签名              | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证；Electron Desktop 的 macOS `.app` 已签名并公证，Windows bundle 可执行文件和最终 `.exe` 安装器已接入发布签名与验证 | 三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据             |
+| 更新描述签名          | `code/update-sign` 已直接消费共享发布描述与 canonical encoding                                                                                                                                                                               | 保留密钥输入和 release artifact adapter                                        |
+| 发布工作流            | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流；Electron Desktop 的 macOS zip 和 Windows exe 已接入签名描述生成与发布，也有独立的稳定通道晋升工作流                                                                 | 扩展 Rust Desktop 产物并完成三端稳定通道                                       |
+| 共享更新 crate        | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名验证及有界下载与摘要校验                                                                                                                                                | 继续迁入通用调度、状态与错误                                                   |
 
 “已有代码”不代表共享架构已经完成。当前 Ash Code 和 `zui` 仍各自拥有下载与调度代码，这些逻辑
 需要继续迁到共享领域，不能被 Electron 复制为第三套实现。

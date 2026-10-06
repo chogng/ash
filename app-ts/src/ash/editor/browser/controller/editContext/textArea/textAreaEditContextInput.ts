@@ -383,7 +383,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 }
 
-function readCompositionSelection(element: HTMLTextAreaElement, rawText: string, normalizedText: string): { readonly anchorOffset: number; readonly activeOffset: number } {
+function readCompositionSelection(element: HTMLTextAreaElement, rawText: string, normalizedText: string): { readonly anchorOffset: number; readonly activeOffset: number; } {
 	if (element.value !== rawText) {
 		return {
 			anchorOffset: normalizedText.length,

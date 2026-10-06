@@ -28,7 +28,7 @@ test("view descriptor models project registry and context visibility", () => {
 	using listener = model.onDidChangeVisibleViewDescriptors((event) => {
 		changes.push(
 			`+${event.added.map((view) => view.id).join(",")}` +
-				` -${event.removed.map((view) => view.id).join(",")}`,
+			` -${event.removed.map((view) => view.id).join(",")}`,
 		);
 	});
 	using viewRegistrations = registry.registerViews("test.sidebar", [
@@ -147,9 +147,9 @@ function testView(
 class TestView implements IView {
 	private visible = true;
 
-	constructor(readonly id: string) {}
+	constructor(readonly id: string) { }
 
-	focus(): void {}
+	focus(): void { }
 
 	isVisible(): boolean {
 		return this.visible;

@@ -42,7 +42,7 @@ export function startStandaloneWebWorker<T extends object>(scope: StandaloneWork
 	store.add(toDisposable(() => scope.removeEventListener('message', listener)));
 	const port: WebWorkerClientPort = { onMessage: messages.event, onFailure: Event.None, send: value => scope.postMessage(value), ...Disposable.None };
 	const host = store.add(new WebWorkerClient(sharedPort(port), standaloneHostChannel));
-	const mirrors = new Map<string, { readonly uri: URI; readonly document: LanguageWorkerDocumentMirror }>();
+	const mirrors = new Map<string, { readonly uri: URI; readonly document: LanguageWorkerDocumentMirror; }>();
 	let requestId = 0;
 	const context: StandaloneWorkerContext = {
 		getMirrorModels: () => [...mirrors.values()].map(({ uri, document }) => ({
@@ -53,7 +53,7 @@ export function startStandaloneWebWorker<T extends object>(scope: StandaloneWork
 		callHost: (method, ...args) => host.request(++requestId, { operation: 'invoke', method, args }, new AbortController().signal),
 	};
 	const instance = Promise.resolve().then(() => create(context));
-	void instance.catch(() => {});
+	void instance.catch(() => { });
 	store.add(new WebWorkerServer(sharedPort(port), standaloneWorkerChannel, {
 		handleRequest: async message => {
 			switch (message.operation) {

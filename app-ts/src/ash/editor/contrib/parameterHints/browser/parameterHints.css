@@ -1,38 +1,44 @@
 .stanza-editor-parameter-hints {
-  position: absolute;
-  z-index: 8;
-  max-width: min(480px, calc(100% - 16px));
-  padding: 6px 8px;
-  color: var(--ash-editor-foreground);
-  background: var(--ash-editor-hover-background, var(--ash-editor-background));
-  border: var(--ash-stroke-thickness) solid var(--ash-editor-border);
-  border-radius: var(--ash-corner-radius-small);
-  box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
+	position: absolute;
+	z-index: 8;
+	max-width: min(480px, calc(100% - 16px));
+	padding: 6px 8px;
+	color: var(--ash-editor-foreground);
+	background: var(
+		--ash-editor-hover-background,
+		var(--ash-editor-background)
+	);
+	border: var(--ash-stroke-thickness) solid var(--ash-editor-border);
+	border-radius: var(--ash-corner-radius-small);
+	box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
 }
 
 .stanza-editor-parameter-hints-signature.active {
-  font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .stanza-editor-parameter-hints-parameter.active {
-  color: var(--ash-list-active-selection-foreground);
-  background: var(--ash-list-active-selection-background);
-  border-radius: var(--ash-corner-radius-x-small);
-  padding: 0 2px;
-  font-weight: var(--ash-font-weight-semi-bold);
+	color: var(--ash-list-active-selection-foreground);
+	background: var(--ash-list-active-selection-background);
+	border-radius: var(--ash-corner-radius-x-small);
+	padding: 0 2px;
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .stanza-editor-parameter-hints-documentation {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-editor-border);
-  color: var(--ash-editor-description-foreground, var(--ash-editor-foreground));
-  font-size: var(--ash-font-size-body2);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+	margin-top: 6px;
+	padding-top: 6px;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-editor-border);
+	color: var(
+		--ash-editor-description-foreground,
+		var(--ash-editor-foreground)
+	);
+	font-size: var(--ash-font-size-body2);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
 }
 
 .stanza-editor-parameter-hints-documentation > div + div {
-  margin-top: 4px;
+	margin-top: 4px;
 }

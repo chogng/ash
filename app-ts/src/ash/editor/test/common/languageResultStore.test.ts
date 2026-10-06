@@ -158,7 +158,7 @@ test("Language result clear is explicit and suppresses empty no-ops", () => {
 		value: tokenResult(0, 1, "keyword"),
 	}), LanguageResultAcceptance.SupersededRequest);
 	assert.deepEqual(events.map(event => (
-		event as { readonly reason: LanguageResultStoreChangeReason }
+		event as { readonly reason: LanguageResultStoreChangeReason; }
 	).reason), [
 		LanguageResultStoreChangeReason.Result,
 		LanguageResultStoreChangeReason.Cleared,
@@ -311,7 +311,7 @@ test("Language tokens reject ambiguous spans without replacing prior state", () 
 test("Model mutation during normalization cannot publish the captured version", () => {
 	using model = new TextModel("a");
 	let mutate = false;
-	using store = new VersionedLanguageResultStore<{ readonly value: number }>(
+	using store = new VersionedLanguageResultStore<{ readonly value: number; }>(
 		model,
 		value => {
 			if (mutate) {
@@ -342,7 +342,7 @@ test("Model mutation during normalization cannot publish the captured version", 
 	assert.equal(model.version, 2);
 	assert.equal(store.result, undefined);
 	assert.deepEqual(events.map(event => (
-		event as { readonly reason: LanguageResultStoreChangeReason }
+		event as { readonly reason: LanguageResultStoreChangeReason; }
 	).reason), [
 		LanguageResultStoreChangeReason.Result,
 		LanguageResultStoreChangeReason.ModelChanged,

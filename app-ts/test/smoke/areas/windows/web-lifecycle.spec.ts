@@ -86,7 +86,7 @@ for (const [mode, entry] of [['production', 'workbench'], ['development', 'workb
 			await page.keyboard.insertText('Keep my unsent message after reconnect');
 			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
 			await page.evaluate(() => {
-				(globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost = globalThis.ashWebWorkbenchHost;
+				(globalThis as typeof globalThis & { acceptanceHost: unknown; }).acceptanceHost = globalThis.ashWebWorkbenchHost;
 			});
 			await stopBackend(env);
 			await expect.poll(async () => {
@@ -102,7 +102,7 @@ for (const [mode, entry] of [['production', 'workbench'], ['development', 'workb
 					} catch { return undefined; }
 				});
 			}, { timeout: 30_000 }).toBe('const value = 1;\n');
-			expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost === globalThis.ashWebWorkbenchHost)).toBe(true);
+			expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceHost: unknown; }).acceptanceHost === globalThis.ashWebWorkbenchHost)).toBe(true);
 			await expect(selected).toHaveAttribute('aria-current', 'page');
 			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
 			// A second client writes through the real API; only a restored catalog subscription
@@ -168,7 +168,7 @@ test('Web backend selection restores a Sessions connection and preserves its dra
 		await editor.waitForEditorFocus();
 		await page.keyboard.insertText('Retain my Sessions draft');
 		await editor.waitForEditorContents(text => text === 'Retain my Sessions draft');
-		await page.evaluate(() => { (globalThis as typeof globalThis & { acceptanceDocument: Document }).acceptanceDocument = document; });
+		await page.evaluate(() => { (globalThis as typeof globalThis & { acceptanceDocument: Document; }).acceptanceDocument = document; });
 		await test.step('Stop the backend and select its current development package', async () => { await stopBackend(env); await launch!.reloadBackend(); });
 		await expect.poll(() => page.evaluate(async () => {
 			try {
@@ -176,7 +176,7 @@ test('Web backend selection restores a Sessions connection and preserves its dra
 				return (await host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' })).content;
 			} catch { return undefined; }
 		}), { timeout: 30_000 }).toBe('const value = 1;\n');
-		expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceDocument: Document }).acceptanceDocument === document)).toBe(true);
+		expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceDocument: Document; }).acceptanceDocument === document)).toBe(true);
 		await editor.waitForEditorContents(text => text === 'Retain my Sessions draft');
 	} finally {
 		await browser.close();
@@ -206,7 +206,7 @@ async function expectWorkspace(page: Page, entry: 'workbench' | 'sessions'): Pro
 	expect(result.content).toBe('const value = 1;\n');
 }
 
-async function launchWeb(mode: 'production' | 'development', port: number, env: NodeJS.ProcessEnv): Promise<{ child: ChildProcess; url: string }> {
+async function launchWeb(mode: 'production' | 'development', port: number, env: NodeJS.ProcessEnv): Promise<{ child: ChildProcess; url: string; }> {
 	const args = mode === 'production'
 		? ['../build/app_ts/launch/web.ts', '../.build/app-ts/web/ash', String(port)]
 		: ['node_modules/vite/bin/vite.js', '--config', '../build/app_ts/vite/vite.config.ts', '--mode', 'web', '--port', String(port)];

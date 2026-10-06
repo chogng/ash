@@ -6,7 +6,7 @@ import { BackupError, type IBackupContent, type IBackupRecord, type IBackupServi
 
 /** Uses the renderer's existing connection; backups survive that connection's lifetime. */
 export class AppServerBackupService implements IBackupService {
-	constructor(private readonly client: AppServerProtocolClient, private readonly clientId: string) {}
+	constructor(private readonly client: AppServerProtocolClient, private readonly clientId: string) { }
 
 	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> {
 		const result = await this.client.request(APP_SERVER_METHODS['backup/workspaces'], { clientId: this.clientId }).catch(explain);

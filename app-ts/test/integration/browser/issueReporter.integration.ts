@@ -26,7 +26,7 @@ import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { IEditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import '../../../src/ash/workbench/contrib/issue/browser/issue.contribution.js';
 
-interface Request { id: number; method: string; params: Record<string, unknown> }
+interface Request { id: number; method: string; params: Record<string, unknown>; }
 class ReporterTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Request[] = [];
@@ -44,7 +44,7 @@ class ReporterTransport implements AppServerTransport {
 	send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'issue-test', workspaceRoot: '/workspace' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string }).frame) as Request;
+		const request = JSON.parse((payload as { frame: string; }).frame) as Request;
 		this.requests.push(request);
 		switch (request.method) {
 			case 'initialize': {
@@ -82,19 +82,21 @@ await client.connect();
 const backend = new AppServerIssueReporterService(client);
 services.registerInstance(IExtensionService, {
 	currentCatalog: { generation: 1, extensions: [{ id: 'example.syntax', name: 'syntax', publisher: 'example', version: '1.2.3', displayName: 'Syntax', sourceKind: 'builtIn', manifestSha256: 'a'.repeat(64), packageSha256: 'b'.repeat(64) }], diagnostics: new URL(location.href).searchParams.has('extensionsFailed') ? [{ code: 'sourceUnavailable', message: 'Extension source is unavailable.', source: 'user', subject: undefined }] : [] },
-	onDidChange: Event.None, onDidFail: Event.None, start: async () => {}, reload: async () => {},
+	onDidChange: Event.None, onDidFail: Event.None, start: async () => { }, reload: async () => { },
 } as unknown as IExtensionService);
 services.registerInstance(IIssueReporterService, backend);
 const accounts = resources.add(new Emitter<AccountState>());
 const accountState = (): AccountState => ({ revision: 1n, accounts: transport.signedIn ? [{ provider: 'github', accountId: '42', displayName: 'Test account', status: 'ready', credentialRevision: 1n }] : [] });
 let releaseAccountRead: (() => void) | undefined;
-services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => {
-	const snapshot = accountState();
-	if (new URL(location.href).searchParams.has('holdAccountRead')) { await new Promise<void>(resolve => { releaseAccountRead = resolve; }); }
-	return snapshot;
-}, startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => {}, logout: async () => { transport.signedIn = false; accounts.fire(accountState()); } });
-services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { transport.signedIn = true; accounts.fire(accountState()); }, cancel: async () => {} });
-services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+services.registerInstance(IAccountService, {
+	onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => {
+		const snapshot = accountState();
+		if (new URL(location.href).searchParams.has('holdAccountRead')) { await new Promise<void>(resolve => { releaseAccountRead = resolve; }); }
+		return snapshot;
+	}, startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => { }, logout: async () => { transport.signedIn = false; accounts.fire(accountState()); }
+});
+services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { transport.signedIn = true; accounts.fire(accountState()); }, cancel: async () => { } });
+services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 const opened: string[] = [];
 services.registerInstance(IOpenerService, { open: async target => { opened.push(String(target)); return true; } } as IOpenerService);
 let pane: IEditorPane | undefined;

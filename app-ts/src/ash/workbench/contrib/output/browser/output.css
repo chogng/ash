@@ -1,28 +1,28 @@
 .ash-output {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 .ash-output-filter-bar {
-  flex: 0 0 auto;
-  padding: 6px 8px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	flex: 0 0 auto;
+	padding: 6px 8px;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-output-filter-input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 24px;
-  padding: 2px 8px;
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  outline: none;
+	width: 100%;
+	box-sizing: border-box;
+	min-height: 24px;
+	padding: 2px 8px;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	outline: none;
 }
 
 .ash-output-filter-input:focus {
-  border-color: var(--ash-focus-border);
+	border-color: var(--ash-focus-border);
 }
 
 .ash-output-content {

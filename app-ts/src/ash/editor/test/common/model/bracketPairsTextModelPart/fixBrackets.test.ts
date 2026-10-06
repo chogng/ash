@@ -11,7 +11,7 @@ const codec: ILanguageIdCodec = {
 	decodeLanguageId: id => id === 1 ? 'typescript' : 'embedded',
 };
 
-function segment(text: string, type = StandardTokenType.Other, language = 'typescript', balanced = true): { text: string; metadata: number } {
+function segment(text: string, type = StandardTokenType.Other, language = 'typescript', balanced = true): { text: string; metadata: number; } {
 	return { text, metadata: codec.encodeLanguageId(language) | (type << MetadataConsts.TOKEN_TYPE_OFFSET) | (balanced ? MetadataConsts.BALANCED_BRACKETS_MASK : 0) };
 }
 

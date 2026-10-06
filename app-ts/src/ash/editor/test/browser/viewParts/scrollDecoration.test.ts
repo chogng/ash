@@ -51,7 +51,7 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 	dom.window.close();
 });
 
-function configurationState(): { layoutInfo: EditorLayoutInfo; scrollbar: InternalEditorScrollbarOptions } {
+function configurationState(): { layoutInfo: EditorLayoutInfo; scrollbar: InternalEditorScrollbarOptions; } {
 	return {
 		layoutInfo: layoutInfo({ width: 500 }),
 		scrollbar: { useShadows: true } as InternalEditorScrollbarOptions,
@@ -69,8 +69,8 @@ function testViewContext(state: ReturnType<typeof configurationState>): ViewCont
 				},
 			},
 		},
-		addEventHandler() {},
-		removeEventHandler() {},
+		addEventHandler() { },
+		removeEventHandler() { },
 	} as unknown as ViewContext;
 }
 

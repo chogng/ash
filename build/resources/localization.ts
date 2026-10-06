@@ -84,7 +84,7 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 	return bundles;
 }
 
-export function validateLocalizationTranslation(english: Bundles, translations: Bundles, locale: string): { missing: readonly string[]; unchanged: number } {
+export function validateLocalizationTranslation(english: Bundles, translations: Bundles, locale: string): { missing: readonly string[]; unchanged: number; } {
 	let unchanged = 0;
 	for (const [bundle, messages] of Object.entries(translations)) {
 		for (const [key, message] of Object.entries(messages)) {
@@ -109,7 +109,7 @@ export async function generateLocalization(check = false): Promise<boolean> {
 		addMessage(english, 'ash', definition.label.key, definition.label.english, 'ApprovalModes');
 		addMessage(english, 'ash', definition.description.key, definition.description.english, 'ApprovalModes');
 	}
-	const languages: { locale: string; languageName: string; localizedLanguageName: string }[] = JSON.parse(await readFile(resolve(resourceRoot, 'languages.json'), 'utf8'));
+	const languages: { locale: string; languageName: string; localizedLanguageName: string; }[] = JSON.parse(await readFile(resolve(resourceRoot, 'languages.json'), 'utf8'));
 	const catalogs = [];
 	for (const language of languages) {
 		const bundles = language.locale === 'en' ? english : await readDomains(resolve(resourceRoot, language.locale));

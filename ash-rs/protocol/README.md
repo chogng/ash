@@ -10,17 +10,17 @@
 目录按业务对象组织；只有包含独立契约的文件才拆开。文件名描述其中的数据，不用 `model.rs`
 泛指所有业务对象，也不用管理器的名字暗示这里有运行时实现。
 
-| 入口 | 用途与主要文件 |
-| --- | --- |
-| [`thread.rs`](src/thread.rs) / `thread/` | 一条独立执行分支：`thread.rs` 定义当前状态，`command.rs` 是调用方意图，`event.rs` 是持久事实，`update.rs` 是订阅更新；历史、目标和压缩检查点也归 Thread |
-| [`turn.rs`](src/turn.rs) / `turn/` | 一次已接受的任务：`turn.rs` 定义当前状态，`instructions.rs` 是冻结指令，`execution_kind.rs` 是执行目的，`review_target.rs` 是代码审查目标，`tool_profile.rs` 是冻结工具清单 |
-| [`session.rs`](src/session.rs) / `session/` | 按 Session ID 分组的 Thread 视图：`session.rs` 定义只读快照，`summary.rs` 是状态与活动摘要，`thread_origin.rs` 是分支来源；这里没有 Session 管理器实现 |
-| [`model.rs`](src/model.rs) / `model/` | 模型规格、输入输出与调用事实；详细入口见下表 |
-| [`guardian.rs`](src/guardian.rs) | Guardian 共享审核数据：动作身份、能力、证据、风险等级、建议及其绑定的审核结果 |
-| [`interaction.rs`](src/interaction.rs) / `interaction/` | 用户输入、批准、提问和客户端工具；`turn_interaction.rs` 定义待处理交互、期限、取消及投递信封 |
-| [`item.rs`](src/item.rs) / `item/plan.rs` | 可持久化的对话条目与计划进度；不是供应商请求消息或任务调度器 |
-| [`config.rs`](src/config.rs) / `config/` | `preferences.rs` 定义共享偏好取值，`patch.rs` 区分不更新、清空和替换；不负责配置存储和优先级 |
-| [`ids.rs`](src/ids.rs) | 执行、任务和交互 ID 的声明与公共校验；模型身份单独归 `model/identity.rs` |
+| 入口                                                    | 用途与主要文件                                                                                                                                                              |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`thread.rs`](src/thread.rs) / `thread/`                | 一条独立执行分支：`thread.rs` 定义当前状态，`command.rs` 是调用方意图，`event.rs` 是持久事实，`update.rs` 是订阅更新；历史、目标和压缩检查点也归 Thread                     |
+| [`turn.rs`](src/turn.rs) / `turn/`                      | 一次已接受的任务：`turn.rs` 定义当前状态，`instructions.rs` 是冻结指令，`execution_kind.rs` 是执行目的，`review_target.rs` 是代码审查目标，`tool_profile.rs` 是冻结工具清单 |
+| [`session.rs`](src/session.rs) / `session/`             | 按 Session ID 分组的 Thread 视图：`session.rs` 定义只读快照，`summary.rs` 是状态与活动摘要，`thread_origin.rs` 是分支来源；这里没有 Session 管理器实现                      |
+| [`model.rs`](src/model.rs) / `model/`                   | 模型规格、输入输出与调用事实；详细入口见下表                                                                                                                                |
+| [`guardian.rs`](src/guardian.rs)                        | Guardian 共享审核数据：动作身份、能力、证据、风险等级、建议及其绑定的审核结果                                                                                               |
+| [`interaction.rs`](src/interaction.rs) / `interaction/` | 用户输入、批准、提问和客户端工具；`turn_interaction.rs` 定义待处理交互、期限、取消及投递信封                                                                                |
+| [`item.rs`](src/item.rs) / `item/plan.rs`               | 可持久化的对话条目与计划进度；不是供应商请求消息或任务调度器                                                                                                                |
+| [`config.rs`](src/config.rs) / `config/`                | `preferences.rs` 定义共享偏好取值，`patch.rs` 区分不更新、清空和替换；不负责配置存储和优先级                                                                                |
+| [`ids.rs`](src/ids.rs)                                  | 执行、任务和交互 ID 的声明与公共校验；模型身份单独归 `model/identity.rs`                                                                                                    |
 
 ## `models.json` 从哪里定义
 
@@ -29,30 +29,30 @@
 [`models.schema.json`](../model-provider-info/models.schema.json)，为编辑器提供字段解释。
 协议模块的划分帮助说明含义，但不会自动决定 JSON 的层级和字段命名。
 
-| 编辑内容 | 类型及阅读入口 |
-| --- | --- |
-| `provider_id`、`model_id` | `StaticModelSpec` 保存编辑值，`model/identity.rs` 定义准确身份；连接 ID 不属于模型身份 |
-| 容量、能力、推理选项和默认值 | `StaticModelSpec` 转换成 `model/catalog.rs` 的 `ModelInfo`；档位语义见 `model/reasoning_effort.rs` |
-| `settings` | `model/parameters.rs` 的参数声明与约束；JSON 用 `true / false / null` 表达支持、不支持、未知，协议用 `CapabilitySupport` |
-| `instructions` | `StaticModelSpec` 的完整版本化基础提示词；Turn 接受时冻结，不包含运行时权限与项目指令 |
-| 某次请求的参数与输入 | `model/invocation.rs`、`model/message.rs`；不写入静态模型目录 |
-| 上下文检查、用量与费用结果 | `model/context_inspection.rs`、`model/usage.rs`、`model/accounting.rs`；由执行过程产生，不是模型规格 |
+| 编辑内容                     | 类型及阅读入口                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `provider_id`、`model_id`    | `StaticModelSpec` 保存编辑值，`model/identity.rs` 定义准确身份；连接 ID 不属于模型身份                                   |
+| 容量、能力、推理选项和默认值 | `StaticModelSpec` 转换成 `model/catalog.rs` 的 `ModelInfo`；档位语义见 `model/reasoning_effort.rs`                       |
+| `settings`                   | `model/parameters.rs` 的参数声明与约束；JSON 用 `true / false / null` 表达支持、不支持、未知，协议用 `CapabilitySupport` |
+| `instructions`               | `StaticModelSpec` 的完整版本化基础提示词；Turn 接受时冻结，不包含运行时权限与项目指令                                    |
+| 某次请求的参数与输入         | `model/invocation.rs`、`model/message.rs`；不写入静态模型目录                                                            |
+| 上下文检查、用量与费用结果   | `model/context_inspection.rs`、`model/usage.rs`、`model/accounting.rs`；由执行过程产生，不是模型规格                     |
 
 ## 模型契约的阅读入口
 
 `src/model.rs` 汇总公开类型；子文件按数据含义组织，而不是把整条调用链放进一个文件。
 
-| 文件 | 定义什么 |
-| --- | --- |
-| [`model/identity.rs`](src/model/identity.rs) | Provider、连接、模型 ID 与准确模型引用 |
-| [`model/reasoning_effort.rs`](src/model/reasoning_effort.rs) | 推理档位请求值及目录中的档位说明 |
-| [`model/catalog.rs`](src/model/catalog.rs) | 模型规格、能力、访问方式、可用性与目录来源状态 |
-| [`model/parameters.rs`](src/model/parameters.rs) | 支持的参数、请求默认值、服务等级与加速声明 |
-| [`model/message.rs`](src/model/message.rs) | 模型输入消息、媒体内容、推理历史与工具调用/结果 |
-| [`model/invocation.rs`](src/model/invocation.rs) | 一次调用的请求、响应、输出方式和流式增量 |
-| [`model/usage.rs`](src/model/usage.rs) | 供应商用量、请求估算和累计结果的数据格式 |
-| [`model/context_inspection.rs`](src/model/context_inspection.rs) | Core 计算后的上下文分类、来源与预算检查结果 |
-| [`model/accounting.rs`](src/model/accounting.rs) | 调用事实、计价证据、精确金额和参考成本结果 |
+| 文件                                                             | 定义什么                                        |
+| ---------------------------------------------------------------- | ----------------------------------------------- |
+| [`model/identity.rs`](src/model/identity.rs)                     | Provider、连接、模型 ID 与准确模型引用          |
+| [`model/reasoning_effort.rs`](src/model/reasoning_effort.rs)     | 推理档位请求值及目录中的档位说明                |
+| [`model/catalog.rs`](src/model/catalog.rs)                       | 模型规格、能力、访问方式、可用性与目录来源状态  |
+| [`model/parameters.rs`](src/model/parameters.rs)                 | 支持的参数、请求默认值、服务等级与加速声明      |
+| [`model/message.rs`](src/model/message.rs)                       | 模型输入消息、媒体内容、推理历史与工具调用/结果 |
+| [`model/invocation.rs`](src/model/invocation.rs)                 | 一次调用的请求、响应、输出方式和流式增量        |
+| [`model/usage.rs`](src/model/usage.rs)                           | 供应商用量、请求估算和累计结果的数据格式        |
+| [`model/context_inspection.rs`](src/model/context_inspection.rs) | Core 计算后的上下文分类、来源与预算检查结果     |
+| [`model/accounting.rs`](src/model/accounting.rs)                 | 调用事实、计价证据、精确金额和参考成本结果      |
 
 目录中的 `ModelSettings` 是参数声明；某一次调用选定的参数属于 `ModelRequest`。名称和说明可以作为
 共享目录数据保留，但协议不选择型号、应用加速偏好或准备供应商请求。
@@ -73,14 +73,14 @@ Ash 的共享审核数据统一定义在 `guardian.rs`，Core、审核器、上�
 protocol 的类型。审核数据不包含沙箱实例、规则求值器或执行授权；这些仍由实现模块拥有。
 没有新增尚无调用方的模型目录字段。
 
-| 内容 | 归属 |
-| --- | --- |
-| 动作和能力身份、审核证据、风险与授权程度、建议及结果绑定 | [`guardian.rs`](src/guardian.rs)；保留原有数据格式与规范化约定 |
-| 风险审核模型、响应约束、并发与取消 | [`guardian-reviewer`](../ext/guardian-reviewer/README.md)，由 [`guardian-v2`](../ext/guardian-v2/README.md) 接入扩展 |
-| 沙箱执行上下文、审核建议校验、最终执行决定与精确授权 | [`action-policy`](../action-policy/README.md)；审核模型只提供建议 |
-| 人工批准请求和回答 | [`interaction/approval.rs`](src/interaction/approval.rs) |
-| 工具执行前持久化的授权事实 | [`thread/event.rs`](src/thread/event.rs) 的 `ToolExecutionAuthority`，包括 `AutoReviewed` |
-| 审核模型选择、权限模式和系统约束 | [Guardian 文档](../../docs/guardian.md)；与主模型的推理档位和生成参数分开 |
+| 内容                                                     | 归属                                                                                                                 |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 动作和能力身份、审核证据、风险与授权程度、建议及结果绑定 | [`guardian.rs`](src/guardian.rs)；保留原有数据格式与规范化约定                                                       |
+| 风险审核模型、响应约束、并发与取消                       | [`guardian-reviewer`](../ext/guardian-reviewer/README.md)，由 [`guardian-v2`](../ext/guardian-v2/README.md) 接入扩展 |
+| 沙箱执行上下文、审核建议校验、最终执行决定与精确授权     | [`action-policy`](../action-policy/README.md)；审核模型只提供建议                                                    |
+| 人工批准请求和回答                                       | [`interaction/approval.rs`](src/interaction/approval.rs)                                                             |
+| 工具执行前持久化的授权事实                               | [`thread/event.rs`](src/thread/event.rs) 的 `ToolExecutionAuthority`，包括 `AutoReviewed`                            |
+| 审核模型选择、权限模式和系统约束                         | [Guardian 文档](../../docs/guardian.md)；与主模型的推理档位和生成参数分开                                            |
 
 `turn/review_target.rs` 则表示需要审查的代码变更，与 Guardian 的风险审核没有关系。
 

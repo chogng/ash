@@ -33,8 +33,8 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private readonly providersStatus: HTMLElement;
 	private readonly rows = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly apiRows = this._register(new DisposableMap<string, DisposableStore>());
-	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement }[] = [];
-	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement; readonly key: ProviderApiKeyInput }[] = [];
+	private modelElements: readonly { readonly entry: ModelCatalogEntry; readonly row: HTMLElement; }[] = [];
+	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement; readonly key: ProviderApiKeyInput; }[] = [];
 	private readonly providerTitle: HTMLElement;
 	private readonly expandRow: HTMLElement;
 	private readonly expandButton: Button;
@@ -289,7 +289,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		return row;
 	}
 
-	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): { readonly row: HTMLElement; readonly key: ProviderApiKeyInput } {
+	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): { readonly row: HTMLElement; readonly key: ProviderApiKeyInput; } {
 		const row = h(this.document, 'div');
 		row.className = 'ash-models-settings-api-row';
 		const name = h(this.document, 'h5');
@@ -297,7 +297,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		name.title = provider.displayName;
 		const controls = h(this.document, 'div');
 		controls.className = 'ash-models-settings-api-controls';
-		const key = resources.add(this.instantiation.createInstance(ProviderApiKeyInput, controls, provider.connection, provider.displayName, provider.apiKeyConfigured, async () => {}));
+		const key = resources.add(this.instantiation.createInstance(ProviderApiKeyInput, controls, provider.connection, provider.displayName, provider.apiKeyConfigured, async () => { }));
 		row.append(name, controls);
 		return { row, key };
 	}

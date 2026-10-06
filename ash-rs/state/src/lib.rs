@@ -20,9 +20,8 @@ mod sqlite_runtime;
 
 pub use dir_index::{ClearOutcome, DirIndexKind, DirIndexLease, StateRuntime};
 pub use sqlite::{
-    HistoryImport,
-    SqliteEnvironmentStore, SqliteMemoryStore, SqliteProjectStore, SqliteTeamStore, SqliteThreadStore,
-    SqliteTurnChangeStore, TurnChangeCommandOutcome,
+    HistoryImport, SqliteEnvironmentStore, SqliteMemoryStore, SqliteProjectStore, SqliteTeamStore,
+    SqliteThreadStore, SqliteTurnChangeStore, TurnChangeCommandOutcome,
 };
 pub use sqlite_runtime::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 

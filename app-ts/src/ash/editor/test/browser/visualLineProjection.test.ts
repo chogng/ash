@@ -165,7 +165,7 @@ test("browser visual-line projection validates its public wrapping inputs", () =
 		initialWrappingMeasurement: { schedule: undefined as never },
 	}), /requires a scheduler/);
 	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
-		initialWrappingMeasurement: { initialLineCount: 0, schedule: () => toDisposable(() => {}) },
+		initialWrappingMeasurement: { initialLineCount: 0, schedule: () => toDisposable(() => { }) },
 	}), /measurement count/);
 });
 

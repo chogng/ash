@@ -27,7 +27,7 @@ import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID } from '../../brow
 test('Sessions Files selects one view from the current folder state and creates the localized empty pane', () => {
 	using contexts = new ContextKeyService();
 	const folders = WorkspaceFolderCountContext.bindTo(contexts);
-	using descriptors = new ViewDescriptorService({  registry: SessionsViewRegistry }, contexts);
+	using descriptors = new ViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
 	const model = descriptors.getViewContainerModel(SESSIONS_FILES_CONTAINER_ID);
 	const visibleIds = (): string[] => model.visibleViewDescriptors.map(view => view.id);
 	assert.deepEqual(visibleIds(), [SESSIONS_FILES_EMPTY_VIEW_ID]);

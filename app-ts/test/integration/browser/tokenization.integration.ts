@@ -24,21 +24,25 @@ await extensions.start();
 
 let analyzeCalls = 0;
 let completedCalls = 0;
-const pending: { revision: number; resolve: () => void }[] = [];
+const pending: { revision: number; resolve: () => void; }[] = [];
 store.add(new AppServerSyntaxProviders(services.languageFeaturesService, {
 	generation: 1,
-	open: async () => {},
-	update: async () => {},
+	open: async () => { },
+	update: async () => { },
 	analyze: params => {
 		analyzeCalls++;
-		return new Promise(resolve => pending.push({ revision: params.revision, resolve: () => {
-			completedCalls++;
-			resolve({ revision: params.revision, hasErrors: true, tokens: [], symbols: [], foldingRanges: [],
-				diagnostics: [{ kind: 'error', range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }] });
-		} }));
+		return new Promise(resolve => pending.push({
+			revision: params.revision, resolve: () => {
+				completedCalls++;
+				resolve({
+					revision: params.revision, hasErrors: true, tokens: [], symbols: [], foldingRanges: [],
+					diagnostics: [{ kind: 'error', range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }]
+				});
+			}
+		}));
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
-	close: async () => {},
+	close: async () => { },
 }));
 let model = services.modelService.createModel('fn main() {}\n', services.languageService.createById('rust'), stanza.URI.file('/project/main.rs'));
 const container = document.getElementById('editor')!;
@@ -88,14 +92,14 @@ const integration = {
 		await textMate.grammars.whenReady();
 	},
 	stopUndo(): void { editor.pushUndoStop(); },
-	async preview(): Promise<{ hasString: boolean; unchanged: boolean }> {
+	async preview(): Promise<{ hasString: boolean; unchanged: boolean; }> {
 		const version = model.version;
 		const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['fn preview() { "preview"; }'], new AbortController().signal);
 		const line = tokens?.[0];
 		const hasString = line !== undefined && Array.from({ length: line.getCount() }, (_, index) => line.getStandardTokenType(index)).includes(StandardTokenType.String);
 		return { hasString, unchanged: model.version === version };
 	},
-	async forceRetokenize(): Promise<{ version: number; accurate: boolean }> {
+	async forceRetokenize(): Promise<{ version: number; accurate: boolean; }> {
 		const action = editor.getAction('editor.action.forceRetokenize');
 		if (!action) throw new Error('Force Retokenize action is not registered');
 		await action.run();
@@ -104,5 +108,5 @@ const integration = {
 	releaseAnalysis(): void { for (const request of pending.splice(0)) request.resolve(); },
 	dispose(): void { editor.dispose(); model.dispose(); store.dispose(); integration.releaseAnalysis(); },
 };
-declare global { interface Window { tokenizationIntegration: typeof integration } }
+declare global { interface Window { tokenizationIntegration: typeof integration; } }
 window.tokenizationIntegration = integration;

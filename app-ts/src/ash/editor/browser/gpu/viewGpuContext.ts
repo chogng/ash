@@ -53,7 +53,7 @@ export class ViewGpuContext extends Disposable {
 
 	public get atlas(): TextureAtlas { return ViewGpuContext.atlas; }
 
-	public readonly canvasDevicePixelDimensions: IObservable<{ width: number; height: number }>;
+	public readonly canvasDevicePixelDimensions: IObservable<{ width: number; height: number; }>;
 	public readonly devicePixelRatio: IObservable<number>;
 	public readonly contentLeft: IObservable<number>;
 	private semanticStyleResolver: SemanticTokenStyleResolver;

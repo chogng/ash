@@ -56,8 +56,8 @@ class TestWorker extends browserEnvironment.window.EventTarget {
 			const data = structuredClone(message);
 			queueMicrotask(() => this.dispatchEvent(new browserEnvironment.window.MessageEvent('message', { data })));
 		},
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	}, editorWorkerWireCodec, new EditorWorker());
 	constructor() {
 		super();
@@ -74,9 +74,9 @@ class TestWorker extends browserEnvironment.window.EventTarget {
 	}
 }
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
 const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent',

@@ -21,17 +21,17 @@ no language-specific editing rules and creates no services.
 
 The filename split is intentional:
 
-| Filename family | Owner | Responsibility |
-| --- | --- | --- |
-| `browser/workbenchLanguageFeatures.ts` | Workbench | Product-owned JSON provider composition |
-| `browser/appServer*Providers.ts` | Workbench | App Server DTO-to-Editor provider adaptation |
-| `editor/common/services/languageService.ts` | Editor | Language identity and file association |
-| `editor/common/services/languageConfigurationService.ts` | Editor | Composable editing rules |
-| `editor/common/services/languageFeatures*.ts` | Editor | Provider registry contract and implementation |
-| `TextModel.bracketPairs`, model tokenization | Editor model | Bracket structure and token data consumed by editing features |
-| `editor/contrib/folding/browser/` | Editor contribution | Folding range providers, tracked fold state, commands, and browser projection; it consumes language configuration but does not own language infrastructure |
-| `languageCompletionSession*`, `languageDiagnostic*`, `languageTokenLineIndex.ts` | Editor language layer | Version gates, session state, and browser-facing result projection |
-| `*Provider*`, `*Worker*`, `*Wire*` | Owning Editor or Workbench layer | Editor owns provider/worker contracts; Workbench owns product and transport adapters |
+| Filename family                                                                  | Owner                            | Responsibility                                                                                                                                             |
+| -------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser/workbenchLanguageFeatures.ts`                                           | Workbench                        | Product-owned JSON provider composition                                                                                                                    |
+| `browser/appServer*Providers.ts`                                                 | Workbench                        | App Server DTO-to-Editor provider adaptation                                                                                                               |
+| `editor/common/services/languageService.ts`                                      | Editor                           | Language identity and file association                                                                                                                     |
+| `editor/common/services/languageConfigurationService.ts`                         | Editor                           | Composable editing rules                                                                                                                                   |
+| `editor/common/services/languageFeatures*.ts`                                    | Editor                           | Provider registry contract and implementation                                                                                                              |
+| `TextModel.bracketPairs`, model tokenization                                     | Editor model                     | Bracket structure and token data consumed by editing features                                                                                              |
+| `editor/contrib/folding/browser/`                                                | Editor contribution              | Folding range providers, tracked fold state, commands, and browser projection; it consumes language configuration but does not own language infrastructure |
+| `languageCompletionSession*`, `languageDiagnostic*`, `languageTokenLineIndex.ts` | Editor language layer            | Version gates, session state, and browser-facing result projection                                                                                         |
+| `*Provider*`, `*Worker*`, `*Wire*`                                               | Owning Editor or Workbench layer | Editor owns provider/worker contracts; Workbench owns product and transport adapters                                                                       |
 
 The editor language layer still owns the contracts and editor semantics consumed by those
 providers: bracket and pair editing, folding state, completion

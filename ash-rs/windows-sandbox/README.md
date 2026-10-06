@@ -8,11 +8,11 @@
 
 2026-10-02 在 Windows 11 23H2 x64 完成了新版服务路径的管理员实机验收：34 项账户单测、9 项服务测试和 10 项完整执行用例全部通过，运行器更新后复测全部执行用例，服务程序更新后再验证实际执行。服务、账户和安装目录已清理，WFP 删除逐项查询确认；具体证据见 [本轮验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-服务及账户管理员验收)。随后安装 WSL2 并重跑完整入口，额外验证受限账户在禁止与允许网络下均不能进入调用者发行版或系统发行版；普通调用者的相同命令先成功执行，见 [WSL 记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收)。这些结果不证明 PSEC 或其他 Windows 系统通过，也不代表全部 WSL 入口已穷尽。
 
-| 归属 | 职责 |
-| --- | --- |
-| `windows-sandbox` | 账户、令牌、WFP、ACL、PTY、进程树及执行租约的 Windows 实现；helper 通过管理管道请求安装操作 |
-| [`windows-sandbox-service`](../windows-sandbox-service/README.md) | SCM 注册与生命周期、管理员持有的服务程序、本地管道认证，以及管理请求的调用者权限 |
-| `mxc-sandbox` | 独立 PSEC、Seatbelt、Bubblewrap 适配器；不承担旧版 Windows 的账户安装 |
+| 归属                                                              | 职责                                                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `windows-sandbox`                                                 | 账户、令牌、WFP、ACL、PTY、进程树及执行租约的 Windows 实现；helper 通过管理管道请求安装操作 |
+| [`windows-sandbox-service`](../windows-sandbox-service/README.md) | SCM 注册与生命周期、管理员持有的服务程序、本地管道认证，以及管理请求的调用者权限            |
+| `mxc-sandbox`                                                     | 独立 PSEC、Seatbelt、Bubblewrap 适配器；不承担旧版 Windows 的账户安装                       |
 
 服务运行器和账户状态位于系统 ProgramData 下的 `AshWindowsSandbox`。账户状态仍以调用者的 DPAPI 身份加密；服务在同一操作系统线程上模拟经过认证的管道调用者完成管理操作。管理员持有状态和运行器的所有权，调用者只读；执行租约、运行目录和 ACL 日志具有各自所需的写权限。
 

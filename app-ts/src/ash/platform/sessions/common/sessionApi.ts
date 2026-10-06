@@ -9,7 +9,7 @@ export type SessionMode = CollaborationMode;
 export type { SessionRequestResult };
 
 export type SessionMutationParams = Omit<SessionRequestParams, "request">;
-export type SessionOperationInput<T extends SessionRequest["type"]> = SessionMutationParams & Omit<Extract<SessionRequest, { type: T }>, "type">;
+export type SessionOperationInput<T extends SessionRequest["type"]> = SessionMutationParams & Omit<Extract<SessionRequest, { type: T; }>, "type">;
 
 export function sessionRequest(params: SessionMutationParams, request: SessionRequest): SessionRequestParams {
 	return { ...params, request };
@@ -72,10 +72,10 @@ export interface CustomModelProvider {
 	readonly baseUrl: string;
 	readonly apiFormat: ModelProviderApiFormat;
 	readonly order: number;
-	readonly models: readonly { readonly id: string; readonly contextWindow: number; readonly upstreamModel?: string }[];
+	readonly models: readonly { readonly id: string; readonly contextWindow: number; readonly upstreamModel?: string; }[];
 }
 
-export type ModelProviderTestResult = { readonly type: 'passed' } | { readonly type: 'failed'; readonly message: string };
+export type ModelProviderTestResult = { readonly type: 'passed'; } | { readonly type: 'failed'; readonly message: string; };
 
 export interface ModelPreferencesUpdate {
 	readonly fast?: boolean;
@@ -84,8 +84,8 @@ export interface ModelPreferencesUpdate {
 
 /** Review selection does not change the model or effort used by the Agent. */
 export type ApprovalReviewModelSelection =
-	| { readonly type: 'automatic' }
-	| { readonly type: 'explicit'; readonly model: { readonly provider: string; readonly model: string }; readonly connection?: string; readonly reasoningEffort?: ReasoningEffort };
+	| { readonly type: 'automatic'; }
+	| { readonly type: 'explicit'; readonly model: { readonly provider: string; readonly model: string; }; readonly connection?: string; readonly reasoningEffort?: ReasoningEffort; };
 
 export interface IModelApi {
 	readApprovalReviewModel(): Promise<ApprovalReviewModelSelection>;
@@ -93,7 +93,7 @@ export interface IModelApi {
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
 	readConfiguredProviderIds(): Promise<readonly string[]>;
-	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
+	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null; }): Promise<void>;
 	listCustomProviders(): Promise<readonly CustomModelProvider[]>;
 	saveCustomProvider(provider: CustomModelProvider): Promise<void>;
 	testProviderModel(provider: CustomModelProvider, model: string): Promise<ModelProviderTestResult>;
@@ -103,7 +103,7 @@ export interface IModelApi {
 	setProviderApiKey(params: ProviderApiKeySetParams): Promise<ProviderApiKeySetResult>;
 	removeProviderApiKey(connection: string): Promise<void>;
 	readModel(): Promise<ModelRef | null>;
-	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
+	setModel(params: { readonly commandId: string; readonly model: ModelRef; }): Promise<void>;
 }
 
 export interface IThreadApi {

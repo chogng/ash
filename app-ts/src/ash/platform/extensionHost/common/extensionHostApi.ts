@@ -13,11 +13,11 @@ export type ExtensionHostLanguageProviderOperation = "completion" | "definition"
 export type ExtensionHostCancellationReason = "caller" | "deadline" | "authorityRevoked" | "shutdown";
 export type ExtensionHostOutputSeverity = "trace" | "debug" | "information" | "warning" | "error" | "log";
 export type ExtensionHostOutputOperation =
-	| { readonly operation: "create"; readonly channelId: string; readonly label: string; readonly kind: "output" | "log" }
-	| { readonly operation: "append" | "replace"; readonly channelId: string; readonly text: string; readonly severity: ExtensionHostOutputSeverity; readonly category: string | undefined }
-	| { readonly operation: "clear" | "dispose"; readonly channelId: string }
-	| { readonly operation: "show"; readonly channelId: string; readonly preserveFocus: boolean };
-export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+	| { readonly operation: "create"; readonly channelId: string; readonly label: string; readonly kind: "output" | "log"; }
+	| { readonly operation: "append" | "replace"; readonly channelId: string; readonly text: string; readonly severity: ExtensionHostOutputSeverity; readonly category: string | undefined; }
+	| { readonly operation: "clear" | "dispose"; readonly channelId: string; }
+	| { readonly operation: "show"; readonly channelId: string; readonly preserveFocus: boolean; };
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };
 
 export interface ExtensionHostRuntimeFailure {
 	readonly code: ExtensionHostFailureCode;
@@ -41,7 +41,7 @@ export interface ExtensionHostCommandRegistration extends ExtensionHostRegistrat
 	readonly command: string;
 	readonly title: string;
 	readonly icon?: string;
-	readonly menus?: readonly { readonly menu: string; readonly when?: string; readonly group?: string; readonly alt?: string }[];
+	readonly menus?: readonly { readonly menu: string; readonly when?: string; readonly group?: string; readonly alt?: string; }[];
 }
 
 /** Browser custom text providers render a shared document, without owning its persistence. */
@@ -95,7 +95,7 @@ export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHos
 
 export type ExtensionHostRegistration = ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
-export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string } | { readonly type: 'language'; readonly languageId: string } | { readonly type: 'startupFinished' };
+export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'startupFinished'; };
 export interface ExtensionHostActivationRequest {
 	readonly extensionId: string;
 	readonly activationGeneration: number;
@@ -104,7 +104,7 @@ export interface ExtensionHostActivationRequest {
 /** Manifest facts available while waiting; these are not process registrations. */
 export interface ExtensionHostActivation {
 	readonly events: readonly string[];
-	readonly commands: readonly { readonly command: string; readonly title: string }[];
+	readonly commands: readonly { readonly command: string; readonly title: string; }[];
 }
 
 export interface ExtensionHostRuntime {
@@ -139,7 +139,7 @@ export interface ExtensionHostInvocationRequest {
 
 /** Renderer-facing Extension Host authority and invocation capability. */
 export interface IExtensionHostApi {
-    registerClientHandler(handler: ExtensionClientHandler): DisposableHandle;
+	registerClientHandler(handler: ExtensionClientHandler): DisposableHandle;
 	isAvailable(): Promise<boolean>;
 	list(): Promise<ExtensionHostFleetSnapshot>;
 	reconcile(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot>;
@@ -161,28 +161,28 @@ export interface ExtensionDocumentSnapshot {
 export interface ExtensionDocumentEdit {
 	readonly uri: string;
 	readonly version: number;
-	readonly edits: { start: { line: number; character: number }; end: { line: number; character: number }; text: string }[];
+	readonly edits: { start: { line: number; character: number; }; end: { line: number; character: number; }; text: string; }[];
 }
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
-	| { operation: 'executeCommand'; command: string; arguments: JsonValue[] }
-	| { operation: 'readDocument'; uri: string }
-	| { operation: 'listDocuments' }
-	| { operation: 'applyEdit'; documents: ExtensionDocumentEdit[] }
-	| { operation: 'readConfiguration'; section: string; resource: string | null }
-	| { operation: 'updateConfiguration'; section: string; value: JsonValue; target: 'user' | 'workspace' }
-	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error' }
-	| { operation: 'showQuickPick'; items: string[]; placeholder: string };
+	| { operation: 'executeCommand'; command: string; arguments: JsonValue[]; }
+	| { operation: 'readDocument'; uri: string; }
+	| { operation: 'listDocuments'; }
+	| { operation: 'applyEdit'; documents: ExtensionDocumentEdit[]; }
+	| { operation: 'readConfiguration'; section: string; resource: string | null; }
+	| { operation: 'updateConfiguration'; section: string; value: JsonValue; target: 'user' | 'workspace'; }
+	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error'; }
+	| { operation: 'showQuickPick'; items: string[]; placeholder: string; };
 
 export type ExtensionClientResult =
-	| { result: 'command'; value: JsonValue }
-	| { result: 'document'; document: ExtensionDocumentSnapshot }
-	| { result: 'documents'; documents: ExtensionDocumentSnapshot[] }
-	| { result: 'applied'; applied: boolean }
-	| { result: 'configuration'; value: JsonValue }
-	| { result: 'selection'; index: number | null }
-	| { result: 'done' };
+	| { result: 'command'; value: JsonValue; }
+	| { result: 'document'; document: ExtensionDocumentSnapshot; }
+	| { result: 'documents'; documents: ExtensionDocumentSnapshot[]; }
+	| { result: 'applied'; applied: boolean; }
+	| { result: 'configuration'; value: JsonValue; }
+	| { result: 'selection'; index: number | null; }
+	| { result: 'done'; };
 
 export type ExtensionClientHandler = (operation: ExtensionClientOperation, signal: AbortSignal) => Promise<ExtensionClientResult>;
 
@@ -379,9 +379,11 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		if (languageIds) {
 			assertUnique(languageIds, 'Custom editor languages');
 		}
-		return Object.freeze({ kind, registrationId, viewType: boundedText(input.viewType, 'Custom editor view type', 128),
+		return Object.freeze({
+			kind, registrationId, viewType: boundedText(input.viewType, 'Custom editor view type', 128),
 			displayName: boundedText(input.displayName, 'Custom editor display name', 512), selectors: Object.freeze(selectors),
-			priority: stringEnum(input.priority, 'Custom editor priority', ['default', 'option'] as const), ...(languageIds ? { languageIds: Object.freeze(languageIds) } : {}) });
+			priority: stringEnum(input.priority, 'Custom editor priority', ['default', 'option'] as const), ...(languageIds ? { languageIds: Object.freeze(languageIds) } : {})
+		});
 	}
 	if (kind === 'externalUriOpener') {
 		exactKeys(input, 'Extension Host external URI opener registration', ['kind', 'label', 'registrationId', 'schemes']);
@@ -394,13 +396,17 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"], ['icon', 'menus']);
 		const menus = input.menus === undefined ? undefined : boundedArray(input.menus, 'Extension command menus', 64).map(value => {
 			const menu = exactRecord(value, 'Extension command menu', ['menu'], ['when', 'group', 'alt']);
-			return Object.freeze({ menu: boundedText(menu.menu, 'Extension command menu ID', 128),
+			return Object.freeze({
+				menu: boundedText(menu.menu, 'Extension command menu ID', 128),
 				...(menu.when === undefined ? {} : { when: boundedText(menu.when, 'Extension menu condition', 2048) }),
 				...(menu.group === undefined ? {} : { group: boundedText(menu.group, 'Extension menu group', 256) }),
-				...(menu.alt === undefined ? {} : { alt: boundedText(menu.alt, 'Extension menu alternate command', 256) }) });
+				...(menu.alt === undefined ? {} : { alt: boundedText(menu.alt, 'Extension menu alternate command', 256) })
+			});
 		});
-		return Object.freeze({ kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512),
-			...(input.icon === undefined ? {} : { icon: boundedText(input.icon, 'Extension command icon', 128) }), ...(menus === undefined ? {} : { menus: Object.freeze(menus) }) });
+		return Object.freeze({
+			kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512),
+			...(input.icon === undefined ? {} : { icon: boundedText(input.icon, 'Extension command icon', 128) }), ...(menus === undefined ? {} : { menus: Object.freeze(menus) })
+		});
 	}
 	if (kind === "languageProvider") {
 		exactKeys(input, "Extension Host language registration", ["kind", "languageIds", "operations", "registrationId"]);
@@ -437,7 +443,7 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	throw new TypeError("Extension Host registration kind is invalid");
 }
 
-type ReadResult = { readonly state: "pending" } | { readonly state: "succeeded"; readonly payload: JsonValue } | { readonly state: "failed"; readonly code: ExtensionHostFailureCode; readonly message: string } | { readonly state: "cancelled"; readonly reason: ExtensionHostCancellationReason };
+type ReadResult = { readonly state: "pending"; } | { readonly state: "succeeded"; readonly payload: JsonValue; } | { readonly state: "failed"; readonly code: ExtensionHostFailureCode; readonly message: string; } | { readonly state: "cancelled"; readonly reason: ExtensionHostCancellationReason; };
 
 function normalizeReadResult(value: unknown): ReadResult {
 	const result = record(value, "Extension Host invocation read result");
@@ -465,7 +471,7 @@ function normalizeCancelResult(value: unknown): void {
 	stringEnum(result.disposition, "Extension Host cancellation disposition", ["requested", "alreadyTerminal"] as const);
 }
 
-function normalizeJsonValue(value: unknown, owner: string, depth: number, budget: { bytes: number; nodes: number; readonly seen: Set<object> }): JsonValue {
+function normalizeJsonValue(value: unknown, owner: string, depth: number, budget: { bytes: number; nodes: number; readonly seen: Set<object>; }): JsonValue {
 	budget.nodes += 1;
 	if (budget.nodes > MAX_PAYLOAD_NODES || depth > MAX_PAYLOAD_DEPTH) throw new RangeError(`${owner} is too complex`);
 	if (value === null || typeof value === "boolean") return value;

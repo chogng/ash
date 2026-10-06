@@ -74,7 +74,7 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	assert.strictEqual(FoldingController.get(editor)?.constructor, FoldingController);
 	const saved = editor.saveViewState();
 	assert.ok(saved);
-	assert.deepEqual((saved.contributionsState[FoldingController.ID] as { collapsedRegions: { startLineNumber: number; endLineNumber: number }[] }).collapsedRegions
+	assert.deepEqual((saved.contributionsState[FoldingController.ID] as { collapsedRegions: { startLineNumber: number; endLineNumber: number; }[]; }).collapsedRegions
 		.map(range => [range.startLineNumber, range.endLineNumber]), [[1, 2]]);
 	await editor.getAction('editor.unfold')!.run();
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));

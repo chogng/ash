@@ -19,7 +19,7 @@ export class TextModelResolverService implements ITextModelService {
 	private readonly contentProviders = new Map<string, ITextModelContentProvider>();
 	private readonly providerModelReferences = new Map<ITextModel, number>();
 
-	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) {}
+	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) { }
 
 	async createModelReference(resource: URI): Promise<IReference<IResolvedTextEditorModel>> {
 		const provider = this.contentProviders.get(resource.scheme);

@@ -15,9 +15,9 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 	constructor(
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IViewsService private readonly views: IViewsService,
-	) {}
+	) { }
 
-	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		const view = this.views.getViewWithId(CHAT_VIEW_ID);
 		if (!view) return Promise.resolve(undefined);
 		if (!(view instanceof ChatViewPane)) throw new Error('Chat view is unavailable for Agents Window handoff');
@@ -31,13 +31,13 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		view.focus();
 	}
 
-	getActiveConversation(): { readonly sessionId: string; readonly threadId: string } | undefined {
+	getActiveConversation(): { readonly sessionId: string; readonly threadId: string; } | undefined {
 		if (this.sessions.activeUntitledSession) return undefined;
 		const active = this.sessions.active;
 		return active ? { sessionId: active.session.sessionId, threadId: active.threadId } : undefined;
 	}
 
-	getConversations(): readonly { readonly sessionId: string; readonly threadId: string; readonly title: string }[] {
+	getConversations(): readonly { readonly sessionId: string; readonly threadId: string; readonly title: string; }[] {
 		return this.sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
 			session.chats.filter(chat => chat.status === 'active').map(chat => ({
 				sessionId: session.sessionId,

@@ -10,7 +10,7 @@ import type { PlaywrightApplication, PlaywrightDriver } from '../../../app-ts/te
 import type { Workbench } from '../../../app-ts/test/automation/workbench.ts';
 import type { RunnerOptions } from './options.ts';
 
-export type JSONValue = string | number | boolean | null | JSONValue[] | { readonly [key: string]: JSONValue };
+export type JSONValue = string | number | boolean | null | JSONValue[] | { readonly [key: string]: JSONValue; };
 
 export interface ApplicationLaunchOptions {
 	readonly runPath: string;
@@ -39,7 +39,7 @@ const videoSize = { width: 1440, height: 900 } as const;
 export class ApplicationService {
 	private running: RunningApplication | undefined;
 
-	constructor(private readonly options: RunnerOptions) {}
+	constructor(private readonly options: RunnerOptions) { }
 
 	get application(): RunningApplication | undefined {
 		return this.running;
@@ -209,7 +209,7 @@ async function waitForServer(url: string, process: ChildProcess): Promise<void> 
 		try {
 			const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
 			if (response.ok) return;
-		} catch {}
+		} catch { }
 		await new Promise(resolveWait => setTimeout(resolveWait, 100));
 	}
 	throw new Error(`Web server did not become ready at ${url}.`);

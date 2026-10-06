@@ -11,8 +11,8 @@ import { TableError, type ITableColumn, type ITableEvent, type ITableRenderer, t
 
 export interface ITableOptions<TRow> {
 	readonly ariaLabel?: string;
-	readonly identityProvider?: { getId(element: TRow): string };
-	readonly accessibilityProvider?: { getAriaLabel(element: TRow): string };
+	readonly identityProvider?: { getId(element: TRow): string; };
+	readonly accessibilityProvider?: { getAriaLabel(element: TRow): string; };
 	readonly scrolling?: ListScrolling;
 }
 

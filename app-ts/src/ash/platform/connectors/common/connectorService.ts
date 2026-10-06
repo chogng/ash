@@ -1,14 +1,14 @@
 import type { Event } from "../../../base/common/event.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-export type ConnectorAccount = { readonly id: string; readonly displayName: string };
+export type ConnectorAccount = { readonly id: string; readonly displayName: string; };
 
 export type ConnectorState =
-	| { readonly status: "disconnected" }
-	| { readonly status: "connecting" }
-	| { readonly status: "connected"; readonly account: ConnectorAccount }
-	| { readonly status: "unavailable"; readonly reason: string }
-	| { readonly status: "reauthorizationRequired"; readonly account: ConnectorAccount };
+	| { readonly status: "disconnected"; }
+	| { readonly status: "connecting"; }
+	| { readonly status: "connected"; readonly account: ConnectorAccount; }
+	| { readonly status: "unavailable"; readonly reason: string; }
+	| { readonly status: "reauthorizationRequired"; readonly account: ConnectorAccount; };
 
 export interface ConnectorView {
 	readonly id: string;

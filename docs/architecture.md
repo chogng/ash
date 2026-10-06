@@ -9,13 +9,13 @@ crate 名称开始倒推。本文是面向开发者的总入口：先建立产�
 
 ## 快速理解
 
-| 你正在解决的问题 | 首先从哪里看 | 接下来验证什么 |
-| --- | --- | --- |
-| 用户为什么会看到某种行为 | 对应的系统文档 | 行为表、规则和例外 |
-| 两个组件为什么都在做相似决定 | 系统边界与端到端流程 | 谁决定、谁执行、谁保存 |
-| 一次请求为什么在某个阶段失败 | 请求执行流程 | 输入、状态、失败语义和恢复点 |
-| 修改一个 crate 会影响哪些地方 | crate README | 它所属的系统、调用方和权威契约 |
-| 一个计划功能是否已经可用 | 系统文档的当前状态 | 代码、测试和对外接口证据 |
+| 你正在解决的问题              | 首先从哪里看         | 接下来验证什么                 |
+| ----------------------------- | -------------------- | ------------------------------ |
+| 用户为什么会看到某种行为      | 对应的系统文档       | 行为表、规则和例外             |
+| 两个组件为什么都在做相似决定  | 系统边界与端到端流程 | 谁决定、谁执行、谁保存         |
+| 一次请求为什么在某个阶段失败  | 请求执行流程         | 输入、状态、失败语义和恢复点   |
+| 修改一个 crate 会影响哪些地方 | crate README         | 它所属的系统、调用方和权威契约 |
+| 一个计划功能是否已经可用      | 系统文档的当前状态   | 代码、测试和对外接口证据       |
 
 阅读顺序应当始终是“用户问题 → 系统行为 → 责任边界 → 执行流程 → 实现符号”。如果必须先理解
 大量 crate、类型和函数名才能知道系统在做什么，说明文档的信息顺序需要调整。
@@ -69,33 +69,33 @@ flowchart TD
 
 ### 3.1 对话、上下文与运行时
 
-| 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
-| --- | --- | --- | --- | --- |
-| Project 与工作组织系统 | 哪些本地/远程根和 Session 需要长期组织在一起？ | Project metadata、长期根目录表以及对 Session 的弱关联 | Project、Workspace、Environment 和 Grant 是否被误建成同一对象 | [`domain-model.md`](domain-model.md) |
-| Agent Team 系统 | 哪些 Agent 身份作为成员跨任务协作？ | Team 成员关系、协调者、讨论及任务关联；当前为目标设计 | Team 是否复制 Session 执行状态或把角色定义当成成员身份 | [Agent Team](../ash-rs/docs/agent-teams.md) |
-| 会话系统 | 一次工作如何被识别、恢复和持续保存？ | Session、Thread、Turn、事件顺序与持久化事务 | Session、Thread、Store 与 rollout 是否存在重复权威 | [`core.md`](core.md)、[`protocol.md`](protocol.md) |
-| 上下文系统 | 当前模型究竟能看到什么？ | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态 | 持久事实、模型输入和 UI 展示状态是否混为一体 | [`core-context.md`](core-context.md) |
-| Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree 和持久化是否混为一个协调器 | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) |
-| Agent 自定义系统 | Agent 长期遵循什么、如何复用工作方法、使用哪种执行配置？ | Instructions、Skills、Agents、`.ash` 原生命名空间与外部导入边界 | Prompt/Task/Slash Command 是否被误建模为 artifact，外部格式是否污染原生 authority | [`agent-customizations.md`](agent-customizations.md) |
+| 系统                   | 回答的核心问题                                           | 应当拥有                                                             | 重点审计边界                                                                      | 权威文档                                                                                                                                                                     |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project 与工作组织系统 | 哪些本地/远程根和 Session 需要长期组织在一起？           | Project metadata、长期根目录表以及对 Session 的弱关联                | Project、Workspace、Environment 和 Grant 是否被误建成同一对象                     | [`domain-model.md`](domain-model.md)                                                                                                                                         |
+| Agent Team 系统        | 哪些 Agent 身份作为成员跨任务协作？                      | Team 成员关系、协调者、讨论及任务关联；当前为目标设计                | Team 是否复制 Session 执行状态或把角色定义当成成员身份                            | [Agent Team](../ash-rs/docs/agent-teams.md)                                                                                                                                  |
+| 会话系统               | 一次工作如何被识别、恢复和持续保存？                     | Session、Thread、Turn、事件顺序与持久化事务                          | Session、Thread、Store 与 rollout 是否存在重复权威                                | [`core.md`](core.md)、[`protocol.md`](protocol.md)                                                                                                                           |
+| 上下文系统             | 当前模型究竟能看到什么？                                 | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态               | 持久事实、模型输入和 UI 展示状态是否混为一体                                      | [`core-context.md`](core-context.md)                                                                                                                                         |
+| Agent 运行时           | 模型输出如何推进一次 Turn？                              | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree 和持久化是否混为一个协调器                           | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) |
+| Agent 自定义系统       | Agent 长期遵循什么、如何复用工作方法、使用哪种执行配置？ | Instructions、Skills、Agents、`.ash` 原生命名空间与外部导入边界      | Prompt/Task/Slash Command 是否被误建模为 artifact，外部格式是否污染原生 authority | [`agent-customizations.md`](agent-customizations.md)                                                                                                                         |
 
 ### 3.2 能力、决策与执行
 
-| 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
-| --- | --- | --- | --- | --- |
-| 模型系统 | 最终使用哪个供应商、模型和调用配置？ | 模型目录、能力、配置解析和运行时选择 | 目录、配置、凭据、供应商适配、传输和重试是否分层 | [`models-manager.md`](models-manager.md)、[`model-provider.md`](model-provider.md)、[`model-provider-info.md`](model-provider-info.md) |
-| 工具系统 | Agent 能看到和调用哪些能力？ | 工具定义、发现、绑定、参数验证、调用和结果契约 | 工具定义、调度、授权、执行与结果持久化是否互相越界 | [`tools.md`](tools.md) |
-| 权限系统 | 某个具体动作能否执行？ | 授权规则、批准范围、批准有效期与最终授权决定 | 权限、Guardian、工具调度和沙箱是否都在做最终决定 | [`permissions.md`](permissions.md)、[`guardian.md`](guardian.md) |
-| 沙箱系统 | 已获准动作实际能触及什么？ | 文件、网络、进程能力和平台强制执行 | 策略选择、用户批准与操作系统强制执行是否分开 | [`sandboxing.md`](sandboxing.md) |
-| 配置系统 | 当前作用域下哪个值最终生效？ | 配置来源、优先级、作用域、合并和不可变领域快照 | 通用合并与各领域验证是否有清楚交接 | [`config.md`](config.md) |
-| 身份与秘密系统 | 用户如何登录，敏感凭据保存在哪里？ | 登录流程、账户状态和秘密的安全存取 | 身份、账户展示、供应商凭据和网络调用是否解耦 | [`login.md`](login.md)、[`secrets.md`](secrets.md)、[`subscriptions.md`](subscriptions.md) |
+| 系统           | 回答的核心问题                       | 应当拥有                                       | 重点审计边界                                       | 权威文档                                                                                                                               |
+| -------------- | ------------------------------------ | ---------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 模型系统       | 最终使用哪个供应商、模型和调用配置？ | 模型目录、能力、配置解析和运行时选择           | 目录、配置、凭据、供应商适配、传输和重试是否分层   | [`models-manager.md`](models-manager.md)、[`model-provider.md`](model-provider.md)、[`model-provider-info.md`](model-provider-info.md) |
+| 工具系统       | Agent 能看到和调用哪些能力？         | 工具定义、发现、绑定、参数验证、调用和结果契约 | 工具定义、调度、授权、执行与结果持久化是否互相越界 | [`tools.md`](tools.md)                                                                                                                 |
+| 权限系统       | 某个具体动作能否执行？               | 授权规则、批准范围、批准有效期与最终授权决定   | 权限、Guardian、工具调度和沙箱是否都在做最终决定   | [`permissions.md`](permissions.md)、[`guardian.md`](guardian.md)                                                                       |
+| 沙箱系统       | 已获准动作实际能触及什么？           | 文件、网络、进程能力和平台强制执行             | 策略选择、用户批准与操作系统强制执行是否分开       | [`sandboxing.md`](sandboxing.md)                                                                                                       |
+| 配置系统       | 当前作用域下哪个值最终生效？         | 配置来源、优先级、作用域、合并和不可变领域快照 | 通用合并与各领域验证是否有清楚交接                 | [`config.md`](config.md)                                                                                                               |
+| 身份与秘密系统 | 用户如何登录，敏感凭据保存在哪里？   | 登录流程、账户状态和秘密的安全存取             | 身份、账户展示、供应商凭据和网络调用是否解耦       | [`login.md`](login.md)、[`secrets.md`](secrets.md)、[`subscriptions.md`](subscriptions.md)                                             |
 
 ### 3.3 扩展、接口与产品入口
 
-| 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
-| --- | --- | --- | --- | --- |
-| 扩展系统 | 外部能力如何被发现、激活和撤销？ | Core Plugins 聚合来源并管理 package lifecycle，各领域消费 capability；Plugin 只定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层 | [`core-plugins.md`](../ash-rs/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
-| App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约 | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md) |
-| 产品界面 | 用户如何观察和控制这些系统？ | Desktop、CLI、TUI 的交互、呈现和平台适配 | 界面是否复制 Core 状态或在本地发明业务规则 | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../code/README.md) |
+| 系统              | 回答的核心问题                   | 应当拥有                                                                                                                               | 重点审计边界                                                 | 权威文档                                                                                                                                                        |
+| ----------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 扩展系统          | 外部能力如何被发现、激活和撤销？ | Core Plugins 聚合来源并管理 package lifecycle，各领域消费 capability；Plugin 只定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层                  | [`core-plugins.md`](../ash-rs/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
+| App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约                                                                     | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md)                                  |
+| 产品界面          | 用户如何观察和控制这些系统？     | Desktop、CLI、TUI 的交互、呈现和平台适配                                                                                               | 界面是否复制 Core 状态或在本地发明业务规则                   | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../code/README.md)                                                                   |
 
 系统名称不是按照 crate 数量划分的。一个系统可以由多个 crate 实现，一个 crate 也可能只是某个
 系统的适配器。真正的边界由权威状态、最终决定、执行责任和失败语义决定。
@@ -104,16 +104,16 @@ flowchart TD
 
 审计每个系统时，必须能够连续回答下面的问题：
 
-| 审计问题 | 清楚边界应当给出的答案 |
-| --- | --- |
-| 它为谁解决什么问题？ | 一个用户或调用方能够识别的问题 |
-| 它接收什么？ | 明确输入、信任级别和前置条件 |
-| 谁拥有权威状态？ | 唯一来源、作用范围和生命周期 |
-| 谁作最终决定？ | 一个可以命名的 owner，而不是“多个组件共同决定” |
-| 谁执行或强制落实？ | 与作决定者区分开的执行责任 |
-| 谁保存结果？ | 持久化位置、恢复方式和失效条件 |
-| 失败意味着什么？ | 失败分类、是否重试、是否回滚和用户能看到什么 |
-| 它明确不负责什么？ | 相邻系统拥有的责任和禁止依赖 |
+| 审计问题             | 清楚边界应当给出的答案                         |
+| -------------------- | ---------------------------------------------- |
+| 它为谁解决什么问题？ | 一个用户或调用方能够识别的问题                 |
+| 它接收什么？         | 明确输入、信任级别和前置条件                   |
+| 谁拥有权威状态？     | 唯一来源、作用范围和生命周期                   |
+| 谁作最终决定？       | 一个可以命名的 owner，而不是“多个组件共同决定” |
+| 谁执行或强制落实？   | 与作决定者区分开的执行责任                     |
+| 谁保存结果？         | 持久化位置、恢复方式和失效条件                 |
+| 失败意味着什么？     | 失败分类、是否重试、是否回滚和用户能看到什么   |
+| 它明确不负责什么？   | 相邻系统拥有的责任和禁止依赖                   |
 
 如果“作决定”“执行”和“保存”三个答案落在多个位置，且没有明确的协调关系，通常不是文档写得
 不够详细，而是架构本身存在重复权威或责任泄漏。

@@ -84,7 +84,7 @@ test('RunOnceScheduler debounces, flushes, and cancels owned work', () => {
 });
 
 test('createCancelablePromise rejects cancellation and disposes a late disposable result', async () => {
-	const deferred = new DeferredPromise<{ dispose(): void }>();
+	const deferred = new DeferredPromise<{ dispose(): void; }>();
 	let disposed = false;
 	const pending = createCancelablePromise(() => deferred.p);
 	pending.cancel();

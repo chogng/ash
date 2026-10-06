@@ -10,14 +10,19 @@ fn host_accepts_typed_check_and_download_requests() {
     let check: HostRequest = serde_json::from_value(json!({
         "command": "check", "currentVersion": "0.1.0", "publicKey": "a".repeat(64),
         "target": "x86_64-pc-windows-msvc"
-    })).unwrap();
+    }))
+    .unwrap();
     assert!(matches!(check.command, HostCommand::Check));
     let download: HostRequest = serde_json::from_value(json!({
         "command": "download", "currentVersion": "0.1.0", "publicKey": "a".repeat(64),
         "target": "x86_64-pc-windows-msvc", "stagingDirectory": "C:/Ash/updates"
-    })).unwrap();
+    }))
+    .unwrap();
     assert!(matches!(download.command, HostCommand::Download));
-    assert_eq!(download.staging_directory, Some(PathBuf::from("C:/Ash/updates")));
+    assert_eq!(
+        download.staging_directory,
+        Some(PathBuf::from("C:/Ash/updates"))
+    );
 }
 
 fn signed_fixture(version: &str, target: &str) -> (CheckRequest, Vec<u8>, Vec<u8>) {

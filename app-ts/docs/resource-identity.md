@@ -41,10 +41,10 @@ production caller reaches their responsibility.
 The following seven Ash-only paths were confirmed on 2026-09-25 to retain
 their current responsibilities:
 
-| Path | Responsibility |
-| --- | --- |
-| `environment.ts` | Runtime environment facts shared by Base and Platform |
-| `jsonValue.ts` | General JSON value validation |
+| Path                                                                              | Responsibility                                        |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `environment.ts`                                                                  | Runtime environment facts shared by Base and Platform |
+| `jsonValue.ts`                                                                    | General JSON value validation                         |
 | `icon.ts`, `lxicons.ts`, `lxiconsLibrary.ts`, `lxiconsUtil.ts`, `productIcons.ts` | Ash icon contracts and generated product icon catalog |
 
 `workbench/contrib/git/browser/gitService.ts` was also confirmed as the owner

@@ -12,13 +12,13 @@ Exact dimensions, styling, action placement, and regression behavior belong in c
 
 All non-phone Sessions product modes use the shared `SidebarPart`. A mode selects its own sidebar view container and views. Library, Creator home and Make must retain the sidebar in their desktop composition. Each mode supplies content to the shared window Parts; a product-page name does not justify a new Part or another window grid.
 
-| Surface | Shared host | Mode-owned content |
-| --- | --- | --- |
-| Left navigation and tools | `SidebarPart` | Registered `ViewContainer`, its `ViewPaneContainer` and `ViewPane` contributions |
-| Agent conversations | `SessionsPart` | Retained session views and their independent conversation grid |
-| Editing and central product pages | `EditorPart` | `EditorInput` and `EditorPane` opened through `IEditorService` |
-| Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor |
-| Bottom tools | `PanelPart` | Registered tool view containers and views |
+| Surface                           | Shared host        | Mode-owned content                                                               |
+| --------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
+| Left navigation and tools         | `SidebarPart`      | Registered `ViewContainer`, its `ViewPaneContainer` and `ViewPane` contributions |
+| Agent conversations               | `SessionsPart`     | Retained session views and their independent conversation grid                   |
+| Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                   |
+| Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor              |
+| Bottom tools                      | `PanelPart`        | Registered tool view containers and views                                        |
 
 `ViewContainer` is the sidebar, auxiliary-bar and panel registration mechanism. Central editor pages use the editor input/pane mechanism rather than a separate mode container. An `EditorPane` can render a canvas, a browsing page or another rich interface; it is not limited to a text editor. Mode implementations own their documents, commands and content while the shared Parts own placement, resizing, focus and hosting lifecycle. Mode changes retain the same Sessions service and selection ownership.
 
@@ -67,15 +67,15 @@ The implementation uses the existing `browser/workbench.ts`, `browser/desktopWor
 
 Sessions supports multiple intended layout families over the shared Parts. Shared services, retained Parts and disposal belong to `Workbench`; each concrete layout owns their arrangement, grid topology, geometry, visibility mapping and size restoration. A concrete layout belongs in its own implementation file when those responsibilities differ. Desktop-specific rules stay in `desktopWorkbench.ts` rather than accumulating in the shared `workbench.ts`.
 
-| Owner | Responsibility |
-| --- | --- |
-| `browser/workbench.ts` | Shared window lifecycle, service assembly, Part creation and initialization order |
-| `browser/workbenchFactory.ts` | Prepare window resources and select a supported concrete workbench at startup |
-| Concrete workbench and layout | Own the selected layout's Part containment, grid geometry, visibility mapping and persisted dimensions |
-| `browser/layoutPolicy.ts` | Supply shared appearance metrics and initial sizes |
-| `ISessionsLayoutService` | Apply feature-supplied entry descriptors and remember host visibility |
-| Layout controllers and strategies | Restore session document working sets and coordinate Code Editor/Details behavior |
-| Sessions services and Parts | Own conversation identity, selection and content independently of the selected window layout |
+| Owner                             | Responsibility                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `browser/workbench.ts`            | Shared window lifecycle, service assembly, Part creation and initialization order                      |
+| `browser/workbenchFactory.ts`     | Prepare window resources and select a supported concrete workbench at startup                          |
+| Concrete workbench and layout     | Own the selected layout's Part containment, grid geometry, visibility mapping and persisted dimensions |
+| `browser/layoutPolicy.ts`         | Supply shared appearance metrics and initial sizes                                                     |
+| `ISessionsLayoutService`          | Apply feature-supplied entry descriptors and remember host visibility                                  |
+| Layout controllers and strategies | Restore session document working sets and coordinate Code Editor/Details behavior                      |
+| Sessions services and Parts       | Own conversation identity, selection and content independently of the selected window layout           |
 
 The desktop detail layout illustrates why this boundary matters: Auxiliary Bar content sits inside the Editor's grid node below one shared tab strip. The node can remain visible while editor content is hidden, and its width can include both editor content and Details. The desktop layout must therefore distinguish node visibility and size from editor-content visibility and size. A layout with independently placed Parts must own its own mapping without inheriting these desktop assumptions.
 
@@ -117,15 +117,15 @@ The Sessions EditorPart retains a product-page group independently of the sessio
 single conversation selection, visible arrangement and navigation history;
 changing the surrounding layout never creates a second conversation or composer.
 
-| Part | Ownership |
-|------|-----------|
-| Title bar | Window navigation and window-scoped actions |
-| Sidebar | Sessions list and Sessions-owned sidebar views |
-| Sessions Part | One or more visible session surfaces |
-| Editor | Code document groups and retained Library / Creator EditorPanes |
-| Auxiliary Bar | Code files and changes, Library asset details, or the active canvas editor's properties |
-| Panel | Terminal and other panel views |
-| Custom View Grid | Full-surface contributed views that replace session content |
+| Part             | Ownership                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| Title bar        | Window navigation and window-scoped actions                                             |
+| Sidebar          | Sessions list and Sessions-owned sidebar views                                          |
+| Sessions Part    | One or more visible session surfaces                                                    |
+| Editor           | Code document groups and retained Library / Creator EditorPanes                         |
+| Auxiliary Bar    | Code files and changes, Library asset details, or the active canvas editor's properties |
+| Panel            | Terminal and other panel views                                                          |
+| Custom View Grid | Full-surface contributed views that replace session content                             |
 
 Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: Layers, the retained CreatorEditorPane and Shape properties. Creator home and Make keep the Creator navigation container and hide the canvas properties. Library uses categories in SidebarPart, its browsing EditorPane in EditorPart and asset details in AuxiliaryBarPart. These views borrow their page's document, selection and browsing state. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
 

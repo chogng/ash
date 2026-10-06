@@ -361,8 +361,8 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return node;
 	}
 
-	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> {
-		const path: Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> = [];
+	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }> {
+		const path: Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }> = [];
 		let parent = this.root;
 		for (const key of keys) {
 			const node = parent.children.get(key);
@@ -373,7 +373,7 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return path;
 	}
 
-	private prune(path: readonly { readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }[]): void {
+	private prune(path: readonly { readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }[]): void {
 		for (let index = path.length - 1; index >= 0; index -= 1) {
 			const entry = path[index]!;
 			if (entry.node.hasValue || entry.node.children.size > 0) return;

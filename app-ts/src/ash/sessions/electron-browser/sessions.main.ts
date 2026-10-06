@@ -56,7 +56,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		try {
 			while (drainRequested) {
 				drainRequested = false;
-				let handoff: { readonly id: string; readonly options: IOpenAgentsWindowOptions } | undefined;
+				let handoff: { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined;
 				while ((handoff = await invoke<typeof handoff>(AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL))) {
 					try {
 						await workbench.acceptHandoff(handoff.options);

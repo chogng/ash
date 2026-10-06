@@ -41,9 +41,9 @@ export const requiredSessionCapabilities: readonly AppServerCapabilityRequiremen
 ];
 
 export type AppServerProtocolIncompatibility =
-	| { readonly kind: 'majorVersion'; readonly expected: number; readonly received: number }
-	| { readonly kind: 'missingCapability'; readonly name: string; readonly minVersion: number; readonly maxVersion: number }
-	| { readonly kind: 'capabilityVersion'; readonly name: string; readonly minVersion: number; readonly maxVersion: number; readonly received: number };
+	| { readonly kind: 'majorVersion'; readonly expected: number; readonly received: number; }
+	| { readonly kind: 'missingCapability'; readonly name: string; readonly minVersion: number; readonly maxVersion: number; }
+	| { readonly kind: 'capabilityVersion'; readonly name: string; readonly minVersion: number; readonly maxVersion: number; readonly received: number; };
 
 /** Initialization failure that a host may recover by selecting another trusted runtime. */
 export class AppServerProtocolIncompatibleError extends Error {

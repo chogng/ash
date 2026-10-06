@@ -34,7 +34,7 @@ export interface TokenizationTextModelPartOptions {
 
 /** Owns syntax requests and their line-token index for exactly one TextModel. */
 export class TokenizationTextModelPart extends Disposable implements ITokenizationTextModelPart {
-	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>());
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number; }[] | undefined>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	private readonly languageIdCodec: ILanguageIdCodec;
 	private readonly syntaxProviderRegistry: SyntaxProviderRegistry;
@@ -43,11 +43,11 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private readonly hasWorkerProvider: boolean;
 	private readonly lineBackendListeners = this._register(new DisposableStore());
 	private readonly lineBackend = this._register(new MutableDisposable<TokenizerSyntaxTokenBackend>());
-	private visibleLines: readonly { startLineNumber: number; endLineNumber: number }[] = [];
+	private visibleLines: readonly { startLineNumber: number; endLineNumber: number; }[] = [];
 	private requestGeneration = 0;
 	private pendingAnalysis: Promise<void> = Promise.resolve();
 
-	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined> = this.changeEmitter.event;
+	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number; }[] | undefined> = this.changeEmitter.event;
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
 	private readonly tokenStore: ReturnType<typeof createLanguageTokenStore>;
 	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
@@ -293,7 +293,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			: BackgroundTokenizationState.InProgress;
 	}
 
-	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void {
+	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number; }[]): void {
 		this.visibleLines = ranges;
 		for (const range of ranges) this.lineBackend.value?.refreshRange(range.startLineNumber, range.endLineNumber);
 	}
@@ -371,7 +371,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 }
 
 function createLineTokens(lineContent: string, tokens: readonly LanguageToken[], topLevelLanguageId: string, codec: ILanguageIdCodec): LineTokens {
-	const data: { text: string; metadata: number }[] = [];
+	const data: { text: string; metadata: number; }[] = [];
 	let offset = 0;
 	for (const token of tokens) {
 		const startOffset = token.range.startColumn - 1;
@@ -393,7 +393,7 @@ function createLineTokens(lineContent: string, tokens: readonly LanguageToken[],
 	return LineTokens.createFromTextAndMetadata(data, codec);
 }
 
-function appendToken(target: { text: string; metadata: number }[], text: string, tokenMetadata: number): void {
+function appendToken(target: { text: string; metadata: number; }[], text: string, tokenMetadata: number): void {
 	const previous = target.at(-1);
 	if (previous?.metadata === tokenMetadata) {
 		previous.text += text;

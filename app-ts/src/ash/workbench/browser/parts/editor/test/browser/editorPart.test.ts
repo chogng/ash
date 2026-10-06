@@ -148,7 +148,7 @@ function createAuxiliaryPart(container: HTMLElement, registry: EditorPaneRegistr
 		minimumHeight: WorkbenchWindowBarHeight,
 		maximumHeight: WorkbenchWindowBarHeight,
 		onDidChange: Event.None, onMenubarVisibilityChange: Event.None,
-		layout() {}, updateOptions() {}, updateProperties() {}, registerVariables() {},
+		layout() { }, updateOptions() { }, updateProperties() { }, registerVariables() { },
 		dispose() { element.remove(); },
 		[Symbol.dispose]() { this.dispose(); },
 	};
@@ -419,8 +419,8 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
 	const registry = new EditorPaneRegistry();
 	const textFileService = {
 		onDidChangeFiles: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { },
+			[Symbol.dispose]() { },
 		}),
 		resolve: async () => {
 			throw new Error("not used");
@@ -1281,7 +1281,7 @@ test("EditorPart registers and releases focusable breadcrumbs for its group", as
 	const editor = createEditorPart(dom.window.document.body, {
 		registry,
 		breadcrumbsService: breadcrumbs,
-		showBreadcrumbPicker: () => {},
+		showBreadcrumbPicker: () => { },
 	});
 	const group = editor.activeGroup;
 	const control = breadcrumbs.getWidget(group.id);
@@ -1522,7 +1522,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		titleActions: {
 			menuService: menus,
 			contextMenuProvider: {
-				showContextMenu() {},
+				showContextMenu() { },
 			},
 		},
 	});
@@ -2107,7 +2107,7 @@ class TestEditorPane extends Disposable implements IEditorPane {
 		await this.inputPromise;
 	}
 
-	clearInput(): void {}
+	clearInput(): void { }
 
 	layout(dimension: IDimension): void {
 		this.dimension = {
@@ -2272,7 +2272,7 @@ class TestAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		this.layoutEmitter.fire({ width: 800, height: 600 });
 	}
 
-	createState(): { width: number; height: number; left: number; top: number; featureWidthOffset: number; featureHeightOffset: number } {
+	createState(): { width: number; height: number; left: number; top: number; featureWidthOffset: number; featureHeightOffset: number; } {
 		return { width: 800, height: 600, left: 0, top: 0, featureWidthOffset: 0, featureHeightOffset: 0 };
 	}
 
@@ -2519,11 +2519,13 @@ test('a missing file offers creation and retries into the same pinned tab', asyn
 		if (!created) pane.inputError = new FileNotFoundError(missing.resource);
 		return pane;
 	}));
-	const files = { createFile: async (resource: URI, existing: string) => {
-		assert.equal(resource.toString(), missing.resource.toString());
-		assert.equal(existing, 'error');
-		created = true;
-	} } as unknown as IFileService;
+	const files = {
+		createFile: async (resource: URI, existing: string) => {
+			assert.equal(resource.toString(), missing.resource.toString());
+			assert.equal(existing, 'error');
+			created = true;
+		}
+	} as unknown as IFileService;
 	try {
 		using editor = createEditorPart(dom.window.document.body, { registry, fileService: files });
 		await editor.openEditor(missing, { pinned: false });

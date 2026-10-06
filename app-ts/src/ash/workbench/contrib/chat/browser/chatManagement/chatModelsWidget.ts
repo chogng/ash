@@ -54,7 +54,7 @@ export class ProviderApiKeyInput extends Disposable {
 		if (!this.dirty) { return Promise.resolve(); }
 		const operation = Promise.resolve().then(() => this.saveKey());
 		this.saving = operation;
-		void operation.finally(() => { this.saving = undefined; }).catch(() => {});
+		void operation.finally(() => { this.saving = undefined; }).catch(() => { });
 		return operation;
 	}
 
@@ -105,7 +105,7 @@ export class ChatModelsWidget extends Disposable {
 	private readonly saveModel: Button;
 	private readonly cancel: Button;
 	private readonly tableResources = this._register(new DisposableStore());
-	private readonly rowControls = new Map<string, { toggle: Switch; status: HTMLElement; edit: Button; remove?: Button }>();
+	private readonly rowControls = new Map<string, { toggle: Switch; status: HTMLElement; edit: Button; remove?: Button; }>();
 	private structure = '';
 	private editing = false;
 	private savingModel = false;
@@ -298,7 +298,7 @@ export class ChatModelsWidget extends Disposable {
 			controls.status.classList.toggle('passed', model.status === 'passed');
 			controls.status.textContent = model.status === 'passed' ? localize('models.provider.passed', 'Model test passed')
 				: model.status === 'failed' ? localize('models.provider.testFailed', 'Model test failed: {0}', model.message ?? '')
-				: model.status === 'testing' ? localize('models.provider.testing', 'Testing model…') : localize('models.provider.untested', 'Not tested');
+					: model.status === 'testing' ? localize('models.provider.testing', 'Testing model…') : localize('models.provider.untested', 'Not tested');
 		}
 	}
 

@@ -45,10 +45,12 @@ test('Design motion validates ordered keyframes and keeps animation positions th
 	const commands = new DocumentCommands(model);
 	const id = commands.addShape('rectangle', { x: 60, y: 40 });
 	const shape = model.value.shapes[0];
-	const motion = { duration: 1000, loop: false, keyframes: [
-		{ offset: 0, x: 0, y: 0, rotation: 0, opacity: 1 },
-		{ offset: 1, x: 100, y: 200, rotation: 90, opacity: 0 },
-	] };
+	const motion = {
+		duration: 1000, loop: false, keyframes: [
+			{ offset: 0, x: 0, y: 0, rotation: 0, opacity: 1 },
+			{ offset: 1, x: 100, y: 200, rotation: 90, opacity: 0 },
+		]
+	};
 	commands.updateShape({ ...shape, motion });
 	assert.deepEqual(sampleDesignMotion(model.value.shapes[0], 500), { offset: 0.5, x: 50, y: 100, rotation: 45, opacity: 0.5 });
 	for (const invalid of [
@@ -107,7 +109,7 @@ test('Design text, paths and nested groups round trip and undo as complete edits
 	commands.addShape('ellipse', { x: -50, y: -30 });
 	const nested = commands.group(new Set(model.value.shapes.map(shape => shape.id)))!;
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
-	assert.equal(Object.isFrozen((model.value.shapes[0] as Extract<DesignShape, { kind: 'group' }>).children), true);
+	assert.equal(Object.isFrozen((model.value.shapes[0] as Extract<DesignShape, { kind: 'group'; }>).children), true);
 	commands.ungroup(nested);
 	commands.ungroup(group);
 	assert.deepEqual(model.value.shapes.slice(0, 2), original.shapes);
@@ -123,10 +125,10 @@ test('Ungroup preserves child centers, rotation and size after a group transform
 	const textId = commands.addShape('text', { x: 0, y: 0 }, 'Hello');
 	const pathId = commands.addShape('path', { x: 200, y: 100 });
 	const id = commands.group(new Set([textId, pathId]))!;
-	const group = model.value.shapes[0] as Extract<DesignShape, { kind: 'group' }>;
+	const group = model.value.shapes[0] as Extract<DesignShape, { kind: 'group'; }>;
 	commands.updateShape({ ...group, x: 100, y: 200, width: group.width * 2, height: group.height * 2, rotation: 90 });
 	commands.ungroup(id);
-	const text = model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>;
+	const text = model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
 	const child = group.children[0];
 	assert.ok(Math.abs(text.x + text.width / 2 - (100 + group.width - ((child.y + child.height / 2) * 2 - group.height))) < 1e-8);
 	assert.ok(Math.abs(text.y + text.height / 2 - (200 + group.height + ((child.x + child.width / 2) * 2 - group.width))) < 1e-8);
@@ -139,10 +141,10 @@ test('Design files reject malformed text, path points, groups and duplicate nest
 	const commands = new DocumentCommands(model);
 	const textId = commands.addShape('text', { x: 0, y: 0 });
 	const pathId = commands.addShape('path', { x: 200, y: 100 });
-	const text = model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>;
-	const path = model.value.shapes[1] as Extract<DesignShape, { kind: 'path' }>;
+	const text = model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
+	const path = model.value.shapes[1] as Extract<DesignShape, { kind: 'path'; }>;
 	commands.group(new Set([textId, pathId]));
-	const group = model.value.shapes[0] as Extract<DesignShape, { kind: 'group' }>;
+	const group = model.value.shapes[0] as Extract<DesignShape, { kind: 'group'; }>;
 	for (const shape of [
 		{ ...text, text: null }, { ...text, fontSize: -1 },
 		{ ...path, nodes: [] }, { ...path, strokeWidth: 0 }, { ...path, closed: 'false' },
@@ -209,7 +211,7 @@ test('Version 2 rejects cycles, duplicate placement, unowned objects and missing
 	const frameId = commands.addFrame({ x: 0, y: 0 });
 	const childId = commands.addShape('rectangle', { x: 0, y: 0 });
 	const source = serializeDesignDocument(model.value);
-	type Manifest = { artifacts: Record<string, { roots: string[]; objects: Record<string, Record<string, unknown>> }> };
+	type Manifest = { artifacts: Record<string, { roots: string[]; objects: Record<string, Record<string, unknown>>; }>; };
 	for (const mutate of [
 		(value: Manifest) => { value.artifacts[model.value.artifactId].objects[frameId].children = [frameId]; },
 		(value: Manifest) => { value.artifacts[model.value.artifactId].roots.push(childId); },

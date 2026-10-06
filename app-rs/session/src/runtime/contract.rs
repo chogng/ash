@@ -9,7 +9,6 @@ use std::time::Duration;
 use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_client::ServerNotification;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
-use ash_slash_commands::SlashCommandDefinition;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use ash_protocol::ApprovalMode;
@@ -19,6 +18,7 @@ use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::Thread;
 use ash_protocol::TurnId;
+use ash_slash_commands::SlashCommandDefinition;
 
 /// The default number of commands that may wait for the worker.
 pub const DEFAULT_COMMAND_QUEUE_CAPACITY: usize = 32;

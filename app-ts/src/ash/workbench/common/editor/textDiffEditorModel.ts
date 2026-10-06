@@ -12,7 +12,7 @@ export class TextDiffEditorModel<T extends ITextModel = ITextModel> extends Diff
 		super(originalModel, modifiedModel);
 	}
 
-	get textDiffEditorModel(): (IDiffEditorModel & { original: T; modified: T }) | undefined {
+	get textDiffEditorModel(): (IDiffEditorModel & { original: T; modified: T; }) | undefined {
 		const original = this.originalModel.textEditorModel;
 		const modified = this.modifiedModel.textEditorModel;
 		if (this.isDisposed() || !original || !modified) {

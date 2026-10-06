@@ -32,7 +32,7 @@ interface IPlatformGlobals {
 	readonly process?: INodeProcess;
 	readonly ash?: {
 		readonly environment?: IRuntimeEnvironment;
-		readonly process?: { readonly platform: string; readonly arch: string };
+		readonly process?: { readonly platform: string; readonly arch: string; };
 	};
 	readonly navigator?: {
 		readonly userAgent: string;

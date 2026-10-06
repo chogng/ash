@@ -2,7 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test.beforeEach(({}, testInfo) => {
+test.beforeEach(({ }, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-ui', 'This scenario checks the Electron UI without an App Server package.');
 });
 

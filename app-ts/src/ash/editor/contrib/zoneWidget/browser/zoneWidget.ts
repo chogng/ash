@@ -43,7 +43,7 @@ interface ResolvedOptions {
 }
 
 export class OverlayWidgetDelegate implements IOverlayWidget {
-	constructor(private readonly _id: string, private readonly _domNode: HTMLElement) {}
+	constructor(private readonly _id: string, private readonly _domNode: HTMLElement) { }
 
 	getId(): string {
 		return this._id;
@@ -221,7 +221,7 @@ export abstract class ZoneWidget extends Disposable {
 		return Math.max(12, this.editor.getLayoutInfo().height / this.editor.getOption(EditorOption.lineHeight) * 0.8);
 	}
 
-	protected _getResizeBounds(): { readonly minLines: number; readonly maxLines: number } {
+	protected _getResizeBounds(): { readonly minLines: number; readonly maxLines: number; } {
 		return { minLines: 5, maxLines: 35 };
 	}
 
@@ -232,7 +232,7 @@ export abstract class ZoneWidget extends Disposable {
 		this.layoutZone();
 	}
 
-	protected _onWidth(_widthInPixels: number): void {}
+	protected _onWidth(_widthInPixels: number): void { }
 
 	protected abstract _fillContainer(container: HTMLElement): void;
 	protected abstract _doLayout(heightInPixels: number, widthInPixels: number): void;

@@ -63,7 +63,7 @@ export class ListView<T> extends Disposable {
 	private readonly rowCache: RowCache<T>;
 	private readonly rowTemplates = new WeakMap<HTMLDivElement, IRow>();
 	private readonly renderer: IListRenderer<T, HTMLDivElement>;
-	private readonly spliceable: CombinedSpliceable<{ readonly item: T; readonly id: string }>;
+	private readonly spliceable: CombinedSpliceable<{ readonly item: T; readonly id: string; }>;
 
 	readonly onDidScroll: Event<number> = this._onDidScroll.event;
 	readonly onDidRenderRows: Event<void> = this._onDidRenderRows.event;
@@ -362,7 +362,7 @@ export class ListView<T> extends Disposable {
 		this.releaseRow(evicted.row, evicted.item, evicted.index);
 	}
 
-	private renderRange(): { readonly start: number; readonly end: number } {
+	private renderRange(): { readonly start: number; readonly end: number; } {
 		const scrollable = this.scrollable;
 		if (!this.isVirtualized || !scrollable) return { start: 0, end: this._items.length };
 		if (scrollable.state.height <= 0) return { start: 0, end: 0 };

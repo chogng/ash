@@ -132,7 +132,7 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 		super();
 	}
 
-	public override dispose(): void {}
+	public override dispose(): void { }
 
 	public override equals(other: BreadcrumbsItem): boolean {
 		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.element.label !== other.element.label) {

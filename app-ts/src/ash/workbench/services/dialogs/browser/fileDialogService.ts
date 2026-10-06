@@ -30,21 +30,21 @@ function matchesFileFilters(name: string, filters: readonly FileFilter[]): boole
 }
 
 type FileDialogHost = FileDialogHostBase & (
-	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly pickDirectory: (startIn?: FileSystemDirectoryHandle) => Promise<FileSystemDirectoryHandle> }
-	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient }
+	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly pickDirectory: (startIn?: FileSystemDirectoryHandle) => Promise<FileSystemDirectoryHandle>; }
+	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; }
 );
 
 type ServerDirectoryItem = IQuickPickItem & (
-	| { readonly kind: 'select'; readonly path: string }
-	| { readonly kind: 'parent'; readonly path: string }
-	| { readonly kind: 'directory'; readonly path: string }
-	| { readonly kind: 'done'; readonly path: string }
+	| { readonly kind: 'select'; readonly path: string; }
+	| { readonly kind: 'parent'; readonly path: string; }
+	| { readonly kind: 'directory'; readonly path: string; }
+	| { readonly kind: 'done'; readonly path: string; }
 );
 
 type WorkspaceFileItem = IQuickPickItem & (
-	| { readonly kind: 'file' | 'directory' | 'parent'; readonly resource: URI }
-	| { readonly kind: 'navigate'; readonly resource: URI }
-	| { readonly kind: 'done' }
+	| { readonly kind: 'file' | 'directory' | 'parent'; readonly resource: URI; }
+	| { readonly kind: 'navigate'; readonly resource: URI; }
+	| { readonly kind: 'done'; }
 );
 
 /** Selects folders and Save As targets for a browser Workbench. */
@@ -69,7 +69,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			? await this.host.provider.getDirectoryHandle(options.defaultUri)
 			: undefined;
 		const folders: URI[] = [];
-		for (;;) {
+		for (; ;) {
 			let handle: FileSystemDirectoryHandle;
 			try {
 				handle = await this.host.pickDirectory(startIn);
@@ -124,7 +124,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		const defaultName = options.defaultUri && !extUri.isEqual(defaultDirectory, options.defaultUri)
 			? options.defaultUri.fsPath.split(/[\\/]/).at(-1) ?? ''
 			: '';
-		for (;;) {
+		for (; ;) {
 			const result = await this.dialogs().input({
 				title: options.title ?? localize('dialog.saveFileTitle', 'Save File'),
 				message: localize('dialog.saveFileName', 'File name'),
@@ -202,7 +202,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			}
 		}
 		const selected = new Map<string, URI>();
-		for (;;) {
+		for (; ;) {
 			const entries = await this.host.fileService().readDirectory(directory);
 			const items: WorkspaceFileItem[] = [
 				...(options.canSelectMany && selected.size ? [{ kind: 'done' as const, label: `${options.openLabel ?? localize('dialog.finishSelection', 'Done')} (${selected.size})` }] : []),
@@ -268,7 +268,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	private async chooseFileFilter(filters: readonly FileFilter[] | undefined): Promise<FileFilter | undefined> {
 		if (!filters?.length) return undefined;
 		if (filters.length === 1) return filters[0];
-		const picker = this.host.quickInput().createQuickPick<IQuickPickItem & { readonly filter: FileFilter }>();
+		const picker = this.host.quickInput().createQuickPick<IQuickPickItem & { readonly filter: FileFilter; }>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
 		picker.ariaLabel = localize('dialog.chooseFileType', 'Choose a file type');
@@ -287,10 +287,10 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		});
 	}
 
-	private async pickServerDirectories(host: Extract<FileDialogHost, { kind: 'server' }>, options: IOpenDialogOptions): Promise<readonly string[] | undefined> {
+	private async pickServerDirectories(host: Extract<FileDialogHost, { kind: 'server'; }>, options: IOpenDialogOptions): Promise<readonly string[] | undefined> {
 		let path = options.defaultUri?.fsPath ?? '';
 		const selected = new Set<string>();
-		for (;;) {
+		for (; ;) {
 			const listing = await host.client.list(path);
 			const choice = await this.showServerDirectory(host.quickInput(), listing, options, selected);
 			if (!choice) return undefined;

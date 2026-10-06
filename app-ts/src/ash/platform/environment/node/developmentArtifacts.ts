@@ -31,7 +31,7 @@ function developmentHostTarget(platform: NodeJS.Platform = process.platform, arc
 	return target;
 }
 
-function isPackageManifest(value: unknown, sequence: number): value is { readonly formatVersion: 1; readonly sequence: number; readonly directory: string } {
+function isPackageManifest(value: unknown, sequence: number): value is { readonly formatVersion: 1; readonly sequence: number; readonly directory: string; } {
 	return typeof value === 'object'
 		&& value !== null
 		&& 'formatVersion' in value

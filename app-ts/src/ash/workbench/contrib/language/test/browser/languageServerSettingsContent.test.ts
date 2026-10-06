@@ -63,7 +63,8 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(IMarketplaceService, { onDidChangeInstalled: this.installed.event } as IMarketplaceService);
 		this.services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => { this.commands.push([id, ...args]); } } as unknown as ICommandService);
 		this.services.registerInstance(IWorkspaceContextService, this.add(new WorkspaceContextService({ id: 'test', folders: [] })));
-		this.services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(),
+		this.services.registerInstance(ILocalizationService, {
+			whenReady: Promise.resolve(),
 			translate: (bundle, key, text, parameters) => {
 				const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === this.locale)!;
 				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match));
@@ -72,7 +73,7 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: this.connection.event } as IRemoteAgentService);
 		this.services.registerInstance(IContextViewService, this.add(new BrowserContextViewService(this.root)));
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
-		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 		this.services.registerInstance(IEditorService, { openEditor: async (input: EditorInput) => { this.inputs.push(input); this.content.setInput(input); } } as IEditorService);
 		this.content = this.add(this.services.createInstance(LanguageServerSettingsContent, this.root));
 		this.root.append(this.content.domNode);

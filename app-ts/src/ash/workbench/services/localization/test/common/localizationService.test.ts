@@ -351,7 +351,7 @@ suite('Workbench localization', () => {
 			'无法准备编辑：{0}',
 			'此编辑器无法使用代码片段占位符导航。',
 			'无法切换编辑：{0}',
-			]);
+		]);
 	});
 
 	test('folding command metadata uses the selected Chinese language catalog', async () => {
@@ -514,7 +514,7 @@ suite('Workbench localization', () => {
 			listEditorExtensions: async () => ({ revision: 1, extensions: [] }),
 			setEditorExtensionPolicy: () => Promise.reject(new Error("unused")),
 			acquireCapability: () => Promise.reject(new Error("unused")),
-			releaseCapability: async () => {},
+			releaseCapability: async () => { },
 			openResource: () => Promise.reject(new Error("unused")),
 		};
 	}
@@ -523,7 +523,7 @@ suite('Workbench localization', () => {
 		using configuration = new InMemoryConfigurationService();
 		using packs = createTestLanguagePacks(createMarketplace());
 		let prompted = false;
-		using locale = createTestLocaleService(configuration, packs, async () => {}, async () => { prompted = true; return { confirmed: true }; }, {
+		using locale = createTestLocaleService(configuration, packs, async () => { }, async () => { prompted = true; return { confirmed: true }; }, {
 			read: async () => undefined,
 			write: async () => { throw new Error('disk full'); },
 		});

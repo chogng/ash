@@ -79,8 +79,8 @@ test('JSON resources publish syntax diagnostics and associated schemas add valid
 		update(_revision, next): void {
 			diagnostics = next;
 		},
-		dispose(): void {},
-		[Symbol.dispose](): void {},
+		dispose(): void { },
+		[Symbol.dispose](): void { },
 	};
 	using registration = acquireJsonLanguageDiagnostics(resource, 'jsonc', model, () => publisher, registry)!;
 
@@ -94,8 +94,8 @@ test('JSON resources publish syntax diagnostics and associated schemas add valid
 		update(_revision, next): void {
 			strictDiagnostics = next;
 		},
-		dispose(): void {},
-		[Symbol.dispose](): void {},
+		dispose(): void { },
+		[Symbol.dispose](): void { },
 	}), registry)!;
 	assert.match(strictDiagnostics.map(diagnostic => diagnostic.message).join('\n'), /Comments/u);
 });

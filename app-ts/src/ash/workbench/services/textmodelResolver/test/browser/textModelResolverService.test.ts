@@ -61,7 +61,7 @@ test('document symbol command resolves a closed Workbench resource and releases 
 
 test('provider references share text and release it after the last editor model closes', async () => {
 	using models = new BrowserTextModelService({
-		onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+		onDidChange: () => ({ dispose() { }, [Symbol.dispose]() { } }),
 		resolve: async request => ({ resource: request.resource, text: '', revision: '1' }),
 		save: async () => ({ revision: '1' }),
 	});

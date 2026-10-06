@@ -1,35 +1,35 @@
 .ash-editor-group-watermark-shortcuts {
-  display: flex;
-  width: min(440px, calc(100% - 48px));
-  gap: 8px;
-  flex-direction: column;
-  color: var(--ash-description-foreground);
+	display: flex;
+	width: min(440px, calc(100% - 48px));
+	gap: 8px;
+	flex-direction: column;
+	color: var(--ash-description-foreground);
 }
 
 .ash-editor-group-watermark-shortcuts:empty,
 .ash-editor-group-watermark-shortcuts[hidden] {
-  display: none;
+	display: none;
 }
 
 .ash-editor-group-watermark-entry {
-  display: grid;
-  min-height: 24px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: center;
+	display: grid;
+	min-height: 24px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 24px;
+	align-items: center;
 }
 
 .ash-editor-group-watermark-label {
-  overflow: hidden;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-editor-group-watermark-shortcuts .ash-keybinding-label {
-  min-width: 118px;
+	min-width: 118px;
 }
 
 .ash-editor-group-watermark-shortcuts .ash-keybinding-label:empty {
-  display: none;
+	display: none;
 }

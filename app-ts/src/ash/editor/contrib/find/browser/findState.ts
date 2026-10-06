@@ -28,7 +28,7 @@ export const enum FindOptionOverride {
 	False = 2,
 }
 
-export interface INewFindReplaceState<T extends { update(value: T): void } = { update(): void }> {
+export interface INewFindReplaceState<T extends { update(value: T): void; } = { update(): void; }> {
 	searchString?: string;
 	replaceString?: string;
 	isRevealed?: boolean;
@@ -71,7 +71,7 @@ interface FindOverrides {
 
 const MATCHES_LIMIT = 19_999;
 
-export class FindReplaceState<T extends { update(value: T): void } = { update(): void }> extends Disposable {
+export class FindReplaceState<T extends { update(value: T): void; } = { update(): void; }> extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<FindReplaceStateChangedEvent>());
 	private readonly values: FindValues<T> = {
 		searchString: '',

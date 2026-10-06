@@ -26,7 +26,7 @@ export class ElectronPlaywrightDriver extends PlaywrightDriver {
 }
 
 /** Renderer readiness does not imply that the desktop has completed focus or fullscreen transitions. */
-export async function waitForElectronWindowState(application: ElectronApplication, page: Page, expected: { focused: boolean; fullScreen?: boolean } | { fullScreen: boolean; focused?: boolean }): Promise<void> {
+export async function waitForElectronWindowState(application: ElectronApplication, page: Page, expected: { focused: boolean; fullScreen?: boolean; } | { fullScreen: boolean; focused?: boolean; }): Promise<void> {
 	const window = await application.browserWindow(page);
 	let id: number;
 	try { id = await window.evaluate(window => window.id); }

@@ -11,7 +11,7 @@ on:
         required: true
       previous-version:
         type: string
-        default: ''
+        default: ""
       source:
         type: string
         default: release
@@ -72,7 +72,7 @@ jobs:
           architecture: ${{ matrix.arch }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
         if: matrix.product == 'ash-desktop'
         with:

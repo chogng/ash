@@ -113,7 +113,7 @@ class TestRemoteAgentApi extends Disposable implements IRemoteAgentApi {
 	resolveInitial(connection: RemoteAgentConnection): void { this.initial.resolve(connection); }
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };

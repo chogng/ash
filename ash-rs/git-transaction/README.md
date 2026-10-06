@@ -4,13 +4,13 @@
 它依赖 [`ash-git`](../git/README.md) 的类型化对象、引用和工作区接口，不知道 Session、Turn、
 SQLite、工作目录归属或界面。调用方通过 `GitTransactions::new(&git)` 复用已有执行器。
 
-| 阶段 | 保证 |
-| --- | --- |
-| prepare | 固定目标 HEAD/tree、最终 tree、用户 Git identity、时间和消息，生成确切 commit 对象 |
-| publish | 检查目标与 checkout，保存 journal 和对象保留引用，以 expected HEAD CAS 发布 |
-| checkout | 分别保持原 index、未暂存和未跟踪内容；安装前再次检查版本，冲突不丢弃用户修改 |
-| recover | 复用事务身份和保留对象，恢复 checkout 或报告冲突；不盲目创建第二个 commit |
-| acknowledge | 调用方持久保存成功回执后，清理事务保留引用与 journal；重放仍可安全确认 |
+| 阶段        | 保证                                                                               |
+| ----------- | ---------------------------------------------------------------------------------- |
+| prepare     | 固定目标 HEAD/tree、最终 tree、用户 Git identity、时间和消息，生成确切 commit 对象 |
+| publish     | 检查目标与 checkout，保存 journal 和对象保留引用，以 expected HEAD CAS 发布        |
+| checkout    | 分别保持原 index、未暂存和未跟踪内容；安装前再次检查版本，冲突不丢弃用户修改       |
+| recover     | 复用事务身份和保留对象，恢复 checkout 或报告冲突；不盲目创建第二个 commit          |
+| acknowledge | 调用方持久保存成功回执后，清理事务保留引用与 journal；重放仍可安全确认             |
 
 提交事务要求调用方持有 `repository_operation_lock`。该锁按 Git common directory 共享，
 协调不同目录指向同一仓库的操作；外部 Git 由 ref CAS 和 checkout tree 比较检测。

@@ -34,7 +34,7 @@ export class ModelService extends Disposable implements IModelService {
 	private _modelCreationOptionsByLanguageAndResource: Record<string, ITextModelCreationOptions> = Object.create(null) as Record<string, ITextModelCreationOptions>;
 	private readonly _onModelAdded = this._register(new Emitter<TextModel>());
 	private readonly _onModelRemoved = this._register(new Emitter<TextModel>());
-	private readonly _onModelModeChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>());
+	private readonly _onModelModeChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
 	readonly _serviceBrand: undefined;
 
 	readonly onModelAdded = this._onModelAdded.event;
@@ -70,12 +70,12 @@ export class ModelService extends Disposable implements IModelService {
 			bracketPairColorizationOptions: creationOptions.bracketPairColorizationOptions,
 			languageConfigurationService: this._languageConfigurationService,
 			...(this._languageService && this._languageFeaturesService ? {
-					tokenization: {
-						languageIdCodec: this._languageService.languageIdCodec,
-						syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
-						documentSemanticTokensProvider: this._languageFeaturesService.documentSemanticTokensProvider,
-						...this._tokenizationOptions,
-					},
+				tokenization: {
+					languageIdCodec: this._languageService.languageIdCodec,
+					syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
+					documentSemanticTokensProvider: this._languageFeaturesService.documentSemanticTokensProvider,
+					...this._tokenizationOptions,
+				},
 			} : {}),
 		});
 		if (creationOptions.detectIndentation) model.detectIndentation(creationOptions.insertSpaces, creationOptions.tabSize);
@@ -393,7 +393,7 @@ function readModelValue(value: string | ITextBufferFactory, defaultEOL: DefaultE
 	}
 }
 
-function createModelBuffer(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): { readonly textBuffer: ITextBuffer; readonly disposable: IDisposable } {
+function createModelBuffer(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): { readonly textBuffer: ITextBuffer; readonly disposable: IDisposable; } {
 	if (typeof value !== 'string') return value.create(defaultEOL);
 	const textBuffer = createPieceTreeTextBuffer(value, defaultEOL);
 	return { textBuffer, disposable: textBuffer };
@@ -418,7 +418,7 @@ class DisposedModelInfo {
 		public readonly time: number,
 		public readonly heapSize: number,
 		public readonly sha1: string,
-	) {}
+	) { }
 }
 
 export interface ITextModelSHA1Computer {

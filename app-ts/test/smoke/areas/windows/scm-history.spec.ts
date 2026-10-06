@@ -387,15 +387,15 @@ test('SCM history reserves title width and reveals commit details on pointer and
 		const electron = application as ElectronApplication;
 		await electron.evaluate(({ shell }) => {
 			const original = shell.openExternal;
-			const state = globalThis as typeof globalThis & { scmHistoryLink?: { url?: string; restore: () => void } };
+			const state = globalThis as typeof globalThis & { scmHistoryLink?: { url?: string; restore: () => void; }; };
 			state.scmHistoryLink = { restore: () => { shell.openExternal = original; } };
 			shell.openExternal = async url => { state.scmHistoryLink!.url = url; };
 		});
 		try {
 			await openOnGitHub.click();
-			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { scmHistoryLink?: { url?: string } }).scmHistoryLink?.url)).toBe(`https://github.com/ash-test/history/commit/${hash}`);
+			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { scmHistoryLink?: { url?: string; }; }).scmHistoryLink?.url)).toBe(`https://github.com/ash-test/history/commit/${hash}`);
 		} finally {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { scmHistoryLink?: { restore: () => void } }).scmHistoryLink!.restore());
+			await electron.evaluate(() => (globalThis as typeof globalThis & { scmHistoryLink?: { restore: () => void; }; }).scmHistoryLink!.restore());
 		}
 	} else {
 		const url = `https://github.com/ash-test/history/commit/${hash}`;

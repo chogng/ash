@@ -115,38 +115,40 @@ registerEditorAction(AddLineCommentAction);
 registerEditorAction(RemoveLineCommentAction);
 const toggleBlockComment = registerEditorAction(BlockCommentAction);
 
-registerEditorContribution({ id: 'editor.contrib.comment', install: context => {
-	if (context.kind !== 'text') {
-		return;
+registerEditorContribution({
+	id: 'editor.contrib.comment', install: context => {
+		if (context.kind !== 'text') {
+			return;
+		}
+		context.register(context.editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) {
+				return;
+			}
+			const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
+			const block = event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a';
+			if (!line && !block) {
+				return;
+			}
+			const action = context.editor.getAction(line ? toggleLineComment.id : toggleBlockComment.id);
+			if (!action?.isSupported()) {
+				return;
+			}
+			const position = context.editor.getPosition();
+			const model = context.editor.getModel();
+			if (!position || !model) {
+				return;
+			}
+			const languageId = model.getLanguageIdAtPosition(position.lineNumber, position.column);
+			const comments = context.configurations.getLanguageConfiguration(languageId).comments;
+			if (line ? !comments?.lineCommentToken : !comments?.blockCommentStartToken || !comments.blockCommentEndToken) {
+				return;
+			}
+			event.stop();
+			void action.run().catch(context.onLanguageError);
+			const selection = context.editor.getSelection();
+			if (selection) {
+				context.view.revealPosition(selection.getPosition());
+			}
+		}));
 	}
-	context.register(context.editor.onKeyDown(event => {
-		if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) {
-			return;
-		}
-		const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
-		const block = event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a';
-		if (!line && !block) {
-			return;
-		}
-		const action = context.editor.getAction(line ? toggleLineComment.id : toggleBlockComment.id);
-		if (!action?.isSupported()) {
-			return;
-		}
-		const position = context.editor.getPosition();
-		const model = context.editor.getModel();
-		if (!position || !model) {
-			return;
-		}
-		const languageId = model.getLanguageIdAtPosition(position.lineNumber, position.column);
-		const comments = context.configurations.getLanguageConfiguration(languageId).comments;
-		if (line ? !comments?.lineCommentToken : !comments?.blockCommentStartToken || !comments.blockCommentEndToken) {
-			return;
-		}
-		event.stop();
-		void action.run().catch(context.onLanguageError);
-		const selection = context.editor.getSelection();
-		if (selection) {
-			context.view.revealPosition(selection.getPosition());
-		}
-	}));
-} });
+});

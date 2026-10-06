@@ -29,9 +29,9 @@ const single = (
 	anchorColumn: number,
 	activeColumn: number,
 ): readonly Selection[] => [Selection.fromPositions(
-		position(0, anchorColumn),
-		position(0, activeColumn),
-	)];
+	position(0, anchorColumn),
+	position(0, activeColumn),
+)];
 
 test("CursorsController restores command selections", () => {
 	using model = new TextModel("hello");

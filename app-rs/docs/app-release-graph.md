@@ -15,16 +15,16 @@ patch 或重复 product hub。
 backend 不得依赖 app/UI。workspace 是统一构建图，不替代产品架构边界；boundary script 和 CI
 继续验证反向依赖不会出现。
 
-| 层 | 当前 owner | 入口 | 状态 |
-| --- | --- | --- | --- |
-| Rust compile/test | Root Cargo workspace / app package | `cargo check/test --manifest-path Cargo.toml -p app` | ✅ |
-| Source/manifest input graph | Bazel app package | `//app-rs:app_sources` | ✅ |
-| App Rust target graph analysis | Bazel + patched `rules_rs` | `//app-rs:app` | ✅ |
-| Package/signing input contract | `app-rs/packaging/*.json` | `//app-rs:app_release_inputs` | ✅ |
-| Unsigned package staging | `build/app_rs/build.py` | `just app-package` | ✅ |
-| Workspace boundary CI | Bazel | `bazel test //app-rs:app_ci --test_env=PATH` | ✅ |
-| 平台签名和验证 | `build/app_rs/signing.py` | 包内 target 选择对应签名工具 | ✅ 平台不能由调用者另行指定 |
-| Hermetic Bazel Rust compile graph | `rules_rs` + single `@crates` hub | `//app-rs:app` | ✅ 完整 app binary build 已通过 |
+| 层                                | 当前 owner                         | 入口                                                 | 状态                            |
+| --------------------------------- | ---------------------------------- | ---------------------------------------------------- | ------------------------------- |
+| Rust compile/test                 | Root Cargo workspace / app package | `cargo check/test --manifest-path Cargo.toml -p app` | ✅                              |
+| Source/manifest input graph       | Bazel app package                  | `//app-rs:app_sources`                               | ✅                              |
+| App Rust target graph analysis    | Bazel + patched `rules_rs`         | `//app-rs:app`                                       | ✅                              |
+| Package/signing input contract    | `app-rs/packaging/*.json`          | `//app-rs:app_release_inputs`                        | ✅                              |
+| Unsigned package staging          | `build/app_rs/build.py`            | `just app-package`                                   | ✅                              |
+| Workspace boundary CI             | Bazel                              | `bazel test //app-rs:app_ci --test_env=PATH`         | ✅                              |
+| 平台签名和验证                    | `build/app_rs/signing.py`          | 包内 target 选择对应签名工具                         | ✅ 平台不能由调用者另行指定     |
+| Hermetic Bazel Rust compile graph | `rules_rs` + single `@crates` hub  | `//app-rs:app`                                       | ✅ 完整 app binary build 已通过 |
 
 ### 根级 Bazel 基础设施
 

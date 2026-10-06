@@ -27,7 +27,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
-	window.HTMLElement.prototype.scrollTo = function () {};
+	window.HTMLElement.prototype.scrollTo = function () { };
 	window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
 	window.HTMLDialogElement.prototype.close = function () {
 		this.removeAttribute('open');
@@ -56,9 +56,9 @@ test('Sessions Models switches control the model picker visibility preference', 
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => { advisor = next; advisorWrites.push(next); },
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }, { model: otherModel, displayName: 'Claude Test' }],
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: () => visible,
@@ -102,7 +102,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ContextMenus, {} as import('../../../platform/contextview/browser/contextView.js').IContextMenuService);
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
-	services.registerInstance(ISkillService, { list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => {} });
+	services.registerInstance(ISkillService, { list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IMarketplaceService);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
@@ -111,13 +111,13 @@ test('Sessions Models switches control the model picker visibility preference', 
 	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
-	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => {}, appendToActiveDraft: () => {} });
+	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, appendToActiveDraft: () => { } });
 	services.registerInstance(IEditorService, {} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
-	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => {});
+	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { });
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');

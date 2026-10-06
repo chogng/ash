@@ -11,17 +11,17 @@ Tool ownership 见 [`docs/tools.md`](../../docs/tools.md)，进程实现见
 
 ## 公共契约
 
-| Symbol | 职责 |
-| --- | --- |
-| `ApprovalPolicy` | 对 exact program/argv digest 给出 start gate |
-| `CommandExecutionAuthority` | 显式区分 sandboxed 与 unrestricted execution |
-| `ExecutionLimits` | 固定 wall-clock timeout 与 stdout/stderr 总 byte budget |
-| `CommandInput` | 显式选择关闭 stdin 或写入调用方已经限制的 bytes |
-| `CommandExecutor::execute` | 检查审批后委托执行服务 |
-| `CommandExecutionOutcome` | completed output 或 structured sandbox denial |
-| `ExecutionError` | start 前拒绝、spawn failure、取消、timeout 或 sandbox setup failure |
-| `CommandSessionOptions` | 分别指定进程运行期限、初次输出等待期限与终端选项 |
-| `CommandExecutor::wait_session` | 订阅已有进程的完成状态；中间输出不结束等待，观察取消不调用进程终止 |
+| Symbol                          | 职责                                                                |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `ApprovalPolicy`                | 对 exact program/argv digest 给出 start gate                        |
+| `CommandExecutionAuthority`     | 显式区分 sandboxed 与 unrestricted execution                        |
+| `ExecutionLimits`               | 固定 wall-clock timeout 与 stdout/stderr 总 byte budget             |
+| `CommandInput`                  | 显式选择关闭 stdin 或写入调用方已经限制的 bytes                     |
+| `CommandExecutor::execute`      | 检查审批后委托执行服务                                              |
+| `CommandExecutionOutcome`       | completed output 或 structured sandbox denial                       |
+| `ExecutionError`                | start 前拒绝、spawn failure、取消、timeout 或 sandbox setup failure |
+| `CommandSessionOptions`         | 分别指定进程运行期限、初次输出等待期限与终端选项                    |
+| `CommandExecutor::wait_session` | 订阅已有进程的完成状态；中间输出不结束等待，观察取消不调用进程终止  |
 
 等待接口、命令期限与模型 Token 边界见 [Agent 时间与等待](../docs/agent-wait.md)。普通命令仍使用
 `ExecutionLimits::timeout`；命令会话的显式运行期限上限为 12 小时，等待不能延长该期限。

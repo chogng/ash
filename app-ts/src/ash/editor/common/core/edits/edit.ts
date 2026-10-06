@@ -2,7 +2,7 @@ import { OffsetRange } from "../ranges/offsetRange.js";
 
 /** Common contract for a replacement whose input and output have measurable length. */
 export abstract class BaseReplacement<TSelf extends BaseReplacement<TSelf>> {
-	constructor(readonly replaceRange: OffsetRange) {}
+	constructor(readonly replaceRange: OffsetRange) { }
 
 	abstract getNewLength(): number;
 	abstract tryJoinTouching(other: TSelf): TSelf | undefined;
@@ -113,7 +113,7 @@ export abstract class BaseEdit<T extends BaseReplacement<T>, TEdit extends BaseE
 		return this._createNew(result).normalize();
 	}
 
-	decomposeSplit(shouldBeInE1: (repl: T) => boolean): { e1: TEdit; e2: TEdit } {
+	decomposeSplit(shouldBeInE1: (repl: T) => boolean): { e1: TEdit; e2: TEdit; } {
 		const e1: T[] = [];
 		const e2: T[] = [];
 		let secondDelta = 0;

@@ -10,11 +10,11 @@ credential slot lifecycle。
 
 ## 公共契约
 
-| Symbol | 当前职责 | 不承担 |
-| --- | --- | --- |
-| `KeyringSecretStore::for_profile` | canonical profile root → isolated native keyring namespace | profile authority、fallback 选择 |
-| `SecretStore` implementation | opaque binary `load/store/delete` | token parsing、account lookup |
-| `read_credential` / `write_credential` / `delete_credential` | 访问调用方明确指定的条目，写入授权和并发校验由认证领域负责 | 枚举、解析 token、决定是否刷新 |
+| Symbol                                                       | 当前职责                                                   | 不承担                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------- |
+| `KeyringSecretStore::for_profile`                            | canonical profile root → isolated native keyring namespace | profile authority、fallback 选择 |
+| `SecretStore` implementation                                 | opaque binary `load/store/delete`                          | token parsing、account lookup    |
+| `read_credential` / `write_credential` / `delete_credential` | 访问调用方明确指定的条目，写入授权和并发校验由认证领域负责 | 枚举、解析 token、决定是否刷新   |
 
 `KeyringSecretStore` 的 OS-visible service 固定为 `com.ash.secret-store.v1`。Account 是 profile namespace 与 `SecretKey` 的
 domain-separated SHA-256，不包含 profile path、email、Connector ID 或原始 key。Value 使用 keyring 的

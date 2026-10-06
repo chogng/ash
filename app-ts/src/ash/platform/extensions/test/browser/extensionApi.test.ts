@@ -57,7 +57,7 @@ function resourceApi(overrides: Partial<IResourceApi>): IResourceApi {
 	return {
 		metadata: async () => metadata(0),
 		read: async () => { throw new Error("resource read is unavailable"); },
-		release: async () => {},
+		release: async () => { },
 		...overrides,
 	};
 }

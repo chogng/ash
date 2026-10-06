@@ -34,7 +34,7 @@ export class TextAreaState {
 		readonly selection: Range | null,
 		/** Visible line count before the selection in the projected textarea value. */
 		readonly newlineCountBeforeSelection: number | undefined,
-	) {}
+	) { }
 
 	toString(): string {
 		return `[ <${this.value}>, selectionStart: ${this.selectionStart}, selectionEnd: ${this.selectionEnd}]`;
@@ -135,7 +135,7 @@ export class TextAreaState {
 		}
 		return {
 			text: currentValue,
-				replacePrevCharCnt: previousSelectionEnd - previousSelectionStart,
+			replacePrevCharCnt: previousSelectionEnd - previousSelectionStart,
 			replaceNextCharCnt: 0,
 			positionDelta: 0,
 		};

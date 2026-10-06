@@ -13,7 +13,7 @@ export interface IContextKeyService extends IContextKeyValueService {
 
 /** A disposable context layer inherited by descendants of one DOM element. */
 export interface IScopedContextKeyService
-	extends IContextKeyService, IDisposable {}
+	extends IContextKeyService, IDisposable { }
 
 export const IContextKeyService =
 	refineServiceDecorator<IContextKeyValueService, IContextKeyService>(IContextKeyValueService);

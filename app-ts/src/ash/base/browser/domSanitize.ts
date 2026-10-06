@@ -23,7 +23,7 @@ export const defaultAllowedAttrs = Object.freeze([
 	'height', 'align',
 ]);
 
-export type SanitizeAttributePredicate = (node: Element, data: { readonly attrName: string; readonly attrValue: string }) => boolean | string;
+export type SanitizeAttributePredicate = (node: Element, data: { readonly attrName: string; readonly attrValue: string; }) => boolean | string;
 
 export interface SanitizeAttributeRule {
 	readonly attributeName: string;
@@ -113,7 +113,7 @@ function configurePurifier(
 	ownerDocument: Document,
 	config: DomSanitizerConfig = {},
 	afterSanitizeAttributes?: (element: Element) => void,
-): { purifier: DOMPurify; purifierConfig: DOMPurifyConfig } {
+): { purifier: DOMPurify; purifierConfig: DOMPurifyConfig; } {
 	const ownerWindow = ownerDocument.defaultView;
 	if (!ownerWindow) {
 		throw new Error('HTML sanitization requires a document with a window');
@@ -212,8 +212,8 @@ function isAllowedUrl(value: string, protocols: readonly string[] | '*', allowRe
 		const protocol = new URL(value, `${relativeProtocol}://base/`).protocol.slice(0, -1);
 		return protocols.includes(protocol)
 			|| allowRelative && protocol === relativeProtocol
-				&& !value.trimStart().startsWith('//')
-				&& !value.trim().toLowerCase().startsWith(`${relativeProtocol}:`);
+			&& !value.trimStart().startsWith('//')
+			&& !value.trim().toLowerCase().startsWith(`${relativeProtocol}:`);
 	} catch {
 		return false;
 	}

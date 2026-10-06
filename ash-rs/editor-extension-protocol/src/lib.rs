@@ -14,8 +14,8 @@ const MAX_LANGUAGE_IDS: usize = 64;
 const MAX_PROVIDER_OPERATIONS: usize = 32;
 const MAX_DISPLAY_TEXT_BYTES: usize = 512;
 
-mod output;
 mod client;
+mod output;
 pub use client::ExtensionClientOperation;
 pub use client::ExtensionClientRequest;
 pub use client::ExtensionClientResponse;

@@ -10,15 +10,15 @@
 
 `models.json` 放在 `model-provider-info` 合理：模型规格、完整基础提示词、参数支持声明属于共享数据。`models-manager` 负责目录来源、刷新、合并和选择。通用规范不要求把端点、认证和全部厂商请求 JSON 塞进模型条目。
 
-| 内容 | 维护位置与职责 | 例子 |
-| --- | --- | --- |
-| 模型事实 | `model-provider-info/models.json`，以准确厂商＋模型 ID 为键 | 上下文、模态、型号级推理档位、生命周期 |
-| 接入声明 | `model-provider-info` 的接入定义；约束按模型＋接入协议绑定 | 地址、协议版本、生成/计数/流式操作、必需请求头、接入限制 |
-| 请求编码 | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用 | `reasoning.effort` 与 `output_config.effort` 的不同结构 |
-| 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验 | 模型会看图，但所选接入没有图像输入协议 |
-| Ash 执行策略 | 模型条目的独立 `host_policy` 部分；Core 和宿主执行 | 执行上下文预算、压缩阈值、工具结果截断预算 |
-| 基础提示词 | 模型条目的 `instructions`，版本化完整正文 | 工作原则、工具使用和结果报告 |
-| 运行时事实 | 账户、凭据、会话与调用记录的各自负责方 | 账户权限、实际服务等级、缓存命中、token 用量 |
+| 内容           | 维护位置与职责                                                | 例子                                                     |
+| -------------- | ------------------------------------------------------------- | -------------------------------------------------------- |
+| 模型事实       | `model-provider-info/models.json`，以准确厂商＋模型 ID 为键   | 上下文、模态、型号级推理档位、生命周期                   |
+| 接入声明       | `model-provider-info` 的接入定义；约束按模型＋接入协议绑定    | 地址、协议版本、生成/计数/流式操作、必需请求头、接入限制 |
+| 请求编码       | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用   | `reasoning.effort` 与 `output_config.effort` 的不同结构  |
+| 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验 | 模型会看图，但所选接入没有图像输入协议                   |
+| Ash 执行策略   | 模型条目的独立 `host_policy` 部分；Core 和宿主执行            | 执行上下文预算、压缩阈值、工具结果截断预算               |
+| 基础提示词     | 模型条目的 `instructions`，版本化完整正文                     | 工作原则、工具使用和结果报告                             |
+| 运行时事实     | 账户、凭据、会话与调用记录的各自负责方                        | 账户权限、实际服务等级、缓存命中、token 用量             |
 
 有效能力必须同时满足模型声明、所选接入协议和 Ash 已实现的调用能力；账户权限在运行时确认。API、订阅代理和第三方托管接入分别声明，不能从厂商公共 API 继承全部能力。
 
@@ -30,15 +30,15 @@
 
 下面列 HTTP JSON 字段，不把 SDK 的辅助参数名当作请求字段。表中的字段存在，不代表同一家所有型号都接受。
 
-| 模型家族／协议 | 输入与系统指导 | 输出 token 上限 | 结构化输出／工具定义 | 官方依据 |
-| --- | --- | --- | --- | --- |
-| GPT／Responses | `input`、`instructions` | `max_output_tokens`，包含推理 token | `text.format`；函数工具为 `tools[]` 的 `name`、`parameters`、`strict` 等字段 | [Responses reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create) |
-| Claude／Messages | `messages`、顶层 `system`；常规对话按内容块组织 | 必填 `max_tokens`，思考也占此预算 | `output_config.format`；工具为 `name`、`input_schema`，结果为 `tool_result` 内容块 | [Messages](https://platform.claude.com/docs/en/api/messages/create)、[结构化输出](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) |
-| Gemini／Interactions | `input`、`system_instruction` | `generation_config.max_output_tokens` | `response_format`；`tools`，`generation_config.tool_choice` | [Interactions reference](https://ai.google.dev/api/interactions-api) |
-| Gemini／GenerateContent | `contents`、`systemInstruction`；模型 ID 在 URL 中 | `generationConfig.maxOutputTokens` | `generationConfig.responseFormat`；旧字段 `responseMimeType`、`responseSchema` 需按版本区分；`tools.functionDeclarations`、`toolConfig` | [GenerateContent reference](https://ai.google.dev/api/generate-content) |
-| GLM／Z.AI Chat Completions | `messages`，含 `system`、`user`、`assistant`、`tool` | `max_tokens`，上限按型号 | 当前 reference 列 `response_format.type=text/json_object`；工具为 `tools[].function` | [Chat Completion](https://docs.z.ai/api-reference/llm/chat-completion) |
-| Kimi／Chat Completions | `messages`，多模态内容使用内容数组 | `max_completion_tokens`；`max_tokens` 已标弃用 | `response_format.type=text/json_object/json_schema`；`tools[].function` | [Chat API](https://platform.kimi.ai/docs/api/chat) |
-| Grok／Responses | `input`，有类型的输出项 | `max_output_tokens` | `text.format`；Chat／xAI SDK 指南另使用 `response_format`，两者按协议区分 | [协议对照](https://docs.x.ai/developers/model-capabilities/text/comparison)、[结构化输出的 Responses 示例](https://docs.x.ai/developers/model-capabilities/text/structured-outputs) |
+| 模型家族／协议             | 输入与系统指导                                       | 输出 token 上限                                | 结构化输出／工具定义                                                                                                                    | 官方依据                                                                                                                                                                            |
+| -------------------------- | ---------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GPT／Responses             | `input`、`instructions`                              | `max_output_tokens`，包含推理 token            | `text.format`；函数工具为 `tools[]` 的 `name`、`parameters`、`strict` 等字段                                                            | [Responses reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)                                                                           |
+| Claude／Messages           | `messages`、顶层 `system`；常规对话按内容块组织      | 必填 `max_tokens`，思考也占此预算              | `output_config.format`；工具为 `name`、`input_schema`，结果为 `tool_result` 内容块                                                      | [Messages](https://platform.claude.com/docs/en/api/messages/create)、[结构化输出](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)                         |
+| Gemini／Interactions       | `input`、`system_instruction`                        | `generation_config.max_output_tokens`          | `response_format`；`tools`，`generation_config.tool_choice`                                                                             | [Interactions reference](https://ai.google.dev/api/interactions-api)                                                                                                                |
+| Gemini／GenerateContent    | `contents`、`systemInstruction`；模型 ID 在 URL 中   | `generationConfig.maxOutputTokens`             | `generationConfig.responseFormat`；旧字段 `responseMimeType`、`responseSchema` 需按版本区分；`tools.functionDeclarations`、`toolConfig` | [GenerateContent reference](https://ai.google.dev/api/generate-content)                                                                                                             |
+| GLM／Z.AI Chat Completions | `messages`，含 `system`、`user`、`assistant`、`tool` | `max_tokens`，上限按型号                       | 当前 reference 列 `response_format.type=text/json_object`；工具为 `tools[].function`                                                    | [Chat Completion](https://docs.z.ai/api-reference/llm/chat-completion)                                                                                                              |
+| Kimi／Chat Completions     | `messages`，多模态内容使用内容数组                   | `max_completion_tokens`；`max_tokens` 已标弃用 | `response_format.type=text/json_object/json_schema`；`tools[].function`                                                                 | [Chat API](https://platform.kimi.ai/docs/api/chat)                                                                                                                                  |
+| Grok／Responses            | `input`，有类型的输出项                              | `max_output_tokens`                            | `text.format`；Chat／xAI SDK 指南另使用 `response_format`，两者按协议区分                                                               | [协议对照](https://docs.x.ai/developers/model-capabilities/text/comparison)、[结构化输出的 Responses 示例](https://docs.x.ai/developers/model-capabilities/text/structured-outputs) |
 
 Gemini 已推荐 Interactions，GenerateContent 仍受支持。Ash 当前 Google 生成接入使用 OpenAI 兼容 Chat Completions，因此还要独立描述它的 `messages`、`reasoning_effort` 和兼容接口约束；上表的两套 Google 字段不能直接送到该接入。[官方接口选择](https://ai.google.dev/gemini-api/docs/interactions-overview)、[兼容接口](https://ai.google.dev/gemini-api/docs/openai)
 
@@ -46,14 +46,14 @@ JSON 对象输出和按 JSON Schema 约束输出是两种能力。参数 schema�
 
 ### 2.2 思考模式、深度、预算和返回内容
 
-| 家族 | 模式与深度字段 | 数值思考预算 | 思考内容与历史 | 必须保留的型号差异 |
-| --- | --- | --- | --- | --- |
-| GPT | Responses `reasoning.effort`；允许值、默认值按型号 | 不把 effort 换算成固定 token 数 | 摘要和继续对话所需的不透明内容分别声明 | GPT-6 Astra 不接受 `none`；不能给整个 GPT 家族一个通用关闭开关。[推理指南](https://developers.openai.com/api/docs/guides/reasoning) |
-| Claude | `thinking.type`、`output_config.effort` | 较早的扩展思考型号使用 `thinking.budget_tokens` | 思考块及签名按协议要求保存、重放 | Opus 5.5 自适应思考常开；Sonnet 5.5 的 `between_tools` 只适用于 `low/medium/high`。[Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking)、[Effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
-| Gemini | Interactions `generation_config.thinking_level`；GenerateContent `generationConfig.thinkingConfig.thinkingLevel` | Gemini 2.5 的 GenerateContent 使用 `thinkingBudget`；取值语义按型号 | Interactions `generation_config.thinking_summaries`；GenerateContent `generationConfig.thinkingConfig.includeThoughts`；摘要与思考签名分开处理 | Gemini 3 与 2.5 的控制不同；`minimal` 不能统一解释成关闭。[思考指南](https://ai.google.dev/gemini-api/docs/generate-content/thinking)、[Interactions reference](https://ai.google.dev/api/interactions-api) |
-| GLM | `thinking.type`、顶层 `reasoning_effort` | 当前引用不提供可普遍套用的独立 budget 字段 | `reasoning_content`；`thinking.clear_thinking` 控制历史保留 | GLM-5.3 只允许开启，深度为 `low/high/max`；5.2 还接受会映射为其他行为的兼容值。[型号迁移规则](https://docs.z.ai/guides/overview/migrate-to-glm-new) |
-| Kimi | K3 顶层 `reasoning_effort`；K2.x 使用 `thinking` | 当前引用不提供通用独立 budget 字段 | Preserved Thinking 要求原样返回完整 assistant 消息，包括 `reasoning_content` | K3 为 `low/high/max`、默认 `max`、思考常开；K2.6 可关闭；K2.7 Code 常开。[型号参数](https://platform.kimi.ai/docs/api/models-overview)、[思考历史](https://platform.kimi.ai/docs/guide/use-thinking-models) |
-| Grok | Responses `reasoning.effort`；SDK 示例也会出现 `reasoning_effort` | 当前引用不提供通用独立 budget 字段 | Responses `reasoning.encrypted_content` 是不透明历史；Chat 接口不返回对应密文 | 4.6/4.7 有 `xhigh`，4.5 的有效深度只有 `low/medium/high`；不可关闭。[推理指南](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
+| 家族   | 模式与深度字段                                                                                                   | 数值思考预算                                                        | 思考内容与历史                                                                                                                                 | 必须保留的型号差异                                                                                                                                                                                                                    |
+| ------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GPT    | Responses `reasoning.effort`；允许值、默认值按型号                                                               | 不把 effort 换算成固定 token 数                                     | 摘要和继续对话所需的不透明内容分别声明                                                                                                         | GPT-6 Astra 不接受 `none`；不能给整个 GPT 家族一个通用关闭开关。[推理指南](https://developers.openai.com/api/docs/guides/reasoning)                                                                                                   |
+| Claude | `thinking.type`、`output_config.effort`                                                                          | 较早的扩展思考型号使用 `thinking.budget_tokens`                     | 思考块及签名按协议要求保存、重放                                                                                                               | Opus 5.5 自适应思考常开；Sonnet 5.5 的 `between_tools` 只适用于 `low/medium/high`。[Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking)、[Effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
+| Gemini | Interactions `generation_config.thinking_level`；GenerateContent `generationConfig.thinkingConfig.thinkingLevel` | Gemini 2.5 的 GenerateContent 使用 `thinkingBudget`；取值语义按型号 | Interactions `generation_config.thinking_summaries`；GenerateContent `generationConfig.thinkingConfig.includeThoughts`；摘要与思考签名分开处理 | Gemini 3 与 2.5 的控制不同；`minimal` 不能统一解释成关闭。[思考指南](https://ai.google.dev/gemini-api/docs/generate-content/thinking)、[Interactions reference](https://ai.google.dev/api/interactions-api)                           |
+| GLM    | `thinking.type`、顶层 `reasoning_effort`                                                                         | 当前引用不提供可普遍套用的独立 budget 字段                          | `reasoning_content`；`thinking.clear_thinking` 控制历史保留                                                                                    | GLM-5.3 只允许开启，深度为 `low/high/max`；5.2 还接受会映射为其他行为的兼容值。[型号迁移规则](https://docs.z.ai/guides/overview/migrate-to-glm-new)                                                                                   |
+| Kimi   | K3 顶层 `reasoning_effort`；K2.x 使用 `thinking`                                                                 | 当前引用不提供通用独立 budget 字段                                  | Preserved Thinking 要求原样返回完整 assistant 消息，包括 `reasoning_content`                                                                   | K3 为 `low/high/max`、默认 `max`、思考常开；K2.6 可关闭；K2.7 Code 常开。[型号参数](https://platform.kimi.ai/docs/api/models-overview)、[思考历史](https://platform.kimi.ai/docs/guide/use-thinking-models)                           |
+| Grok   | Responses `reasoning.effort`；SDK 示例也会出现 `reasoning_effort`                                                | 当前引用不提供通用独立 budget 字段                                  | Responses `reasoning.encrypted_content` 是不透明历史；Chat 接口不返回对应密文                                                                  | 4.6/4.7 有 `xhigh`，4.5 的有效深度只有 `low/medium/high`；不可关闭。[推理指南](https://docs.x.ai/developers/model-capabilities/text/reasoning)                                                                                        |
 
 必须分别描述四件事：是否思考、投入多深、允许用多少 token、是否返回摘要或历史凭据。同名 effort 不保证跨型号、跨厂商有相同投入。思考预算和整次响应预算还要描述共享关系，避免把推理 token 与可见输出预算重复计算。
 
@@ -61,25 +61,25 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 ### 2.3 约束实例：单个布尔值无法表达
 
-| 官方规则 | 模板需要记录什么 |
-| --- | --- |
-| Kimi K3 温度固定为 1、`top_p` 固定为 0.95，其他值报错；K2.6 的固定温度随思考模式变化 | `mutability=fixed`、固定值、模式条件、非法值处理；固定参数通常省略发送。[参数表](https://platform.kimi.ai/docs/api/models-overview) |
-| GLM `do_sample=false` 时 `temperature/top_p` 失效 | 参数之间的条件和 `ignored` 行为；官方 `stop` 正文与 schema 数量限制还存在差异，填入前需核实，不能挑较宽的限制。[Chat reference](https://docs.z.ai/api-reference/llm/chat-completion) |
-| Grok 推理模型拒绝 presence/frequency penalty 和 stop | 所选型号＋协议的明确拒绝规则；传值前报错。[Reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
-| Claude Sonnet 5.5 在 `between_tools` 下不允许会话中变更 effort | 模式与 effort 的允许组合，以及跨轮变更限制。[Effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
-| Kimi K3 支持 `tool_choice=required`，K2.6 和 K2.7 Code 不支持 | 型号级枚举，不能在厂商级统一开启 required。[参数表](https://platform.kimi.ai/docs/api/models-overview) |
-| Google 接口 schema 说明部分参数并非每个型号都能配置 | 接口字段声明与型号可用集合分别保存。[GenerationConfig](https://ai.google.dev/api/generate-content) |
+| 官方规则                                                                             | 模板需要记录什么                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Kimi K3 温度固定为 1、`top_p` 固定为 0.95，其他值报错；K2.6 的固定温度随思考模式变化 | `mutability=fixed`、固定值、模式条件、非法值处理；固定参数通常省略发送。[参数表](https://platform.kimi.ai/docs/api/models-overview)                                                  |
+| GLM `do_sample=false` 时 `temperature/top_p` 失效                                    | 参数之间的条件和 `ignored` 行为；官方 `stop` 正文与 schema 数量限制还存在差异，填入前需核实，不能挑较宽的限制。[Chat reference](https://docs.z.ai/api-reference/llm/chat-completion) |
+| Grok 推理模型拒绝 presence/frequency penalty 和 stop                                 | 所选型号＋协议的明确拒绝规则；传值前报错。[Reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning)                                                                |
+| Claude Sonnet 5.5 在 `between_tools` 下不允许会话中变更 effort                       | 模式与 effort 的允许组合，以及跨轮变更限制。[Effort](https://platform.claude.com/docs/en/build-with-claude/effort)                                                                   |
+| Kimi K3 支持 `tool_choice=required`，K2.6 和 K2.7 Code 不支持                        | 型号级枚举，不能在厂商级统一开启 required。[参数表](https://platform.kimi.ai/docs/api/models-overview)                                                                               |
+| Google 接口 schema 说明部分参数并非每个型号都能配置                                  | 接口字段声明与型号可用集合分别保存。[GenerationConfig](https://ai.google.dev/api/generate-content)                                                                                   |
 
 ### 2.4 缓存、会话和加速
 
 这些能力属于具体接入操作，不能统一缩成 `cache=true` 或 `fast=true`。
 
-| 能力 | 已核对的官方差异 | 模板要求 |
-| --- | --- | --- |
+| 能力     | 已核对的官方差异                                                                                                                     | 模板要求                                                                                                                                                                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 缓存控制 | OpenAI 新型号有 `prompt_cache_options` 与显式断点；Claude 有内容块 `cache_control`；Google GenerateContent 使用 `cachedContent` 引用 | 区分自动缓存、显式断点、缓存资源；分别记录 TTL、断点数量和操作范围。[OpenAI reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)、[Claude Messages](https://platform.claude.com/docs/en/api/messages/create)、[Google reference](https://ai.google.dev/api/generate-content) |
-| 状态保存 | Grok Responses 使用 `store`、`previous_response_id`；Gemini Interactions 使用 `store`、`previous_interaction_id` | 保存开关、关联 ID、历史重放与保留期限分别声明；缓存不是会话存储。[xAI 对照](https://docs.x.ai/developers/model-capabilities/text/comparison)、[Gemini 概览](https://ai.google.dev/gemini-api/docs/interactions-overview) |
-| 加速 | xAI `service_tier=priority` 是调度等级，响应报告实际等级；Kimi Highspeed 是不同模型 ID | 分开记录请求等级、响应实际等级、型号切换；不得由名字含 Flash 推出可切换 Fast。[xAI Priority](https://docs.x.ai/developers/advanced-api-usage/priority-processing)、[Kimi 型号规则](https://platform.kimi.ai/docs/api/models-overview) |
-| 传输 | xAI Responses 有单独 WebSocket 协议；Google Live 与文本生成是独立操作 | HTTP、SSE、WebSocket、实时语音分别绑定协议和凭据范围；不能由 HTTP 兼容推导 WebSocket。[xAI WebSocket](https://docs.x.ai/developers/advanced-api-usage/websocket-mode)、[Google Live](https://ai.google.dev/api/live) |
+| 状态保存 | Grok Responses 使用 `store`、`previous_response_id`；Gemini Interactions 使用 `store`、`previous_interaction_id`                     | 保存开关、关联 ID、历史重放与保留期限分别声明；缓存不是会话存储。[xAI 对照](https://docs.x.ai/developers/model-capabilities/text/comparison)、[Gemini 概览](https://ai.google.dev/gemini-api/docs/interactions-overview)                                                                                               |
+| 加速     | xAI `service_tier=priority` 是调度等级，响应报告实际等级；Kimi Highspeed 是不同模型 ID                                               | 分开记录请求等级、响应实际等级、型号切换；不得由名字含 Flash 推出可切换 Fast。[xAI Priority](https://docs.x.ai/developers/advanced-api-usage/priority-processing)、[Kimi 型号规则](https://platform.kimi.ai/docs/api/models-overview)                                                                                  |
+| 传输     | xAI Responses 有单独 WebSocket 协议；Google Live 与文本生成是独立操作                                                                | HTTP、SSE、WebSocket、实时语音分别绑定协议和凭据范围；不能由 HTTP 兼容推导 WebSocket。[xAI WebSocket](https://docs.x.ai/developers/advanced-api-usage/websocket-mode)、[Google Live](https://ai.google.dev/api/live)                                                                                                   |
 
 ## 3. 通用字段目录
 
@@ -87,43 +87,43 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 ### 3.1 模型事实
 
-| 字段组 | 建议字段 | 含义与边界 |
-| --- | --- | --- |
-| 身份 | `vendor_id`、`model_id`、`display_name`、`family`、`version` | 保留准确上游身份；别名与实际返回型号分开 |
-| 生命周期 | `lifecycle.status`、`released_at`、`deprecated_at`、`retired_at`、`replacement` | 日期仅填官方确认值；替代型号不触发自动换模 |
-| token 规格 | `limits.context_tokens`、`max_input_tokens`、`max_output_tokens`、`budget_semantics` | 上下文容量、输入上限、响应上限独立；写清推理、工具参数是否计入响应预算 |
-| 输入 | `input.modalities`、`media_constraints`、`instruction_channels`、`assistant_prefill` | text/image/audio/video/document；文件格式、尺寸、数量、时长；系统指导承载方式 |
-| 输出 | `output.modalities`、`modality_combinations` | 能否输出音频或图像与输入能力分开；记录允许同时请求的组合 |
-| 证据 | `evidence` | 每组值对应官方链接、型号/接口/区域、文档版本、复核日期和验证状态 |
+| 字段组     | 建议字段                                                                             | 含义与边界                                                                    |
+| ---------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| 身份       | `vendor_id`、`model_id`、`display_name`、`family`、`version`                         | 保留准确上游身份；别名与实际返回型号分开                                      |
+| 生命周期   | `lifecycle.status`、`released_at`、`deprecated_at`、`retired_at`、`replacement`      | 日期仅填官方确认值；替代型号不触发自动换模                                    |
+| token 规格 | `limits.context_tokens`、`max_input_tokens`、`max_output_tokens`、`budget_semantics` | 上下文容量、输入上限、响应上限独立；写清推理、工具参数是否计入响应预算        |
+| 输入       | `input.modalities`、`media_constraints`、`instruction_channels`、`assistant_prefill` | text/image/audio/video/document；文件格式、尺寸、数量、时长；系统指导承载方式 |
+| 输出       | `output.modalities`、`modality_combinations`                                         | 能否输出音频或图像与输入能力分开；记录允许同时请求的组合                      |
+| 证据       | `evidence`                                                                           | 每组值对应官方链接、型号/接口/区域、文档版本、复核日期和验证状态              |
 
 文件上传接口接收 PDF，不自动说明模型支持整份文档的所有页数、视觉内容或同一种计数方式。图片细节等级、视频帧处理、音频时长与文件资源生命周期都由所选接入补充。
 
 ### 3.2 参数与能力约束
 
-| 字段组 | 建议字段 | 需要描述的规则 |
-| --- | --- | --- |
-| 思考 | `reasoning.mode`、`effort`、`token_budget`、`summary`、`history`、`change_scope` | 模式、真实深度、预算、返回内容、历史保留、跨轮修改条件各自独立 |
-| 采样 | `sampling.temperature`、`top_p`、`top_k`、`seed`、`presence_penalty`、`frequency_penalty`、`enabled` | 范围、固定值、默认值、互斥/失效条件；seed 不声明成确定性保证 |
-| 停止与候选 | `generation.stop_sequences`、`candidate_count`、`logprobs`、`top_logprobs` | 个数/长度限制、联动条件、推理模式限制 |
-| 输出格式 | `output.format`、`schema_profile`、`verbosity` | text、JSON 对象、JSON Schema、模态格式；schema 支持子集与普通文本长度控制分开 |
-| 客户端工具 | `tools.function_calling`、`choice`、`parallel_calls`、`strict_arguments`、`schema_profile`、`limits` | 允许选择的模式、指定函数、调用数量/名称长度、参数结构、并行开关 |
-| 工具历史 | `tools.history`、`result_modalities`、`call_id_policy` | Call/Result 配对、返回角色/内容块、必须保留的推理信息、工具错误表达 |
-| 托管工具 | `server_tools` | 检索、执行、MCP 等逐工具注册；厂商工具名称、版本与访问权限由接入绑定 |
-| 缓存 | `cache.automatic`、`explicit_breakpoints`、`resource_reference`、`ttl`、`invalidation` | 三种机制不合并；说明哪些字段变化会影响缓存 |
-| 会话 | `state.store`、`continuation`、`history_replay`、`compaction` | 存储默认、保留期限、前序引用、摘要/签名/密文重放、服务端压缩操作 |
-| 服务等级 | `execution.service_tiers`、`speed`、`accelerated_model`、`background` | 调度等级、速度参数、型号切换分别描述；后台执行与流式返回独立 |
+| 字段组     | 建议字段                                                                                             | 需要描述的规则                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 思考       | `reasoning.mode`、`effort`、`token_budget`、`summary`、`history`、`change_scope`                     | 模式、真实深度、预算、返回内容、历史保留、跨轮修改条件各自独立                |
+| 采样       | `sampling.temperature`、`top_p`、`top_k`、`seed`、`presence_penalty`、`frequency_penalty`、`enabled` | 范围、固定值、默认值、互斥/失效条件；seed 不声明成确定性保证                  |
+| 停止与候选 | `generation.stop_sequences`、`candidate_count`、`logprobs`、`top_logprobs`                           | 个数/长度限制、联动条件、推理模式限制                                         |
+| 输出格式   | `output.format`、`schema_profile`、`verbosity`                                                       | text、JSON 对象、JSON Schema、模态格式；schema 支持子集与普通文本长度控制分开 |
+| 客户端工具 | `tools.function_calling`、`choice`、`parallel_calls`、`strict_arguments`、`schema_profile`、`limits` | 允许选择的模式、指定函数、调用数量/名称长度、参数结构、并行开关               |
+| 工具历史   | `tools.history`、`result_modalities`、`call_id_policy`                                               | Call/Result 配对、返回角色/内容块、必须保留的推理信息、工具错误表达           |
+| 托管工具   | `server_tools`                                                                                       | 检索、执行、MCP 等逐工具注册；厂商工具名称、版本与访问权限由接入绑定          |
+| 缓存       | `cache.automatic`、`explicit_breakpoints`、`resource_reference`、`ttl`、`invalidation`               | 三种机制不合并；说明哪些字段变化会影响缓存                                    |
+| 会话       | `state.store`、`continuation`、`history_replay`、`compaction`                                        | 存储默认、保留期限、前序引用、摘要/签名/密文重放、服务端压缩操作              |
+| 服务等级   | `execution.service_tiers`、`speed`、`accelerated_model`、`background`                                | 调度等级、速度参数、型号切换分别描述；后台执行与流式返回独立                  |
 
 ### 3.3 接入和响应契约
 
-| 字段组 | 建议字段 | 归属与作用 |
-| --- | --- | --- |
-| 操作绑定 | `connection_id`、`protocol`、`api_version`、`operation`、`model_binding`、`required_headers` | 模型＋接入＋操作的唯一身份；区分 URL 模型 ID 与 body 字段，不保存秘密 |
-| 参数映射 | `parameter_bindings`、`value_mappings`、`conditional_rules` | 保留字段路径与文档化值映射；由有类型的 codec 执行，JSON 不编写任意转换脚本 |
-| 流式 | `transport`、`stream.events`、`termination`、`usage_delivery` | 帧协议、增量类型、成功终止证据、何时报告完整 usage |
-| token 计数 | `token_count.operation`、`accuracy`、`coverage` | 生成前计数是否涵盖工具、模态、系统指导；完成后的 usage 不能代替计数操作 |
-| 用量 | `usage.input`、`output`、`reasoning`、`cache_read`、`cache_write`、`accounting_semantics` | 原始字段位置、包含关系和未知值；不把 reasoning 再加到已含它的 output |
-| 完成原因 | `finish_reasons`、`incomplete_reasons`、`tool_continuation` | 正常结束、预算用尽、工具等待、拒绝等与协议事件对应 |
-| 错误 | `errors.parameter_rejection`、`rate_limit`、`retry_after`、`request_id` | 记录协议能提供的证据；实际重试与取消由调用负责方执行 |
+| 字段组     | 建议字段                                                                                     | 归属与作用                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 操作绑定   | `connection_id`、`protocol`、`api_version`、`operation`、`model_binding`、`required_headers` | 模型＋接入＋操作的唯一身份；区分 URL 模型 ID 与 body 字段，不保存秘密      |
+| 参数映射   | `parameter_bindings`、`value_mappings`、`conditional_rules`                                  | 保留字段路径与文档化值映射；由有类型的 codec 执行，JSON 不编写任意转换脚本 |
+| 流式       | `transport`、`stream.events`、`termination`、`usage_delivery`                                | 帧协议、增量类型、成功终止证据、何时报告完整 usage                         |
+| token 计数 | `token_count.operation`、`accuracy`、`coverage`                                              | 生成前计数是否涵盖工具、模态、系统指导；完成后的 usage 不能代替计数操作    |
+| 用量       | `usage.input`、`output`、`reasoning`、`cache_read`、`cache_write`、`accounting_semantics`    | 原始字段位置、包含关系和未知值；不把 reasoning 再加到已含它的 output       |
+| 完成原因   | `finish_reasons`、`incomplete_reasons`、`tool_continuation`                                  | 正常结束、预算用尽、工具等待、拒绝等与协议事件对应                         |
+| 错误       | `errors.parameter_rejection`、`rate_limit`、`retry_after`、`request_id`                      | 记录协议能提供的证据；实际重试与取消由调用负责方执行                       |
 
 账户 RPM/TPM 配额、已用量、当前额度和实时模型可用性是运行时数据，不写死进模型事实。价格使用独立、带日期的计价记录，见 [计价设计](../../docs/model-accounting.md)。
 
@@ -131,18 +131,18 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 每个可配置参数复用一种描述器，减少重复，又保留限制。`support` 使用 `true / false / null`：分别表示已确认支持、已确认不支持、尚无足够证据；省略字段同样表示未知。布尔与空值表达支持状态，范围、固定值和支持条件由各自字段描述。
 
-| 属性 | 建议类型 | 规则 |
-| --- | --- | --- |
-| `support` | `boolean 或 null` | `true` 支持、`false` 不支持、`null` 或省略为未知 |
-| `value_type` | 有类型的值类别 | boolean、integer、number、enum、schema 等 |
-| `mutability` | `configurable / fixed` | 固定参数仍有有效值，但界面不能提供可调滑块 |
-| `allowed_values`／`range`／`fixed_value` | 枚举、边界或固定值 | 范围含单位与开闭边界；三者按类型选择 |
-| `upstream_default` | 已确认的值 | 官方未声明时省略；与 Ash 偏好分开 |
-| `required` | boolean 或有类型条件 | 例如 Messages 的输出上限必填 |
-| `conditions` | 参数路径＋操作符＋有类型值 | 描述模式、其他参数、协议版本与 beta 头限制 |
-| `invalid_value_behavior` | `reject / ignored / documented_mapping` | 区分错误、无效和明确的兼容映射 |
-| `change_scope` | 请求/轮次/会话约束 | 说明是否可在会话中修改以及历史影响 |
-| `evidence` | 证据 ID 列表 | 约束、默认值和支持范围均有对应来源 |
+| 属性                                     | 建议类型                                | 规则                                             |
+| ---------------------------------------- | --------------------------------------- | ------------------------------------------------ |
+| `support`                                | `boolean 或 null`                       | `true` 支持、`false` 不支持、`null` 或省略为未知 |
+| `value_type`                             | 有类型的值类别                          | boolean、integer、number、enum、schema 等        |
+| `mutability`                             | `configurable / fixed`                  | 固定参数仍有有效值，但界面不能提供可调滑块       |
+| `allowed_values`／`range`／`fixed_value` | 枚举、边界或固定值                      | 范围含单位与开闭边界；三者按类型选择             |
+| `upstream_default`                       | 已确认的值                              | 官方未声明时省略；与 Ash 偏好分开                |
+| `required`                               | boolean 或有类型条件                    | 例如 Messages 的输出上限必填                     |
+| `conditions`                             | 参数路径＋操作符＋有类型值              | 描述模式、其他参数、协议版本与 beta 头限制       |
+| `invalid_value_behavior`                 | `reject / ignored / documented_mapping` | 区分错误、无效和明确的兼容映射                   |
+| `change_scope`                           | 请求/轮次/会话约束                      | 说明是否可在会话中修改以及历史影响               |
+| `evidence`                               | 证据 ID 列表                            | 约束、默认值和支持范围均有对应来源               |
 
 描述器不允许用通用 `extra_body` 或任意 JSON 覆盖绕过校验。文档化映射必须明确列出接受值和最终行为；“接受七个字符串”不等于“七个深度”。参数未知时不能给用户显示已验证的开关；用户明确选择不受支持的值，应在请求前解释原因，不静默丢弃或换成另一个值。
 
@@ -238,13 +238,13 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 ## 6. Ash 策略与提示词模板
 
-| 内容 | 建议结构 | 如何生效 |
-| --- | --- | --- |
-| 执行预算 | `host_policy.context_options`、`default_context_tokens` | Ash 选择本次预算，受模型/接入容量约束 |
-| 自动压缩 | `host_policy.auto_compact_token_limit` | Core 使用预算阈值；区别于厂商压缩 API |
-| 工具输出限额 | `host_policy.tool_output_limit`，带计量方法和单位 | 保留完整原始结果，限制给模型的文本；当前 token 限额使用 UTF-8 字节近似，不能标为准确计数 |
-| 请求偏好 | `host_policy.request_defaults` | Ash 默认 effort/verbosity 等必须通过所选接入校验；不改写官方默认值 |
-| 基础指导 | `instructions.revision`、`instructions.body` | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态 |
+| 内容         | 建议结构                                                | 如何生效                                                                                 |
+| ------------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 执行预算     | `host_policy.context_options`、`default_context_tokens` | Ash 选择本次预算，受模型/接入容量约束                                                    |
+| 自动压缩     | `host_policy.auto_compact_token_limit`                  | Core 使用预算阈值；区别于厂商压缩 API                                                    |
+| 工具输出限额 | `host_policy.tool_output_limit`，带计量方法和单位       | 保留完整原始结果，限制给模型的文本；当前 token 限额使用 UTF-8 字节近似，不能标为准确计数 |
+| 请求偏好     | `host_policy.request_defaults`                          | Ash 默认 effort/verbosity 等必须通过所选接入校验；不改写官方默认值                       |
+| 基础指导     | `instructions.revision`、`instructions.body`            | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态                     |
 
 基础正文可以统一包含工作目标、工具和结果使用、编辑与验证、权限边界、任务完成和报告规则。型号专用指导只写有官方依据或评测证据的差异。Role、权限、项目指令、动态工具和用户当前任务由运行时加入；提示词不能开启推理档位、扩大 API 上限或授予工具权限。现有规则见 [Agent 指令设计](../../docs/agent-instructions.md)。
 
@@ -252,16 +252,16 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/parameters.rs) 和 [接入定义](../src/definition.rs) 为准。当前目录的 [JSON Schema](../models.schema.json) 从 Rust 解析声明生成，App Server 的 JSON Schema 和 TypeScript 类型从共享协议生成，避免另建一份手工类型。当前服务等级格式与示例见 [可解析的模型设置](../README.md#统一静态模型清单)。
 
-| 范围 | 当前状态 | 规范要求补充 |
-| --- | --- | --- |
-| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词和 revision | 字段级来源、适用型号/接入版本与复核状态 |
-| 上下文 | 已有容量、执行预算选项、压缩阈值 | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组 |
-| 模态 | `ModelSettings` 有 text/image/audio 输入列表 | video/document、输出模态、组合、媒体限制与操作范围 |
-| 推理 | 已有带可选说明的支持档位与默认档位 | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则 |
-| 请求设置 | 已有 verbosity、摘要；服务等级含 ID、名称、说明与默认值，加速机制独立声明 | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
-| 工具 | 已有工具和并行能力标记、工具输出预算 | 工具选择、strict、schema 子集、数量限制、结果/历史协议 |
-| 接入 | 已有 API profile、独立流式/语音协议、计数声明 | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入 |
-| 缓存与状态 | 协议实现已有部分缓存、会话行为 | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义 |
+| 范围           | 当前状态                                                                  | 规范要求补充                                                         |
+| -------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词和 revision                     | 字段级来源、适用型号/接入版本与复核状态                              |
+| 上下文         | 已有容量、执行预算选项、压缩阈值                                          | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组         |
+| 模态           | `ModelSettings` 有 text/image/audio 输入列表                              | video/document、输出模态、组合、媒体限制与操作范围                   |
+| 推理           | 已有带可选说明的支持档位与默认档位                                        | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则               |
+| 请求设置       | 已有 verbosity、摘要；服务等级含 ID、名称、说明与默认值，加速机制独立声明 | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
+| 工具           | 已有工具和并行能力标记、工具输出预算                                      | 工具选择、strict、schema 子集、数量限制、结果/历史协议               |
+| 接入           | 已有 API profile、独立流式/语音协议、计数声明                             | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入  |
+| 缓存与状态     | 协议实现已有部分缓存、会话行为                                            | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义          |
 
 完整性的检查单位是“实际能否按正确条件构造请求并解析结果”。Codex 的展示顺序、升级提示、搜索工具选择等还包含自身产品策略；这些字段要有 Ash 的明确负责方和调用用途，不能为了增加行数照抄。
 
@@ -269,34 +269,34 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_models.rs` 的 `ModelInfo`，内置实例在 `codex-rs/models-manager/models.json`；`codex-rs/app-server-protocol/src/protocol/v2/model.rs` 的 `Model` 是供客户端选择模型的较小结果。它们是 Codex 自己的契约，不是跨供应商的标准。下面按当前本地源码逐项列出对应关系；没有对应消费者的字段不加入 Ash 目录。
 
-| Codex `ModelInfo` 字段 | Ash 对应字段或负责方 | 当前处理 |
-| --- | --- | --- |
-| `slug`、`display_name`、`description` | `model_id`、`display_name`、`description` | 静态、动态目录保留；简介可省略 |
-| `supported_reasoning_levels`、`default_reasoning_level` | `supported_reasoning_efforts[{effort,description}]`、`model_reasoning_effort` | 保留档位顺序及说明；Codex `xhigh` 对应 JSON `extraHigh`，请求仍按协议编码 |
-| `service_tiers`、`default_service_tier` | `settings.serviceTiers[{id,name,description}]`、`defaultServiceTier` | 原样保留请求 ID；默认值必须引用列表成员 |
-| `additional_speed_tiers` | `settings.acceleration` | Ash 用明确的等级、速度参数或高速型号声明加速；不复制另一份速度列表 |
-| `input_modalities` | `settings.inputModalities` | 现有 text/image/audio；不推断尚无协议的模态 |
-| `support_verbosity`、`default_verbosity` | `settings.verbosity`、`defaultVerbosity` | 支持情况与默认值分开，未知状态保持未知 |
-| `supports_reasoning_summary_parameter`、`default_reasoning_summary` | `settings.reasoningSummary`、`defaultReasoningSummary` | 参数能力与返回的推理历史分别处理 |
-| `supports_image_detail_original` | `capabilities.imageDetailOriginal` | 保留明确能力声明 |
-| `context_window`、`max_context_window` | `context_window`、`context_window_options` | 容量和 Ash 执行预算分开；动态 Codex 导入用已声明最大容量作为上限 |
-| `auto_compact_token_limit` | `auto_compact_token_limit` | 由 Core 与配置合并执行，并受有效预算约束 |
-| `effective_context_window_percent` | Core 上下文预算计算 | 目录没有同名字段；预算算法由 Core 维护，不能直接搬入 Codex 的保留比例 |
-| `comp_hash` | Core 压缩兼容性与历史协议 | 尚无对应消费链，不声明为已支持 |
-| `truncation_policy` | `settings.toolOutputLimit` | 保留计量方式与限额；token 限额的当前估算语义见模型计价文档 |
-| `visibility`、`priority` | 动态目录适配与客户端可见性设置 | Codex 订阅导入过滤隐藏项并保留排序；不把账户展示策略写进静态型号规格 |
-| `supported_in_api`、`available_access_programs` | 接入定义、凭据与运行时权限 | API 和订阅接入独立校验；型号元数据不证明账户权益 |
-| `availability_nux`、`upgrade`、`model_specialty` | 产品展示与型号生命周期 | 尚无对应的 Ash 展示消费者，不复制 Codex 提示 |
-| `model_messages` | `instructions`、Core 指令组装与各功能负责方 | 仅模型基础正文进入目录；工具、权限、协作和运行时指导由其所属模块组装 |
-| `include_skills_usage_instructions`、`include_plugin_usage_instructions`、`include_apps_usage_instructions` | Skills、插件和连接工具指令组装 | 属于 Ash 功能策略，不从型号名字或 Codex 标志开关功能 |
-| `shell_type`、`apply_patch_tool_type` | Shell、文件修改工具与工具运行时 | 使用 Ash 工具契约，不复制 Codex 工具实现选择 |
-| `web_search_tool_type`、`supports_search_tool`、`experimental_supported_tools` | 搜索和工具声明、工具注册 | 工具开放、协议和权限由工具负责方校验，不由静态目录授权 |
-| `supports_experimental_context` | Core 上下文管理 | 尚无对应型号开关，不声称支持 Codex 的实验协议 |
-| `use_responses_lite` | 接入 API profile 与 `ash-api` | 尚未实现该协议，不能只增加目录布尔值 |
-| `supports_reasoning_effort_updates` | 接入历史编码与请求构造器 | 尚无同名能力声明；当前 effort 通过普通请求参数发送 |
-| `guardian`、`node_repl_auto_review_required`、`node_repl_disabled`、`auto_review_model_override` | Guardian、权限、审批模型和 REPL 功能 | 属于 Ash 执行策略；不能从外部目录改写安全或工具配置 |
-| `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort` | 工具模式与协作功能 | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位 |
-| `used_fallback_model_metadata` | Codex 内部解析标记 | 不属于 JSON 型号声明，也不写入 Ash 目录 |
+| Codex `ModelInfo` 字段                                                                                      | Ash 对应字段或负责方                                                          | 当前处理                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `slug`、`display_name`、`description`                                                                       | `model_id`、`display_name`、`description`                                     | 静态、动态目录保留；简介可省略                                            |
+| `supported_reasoning_levels`、`default_reasoning_level`                                                     | `supported_reasoning_efforts[{effort,description}]`、`model_reasoning_effort` | 保留档位顺序及说明；Codex `xhigh` 对应 JSON `extraHigh`，请求仍按协议编码 |
+| `service_tiers`、`default_service_tier`                                                                     | `settings.serviceTiers[{id,name,description}]`、`defaultServiceTier`          | 原样保留请求 ID；默认值必须引用列表成员                                   |
+| `additional_speed_tiers`                                                                                    | `settings.acceleration`                                                       | Ash 用明确的等级、速度参数或高速型号声明加速；不复制另一份速度列表        |
+| `input_modalities`                                                                                          | `settings.inputModalities`                                                    | 现有 text/image/audio；不推断尚无协议的模态                               |
+| `support_verbosity`、`default_verbosity`                                                                    | `settings.verbosity`、`defaultVerbosity`                                      | 支持情况与默认值分开，未知状态保持未知                                    |
+| `supports_reasoning_summary_parameter`、`default_reasoning_summary`                                         | `settings.reasoningSummary`、`defaultReasoningSummary`                        | 参数能力与返回的推理历史分别处理                                          |
+| `supports_image_detail_original`                                                                            | `capabilities.imageDetailOriginal`                                            | 保留明确能力声明                                                          |
+| `context_window`、`max_context_window`                                                                      | `context_window`、`context_window_options`                                    | 容量和 Ash 执行预算分开；动态 Codex 导入用已声明最大容量作为上限          |
+| `auto_compact_token_limit`                                                                                  | `auto_compact_token_limit`                                                    | 由 Core 与配置合并执行，并受有效预算约束                                  |
+| `effective_context_window_percent`                                                                          | Core 上下文预算计算                                                           | 目录没有同名字段；预算算法由 Core 维护，不能直接搬入 Codex 的保留比例     |
+| `comp_hash`                                                                                                 | Core 压缩兼容性与历史协议                                                     | 尚无对应消费链，不声明为已支持                                            |
+| `truncation_policy`                                                                                         | `settings.toolOutputLimit`                                                    | 保留计量方式与限额；token 限额的当前估算语义见模型计价文档                |
+| `visibility`、`priority`                                                                                    | 动态目录适配与客户端可见性设置                                                | Codex 订阅导入过滤隐藏项并保留排序；不把账户展示策略写进静态型号规格      |
+| `supported_in_api`、`available_access_programs`                                                             | 接入定义、凭据与运行时权限                                                    | API 和订阅接入独立校验；型号元数据不证明账户权益                          |
+| `availability_nux`、`upgrade`、`model_specialty`                                                            | 产品展示与型号生命周期                                                        | 尚无对应的 Ash 展示消费者，不复制 Codex 提示                              |
+| `model_messages`                                                                                            | `instructions`、Core 指令组装与各功能负责方                                   | 仅模型基础正文进入目录；工具、权限、协作和运行时指导由其所属模块组装      |
+| `include_skills_usage_instructions`、`include_plugin_usage_instructions`、`include_apps_usage_instructions` | Skills、插件和连接工具指令组装                                                | 属于 Ash 功能策略，不从型号名字或 Codex 标志开关功能                      |
+| `shell_type`、`apply_patch_tool_type`                                                                       | Shell、文件修改工具与工具运行时                                               | 使用 Ash 工具契约，不复制 Codex 工具实现选择                              |
+| `web_search_tool_type`、`supports_search_tool`、`experimental_supported_tools`                              | 搜索和工具声明、工具注册                                                      | 工具开放、协议和权限由工具负责方校验，不由静态目录授权                    |
+| `supports_experimental_context`                                                                             | Core 上下文管理                                                               | 尚无对应型号开关，不声称支持 Codex 的实验协议                             |
+| `use_responses_lite`                                                                                        | 接入 API profile 与 `ash-api`                                                 | 尚未实现该协议，不能只增加目录布尔值                                      |
+| `supports_reasoning_effort_updates`                                                                         | 接入历史编码与请求构造器                                                      | 尚无同名能力声明；当前 effort 通过普通请求参数发送                        |
+| `guardian`、`node_repl_auto_review_required`、`node_repl_disabled`、`auto_review_model_override`            | Guardian、权限、审批模型和 REPL 功能                                          | 属于 Ash 执行策略；不能从外部目录改写安全或工具配置                       |
+| `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort`                                          | 工具模式与协作功能                                                            | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位                      |
+| `used_fallback_model_metadata`                                                                              | Codex 内部解析标记                                                            | 不属于 JSON 型号声明，也不写入 Ash 目录                                   |
 
 Codex 示例 JSON 还可能含有不在这份 `ModelInfo` 中的字段，例如 `prefer_websockets`、`supports_parallel_tool_calls`、`minimal_client_version`、`requires_sandboxed_review`。因此复制示例不能代替核对实际消费类型。Ash 已有并行工具声明；传输由接入定义负责，客户端版本与审批限制由相应功能负责。Ash 的 Schema 拒绝未声明字段。
 

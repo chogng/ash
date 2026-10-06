@@ -21,7 +21,7 @@ test('other behavior', () => {});
 const first = relative(outputDirectory, join(directory, 'first.test.js')).replaceAll('\\', '/');
 const second = relative(outputDirectory, join(directory, 'second.test.js')).replaceAll('\\', '/');
 
-function run(args: readonly string[]): { status: number | null; output: string } {
+function run(args: readonly string[]): { status: number | null; output: string; } {
 	const result = spawnSync(process.execPath, ['test/unit/run.ts', ...args], {
 		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true,
 	});

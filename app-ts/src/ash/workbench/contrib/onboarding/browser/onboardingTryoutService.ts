@@ -15,7 +15,7 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		@IViewsService private readonly views: IViewsService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@INotificationService private readonly notifications: INotificationService,
-	) {}
+	) { }
 
 	public getTryouts(): readonly IOnboardingTryout[] {
 		return onboardingTryoutRegistry.getTryouts();

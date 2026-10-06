@@ -4,10 +4,7 @@
     "noEmit": true,
     "incremental": true,
     "tsBuildInfoFile": "../.build/app-ts/common.tsbuildinfo",
-    "lib": [
-      "ES2022",
-      "ESNext.Disposable"
-    ],
+    "lib": ["ES2022", "ESNext.Disposable"],
     "types": [],
     "noUncheckedSideEffectImports": true,
     "skipLibCheck": false
@@ -18,8 +15,5 @@
     "src/ash/**/common/**/*.ts",
     "test/types/common.ts"
   ],
-  "exclude": [
-    "src/ash/**/test/**",
-    "src/ash/sessions/browser/**"
-  ]
+  "exclude": ["src/ash/**/test/**", "src/ash/sessions/browser/**"]
 }

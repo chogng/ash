@@ -49,7 +49,7 @@ export class ViewPaneContainer extends Disposable {
 	private visible = true;
 	private readonly viewsAdded = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewsRemoved = this._register(new Emitter<readonly ViewPane[]>());
-	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean }>());
+	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean; }>());
 	private readonly viewFocus = this._register(new Emitter<ViewPane>());
 	private readonly viewBlur = this._register(new Emitter<ViewPane>());
 	public readonly onDidAddViews = this.viewsAdded.event;

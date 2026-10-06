@@ -7,7 +7,7 @@ import type { ITextModel } from '../../../common/model.js';
 export class InsertFinalNewLineCommand implements ICommand {
 	private selectionId!: string;
 
-	constructor(private readonly selection: Selection) {}
+	constructor(private readonly selection: Selection) { }
 
 	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		const operation = insertFinalNewLine(model);

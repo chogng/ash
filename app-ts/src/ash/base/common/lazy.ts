@@ -11,7 +11,7 @@ export class Lazy<T> {
 	private failure: unknown;
 	private failed = false;
 
-	constructor(private readonly create: () => T) {}
+	constructor(private readonly create: () => T) { }
 
 	get hasValue(): boolean {
 		return this.state === LazyState.Initialized;

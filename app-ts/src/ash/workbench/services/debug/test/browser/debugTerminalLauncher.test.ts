@@ -59,7 +59,7 @@ suite('DAP terminal availability', () => {
 				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
 				read: async () => { throw new Error('Disconnected terminal must not poll'); },
 				write: async () => { calls.push('write'); },
-				resize: async () => {},
+				resize: async () => { },
 				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
 			const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
@@ -81,10 +81,10 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const adapters = resources.add(new DebugAdapterFactoryRegistry());
 	let resolveResponse!: (response: Record<string, unknown>) => void;
 	const response = new Promise<Record<string, unknown>>(resolve => { resolveResponse = resolve; });
-	const messages: Array<{ sequence: number; message: unknown }> = [];
+	const messages: Array<{ sequence: number; message: unknown; }> = [];
 	const enqueue = (message: unknown): void => { messages.push({ sequence: messages.length, message }); };
 	const processes: IDebugAdapterProcessService = {
-		onConnectionState: () => Event.None(() => {}),
+		onConnectionState: () => Event.None(() => { }),
 		getConnectionState: async () => 'ready',
 		start: async () => 'adapter-process',
 		send: async (_id, value) => {
@@ -97,7 +97,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 			enqueue({ seq: 102, type: 'response', request_seq: message.seq, command: message.command, success: true, body: {} });
 		},
 		read: async (_id, afterSequence, maxMessages) => ({ messages: messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages), nextSequence: messages.length, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null }),
-		close: async () => {},
+		close: async () => { },
 	};
 	const browser = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => browser.window.close()));

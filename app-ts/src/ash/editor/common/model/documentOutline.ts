@@ -24,7 +24,7 @@ export interface DocumentOutlineOptions {
 export function buildDocumentOutline(document: DocumentNode, options: DocumentOutlineOptions = {}): DocumentOutline {
 	if (!document || typeof document !== "object") throw new TypeError("A document is required to build an outline");
 	const entries: DocumentOutlineEntry[] = [];
-	const headingStack: Array<{ readonly nodeId: DocumentNodeId; readonly level: number }> = [];
+	const headingStack: Array<{ readonly nodeId: DocumentNodeId; readonly level: number; }> = [];
 	const isHeading = options.isHeading ?? (node => node.type === "heading");
 	const getLevel = options.getLevel ?? defaultHeadingLevel;
 	const getTitle = options.getTitle ?? defaultHeadingTitle;

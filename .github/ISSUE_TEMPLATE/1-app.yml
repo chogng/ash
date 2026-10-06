@@ -1,11 +1,11 @@
 name: 🖥️ App Bug
 description: Report an issue with the Ash app
 labels:
-- app
+  - app
 body:
   - type: markdown
     attributes:
-      value: 
+      value:
         Before submitting a new issue, search existing issues to see whether it has already been reported.
         If you find the same issue, add a 👍 reaction instead of opening a duplicate.
 

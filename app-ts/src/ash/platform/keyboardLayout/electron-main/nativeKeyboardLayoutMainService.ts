@@ -87,7 +87,7 @@ function readNativeKeyboardLayout(nativeKeymap: NativeKeymapModule): IKeyboardLa
 function nativeLayoutIdentity(
 	layout: ReturnType<NativeKeymapModule['getCurrentKeyboardLayout']>,
 	operatingSystem: OperatingSystem,
-): { readonly id: string; readonly label: string } {
+): { readonly id: string; readonly label: string; } {
 	if (operatingSystem === OperatingSystem.Windows && 'name' in layout) {
 		return { id: layout.name, label: layout.text };
 	}

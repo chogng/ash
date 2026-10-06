@@ -50,15 +50,15 @@ function testConfiguration(lineHeight: number, padding: EditorViewportVerticalPa
 		onDidChangeFast: Event.None,
 		onDidChange: Event.None,
 		getRawOptions: () => ({}),
-		updateOptions: () => {},
-		observeContainer: () => {},
-		setIsDominatedByLongLines: () => {},
-		setModelLineCount: () => {},
-		setViewLineCount: () => {},
-		setReservedHeight: () => {},
-		setGlyphMarginDecorationLaneCount: () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		updateOptions: () => { },
+		observeContainer: () => { },
+		setIsDominatedByLongLines: () => { },
+		setModelLineCount: () => { },
+		setViewLineCount: () => { },
+		setReservedHeight: () => { },
+		setGlyphMarginDecorationLaneCount: () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 }
 
@@ -419,8 +419,8 @@ test('ViewLayout publishes scroll, content-size, and whitespace changes from one
 	using viewport = new ViewLayout(model, { lineHeight: 20 });
 	viewport.setViewportSize({ width: 100, height: 40 });
 	viewport.setMaxLineWidth(200);
-	const scrolls: Array<{ left: number; top: number; widthChanged: boolean }> = [];
-	const sizes: Array<{ width: number; height: number }> = [];
+	const scrolls: Array<{ left: number; top: number; widthChanged: boolean; }> = [];
+	const sizes: Array<{ width: number; height: number; }> = [];
 	using scrollListener = viewport.onDidScroll(event => scrolls.push({
 		left: event.scrollLeft,
 		top: event.scrollTop,

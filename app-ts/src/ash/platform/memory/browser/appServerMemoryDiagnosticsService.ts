@@ -37,7 +37,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 		const operation = this.mutation.then(() => this.begin());
 		this.mutation = operation.then(() => undefined, () => undefined);
 		this.starting = operation;
-		void operation.finally(() => { if (this.starting === operation) { this.starting = undefined; } }).catch(() => {});
+		void operation.finally(() => { if (this.starting === operation) { this.starting = undefined; } }).catch(() => { });
 		return operation;
 	}
 

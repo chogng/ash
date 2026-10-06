@@ -14,14 +14,14 @@
 
 ## 持久化身份
 
-| 字段 | 用途 |
-| --- | --- |
-| `CloudCodebaseGrantId` | 本机一次明确授权，也是远端批量删除边界 |
-| `CloudCodebaseId` | 服务端长期对象身份，不从本地路径推导 |
-| `root_id` | 防止授权被另一个 Workspace 复用 |
-| destination | 固定 provider、tenant 与 collection |
+| 字段                         | 用途                                       |
+| ---------------------------- | ------------------------------------------ |
+| `CloudCodebaseGrantId`       | 本机一次明确授权，也是远端批量删除边界     |
+| `CloudCodebaseId`            | 服务端长期对象身份，不从本地路径推导       |
+| `root_id`                    | 防止授权被另一个 Workspace 复用            |
+| destination                  | 固定 provider、tenant 与 collection        |
 | selection + max egress bytes | 固定允许发布的相对路径范围和源码 byte 上限 |
-| remote generation | 固定一次查询实际使用的云端版本 |
+| remote generation            | 固定一次查询实际使用的云端版本             |
 
 旧状态数据库会一次性迁移到当前 schema；迁移使用原 provider collection 作为此前已经存在的远端对象身份。迁移不会丢弃 `Revoking` 或失败删除任务。
 

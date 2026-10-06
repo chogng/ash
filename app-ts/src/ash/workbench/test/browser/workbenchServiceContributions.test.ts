@@ -5,8 +5,8 @@ import { InstantiationService } from "../../../platform/instantiation/common/ins
 import { WorkbenchServiceContributionRegistry, type WorkbenchServiceContributionContext } from "../../browser/workbenchServiceContributions.js";
 
 test("Workbench service contributions install by declared dependency topology", () => {
-	const first = createServiceIdentifier<{ readonly value: string }>("testFirst");
-	const second = createServiceIdentifier<{ readonly value: string }>("testSecond");
+	const first = createServiceIdentifier<{ readonly value: string; }>("testFirst");
+	const second = createServiceIdentifier<{ readonly value: string; }>("testSecond");
 	const registry = new WorkbenchServiceContributionRegistry();
 	const installed: string[] = [];
 	registry.register({ service: second, dependencies: [first], install: context => { installed.push("second"); return { value: `${context.container.get(first).value}:second` }; } });

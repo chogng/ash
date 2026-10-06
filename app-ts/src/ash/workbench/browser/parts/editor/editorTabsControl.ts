@@ -20,7 +20,7 @@ export interface EditorTabDescriptor {
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */
 export interface EditorTabsDelegate {
 	activate(input: EditorInput): void;
-	select?(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): boolean;
+	select?(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): boolean;
 	preview(input: EditorInput): void;
 	close(input: EditorInput): void;
 	showContextMenu?(input: EditorInput, event: MouseEvent | KeyboardEvent, tab: HTMLElement): void;

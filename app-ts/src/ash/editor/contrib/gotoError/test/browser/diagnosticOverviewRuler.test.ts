@@ -10,15 +10,15 @@ import { type TextMeasurer } from '../../../../common/viewModel.js';
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 
 test('OverviewRuler projects standard zones through its canvas and layout API', () => {
-	const paint: { readonly fill: string; readonly top: number; readonly height: number }[] = [];
+	const paint: { readonly fill: string; readonly top: number; readonly height: number; }[] = [];
 	browserEnvironment.window.HTMLCanvasElement.prototype.getContext = function () {
 		const context = {
 			fillStyle: '',
-			clearRect(): void {},
-			beginPath(): void {},
-			moveTo(): void {},
-			lineTo(): void {},
-			stroke(): void {},
+			clearRect(): void { },
+			beginPath(): void { },
+			moveTo(): void { },
+			lineTo(): void { },
+			stroke(): void { },
 			fillRect(_left: number, top: number, _width: number, height: number): void {
 				paint.push({ fill: String(context.fillStyle), top, height });
 			},

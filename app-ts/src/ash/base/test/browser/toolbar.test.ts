@@ -158,17 +158,17 @@ function action(id: string): IAction {
 		label: id,
 		tooltip: id,
 		enabled: true,
-		run() {},
+		run() { },
 	};
 }
 
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }

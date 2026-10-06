@@ -10,12 +10,12 @@ This specification defines stable placement and state-ownership rules. Row styli
 
 ## Ownership
 
-| Concern | Owner |
-|---------|-------|
-| Session catalog and lifecycle | `ISessionsManagementService` |
-| Pin and per-sort ordering state | `ISessionsListModelService` |
-| Custom groups and membership | `ISessionGroupsService` |
-| Top-level group/workspace order | `ISessionSectionOrderService` |
+| Concern                           | Owner                             |
+| --------------------------------- | --------------------------------- |
+| Session catalog and lifecycle     | `ISessionsManagementService`      |
+| Pin and per-sort ordering state   | `ISessionsListModelService`       |
+| Custom groups and membership      | `ISessionGroupsService`           |
+| Top-level group/workspace order   | `ISessionSectionOrderService`     |
 | Tree composition and presentation | `SessionsView` and `SessionsList` |
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.

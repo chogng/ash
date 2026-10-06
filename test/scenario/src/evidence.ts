@@ -37,7 +37,7 @@ interface EvidenceRun {
 	readonly runPath: string;
 	readonly application: RunningApplication;
 	readonly steps: EvidenceStep[];
-	readonly artifacts: { report?: string; videos: string[]; logs: string[]; finalizationError?: string };
+	readonly artifacts: { report?: string; videos: string[]; logs: string[]; finalizationError?: string; };
 }
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
@@ -46,7 +46,7 @@ const evidenceRoot = join(repositoryRoot, '.build', 'ash-playwright-mcp', 'evide
 export class EvidenceService {
 	private currentRun: EvidenceRun | undefined;
 
-	constructor(private readonly applications: ApplicationService) {}
+	constructor(private readonly applications: ApplicationService) { }
 
 	async start(
 		scenarioId: string,
@@ -257,7 +257,7 @@ function isHttpUrl(value: string): boolean {
 
 function readAshVersion(): string {
 	const packagePath = join(repositoryRoot, 'app-ts', 'package.json');
-	return existsSync(packagePath) ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string }).version : 'unknown';
+	return existsSync(packagePath) ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string; }).version : 'unknown';
 }
 
 function toRelativePath(root: string, path: string): string {

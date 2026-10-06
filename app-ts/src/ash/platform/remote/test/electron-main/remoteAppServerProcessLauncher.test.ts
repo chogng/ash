@@ -7,7 +7,7 @@ import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/
 import { RemoteAppServerProcessLauncher, SshRuntimeProbeError, sshRuntimeProbeArguments } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 
 test('Remote launcher starts a local daemon carrier with a remote connection scope', () => {
-	const launches: Array<{ executable: string; args: readonly string[]; environment: Readonly<Record<string, string>> }> = [];
+	const launches: Array<{ executable: string; args: readonly string[]; environment: Readonly<Record<string, string>>; }> = [];
 	const child = {} as ChildProcessWithoutNullStreams;
 	const carrier = createCarrier((executable, args, options) => {
 		launches.push({ executable, args, environment: options.environment });
@@ -45,7 +45,7 @@ test('Remote launcher retargets the same authority without opening the path loca
 });
 
 test("Desktop validates the selected runtime before starting the App Server", async () => {
-	let probe: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv } | undefined;
+	let probe: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv; } | undefined;
 	const launcher = new RemoteAppServerProcessLauncher({
 		workspace: createSshRemoteWorkspaceUri("Work-Server", "/home/ash/project"),
 		sshExecutable: "ssh",

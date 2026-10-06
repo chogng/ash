@@ -21,7 +21,7 @@ for (const [original, formatted] of [
 			edits: [{ range: model.getFullModelRange(), text: formatted }],
 		});
 		assert.ok(Array.isArray(result));
-		model.pushEditOperations(null, result as { range: Range; text: string }[], () => null);
+		model.pushEditOperations(null, result as { range: Range; text: string; }[], () => null);
 		assert.equal(model.getValue(), formatted);
 		model.undo();
 		assert.equal(model.getValue(), original);
@@ -69,7 +69,7 @@ test('Editor worker computes Unicode highlights from the captured model version'
 
 	const result = await run(worker, model, 1, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, Object.freeze({}));
 
-	assert.deepEqual((result as readonly { readonly kind: string }[]).map(highlight => highlight.kind), ['invisible', 'confusable', 'bidi']);
+	assert.deepEqual((result as readonly { readonly kind: string; }[]).map(highlight => highlight.kind), ['invisible', 'confusable', 'bidi']);
 });
 
 test('Unicode highlights exclude CRLF separators and retain character positions', async () => {

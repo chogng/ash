@@ -1,109 +1,109 @@
 .ash-select-box {
-  min-width: 80px;
-  max-width: 100%;
+	min-width: 80px;
+	max-width: 100%;
 }
 
 .ash-select-box-button {
-  width: 100%;
+	width: 100%;
 }
 
 .ash-select-box .ash-dropdown-indicator > .ash-icon,
 .ash-select-box-option-check > .ash-icon {
-  width: var(--ash-lxicon-font-size);
-  height: var(--ash-lxicon-font-size);
+	width: var(--ash-lxicon-font-size);
+	height: var(--ash-lxicon-font-size);
 }
 
 .ash-select-box-list {
-  width: max-content;
-  min-width: var(--dropdown-trigger-width, 160px);
-  max-width: min(320px, calc(100vw - 16px));
-  max-height: min(320px, calc(100vh - 16px));
-  box-sizing: border-box;
-  padding: 4px;
-  outline: none;
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
-  overflow: auto;
+	width: max-content;
+	min-width: var(--dropdown-trigger-width, 160px);
+	max-width: min(320px, calc(100vw - 16px));
+	max-height: min(320px, calc(100vh - 16px));
+	box-sizing: border-box;
+	padding: 4px;
+	outline: none;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	overflow: auto;
 }
 
 .ash-select-box-option {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 16px;
-  gap: 6px;
-  min-height: 24px;
-  padding: 4px 6px;
-  border-radius: var(--ash-corner-radius-x-small);
-  outline: none;
-  cursor: pointer;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto 16px;
+	gap: 6px;
+	min-height: 24px;
+	padding: 4px 6px;
+	border-radius: var(--ash-corner-radius-x-small);
+	outline: none;
+	cursor: pointer;
 }
 
 .ash-select-box-option-active {
-  color: var(--ash-foreground);
-  background: var(--ash-list-hover-background);
+	color: var(--ash-foreground);
+	background: var(--ash-list-hover-background);
 }
 
 .ash-select-box-option:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-select-box-option-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-select-box-option-check {
-  display: inline-flex;
-  grid-column: 3;
-  align-items: center;
-  justify-content: center;
-  visibility: hidden;
+	display: inline-flex;
+	grid-column: 3;
+	align-items: center;
+	justify-content: center;
+	visibility: hidden;
 }
 
 .ash-select-box-option-selected > .ash-select-box-option-check {
-  visibility: visible;
+	visibility: visible;
 }
 
 .ash-select-box-option-description {
-  grid-column: 2;
-  color: var(--ash-description-foreground);
+	grid-column: 2;
+	color: var(--ash-description-foreground);
 }
 
 .ash-select-box-option-active .ash-select-box-option-description {
-  color: inherit;
+	color: inherit;
 }
 
 .ash-select-box-option-disabled {
-  opacity: .5;
-  cursor: default;
+	opacity: 0.5;
+	cursor: default;
 }
 
 .ash-select-box.ash-select-box-field {
-  width: fit-content;
-  min-width: 0;
+	width: fit-content;
+	min-width: 0;
 }
 
 .ash-select-box-field > .ash-select-box-button {
-  min-height: 24px;
-  box-sizing: border-box;
-  gap: var(--ash-spacing-size40);
-  padding: 0 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-medium);
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
-  font: inherit;
+	min-height: 24px;
+	box-sizing: border-box;
+	gap: var(--ash-spacing-size40);
+	padding: 0 6px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-medium);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	font: inherit;
 }
 
 .ash-select-box-field > .ash-select-box-button:hover,
 .ash-select-box-field.ash-dropdown-open > .ash-select-box-button {
-  background: var(--ash-input-background);
+	background: var(--ash-input-background);
 }
 
 .ash-select-box-field > .ash-select-box-button:focus-visible {
-  border-color: var(--ash-focus-border);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	border-color: var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }

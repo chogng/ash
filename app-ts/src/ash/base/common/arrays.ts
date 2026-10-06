@@ -184,9 +184,9 @@ function strictEquals<T>(left: T, right: T): boolean {
 
 /** A callback-based lazy sequence that can stop iteration early. */
 export class CallbackIterable<T> {
-	public static readonly empty = new CallbackIterable<never>(_callback => {});
+	public static readonly empty = new CallbackIterable<never>(_callback => { });
 
-	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) {}
+	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) { }
 
 	forEach(handler: (item: T) => void): void {
 		this.iterate(item => { handler(item); return true; });

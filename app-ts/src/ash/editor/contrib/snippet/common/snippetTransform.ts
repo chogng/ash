@@ -92,7 +92,7 @@ function expandBracedCaptureExpression(expression: string, captures: readonly st
 	return capture.length === 0 ? expandTransformFormat(directive, captures) : capture;
 }
 
-function readBracedExpression(format: string, startOffset: number): { readonly text: string; readonly nextOffset: number } {
+function readBracedExpression(format: string, startOffset: number): { readonly text: string; readonly nextOffset: number; } {
 	let depth = 0;
 	let text = "";
 	for (let offset = startOffset; offset < format.length; offset += 1) {
@@ -120,7 +120,7 @@ function readBracedExpression(format: string, startOffset: number): { readonly t
 	throw new SyntaxError("Unclosed completion snippet transform format expression");
 }
 
-function splitConditional(value: string): { readonly whenTruthy: string; readonly whenFalsy: string } {
+function splitConditional(value: string): { readonly whenTruthy: string; readonly whenFalsy: string; } {
 	let depth = 0;
 	for (let offset = 0; offset < value.length; offset += 1) {
 		const character = value[offset]!;

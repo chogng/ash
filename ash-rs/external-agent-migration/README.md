@@ -46,18 +46,18 @@ directory `tempfile`。它不得反向依赖
 
 ## 2. 公共契约
 
-| Symbol | 当前职责 | 不承担 |
-| --- | --- | --- |
-| `ExternalAgent` | 区分 `Codex`、`Claude`、`Copilot` 与 `Cursor` 布局 | 动态 provider registry |
-| `ImportScope` | 区分 `User` 与 `Project` 来源 | directory capability 或配置优先级 |
-| `AgentImportLocation::{codex_user,codex_project,claude_user,claude_project}` | 将来源、作用范围和调用方选择的根目录绑定为一个发现输入 | 环境变量解析、文件访问授权 |
-| `inspect_agent_paths` | 校验所有输入根并检查已知相对位置 | 转换内容或应用配置 |
-| `detect_migration_plan` | 校验输入根并解析有界源格式，产出按条目排序的 `MigrationPlanItem` | 映射到 Ash 领域、过滤已导入项、应用配置 |
-| `MigrationPlanItem` / `MigrationItemDetail` | 一个可迁移条目及其类型化源格式 fragment | Ash config schema、目标 authority 命令 |
-| `repository_root_for_cwd` | 从任意 cwd 向上解析 `.git` 仓库根 | home/project 作用范围决策、目录授权 |
-| `AgentImportCandidate` | 返回来源、作用范围、条目类型、审查类别、相对路径和 canonical host path | 表示内容已受信任、已批准或可执行 |
-| `AgentImportDiagnostic` | 说明一个已存在的已知路径为什么未进入候选 | 暴露根目录、正文或凭据 |
-| `AgentImportError` | 表达调用方选择的根目录整体无效 | 表达单个候选的隔离错误 |
+| Symbol                                                                       | 当前职责                                                               | 不承担                                  |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------- |
+| `ExternalAgent`                                                              | 区分 `Codex`、`Claude`、`Copilot` 与 `Cursor` 布局                     | 动态 provider registry                  |
+| `ImportScope`                                                                | 区分 `User` 与 `Project` 来源                                          | directory capability 或配置优先级       |
+| `AgentImportLocation::{codex_user,codex_project,claude_user,claude_project}` | 将来源、作用范围和调用方选择的根目录绑定为一个发现输入                 | 环境变量解析、文件访问授权              |
+| `inspect_agent_paths`                                                        | 校验所有输入根并检查已知相对位置                                       | 转换内容或应用配置                      |
+| `detect_migration_plan`                                                      | 校验输入根并解析有界源格式，产出按条目排序的 `MigrationPlanItem`       | 映射到 Ash 领域、过滤已导入项、应用配置 |
+| `MigrationPlanItem` / `MigrationItemDetail`                                  | 一个可迁移条目及其类型化源格式 fragment                                | Ash config schema、目标 authority 命令  |
+| `repository_root_for_cwd`                                                    | 从任意 cwd 向上解析 `.git` 仓库根                                      | home/project 作用范围决策、目录授权     |
+| `AgentImportCandidate`                                                       | 返回来源、作用范围、条目类型、审查类别、相对路径和 canonical host path | 表示内容已受信任、已批准或可执行        |
+| `AgentImportDiagnostic`                                                      | 说明一个已存在的已知路径为什么未进入候选                               | 暴露根目录、正文或凭据                  |
+| `AgentImportError`                                                           | 表达调用方选择的根目录整体无效                                         | 表达单个候选的隔离错误                  |
 
 典型调用点保持自解释，不传递布尔模式或裸来源字符串：
 
@@ -87,12 +87,12 @@ let plan = detect_migration_plan(
 `agent_paths.rs` 拥有元数据 inspection 的静态路径表；`detect.rs` 和各内容模块拥有计划读取的固定布局。
 当前识别的路径如下：
 
-| 来源 | 用户级路径 | 项目级路径 |
-| --- | --- | --- |
-| Codex | `~/.codex/{AGENTS.md,AGENTS.override.md,config.toml,agents/,rules/}`、`~/.agents/skills/` | `{AGENTS.md,AGENTS.override.md}`、`.codex/{config.toml,agents/,rules/}`、`.agents/skills/` |
-| Claude | `~/.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json`（MCP 声明）、`~/.claude/projects/*/memory/` | `{CLAUDE.md,CLAUDE.local.md,.mcp.json}`、`.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json` 对应项目条目（MCP 声明） |
-| Cursor | 尚未支持用户级布局 | `.cursorrules`、`.cursor/rules/**/*.mdc` |
-| Copilot | 尚未支持用户级布局 | `.github/copilot-instructions.md`、`.github/instructions/*.instructions.md`（直接文件） |
+| 来源    | 用户级路径                                                                                                                                               | 项目级路径                                                                                                                                                                   |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex   | `~/.codex/{AGENTS.md,AGENTS.override.md,config.toml,agents/,rules/}`、`~/.agents/skills/`                                                                | `{AGENTS.md,AGENTS.override.md}`、`.codex/{config.toml,agents/,rules/}`、`.agents/skills/`                                                                                   |
+| Claude  | `~/.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json`（MCP 声明）、`~/.claude/projects/*/memory/` | `{CLAUDE.md,CLAUDE.local.md,.mcp.json}`、`.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json` 对应项目条目（MCP 声明） |
+| Cursor  | 尚未支持用户级布局                                                                                                                                       | `.cursorrules`、`.cursor/rules/**/*.mdc`                                                                                                                                     |
+| Copilot | 尚未支持用户级布局                                                                                                                                       | `.github/copilot-instructions.md`、`.github/instructions/*.instructions.md`（直接文件）                                                                                      |
 
 路径映射依据 Codex 的
 [导入说明](https://learn.chatgpt.com/docs/import)和
@@ -101,12 +101,12 @@ let plan = detect_migration_plan(
 [Skill 位置说明](https://code.claude.com/docs/en/skills)。外部产品改变路径时，先更新
 官方契约证据和 fixture，再修改 `agent_paths.rs`；不能靠扫描整个 home 猜测新位置。
 
-| `ImportItemKind` | `ImportReviewCategory` | 原因 |
-| --- | --- | --- |
-| `Instructions`、`Skills`、`Commands`、`Memory`、`InstructionRules` | `Content` | 包含将进入模型上下文的外部指令 |
-| `Settings`、`Agents`、`Plugins` | `Configuration` | 需要目标领域映射，不能按原格式直接生效 |
-| `McpServers` | `Connection` | 可能引入进程、网络、header 或重新登录要求 |
-| `ExecutionRules`、`Hooks` | `ExecutionPolicy` | 可能改变命令是否提示、允许或阻止 |
+| `ImportItemKind`                                                   | `ImportReviewCategory` | 原因                                      |
+| ------------------------------------------------------------------ | ---------------------- | ----------------------------------------- |
+| `Instructions`、`Skills`、`Commands`、`Memory`、`InstructionRules` | `Content`              | 包含将进入模型上下文的外部指令            |
+| `Settings`、`Agents`、`Plugins`                                    | `Configuration`        | 需要目标领域映射，不能按原格式直接生效    |
+| `McpServers`                                                       | `Connection`           | 可能引入进程、网络、header 或重新登录要求 |
+| `ExecutionRules`、`Hooks`                                          | `ExecutionPolicy`      | 可能改变命令是否提示、允许或阻止          |
 
 Claude commands 按 plan 条目发现（文件 stem），与上游一样作为可迁移为 skill 的候选；把 command
 body 转成 Ash Skill 仍是 adapter 的职责，本 crate 不读取 command 正文。Codex execution rules 只发现
@@ -121,31 +121,31 @@ MCP 声明；整个文件不进入候选，也不交给 Desktop、模型或普�
 
 ## 4. 文件与内部所有权
 
-| 文件 / private symbol | 单一职责 | 修改时同步检查 |
-| --- | --- | --- |
-| `import.rs` | 公共导入值类型、named constructor、getter 和私有路径 `Debug` | App Server DTO、Desktop preview、隐私测试 |
-| `plan.rs` | `MigrationPlan`/`MigrationPlanItem` 与类型化源格式 fragment；`Debug` 隐藏路径与设置文档 | App Server DTO、preview UI、redaction |
-| `detect.rs::detect_migration_plan` | 按 agent/scope 编排 discovery 与解析，排序去重 plan item 与 diagnostic | 新条目类型、排序契约 |
-| `source.rs` | 读取前路径校验、有界文件读取和目录枚举、按来源诊断 | 软链接、大小与深度上限、失败隔离 |
-| `settings.rs` | JSON/TOML 解析、Claude 两份设置的合并与来源记录 | 源格式变化、失败语义 |
-| `instruction.rs` | 共享指令结构、统一发现入口和公共读取、遍历、引用与模式处理 | 跨来源契约与共用边界 |
-| `codex.rs` | Codex 用户/项目指令布局与 override 选择 | 优先级、共享文件冲突与空 override |
-| `claude.rs` | Claude 指令布局、paths 和私有文件限制 | 全局/文件匹配与引用诊断 |
-| `cursor.rs` | Cursor 指令布局、globs 和 alwaysApply | 三态加载方式与引用诊断 |
-| `copilot.rs` | Copilot 固定指令布局、正文和加载语义解析 | applyTo、未知字段、来源限制与诊断 |
-| `frontmatter.rs` | Markdown frontmatter 拆分与标量提取 | agent/命令 frontmatter 字段 |
-| `mcp.rs` | 外部 MCP 声明收集、`${VAR}` 语义、stdio/http 归一化与 unsupported 标记 | transport 类型、placeholder 规则 |
-| `hooks.rs` | Claude hooks 组发现与可转换组计数 | hook 字段白名单 |
-| `plugins.rs` | enabledPlugins 分组与 marketplace source 解析 | registry 格式、official fallback |
-| `memory.rs` | 外部项目 memory markdown 发现 | 项目 key 归属（adapter 职责） |
-| `scope.rs::repository_root_for_cwd` | `.git` 仓库根向上解析 | 作用范围决策调用方 |
-| `agent_paths.rs::paths_for` | `ExternalAgent + ImportScope` 到固定 `AgentPath` 的穷尽映射 | 官方路径、review category、fixture 和本表 |
-| `agent_paths.rs::{file,directory}` | 构造带预期 entry 类型的 Agent 路径 | type-mismatch diagnostic |
-| `inspect_path.rs::inspect_agent_paths` | 逐 root 检查 Agent 路径、排序、去重并构造 immutable inspection | 多 root 失败语义和顺序测试 |
-| `inspect_path.rs::validate_import_root` | 拒绝不可用、非目录或 symlink root，并建立 `CanonicalPathRoot` | `AgentImportError` 与错误脱敏 |
-| `inspect_path.rs::inspect_path` | 检查一个 Agent 相对路径的 metadata、类型和 symlink，再委托通用 canonical containment | diagnostic code、候选 canonical path |
-| `error.rs` | 根目录级类型化错误与不含绝对路径的显示文本 | Desktop 错误映射与日志 |
-| `inspect_path_tests.rs` | 临时目录上的路径检查与隐私回归 | 新来源、路径、错误或 redaction |
+| 文件 / private symbol                   | 单一职责                                                                                | 修改时同步检查                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `import.rs`                             | 公共导入值类型、named constructor、getter 和私有路径 `Debug`                            | App Server DTO、Desktop preview、隐私测试 |
+| `plan.rs`                               | `MigrationPlan`/`MigrationPlanItem` 与类型化源格式 fragment；`Debug` 隐藏路径与设置文档 | App Server DTO、preview UI、redaction     |
+| `detect.rs::detect_migration_plan`      | 按 agent/scope 编排 discovery 与解析，排序去重 plan item 与 diagnostic                  | 新条目类型、排序契约                      |
+| `source.rs`                             | 读取前路径校验、有界文件读取和目录枚举、按来源诊断                                      | 软链接、大小与深度上限、失败隔离          |
+| `settings.rs`                           | JSON/TOML 解析、Claude 两份设置的合并与来源记录                                         | 源格式变化、失败语义                      |
+| `instruction.rs`                        | 共享指令结构、统一发现入口和公共读取、遍历、引用与模式处理                              | 跨来源契约与共用边界                      |
+| `codex.rs`                              | Codex 用户/项目指令布局与 override 选择                                                 | 优先级、共享文件冲突与空 override         |
+| `claude.rs`                             | Claude 指令布局、paths 和私有文件限制                                                   | 全局/文件匹配与引用诊断                   |
+| `cursor.rs`                             | Cursor 指令布局、globs 和 alwaysApply                                                   | 三态加载方式与引用诊断                    |
+| `copilot.rs`                            | Copilot 固定指令布局、正文和加载语义解析                                                | applyTo、未知字段、来源限制与诊断         |
+| `frontmatter.rs`                        | Markdown frontmatter 拆分与标量提取                                                     | agent/命令 frontmatter 字段               |
+| `mcp.rs`                                | 外部 MCP 声明收集、`${VAR}` 语义、stdio/http 归一化与 unsupported 标记                  | transport 类型、placeholder 规则          |
+| `hooks.rs`                              | Claude hooks 组发现与可转换组计数                                                       | hook 字段白名单                           |
+| `plugins.rs`                            | enabledPlugins 分组与 marketplace source 解析                                           | registry 格式、official fallback          |
+| `memory.rs`                             | 外部项目 memory markdown 发现                                                           | 项目 key 归属（adapter 职责）             |
+| `scope.rs::repository_root_for_cwd`     | `.git` 仓库根向上解析                                                                   | 作用范围决策调用方                        |
+| `agent_paths.rs::paths_for`             | `ExternalAgent + ImportScope` 到固定 `AgentPath` 的穷尽映射                             | 官方路径、review category、fixture 和本表 |
+| `agent_paths.rs::{file,directory}`      | 构造带预期 entry 类型的 Agent 路径                                                      | type-mismatch diagnostic                  |
+| `inspect_path.rs::inspect_agent_paths`  | 逐 root 检查 Agent 路径、排序、去重并构造 immutable inspection                          | 多 root 失败语义和顺序测试                |
+| `inspect_path.rs::validate_import_root` | 拒绝不可用、非目录或 symlink root，并建立 `CanonicalPathRoot`                           | `AgentImportError` 与错误脱敏             |
+| `inspect_path.rs::inspect_path`         | 检查一个 Agent 相对路径的 metadata、类型和 symlink，再委托通用 canonical containment    | diagnostic code、候选 canonical path      |
+| `error.rs`                              | 根目录级类型化错误与不含绝对路径的显示文本                                              | Desktop 错误映射与日志                    |
+| `inspect_path_tests.rs`                 | 临时目录上的路径检查与隐私回归                                                          | 新来源、路径、错误或 redaction            |
 
 `lib.rs` 保持私有模块和显式 re-export。若调用方开始依赖 `agent_paths`/`inspect_path` 私有函数，或 crate
 root 重新实现路径判断，说明公共 API 或 ownership 已经漂移。
@@ -192,16 +192,16 @@ detect_migration_plan
 
 `source.rs` 统一拥有资源限制，按一次选中 root 的读取累计：
 
-| 资源 | 上限 |
-| --- | --- |
-| 单文件 | 1 MiB；实际读取也受上限约束，不能只检查 metadata 大小 |
-| 单 root 累计读取 | 16 MiB |
-| 单目录直接条目 | 1,024 |
-| 单 root 累计枚举条目 | 4,096 |
-| root 以下相对路径层数 | 16 |
-| JSON/TOML/YAML 文档嵌套层数 | 64；格式解析器也保留自身递归限制 |
-| 单文档节点数 | 65,536 |
-| YAML 别名展开后的累计文本 | 1 MiB；构造值树前校验展开预算 |
+| 资源                        | 上限                                                  |
+| --------------------------- | ----------------------------------------------------- |
+| 单文件                      | 1 MiB；实际读取也受上限约束，不能只检查 metadata 大小 |
+| 单 root 累计读取            | 16 MiB                                                |
+| 单目录直接条目              | 1,024                                                 |
+| 单 root 累计枚举条目        | 4,096                                                 |
+| root 以下相对路径层数       | 16                                                    |
+| JSON/TOML/YAML 文档嵌套层数 | 64；格式解析器也保留自身递归限制                      |
+| 单文档节点数                | 65,536                                                |
+| YAML 别名展开后的累计文本   | 1 MiB；构造值树前校验展开预算                         |
 
 超过限制产生 `LimitExceeded`；不能读取的目录不返回部分目录清单，其他预算允许的来源继续处理。
 传入的跨 home MCP 来源独立校验，并使用自己的 root 预算和 User scope diagnostic。
@@ -214,19 +214,19 @@ detect_migration_plan
 
 ## 6. 失败、隔离与隐私语义
 
-| 条件 | 结果 | 是否继续其他候选 |
-| --- | --- | --- |
-| 输入 root 不可访问 | `AgentImportError::RootUnavailable` | ❌ 整个调用失败 |
-| 输入 root 不是目录 | `AgentImportError::RootNotDirectory` | ❌ 整个调用失败 |
-| 输入 root 本身是 symlink | `AgentImportError::RootSymlinkNotAllowed` | ❌ 整个调用失败 |
-| 已知相对路径不存在 | 不产生候选或 diagnostic | ✅ |
-| 候选 metadata/canonicalize 失败 | `MetadataUnavailable` | ✅ |
-| 候选类型与 specification 不符 | `UnexpectedFileType` | ✅ |
-| 候选自身是 symlink；或计划读取遇到根内 ancestor symlink | `SymlinkNotAllowed` | ✅ |
-| inspection 的 ancestor symlink 使 canonical candidate 逃出 root | `EscapesSelectedRoot` | ✅ |
-| settings/config/MCP/frontmatter/registry 解析失败 | `InvalidContent` diagnostic，跳过该文件 | ✅ |
-| 读取、枚举或文档深度超限 | `LimitExceeded` diagnostic | ✅ 继续剩余预算允许的来源 |
-| 候选合法 | 保存 canonical path | ✅ |
+| 条件                                                            | 结果                                      | 是否继续其他候选          |
+| --------------------------------------------------------------- | ----------------------------------------- | ------------------------- |
+| 输入 root 不可访问                                              | `AgentImportError::RootUnavailable`       | ❌ 整个调用失败           |
+| 输入 root 不是目录                                              | `AgentImportError::RootNotDirectory`      | ❌ 整个调用失败           |
+| 输入 root 本身是 symlink                                        | `AgentImportError::RootSymlinkNotAllowed` | ❌ 整个调用失败           |
+| 已知相对路径不存在                                              | 不产生候选或 diagnostic                   | ✅                        |
+| 候选 metadata/canonicalize 失败                                 | `MetadataUnavailable`                     | ✅                        |
+| 候选类型与 specification 不符                                   | `UnexpectedFileType`                      | ✅                        |
+| 候选自身是 symlink；或计划读取遇到根内 ancestor symlink         | `SymlinkNotAllowed`                       | ✅                        |
+| inspection 的 ancestor symlink 使 canonical candidate 逃出 root | `EscapesSelectedRoot`                     | ✅                        |
+| settings/config/MCP/frontmatter/registry 解析失败               | `InvalidContent` diagnostic，跳过该文件   | ✅                        |
+| 读取、枚举或文档深度超限                                        | `LimitExceeded` diagnostic                | ✅ 继续剩余预算允许的来源 |
+| 候选合法                                                        | 保存 canonical path                       | ✅                        |
 
 多 root 调用不是部分成功协议：任一输入 root 无效都会返回 `Err`，不会返回其他 root 的半份 inspection。
 单候选问题则通过 diagnostic 隔离，不影响同一 root 的其他候选。
@@ -269,16 +269,16 @@ external source
 这样外部格式变化不会反向决定 Ash Config schema，inspection 成功也不会被误当成 configuration
 commit。
 
-| Import item | Ash apply target | 当前状态与安全边界 |
-| --- | --- | --- |
-| `Skills` | `AddSkillSource` / Skill source authority | Config command 已有；仍需 parser、digest、conflict 与 source identity |
-| `McpServers` | `UpsertMcpServer` | Config command 已有；导入时默认不连接，credential 必须剥离并单独绑定 |
-| Settings 内的 Plugin request | `UpsertPluginRequest` | Config command 已有；只接受可解析的 exact package/version request，不代表安装或激活 |
-| Settings 内的 Hook | `UpsertHook` | Config command 已有；导入后保持 disabled，执行仍需 trust、policy、approval 与 sandbox |
-| `Instructions`、`InstructionRules` | Ash Instruction authority | 四种来源的项目指令及 Claude/Codex 用户指令已接入转换与发布，不能把原始文件塞入普通 Config |
-| `Agents` | Ash Agent definition authority | 目标模型尚未完成 |
-| `Settings` 其他字段 | 对应 Ash typed field-by-field mapping | 不支持项必须显示为 skipped/unsupported，禁止 raw passthrough |
-| `ExecutionRules` | Policy migration review | 不能生成长期 approval，也不能自动转换为 Hook |
+| Import item                        | Ash apply target                          | 当前状态与安全边界                                                                        |
+| ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Skills`                           | `AddSkillSource` / Skill source authority | Config command 已有；仍需 parser、digest、conflict 与 source identity                     |
+| `McpServers`                       | `UpsertMcpServer`                         | Config command 已有；导入时默认不连接，credential 必须剥离并单独绑定                      |
+| Settings 内的 Plugin request       | `UpsertPluginRequest`                     | Config command 已有；只接受可解析的 exact package/version request，不代表安装或激活       |
+| Settings 内的 Hook                 | `UpsertHook`                              | Config command 已有；导入后保持 disabled，执行仍需 trust、policy、approval 与 sandbox     |
+| `Instructions`、`InstructionRules` | Ash Instruction authority                 | 四种来源的项目指令及 Claude/Codex 用户指令已接入转换与发布，不能把原始文件塞入普通 Config |
+| `Agents`                           | Ash Agent definition authority            | 目标模型尚未完成                                                                          |
+| `Settings` 其他字段                | 对应 Ash typed field-by-field mapping     | 不支持项必须显示为 skipped/unsupported，禁止 raw passthrough                              |
+| `ExecutionRules`                   | Policy migration review                   | 不能生成长期 approval，也不能自动转换为 Hook                                              |
 
 一次 Import 可能同时修改 Skill、MCP、Plugin 与 Hook section，因此 apply 必须先构造完整 plan。
 Config 子批次使用 expected-revision 约束：
@@ -371,7 +371,7 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
 - **Current limitation**：没有 Config batch adapter、import receipt 或 source-qualified rollback
   contract。
 - **Proposed**：App Server 组合 `MigrationPlan` fragment 并调用各 authority；Desktop 只提交用户
- 确认后的 exact item identity。
+  确认后的 exact item identity。
 - **Proposed**：为 host `add-dir` adapter 提供只返回 allowlisted contribution kind 的窄
   inspection projection；它不等同完整 Import，也不处理 directory authorization。
 
@@ -383,12 +383,12 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
 `detect_instruction_plan` 只读取选定生态的指令，不读取 settings、MCP、hooks 等其他配置。
 所有来源输出同一个 `ExternalInstruction`，包含 Root/Rule 类型、加载方式、正文和原始文本；Debug 隐藏正文。
 
-| 来源 | 项目文件 | 转换方式 |
-| --- | --- | --- |
+| 来源    | 项目文件                                                                    | 转换方式                                                            |
+| ------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Copilot | `.github/copilot-instructions.md`、`.github/instructions/*.instructions.md` | 根文件进入 `ASH.md`；`applyTo` 转为文件匹配，无模式规则保留按需加载 |
-| Claude | `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/**/*.md` | 根文件进入 `ASH.md`；其他规则保留全局或 `paths` 文件匹配 |
-| Codex | `AGENTS.override.md` | 非空内容进入 `ASH.md`；共享 `AGENTS.md` 已直接加载，不重复复制 |
-| Cursor | `.cursorrules`、`.cursor/rules/**/*.mdc` | 根文件进入 `ASH.md`；规则按 `alwaysApply`、`globs` 或显式选择转换 |
+| Claude  | `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/**/*.md`                   | 根文件进入 `ASH.md`；其他规则保留全局或 `paths` 文件匹配            |
+| Codex   | `AGENTS.override.md`                                                        | 非空内容进入 `ASH.md`；共享 `AGENTS.md` 已直接加载，不重复复制      |
+| Cursor  | `.cursorrules`、`.cursor/rules/**/*.mdc`                                    | 根文件进入 `ASH.md`；规则按 `alwaysApply`、`globs` 或显式选择转换   |
 
 - 细分规则写入 `.ash/instructions/<source>-<name>.md`，嵌套目录合并为文件名；重名报告 unsupported。遍历遵守文件数、深度与字节限制。
 - Claude 的私有 `CLAUDE.local.md` 暂不发布到项目规则；Claude/Cursor 正文中的有效 `@` 引用暂不转换，报告 unsupported。行内代码和代码块里的 `@` 保留普通文本语义。

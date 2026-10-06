@@ -1,39 +1,52 @@
 .ash-sessions-button {
-  min-height: 28px;
-  padding: 6px 10px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-medium);
-  color: var(--ash-button-foreground, var(--ash-foreground));
-  background: var(--ash-button-background, var(--ash-input-background));
-  box-shadow: 0 1px 1px color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
-  cursor: pointer;
-  font-size: var(--ash-font-size-label1);
-  font-weight: var(--ash-font-weight-semi-bold, 600);
+	min-height: 28px;
+	padding: 6px 10px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-medium);
+	color: var(--ash-button-foreground, var(--ash-foreground));
+	background: var(--ash-button-background, var(--ash-input-background));
+	box-shadow: 0 1px 1px
+		color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
+	cursor: pointer;
+	font-size: var(--ash-font-size-label1);
+	font-weight: var(--ash-font-weight-semi-bold, 600);
 }
 
 .ash-sessions-button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ash-focus-border) 58%, var(--ash-border));
-  background: var(--ash-button-hover-background, var(--ash-list-hover-background));
+	border-color: color-mix(
+		in srgb,
+		var(--ash-focus-border) 58%,
+		var(--ash-border)
+	);
+	background: var(
+		--ash-button-hover-background,
+		var(--ash-list-hover-background)
+	);
 }
 
 .ash-sessions-button:focus-visible {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: 2px;
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: 2px;
 }
 
 .ash-sessions-button:disabled {
-  opacity: .42;
-  cursor: default;
+	opacity: 0.42;
+	cursor: default;
 }
 
 .ash-sessions-primary-button {
-  border-color: var(--sessions-accent);
-  color: var(--ash-button-primary-foreground);
-  background: var(--sessions-accent);
+	border-color: var(--sessions-accent);
+	color: var(--ash-button-primary-foreground);
+	background: var(--sessions-accent);
 }
 
 .ash-sessions-primary-button:hover:not(:disabled) {
-  background: var(--ash-button-primary-hover-background, var(--sessions-accent-strong));
+	background: var(
+		--ash-button-primary-hover-background,
+		var(--sessions-accent-strong)
+	);
 }
 
-.ash-sessions-primary-button:active { transform: translateY(1px); }
+.ash-sessions-primary-button:active {
+	transform: translateY(1px);
+}

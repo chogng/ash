@@ -24,17 +24,17 @@
 Skill 是按任务逐步加载的工作方法和参考资料，不是工具权限。Agent 可以按照 Skill 建议行动，
 但任何脚本、网络或文件操作仍经过正常工具、权限和沙箱流程。
 
-| 发生的事情 | 加载什么 | 安全边界 |
-| --- | --- | --- |
-| 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
-| 用户输入 `$commit` 等 Skill 选择 | 接受 Turn 时完整读取对应 `SKILL.md` | `$` 候选只持有元数据和精确 `SkillRef` |
-| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文 | 歧义、低置信、user/Directory/Plugin/Marketplace 来源都不自动激活 |
-| 用户打开 `/skills` | 浏览、启用、禁用和查看诊断 | 不从管理面板直接执行 Skill |
-| 模型按需选择 Skill | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文 | 后端不做关键词分类，也不暴露本地路径 |
-| 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
-| Skill 建议运行脚本或工具 | 转成普通工具请求 | 不授予文件、网络、凭据或沙箱绕过能力 |
-| Marketplace package 提供 Skill | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行 |
-| Legacy Plugin 提供 Skill | 保留 Plugin、版本和内容摘要来源 | Plugin 启用不等于 Skill 自动执行 |
+| 发生的事情                                      | 加载什么                                                             | 安全边界                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 启动或刷新 Skill 目录                           | 只读取名称、描述和来源等元数据                                       | 不把全部正文塞入上下文                                           |
+| 用户输入 `$commit` 等 Skill 选择                | 接受 Turn 时完整读取对应 `SKILL.md`                                  | `$` 候选只持有元数据和精确 `SkillRef`                            |
+| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文      | 歧义、低置信、user/Directory/Plugin/Marketplace 来源都不自动激活 |
+| 用户打开 `/skills`                              | 浏览、启用、禁用和查看诊断                                           | 不从管理面板直接执行 Skill                                       |
+| 模型按需选择 Skill                              | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文              | 后端不做关键词分类，也不暴露本地路径                             |
+| 正文引用参考资料                                | 只在当前任务确实需要时读取                                           | 路径必须受来源目录约束                                           |
+| Skill 建议运行脚本或工具                        | 转成普通工具请求                                                     | 不授予文件、网络、凭据或沙箱绕过能力                             |
+| Marketplace package 提供 Skill                  | Manager 验证 exact package，再把 Skill capability 投影进共享 catalog | 安装不等于启用、选择或执行                                       |
+| Legacy Plugin 提供 Skill                        | 保留 Plugin、版本和内容摘要来源                                      | Plugin 启用不等于 Skill 自动执行                                 |
 
 ## 1. 结论
 
@@ -147,15 +147,15 @@ description: Reviews code changes for correctness and maintainability. Use for P
 
 兼容字段：
 
-| Field | Ash 处理 |
-| --- | --- |
-| `name` | 严格校验，并要求与 Skill 目录名一致 |
-| `description` | discovery/selection metadata，必须同时说明做什么和何时使用 |
-| `license` | 展示与分发 metadata，不影响 runtime permission |
-| `compatibility` | 环境提示；解析为 warning/gate，但不自动安装依赖 |
-| `metadata` | string map；只允许 namespaced extension 影响 Ash 展示 |
-| `allowed-tools` | experimental hint；绝不作为 Ash approval grant |
-| Markdown body | Skill 激活后作为完整 instruction 加载 |
+| Field           | Ash 处理                                                   |
+| --------------- | ---------------------------------------------------------- |
+| `name`          | 严格校验，并要求与 Skill 目录名一致                        |
+| `description`   | discovery/selection metadata，必须同时说明做什么和何时使用 |
+| `license`       | 展示与分发 metadata，不影响 runtime permission             |
+| `compatibility` | 环境提示；解析为 warning/gate，但不自动安装依赖            |
+| `metadata`      | string map；只允许 namespaced extension 影响 Ash 展示      |
+| `allowed-tools` | experimental hint；绝不作为 Ash approval grant             |
+| Markdown body   | Skill 激活后作为完整 instruction 加载                      |
 
 Ash 不修改第三方 Skill format 来塞入 executable grant、credential 或 MCP launch config。这些属于
 Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 compatibility diagnostic。
@@ -432,11 +432,11 @@ digest 与 `Automatic` reason 和显式 activation 一样进入 durable `TurnAcc
 [Agent Skills progressive disclosure](https://agentskills.io/specification#progressive-disclosure)
 分三层：
 
-| Level | 内容 | 加载时机 |
-| --- | --- | --- |
-| Metadata | name + description + source/compatibility | catalog/selection |
-| Instructions | 完整 `SKILL.md` body | Skill 激活 |
-| Resources | references/scripts/assets | 指令明确需要且 Agent 决定读取 |
+| Level        | 内容                                      | 加载时机                      |
+| ------------ | ----------------------------------------- | ----------------------------- |
+| Metadata     | name + description + source/compatibility | catalog/selection             |
+| Instructions | 完整 `SKILL.md` body                      | Skill 激活                    |
+| Resources    | references/scripts/assets                 | 指令明确需要且 Agent 决定读取 |
 
 激活流程：
 
@@ -678,13 +678,13 @@ stored identity/digest；重新执行必须重新授权/解析，不能假定旧
 
 ## 15. App Server API 与客户端
 
-| Method | 语义 | 状态 |
-| --- | --- | --- |
-| `skills/list` | 读取 metadata-only catalog；`refresh` 请求重扫 | ✅ 已实现 |
-| `skill/enablement/set` | 按 exact `SkillId` 修改 future eligibility | ✅ 已实现 |
-| `session/request` StartTurn Skill input | 选择 exact `SkillRef` | ✅ 已实现 |
-| `skill/resource/open` | 将 digest-pinned package resource materialize 到 connection-owned Resource store | ✅ 已实现 |
-| `skill/read` | 读取 entry metadata/diagnostics，不默认返回完整 body | Proposed |
+| Method                                  | 语义                                                                             | 状态      |
+| --------------------------------------- | -------------------------------------------------------------------------------- | --------- |
+| `skills/list`                           | 读取 metadata-only catalog；`refresh` 请求重扫                                   | ✅ 已实现 |
+| `skill/enablement/set`                  | 按 exact `SkillId` 修改 future eligibility                                       | ✅ 已实现 |
+| `session/request` StartTurn Skill input | 选择 exact `SkillRef`                                                            | ✅ 已实现 |
+| `skill/resource/open`                   | 将 digest-pinned package resource materialize 到 connection-owned Resource store | ✅ 已实现 |
+| `skill/read`                            | 读取 entry metadata/diagnostics，不默认返回完整 body                             | Proposed  |
 
 Skill install/remove 不属于 Skill manager：
 
@@ -758,15 +758,15 @@ CatalogStale
 
 建议第一版本地上限作为 Ash policy，而不是 Agent Skills 标准：
 
-| 项目 | 初始 policy |
-| --- | --- |
-| 每 source Skill 数 | 有界，超限产生 source diagnostic |
-| frontmatter bytes | 小型固定上限 |
-| `SKILL.md` bytes | 与 context budget 联动，硬上限独立存在 |
-| 模型可读取的 Skill 正文 | 由正常 Tool Result 与上下文预算约束 |
-| reference depth | 1 为推荐，硬上限不超过少量层级 |
-| loaded reference bytes | per invocation 总预算 |
-| file count/tree depth | 防目录/归档资源耗尽 |
+| 项目                    | 初始 policy                            |
+| ----------------------- | -------------------------------------- |
+| 每 source Skill 数      | 有界，超限产生 source diagnostic       |
+| frontmatter bytes       | 小型固定上限                           |
+| `SKILL.md` bytes        | 与 context budget 联动，硬上限独立存在 |
+| 模型可读取的 Skill 正文 | 由正常 Tool Result 与上下文预算约束    |
+| reference depth         | 1 为推荐，硬上限不超过少量层级         |
+| loaded reference bytes  | per invocation 总预算                  |
+| file count/tree depth   | 防目录/归档资源耗尽                    |
 
 具体数值在实现 benchmark 和真实 Skill corpus 后固定到 policy/config。测试注入 tokenizer estimator
 和 fake filesystem，不依赖真实 home directory。

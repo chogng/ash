@@ -62,8 +62,8 @@ test("Slash Command catalog rejects invalid and colliding definitions", () => {
 test("Desktop adapter matches the shared Slash Commands conformance fixture", () => {
 	const fixture = JSON.parse(readFileSync(join(process.cwd(), "..", "ash-rs", "slash-commands", "fixtures", "conformance.json"), "utf8")) as {
 		definitions: SlashCommandDefinition[];
-		matching: { query: string; names: string[] }[];
-		inputs: { text: string; kind: string; name?: string; arguments?: string }[];
+		matching: { query: string; names: string[]; }[];
+		inputs: { text: string; kind: string; name?: string; arguments?: string; }[];
 		invalidDefinitions: SlashCommandDefinition[];
 	};
 	const catalog = new SlashCommandCatalog([], fixture.definitions);

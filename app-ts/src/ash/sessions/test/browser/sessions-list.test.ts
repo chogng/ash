@@ -24,7 +24,7 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 		onDidChange: changes.event,
 		activeSelection: undefined,
 		get visibleSelections() { return untitledSessions.map(session => ({ kind: "untitled", session })); },
-		openNewSession() {},
+		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
 	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session");

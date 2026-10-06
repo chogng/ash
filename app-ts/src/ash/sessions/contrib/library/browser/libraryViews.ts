@@ -68,9 +68,11 @@ export class LibraryNavigationView extends ViewPane {
 	}
 
 	private appendCategory(id: string, name: string, icon: typeof Lxicon.library): void {
-		const button = this.navigation.add(new Button(this.navigationDomNode, { label: name, icon, onClick: () => {
-			this.library.selectCategory(id);
-		} }));
+		const button = this.navigation.add(new Button(this.navigationDomNode, {
+			label: name, icon, onClick: () => {
+				this.library.selectCategory(id);
+			}
+		}));
 		button.domNode.dataset.libraryCategory = id;
 		button.domNode.classList.toggle('selected', id === this.library.state.get().category);
 		if (id === this.library.state.get().category) { button.domNode.setAttribute('aria-current', 'page'); }

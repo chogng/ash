@@ -1,7 +1,7 @@
 declare const uuidBrand: unique symbol;
 
 /** A validated RFC 9562 UUID string in lowercase canonical form. */
-export type UUID = string & { readonly [uuidBrand]: "UUID" };
+export type UUID = string & { readonly [uuidBrand]: "UUID"; };
 
 const UUID_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

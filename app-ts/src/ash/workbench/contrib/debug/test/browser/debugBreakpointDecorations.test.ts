@@ -77,7 +77,7 @@ class BreakpointDebugService extends Disposable {
 	private readonly breakpointEmitter = this._register(new Emitter<readonly IDebugBreakpoint[]>());
 	public breakpoints: readonly IDebugBreakpoint[];
 	public readonly onDidChangeBreakpoints = this.breakpointEmitter.event;
-	public readonly toggled: Array<{ readonly resource: string; readonly lineNumber: number }> = [];
+	public readonly toggled: Array<{ readonly resource: string; readonly lineNumber: number; }> = [];
 
 	constructor(resource: URI) {
 		super();

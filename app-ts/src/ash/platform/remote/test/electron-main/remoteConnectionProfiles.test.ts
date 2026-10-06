@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { RemoteConnectionProfiles } from "../../../../platform/remote/electron-main/remoteConnectionProfiles.js";
 
 test("Electron Main delegates Remote profile reads, activation, and rollback to the shared Rust store", async () => {
-	const invocations: Array<{ executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv }> = [];
+	const invocations: Array<{ executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv; }> = [];
 	const profiles = new RemoteConnectionProfiles({
 		remoteExecutable: "/Applications/Ash.app/Contents/Resources/bin/ash-remote",
 		environment: { ASH_HOME: "/Users/test/Library/Application Support/Ash/state" },

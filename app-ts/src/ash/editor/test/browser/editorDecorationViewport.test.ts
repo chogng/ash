@@ -416,7 +416,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 				},
 			],
 		},
-		}), LanguageResultAcceptance.Applied);
+	}), LanguageResultAcceptance.Applied);
 	viewport.render(true, false);
 
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({
@@ -486,7 +486,7 @@ function decorationClassName(element: HTMLElement): string | undefined {
 	return [...element.classList].find(className => className !== 'cdr');
 }
 
-function hoverMessageValue(message: { readonly value: string } | readonly { readonly value: string }[] | null | undefined): string | undefined {
+function hoverMessageValue(message: { readonly value: string; } | readonly { readonly value: string; }[] | null | undefined): string | undefined {
 	if (!message) return undefined;
 	return 'value' in message ? message.value : message[0]?.value;
 }
@@ -521,14 +521,14 @@ function recordCanvasPaint(dom: JSDOM): CanvasPaint[] {
 			createImageData(width: number, height: number): ImageData {
 				return { width, height, data: new Uint8ClampedArray(width * height * 4), colorSpace: 'srgb' };
 			},
-			putImageData(): void {},
+			putImageData(): void { },
 			fillRect(left: number, top: number, width: number, height: number): void {
-					paint.push({ frame, kind, canvasHeight: canvas.height, fill: String(this.fillStyle), left, top, width, height });
+				paint.push({ frame, kind, canvasHeight: canvas.height, fill: String(this.fillStyle), left, top, width, height });
 			},
-			beginPath(): void {},
-			moveTo(): void {},
-			lineTo(): void {},
-			stroke(): void {},
+			beginPath(): void { },
+			moveTo(): void { },
+			lineTo(): void { },
+			stroke(): void { },
 		};
 		return context as unknown as CanvasRenderingContext2D;
 	} as unknown as typeof dom.window.HTMLCanvasElement.prototype.getContext;
@@ -537,7 +537,7 @@ function recordCanvasPaint(dom: JSDOM): CanvasPaint[] {
 	return paint;
 }
 
-function minimapMarkers(paint: readonly CanvasPaint[]): readonly { readonly fill: string; readonly top: number }[] {
+function minimapMarkers(paint: readonly CanvasPaint[]): readonly { readonly fill: string; readonly top: number; }[] {
 	const frame = paint.filter(entry => entry.kind === 'minimap').at(-1)?.frame;
 	return paint.filter(entry => entry.kind === 'minimap' && entry.frame === frame && entry.width === 3).map(entry => ({ fill: entry.fill, top: entry.top }));
 }

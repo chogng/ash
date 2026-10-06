@@ -67,7 +67,7 @@ export function log(logger: ILogService, level: LogLevel, message: string): void
 }
 
 export class ConsoleLogger implements ILogService {
-	constructor(private readonly category = "application", private readonly target: Pick<Console, "debug" | "info" | "warn" | "error"> = console) {}
+	constructor(private readonly category = "application", private readonly target: Pick<Console, "debug" | "info" | "warn" | "error"> = console) { }
 	trace(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("debug", message, argument, arguments_); }
 	debug(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("debug", message, argument, arguments_); }
 	info(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("info", message, argument, arguments_); }
@@ -81,12 +81,12 @@ export class ConsoleLogger implements ILogService {
 }
 
 export class NullLoggerService implements ILogServiceHost, ILoggerService {
-	trace(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
-	debug(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
-	info(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
-	warn(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
-	error(_categoryOrError: string | Error, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
-	registerSink(_sink: ILogSink): IDisposable { return { dispose() {}, [Symbol.dispose]() {} }; }
+	trace(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
+	debug(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
+	info(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
+	warn(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
+	error(_categoryOrError: string | Error, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
+	registerSink(_sink: ILogSink): IDisposable { return { dispose() { }, [Symbol.dispose]() { } }; }
 	createLogger(_category: string): ILogService { return this; }
 }
 

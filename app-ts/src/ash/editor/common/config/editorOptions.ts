@@ -843,7 +843,7 @@ export interface IDiffEditorBaseOptions {
 }
 
 /** Complete options accepted by a diff editor. */
-export interface IDiffEditorOptions extends IEditorOptions, IDiffEditorBaseOptions {}
+export interface IDiffEditorOptions extends IEditorOptions, IDiffEditorBaseOptions { }
 
 /** Diff options after all top-level defaults have been applied. */
 export type ValidDiffEditorBaseOptions = Readonly<Required<IDiffEditorBaseOptions>>;
@@ -1095,17 +1095,17 @@ export class ApplyUpdateResult<T> {
 	public constructor(
 		public readonly newValue: T,
 		public readonly didChange: boolean,
-	) {}
+	) { }
 }
 
 /** An option descriptor kept in the common registry. */
-type EditorOptionSchema = IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema };
+type EditorOptionSchema = IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema; };
 
 export interface IEditorOption<K extends EditorOption, V> {
 	readonly id: K;
 	readonly name: string;
 	readonly defaultValue: V;
-	readonly schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema } | undefined;
+	readonly schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema; } | undefined;
 	validate(input: unknown): V;
 	compute(environment: IEnvironmentalOptions, options: IComputedEditorOptions, value: V): V;
 	applyUpdate(value: V | undefined, update: V): ApplyUpdateResult<V>;
@@ -1353,7 +1353,7 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 		height: number;
 		lineHeight: number;
 		pixelRatio: number;
-	}): { typicalViewportLineCount: number; extraLinesBeforeFirstLine: number; extraLinesBeyondLastLine: number; desiredRatio: number; minimapLineCount: number } {
+	}): { typicalViewportLineCount: number; extraLinesBeforeFirstLine: number; extraLinesBeyondLastLine: number; desiredRatio: number; minimapLineCount: number; } {
 		const height = Math.max(1, input.height);
 		const lineHeight = Math.max(1, input.lineHeight);
 		const pixelRatio = Math.max(1, input.pixelRatio);

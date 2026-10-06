@@ -21,7 +21,8 @@ test('public reference parsing rejects enterprise hosts and unsafe reference ide
 test('hover intent loads all checks pages once while retaining prefetched core metadata', async () => {
 	using services = new InstantiationService();
 	const reads: string[] = [];
-	services.registerInstance(IGitHubService, { ...createDisconnectedGitHubService(),
+	services.registerInstance(IGitHubService, {
+		...createDisconnectedGitHubService(),
 		readPullRequest: async () => { reads.push('core'); return pullRequest; },
 		readChecks: async (_repository, commit, page) => {
 			assert.equal(commit, pullRequest.headCommit);
@@ -42,10 +43,12 @@ test('hover intent loads all checks pages once while retaining prefetched core m
 test('failed optional checks can be retried without losing the loaded PR', async () => {
 	using services = new InstantiationService();
 	let attempts = 0;
-	services.registerInstance(IGitHubService, { ...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readChecks: async () => {
-		if (++attempts === 1) { throw new Error('Checks temporarily unavailable'); }
-		return { state: 'success', statuses: [], checks: [], nextPage: null };
-	} });
+	services.registerInstance(IGitHubService, {
+		...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readChecks: async () => {
+			if (++attempts === 1) { throw new Error('Checks temporarily unavailable'); }
+			return { state: 'success', statuses: [], checks: [], nextPage: null };
+		}
+	});
 	using resolver = services.createInstance(LazyGitHubResourceResolver);
 	await assert.rejects(resolver.resolvePullRequest(target), /temporarily unavailable/);
 	assert.deepEqual(resolver.getPullRequestState(target).get(), { status: 'resolved', value: { pullRequest, checks: undefined } });
@@ -59,11 +62,13 @@ test('retiring a link cancels in-flight checks and prevents late state from reap
 	let cancellation!: CancellationToken;
 	let entered!: () => void;
 	const started = new Promise<void>(resolve => { entered = resolve; });
-	services.registerInstance(IGitHubService, { ...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readChecks: async (_repository, _commit, _page, token) => {
-		cancellation = token!;
-		entered();
-		return new Promise<GitHubChecks>(resolve => { release = resolve; });
-	} });
+	services.registerInstance(IGitHubService, {
+		...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readChecks: async (_repository, _commit, _page, token) => {
+			cancellation = token!;
+			entered();
+			return new Promise<GitHubChecks>(resolve => { release = resolve; });
+		}
+	});
 	using resolver = services.createInstance(LazyGitHubResourceResolver);
 	const state = resolver.getPullRequestState(target);
 	const pending = resolver.resolvePullRequest(target);

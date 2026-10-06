@@ -141,7 +141,7 @@ export class CompositionOutcome {
 		public readonly insertedSelectionStart: number,
 		public readonly insertedSelectionEnd: number,
 		public readonly insertedTextRange: Range,
-	) {}
+	) { }
 }
 
 function pairTypingContext(config: CursorConfiguration, model: ITextModel, selection: Selection, text: string): PairTypingContext {
@@ -256,7 +256,7 @@ function enterAction(configuration: ResolvedLanguageConfiguration, previous: str
 	return { indentAction: IndentAction.None };
 }
 
-function enterInsertion(before: string, action: EnterAction, indentation: ResolvedEditorIndentationOptions): { readonly text: string; readonly caret: number } {
+function enterInsertion(before: string, action: EnterAction, indentation: ResolvedEditorIndentationOptions): { readonly text: string; readonly caret: number; } {
 	const leading = getLeadingIndentation(before);
 	const removeText = Math.min(action.removeText ?? 0, leading.length);
 	const base = normalizeEditorIndentation(leading.slice(0, leading.length - removeText), indentation);

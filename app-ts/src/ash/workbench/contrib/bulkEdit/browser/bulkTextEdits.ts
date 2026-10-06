@@ -7,7 +7,7 @@ import type { DisposableMap } from '../../../../base/common/lifecycle.js';
 
 interface TextOperation {
 	readonly entry: LanguageTextDocumentEdit;
-	readonly model: { readonly reference: TextModelReference; readonly wasOpen: boolean; version: number };
+	readonly model: { readonly reference: TextModelReference; readonly wasOpen: boolean; version: number; };
 	readonly before: string;
 	readonly after: string;
 }
@@ -21,7 +21,7 @@ export class BulkTextEdits {
 		private readonly failedSaves: DisposableMap<string, TextModelReference>,
 		private readonly signal: AbortSignal,
 		private readonly reason: TextModelEditSource | undefined,
-	) {}
+	) { }
 
 	public async apply(): Promise<readonly URI[]> {
 		const { entry, model, before, after } = this.operation;

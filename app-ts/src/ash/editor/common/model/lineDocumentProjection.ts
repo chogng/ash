@@ -18,7 +18,7 @@ class DocumentLineProjection {
 	private readonly relations: LineRelation[] = [];
 	private readonly lineIds = new Set<LineId>();
 
-	constructor(private readonly schema: DocumentSchema, private readonly documentId: string) {}
+	constructor(private readonly schema: DocumentSchema, private readonly documentId: string) { }
 
 	public visit(node: DocumentNode, ancestors: readonly DocumentNode[]): void {
 		const kind = this.schema.getNodeSpec(node.type)?.kind;

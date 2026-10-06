@@ -172,7 +172,7 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_000, 700) });
-	const changes: Array<{ partId: SessionsPartId; visible: boolean }> = [];
+	const changes: Array<{ partId: SessionsPartId; visible: boolean; }> = [];
 	const subscription = layout.onDidChangePartVisibility(change => changes.push(change));
 
 	layout.layout(new Dimension(1_000, 700));
@@ -411,8 +411,8 @@ test('Sessions layout creation requires the registered storage service', () => {
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
-	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

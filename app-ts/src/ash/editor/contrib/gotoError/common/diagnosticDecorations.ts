@@ -66,7 +66,7 @@ export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omi
 	}
 }
 
-function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string }): Omit<IModelDecorationOptions, 'stickiness'> {
+function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string; }): Omit<IModelDecorationOptions, 'stickiness'> {
 	const color = themeColorFromId(colorId);
 	return {
 		description: 'marker-decoration',

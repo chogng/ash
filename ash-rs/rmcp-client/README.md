@@ -11,16 +11,16 @@ Streamable HTTP transport convenience connector；它不拥有 server 配置解�
 
 ## 文件与公共契约
 
-| 文件 / symbol | 职责 |
-| --- | --- |
-| `client.rs` / `RmcpClient` | 一个已经 initialize 的 session；并发发送原始 `tools/list` / `tools/call` |
-| `client.rs` / `RmcpClient::connect` | caller-provided RMCP transport 接入点，供 sandbox/remote launcher 或自定义 HTTP stack 使用 |
-| `client.rs` / `connect_stdio`、`connect_streamable_http` | direct local child 与 reqwest HTTP convenience connector |
-| `client.rs` / `RmcpClientOptions`、`RmcpTimeouts` | client identity、host callback 与 initialize/request/shutdown deadline |
-| `handler.rs` / `McpClientHost` | server notification 与 elicitation 的 host-owned delivery contract |
-| `handler.rs` / `McpClientEvent` | progress、server cancellation 与 catalog invalidation notification |
-| `transport.rs` | `StdioServerCommand`、`StreamableHttpServer`、redacted `BearerToken` |
-| `error.rs` / `RmcpClientError` | transport start、handshake、request deadline、service 与 shutdown failure |
+| 文件 / symbol                                            | 职责                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `client.rs` / `RmcpClient`                               | 一个已经 initialize 的 session；并发发送原始 `tools/list` / `tools/call`                   |
+| `client.rs` / `RmcpClient::connect`                      | caller-provided RMCP transport 接入点，供 sandbox/remote launcher 或自定义 HTTP stack 使用 |
+| `client.rs` / `connect_stdio`、`connect_streamable_http` | direct local child 与 reqwest HTTP convenience connector                                   |
+| `client.rs` / `RmcpClientOptions`、`RmcpTimeouts`        | client identity、host callback 与 initialize/request/shutdown deadline                     |
+| `handler.rs` / `McpClientHost`                           | server notification 与 elicitation 的 host-owned delivery contract                         |
+| `handler.rs` / `McpClientEvent`                          | progress、server cancellation 与 catalog invalidation notification                         |
+| `transport.rs`                                           | `StdioServerCommand`、`StreamableHttpServer`、redacted `BearerToken`                       |
+| `error.rs` / `RmcpClientError`                           | transport start、handshake、request deadline、service 与 shutdown failure                  |
 
 公共工具请求/结果直接重新导出 RMCP 模型。这是有意的低层边界；特定协议版本的数据结构
 不能从本 crate继续向 Core 或 App Server protocol 泄漏。当前 `ash-mcp` 已把这些类型投影为

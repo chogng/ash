@@ -6,40 +6,40 @@
 
 本 crate 统一维护模型规格、完整基础提示词、供应商与接入声明，以及用户接入配置的校验和规范化。配置存储、模型目录和请求实现共享这些声明，不需要为读取它们引入供应商客户端。
 
-| 内容 | 归属 |
-| --- | --- |
-| 模型规格、基础正文、接入协议与配置规则 | `model-provider-info` |
-| 目录发现结果、刷新、缓存、模型与提示词选择 | `models-manager` |
-| 凭据读取、客户端、连接与实际请求 | `model-provider` |
+| 内容                                       | 归属                  |
+| ------------------------------------------ | --------------------- |
+| 模型规格、基础正文、接入协议与配置规则     | `model-provider-info` |
+| 目录发现结果、刷新、缓存、模型与提示词选择 | `models-manager`      |
+| 凭据读取、客户端、连接与实际请求           | `model-provider`      |
 
 原 `ash-rs/model-provider-config` 已改名为本目录，Cargo package 为 `ash-model-provider-info`，消费方统一使用 `model-provider-info` dependency key 和 `model_provider_info` Rust 路径。`ModelProviderConfig` 等类型仍表达接入配置，不因 crate 改名而改变配置格式或协议字段。
 
 ## 公共模型
 
-| Symbol | 职责 | 关键语义 |
-| --- | --- | --- |
-| `ModelProviderConfig` | 用户/host 可配置值 | provider、connection、base URL、max output 与 per-model context metadata |
-| `ModelContextConfig` | 单模型的 Core budget metadata | positive context window、optional auto-compact limit |
-| `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
-| `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
-| `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
-| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 内置文本模型目录 | 唯一 model/provider ID、context、capabilities、reasoning、defaults 和完整基础提示词 |
-| `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
-| `ApiProfile` | declarative wire profile | runtime 显式解析为 `ash-api::ApiEndpoint` |
-| `WebSocketApiProfile` | Responses WebSocket 能力 | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
-| `RealtimeApiProfile` | 独立语音会话协议能力 | 默认 `Unavailable`；与文本 WebSocket 和订阅身份分开授权 |
-| `TranscriptionApiProfile` | OpenAI／xAI 流式听写协议能力 | 默认 `Unavailable`；直接 API 接入各自声明，订阅接入不可用 |
-| `LiveApiProfile` | GPT-Live 会话协议能力 | 明确声明，不能从文本协议推断 |
-| `VoiceModelCatalog` / `VoiceModelDefinition` | Provider 的独立语音目录 | 模型、支持的音色与默认值 |
-| `VoiceModelConfig` | 可序列化的语音选择 | 与文本模型选择分开，不含密钥 |
-| `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
-| `NormalizedInputTokenCountConfig` | runtime-ready count snapshot | 已解析 base URL；不包含 client 或准确度策略 |
-| `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |
-| `ModelCatalogPolicy` | listed-only 或 allow-unlisted | 声明 static gate，由 `ash-models-manager` 执行 canonical resolution |
-| `ApiKeyPolicy` | unsupported、optional 或 required | 只声明 host secret binding 要求，不持有密钥 |
-| `ApiKeyHeader` | Bearer、`x-api-key` 或 `x-goog-api-key` | 只声明 direct request 的认证 Header 形状，不读取密钥 |
-| `ApprovalReviewModelDefault` | automatic review default | active model 或 provider-declared model |
-| `ProviderConfigError` | static/normalization error | 不包含 transport/auth failure |
+| Symbol                                       | 职责                                    | 关键语义                                                                                       |
+| -------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `ModelProviderConfig`                        | 用户/host 可配置值                      | provider、connection、base URL、max output 与 per-model context metadata                       |
+| `ModelContextConfig`                         | 单模型的 Core budget metadata           | positive context window、optional auto-compact limit                                           |
+| `ProviderDefinition`                         | provider-owned declaration              | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
+| `NormalizedModelProviderConfig`              | runtime-ready immutable config          | provider/profile/base URL 已确定                                                               |
+| `ProviderConfigRegistry`                     | definition authority                    | validate、register、merge、selection、normalize                                                |
+| `STATIC_MODEL_CATALOG` / `StaticModelSpec`   | 内置文本模型目录                        | 唯一 model/provider ID、context、capabilities、reasoning、defaults 和完整基础提示词            |
+| `ProviderAdapter`                            | serializable adapter identity           | 不是 runtime trait/object                                                                      |
+| `ApiProfile`                                 | declarative wire profile                | runtime 显式解析为 `ash-api::ApiEndpoint`                                                      |
+| `WebSocketApiProfile`                        | Responses WebSocket 能力                | 默认 `Unavailable`；不得从 HTTP compatibility 推断                                             |
+| `RealtimeApiProfile`                         | 独立语音会话协议能力                    | 默认 `Unavailable`；与文本 WebSocket 和订阅身份分开授权                                        |
+| `TranscriptionApiProfile`                    | OpenAI／xAI 流式听写协议能力            | 默认 `Unavailable`；直接 API 接入各自声明，订阅接入不可用                                      |
+| `LiveApiProfile`                             | GPT-Live 会话协议能力                   | 明确声明，不能从文本协议推断                                                                   |
+| `VoiceModelCatalog` / `VoiceModelDefinition` | Provider 的独立语音目录                 | 模型、支持的音色与默认值                                                                       |
+| `VoiceModelConfig`                           | 可序列化的语音选择                      | 与文本模型选择分开，不含密钥                                                                   |
+| `InputTokenCountDefinition`                  | provider-owned preflight declaration    | profile、target 与明确 model policy                                                            |
+| `NormalizedInputTokenCountConfig`            | runtime-ready count snapshot            | 已解析 base URL；不包含 client 或准确度策略                                                    |
+| `EndpointPolicy`                             | provider default 或 configured-only     | 不执行 DNS/network validation                                                                  |
+| `ModelCatalogPolicy`                         | listed-only 或 allow-unlisted           | 声明 static gate，由 `ash-models-manager` 执行 canonical resolution                            |
+| `ApiKeyPolicy`                               | unsupported、optional 或 required       | 只声明 host secret binding 要求，不持有密钥                                                    |
+| `ApiKeyHeader`                               | Bearer、`x-api-key` 或 `x-goog-api-key` | 只声明 direct request 的认证 Header 形状，不读取密钥                                           |
+| `ApprovalReviewModelDefault`                 | automatic review default                | active model 或 provider-declared model                                                        |
+| `ProviderConfigError`                        | static/normalization error              | 不包含 transport/auth failure                                                                  |
 
 `model_provider_config_schema()`、`provider_definition_schema()` 与 `model_catalog_schema()` 从 Rust types 生成 JSON Schema；
 schema 没有第二份手写来源。
@@ -71,24 +71,24 @@ src/
 └── lib.rs
 ```
 
-| Symbol | 可见性 | 当前职责 | 方向约束 |
-| --- | --- | --- | --- |
-| `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
-| `ProviderDefinition::validate` | public method | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效 |
-| `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
-| `STATIC_MODEL_CATALOG` | public static | 产品内置文本模型及静态 metadata | 文本模型在 models.json 声明；语音目录归 `voice_models` |
-| `attach_static_models` | crate-private function | catalog rows → provider models | registry validation 前自动执行 |
-| `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
-| `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
-| `ProviderConfigRegistry::with_configs` | public method | 将接入配置组装为 immutable registry | 未知供应商报错；自定义声明和已注册插件定义保留 |
-| `ProviderConfigRegistry::normalize` | public method | config + definition → normalized snapshot | endpoint/default/profile precedence 在此唯一实现 |
-| `normalize_for` | public method | 先 enforce selected/configured provider identity | 防止 model ref 与 config 串线 |
-| `automatic_approval_review_model` | public method | provider default 或 active model fallback | 不证明远端 entitlement |
-| `validate_model_selection` | public compatibility/preflight method | 显式配置校验 | 内置模型请求不依赖远端目录成员资格 |
-| `normalize_base_url` | crate-private function | apply explicit normalization rule | 不追加 API route |
-| `is_http_url` | crate-private function | 最小 HTTP(S) shape check | 不是 full URL/network validator |
-| `providers::builtin` | crate-private function | built-in definitions | 每个 provider 在 sibling module 独立定义 |
-| `default_provider` / `configured_provider` | private helpers | shared definition constructors | 不隐藏 provider-specific profile/default differences |
+| Symbol                                     | 可见性                                | 当前职责                                                              | 方向约束                                               |
+| ------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
+| `ModelProviderConfig::validate_static`     | public method                         | zero output/context limits 与 configured URL shape                    | 不依赖 registry或网络                                  |
+| `ProviderDefinition::validate`             | public method                         | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效                            |
+| `InputTokenCountDefinition::validate`      | crate-private method                  | count URL、non-empty/unique model list                                | 不探测远端 model availability                          |
+| `STATIC_MODEL_CATALOG`                     | public static                         | 产品内置文本模型及静态 metadata                                       | 文本模型在 models.json 声明；语音目录归 `voice_models` |
+| `attach_static_models`                     | crate-private function                | catalog rows → provider models                                        | registry validation 前自动执行                         |
+| `ProviderConfigRegistry::register`         | public method                         | validate + reject duplicate                                           | built-in/plugin 定义走相同路径                         |
+| `ProviderConfigRegistry::merge`            | public method                         | prevalidate incoming + explicit conflict policy                       | merge 不能 partial apply                               |
+| `ProviderConfigRegistry::with_configs`     | public method                         | 将接入配置组装为 immutable registry                                   | 未知供应商报错；自定义声明和已注册插件定义保留         |
+| `ProviderConfigRegistry::normalize`        | public method                         | config + definition → normalized snapshot                             | endpoint/default/profile precedence 在此唯一实现       |
+| `normalize_for`                            | public method                         | 先 enforce selected/configured provider identity                      | 防止 model ref 与 config 串线                          |
+| `automatic_approval_review_model`          | public method                         | provider default 或 active model fallback                             | 不证明远端 entitlement                                 |
+| `validate_model_selection`                 | public compatibility/preflight method | 显式配置校验                                                          | 内置模型请求不依赖远端目录成员资格                     |
+| `normalize_base_url`                       | crate-private function                | apply explicit normalization rule                                     | 不追加 API route                                       |
+| `is_http_url`                              | crate-private function                | 最小 HTTP(S) shape check                                              | 不是 full URL/network validator                        |
+| `providers::builtin`                       | crate-private function                | built-in definitions                                                  | 每个 provider 在 sibling module 独立定义               |
+| `default_provider` / `configured_provider` | private helpers                       | shared definition constructors                                        | 不隐藏 provider-specific profile/default differences   |
 
 ## 规范化调用图
 
@@ -207,11 +207,11 @@ just generate-model-catalog-schema --check
 
 以上对象放在条目的 `settings` 中。ID 唯一，ID、名称与说明不能空白；`defaultServiceTier` 和服务等级加速选项都必须引用已声明的 ID。默认值是 Ash 的请求默认值，不代表供应商的默认配置。速度倍数未经实测时，说明不承诺固定倍数；说明也不参与价格计算。
 
-| 加速机制 | `settings.acceleration` | 真实请求 |
-| --- | --- | --- |
-| 服务等级 | `{"type":"serviceTier","serviceTier":"priority"}` | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID |
-| 速度参数 | `{"type":"speed","speed":"fast","name":"Fast","description":"Faster responses, increased usage"}` | 独立的 `speed=fast` 和所属接口的 beta Header；不伪造一个 Fast 服务等级 |
-| 高速型号 | `{"type":"model","model":"kimi-k2.7-code-highspeed","name":"Fast","description":"Uses a separate high-speed model, increased usage"}` | 从冻结的模型声明选择高速型号，再应用所选连接的上游 ID 别名 |
+| 加速机制 | `settings.acceleration`                                                                                                               | 真实请求                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 服务等级 | `{"type":"serviceTier","serviceTier":"priority"}`                                                                                     | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID    |
+| 速度参数 | `{"type":"speed","speed":"fast","name":"Fast","description":"Faster responses, increased usage"}`                                     | 独立的 `speed=fast` 和所属接口的 beta Header；不伪造一个 Fast 服务等级 |
+| 高速型号 | `{"type":"model","model":"kimi-k2.7-code-highspeed","name":"Fast","description":"Uses a separate high-speed model, increased usage"}` | 从冻结的模型声明选择高速型号，再应用所选连接的上游 ID 别名             |
 
 用户的加速开关仍以连接上的 `fastModels` 保存。显式请求等级或速度优先于同类参数的加速偏好；关闭开关使用声明的请求默认等级。服务等级 ID 原样传到请求字段，只有 ChatGPT 订阅的显式 `default` 按接口约定省略。预先计数不发送等级、速度或加速 beta Header。订阅连接仍单独限制是否可加速，不能从公开 API 能力推断。
 

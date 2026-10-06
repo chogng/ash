@@ -376,8 +376,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		return Object.freeze({ resource, revision, diagnostics: Object.freeze(diagnostics) });
 	}
 
-	private workspaceTarget(resource: URI): { readonly dirId: string; readonly path: string } | undefined {
-		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number } | undefined;
+	private workspaceTarget(resource: URI): { readonly dirId: string; readonly path: string; } | undefined {
+		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number; } | undefined;
 		for (const folder of this.workspace.getWorkspace().folders) {
 			try {
 				const path = workspaceRelativePath(folder.uri, resource);

@@ -39,16 +39,16 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 
 ### 请求与执行
 
-| Symbol | 职责 |
-| --- | --- |
-| `HttpClient` | `execute` 或 `execute_streaming` 一次；implementation 不得 retry |
-| `ReqwestHttpClient` | 生产 HTTP 客户端，在异步 I/O runtime 执行并支持取消；同步 trait 的调用者等待结果 |
-| `UreqHttpClient` | reusable synchronous client；没有 panic-based `Default` |
-| `HttpMethod::{Get,Post,Patch,Put,Delete}` | 当前支持的 method |
-| `HttpRequest` | validated HTTP(S) URL、headers 与 raw body |
-| `HttpResponse` | status、headers 与 bounded raw body |
-| `HttpHeader` | name/value pair；`Debug` 永远隐藏 value |
-| `HttpClientError` | invalid request/configuration 或 sanitized transport failure |
+| Symbol                                    | 职责                                                                             |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `HttpClient`                              | `execute` 或 `execute_streaming` 一次；implementation 不得 retry                 |
+| `ReqwestHttpClient`                       | 生产 HTTP 客户端，在异步 I/O runtime 执行并支持取消；同步 trait 的调用者等待结果 |
+| `UreqHttpClient`                          | reusable synchronous client；没有 panic-based `Default`                          |
+| `HttpMethod::{Get,Post,Patch,Put,Delete}` | 当前支持的 method                                                                |
+| `HttpRequest`                             | validated HTTP(S) URL、headers 与 raw body                                       |
+| `HttpResponse`                            | status、headers 与 bounded raw body                                              |
+| `HttpHeader`                              | name/value pair；`Debug` 永远隐藏 value                                          |
+| `HttpClientError`                         | invalid request/configuration 或 sanitized transport failure                     |
 
 包括 3xx/4xx/5xx 在内的 HTTP 状态都是 `HttpResponse` 事实，不是传输错误。是否重试以及如何
 解释状态，由上层操作或协议决定。`HttpResponse::retry_after_deadline()` 将秒数或 HTTP 日期格式
@@ -59,21 +59,21 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 
 ### 配置
 
-| Symbol | 当前 contract |
-| --- | --- |
-| `HttpClientConfig` | immutable builder-style config snapshot |
-| `ProxyPolicy` | `Direct`、构造时读取环境、explicit、explicit + bypass |
-| `ProxyBypass` | `NO_PROXY` 风格 exact/suffix/IP/port/`*` rules |
-| `RedirectPolicy` | 默认拒绝，或 bounded `Follow { max_hops }` |
-| `Timeout` / `TransportTimeouts` | connect/read/write/overall 的 disabled/after policy |
-| `ConnectionPoolPolicy` | total 与 per-host idle connection 上限 |
-| `ResponseBodyLimit` | unary body hard limit，默认 10 MiB |
-| `TlsPolicy` | system roots、system + custom DER、custom DER only |
-| `ClientIdentityPolicy` | no identity 或 DER certificate chain + private key |
-| `CertificateBundle` | non-empty DER certificate bundle，debug 只显示数量 |
-| `ClientIdentity` | DER chain 与 zeroizing private key，debug redacted |
-| `OutboundNetworkSnapshot` | HTTP/WebSocket 共用的 immutable proxy/TLS/timeout/target-policy snapshot |
-| `OutboundProxyRoute` | 对一个 HTTP(S)/WS(S) target 的 direct/proxy 决策；proxy debug redacted |
+| Symbol                          | 当前 contract                                                            |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| `HttpClientConfig`              | immutable builder-style config snapshot                                  |
+| `ProxyPolicy`                   | `Direct`、构造时读取环境、explicit、explicit + bypass                    |
+| `ProxyBypass`                   | `NO_PROXY` 风格 exact/suffix/IP/port/`*` rules                           |
+| `RedirectPolicy`                | 默认拒绝，或 bounded `Follow { max_hops }`                               |
+| `Timeout` / `TransportTimeouts` | connect/read/write/overall 的 disabled/after policy                      |
+| `ConnectionPoolPolicy`          | total 与 per-host idle connection 上限                                   |
+| `ResponseBodyLimit`             | unary body hard limit，默认 10 MiB                                       |
+| `TlsPolicy`                     | system roots、system + custom DER、custom DER only                       |
+| `ClientIdentityPolicy`          | no identity 或 DER certificate chain + private key                       |
+| `CertificateBundle`             | non-empty DER certificate bundle，debug 只显示数量                       |
+| `ClientIdentity`                | DER chain 与 zeroizing private key，debug redacted                       |
+| `OutboundNetworkSnapshot`       | HTTP/WebSocket 共用的 immutable proxy/TLS/timeout/target-policy snapshot |
+| `OutboundProxyRoute`            | 对一个 HTTP(S)/WS(S) target 的 direct/proxy 决策；proxy debug redacted   |
 
 `HttpClientConfig::default()` 当前使用环境 proxy、拒绝 redirect、30 秒 connect timeout、60 秒
 overall timeout、system roots、无 client identity、100/1 idle pool，以及各自 10 MiB 的普通响应和
@@ -101,22 +101,22 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 
 ## 内部接口地图
 
-| Symbol | 可见性 | 当前职责 | 方向约束 |
-| --- | --- | --- | --- |
-| `UreqHttpClient::{http_direct_agent,http_proxy_agent}` | private fields | 不依赖 system roots 的 HTTP direct/proxied reusable pools | backend type 不进入 public API |
-| `UreqHttpClient::{network,https_direct_agent,https_proxy_agent}` | private fields | 共用 policy snapshot，并在首次 HTTPS route 时惰性构造 reusable pool | 成功或失败都缓存 |
-| `UreqHttpClient::agent_for` | private method | 消费 shared route 并选择/准备 agent | caller 不手选 route |
-| `OutboundNetworkSnapshot::proxy_route` | public method | 对 HTTP(S)/WS(S) target 应用同一份 proxy/bypass snapshot | 不解释 provider |
-| `OutboundNetworkSnapshot::connect_tls` | public method | 以 crate-owned stream 应用 TLS/mTLS 与 hostname validation | 不暴露 rustls stream/config |
-| `resolve_proxy` | private | materialize proxy URL 与 bypass snapshot | `Direct` 不能受环境影响 |
-| `proxy_url_from_environment` | private | 固定优先级读取 proxy env | 只在 client 构造时调用 |
-| `build_agent` | private | 应用 proxy、redirect、timeouts、pool、TLS | 每个 request 不重新 build agent |
-| `build_tls_config` | private | trust roots + optional client auth | 保持 hostname/chain validation |
-| `system_certificate_verifier` | private | 系统信任验证器与额外 CA | 桌面端委托 OS 校验，构造失败是 `Connection(CertificateConfiguration)` |
-| `add_certificate_bundle` | private | 将 DER roots 加入 rustls store | 不记录 certificate bytes |
-| `rule_matches` / `split_authority` | private | `NO_PROXY`-style match | port rule 必须 exact |
-| `is_http_url` | private | request construction 的 scheme/authority guard | 非 HTTP(S) 在 backend 前拒绝 |
-| `HttpStatusClass::from_status` | private | telemetry low-cardinality classification | 不暴露 exact URL/status label |
+| Symbol                                                           | 可见性         | 当前职责                                                            | 方向约束                                                              |
+| ---------------------------------------------------------------- | -------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `UreqHttpClient::{http_direct_agent,http_proxy_agent}`           | private fields | 不依赖 system roots 的 HTTP direct/proxied reusable pools           | backend type 不进入 public API                                        |
+| `UreqHttpClient::{network,https_direct_agent,https_proxy_agent}` | private fields | 共用 policy snapshot，并在首次 HTTPS route 时惰性构造 reusable pool | 成功或失败都缓存                                                      |
+| `UreqHttpClient::agent_for`                                      | private method | 消费 shared route 并选择/准备 agent                                 | caller 不手选 route                                                   |
+| `OutboundNetworkSnapshot::proxy_route`                           | public method  | 对 HTTP(S)/WS(S) target 应用同一份 proxy/bypass snapshot            | 不解释 provider                                                       |
+| `OutboundNetworkSnapshot::connect_tls`                           | public method  | 以 crate-owned stream 应用 TLS/mTLS 与 hostname validation          | 不暴露 rustls stream/config                                           |
+| `resolve_proxy`                                                  | private        | materialize proxy URL 与 bypass snapshot                            | `Direct` 不能受环境影响                                               |
+| `proxy_url_from_environment`                                     | private        | 固定优先级读取 proxy env                                            | 只在 client 构造时调用                                                |
+| `build_agent`                                                    | private        | 应用 proxy、redirect、timeouts、pool、TLS                           | 每个 request 不重新 build agent                                       |
+| `build_tls_config`                                               | private        | trust roots + optional client auth                                  | 保持 hostname/chain validation                                        |
+| `system_certificate_verifier`                                    | private        | 系统信任验证器与额外 CA                                             | 桌面端委托 OS 校验，构造失败是 `Connection(CertificateConfiguration)` |
+| `add_certificate_bundle`                                         | private        | 将 DER roots 加入 rustls store                                      | 不记录 certificate bytes                                              |
+| `rule_matches` / `split_authority`                               | private        | `NO_PROXY`-style match                                              | port rule 必须 exact                                                  |
+| `is_http_url`                                                    | private        | request construction 的 scheme/authority guard                      | 非 HTTP(S) 在 backend 前拒绝                                          |
+| `HttpStatusClass::from_status`                                   | private        | telemetry low-cardinality classification                            | 不暴露 exact URL/status label                                         |
 
 ## 构造调用图
 

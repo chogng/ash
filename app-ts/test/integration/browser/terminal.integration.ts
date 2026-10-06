@@ -49,7 +49,7 @@ const instance: ITerminalInstance = {
 	write: data => { writes.push(data); },
 	processBinary: async data => { binaryWrites.push(Array.from(data, character => character.charCodeAt(0))); },
 	resize: dimensions => { resizes.push(dimensions); },
-	close: async () => {},
+	close: async () => { },
 };
 const widgetServices = createCodeEditorServices(store);
 const widget = store.add(widgetServices.createInstance(TerminalInstanceWidget, document.querySelector<HTMLElement>('#terminal')!, instance));
@@ -129,38 +129,38 @@ if (new URLSearchParams(location.search).has('pane')) {
 		getProfiles: async () => { profiles++; await pending; return [instance.profile]; },
 		createTerminal: async () => { creates++; instances.push(instance); created.fire(instance); return instance; },
 		relaunchTerminal: async () => { await pending; },
-		setActiveInstance: () => {},
-		moveTerminal: () => {},
-		closeTerminal: async () => {},
+		setActiveInstance: () => { },
+		moveTerminal: () => { },
+		closeTerminal: async () => { },
 	};
 	services.registerInstance(ITerminalService, terminals);
 	let transcript!: (text: string, isFinal: boolean) => void;
 	let stops = 0;
-	services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => {}, cancelPreparation: async () => {}, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
+	services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
-	services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
+	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 	services.registerInstance(INotificationService, store.add(new NotificationService()));
 	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, terminals, menu, {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu: () => {},
-		hideContextMenu: () => {},
+		showContextMenu: () => { },
+		hideContextMenu: () => { },
 	}, context, Object.assign(store.add(new BrowserLayoutService({ root: document.querySelector<HTMLElement>('#terminal')! })), {
 		onDidChangePartVisibility: visibility.event,
 		isPartVisible: () => visible,
 		isPanelMaximized: () => false,
-		toggleMaximizedPanel: () => {},
+		toggleMaximizedPanel: () => { },
 		showPart: () => setPanel(true),
 		showParts: () => setPanel(true),
 		hidePart: () => setPanel(false),
 		hideParts: () => setPanel(false),
 		getPartSize: () => ({ width: 800, height: 400 }),
-		resizePart: () => {},
-		setLayoutStyle: () => {},
+		resizePart: () => { },
+		setLayoutStyle: () => { },
 	}), {
 		onDidChangeWorkspace: workspaceChanged.event,
 		getWorkspace: () => workspace,
@@ -185,7 +185,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 declare global {
 	interface Window {
 		ashTerminalPaneIntegration: {
-			counts(): { profiles: number; creates: number };
+			counts(): { profiles: number; creates: number; };
 			transcript(text: string, final: boolean): void;
 			stops(): number;
 			panel(visible: boolean): void;
@@ -240,7 +240,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 			}),
 		};
 		const install = (container: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService): void => {
-			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => {} });
+			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => { } });
 		};
 		const services = [0, 1].map(() => {
 			const container = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
@@ -271,7 +271,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 
 declare global {
 	interface Window {
-		ashTerminalAssemblyIntegration(): Promise<{ isolated: boolean; output: string[]; calls: string[]; missingDependency: string; remaining: number[] }>;
+		ashTerminalAssemblyIntegration(): Promise<{ isolated: boolean; output: string[]; calls: string[]; missingDependency: string; remaining: number[]; }>;
 	}
 }
 
@@ -298,7 +298,7 @@ if (new URLSearchParams(location.search).has('embedder')) {
 		[IWorkspaceContextService, workspace],
 		[ITerminalProcessService, { listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
 	)));
-	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => {} });
+	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	let hostWidget: TerminalInstanceWidget;
 	let hostReady: Promise<void> = Promise.resolve();
@@ -347,7 +347,7 @@ declare global {
 			name(value: string): void;
 			output(value: string): void;
 			exit(code: number): void;
-			status(): { opens: number; closes: number; backendCalls: string[]; title?: string; state?: string; readOnly?: boolean; remaining: number };
+			status(): { opens: number; closes: number; backendCalls: string[]; title?: string; state?: string; readOnly?: boolean; remaining: number; };
 			close(): Promise<void>;
 			dispose(): void;
 		};
@@ -372,8 +372,8 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		listProfiles: async () => [profile],
 		create: async () => ({ terminalId: 'stream-shell', ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }),
-		write: async () => {},
-		resize: async () => {},
+		write: async () => { },
+		resize: async () => { },
 		close: async () => { closes++; },
 		getConnectionState: async () => 'ready',
 		onConnectionState: Event.None,
@@ -395,7 +395,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	};
 	const workspace = store.add(new WorkspaceContextService({ id: 'stream', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => {} });
+	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	let screen!: TerminalInstanceWidget;
 	store.add(terminals.onDidCreateInstance(instance => {
@@ -415,7 +415,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 declare global {
 	interface Window {
 		ashTerminalStreamIntegration: {
-			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number };
+			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number; };
 			start(): Promise<void>;
 			close(): Promise<void>;
 		};

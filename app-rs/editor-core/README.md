@@ -10,14 +10,14 @@
 
 ## 当前 API 与调用路径
 
-| Public API | 职责 | 不负责 |
-| --- | --- | --- |
-| `EditorCoreDocument` | 保存文本、selection、revision 与 bounded history | DOM、绘制、文件保存、语法结果 |
-| `EditorCoreTransaction` | 将同一旧 revision 上的 edit 和 post-selection 原子提交 | command/keybinding 解释 |
-| `EditorCoreUtf16Offset` | 固定 Browser-compatible UTF-16 code-unit 语义 | UTF-8 byte offset 暴露 |
-| `EditorCoreDocumentSnapshot` | 在显式同步点复制文本、revision 与 selections | viewport / line rendering |
-| `EditorCoreRevision` | 跨 adapter 共用的单调 revision value | 将 selection-only 变化误报为文本 mutation |
-| `EditorCoreEditError` | 报告 stale revision、无效 surrogate boundary、重叠 edit | transport error mapping |
+| Public API                   | 职责                                                    | 不负责                                    |
+| ---------------------------- | ------------------------------------------------------- | ----------------------------------------- |
+| `EditorCoreDocument`         | 保存文本、selection、revision 与 bounded history        | DOM、绘制、文件保存、语法结果             |
+| `EditorCoreTransaction`      | 将同一旧 revision 上的 edit 和 post-selection 原子提交  | command/keybinding 解释                   |
+| `EditorCoreUtf16Offset`      | 固定 Browser-compatible UTF-16 code-unit 语义           | UTF-8 byte offset 暴露                    |
+| `EditorCoreDocumentSnapshot` | 在显式同步点复制文本、revision 与 selections            | viewport / line rendering                 |
+| `EditorCoreRevision`         | 跨 adapter 共用的单调 revision value                    | 将 selection-only 变化误报为文本 mutation |
+| `EditorCoreEditError`        | 报告 stale revision、无效 surrogate boundary、重叠 edit | transport error mapping                   |
 
 ```text
 adapter input

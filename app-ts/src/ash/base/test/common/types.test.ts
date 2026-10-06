@@ -47,7 +47,7 @@ test("isNonEmptyString requires non-whitespace text", () => {
 });
 
 test('general type guards expose object, function, defined, and mutable contracts', () => {
-	const value: Mutable<{ readonly count: number }> = { count: 1 };
+	const value: Mutable<{ readonly count: number; }> = { count: 1 };
 	value.count = 2;
 	assert.deepEqual({
 		count: value.count,
@@ -69,8 +69,8 @@ test('general type guards expose object, function, defined, and mutable contract
 });
 
 test('argument constraints accept primitives, class instances and strict predicates', () => {
-	class Value {}
-	class DerivedValue extends Value {}
+	class Value { }
+	class DerivedValue extends Value { }
 	const BoundValue = Value.bind(undefined);
 	validateConstraints([3, 'text', false], [Number, 'string', Boolean]);
 	validateConstraints([new DerivedValue(), new Value()], [Value, BoundValue]);

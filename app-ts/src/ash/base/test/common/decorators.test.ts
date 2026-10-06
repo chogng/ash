@@ -8,7 +8,7 @@ suite('Decorators', () => {
 	test('memoize caches methods and getters independently per instance', () => {
 		class Example {
 			public calls = 0;
-			constructor(private readonly result: number | null) {}
+			constructor(private readonly result: number | null) { }
 
 			@memoize
 			public value(): number | null {

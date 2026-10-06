@@ -219,7 +219,7 @@ test('A dropped snippet selects its placeholder and Tab reaches its final stop',
 	const provider: DocumentDropEditProvider = {
 		dropMimeTypes: ['text/plain'], providedDropEditKinds: [kind],
 		provideDocumentDropEdits() {
-			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '(${1:name})$0' } }], dispose() {} };
+			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '(${1:name})$0' } }], dispose() { } };
 		},
 	};
 	using registration = features.documentDropEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
@@ -260,7 +260,7 @@ function transferDropEvent(targetWindow: typeof browserEnvironment.window, dataT
 		...dataTransfer.files.map(file => ({
 			kind: 'file',
 			type: file.type,
-			getAsString: (_callback: (value: string) => void) => {},
+			getAsString: (_callback: (value: string) => void) => { },
 			getAsFile: () => file,
 		})),
 	];

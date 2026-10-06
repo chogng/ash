@@ -47,7 +47,7 @@ interface AcademicIntegrationHarness {
 	getBundleIds(): readonly string[];
 	getCodeBlockText(): string | undefined;
 	getStructuredBlockTexts(): readonly string[];
-	getStructuredFirstTextMarks(): readonly { readonly type: string; readonly attrs: Readonly<Record<string, string | number | boolean | null>> }[];
+	getStructuredFirstTextMarks(): readonly { readonly type: string; readonly attrs: Readonly<Record<string, string | number | boolean | null>>; }[];
 	getStructuredSelection(): unknown;
 	getOpenedLinks(): readonly string[];
 	saveCodeBlock(): Promise<void>;
@@ -103,7 +103,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 		};
 	}
 
-	async updatePresence(_selection: DocumentSelection | undefined, _signal: AbortSignal): Promise<void> {}
+	async updatePresence(_selection: DocumentSelection | undefined, _signal: AbortSignal): Promise<void> { }
 
 	async createInvite(displayName: string, role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
 		if (!this.canManageMembers) throw new Error("This collaboration member cannot create room invitations");

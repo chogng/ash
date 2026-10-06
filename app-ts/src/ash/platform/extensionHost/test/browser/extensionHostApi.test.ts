@@ -13,7 +13,7 @@ class RemoteHost extends Disposable implements IExtensionHostApi {
 	readonly activation = new DeferredPromise<ExtensionHostFleetSnapshot>();
 	readonly read = new DeferredPromise<ExtensionHostFleetSnapshot>();
 	readonly readStarted = new DeferredPromise<void>();
-	registerClientHandler(): { dispose(): void } { throw new Error('Client calls are outside this fixture'); }
+	registerClientHandler(): { dispose(): void; } { throw new Error('Client calls are outside this fixture'); }
 	isAvailable(): Promise<boolean> { return Promise.resolve(true); }
 	getConnectionState(): Promise<AppServerConnectionState> { return Promise.resolve('ready'); }
 	list(): Promise<ExtensionHostFleetSnapshot> { void this.readStarted.complete(); return this.read.p; }
@@ -27,13 +27,15 @@ class RemoteHost extends Disposable implements IExtensionHostApi {
 }
 
 function snapshot(generation: number, lifecycle: 'dormant' | 'ready'): ExtensionHostFleetSnapshot {
-	return normalizeExtensionHostSnapshot({ generation, extensions: [{
-		id: 'lazy', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
-		activationGeneration: 7, incarnation: lifecycle === 'ready' ? 1 : null, lifecycle,
-		failure: null, stderr: '', outputEvents: [],
-		...(lifecycle === 'dormant' ? { activation: { events: ['onCommand:lazy.run'], commands: [{ command: 'lazy.run', title: 'Run' }] } } : {}),
-		registrations: lifecycle === 'ready' ? [{ kind: 'command', registrationId: 'callback', command: 'lazy.run', title: 'Run' }] : [],
-	}] });
+	return normalizeExtensionHostSnapshot({
+		generation, extensions: [{
+			id: 'lazy', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+			activationGeneration: 7, incarnation: lifecycle === 'ready' ? 1 : null, lifecycle,
+			failure: null, stderr: '', outputEvents: [],
+			...(lifecycle === 'dormant' ? { activation: { events: ['onCommand:lazy.run'], commands: [{ command: 'lazy.run', title: 'Run' }] } } : {}),
+			registrations: lifecycle === 'ready' ? [{ kind: 'command', registrationId: 'callback', command: 'lazy.run', title: 'Run' }] : [],
+		}]
+	});
 }
 
 function browser(remote: RemoteHost): BrowserExtensionHostApi {

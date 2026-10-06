@@ -209,7 +209,7 @@ class UserThemeResources extends Disposable implements IUserThemeService {
 
 	public reload(): Promise<void> {
 		const operation = this.reloadQueue.then(() => this.reloadResources());
-		this.reloadQueue = operation.then(() => {}, () => {});
+		this.reloadQueue = operation.then(() => { }, () => { });
 		return operation;
 	}
 

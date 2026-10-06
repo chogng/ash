@@ -120,7 +120,7 @@ try {
 	await rm(directory, { recursive: true, force: true });
 }
 
-function parseOptions(args: readonly string[]): { readonly backendPackage?: string; readonly output?: string; readonly unsigned: boolean } {
+function parseOptions(args: readonly string[]): { readonly backendPackage?: string; readonly output?: string; readonly unsigned: boolean; } {
 	let backendPackage: string | undefined;
 	let output: string | undefined;
 	let unsigned = false;

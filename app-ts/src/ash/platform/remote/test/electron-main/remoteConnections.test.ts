@@ -42,7 +42,7 @@ test("Electron Main creates, atomically updates, and removes targets through the
 			calls.push([...args]);
 			return { exitCode: 0, stdout: outputs.shift()!, stderr: "" };
 		},
-		scheduleConnect: () => {},
+		scheduleConnect: () => { },
 	});
 
 	assert.deepEqual(await service.save({ name: " BUILD ", host: "BUILD-LINUX", workspace: " /srv/project " }), { name: "build", host: "build-linux", workspace: "/srv/project" });
@@ -60,7 +60,7 @@ test("named Remote connection paths preserve POSIX backslashes", async () => {
 		remoteExecutable: "ash-remote",
 		environment: {},
 		runCommand: async () => ({ exitCode: 0, stdout: '[{"name":"build","host":"build","workspace":"/srv/project\\\\archive"}]', stderr: "" }),
-		scheduleConnect: () => {},
+		scheduleConnect: () => { },
 	});
 
 	assert.deepEqual(await service.list(), [{ name: "build", host: "build", workspace: "/srv/project\\archive" }]);
@@ -71,7 +71,7 @@ test("named Remote connection mutations require the CLI to return the exact requ
 		remoteExecutable: "ash-remote",
 		environment: {},
 		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"other","host":"other","workspace":"/srv/other"}', stderr: "" }),
-		scheduleConnect: () => {},
+		scheduleConnect: () => { },
 	});
 
 	await assert.rejects(() => service.save({ name: "build", host: "build", workspace: "/srv/build" }), /different target/);
@@ -105,7 +105,7 @@ test("named Remote connection lists require sorted unique canonical records", as
 			stdout: '[{"name":"zulu","host":"zulu","workspace":"/srv/z"},{"name":"alpha","host":"alpha","workspace":"/srv/a"}]',
 			stderr: "",
 		}),
-		scheduleConnect: () => {},
+		scheduleConnect: () => { },
 	});
 	await assert.rejects(() => service.list(), /duplicate or unsorted/);
 });
@@ -125,8 +125,8 @@ test("named Remote connection scheduling is reusable after one window open settl
 });
 
 test("concurrent named Remote connection requests cannot both cross the catalog gate", async () => {
-	let finishLookup!: (output: { exitCode: number; stdout: string; stderr: string }) => void;
-	const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string }>(resolve => finishLookup = resolve);
+	let finishLookup!: (output: { exitCode: number; stdout: string; stderr: string; }) => void;
+	const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string; }>(resolve => finishLookup = resolve);
 	let schedules = 0;
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",

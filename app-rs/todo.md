@@ -1,7 +1,8 @@
 - 禁止native 概念在app这里
 - 设计理念为 agent-first, 一切功能都是为了提升agent的能力
 
----------------------------------------------------
+---
+
 - ash-session：App Server Session client、worker、订阅、命令/事件队列和断线恢复策略，以及单个 Agent Pane 的 Thread、时间线、Composer、布局和内部交互
 - ash-files：Files Pane、目录树、搜索和文件交互
 - ash-scm：Changes Pane、多文件 Diff、折叠和滚动

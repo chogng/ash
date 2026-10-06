@@ -162,8 +162,8 @@ class SessionsWindowRecord extends Disposable {
 	readonly remoteConnections: IRemoteConnectionService;
 	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
 	supervisor: AppServerConnectionRelay | undefined;
-	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable } | undefined;
-	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void }>();
+	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable; } | undefined;
+	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void; }>();
 	private readonly handoffQueue: string[] = [];
 
 	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService) {
@@ -183,7 +183,7 @@ class SessionsWindowRecord extends Disposable {
 		});
 	}
 
-	takeHandoff(): { readonly id: string; readonly options: IOpenAgentsWindowOptions } | undefined {
+	takeHandoff(): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
 		const id = this.handoffQueue.shift();
 		const handoff = id ? this.handoffs.get(id) : undefined;
 		return handoff && id ? { id, options: handoff.options } : undefined;
@@ -205,8 +205,8 @@ class SessionsWindowRecord extends Disposable {
 }
 
 type WindowSessionEntry =
-	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
-	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier };
+	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier; }
+	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; };
 
 const AGENTS_WINDOW_KEY = 'agents';
 
@@ -851,7 +851,7 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private async resolveWorkspace(): Promise<{ readonly workspace: IAnyWorkspaceIdentifier; readonly explicit: boolean }> {
+	private async resolveWorkspace(): Promise<{ readonly workspace: IAnyWorkspaceIdentifier; readonly explicit: boolean; }> {
 		try {
 			const target = parseLaunchArguments(this.workspaceLaunchArguments(process.argv)).workspace;
 			return {
@@ -984,7 +984,7 @@ export class AshApplication extends Disposable {
 					return { nonce: value.nonce };
 				},
 				// The trusted route owns the window identity; the renderer supplies only a reply nonce.
-				invoke: value => this.mainProcessIpcServer.connect(window.webContents, `window:${window.id}`, (value as { nonce: string }).nonce),
+				invoke: value => this.mainProcessIpcServer.connect(window.webContents, `window:${window.id}`, (value as { nonce: string; }).nonce),
 			},
 		];
 	}
@@ -1454,7 +1454,7 @@ export class AshApplication extends Disposable {
 			}
 			return { action: 'allow', overrideBrowserWindowOptions: this.auxiliaryWindowsMainService.createWindow(details) };
 		});
-		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string }): void => {
+		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; }): void => {
 			if (details.url !== 'about:blank') return;
 			const childResources = new DisposableStore();
 			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id));
@@ -2074,7 +2074,7 @@ export class AshApplication extends Disposable {
 
 	private createWindowsStateHandler(
 		workspace: IAnyWorkspaceIdentifier,
-		options?: { readonly storageKey: string; readonly defaultState: IWindowState },
+		options?: { readonly storageKey: string; readonly defaultState: IWindowState; },
 	): WindowsStateHandler {
 		return new WindowsStateHandler({
 			stateService: this.services.state,

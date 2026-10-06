@@ -83,7 +83,7 @@ export class SemanticTokensTextModelPart extends Disposable implements SemanticT
 }
 
 class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane, SemanticTokensPayload, LanguageTokenResult> {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageSemanticTokensProvider>) {}
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageSemanticTokensProvider>) { }
 
 	async run(request: LanguageWorkerRequest<SemanticTokensLane, SemanticTokensPayload>, signal: AbortSignal): Promise<LanguageTokenResult> {
 		const providerRequest = Object.freeze({
@@ -102,7 +102,7 @@ class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane,
 		return EMPTY_RESULT;
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 	[Symbol.dispose](): void { this.dispose(); }
 }
 

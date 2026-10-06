@@ -20,23 +20,23 @@ async function publish(source: string, directory: string, identity: string): Pro
 	await writeFile(marker, identity);
 	const script = 'import json,sys; from pathlib import Path; from build.ash_rs.develop import publish_generation; changed,generation=publish_generation(Path(sys.argv[1]), {"test-generation":Path(sys.argv[2])}, Path(sys.argv[3])); print(json.dumps({"generation":generation}))';
 	const result = await execFileAsync(process.execPath, [resolve(desktopDirectory, '../build/python.ts'), '-B', '-c', script, source, marker, directory], { cwd: resolve(desktopDirectory, '..'), windowsHide: true });
-	return (JSON.parse(result.stdout) as { generation: string }).generation;
+	return (JSON.parse(result.stdout) as { generation: string; }).generation;
 }
 
-async function connection(page: Page): Promise<{ generation: number }> {
+async function connection(page: Page): Promise<{ generation: number; }> {
 	return page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number; }>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:remote:connection');
 	});
 }
 
-type CatalogProbeGlobal = typeof globalThis & { catalogSubscriptions: number };
+type CatalogProbeGlobal = typeof globalThis & { catalogSubscriptions: number; };
 
 function countCatalogSubscriptions(): void {
 	(globalThis as CatalogProbeGlobal).catalogSubscriptions = 0;
 	const post = MessagePort.prototype.postMessage;
 	// Observe outgoing product requests without replacing the connection or backend replies.
-	MessagePort.prototype.postMessage = function (message: { frame?: string }, options?: Transferable[] | StructuredSerializeOptions): void {
+	MessagePort.prototype.postMessage = function (message: { frame?: string; }, options?: Transferable[] | StructuredSerializeOptions): void {
 		if (message.frame && JSON.parse(message.frame).method === 'session/catalog/subscribe') {
 			(globalThis as CatalogProbeGlobal).catalogSubscriptions++;
 		}
@@ -144,7 +144,7 @@ test('publication between runtime selection and Windows process startup preserve
 		await launcher.validate();
 		await access(launcher.executable);
 		const result = await execFileAsync(launcher.executable, ['start'], { env: { ...launcher.environment }, windowsHide: true });
-		expect((JSON.parse(result.stdout) as { pid: number }).pid).toBeGreaterThan(0);
+		expect((JSON.parse(result.stdout) as { pid: number; }).pid).toBeGreaterThan(0);
 		await execFileAsync(launcher.executable, ['stop'], { env: { ...launcher.environment }, windowsHide: true });
 		launcher.dispose();
 		await expect.poll(async () => {

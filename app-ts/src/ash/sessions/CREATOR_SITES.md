@@ -42,14 +42,14 @@ SidebarPart | EditorPart | AuxiliaryBarPart
 
 用户需要与 Agent 讨论时，窗口布局额外显示已有 SessionsPart。对话的显隐不更换文档模型、不销毁编辑器，也不将画布搬进 Chat 或 AuxiliaryBarPart；右侧仍承担编辑工具的职责。具体对话位置由窗口布局契约决定，各创作模式不自行实现另一套对话容器。左右工具 Part 可由用户收起，编辑器保留当前资源和状态。
 
-| 现有基座 | 适用职责 | 复用边界 |
-| --- | --- | --- |
-| [EditorInput](../workbench/services/editor/common/editorService.ts) | 指定打开哪个资源、使用哪个编辑器 | 资源身份与编辑器类型分别表达；模式不是文档身份 |
-| [IEditorPane](../workbench/browser/parts/editor/editorPane.ts) 与 [EditorPaneRegistry](../workbench/browser/editor.ts) | 自定义编辑器的创建、加载、显示、布局、焦点与释放 | Design、Sites 等使用自己的内容模型和组件实现此契约 |
-| [EditorPart](../workbench/browser/parts/editor/editorPart.ts) 与编辑组 | 标签、活动编辑器、分屏、打开取消、保存和关闭协调 | 复用现有实现与服务，Creator 不另建标签和文件关闭机制 |
-| [IWorkingCopy](../workbench/services/workingCopy/common/workingCopyService.ts) | 未保存状态、备份、保存、另存、回退与外部修改 | 内容领域拥有序列化与模型；注册服务负责索引与协调 |
-| [ViewPaneContainer](../workbench/browser/parts/views/viewPaneContainer.ts) | 面板显隐、顺序、折叠、尺寸及焦点 | 承载图层、属性等工具；文档和撤销记录由编辑模型拥有 |
-| [Stanza](../editor/README.md) | 文本和富文档内容编辑 | 在需要文字编辑的组件中使用；其 TextModel 不承担空间画布和网站布局模型 |
+| 现有基座                                                                                                               | 适用职责                                         | 复用边界                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
+| [EditorInput](../workbench/services/editor/common/editorService.ts)                                                    | 指定打开哪个资源、使用哪个编辑器                 | 资源身份与编辑器类型分别表达；模式不是文档身份                        |
+| [IEditorPane](../workbench/browser/parts/editor/editorPane.ts) 与 [EditorPaneRegistry](../workbench/browser/editor.ts) | 自定义编辑器的创建、加载、显示、布局、焦点与释放 | Design、Sites 等使用自己的内容模型和组件实现此契约                    |
+| [EditorPart](../workbench/browser/parts/editor/editorPart.ts) 与编辑组                                                 | 标签、活动编辑器、分屏、打开取消、保存和关闭协调 | 复用现有实现与服务，Creator 不另建标签和文件关闭机制                  |
+| [IWorkingCopy](../workbench/services/workingCopy/common/workingCopyService.ts)                                         | 未保存状态、备份、保存、另存、回退与外部修改     | 内容领域拥有序列化与模型；注册服务负责索引与协调                      |
+| [ViewPaneContainer](../workbench/browser/parts/views/viewPaneContainer.ts)                                             | 面板显隐、顺序、折叠、尺寸及焦点                 | 承载图层、属性等工具；文档和撤销记录由编辑模型拥有                    |
+| [Stanza](../editor/README.md)                                                                                          | 文本和富文档内容编辑                             | 在需要文字编辑的组件中使用；其 TextModel 不承担空间画布和网站布局模型 |
 
 一个文件或文件包是一个持久资源，拥有一份已提交内容、撤销历史与保存基准。默认打开一个编辑器实例；同一资源可以打开多个编辑视图，它们可以分别编辑，但提交到同一个模型。独立的是各视图的选区、当前页面、断点和视口，内容及保存状态彼此同步。不同资源分别拥有自己的内容、历史与未保存状态。
 
@@ -63,15 +63,15 @@ SidebarPart | EditorPart | AuxiliaryBarPart
 
 ## 职责与数据归属
 
-| 层 | 拥有的职责 | 与其他层的关系 |
-| --- | --- | --- |
-| Sessions 窗口 | Parts、窗口布局、导航、焦点与窗口生命周期 | 组合 SidebarPart、EditorPart、AuxiliaryBarPart，按对话需要显示 SessionsPart |
-| Creator 贡献 | 创作入口、模式选择与能力组合 | 作品在共享 EditorPart 编辑，工具 View 分别注册到左右 Part |
-| Sites 模式 | 网站工作区组合、默认工具与面板、网站编辑上下文 | 组合所需 contrib，定义网站特有的内容和运行要求 |
-| 网站文档与编辑模型 | 页面、元素、布局规则、断点差异、样式、链接和内容绑定，以及提交和历史 | 所有编辑能力通过同一编辑入口修改 |
-| 文档工作副本及模型引用拥有方 | 资源身份、模型引用、读取版本、保存基准、未保存状态、备份和关闭处理 | 按资源共享内容，使用现有文件服务与工作副本设施 |
-| contrib | 自己的命令、控件、面板、手势及订阅 | 借用文档和编辑上下文，拥有自己的界面与资源 |
-| 后端领域能力 | 发布任务、站点版本与长期运行的任务状态 | 前端使用领域服务；连接适配层负责传输转换 |
+| 层                           | 拥有的职责                                                           | 与其他层的关系                                                              |
+| ---------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Sessions 窗口                | Parts、窗口布局、导航、焦点与窗口生命周期                            | 组合 SidebarPart、EditorPart、AuxiliaryBarPart，按对话需要显示 SessionsPart |
+| Creator 贡献                 | 创作入口、模式选择与能力组合                                         | 作品在共享 EditorPart 编辑，工具 View 分别注册到左右 Part                   |
+| Sites 模式                   | 网站工作区组合、默认工具与面板、网站编辑上下文                       | 组合所需 contrib，定义网站特有的内容和运行要求                              |
+| 网站文档与编辑模型           | 页面、元素、布局规则、断点差异、样式、链接和内容绑定，以及提交和历史 | 所有编辑能力通过同一编辑入口修改                                            |
+| 文档工作副本及模型引用拥有方 | 资源身份、模型引用、读取版本、保存基准、未保存状态、备份和关闭处理   | 按资源共享内容，使用现有文件服务与工作副本设施                              |
+| contrib                      | 自己的命令、控件、面板、手势及订阅                                   | 借用文档和编辑上下文，拥有自己的界面与资源                                  |
+| 后端领域能力                 | 发布任务、站点版本与长期运行的任务状态                               | 前端使用领域服务；连接适配层负责传输转换                                    |
 
 “同一份文档”指同一个网站的编辑过程。不同创作模式可以拥有各自的内容类型；公共契约围绕工作区和文件生命周期建立，不要求所有成果都塞进现有图形对象类型。
 
@@ -83,16 +83,16 @@ SidebarPart | EditorPart | AuxiliaryBarPart
 
 以下名称用于说明目标职责，创建目录与公开接口时仍需有实际消费者。已有能力能够承担职责时扩展其契约，不按表格预建空模块。
 
-| 能力 | 对应截图操作 | 完整职责与边界 |
-| --- | --- | --- |
-| 页面管理 | Webpages、Home、/journal、/article | 页面创建、删除、顺序、名称与路由；页面切换更新编辑上下文 |
-| 图层与选择 | Layers、元素层级、显隐 | 显示文档层级，选择、重排与包含关系编辑；与画布共享选区 |
-| 画布编辑 | 点击、拖动、缩放、测量、工具栏 | 视口、命中、手势和编辑辅助显示；通过编辑命令提交内容 |
-| 布局与响应式 | Desktop/Tablet/Mobile、Primary、Position、Auto layout | 断点、继承与覆盖、排列、尺寸、间距、内边距和定位；拥有网站布局规则的求值 |
-| 外观编辑 | Fill、Stroke、Effects、Opacity、圆角 | 编辑颜色、边框、阴影、透明度及可复用样式；按元素类型提供适用控件 |
-| 交互编辑 | Link、Interaction | 页面跳转、外链、触发条件和交互定义；预览消费这些定义 |
-| CMS | 内容集合、文章字段、列表绑定 | 内容结构、条目、模板与绑定；内容和页面模板具有不同身份 |
-| 预览与发布 | 预览按钮、Publish | 预览贡献负责运行网站；发布贡献负责固定版本、启动任务和显示结果，两者生命周期分别管理 |
+| 能力         | 对应截图操作                                          | 完整职责与边界                                                                       |
+| ------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 页面管理     | Webpages、Home、/journal、/article                    | 页面创建、删除、顺序、名称与路由；页面切换更新编辑上下文                             |
+| 图层与选择   | Layers、元素层级、显隐                                | 显示文档层级，选择、重排与包含关系编辑；与画布共享选区                               |
+| 画布编辑     | 点击、拖动、缩放、测量、工具栏                        | 视口、命中、手势和编辑辅助显示；通过编辑命令提交内容                                 |
+| 布局与响应式 | Desktop/Tablet/Mobile、Primary、Position、Auto layout | 断点、继承与覆盖、排列、尺寸、间距、内边距和定位；拥有网站布局规则的求值             |
+| 外观编辑     | Fill、Stroke、Effects、Opacity、圆角                  | 编辑颜色、边框、阴影、透明度及可复用样式；按元素类型提供适用控件                     |
+| 交互编辑     | Link、Interaction                                     | 页面跳转、外链、触发条件和交互定义；预览消费这些定义                                 |
+| CMS          | 内容集合、文章字段、列表绑定                          | 内容结构、条目、模板与绑定；内容和页面模板具有不同身份                               |
+| 预览与发布   | 预览按钮、Publish                                     | 预览贡献负责运行网站；发布贡献负责固定版本、启动任务和显示结果，两者生命周期分别管理 |
 
 页面路由、断点和 CMS 是网站领域规则。图层操作、选区、颜色编辑等能力只有在多个模式的实际契约一致时才共享；网站尺寸规则不能通过给自由画布的宽高字段附加含义来表达。
 
@@ -157,16 +157,16 @@ Sessions 窗口核心和共享服务不导入 contrib 实现。Creator 使用 Se
 
 以下依据当前工作区源码，包含尚未提交的 Creator 整理。公共画布拆分的验证使用画布与编辑器单元测试，以及 Sessions Design 和 Creator 的 Playwright 场景。
 
-| 能力 | 当前情况 | 开工需要完成 |
-| --- | --- | --- |
-| Creator 模式标识 | [`CreatorMode`](contrib/creator/common/creator.ts) 已列出 Sites 等模式 | 按资源打开对应编辑器，模式不作为单一文档的索引 |
-| 模式契约 | [`creatorWorkspace.ts`](contrib/creator/browser/creatorWorkspace.ts) 已定义工作区与模式注册契约 | 按真实网站消费者补齐工具与面板组合契约 |
-| 公共画布 | [`contrib/canvas`](contrib/canvas/README.md) 已拥有视口、网格、空间容器、选框和指针手势 | 网站布局结果由 Sites 提供；画布不拥有网站规则与文档历史 |
-| 画布工作区 | [`creatorCanvasWorkspace.ts`](contrib/creator/browser/creatorCanvasWorkspace.ts) 组合已有 Design 编辑能力 | 区分公共画布机制与自由布局操作，接入网站布局结果 |
-| 文档、编辑和保存 | 已有 [模型](contrib/creator/common/model/designModel.ts)、[编辑命令](contrib/creator/common/commands/documentCommands.ts) 与[文件控制器](contrib/creator/browser/designDocumentController.ts) | 增加网站内容、断点与引用规则，保持提交和文件状态的唯一拥有者 |
-| Sites 能力 | [SitesWorkspace](contrib/creator/contrib/sites/browser/sites.contribution.ts) 已提供画板页面、预览和 SVG 内容的 HTML 导出 | 网站元素布局、断点、独立路由、CMS 与发布仍待实现；已有导出不能证明网站排版能力已完成 |
-| 文档身份 | [DesignEditorService](contrib/creator/browser/designEditorService.ts) 按模式保留一份文档，CreatorPage 按模式保留工作区 | 改为按资源共享文档引用，支持同模式多文件与同文件多视图 |
-| 现有测试 | [模型测试](test/common/designModel.test.ts)与[编辑器测试](test/browser/designEditorWidget.test.ts)覆盖已有设计行为 | 新增网站规则与完整用户流程覆盖；现有测试不能证明 Sites 可用 |
+| 能力             | 当前情况                                                                                                                                                                                      | 开工需要完成                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Creator 模式标识 | [`CreatorMode`](contrib/creator/common/creator.ts) 已列出 Sites 等模式                                                                                                                        | 按资源打开对应编辑器，模式不作为单一文档的索引                                       |
+| 模式契约         | [`creatorWorkspace.ts`](contrib/creator/browser/creatorWorkspace.ts) 已定义工作区与模式注册契约                                                                                               | 按真实网站消费者补齐工具与面板组合契约                                               |
+| 公共画布         | [`contrib/canvas`](contrib/canvas/README.md) 已拥有视口、网格、空间容器、选框和指针手势                                                                                                       | 网站布局结果由 Sites 提供；画布不拥有网站规则与文档历史                              |
+| 画布工作区       | [`creatorCanvasWorkspace.ts`](contrib/creator/browser/creatorCanvasWorkspace.ts) 组合已有 Design 编辑能力                                                                                     | 区分公共画布机制与自由布局操作，接入网站布局结果                                     |
+| 文档、编辑和保存 | 已有 [模型](contrib/creator/common/model/designModel.ts)、[编辑命令](contrib/creator/common/commands/documentCommands.ts) 与[文件控制器](contrib/creator/browser/designDocumentController.ts) | 增加网站内容、断点与引用规则，保持提交和文件状态的唯一拥有者                         |
+| Sites 能力       | [SitesWorkspace](contrib/creator/contrib/sites/browser/sites.contribution.ts) 已提供画板页面、预览和 SVG 内容的 HTML 导出                                                                     | 网站元素布局、断点、独立路由、CMS 与发布仍待实现；已有导出不能证明网站排版能力已完成 |
+| 文档身份         | [DesignEditorService](contrib/creator/browser/designEditorService.ts) 按模式保留一份文档，CreatorPage 按模式保留工作区                                                                        | 改为按资源共享文档引用，支持同模式多文件与同文件多视图                               |
+| 现有测试         | [模型测试](test/common/designModel.test.ts)与[编辑器测试](test/browser/designEditorWidget.test.ts)覆盖已有设计行为                                                                            | 新增网站规则与完整用户流程覆盖；现有测试不能证明 Sites 可用                          |
 
 已有 [`contrib/creator/DESIGN.md`](contrib/creator/DESIGN.md) 讨论多种创作成果与媒体工作流。本文具体负责此次网站模式的拆分和启动；模型、文件与贡献职责实际变化时，在同一次实现中同步相关正文和调用点。
 
@@ -174,13 +174,13 @@ Sessions 窗口核心和共享服务不导入 contrib 实现。Creator 使用 Se
 
 按可完成实际工作的顺序交付，每轮使用长期所属的模型和接口。尚未实现的能力不显示为可用操作。
 
-| 顺序 | 实现范围 | 验收结果 |
-| --- | --- | --- |
-| 1 | 平级 contrib 装配、Editor 基座接入、按资源管理的网站文档、基础页面和选择、工作副本 | 打开两份网站分别编辑，同一网站多视图共享内容、历史和保存基准；创建页面、撤销重做、保存重开，关闭一处和切换会话不丢其他视图内容 |
-| 2 | 布局与响应式、外观、网站画布计算及交互预览基础 | 搭出标题与文章列表；电脑和平板继承主布局，手机可覆盖；Fill/Hug、间距、定位在画布和浏览器运行中一致 |
-| 3 | 内部路由、外链与交互编辑，完整运行预览 | 首页跳转文章页，修改路由后链接仍有效，能返回；不同宽度下可完成相同访问任务 |
-| 4 | CMS 集合、字段、模板和内容绑定 | 文章集合驱动列表与详情，新增条目更新页面，模板与内容分别编辑并可保存重开 |
-| 5 | 发布贡献与后端发布领域接入 | 发布确切版本，返回可访问站点与任务结果；发布期间继续编辑不改变已启动任务的输入 |
+| 顺序 | 实现范围                                                                           | 验收结果                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | 平级 contrib 装配、Editor 基座接入、按资源管理的网站文档、基础页面和选择、工作副本 | 打开两份网站分别编辑，同一网站多视图共享内容、历史和保存基准；创建页面、撤销重做、保存重开，关闭一处和切换会话不丢其他视图内容 |
+| 2    | 布局与响应式、外观、网站画布计算及交互预览基础                                     | 搭出标题与文章列表；电脑和平板继承主布局，手机可覆盖；Fill/Hug、间距、定位在画布和浏览器运行中一致                             |
+| 3    | 内部路由、外链与交互编辑，完整运行预览                                             | 首页跳转文章页，修改路由后链接仍有效，能返回；不同宽度下可完成相同访问任务                                                     |
+| 4    | CMS 集合、字段、模板和内容绑定                                                     | 文章集合驱动列表与详情，新增条目更新页面，模板与内容分别编辑并可保存重开                                                       |
+| 5    | 发布贡献与后端发布领域接入                                                         | 发布确切版本，返回可访问站点与任务结果；发布期间继续编辑不改变已启动任务的输入                                                 |
 
 第一轮直接从网站文档与 Creator 装配开始，同时交付能保存重开的最小页面编辑流程。页面树、选区、命令、历史、文件控制器及其测试属于同一轮实现，不把 UI 接好后再补内容契约。
 

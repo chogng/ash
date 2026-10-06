@@ -17,8 +17,8 @@ import { IDecorationsService } from '../../../../services/decorations/common/dec
 import { OpenEditorsFocusedContext } from '../../common/files.js';
 
 type OpenEditorsRow =
-	| { readonly kind: 'group'; readonly id: string; readonly label: string }
-	| { readonly kind: 'editor'; readonly id: string; readonly editor: EditorInstanceState; readonly isActive: boolean };
+	| { readonly kind: 'group'; readonly id: string; readonly label: string; }
+	| { readonly kind: 'editor'; readonly id: string; readonly editor: EditorInstanceState; readonly isActive: boolean; };
 
 /** Shows the editor instances already owned by the Workbench editor groups. */
 export class OpenEditorsView extends ViewPane {

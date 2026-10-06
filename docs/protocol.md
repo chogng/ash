@@ -31,15 +31,15 @@ get_session(S1) = all Threads where thread.session_id == S1
 
 ## 2. 身份
 
-| 字段 | 含义 | 约束 |
-| --- | --- | --- |
-| `agent_id` | 长期 Agent 身份 | 可跨任务绑定多个 Thread，不共享执行状态 |
-| `session_id` | Thread tree 的共同分组身份 | 保存在每个 Thread 上 |
-| `thread_id` | 一条具体分支的地址 | 持久化、恢复和执行边界 |
-| `parent_thread_id` | 拓扑父 Thread | 不替代 `session_id` |
-| `forked_from_id` | 内容从哪个 Thread 派生 | 与拓扑父关系分别表达 |
-| `turn_id` | Thread 内的一次执行周期 | 随 Thread 事件保存 |
-| `item_id` | Turn 内的具体内容或工具活动 | 随 Thread 事件保存 |
+| 字段               | 含义                        | 约束                                    |
+| ------------------ | --------------------------- | --------------------------------------- |
+| `agent_id`         | 长期 Agent 身份             | 可跨任务绑定多个 Thread，不共享执行状态 |
+| `session_id`       | Thread tree 的共同分组身份  | 保存在每个 Thread 上                    |
+| `thread_id`        | 一条具体分支的地址          | 持久化、恢复和执行边界                  |
+| `parent_thread_id` | 拓扑父 Thread               | 不替代 `session_id`                     |
+| `forked_from_id`   | 内容从哪个 Thread 派生      | 与拓扑父关系分别表达                    |
+| `turn_id`          | Thread 内的一次执行周期     | 随 Thread 事件保存                      |
+| `item_id`          | Turn 内的具体内容或工具活动 | 随 Thread 事件保存                      |
 
 根 Thread 常见 `thread_id == session_id`，但调用方不得依赖这个关系推断归属；是否同树只看显式 `session_id`。
 
@@ -51,11 +51,11 @@ Project 是可选的长期组织关系，不参与上述身份、顺序或恢复
 
 ## 3. Command、Event 与 Update
 
-| 类型 | 用途 | 是否持久化 |
-| --- | --- | --- |
-| `ThreadCommand` | 调用方请求改变一个 Thread | command receipt 随已接受写入保存 |
-| `ThreadEvent` | 已发生且可重放的领域事实 | 是 |
-| `ThreadUpdate` | 面向订阅客户端的 committed 或 transient 变化 | committed 内容来自事件；transient 不保存 |
+| 类型            | 用途                                         | 是否持久化                               |
+| --------------- | -------------------------------------------- | ---------------------------------------- |
+| `ThreadCommand` | 调用方请求改变一个 Thread                    | command receipt 随已接受写入保存         |
+| `ThreadEvent`   | 已发生且可重放的领域事实                     | 是                                       |
+| `ThreadUpdate`  | 面向订阅客户端的 committed 或 transient 变化 | committed 内容来自事件；transient 不保存 |
 
 Command 使用稳定 `command_id` 实现幂等。相同 `command_id` 与相同 payload 可以返回已有结果；相同 ID 与不同 payload 必须明确报错。
 
@@ -75,24 +75,24 @@ Session 订阅没有 Session update gap。它返回当前树视图、各 Thread 
 
 ## 5. 所有权
 
-| crate | 负责什么 |
-| --- | --- |
-| `ash-protocol` | 共享领域类型、稳定 ID、serde/schema |
-| `ash-history` | `ThreadEvent` 的持久记录格式 |
-| `ash-agent-graph-store` | Agent 身份、Thread 绑定和委托关系读取契约 |
-| `ash-thread-store` | Thread 流读取、Session 成员查询、原子追加和冲突校验 |
-| `ash-core` | 命令执行、reducer、恢复与运行状态 |
-| `ash-state` | SQLite 实现与迁移 |
-| `ash-app-server-protocol` | JSON-RPC DTO、方法注册和生成 schema |
+| crate                     | 负责什么                                            |
+| ------------------------- | --------------------------------------------------- |
+| `ash-protocol`            | 共享领域类型、稳定 ID、serde/schema                 |
+| `ash-history`             | `ThreadEvent` 的持久记录格式                        |
+| `ash-agent-graph-store`   | Agent 身份、Thread 绑定和委托关系读取契约           |
+| `ash-thread-store`        | Thread 流读取、Session 成员查询、原子追加和冲突校验 |
+| `ash-core`                | 命令执行、reducer、恢复与运行状态                   |
+| `ash-state`               | SQLite 实现与迁移                                   |
+| `ash-app-server-protocol` | JSON-RPC DTO、方法注册和生成 schema                 |
 
 ## 6. 消息恢复点与共享历史
 
-| 内容 | 保存什么 | 恢复时怎么用 |
-| --- | --- | --- |
-| `MessageCheckpoint` | 原消息的 Thread、sequence、前后边界和文件版本 | 在选定消息前或后创建执行分支 |
-| `HistoryPrefixRef` | 原事件前缀的摘要和来源位置 | 共享原记录；分支只追加自己的事件 |
-| `ContextCheckpoint` | 覆盖指定 Items 的压缩摘要 | 仅用于模型输入，不替代消息恢复点 |
-| Rollout trace | Thread 事件和完整的被引用前缀集合 | 导出可独立读取的对话事实 |
+| 内容                | 保存什么                                      | 恢复时怎么用                     |
+| ------------------- | --------------------------------------------- | -------------------------------- |
+| `MessageCheckpoint` | 原消息的 Thread、sequence、前后边界和文件版本 | 在选定消息前或后创建执行分支     |
+| `HistoryPrefixRef`  | 原事件前缀的摘要和来源位置                    | 共享原记录；分支只追加自己的事件 |
+| `ContextCheckpoint` | 覆盖指定 Items 的压缩摘要                     | 仅用于模型输入，不替代消息恢复点 |
+| Rollout trace       | Thread 事件和完整的被引用前缀集合             | 导出可独立读取的对话事实         |
 
 历史版本 17 的新分支用 `ThreadCreated` 与 `HistoryPrefixBound` 固定来源。原 event ID、Thread ID、sequence 和记录字节保持不变；父分支继续执行不改变已有前缀。第一段未结束的执行保留已记录消息，并标为 Interrupted；未配对的 Tool Call 附加确定性的中断结果，不继承工具执行资格。中断结果的生成属于历史版本 17 的重放规则，不能无版本修改其文本或身份。
 

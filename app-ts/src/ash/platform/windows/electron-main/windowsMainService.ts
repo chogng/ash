@@ -27,9 +27,9 @@ import { findWindowOnWorkspaceOrFolder } from './windowsFinder.js';
 
 export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 	readonly id: number;
-	on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+	on(event: 'close', listener: (event: { preventDefault(): void; }) => void): unknown;
 	on(event: 'focus', listener: () => void): unknown;
-	off(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+	off(event: 'close', listener: (event: { preventDefault(): void; }) => void): unknown;
 	off(event: 'focus', listener: () => void): unknown;
 	on(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
 	off(event: 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
@@ -345,7 +345,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		throw new Error('Window closed before its renderer was ready');
 	}
 
-	public async open(configuration: IOpenConfiguration): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void> }> {
+	public async open(configuration: IOpenConfiguration): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void>; }> {
 		this.assertNotDisposed();
 		const needsWorkbench = !!configuration.workspace || configuration.files.length > 0;
 		const active = this.getLastActiveWindow(needsWorkbench ? 'workbench' : 'all');
@@ -460,10 +460,12 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			this.managedWindows.set(key, created);
 			host = created;
 		}
-		return host.open({ ...options, initialize: (window, resources) => {
-			this.trackActivation(window, resources);
-			return options.initialize(window, resources);
-		} });
+		return host.open({
+			...options, initialize: (window, resources) => {
+				this.trackActivation(window, resources);
+				return options.initialize(window, resources);
+			}
+		});
 	}
 
 	public managedWindow(key: string): TWindow | undefined {
@@ -478,12 +480,12 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		return this.managedWindows.get(key)?.close() ?? Promise.resolve();
 	}
 
-	public selectWindowsToRestore<TEntry extends { readonly workspace: IAnyWorkspaceIdentifier }>(
-		session: { readonly windows: readonly TEntry[]; readonly active: number } | undefined,
+	public selectWindowsToRestore<TEntry extends { readonly workspace: IAnyWorkspaceIdentifier; }>(
+		session: { readonly windows: readonly TEntry[]; readonly active: number; } | undefined,
 		configuredSetting: unknown,
 		hasExplicitTarget: boolean,
 		wasRestarted: boolean,
-	): { readonly windows: readonly TEntry[]; readonly active: TEntry | undefined } {
+	): { readonly windows: readonly TEntry[]; readonly active: TEntry | undefined; } {
 		const setting: RestoreWindowsSetting = wasRestarted || configuredSetting === undefined
 			? 'all'
 			: parseRestoreWindowsSetting(configuredSetting);
@@ -689,7 +691,7 @@ export function windowResourceIpcRoutes(services: IWindowResourceIpcServices): r
 }
 
 export function trackWindowResourceChanges(
-	window: { readonly webContents: { send(channel: string, value: unknown): void }; isDestroyed(): boolean },
+	window: { readonly webContents: { send(channel: string, value: unknown): void; }; isDestroyed(): boolean; },
 	services: IWindowResourceIpcServices,
 ): IDisposable {
 	const resources = new DisposableStore();

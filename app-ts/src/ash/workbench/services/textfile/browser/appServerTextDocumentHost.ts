@@ -13,7 +13,7 @@ import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceCon
 import type { ChatEditSource, ChatEditOutcome } from '../../chat/common/chatService.js';
 
 interface DocumentEditReview {
-	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean }>;
+	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean; }>;
 	finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void>;
 }
 

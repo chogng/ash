@@ -16,7 +16,7 @@ test('website grants bind both origins, reset removes decisions and closing canc
 	const session = Object.assign(new EventEmitter(), {
 		setPermissionCheckHandler: (handler: typeof check) => { check = handler; },
 		setPermissionRequestHandler: (handler: typeof request) => { request = handler; },
-		setDevicePermissionHandler: () => {},
+		setDevicePermissionHandler: () => { },
 	}) as unknown as Session;
 	let pageUrl = 'https://parent.test/';
 	const contents = Object.assign(new EventEmitter(), { getURL: () => pageUrl }) as unknown as WebContents;
@@ -69,7 +69,7 @@ test('a remote session retains one SOCKS policy until its last page closes and n
 	const policies: Electron.ProxyConfig[] = [];
 	let connectionsClosed = 0;
 	const session = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler: () => {}, setPermissionRequestHandler: () => {}, setDevicePermissionHandler: () => {},
+		setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
 		setProxy: async (policy: Electron.ProxyConfig) => { policies.push(policy); },
 		closeAllConnections: async () => { connectionsClosed++; },
 	}) as unknown as Session;

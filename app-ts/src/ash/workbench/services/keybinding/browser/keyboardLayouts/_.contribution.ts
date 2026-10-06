@@ -5,7 +5,7 @@ export class KeyboardLayoutContribution {
 	public static readonly INSTANCE = new KeyboardLayoutContribution();
 	private readonly layouts: IKeymapInfo[] = [];
 
-	private constructor() {}
+	private constructor() { }
 
 	public get layoutInfos(): readonly IKeymapInfo[] {
 		return this.layouts;

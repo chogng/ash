@@ -120,7 +120,7 @@ function record(value: unknown, path: string): Record<string, unknown> {
 }
 
 /** One-way conversion of the retired version-1 resource, before normal loading. */
-export function migrateUserTheme(source: string): { readonly id: string; readonly content: string } | undefined {
+export function migrateUserTheme(source: string): { readonly id: string; readonly content: string; } | undefined {
 	let value: unknown;
 	try { value = JSON.parse(source); } catch { return undefined; }
 	if (typeof value !== "object" || value === null || !("version" in value)) return undefined;

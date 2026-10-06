@@ -31,7 +31,7 @@ export class TraceEditor extends Disposable implements IEditorPane {
 	private exportButton!: Button;
 	private selected: string | undefined;
 	private visible: readonly TraceSpan[] = [];
-	private readonly rows = new Map<string, { domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement }>();
+	private readonly rows = new Map<string, { domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement; }>();
 	private frame: number | undefined;
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
@@ -50,15 +50,19 @@ export class TraceEditor extends Disposable implements IEditorPane {
 		this.address = this.field(toolbar, localize('trace.address', 'Trace address'));
 		this.address.value = 'ws://127.0.0.1:4319/';
 		this.token = this.field(toolbar, localize('trace.token', 'Trace token'), 'password');
-		this.connectButton = this._register(new Button(toolbar, { label: localize('trace.connect', 'Connect'), presentation: 'primary', onClick: () => {
-			this.selected = undefined;
-			this.connection.connect(this.address.value, this.token.value);
-		} }));
+		this.connectButton = this._register(new Button(toolbar, {
+			label: localize('trace.connect', 'Connect'), presentation: 'primary', onClick: () => {
+				this.selected = undefined;
+				this.connection.connect(this.address.value, this.token.value);
+			}
+		}));
 		this.disconnectButton = this._register(new Button(toolbar, { label: localize('trace.disconnect', 'Disconnect'), onClick: () => this.connection.disconnect() }));
 		this._register(new Button(toolbar, { label: localize('trace.clear', 'Clear'), onClick: () => { this.selected = undefined; this.connection.clear(); } }));
-		this.exportButton = this._register(new Button(toolbar, { label: localize('trace.export', 'Export filtered OTLP'), onClick: () => {
-			triggerDownload(new Blob([exportTrace(this.filtered())], { type: 'application/json' }), 'ash-traces.json', document);
-		} }));
+		this.exportButton = this._register(new Button(toolbar, {
+			label: localize('trace.export', 'Export filtered OTLP'), onClick: () => {
+				triggerDownload(new Blob([exportTrace(this.filtered())], { type: 'application/json' }), 'ash-traces.json', document);
+			}
+		}));
 		this._register(new Button(toolbar, { label: localize('trace.help', 'Help'), onClick: () => { void this.showHelp(); } }));
 		this.filter = this.field(this.domNode, localize('trace.filter', 'Filter by name, outcome or trace ID'), 'search');
 		this._register(this.filter.onDidChange(() => this.scheduleRender()));
@@ -210,7 +214,8 @@ export class TraceEditor extends Disposable implements IEditorPane {
 
 	private showHelp(): void {
 		this.accessibleView.show(AccessibleViewType.Help);
-	}}
+	}
+}
 
 function outcomeLabel(outcome: string): string {
 	switch (outcome) {

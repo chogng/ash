@@ -119,7 +119,7 @@ export async function startWebWorkbench(
 			const extensions = createBrowserExtensionApi();
 			api = { ...createDisconnectedRendererApi(), extensions };
 		}
-		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
+		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>; };
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB)
 			: undefined;

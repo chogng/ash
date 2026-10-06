@@ -27,7 +27,7 @@ interface TaskbarProbe {
 }
 
 test.use({ openWorkspace: false });
-test.beforeEach(({}, testInfo) => {
+test.beforeEach(({ }, testInfo) => {
 	test.skip(process.platform !== 'win32' || testInfo.project.name !== 'electron-ui', 'Windows taskbar integration requires the Windows Electron UI project.');
 });
 
@@ -37,12 +37,14 @@ test('taskbar shortcuts use Ash identity, follow display language and launch rea
 	await electron.evaluate(({ app, BrowserWindow }) => {
 		const originalTasks = app.setJumpList;
 		const originalDetails = BrowserWindow.prototype.setAppDetails;
-		const state = globalThis as typeof globalThis & { ashTaskbarProbe?: TaskbarProbe };
-		const probe: TaskbarProbe = { tasks: [], details: [], accepted: false, restore: () => {
-			app.setJumpList = originalTasks;
-			BrowserWindow.prototype.setAppDetails = originalDetails;
-			delete state.ashTaskbarProbe;
-		} };
+		const state = globalThis as typeof globalThis & { ashTaskbarProbe?: TaskbarProbe; };
+		const probe: TaskbarProbe = {
+			tasks: [], details: [], accepted: false, restore: () => {
+				app.setJumpList = originalTasks;
+				BrowserWindow.prototype.setAppDetails = originalDetails;
+				delete state.ashTaskbarProbe;
+			}
+		};
 		state.ashTaskbarProbe = probe;
 		app.setJumpList = categories => {
 			probe.tasks = categories?.find(category => category.type === 'tasks')?.items?.map(item => ({ ...item, arguments: item.args! })) as Task[] ?? [];
@@ -52,10 +54,10 @@ test('taskbar shortcuts use Ash identity, follow display language and launch rea
 		};
 		BrowserWindow.prototype.setAppDetails = function (details) { probe.details.push(details); originalDetails.call(this, details); };
 	});
-	const readTasks = (): Promise<Task[]> => electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe }).ashTaskbarProbe.tasks);
+	const readTasks = (): Promise<Task[]> => electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe; }).ashTaskbarProbe.tasks);
 	const setLanguage = async (locale: string): Promise<void> => {
 		await workbench.page.evaluate(async locale => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			const snapshot = await ipc.invoke('ash:configuration:read') as IConfigurationSnapshot;
 			await ipc.invoke('ash:configuration:update', {
 				expectedRevision: snapshot.revision,
@@ -79,7 +81,7 @@ test('taskbar shortcuts use Ash identity, follow display language and launch rea
 		expect((await readTasks()).map(task => task.description)).toEqual(['打开新的 Ash 窗口', '打开 Ash Agents 窗口']);
 		await setLanguage('en');
 		await expect.poll(async () => (await readTasks()).map(task => task.title)).toEqual(['New Window', 'Open Agents Window']);
-		expect(await electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe }).ashTaskbarProbe.accepted)).toBe(true);
+		expect(await electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe; }).ashTaskbarProbe.accepted)).toBe(true);
 		const tasks = await readTasks();
 		const identity = await electron.evaluate(({ app }) => ({ name: app.getName(), appPath: app.getAppPath(), userData: app.getPath('userData'), executable: process.execPath }));
 		expect(identity.name).toBe('Ash');
@@ -97,7 +99,7 @@ test('taskbar shortcuts use Ash identity, follow display language and launch rea
 		await expect((await agentsOpened).locator('.ash-sessions-window')).toBeVisible();
 		await runTask(tasks[1]!);
 		expect(electron.windows()).toHaveLength(3);
-		const details = await electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe }).ashTaskbarProbe.details);
+		const details = await electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe: TaskbarProbe; }).ashTaskbarProbe.details);
 		expect(details).toHaveLength(2);
 		for (const detail of details) {
 			expect(detail).toEqual({
@@ -106,7 +108,7 @@ test('taskbar shortcuts use Ash identity, follow display language and launch rea
 			});
 		}
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe?: TaskbarProbe }).ashTaskbarProbe?.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashTaskbarProbe?: TaskbarProbe; }).ashTaskbarProbe?.restore());
 	}
 });
 
@@ -115,7 +117,7 @@ test('taskbar projects share Welcome history and respect items removed in Window
 	await electron.evaluate(({ app }) => {
 		const originalList = app.setJumpList;
 		const originalSettings = app.getJumpListSettings;
-		const state = globalThis as typeof globalThis & { ashRecentProjectsProbe?: RecentProjectsProbe };
+		const state = globalThis as typeof globalThis & { ashRecentProjectsProbe?: RecentProjectsProbe; };
 		const probe: RecentProjectsProbe = {
 			categories: [], settings: { minItems: 2, removedItems: [] }, result: '',
 			restore: () => { app.setJumpList = originalList; app.getJumpListSettings = originalSettings; delete state.ashRecentProjectsProbe; },
@@ -127,21 +129,21 @@ test('taskbar projects share Welcome history and respect items removed in Window
 	const folderUri = URI.file(testInfo.outputPath('folder with spaces')).toString();
 	const workspaceUri = URI.file(testInfo.outputPath('team.code-workspace')).toString();
 	const invoke = (channel: string, value?: unknown): Promise<unknown> => workbench.page.evaluate(async ({ channel, value }) => {
-		return (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown> } } }).ash.ipcRenderer.invoke(channel, value);
+		return (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke(channel, value);
 	}, { channel, value });
-	const readCategories = (): Promise<JumpListCategory[]> => electron.evaluate(() => (globalThis as typeof globalThis & { ashRecentProjectsProbe: RecentProjectsProbe }).ashRecentProjectsProbe.categories);
+	const readCategories = (): Promise<JumpListCategory[]> => electron.evaluate(() => (globalThis as typeof globalThis & { ashRecentProjectsProbe: RecentProjectsProbe; }).ashRecentProjectsProbe.categories);
 	const projects = workbench.page.locator('.ash-getting-started-recent-name');
 	try {
 		await invoke('ash:workspaces:recent:add', { workspaces: [{ folderUri, label: 'Folder' }, { workspace: { id: 'team', configPath: workspaceUri }, label: 'Team' }] });
 		await expect(projects).toHaveText(['Folder', 'Team']);
 		await expect.poll(async () => (await readCategories()).find(category => category.type === 'custom')?.items?.map(item => item.title)).toEqual(['Folder', 'Team']);
-		expect(await electron.evaluate(() => (globalThis as typeof globalThis & { ashRecentProjectsProbe: RecentProjectsProbe }).ashRecentProjectsProbe.result)).toBe('ok');
+		expect(await electron.evaluate(() => (globalThis as typeof globalThis & { ashRecentProjectsProbe: RecentProjectsProbe; }).ashRecentProjectsProbe.result)).toBe('ok');
 		const categories = await readCategories();
 		expect(categories.map(category => category.type)).toEqual(['tasks', 'custom', 'recent']);
 		expect(categories[1]!.items![0]!.args).toContain('--folder-uri');
 		expect(categories[1]!.items![1]!.args).toContain('--workspace');
 		await electron.evaluate(() => {
-			const probe = (globalThis as typeof globalThis & { ashRecentProjectsProbe: RecentProjectsProbe }).ashRecentProjectsProbe;
+			const probe = (globalThis as typeof globalThis & { ashRecentProjectsProbe: RecentProjectsProbe; }).ashRecentProjectsProbe;
 			probe.settings.removedItems = [probe.categories.find(category => category.type === 'custom')!.items![0]!];
 		});
 		await invoke('ash:workspaces:recent:add', { workspaces: [{ workspace: { id: 'team', configPath: workspaceUri }, label: 'Team' }] });
@@ -151,7 +153,7 @@ test('taskbar projects share Welcome history and respect items removed in Window
 		await expect(projects).toHaveCount(0);
 		await expect.poll(async () => (await readCategories()).map(category => category.type)).toEqual(['tasks', 'recent']);
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashRecentProjectsProbe?: RecentProjectsProbe }).ashRecentProjectsProbe?.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashRecentProjectsProbe?: RecentProjectsProbe; }).ashRecentProjectsProbe?.restore());
 	}
 });
 
@@ -160,24 +162,26 @@ test('Desktop imports existing Welcome projects once into the shared history', a
 	const workspace = testInfo.outputPath('old.code-workspace');
 	const identity = { scope: StorageScope.PROFILE, id: 'default' };
 	await seedStorageOnNextLoad(application, workbench.page, identity, {
-		'workbench.recentWorkspaces': { value: JSON.stringify([
-			{ root: folder, name: 'Migrated Folder', lastOpened: 2 },
-			{ root: workspace, name: 'Migrated Team', lastOpened: 1 },
-		]), target: StorageTarget.USER },
+		'workbench.recentWorkspaces': {
+			value: JSON.stringify([
+				{ root: folder, name: 'Migrated Folder', lastOpened: 2 },
+				{ root: workspace, name: 'Migrated Team', lastOpened: 1 },
+			]), target: StorageTarget.USER
+		},
 	});
 	await workbench.page.reload();
 	await workbench.waitForReady();
 	await expect(workbench.page.locator('.ash-getting-started-recent-name')).toHaveText(['Migrated Folder', 'Migrated Team']);
 	await expect.poll(async () => (await readStorageEntries(application, workbench.page, identity))['workbench.recentWorkspaces']).toBeUndefined();
 	await workbench.page.evaluate(async () => {
-		await (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer.invoke('ash:workspaces:recent:clear');
+		await (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void>; }; }; }).ash.ipcRenderer.invoke('ash:workspaces:recent:clear');
 	});
 	await workbench.page.reload();
 	await workbench.waitForReady();
 	await expect(workbench.page.locator('.ash-getting-started-recent-name')).toHaveCount(0);
 });
 
-test('the Agents task starts the app directly in its Agents window', async ({}, testInfo) => {
+test('the Agents task starts the app directly in its Agents window', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('taskbar profile with spaces');
 	await mkdir(userDataDirectory, { recursive: true });
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory, extraArgs: ['--agents-window'] });

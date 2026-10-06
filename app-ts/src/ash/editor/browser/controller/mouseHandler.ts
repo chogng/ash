@@ -338,11 +338,11 @@ function eventTargetElement(target: EventTarget | null, ownerDocument: Document)
 	return HTMLElementConstructor && target instanceof HTMLElementConstructor ? target : null;
 }
 
-function isViewZone(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.GUTTER_VIEW_ZONE | MouseTargetType.CONTENT_VIEW_ZONE }> {
+function isViewZone(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.GUTTER_VIEW_ZONE | MouseTargetType.CONTENT_VIEW_ZONE; }> {
 	return target.type === MouseTargetType.GUTTER_VIEW_ZONE || target.type === MouseTargetType.CONTENT_VIEW_ZONE;
 }
 
-function isWidget(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.CONTENT_WIDGET | MouseTargetType.OVERLAY_WIDGET }> {
+function isWidget(target: IMouseTarget): target is Extract<IMouseTarget, { type: MouseTargetType.CONTENT_WIDGET | MouseTargetType.OVERLAY_WIDGET; }> {
 	return target.type === MouseTargetType.CONTENT_WIDGET || target.type === MouseTargetType.OVERLAY_WIDGET;
 }
 

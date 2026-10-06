@@ -106,7 +106,7 @@ export class AppServerGitHubService implements IGitHubService {
 		const response = appServerRequest(this.connection, method, { ...params, operationId } as MethodParams<M>);
 		const listener = token.onCancellationRequested(() => {
 			// Cancellation acknowledges intent; the original response owns the remote outcome.
-			void appServerRequest(this.connection, 'github/cancel', { operationId }).then(() => {}, onUnexpectedError);
+			void appServerRequest(this.connection, 'github/cancel', { operationId }).then(() => { }, onUnexpectedError);
 		});
 		try {
 			const result = await response;

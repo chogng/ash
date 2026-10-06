@@ -30,12 +30,12 @@ import { InlineCompletionContextKeys } from './inlineCompletionContextKeys.js';
 import { DataChannelForwardingTelemetryService } from '../../../../../platform/dataChannel/browser/forwardingTelemetryService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 
-type CompletionEndOfLife = { accepted: boolean; durationMs: number };
+type CompletionEndOfLife = { accepted: boolean; durationMs: number; };
 type CompletionEndOfLifeClassification = {
 	owner: 'lanxi';
 	comment: 'Inline completion lifecycle without document or suggestion content.';
-	accepted: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the suggestion was accepted.' };
-	durationMs: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'Time the suggestion remained available in milliseconds.'; isMeasurement: true };
+	accepted: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the suggestion was accepted.'; };
+	durationMs: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'Time the suggestion remained available in milliseconds.'; isMeasurement: true; };
 };
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
@@ -218,7 +218,7 @@ export class InlineCompletionsController extends Disposable {
 }
 
 class AcceptInlineCompletionCommand implements ICommand {
-	constructor(private readonly edits: readonly TextEdit[], private readonly mainEditIndex: number) {}
+	constructor(private readonly edits: readonly TextEdit[], private readonly mainEditIndex: number) { }
 
 	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
 		for (const edit of this.edits) builder.addTrackedEditOperation(edit.range, edit.text);
@@ -229,7 +229,9 @@ class AcceptInlineCompletionCommand implements ICommand {
 	}
 }
 
-registerEditorContribution({ id: InlineCompletionsController.ID, install: context => {
-	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.model.getLanguageId()))) return;
-	return context.instantiationService.createInstance(InlineCompletionsController, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.onDidExecuteCommand, context.onLanguageError);
-} });
+registerEditorContribution({
+	id: InlineCompletionsController.ID, install: context => {
+		if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.model.getLanguageId()))) return;
+		return context.instantiationService.createInstance(InlineCompletionsController, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.onDidExecuteCommand, context.onLanguageError);
+	}
+});

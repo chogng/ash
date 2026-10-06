@@ -17,7 +17,7 @@ export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'the
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
 	readonly cursorOptions?: IEditorOptions;
-	readonly padding?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number };
+	readonly padding?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number; };
 	readonly model: TextModel;
 	readonly selectionController?: CursorsController;
 };

@@ -6112,16 +6112,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6215,16 +6211,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6319,16 +6311,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6423,16 +6411,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6527,16 +6511,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6631,16 +6611,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6735,16 +6711,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6841,16 +6813,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -6947,16 +6915,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -7052,16 +7016,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }
@@ -7161,16 +7121,12 @@
           "gpt5CodexCatN": false
         },
         "env": {
-          "workspacePaths": [
-            "/example/workspace"
-          ],
+          "workspacePaths": ["/example/workspace"],
           "artifactsFolder": "/example/artifacts"
         },
         "requestContext": {
           "env": {
-            "workspacePaths": [
-              "/example/workspace"
-            ],
+            "workspacePaths": ["/example/workspace"],
             "artifactsFolder": "/example/artifacts",
             "sandboxEnabled": false
           }

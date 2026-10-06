@@ -9,7 +9,7 @@ import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeSticki
 
 test('TextDecorationCollection keeps opaque metadata beside standard model options', () => {
 	using model = new TextModel('abcd\nefgh\nij');
-	using collection = new TextDecorationCollection<{ readonly kind: 'match' | 'error' }>(model);
+	using collection = new TextDecorationCollection<{ readonly kind: 'match' | 'error'; }>(model);
 	const match = collection.add({
 		range: new Range(1, 2, 2, 3),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,

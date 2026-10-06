@@ -50,7 +50,7 @@ export function sortEditsByYieldTo<T extends {
 		}
 		if (lowLinks[index] !== indices[index]) return;
 		const component: number[] = [];
-		for (;;) {
+		for (; ;) {
 			const member = stack.pop()!;
 			onStack.delete(member);
 			componentOf[member] = components.length;
@@ -79,7 +79,7 @@ export function sortEditsByYieldTo<T extends {
 	return result;
 }
 
-function matchesYieldTarget(target: DropYieldTo, edit: { readonly kind: HierarchicalKind | undefined; readonly handledMimeType?: string }): boolean {
+function matchesYieldTarget(target: DropYieldTo, edit: { readonly kind: HierarchicalKind | undefined; readonly handledMimeType?: string; }): boolean {
 	return 'mimeType' in target
 		? target.mimeType === edit.handledMimeType
 		: edit.kind !== undefined && target.kind.contains(edit.kind);

@@ -88,7 +88,7 @@ export class StandaloneWorkspaceContextService implements IWorkspaceContextServi
 export class StandaloneBulkEditService implements IBulkEditService {
 	declare readonly _serviceBrand: undefined;
 
-	constructor(@ICodeEditorService private readonly editors: ICodeEditorServiceContract) {}
+	constructor(@ICodeEditorService private readonly editors: ICodeEditorServiceContract) { }
 
 	hasPreviewHandler(): boolean { return false; }
 	setPreviewHandler(_handler: IBulkEditPreviewHandler): IDisposable {
@@ -110,7 +110,7 @@ export class StandaloneBulkEditService implements IBulkEditService {
 			byModel.set(model, group);
 		}
 		if (options.token?.aborted || edits.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
-		const applied = new Map<ITextModel, { readonly text: string; readonly alternativeVersionId: number }>();
+		const applied = new Map<ITextModel, { readonly text: string; readonly alternativeVersionId: number; }>();
 		try {
 			for (const [model, group] of byModel) {
 				model.pushStackElement();
@@ -475,7 +475,7 @@ function withoutResource(overrides: IConfigurationOverrides | IConfigurationUpda
 class StandaloneResourcePropertiesService implements ITextResourcePropertiesServiceContract {
 	readonly _serviceBrand: undefined;
 
-	constructor(private readonly configurationService: IConfigurationService) {}
+	constructor(private readonly configurationService: IConfigurationService) { }
 
 	getEOL(resource: URI, language?: string): string {
 		const eol = this.configurationService.getValue<'auto' | '\n' | '\r\n'>('files.eol', { overrideIdentifier: language, resource });

@@ -148,7 +148,7 @@ export class MenuRegistry {
 	}
 
 	appendMenuItems(
-		entries: Iterable<{ readonly id: MenuId; readonly item: MenuRegistryItem }>,
+		entries: Iterable<{ readonly id: MenuId; readonly item: MenuRegistryItem; }>,
 	): IDisposable {
 		const contributions = Array.from(entries, ({ id, item }) => ({ id, item }));
 		const changed = new Set<MenuId>();
@@ -322,7 +322,7 @@ export interface IAction2Options extends ICommandAction {
 
 /** Base class for a statically declared command and its UI contributions. */
 export abstract class Action2 {
-	constructor(readonly desc: Readonly<IAction2Options>) {}
+	constructor(readonly desc: Readonly<IAction2Options>) { }
 
 	abstract run(
 		accessor: ServicesAccessor,
@@ -370,7 +370,7 @@ export function registerAction2(
 			}
 		}
 
-		const menuItems: Array<{ id: MenuId; item: MenuRegistryItem }> = [];
+		const menuItems: Array<{ id: MenuId; item: MenuRegistryItem; }> = [];
 		for (const placement of toArray(action.desc.menu)) {
 			menuItems.push({
 				id: placement.id,

@@ -217,7 +217,7 @@ function trimSerializedSeparators(
 function anchorPoint(
 	anchor: ContextMenuAnchor,
 	delegate: IContextMenuDelegate,
-): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean } {
+): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean; } {
 	if (!isNode(anchor)) {
 		return {
 			x: normalizeCoordinate(anchor.x),

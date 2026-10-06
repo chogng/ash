@@ -9,7 +9,7 @@ const desktopRoot = findDesktopRoot(import.meta.dirname);
 const unitRoot = join(desktopRoot, "test/unit");
 const editorRoot = join(desktopRoot, "src/ash/editor");
 const browserIntegrationRoot = join(desktopRoot, "test/integration/browser");
-const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
+const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8")) as { scripts?: Record<string, string>; };
 
 test("Stanza unit tests follow the flat editor common, browser, and contrib layout", () => {
 	assert.equal(exists(join(desktopRoot, "test/monaco")), false);

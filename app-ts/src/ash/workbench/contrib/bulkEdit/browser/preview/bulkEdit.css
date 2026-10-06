@@ -1,122 +1,123 @@
 .ash-bulk-edit {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: var(--ash-spacing-size80);
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: var(--ash-spacing-size80);
 }
 
 .ash-bulk-edit-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ash-spacing-size60);
-  padding-bottom: var(--ash-spacing-size80);
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size60);
+	padding-bottom: var(--ash-spacing-size80);
 }
 
 .ash-bulk-edit-status {
-  min-height: 18px;
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size20) var(--ash-spacing-size80);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+	min-height: 18px;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size20)
+		var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-bulk-edit-list {
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  list-style: none;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	list-style: none;
 }
 
 .ash-bulk-edit-entry {
-  margin-bottom: var(--ash-spacing-size60);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  padding: var(--ash-spacing-size80);
-  background: var(--ash-editor-background);
+	margin-bottom: var(--ash-spacing-size60);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	padding: var(--ash-spacing-size80);
+	background: var(--ash-editor-background);
 }
 
 .ash-bulk-edit-entry.has-error {
-  border-color: var(--ash-error-foreground);
+	border-color: var(--ash-error-foreground);
 }
 
 .ash-bulk-edit-entry-header {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  gap: var(--ash-spacing-size80);
-  align-items: center;
+	display: grid;
+	grid-template-columns: auto auto minmax(0, 1fr);
+	gap: var(--ash-spacing-size80);
+	align-items: center;
 }
 
 .ash-bulk-edit-kind {
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-body2);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-body2);
 }
 
 .ash-bulk-edit-resource {
-  min-width: 0;
-  overflow-wrap: anywhere;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .ash-bulk-edit-detail {
-  margin: var(--ash-spacing-size40) 0 0 var(--ash-spacing-size240);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+	margin: var(--ash-spacing-size40) 0 0 var(--ash-spacing-size240);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-bulk-edit-entry.has-error .ash-bulk-edit-detail {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-bulk-edit-text-change {
-  margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+	margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-bulk-edit-text-change pre {
-  max-height: 180px;
-  margin: var(--ash-spacing-size60) 0 0;
-  overflow: auto;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  padding: var(--ash-spacing-size60);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-editor-background);
-  font: var(--ash-font-size-body2)/1.4 var(--ash-font-family-monospace);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+	max-height: 180px;
+	margin: var(--ash-spacing-size60) 0 0;
+	overflow: auto;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	padding: var(--ash-spacing-size60);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+	font: var(--ash-font-size-body2)/1.4 var(--ash-font-family-monospace);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .ash-bulk-edit-group > ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+	list-style: none;
+	padding: 0;
+	margin: 0;
 }
 
 .ash-bulk-edit-group-label {
-  padding: var(--ash-spacing-size80) 0;
-  font-weight: var(--ash-font-weight-semi-bold);
-  overflow-wrap: anywhere;
+	padding: var(--ash-spacing-size80) 0;
+	font-weight: var(--ash-font-weight-semi-bold);
+	overflow-wrap: anywhere;
 }
 
 .ash-bulk-edit-replacements {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ash-spacing-size40);
-  margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
 }
 
 .ash-bulk-edit-replacements label {
-  display: flex;
-  align-items: baseline;
-  gap: var(--ash-spacing-size80);
-  overflow-wrap: anywhere;
+	display: flex;
+	align-items: baseline;
+	gap: var(--ash-spacing-size80);
+	overflow-wrap: anywhere;
 }
 
 .ash-bulk-edit input:focus-visible,
 .ash-bulk-edit summary:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: 2px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: 2px;
 }
 
 [data-color-scheme^="high-contrast"] .ash-bulk-edit-entry {
-  border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrast-border);
 }

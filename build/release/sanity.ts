@@ -9,8 +9,8 @@ import { promisify } from 'node:util';
 import { pythonCommand } from '../python.ts';
 
 type Product = 'ash-desktop' | 'ash-code' | 'ash-app-server';
-export interface ReleaseIdentity { product: Product; version: string; target: string }
-interface ReleasePackage { fileName: string; format: string; size: number; sha256: string; url: string }
+export interface ReleaseIdentity { product: Product; version: string; target: string; }
+interface ReleasePackage { fileName: string; format: string; size: number; sha256: string; url: string; }
 const root = resolve(import.meta.dirname, '../..');
 const runFile = promisify(execFile);
 const hosts = [
@@ -30,7 +30,7 @@ export function releaseMatrix(product: Product | 'all') {
 		.map(host => ({ ...host, product })));
 }
 
-export function releaseAsset(identity: ReleaseIdentity): { archive: string; format: string; descriptor: string } {
+export function releaseAsset(identity: ReleaseIdentity): { archive: string; format: string; descriptor: string; } {
 	assert.match(identity.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/, 'Expected a release version without v');
 	const host = releaseMatrix(identity.product).find(host => host.target === identity.target);
 	assert(host, 'Unsupported product target');
@@ -87,7 +87,7 @@ async function run(program: string, args: string[], env = process.env): Promise<
 	});
 }
 
-async function loadArtifact(identity: ReleaseIdentity, directory: string, download: boolean): Promise<{ archive: string; descriptor: ReleasePackage }> {
+async function loadArtifact(identity: ReleaseIdentity, directory: string, download: boolean): Promise<{ archive: string; descriptor: ReleasePackage; }> {
 	const asset = releaseAsset(identity);
 	await mkdir(directory, { recursive: true });
 	if (download) await run('gh', ['release', 'download', `v${identity.version}`, '--repo', 'chogng/ash', '--pattern', asset.archive, '--pattern', asset.descriptor, '--dir', directory]);
@@ -132,7 +132,7 @@ async function verifyRuntime(identity: ReleaseIdentity, archive: string, directo
 	await run(python.command, python.args);
 }
 
-async function verifyDesktop(identity: ReleaseIdentity, archive: string, previous: { archive: string; version: string } | undefined, output: string): Promise<void> {
+async function verifyDesktop(identity: ReleaseIdentity, archive: string, previous: { archive: string; version: string; } | undefined, output: string): Promise<void> {
 	const cli = join(root, 'app-ts/node_modules/@playwright/test/cli.js');
 	await run(process.execPath, [cli, 'test', '--config', 'app-ts/playwright.config.ts', 'test/smoke/areas/windows/release-package.spec.ts', '--project=electron-release', '--output', join(output, 'playwright')], {
 		...process.env,

@@ -134,7 +134,7 @@ test("Stanza remote collaboration publishes local presence and projects remote s
 	try {
 		using service = new RemoteDocumentCollaborationService();
 		using connection = await service.open({ clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
-		const presences: (readonly { readonly clientId: string }[])[] = [];
+		const presences: (readonly { readonly clientId: string; }[])[] = [];
 		connection.onDidReceivePresence(presence => presences.push(presence));
 		await connection.updatePresence({ kind: "text", anchor: { nodeId: "text-1", offset: 1 }, head: { nodeId: "text-1", offset: 1 } }, new AbortController().signal);
 		await waitFor(() => resolvePresence !== undefined);

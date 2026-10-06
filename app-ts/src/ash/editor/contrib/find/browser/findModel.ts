@@ -214,7 +214,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 
 	private replacementFor(match: TextSearchMatch): string {
 		const pattern = this.state.isRegex ? parseReplaceString(this.state.replaceString) : ReplacePattern.fromStaticValue(this.state.replaceString);
-		const captures: string[] & { groups?: Record<string, string | undefined> } = [match.text, ...match.captures.map(value => value ?? '')];
+		const captures: string[] & { groups?: Record<string, string | undefined>; } = [match.text, ...match.captures.map(value => value ?? '')];
 		captures.groups = { ...match.namedCaptures };
 		return pattern.buildReplaceString(captures, this.state.preserveCase);
 	}

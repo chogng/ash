@@ -3,7 +3,7 @@ export function createSingleCallFunction<TArguments extends unknown[], TResult>(
 	const receiver = this;
 	let called = false;
 	let result: TResult;
-	return function(...arguments_: TArguments): TResult {
+	return function (...arguments_: TArguments): TResult {
 		if (called) return result;
 		called = true;
 		try { result = function_.apply(receiver, arguments_); }

@@ -35,7 +35,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		this._register(addDisposableListener(button, 'click', () => { void this.openAsText(); }));
 	}
 
-	override async setInput(input: { readonly resource: URI }, signal: AbortSignal): Promise<void> {
+	override async setInput(input: { readonly resource: URI; }, signal: AbortSignal): Promise<void> {
 		await super.setInput(input, signal);
 		this.resource = input.resource;
 	}

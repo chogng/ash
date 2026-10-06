@@ -9,17 +9,17 @@
 
 ## 公共契约
 
-| Symbol | 职责 | 接入要求 |
-| --- | --- | --- |
-| `InputClassifier` | 持有工作目录和 PATH 快照，执行整条分类管线 | 一个 Composer 持有一个实例；工作区切换时调用 `set_working_directory` |
-| `InputClassificationContext` | 提供 `current_route` 和 `InputConversation` | 每次输入变化时提供当前分类路由和会话位置 |
-| `InputConversation` | 区分普通输入与 Agent 回复后的短追问 | Agent Turn 完成后设为 `AgentFollowUp`，新提交或失败后复位 |
-| `InputHistoryEntry` | 提供按时间排序的 Shell 命令和 Agent prompt | Snapshot 必须按 Turn 顺序重建；command-not-found 不进入 Shell 历史 |
-| `InputClassification` | 返回路由、置信度与决策来源 | 置信度只用于诊断，不得作为执行授权 |
-| `start_background_warmup` | 后台解码模型、缓存权重张量和加载 tokenizer | 创建输入界面时调用，避免首次推理承担加载延迟 |
-| `InputClassifier::prepare` / `InputClassificationTask` | 立即执行规则与 Shell 证据判断，捕获剩余推理任务 | `classification()` 有结果时直接使用，否则在后台调用 `run()`；任务持有准备时的输入和上下文 |
-| `shell_completions` / `shell_completion_snapshot` | 从分类器持有的同一 Shell context 返回补全项；snapshot 另含当前 token 的精确匹配状态 | UI 可投影结果，但不能建立第二套 parser/registry |
-| `replace_shell_aliases` / `set_shell_path_entries` | 更新宿主提供的 Shell 环境快照 | 只能传入当前执行环境的事实；不得猜测 alias |
+| Symbol                                                 | 职责                                                                                | 接入要求                                                                                  |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `InputClassifier`                                      | 持有工作目录和 PATH 快照，执行整条分类管线                                          | 一个 Composer 持有一个实例；工作区切换时调用 `set_working_directory`                      |
+| `InputClassificationContext`                           | 提供 `current_route` 和 `InputConversation`                                         | 每次输入变化时提供当前分类路由和会话位置                                                  |
+| `InputConversation`                                    | 区分普通输入与 Agent 回复后的短追问                                                 | Agent Turn 完成后设为 `AgentFollowUp`，新提交或失败后复位                                 |
+| `InputHistoryEntry`                                    | 提供按时间排序的 Shell 命令和 Agent prompt                                          | Snapshot 必须按 Turn 顺序重建；command-not-found 不进入 Shell 历史                        |
+| `InputClassification`                                  | 返回路由、置信度与决策来源                                                          | 置信度只用于诊断，不得作为执行授权                                                        |
+| `start_background_warmup`                              | 后台解码模型、缓存权重张量和加载 tokenizer                                          | 创建输入界面时调用，避免首次推理承担加载延迟                                              |
+| `InputClassifier::prepare` / `InputClassificationTask` | 立即执行规则与 Shell 证据判断，捕获剩余推理任务                                     | `classification()` 有结果时直接使用，否则在后台调用 `run()`；任务持有准备时的输入和上下文 |
+| `shell_completions` / `shell_completion_snapshot`      | 从分类器持有的同一 Shell context 返回补全项；snapshot 另含当前 token 的精确匹配状态 | UI 可投影结果，但不能建立第二套 parser/registry                                           |
+| `replace_shell_aliases` / `set_shell_path_entries`     | 更新宿主提供的 Shell 环境快照                                                       | 只能传入当前执行环境的事实；不得猜测 alias                                                |
 
 App 只把 `InputRoute` 映射为 Composer 路由，并把真实 Turn 生命周期投影成
 `InputConversation` 和按顺序排列的 `InputHistoryEntry`。Shell parser、相似度计算、PATH/manifest
@@ -53,12 +53,12 @@ Shell token 阈值采用 Warp 当前严格方案：所有解析 token 都有 She
 
 这里对齐的是判定顺序和阈值，不是复制 Warp 的补全器数据。两者当前的 Shell 证据边界如下：
 
-| 证据 | Warp | Ash 当前实现 |
-| --- | --- | --- |
-| 顶层命令 | 补全器的 `ParsedTokensSnapshot` | `ash-shell-completion` registry、Shell builtin 和 PATH 可执行文件 |
-| 参数 | 命令签名和 token description | 递归 command spec、精确 option/value、现有路径和工作区 target |
-| alias | 在分类前用当前会话的补全上下文展开 | engine 已实现有界展开；由产品宿主提供 alias snapshot |
-| 证据不足 | 交给 BERT-Tiny | 交给 BERT-Tiny |
+| 证据     | Warp                               | Ash 当前实现                                                      |
+| -------- | ---------------------------------- | ----------------------------------------------------------------- |
+| 顶层命令 | 补全器的 `ParsedTokensSnapshot`    | `ash-shell-completion` registry、Shell builtin 和 PATH 可执行文件 |
+| 参数     | 命令签名和 token description       | 递归 command spec、精确 option/value、现有路径和工作区 target     |
+| alias    | 在分类前用当前会话的补全上下文展开 | engine 已实现有界展开；由产品宿主提供 alias snapshot              |
+| 证据不足 | 交给 BERT-Tiny                     | 交给 BERT-Tiny                                                    |
 
 当前 App 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，尚未向 engine 提供交互 PTY alias 和动态
 generator 候选；因此静态 command grammar、PATH 和 directory evidence 已生效，alias API 暂时没有产品数据源。

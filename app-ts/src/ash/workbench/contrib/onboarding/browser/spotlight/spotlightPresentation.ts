@@ -8,7 +8,7 @@ import { onboardingTargetRegistry } from './onboardingTarget.js';
 import '../media/spotlight.css';
 
 export class SpotlightPresentation {
-	constructor(private readonly container: HTMLElement) {}
+	constructor(private readonly container: HTMLElement) { }
 
 	public async show(steps: readonly IOnboardingStep[], token: CancellationToken, scope?: string): Promise<OnboardingOutcome> {
 		if (steps.length === 0) return 'unavailable';

@@ -1,287 +1,287 @@
 .ash-debug {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .ash-debug-controls {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  gap: var(--ash-spacing-size60);
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	display: flex;
+	flex: 0 0 auto;
+	flex-direction: column;
+	gap: var(--ash-spacing-size60);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
 
 .ash-debug-launch {
-  display: flex;
-  align-items: center;
-  gap: var(--ash-spacing-size40);
-  min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
 }
 
 .ash-debug-launch > .ash-button {
-  flex: 0 0 auto;
+	flex: 0 0 auto;
 }
 
 .ash-debug-controls select,
 .ash-debug-thread-select,
 .ash-debug-breakpoint-edit select,
 .ash-debug-input-form input {
-  box-sizing: border-box;
-  min-width: 0;
-  height: 28px;
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
-  color: var(--ash-input-foreground);
-  font: inherit;
-  background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
+	box-sizing: border-box;
+	min-width: 0;
+	height: 28px;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-debug-launch > select {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-debug-controls > .ash-toolbar {
-  align-self: flex-end;
+	align-self: flex-end;
 }
 
 .ash-debug-controls.empty,
 .ash-debug-controls > .empty,
 .ash-debug-status.empty,
 .ash-debug-input-form.empty {
-  display: none;
+	display: none;
 }
 
 .ash-debug-variable-data.empty {
-  display: none;
+	display: none;
 }
 
 .ash-debug select:focus-visible,
 .ash-debug input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-debug-status {
-  flex: 0 0 auto;
-  padding: var(--ash-spacing-size80) var(--ash-spacing-size40);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
 }
 
 .ash-debug-status.error {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-debug-section {
-  min-width: 0;
+	min-width: 0;
 }
 
 .ash-debug-section-content {
-  overflow-y: auto;
-  overflow-x: hidden;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 .ash-debug-welcome-content {
-  box-sizing: border-box;
-  padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
-  font-size: var(--ash-font-size-body1);
-  line-height: 1.5;
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
+	font-size: var(--ash-font-size-body1);
+	line-height: 1.5;
 }
 
 .ash-debug-welcome-content > .ash-button {
-  width: 100%;
+	width: 100%;
 }
 
 .ash-debug-welcome-content > p {
-  margin: var(--ash-spacing-size120) 0;
-  color: var(--ash-description-foreground);
+	margin: var(--ash-spacing-size120) 0;
+	color: var(--ash-description-foreground);
 }
 
 .ash-debug-list {
-  min-width: 0;
-  margin: 0;
-  padding: var(--ash-spacing-size40) 0;
-  list-style: none;
+	min-width: 0;
+	margin: 0;
+	padding: var(--ash-spacing-size40) 0;
+	list-style: none;
 }
 
 .ash-debug-list > li {
-  display: flex;
-  align-items: center;
-  min-width: 0;
+	display: flex;
+	align-items: center;
+	min-width: 0;
 }
 
 .ash-debug-frame,
 .ash-debug-variable,
 .ash-debug-breakpoint {
-  flex: 1;
-  min-width: 0;
-  height: 22px;
-  padding: 0 var(--ash-spacing-size60);
-  overflow: hidden;
-  border: var(--ash-stroke-thickness) solid transparent;
-  border-radius: var(--ash-corner-radius-small);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-  background: transparent;
+	flex: 1;
+	min-width: 0;
+	height: 22px;
+	padding: 0 var(--ash-spacing-size60);
+	overflow: hidden;
+	border: var(--ash-stroke-thickness) solid transparent;
+	border-radius: var(--ash-corner-radius-small);
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+	background: transparent;
 }
 
 .ash-debug-frame:hover,
 .ash-debug-variable:hover,
 .ash-debug-breakpoint:hover {
-  background: var(--ash-list-hover-background);
+	background: var(--ash-list-hover-background);
 }
 
 .ash-debug-frame.selected {
-  color: var(--ash-list-active-selection-foreground);
-  background: var(--ash-list-active-selection-background);
-  border-color: var(--ash-contrast-border);
+	color: var(--ash-list-active-selection-foreground);
+	background: var(--ash-list-active-selection-background);
+	border-color: var(--ash-contrast-border);
 }
 
 .ash-debug-frame:focus-visible,
 .ash-debug-variable:focus-visible,
 .ash-debug-breakpoint:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-debug-thread-select {
-  width: 100%;
-  margin-top: var(--ash-spacing-size40);
+	width: 100%;
+	margin-top: var(--ash-spacing-size40);
 }
 
 .ash-debug-input-form {
-  display: flex;
-  align-items: center;
-  gap: var(--ash-spacing-size40);
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
 
 .ash-debug-input-form input {
-  flex: 1;
+	flex: 1;
 }
 
 .ash-debug-watch-value {
-  flex: 1;
-  min-width: 0;
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-debug-variable-edit {
-  box-sizing: border-box;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+	box-sizing: border-box;
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
 }
 
 .ash-debug-variable-edit > .ash-input-box {
-  flex: 1;
-  min-width: 0;
+	flex: 1;
+	min-width: 0;
 }
 
 .ash-debug-exceptions label {
-  display: flex;
-  gap: var(--ash-spacing-size60);
-  align-items: center;
-  padding: var(--ash-spacing-size40);
+	display: flex;
+	gap: var(--ash-spacing-size60);
+	align-items: center;
+	padding: var(--ash-spacing-size40);
 }
 
 .ash-debug-breakpoints > li > .ash-checkbox {
-  flex: 0 0 auto;
-  padding-left: var(--ash-spacing-size60);
+	flex: 0 0 auto;
+	padding-left: var(--ash-spacing-size60);
 }
 
 .ash-debug-breakpoints > li.disabled > .ash-debug-breakpoint {
-  color: var(--ash-description-foreground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-debug-breakpoint-edit {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ash-spacing-size80);
-  padding: var(--ash-spacing-size80);
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
 }
 
 .ash-debug-breakpoint-edit > label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ash-spacing-size40);
-  width: 100%;
-  min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	width: 100%;
+	min-width: 0;
 }
 
 .ash-debug-breakpoint-edit .ash-input-box {
-  min-width: 0;
+	min-width: 0;
 }
 
 .ash-debug-console {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 }
 
 .ash-debug-console-session {
-  flex: 0 0 auto;
-  margin: 4px 8px;
-  padding: 4px 6px;
-  color: inherit;
-  background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	flex: 0 0 auto;
+	margin: 4px 8px;
+	padding: 4px 6px;
+	color: inherit;
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
 }
 
 .ash-debug-console-output {
-  flex: 1;
-  min-height: 60px;
-  margin: 0;
-  padding: 8px 12px;
-  overflow: auto;
-  color: var(--ash-editor-foreground);
-  font-family: var(--ash-font-family-monospace);
-  white-space: pre-wrap;
-  background: var(--ash-editor-background);
+	flex: 1;
+	min-height: 60px;
+	margin: 0;
+	padding: 8px 12px;
+	overflow: auto;
+	color: var(--ash-editor-foreground);
+	font-family: var(--ash-font-family-monospace);
+	white-space: pre-wrap;
+	background: var(--ash-editor-background);
 }
 
 .ash-debug-console-form {
-  flex: 0 0 auto;
-  padding: 6px 8px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	flex: 0 0 auto;
+	padding: 6px 8px;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-debug-console-form input {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 6px 8px;
-  color: inherit;
-  font: inherit;
-  background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	box-sizing: border-box;
+	width: 100%;
+	padding: 6px 8px;
+	color: inherit;
+	font: inherit;
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
 }
 
 .ash-debug-console-session:focus-visible,
 .ash-debug-console-output:focus-visible,
 .ash-debug-console-form input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-debug-console-status {
-  min-height: 0;
-  padding: 0 8px 4px;
-  color: var(--ash-error-foreground);
-  font-size: var(--ash-font-size-label1);
+	min-height: 0;
+	padding: 0 8px 4px;
+	color: var(--ash-error-foreground);
+	font-size: var(--ash-font-size-label1);
 }

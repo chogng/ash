@@ -127,7 +127,7 @@ export class ReindentSelectedLinesAction extends ReindentAction {
 
 export class IndentationToSpacesCommand implements ICommand {
 	private selectionId: string | undefined;
-	constructor(private readonly selection: Selection, private readonly tabSize: number) {}
+	constructor(private readonly selection: Selection, private readonly tabSize: number) { }
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		this.selectionId = builder.trackSelection(this.selection);
 		addIndentationEdits(model, builder, this.tabSize, true);
@@ -139,7 +139,7 @@ export class IndentationToSpacesCommand implements ICommand {
 
 export class IndentationToTabsCommand implements ICommand {
 	private selectionId: string | undefined;
-	constructor(private readonly selection: Selection, private readonly tabSize: number) {}
+	constructor(private readonly selection: Selection, private readonly tabSize: number) { }
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		this.selectionId = builder.trackSelection(this.selection);
 		addIndentationEdits(model, builder, this.tabSize, false);
@@ -151,7 +151,7 @@ export class IndentationToTabsCommand implements ICommand {
 
 class ReindentCommand implements ICommand {
 	private selectionId: string | undefined;
-	constructor(private readonly selection: Selection, private readonly edits: readonly { readonly range: import('../../../common/core/range.js').IRange; readonly text: string | null }[]) {}
+	constructor(private readonly selection: Selection, private readonly edits: readonly { readonly range: import('../../../common/core/range.js').IRange; readonly text: string | null; }[]) { }
 	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
 		this.selectionId = builder.trackSelection(this.selection);
 		for (const edit of this.edits) builder.addEditOperation(edit.range, edit.text);
@@ -171,7 +171,7 @@ function addIndentationEdits(model: ITextModel, builder: IEditOperationBuilder, 
 }
 
 function readTabSize(args: unknown, fallback: number): number {
-	const value = typeof args === 'number' ? args : typeof args === 'object' && args !== null && 'tabSize' in args ? (args as { tabSize?: unknown }).tabSize : fallback;
+	const value = typeof args === 'number' ? args : typeof args === 'object' && args !== null && 'tabSize' in args ? (args as { tabSize?: unknown; }).tabSize : fallback;
 	if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 32) throw new RangeError('Tab size must be an integer from 1 to 32');
 	return value as number;
 }

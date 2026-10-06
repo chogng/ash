@@ -36,7 +36,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 			const page = workbench.page;
 			if (entry === 'recent') {
 				await page.evaluate(async folder => {
-					const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, argument: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+					const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, argument: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 					await ipc.invoke('ash:workspaces:recent:add', { workspaces: [{ folderUri: folder }] });
 				}, URI.file(testWorkspace.directory).toString());
 				await page.locator('.ash-getting-started-recent-item').click();
@@ -137,7 +137,7 @@ test('opening a folder names the target and explains the permission choice in th
 	await prompt.getByRole('button', { name: '取消' }).click();
 	await expect(prompt).toHaveCount(0);
 	const workspaceAfterCancel = await page.evaluate(() => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:workspace:context:read');
 	});
 	expect(parseWorkspace(workspaceAfterCancel).folders).toHaveLength(0);
@@ -145,7 +145,7 @@ test('opening a folder names the target and explains the permission choice in th
 	await page.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: '以只读模式打开' }).click();
 	await expect.poll(async () => {
 		const value = await workbench.page.evaluate(() => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			return ipc.invoke('ash:workspace:context:read');
 		});
 		return parseWorkspace(value).folders[0]?.uri.fsPath;

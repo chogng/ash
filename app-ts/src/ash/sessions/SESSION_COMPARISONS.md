@@ -8,16 +8,16 @@ Session comparisons run the same task through multiple Sessions providers and pr
 
 ## Ownership
 
-| Concern | Owner |
-|---|---|
-| Comparison records, participant lifecycle, and selection | `ISessionComparisonService` |
-| Attempt, Judge, and Synthesizer harness, provider-local model, reasoning-effort, and permission selection | new-session composer |
-| Provider-native permission options, mapping, and policy enforcement | Sessions provider |
-| Session creation, model resolution, and worktree isolation | Sessions provider through `ISessionsManagementService` |
-| Attempt evidence and user actions | Judge chat result and comparison parent grid |
-| Bounded attempt manifest | `readAttemptComparison` tool |
-| Targeted transcript follow-up | existing Agent Host `get_session_context` tool |
-| Structured recommendation | visible grouped Judge session and `completeAttemptComparison` tool |
+| Concern                                                                                                   | Owner                                                              |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Comparison records, participant lifecycle, and selection                                                  | `ISessionComparisonService`                                        |
+| Attempt, Judge, and Synthesizer harness, provider-local model, reasoning-effort, and permission selection | new-session composer                                               |
+| Provider-native permission options, mapping, and policy enforcement                                       | Sessions provider                                                  |
+| Session creation, model resolution, and worktree isolation                                                | Sessions provider through `ISessionsManagementService`             |
+| Attempt evidence and user actions                                                                         | Judge chat result and comparison parent grid                       |
+| Bounded attempt manifest                                                                                  | `readAttemptComparison` tool                                       |
+| Targeted transcript follow-up                                                                             | existing Agent Host `get_session_context` tool                     |
+| Structured recommendation                                                                                 | visible grouped Judge session and `completeAttemptComparison` tool |
 
 Comparison records are persisted in profile storage. Session and chat resources remain provider-owned identities. Each terminal attempt snapshots the producer-measured first-turn duration from the Agent Host protocol and the provider-reported input-plus-output token total used by the Judge result; cost is not recorded. Comparison telemetry records that duration, while analytical token totals come from provider-native OTel chat spans correlated by the same hashed comparison identifier and attempt index.
 The Sessions group service persists the comparison's session membership so the hierarchy survives window reloads.

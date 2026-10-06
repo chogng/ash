@@ -6,14 +6,14 @@ This crate owns the backend-neutral runtime for trusted Debug Adapter Protocol (
 
 `DebugAdapterService` owns process lifetime, bounded output, DAP `Content-Length` framing, session identity, and cleanup. It requires both `LoadExecutableConfiguration` and `ExecuteProcess` capabilities for the same directory root. It does not parse `.vscode/launch.json`, own breakpoints, implement DAP client state, authorize App Server connections, or render UI.
 
-| Symbol | Responsibility | Must not own |
-| --- | --- | --- |
-| `DebugAdapterService` | Validate active directory capabilities and own at most eight adapter processes | Product configuration or connection identity |
-| `DebugAdapterCommand::new` | Bound program and arguments and reject NUL input | Executable discovery |
-| `read_message` / `encode_message` | Parse and create bounded DAP frames | Request pairing or DAP semantics |
-| `DebugAdapterState` | Retain at most 512 messages plus bounded stderr and exit state | Durable history |
-| `push_message` | Assign ordered sequence numbers and evict the oldest retained messages | Consumer cursors |
-| `refresh_process_state` / `terminate` | Observe exit and reap or kill the child | Restart policy |
+| Symbol                                | Responsibility                                                                 | Must not own                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
+| `DebugAdapterService`                 | Validate active directory capabilities and own at most eight adapter processes | Product configuration or connection identity |
+| `DebugAdapterCommand::new`            | Bound program and arguments and reject NUL input                               | Executable discovery                         |
+| `read_message` / `encode_message`     | Parse and create bounded DAP frames                                            | Request pairing or DAP semantics             |
+| `DebugAdapterState`                   | Retain at most 512 messages plus bounded stderr and exit state                 | Durable history                              |
+| `push_message`                        | Assign ordered sequence numbers and evict the oldest retained messages         | Consumer cursors                             |
+| `refresh_process_state` / `terminate` | Observe exit and reap or kill the child                                        | Restart policy                               |
 
 The call path is `DebugAdapterService::start` → `tokio::process::Command` → `spawn_stdout_reader` / `spawn_stderr_reader`. Callers send JSON through `send`; `read` returns the next bounded page and advances only past messages in that page. Adapter `seq` values may start at zero (LLDB-DAP emits zero); the retained-message cursor is assigned separately by this process owner. Request pairing belongs to the client and uses `request_seq`. A consumer that falls behind the retained prefix receives `output_gap = true` and must fail the session instead of silently skipping protocol events.
 

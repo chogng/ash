@@ -165,7 +165,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	/** The model range currently represented by the browser's native buffer. */
-	get textWindow(): { readonly startOffset: number; readonly endOffset: number } {
+	get textWindow(): { readonly startOffset: number; readonly endOffset: number; } {
 		return Object.freeze({
 			startOffset: this.shadowOffset,
 			endOffset: this.shadowOffset + this.shadowText.length,
@@ -481,7 +481,7 @@ export class NativeEditContext extends AbstractEditContext {
 	private handleImeStateChange(enabled: boolean): void {
 		if (!enabled && this.focused && !this.imeFallbackFocused) {
 			this.focusImeFallback();
-	} else if (enabled && this.imeFallbackFocused) {
+		} else if (enabled && this.imeFallbackFocused) {
 			this.imeFallbackFocused = false;
 			this.focusTracker.resume();
 			this.focusTracker.focus();
@@ -501,7 +501,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	/** Native EditContext retains its own editing buffer; there is no textarea value to clear. */
-	clear(): void {}
+	clear(): void { }
 
 	syncState(state: EditContextState): void {
 		if (this.composing) return;

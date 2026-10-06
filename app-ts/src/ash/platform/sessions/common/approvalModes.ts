@@ -4,8 +4,8 @@ export type ApprovalMode = 'manual' | 'auto' | 'bypassPermissions';
 
 export interface ApprovalModeDefinition {
 	readonly id: ApprovalMode;
-	readonly label: { readonly key: string; readonly text: string };
-	readonly description: { readonly key: string; readonly text: string };
+	readonly label: { readonly key: string; readonly text: string; };
+	readonly description: { readonly key: string; readonly text: string; };
 	readonly requiresConfirmation: boolean;
 }
 

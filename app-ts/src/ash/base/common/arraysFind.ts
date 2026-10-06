@@ -72,7 +72,7 @@ export class MonotonousArray<T> {
 	private lastIndex = 0;
 	private previousPredicate: ((item: T) => boolean) | undefined;
 
-	constructor(private readonly array: readonly T[]) {}
+	constructor(private readonly array: readonly T[]) { }
 
 	public findLastMonotonous(predicate: (item: T) => boolean): T | undefined {
 		if (MonotonousArray.assertInvariants && this.previousPredicate) {

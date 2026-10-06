@@ -7,7 +7,7 @@ interface Edit {
 	readonly title: string;
 	readonly kind: HierarchicalKind;
 	readonly handledMimeType?: string;
-	readonly yieldTo?: readonly ({ readonly kind: HierarchicalKind } | { readonly mimeType: string })[];
+	readonly yieldTo?: readonly ({ readonly kind: HierarchicalKind; } | { readonly mimeType: string; })[];
 }
 
 function edit(title: string, kind: string, yieldTo?: Edit['yieldTo'], handledMimeType?: string): Edit {

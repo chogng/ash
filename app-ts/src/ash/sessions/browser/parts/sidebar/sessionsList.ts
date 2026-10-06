@@ -116,7 +116,7 @@ export class SessionsList extends Disposable {
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLButtonElement;
 	private readonly label: HTMLSpanElement;
-	private open: () => void = () => {};
+	private open: () => void = () => { };
 	private readonly clickListener;
 
 	constructor(ownerDocument: Document) {

@@ -25,9 +25,9 @@ export const Direction = {
 } as const;
 
 export type Sizing =
-	| { readonly type: "distribute" }
-	| { readonly type: "split" }
-	| { readonly type: "invisible"; readonly cachedVisibleSize: number };
+	| { readonly type: "distribute"; }
+	| { readonly type: "split"; }
+	| { readonly type: "invisible"; readonly cachedVisibleSize: number; };
 
 export const Sizing = {
 	Distribute: { type: "distribute" } as const,

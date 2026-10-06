@@ -21,7 +21,7 @@ export class SessionGridLayout extends Disposable {
 	private widths: ReadonlyMap<string, number> | undefined;
 	private restorePending = false;
 	private readonly storageKey: string;
-	private dimension: { width: number; height: number } | undefined;
+	private dimension: { width: number; height: number; } | undefined;
 	private visible = true;
 
 	constructor(private readonly container: HTMLElement, initialView: IView, @IStorageService private readonly storage: IStorageService) {

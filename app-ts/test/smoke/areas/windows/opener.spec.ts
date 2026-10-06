@@ -38,9 +38,11 @@ test('Output task file links open the editor at their line and column from the k
 	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
 	await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
 	await writeFile(join(testWorkspace.directory, 'src', 'link-target.ts'), Array.from({ length: 15 }, (_, index) => `// source line ${index + 1}`).join('\n'));
-	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [
-		{ label: taskLabel, type: 'shell', command: 'node -e "process.exit(0)"' },
-	] }));
+	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({
+		version: '2.0.0', tasks: [
+			{ label: taskLabel, type: 'shell', command: 'node -e "process.exit(0)"' },
+		]
+	}));
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select(taskLabel);
 	await workbench.page.getByRole('tab', { name: 'Tasks', exact: true }).click();
@@ -68,7 +70,7 @@ test('Output task file links open the editor at their line and column from the k
 interface ExternalOpening {
 	readonly urls: string[];
 	readonly windows: number[];
-	readonly navigations: { readonly url: string; readonly prevented: boolean }[];
+	readonly navigations: { readonly url: string; readonly prevented: boolean; }[];
 	restore(): void;
 }
 
@@ -76,7 +78,7 @@ async function captureExternalOpening(electron: ElectronApplication): Promise<vo
 	await electron.evaluate(({ shell, BrowserWindow }) => {
 		const original = shell.openExternal;
 		const urls: string[] = [];
-		(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening = {
+		(globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening = {
 			urls,
 			windows: BrowserWindow.getAllWindows().map(window => window.id),
 			navigations: [],
@@ -124,7 +126,7 @@ test('editor document links open from the keyboard and modifier click', async ({
 			}
 			if (electron) {
 				await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
-					const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening;
+					const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
 					return {
 						urls: state.urls,
 						unchangedWindows: BrowserWindow.getAllWindows().map(window => window.id).join(',') === state.windows.join(','),
@@ -144,7 +146,7 @@ test('editor document links open from the keyboard and modifier click', async ({
 		await expect(link).toBeVisible();
 	} finally {
 		if (electron) {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore());
+			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
 		}
 	}
 });
@@ -202,14 +204,14 @@ test.describe('SCM external opening', () => {
 			await openLink.focus();
 			await openLink.press('Enter');
 			await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
-				const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening;
+				const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
 				return {
 					urls: state.urls,
 					unchangedWindows: BrowserWindow.getAllWindows().map(window => window.id).join(',') === state.windows.join(','),
 				};
 			})).toEqual({ urls: [href], unchangedWindows: true });
 		} finally {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore());
+			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
 		}
 	});
 });
@@ -239,7 +241,7 @@ test('release notes external links use the product opener from the keyboard', as
 		if (electron) {
 			await link.press('Enter');
 			await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
-				const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening;
+				const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
 				return {
 					urls: state.urls,
 					unchangedWindows: BrowserWindow.getAllWindows().map(window => window.id).join(',') === state.windows.join(','),
@@ -259,7 +261,7 @@ test('release notes external links use the product opener from the keyboard', as
 		await expect(notes.getByRole('heading', { name: 'Ash 0.1', exact: true })).toBeVisible();
 	} finally {
 		if (electron) {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore());
+			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
 		}
 	}
 });
@@ -277,16 +279,16 @@ test('desktop link window requests use the system and product pages cannot navig
 			const windows = await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id));
 			await page.evaluate(href => { window.open(href, '_blank', 'noopener,noreferrer'); }, href);
 			urls.push(href);
-			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.urls)).toEqual(urls);
+			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.urls)).toEqual(urls);
 			expect(await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id))).toEqual(windows);
 			await electron.evaluate(({ BrowserWindow }, originalUrl) => {
 				const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === originalUrl)!;
 				window.webContents.once('will-navigate', (event, url) => {
-					(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.navigations.push({ url, prevented: event.defaultPrevented });
+					(globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.navigations.push({ url, prevented: event.defaultPrevented });
 				});
 			}, originalUrl);
 			await page.evaluate(href => { location.href = href; }, href);
-			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.navigations.at(-1))).toEqual({ url: href, prevented: true });
+			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.navigations.at(-1))).toEqual({ url: href, prevented: true });
 			expect(page.url()).toBe(originalUrl);
 			await expect.poll(() => page.evaluate(selector => {
 				const bounds = document.querySelector(selector)?.getBoundingClientRect();
@@ -294,6 +296,6 @@ test('desktop link window requests use the system and product pages cannot navig
 			}, index === 0 ? '.ash-workbench' : '.ash-sessions-window')).toBe(true);
 		}
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
 	}
 });

@@ -228,10 +228,10 @@ Ash Code and Remote runtime `.tar.gz` writers share [`archive.py`](../lib/archiv
 which sets gzip level 6, clears the original filename, and fixes the gzip timestamp at zero.
 Each builder owns its tar format, member ordering, permissions, and metadata normalization.
 
-| Target | Current sandbox package state |
-| --- | --- |
-| macOS | MXC Seatbelt policy; system launcher |
-| Linux | `ash-resources/bwrap` is required; MXC owns sandbox/network setup |
+| Target  | Current sandbox package state                                                                                                                |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | MXC Seatbelt policy; system launcher                                                                                                         |
+| Linux   | `ash-resources/bwrap` is required; MXC owns sandbox/network setup                                                                            |
 | Windows | MXC SDK is linked into the runtime; `ash-windows-sandbox.exe` and `ash-windows-sandbox-service.exe` are included and signed with the runtime |
 
 Tests are offline and cover target-lock completeness, both runtime package layouts, the packaged

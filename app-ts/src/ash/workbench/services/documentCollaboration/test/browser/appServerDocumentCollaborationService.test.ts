@@ -101,7 +101,7 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 class FakeServerEvents implements IServerEventApi {
 	private readonly listeners = new Set<(event: ServerNotification) => void>();
 
-	subscribe(listener: (event: ServerNotification) => void): { dispose(): void } {
+	subscribe(listener: (event: ServerNotification) => void): { dispose(): void; } {
 		this.listeners.add(listener);
 		return { dispose: () => this.listeners.delete(listener) };
 	}

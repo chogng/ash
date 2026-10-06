@@ -239,7 +239,7 @@ function arrayValueAtOffset(document: JsonDocument, offset: number): {
 	return document.root ? visit(document.root, []) : undefined;
 }
 
-function propertyAwaitingValueAtOffset(document: JsonDocument, offset: number): { readonly property: JsonPropertyNode; readonly path: readonly (string | number)[] } | undefined {
+function propertyAwaitingValueAtOffset(document: JsonDocument, offset: number): { readonly property: JsonPropertyNode; readonly path: readonly (string | number)[]; } | undefined {
 	if (!document.root) return undefined;
 	const object = deepestObjectAtOffset(document.root, offset);
 	const objectPath = object ? getJsonNodePath(document.root, object) : undefined;
@@ -314,7 +314,7 @@ function deepestObjectAtOffset(node: JsonValueNode, offset: number): JsonObjectN
 	return undefined;
 }
 
-function propertyAtOffset(root: JsonValueNode | undefined, offset: number, path: readonly (string | number)[] = []): { readonly property: JsonPropertyNode; readonly path: readonly (string | number)[] } | undefined {
+function propertyAtOffset(root: JsonValueNode | undefined, offset: number, path: readonly (string | number)[] = []): { readonly property: JsonPropertyNode; readonly path: readonly (string | number)[]; } | undefined {
 	if (!root || offset < root.offset || offset > root.offset + root.length) return undefined;
 	if (root.type === 'object') {
 		for (const property of root.properties) {
@@ -338,7 +338,7 @@ function propertyAtOffset(root: JsonValueNode | undefined, offset: number, path:
 	return undefined;
 }
 
-function jsonParseOptions(languageId: string): { readonly allowComments: boolean; readonly allowTrailingComma: boolean } {
+function jsonParseOptions(languageId: string): { readonly allowComments: boolean; readonly allowTrailingComma: boolean; } {
 	return { allowComments: languageId === 'jsonc', allowTrailingComma: languageId === 'jsonc' };
 }
 

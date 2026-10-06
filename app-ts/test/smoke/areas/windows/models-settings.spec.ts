@@ -101,7 +101,7 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 
 test('Models Settings saves custom model IDs and keys and tests the configured endpoint', async ({ target, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses App Server and its isolated configuration.');
-	const requests: { path: string; model?: string; key: string | undefined }[] = [];
+	const requests: { path: string; model?: string; key: string | undefined; }[] = [];
 	let rejectDiscovery = false;
 	const server = createServer(async (request, response) => {
 		if (request.method === 'GET') {
@@ -112,7 +112,7 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		}
 		const chunks: Buffer[] = [];
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
-		const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string };
+		const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; };
 		requests.push({ path: request.url!, model: body.model, key: request.headers.authorization });
 		if (body.model === 'rejected-model') { response.writeHead(403); response.end(); return; }
 		response.writeHead(200, { 'content-type': 'text/event-stream' });

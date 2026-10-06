@@ -14,7 +14,7 @@ export function withSelection(uri: URI, selection: ITextEditorSelection): URI {
 }
 
 /** Separates editor coordinates before the resource enters file or model resolution. */
-export function extractSelection(uri: URI): { selection: ITextEditorSelection | undefined; uri: URI } {
+export function extractSelection(uri: URI): { selection: ITextEditorSelection | undefined; uri: URI; } {
 	const points = uri.fragment.split('-');
 	if (points.length > 2 || points.some(point => !/^L?\d+(,\d+)?$/.test(point))) {
 		return { uri, selection: undefined };
@@ -63,7 +63,7 @@ export interface IExternalUriResolver {
 export interface IExternalOpener {
 	openExternal(
 		href: string,
-		context: { readonly sourceUri: URI; readonly preferredOpenerId?: string },
+		context: { readonly sourceUri: URI; readonly preferredOpenerId?: string; },
 		token: CancellationToken,
 	): Promise<boolean>;
 }

@@ -7,7 +7,7 @@ import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import { EditorPanes, type IEditorPaneRegistry } from "../../editor.js";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-const binaryEditorOptions: { value: string; label: string }[] = [{ value: "", get label() { return localize("workbench.editor.defaultBinaryEditor.default", "Default"); } }];
+const binaryEditorOptions: { value: string; label: string; }[] = [{ value: "", get label() { return localize("workbench.editor.defaultBinaryEditor.default", "Default"); } }];
 
 export const EditorOpenErrorDialogConfiguration = configurationRegistry.registerConfiguration<boolean>({
 	key: "workbench.editor.openErrorDialog",

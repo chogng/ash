@@ -1,11 +1,11 @@
 .ash-grid {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .ash-grid > .ash-split-view {
-  position: absolute;
-  inset: 0;
+	position: absolute;
+	inset: 0;
 }

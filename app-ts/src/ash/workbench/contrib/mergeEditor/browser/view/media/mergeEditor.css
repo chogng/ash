@@ -15,7 +15,8 @@
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-bottom: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-merge-progress {
@@ -47,7 +48,8 @@
 }
 
 .ash-merge-input + .ash-merge-input {
-	border-left: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-left: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-merge-editor:not(.show-base) .ash-merge-input-current {
@@ -82,7 +84,8 @@
 .ash-merge-editor.columns .ash-merge-result {
 	grid-column: 2;
 	grid-row: 3;
-	border-left: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-left: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-merge-editor.columns .ash-merge-input-incoming {
@@ -102,7 +105,8 @@
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 	font-size: var(--ash-font-size-heading3);
 	font-weight: var(--ash-font-weight-semi-bold);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-bottom: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-merge-input-editor,
@@ -119,7 +123,8 @@
 	max-height: 25%;
 	overflow: auto;
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-block: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-block: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-merge-hunk {
@@ -176,7 +181,8 @@
 	overflow-x: auto;
 	white-space: nowrap;
 	background: var(--ash-editor-background);
-	border-block: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-block: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-merge-inline-state {
@@ -206,6 +212,7 @@
 
 	.ash-merge-input + .ash-merge-input {
 		border-left: 0;
-		border-top: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+		border-top: var(--ash-stroke-thickness) solid
+			var(--ash-editor-group-border);
 	}
 }

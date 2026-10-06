@@ -25,15 +25,15 @@ const cursors = (
 	offsets: readonly number[],
 	primaryIndex = 0,
 ): readonly Selection[] => primaryFirst(offsets.map(offset => Selection.fromPositions(
-		position(0, offset),
-	)), primaryIndex);
+	position(0, offset),
+)), primaryIndex);
 const selections = (
 	offsets: readonly (readonly [number, number])[],
 	primaryIndex = 0,
 ): readonly Selection[] => primaryFirst(offsets.map(([anchorOffset, activeOffset]) => Selection.fromPositions(
-		position(0, anchorOffset),
-		position(0, activeOffset),
-	)), primaryIndex);
+	position(0, anchorOffset),
+	position(0, activeOffset),
+)), primaryIndex);
 
 function pushEdits(model: TextModel, edits: IIdentifiedSingleEditOperation[], group?: UndoRedoGroup): TextModelChange | undefined {
 	let change: TextModelChange | undefined;

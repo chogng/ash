@@ -118,7 +118,7 @@ class MoreActionsAction implements IAction {
 	readonly enabled = true;
 	readonly checked = undefined;
 
-	run(): void {}
+	run(): void { }
 }
 
 class MoreActionsViewItem extends DropdownMenuActionViewItem {

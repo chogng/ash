@@ -172,7 +172,7 @@ test('ModelService owns resource identity, language events, and model removal', 
 class TestTextResourcePropertiesService implements ITextResourcePropertiesService {
 	readonly _serviceBrand: undefined;
 
-	constructor(private readonly configuration: IConfigurationService) {}
+	constructor(private readonly configuration: IConfigurationService) { }
 
 	getEOL(resource: URI, language?: string): string {
 		const eol = this.configuration.getValue<string>('files.eol', { resource, overrideIdentifier: language });

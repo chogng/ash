@@ -149,7 +149,7 @@ class TestRemoteTunnelService extends Disposable implements IRemoteTunnelService
 		return initialList ?? Promise.resolve(Object.freeze([...this.tunnels.values()]));
 	}
 
-	async open(request: { readonly remotePort: number }): Promise<RemoteTunnel> {
+	async open(request: { readonly remotePort: number; }): Promise<RemoteTunnel> {
 		this.openedPorts.push(request.remotePort);
 		const opened = tunnel(`tunnel-${request.remotePort}`, request.remotePort + 10_000, request.remotePort, "open");
 		this.upsert(opened);

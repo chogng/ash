@@ -265,7 +265,7 @@ class FakeServerEvents implements IServerEventApi {
 
 class FakeDirPermissionsService implements IDirPermissionsService {
 	readonly onDidChangePermissions = Event.None;
-	constructor(private readonly dir: string, public value: readonly PermissionDto[]) {}
+	constructor(private readonly dir: string, public value: readonly PermissionDto[]) { }
 	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
 	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }
 	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }
@@ -293,8 +293,8 @@ class FakeLanguageApi implements ILanguageApi {
 	readonly rangeFormattingRequests: Parameters<ILanguageApi["formatRange"]>[0][] = [];
 	readonly signatureHelpRequests: Parameters<ILanguageApi["signatureHelp"]>[0][] = [];
 
-	async synchronize(): Promise<void> {}
-	async close(): Promise<void> {}
+	async synchronize(): Promise<void> { }
+	async close(): Promise<void> { }
 
 	async hover(params: Parameters<ILanguageApi["hover"]>[0]): ReturnType<ILanguageApi["hover"]> {
 		this.hoverRequests.push(params);
@@ -363,10 +363,12 @@ class FakeLanguageApi implements ILanguageApi {
 	}
 
 	async rename(): ReturnType<ILanguageApi["rename"]> {
-		return { entries: [
-			{ kind: "create", path: "created.ts", existing: "error" },
-			{ kind: "textDocument", document: { path: "main.ts", expectedText: "value", edits: [{ range: DTO_RANGE, newText: "renamed" }] } },
-		] };
+		return {
+			entries: [
+				{ kind: "create", path: "created.ts", existing: "error" },
+				{ kind: "textDocument", document: { path: "main.ts", expectedText: "value", edits: [{ range: DTO_RANGE, newText: "renamed" }] } },
+			]
+		};
 	}
 
 	async codeActions(params: Parameters<ILanguageApi["codeActions"]>[0]): ReturnType<ILanguageApi["codeActions"]> {

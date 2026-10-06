@@ -132,8 +132,8 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 		services.registerInstance(IDialogService, {
 			onWillShowDialog: EventUtils.None, onDidShowDialog: EventUtils.None,
 			confirm: async () => ({ confirmed: true }),
-			showMessage: async () => {}, info: async () => {}, warn: async () => {}, error: async () => {},
-			prompt: async () => ({}), input: async () => ({ confirmed: false }), about: async () => {},
+			showMessage: async () => { }, info: async () => { }, warn: async () => { }, error: async () => { },
+			prompt: async () => ({}), input: async () => ({ confirmed: false }), about: async () => { },
 		});
 		try {
 			using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
@@ -197,7 +197,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 		}));
 	}
 
-	async acquire(input: { readonly resource: URI; readonly initialText?: string }): Promise<TextModelReference> {
+	async acquire(input: { readonly resource: URI; readonly initialText?: string; }): Promise<TextModelReference> {
 		const key = input.resource.toString();
 		const existing = this.persistentModels.get(key);
 		const model = existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? "", { resource: input.resource });
@@ -224,11 +224,11 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	getModel(resource: URI): TextModel | null {
 		return this.persistentModels.get(resource.toString()) ?? null;
 	}
-	async refresh(): Promise<void> {}
+	async refresh(): Promise<void> { }
 }
 
 class PreviewFileService extends Disposable implements IFileService {
-	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined }>());
+	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined; }>());
 	readonly onDidChangeFiles = this.changeEmitter.event;
 	private readonly resources = new Map<string, string>();
 
@@ -267,8 +267,8 @@ function emptyWorkingCopies(): IWorkingCopyService {
 		register: () => toDisposable(() => undefined),
 		get: () => [],
 		getAll: () => [],
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
@@ -277,7 +277,7 @@ function installDomGlobals(browser: JSDOM) {
 	return registerWindow(browser.window as unknown as Window);
 }
 
-async function previewEdits(edit: LanguageWorkspaceEdit, dependencies: { files: PreviewFileService; models: PreviewTextModelService; workingCopies: IWorkingCopyService }, signal: AbortSignal): Promise<BulkFileOperations> {
+async function previewEdits(edit: LanguageWorkspaceEdit, dependencies: { files: PreviewFileService; models: PreviewTextModelService; workingCopies: IWorkingCopyService; }, signal: AbortSignal): Promise<BulkFileOperations> {
 	using services = new InstantiationService();
 	services.registerInstance(IFileService, dependencies.files);
 	services.registerInstance(ITextModelResourceService, dependencies.models);

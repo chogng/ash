@@ -20,14 +20,14 @@ Rust 后端继续提供授权、GitHub、Git、存储等业务能力。JS 入口
 
 ## 1. Crate 边界
 
-| 能力 | 本 crate 的职责 | 上层或平台职责 |
-| --- | --- | --- |
-| Package binding | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation | source adapter 选择 immutable package/executable 并解析绝对路径 |
-| Activation authority | 每次激活和调用前获取 `ActivationLease` | Adapter 同时复核 source artifact/admission lease 与 directory capability |
-| Process supervision | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启 | 平台 launcher 安装 sandbox、hard limits 和 killable process tree |
-| Host RPC v1 | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits | 扩展程序实现协议；App Server 把注册投影到领域 owner |
-| Provider invocation | 路由到精确 registration、deadline、并发取消和结果校验 | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
-| Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务 |
+| 能力                 | 本 crate 的职责                                                                          | 上层或平台职责                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Package binding      | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation                     | source adapter 选择 immutable package/executable 并解析绝对路径                                 |
+| Activation authority | 每次激活和调用前获取 `ActivationLease`                                                   | Adapter 同时复核 source artifact/admission lease 与 directory capability                        |
+| Process supervision  | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启                                | 平台 launcher 安装 sandbox、hard limits 和 killable process tree                                |
+| Host RPC v1          | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits                                | 扩展程序实现协议；App Server 把注册投影到领域 owner                                             |
+| Provider invocation  | 路由到精确 registration、deadline、并发取消和结果校验                                    | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
+| Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务                                 |
 
 出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin 目录、持久化 enable/grant、解释
 `package.json`、注册 Workbench provider、决定工作区信任，或自行把一个普通 Node/WASM 脚本当成
@@ -35,34 +35,34 @@ entrypoint 加载。
 
 ## 2. 文件与公共契约
 
-| 文件 | 关键公共契约 | 约束 |
-| --- | --- | --- |
-| `../editor-extension-protocol/src/lib.rs` | `ExtensionHostRequest`、`ExtensionHostResponse`、`RegistrationDescriptor` | Host 与 SDK 共用的 Host RPC v1 wire shape；严格校验 request/response correlation |
-| `../editor-extension-protocol/src/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation` | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
-| `authority.rs` | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec` | 授权是 live gate，不是 activation 时的一次布尔判断 |
-| `limits.rs` | `ExtensionHostLimits`、`ProcessIsolationPolicy` | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致 |
-| `process.rs` | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 必须在 entrypoint 执行前完成隔离，并清空继承环境 |
-| `supervisor.rs` | `ExtensionHostSupervisor`、`ExtensionHostSnapshot` | 一扩展一监管器；注册仅在完整 activation 成功后发布 |
-| `supervisor/invocation.rs` | `ExtensionInvocation`、`ExtensionInvocationHandle` | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling |
-| `restart.rs` | `RestartPolicy`、`RestartTracker` | 滑动窗口、指数退避和 terminal `CrashLoop` |
-| `error.rs` | `ExtensionHostError` | 区分拒绝、配额、协议、退出、超时和 unknown outcome |
+| 文件                                         | 关键公共契约                                                              | 约束                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `../editor-extension-protocol/src/lib.rs`    | `ExtensionHostRequest`、`ExtensionHostResponse`、`RegistrationDescriptor` | Host 与 SDK 共用的 Host RPC v1 wire shape；严格校验 request/response correlation       |
+| `../editor-extension-protocol/src/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation`                         | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
+| `authority.rs`                               | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec`       | 授权是 live gate，不是 activation 时的一次布尔判断                                     |
+| `limits.rs`                                  | `ExtensionHostLimits`、`ProcessIsolationPolicy`                           | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致                    |
+| `process.rs`                                 | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 必须在 entrypoint 执行前完成隔离，并清空继承环境                              |
+| `supervisor.rs`                              | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；注册仅在完整 activation 成功后发布                                     |
+| `supervisor/invocation.rs`                   | `ExtensionInvocation`、`ExtensionInvocationHandle`                        | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling                    |
+| `restart.rs`                                 | `RestartPolicy`、`RestartTracker`                                         | 滑动窗口、指数退避和 terminal `CrashLoop`                                              |
+| `error.rs`                                   | `ExtensionHostError`                                                      | 区分拒绝、配额、协议、退出、超时和 unknown outcome                                     |
 
 `ExtensionHostLauncher` 和 `ActivationAuthority` 是 host adapter 必须实现的两个端口。前者拥有物理
 隔离，后者拥有“当前是否仍可运行”的 live decision；不能用一个启动时缓存的 `true` 替代后者。
 
 ## 3. 内部接口地图
 
-| Private symbol | 精确职责 | 不能承担 | 修改时同步检查 |
-| --- | --- | --- | --- |
-| `SupervisorState` | 保存 status、incarnation、live process、原子 registrations、invocation leases 与 restart tracker | Plugin 安装状态或 Workbench registry | supervisor lifecycle/recovery tests、系统文档 |
-| `ExtensionHostSupervisor::launch_and_activate` | 取得 activation lease，spawn，递增 incarnation，完成 handshake + activate 后一次发布 registrations | 平台 sandbox、activation-event matching | authority、handshake、capability ceiling、restart tests |
-| `ExtensionHostSupervisor::context` | 分配非零且不复用的 request ID，并绑定 incarnation 与 activation generation | 跨进程持久 ID | exhaustion/correlation tests |
-| `reserve_pending` | 在写 stdin 前预留 waiter，分别约束普通请求和 control request，并拒绝 request ID 重用 | provider-level scheduling | concurrent cancel、quota、duplicate-ID tests |
-| `spawn_stdout_reader` | 有界读取 frame，区分 correlated response、client request 与 Output event；前者匹配 pending request，后者严格校验并进入有界队列 | Workbench channel registry 或无限缓冲 | malformed/oversized/correlation/Output quota tests |
-| `extension_protocol::read_frame` | 在分配增长前校验 frame byte ceiling，并要求换行终止 | JSON semantic validation | exact-boundary tests |
-| `ExtensionInvocationHandle::wait` | 轮询 terminal response，观察 caller/deadline cancellation，执行 grace 后 unknown-outcome recovery | 把超时当成确认失败 | cancel/deadline/indeterminate/restart tests |
-| `ExtensionHostSupervisor::recover_locked` | 清除旧注册和 leases、终止旧进程、消费 restart budget、重新握手和激活 | 无限重启或跨授权恢复 | crash-window/backoff/authority-revoked tests |
-| `validate_registrations` | 检查注册数量、ID 唯一性、字段限制和 manifest capability ceiling | 实现 provider 业务语义 | protocol capability/duplicate/size tests |
+| Private symbol                                 | 精确职责                                                                                                                       | 不能承担                                | 修改时同步检查                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------- |
+| `SupervisorState`                              | 保存 status、incarnation、live process、原子 registrations、invocation leases 与 restart tracker                               | Plugin 安装状态或 Workbench registry    | supervisor lifecycle/recovery tests、系统文档           |
+| `ExtensionHostSupervisor::launch_and_activate` | 取得 activation lease，spawn，递增 incarnation，完成 handshake + activate 后一次发布 registrations                             | 平台 sandbox、activation-event matching | authority、handshake、capability ceiling、restart tests |
+| `ExtensionHostSupervisor::context`             | 分配非零且不复用的 request ID，并绑定 incarnation 与 activation generation                                                     | 跨进程持久 ID                           | exhaustion/correlation tests                            |
+| `reserve_pending`                              | 在写 stdin 前预留 waiter，分别约束普通请求和 control request，并拒绝 request ID 重用                                           | provider-level scheduling               | concurrent cancel、quota、duplicate-ID tests            |
+| `spawn_stdout_reader`                          | 有界读取 frame，区分 correlated response、client request 与 Output event；前者匹配 pending request，后者严格校验并进入有界队列 | Workbench channel registry 或无限缓冲   | malformed/oversized/correlation/Output quota tests      |
+| `extension_protocol::read_frame`               | 在分配增长前校验 frame byte ceiling，并要求换行终止                                                                            | JSON semantic validation                | exact-boundary tests                                    |
+| `ExtensionInvocationHandle::wait`              | 轮询 terminal response，观察 caller/deadline cancellation，执行 grace 后 unknown-outcome recovery                              | 把超时当成确认失败                      | cancel/deadline/indeterminate/restart tests             |
+| `ExtensionHostSupervisor::recover_locked`      | 清除旧注册和 leases、终止旧进程、消费 restart budget、重新握手和激活                                                           | 无限重启或跨授权恢复                    | crash-window/backoff/authority-revoked tests            |
+| `validate_registrations`                       | 检查注册数量、ID 唯一性、字段限制和 manifest capability ceiling                                                                | 实现 provider 业务语义                  | protocol capability/duplicate/size tests                |
 
 真实调用路径为：
 
@@ -120,20 +120,20 @@ Host 限制 pattern 为 2048 bytes 并验证展示 kind。
 
 默认 `ExtensionHostLimits` 为：
 
-| 限制 | 默认值 |
-| --- | ---: |
-| 单 frame | 1 MiB |
-| invocation payload | 512 KiB |
-| registrations | 256 |
-| ordinary in-flight requests | 32 |
-| in-flight control requests | 8 |
-| captured stderr | 256 KiB |
-| queued / retained Output | 4096 events / 512 KiB |
-| arguments | 128 entries / 32 KiB |
-| environment | 64 entries / 32 KiB |
-| startup / request / cancellation grace / shutdown | 10 s / 30 s / 2 s / 5 s |
-| restart budget | 60 s 内最多 5 次；100 ms 起步、最高 5 s 指数退避 |
-| hard resources | 512 MiB memory、300 s CPU、1 process |
+| 限制                                              |                                           默认值 |
+| ------------------------------------------------- | -----------------------------------------------: |
+| 单 frame                                          |                                            1 MiB |
+| invocation payload                                |                                          512 KiB |
+| registrations                                     |                                              256 |
+| ordinary in-flight requests                       |                                               32 |
+| in-flight control requests                        |                                                8 |
+| captured stderr                                   |                                          256 KiB |
+| queued / retained Output                          |                            4096 events / 512 KiB |
+| arguments                                         |                             128 entries / 32 KiB |
+| environment                                       |                              64 entries / 32 KiB |
+| startup / request / cancellation grace / shutdown |                          10 s / 30 s / 2 s / 5 s |
+| restart budget                                    | 60 s 内最多 5 次；100 ms 起步、最高 5 s 指数退避 |
+| hard resources                                    |             512 MiB memory、300 s CPU、1 process |
 
 这些值按 bytes 或 entries 计数。硬资源值只是一项 launcher obligation；crate 内没有因为字段存在就
 宣称 OS 已经实施限制。

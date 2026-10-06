@@ -1,6 +1,6 @@
 export type TeamRole =
-	| { readonly type: 'default' }
-	| { readonly type: 'exact'; readonly name: string; readonly source: { readonly type: 'builtIn' } | { readonly type: 'directory'; readonly id: string } };
+	| { readonly type: 'default'; }
+	| { readonly type: 'exact'; readonly name: string; readonly source: { readonly type: 'builtIn'; } | { readonly type: 'directory'; readonly id: string; }; };
 
 export interface TeamMember {
 	readonly agentId: string;
@@ -41,8 +41,8 @@ export interface TeamMessage {
 }
 
 export type TeamCommand =
-	| { readonly type: 'create'; readonly name: string; readonly description: string; readonly coordinatorId: string; readonly members: readonly TeamMember[] }
-	| { readonly type: 'updateDetails'; readonly name: string; readonly description: string }
-	| { readonly type: 'addMember' | 'updateMember'; readonly member: TeamMember }
-	| { readonly type: 'removeMember' | 'setCoordinator'; readonly agentId: string }
-	| { readonly type: 'archive' | 'restore' };
+	| { readonly type: 'create'; readonly name: string; readonly description: string; readonly coordinatorId: string; readonly members: readonly TeamMember[]; }
+	| { readonly type: 'updateDetails'; readonly name: string; readonly description: string; }
+	| { readonly type: 'addMember' | 'updateMember'; readonly member: TeamMember; }
+	| { readonly type: 'removeMember' | 'setCoordinator'; readonly agentId: string; }
+	| { readonly type: 'archive' | 'restore'; };

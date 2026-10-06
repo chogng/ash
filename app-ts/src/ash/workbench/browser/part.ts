@@ -50,7 +50,7 @@ export abstract class WorkbenchPart extends Disposable {
 	get maximumHeight(): number { return Number.POSITIVE_INFINITY; }
 	get preferredWidth(): number | undefined { return undefined; }
 
-	layout(_dimension: IDimension): void {}
+	layout(_dimension: IDimension): void { }
 
 	/** Converts Grid border-box dimensions without measuring DOM after Grid writes. */
 	protected layoutContents(width: number, height: number): ILayoutContentResult {

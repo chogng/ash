@@ -761,7 +761,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		return host;
 	}
 
-	private resolveSideGroup(source: EditorGroupView): { readonly host: EditorGroupHost; readonly created: boolean } {
+	private resolveSideGroup(source: EditorGroupView): { readonly host: EditorGroupHost; readonly created: boolean; } {
 		const sourceIndex = this.groupIndex(source);
 		const existing = this._groups[sourceIndex + 1];
 		if (existing) return { host: existing, created: false };
@@ -914,7 +914,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 	}
 
 	private rebuildGroups(
-		groups: readonly { readonly id?: string; readonly size: number }[],
+		groups: readonly { readonly id?: string; readonly size: number; }[],
 		layout: EditorWorkingSetLayout | undefined,
 		activeGroupIndex: number,
 		retained: readonly EditorGroupHost[] = [],
@@ -1073,7 +1073,7 @@ function editorGroupIdFromGridData(value: unknown): string {
 
 function legacyGridDescriptor(
 	hosts: readonly EditorGroupHost[],
-	groups: readonly { readonly size: number }[],
+	groups: readonly { readonly size: number; }[],
 	dimension: IDimension,
 ): GridDescriptor<EditorGroupGridView> {
 	const width = Math.max(1, dimension.width);
@@ -1111,7 +1111,7 @@ class EditorGroupGridView implements ISerializableGridView {
 	readonly minimumHeight = 119;
 	readonly maximumHeight = Infinity;
 
-	constructor(readonly group: EditorGroupView) {}
+	constructor(readonly group: EditorGroupView) { }
 
 	get element(): HTMLElement {
 		return this.group.domNode;

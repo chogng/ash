@@ -17,7 +17,7 @@ const installedGlobals = installEditorTestDom(environment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent',
 ], {
 	navigator: { userAgent: environment.window.navigator.userAgent, clipboard: {} },
-	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
+	ResizeObserver: class TestResizeObserver { observe(): void { } unobserve(): void { } disconnect(): void { } },
 });
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -242,15 +242,15 @@ class MemoryClipboardService implements IClipboardServiceContract {
 	text = '';
 	async readText(): Promise<string> { return this.text; }
 	async writeText(value: string): Promise<void> { this.text = value; }
-	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy' }> { return { resources: [], operation: 'copy' }; }
-	async writeResources(): Promise<void> {}
+	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy'; }> { return { resources: [], operation: 'copy' }; }
+	async writeResources(): Promise<void> { }
 	async hasResources(): Promise<boolean> { return false; }
 	async pasteSystemFiles(): Promise<boolean> { return false; }
 }
 
 class DeferredClipboardService implements IClipboardServiceContract {
-	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy' }> { return { resources: [], operation: 'copy' }; }
-	async writeResources(): Promise<void> {}
+	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy'; }> { return { resources: [], operation: 'copy' }; }
+	async writeResources(): Promise<void> { }
 	async hasResources(): Promise<boolean> { return false; }
 	async pasteSystemFiles(): Promise<boolean> { return false; }
 	private readonly reads: Array<(text: string) => void> = [];

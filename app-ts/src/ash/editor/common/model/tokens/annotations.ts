@@ -237,7 +237,7 @@ export interface IAnnotationUpdate<T> {
 type DefinedValue = object | string | number | boolean;
 
 export type ISerializedAnnotation<TSerializedProperty extends DefinedValue> = {
-	range: { start: number; endExclusive: number };
+	range: { start: number; endExclusive: number; };
 	annotation: TSerializedProperty | undefined;
 };
 

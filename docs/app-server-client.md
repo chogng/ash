@@ -13,13 +13,13 @@ App Server 客户端把“连接后端进程、初始化连接、配对请求、
 就绪会话，使 CLI、TUI 和无交互宿主不必各自实现一遍。产品端通过 stdio 连接单独打包的
 `ash-app-server`；进程内连接只供本 crate 测试及显式启用 `in-process` 特性的契约测试使用。
 
-| 调用方动作 | 客户端保证 | 调用方仍负责 |
-| --- | --- | --- |
-| 启动本地 App Server | 只有进程和双向通道都建立后才开始初始化 | 提供启动配置和产品参数 |
-| 取得 ready client | 已完成能力、版本和模式校验 | 决定接下来调用哪个产品方法 |
-| 发出多个并发请求 | 按请求 ID 配对结果并结束等待者 | 处理领域结果和用户交互 |
-| 接收通知 | 独立转发服务端事件，不阻塞请求结果 | 更新自己的呈现状态 |
-| 关闭宿主 | 拒绝新请求、结束等待者并等待后台任务退出 | 决定产品级退出或重连策略 |
+| 调用方动作          | 客户端保证                                                            | 调用方仍负责                                        |
+| ------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+| 启动本地 App Server | 只有进程和双向通道都建立后才开始初始化                                | 提供启动配置和产品参数                              |
+| 取得 ready client   | 已完成能力、版本和模式校验                                            | 决定接下来调用哪个产品方法                          |
+| 发出多个并发请求    | 按请求 ID 配对结果并结束等待者                                        | 处理领域结果和用户交互                              |
+| 接收通知            | 独立转发服务端事件，不阻塞请求结果                                    | 更新自己的呈现状态                                  |
+| 关闭宿主            | 拒绝新请求、结束等待者并等待后台任务退出                              | 决定产品级退出或重连策略                            |
 | 连接远程 App Server | `start_stdio` 复用同一 ready session、typed request 与 event contract | SSH transport、安装和产品重连策略由 host layer 拥有 |
 
 ## 1. 结论
@@ -55,6 +55,7 @@ ash-app-server-client ── JSONL/stdio ──► ash-app-server 程序
 
 当前 `ash-cli` 的交互式和无界面提示词路径已经使用自有
 `AppServerSession`、可克隆请求句柄、独立 `AppServerEvents` 与显式关闭。
+
 ## 2. 抽象单位：一个运行中的 App Server Session
 
 共享层的顶层抽象应是一个有明确所有权的运行会话，而不是裸 transport：
@@ -486,14 +487,14 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 
 同步适配面与剩余工作：
 
-| 边界 | 状态 |
-| --- | --- |
-| `start_in_process_client` / generic `AppServerClient<T>` | 前者仅供契约测试，后者是 typed request 的通用接口；TUI/CLI 不再依赖 drain |
-| typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
-| bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
-| stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize 的协议和必需能力校验，并使用同一 request/event contract；本地与 Remote `ash code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
-| initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
-| server error 被压成 code/string | 丢失 typed error name/data |
+| 边界                                                     | 状态                                                                                                                                                                                      |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start_in_process_client` / generic `AppServerClient<T>` | 前者仅供契约测试，后者是 typed request 的通用接口；TUI/CLI 不再依赖 drain                                                                                                                 |
+| typed method 同步等待 completion                         | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop                                                                                                            |
+| bounded event/data plane                                 | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供                                                                                                                     |
+| stdio child backend                                      | 已实现；`AppServerSession::start_stdio` 完成 initialize 的协议和必需能力校验，并使用同一 request/event contract；本地与 Remote `ash code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
+| initialize gate 只存在于一个 helper                      | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求                                                                                                                                    |
+| server error 被压成 code/string                          | 丢失 typed error name/data                                                                                                                                                                |
 
 因此 stdio session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中在 typed error、显式 lag lifecycle，以及其他产品宿主需要的连接恢复。不要把这些策略回退到 notification drain，也不要把 durable subscription restoration 偷塞进低层 stdio transport。
 

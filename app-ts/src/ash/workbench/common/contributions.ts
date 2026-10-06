@@ -129,7 +129,7 @@ export class WorkbenchContributionHost extends Disposable {
 		readonly IWorkbenchContributionRegistration[];
 	private readonly onError: WorkbenchContributionErrorHandler;
 	private readonly instantiated = new Set<string>();
-	private readonly instances: { readonly id: string; readonly contribution: IWorkbenchContribution }[] = [];
+	private readonly instances: { readonly id: string; readonly contribution: IWorkbenchContribution; }[] = [];
 	private _phase = 0;
 
 	constructor(

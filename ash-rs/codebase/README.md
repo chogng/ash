@@ -14,16 +14,16 @@
 
 ## 主要接口
 
-| 接口 | 保证 |
-| --- | --- |
-| `Codebase::open/rebuild/refresh_observed_paths` | 只在规范化 root 内重新读取事实，以完整 transaction 发布 generation |
-| `Codebase::search` | 返回本地全文索引与未保存内容的候选 |
-| `Codebase::materialize/materialize_verified_excerpt` | 校验当前 revision、range、key 与 content hash |
-| overlay synchronize/close | 未保存内容完全替代同路径磁盘内容，保存后按 content hash 交回磁盘 generation |
-| `SymbolIndex` | 只消费 Codebase 已复核源码，不自行扫描目录 |
-| `CodebaseSemanticService` | 以 `EmbeddingIndexKey` 绑定向量数据，只复用身份完全匹配的 embedding |
-| `CodebaseRetrievalService::search` | 组合 FTS 与公共 grep 候选，将 grep 位置映射到已有 chunk 并复核 |
-| `CodebaseRetrievalService::retrieve_with_cancellation` | 组合文字、符号、语义与可选增强候选，统一复核、去重、限额并传递取消 |
+| 接口                                                   | 保证                                                                        |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `Codebase::open/rebuild/refresh_observed_paths`        | 只在规范化 root 内重新读取事实，以完整 transaction 发布 generation          |
+| `Codebase::search`                                     | 返回本地全文索引与未保存内容的候选                                          |
+| `Codebase::materialize/materialize_verified_excerpt`   | 校验当前 revision、range、key 与 content hash                               |
+| overlay synchronize/close                              | 未保存内容完全替代同路径磁盘内容，保存后按 content hash 交回磁盘 generation |
+| `SymbolIndex`                                          | 只消费 Codebase 已复核源码，不自行扫描目录                                  |
+| `CodebaseSemanticService`                              | 以 `EmbeddingIndexKey` 绑定向量数据，只复用身份完全匹配的 embedding         |
+| `CodebaseRetrievalService::search`                     | 组合 FTS 与公共 grep 候选，将 grep 位置映射到已有 chunk 并复核              |
+| `CodebaseRetrievalService::retrieve_with_cancellation` | 组合文字、符号、语义与可选增强候选，统一复核、去重、限额并传递取消          |
 
 ## 数据库
 

@@ -29,11 +29,11 @@ export class SmartSnippetInserter {
 		const updateState = (token: JsonToken, state: InsertionState): void => {
 			if (state !== InsertionState.Invalid && arrayLevel === 1 && objectLevel === 0) {
 				currentState = state;
-					lastValidOffset = token.offset + token.length;
+				lastValidOffset = token.offset + token.length;
 				lastValidState = state;
 			} else if (currentState !== InsertionState.Invalid) {
 				currentState = InsertionState.Invalid;
-					lastValidOffset = token.offset;
+				lastValidOffset = token.offset;
 			}
 		};
 
@@ -90,7 +90,7 @@ export class SmartSnippetInserter {
 			return Object.freeze({
 				position: model.positionAt(acceptedOffset),
 				prepend: '',
-					append: tokens.some(candidate => candidate.offset >= acceptedOffset && candidate.kind === JsonTokenKind.OpenBrace) ? ',' : '',
+				append: tokens.some(candidate => candidate.offset >= acceptedOffset && candidate.kind === JsonTokenKind.OpenBrace) ? ',' : '',
 			});
 		}
 

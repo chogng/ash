@@ -26,9 +26,11 @@ class ThemeWindow extends Disposable {
 	constructor() {
 		super();
 		this._register(toDisposable(() => this.browser.window.close()));
-		Object.defineProperty(this.browser.window, 'matchMedia', { value: (query: string) => {
-			return query === '(prefers-color-scheme: dark)' ? this.systemTheme : { matches: false, addEventListener() {}, removeEventListener() {} };
-		} });
+		Object.defineProperty(this.browser.window, 'matchMedia', {
+			value: (query: string) => {
+				return query === '(prefers-color-scheme: dark)' ? this.systemTheme : { matches: false, addEventListener() { }, removeEventListener() { } };
+			}
+		});
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
 		this.services.registerInstance(IHostColorSchemeService, this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)));
@@ -169,7 +171,7 @@ test('workbench theme creation rejects a missing configuration registration', ()
 
 class TestMediaQueryList {
 	private readonly listeners = new Set<() => void>();
-	constructor(public matches: boolean) {}
+	constructor(public matches: boolean) { }
 	public get listenerCount(): number { return this.listeners.size; }
 	public addEventListener(type: string, listener: () => void): void {
 		if (type === 'change') { this.listeners.add(listener); }

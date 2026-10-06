@@ -9,5 +9,5 @@ export class NoEditorTabsControl extends EditorTabsControl {
 		this.domNode.hidden = true;
 	}
 
-	setEditors(_editors: readonly EditorTabDescriptor[], _activeInput: EditorInput | undefined): void {}
+	setEditors(_editors: readonly EditorTabDescriptor[], _activeInput: EditorInput | undefined): void { }
 }

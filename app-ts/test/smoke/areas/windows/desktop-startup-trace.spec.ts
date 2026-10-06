@@ -17,8 +17,8 @@ interface ConnectionSample {
 	readonly cohort: 'fresh' | 'stopped' | 'reused' | 'ui-only';
 	readonly index: number;
 	readonly readyMs: number | null;
-	readonly milestones: readonly { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number }[];
-	readonly renderer: { readonly responseEndMs: number; readonly marks: readonly { name: string; startTimeMs: number }[] } | null;
+	readonly milestones: readonly { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number; }[];
+	readonly renderer: { readonly responseEndMs: number; readonly marks: readonly { name: string; startTimeMs: number; }[]; } | null;
 	readonly error?: string;
 }
 
@@ -74,7 +74,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		let readyMs: number | null = null;
 		let renderer: ConnectionSample['renderer'] = null;
 		let error: string | undefined;
-		const milestones: { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number }[] = [{ phase: 'launch-requested', elapsedMs: 0 }];
+		const milestones: { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number; }[] = [{ phase: 'launch-requested', elapsedMs: 0 }];
 		try {
 			desktop = await launchElectron({
 				appServerMode: cohort === 'ui-only' ? 'disabled' : 'required',
@@ -119,7 +119,7 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		}
 		await writeFile(join(credentials, 'credentials.json'), JSON.stringify(entries));
 		const packageRoot = dirname(dirname(backend));
-		metadata.buildId = (JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8')) as { buildId: string }).buildId;
+		metadata.buildId = (JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8')) as { buildId: string; }).buildId;
 		metadata.rendererBuildId = `sha256:${createHash('sha256').update(await readFile(resolve(appPath, '../.build/app-ts/renderer/ash/build-assets.json'))).digest('hex')}`;
 		metadata.backendBytes = (await stat(backend)).size;
 
@@ -139,11 +139,11 @@ test('Desktop startup trace', async ({ target, testWorkspace }, testInfo) => {
 		reusedProfile = join(directory, 'reused-profile');
 		liveDesktop = await launchElectron({ appServerMode: 'required', userDataDirectory: join(directory, 'reused-setup'), profileDirectory: reusedProfile, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const liveEnvironment = { ...process.env, ASH_HOME: reusedProfile };
-		const before = JSON.parse((await execFileAsync(daemon, ['version'], { env: liveEnvironment, windowsHide: true })).stdout) as { pid: number };
+		const before = JSON.parse((await execFileAsync(daemon, ['version'], { env: liveEnvironment, windowsHide: true })).stdout) as { pid: number; };
 		for (let index = 0; index < samplesPerCohort; index++) {
 			await measure('reused', index, reusedProfile, false);
 		}
-		const after = JSON.parse((await execFileAsync(daemon, ['version'], { env: liveEnvironment, windowsHide: true })).stdout) as { pid: number };
+		const after = JSON.parse((await execFileAsync(daemon, ['version'], { env: liveEnvironment, windowsHide: true })).stdout) as { pid: number; };
 		metadata.reusedDaemonSameProcess = before.pid === after.pid;
 		await liveDesktop.close();
 		liveDesktop = undefined;
@@ -197,11 +197,11 @@ function redact(value: string, home: string, workspace: string): string {
 	return value.replaceAll(home, '[test-home]').replaceAll(workspace, '[test-workspace]').replaceAll(accountHome, '[home]').replaceAll('offline-test-key', '[test-credential]');
 }
 
-function summarize(samples: readonly ConnectionSample[]): Record<ConnectionSample['cohort'], { valid: number; errors: number; medianMs: number | null }> {
+function summarize(samples: readonly ConnectionSample[]): Record<ConnectionSample['cohort'], { valid: number; errors: number; medianMs: number | null; }> {
 	return Object.fromEntries((['fresh', 'stopped', 'reused', 'ui-only'] as const).map(cohort => {
 		const cohortSamples = samples.filter(sample => sample.cohort === cohort);
 		const valid = cohortSamples.flatMap(sample => sample.readyMs === null || sample.error ? [] : [sample.readyMs]).sort((a, b) => a - b);
 		const medianMs = valid.length === 0 ? null : (valid[Math.floor((valid.length - 1) / 2)]! + valid[Math.floor(valid.length / 2)]!) / 2;
 		return [cohort, { valid: valid.length, errors: cohortSamples.length - valid.length, medianMs }];
-	})) as Record<ConnectionSample['cohort'], { valid: number; errors: number; medianMs: number | null }>;
+	})) as Record<ConnectionSample['cohort'], { valid: number; errors: number; medianMs: number | null; }>;
 }

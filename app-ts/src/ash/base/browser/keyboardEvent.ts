@@ -30,7 +30,7 @@ export interface IKeyboardEvent {
 	readonly isComposing: boolean;
 	readonly repeat: boolean;
 	matches(chord: KeyChord): boolean;
-	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean }): void;
+	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean; }): void;
 }
 
 /**

@@ -169,6 +169,9 @@ importers:
       node:
         specifier: runtime:24.21.0
         version: runtime:24.21.0
+      prettier:
+        specifier: 3.9.9
+        version: 3.9.9
       sirv:
         specifier: ^3.0.2
         version: 3.0.2
@@ -1596,6 +1599,11 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
+  prettier@3.9.9:
+    resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   proc-log@6.1.0:
     resolution: {integrity: sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -2985,6 +2993,8 @@ snapshots:
   postject@1.0.0-alpha.6:
     dependencies:
       commander: 9.5.0
+
+  prettier@3.9.9: {}
 
   proc-log@6.1.0: {}
 

@@ -25,7 +25,7 @@ const viewLayout = {
 } as unknown as IViewLayout;
 
 test('RestrictedRenderingContext exposes the immutable viewport contract', () => {
-	const context = new class extends RestrictedRenderingContext {}(viewLayout, viewportData);
+	const context = new class extends RestrictedRenderingContext { }(viewLayout, viewportData);
 
 	assert.deepEqual({
 		scrollWidth: context.scrollWidth,

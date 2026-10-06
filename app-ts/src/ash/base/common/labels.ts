@@ -13,8 +13,8 @@ export interface IPathLabelFormatting {
 export interface IRelativePathProvider {
 	readonly noPrefix?: boolean;
 
-	getWorkspace(): { readonly folders: readonly { readonly uri: URI; readonly name?: string }[] };
-	getWorkspaceFolder(resource: URI): { readonly uri: URI; readonly name?: string } | null;
+	getWorkspace(): { readonly folders: readonly { readonly uri: URI; readonly name?: string; }[]; };
+	getWorkspaceFolder(resource: URI): { readonly uri: URI; readonly name?: string; } | null;
 }
 
 /** Supplies the home resource used for `~` path shortening. */
@@ -189,7 +189,7 @@ export interface ISeparator {
 
 /** Expands `${variable}` placeholders and omits separators beside empty values. */
 export function template(value: string, values: Readonly<Record<string, string | ISeparator | undefined | null>> = {}): string {
-	const segments: { readonly value: string; readonly separator: boolean }[] = [];
+	const segments: { readonly value: string; readonly separator: boolean; }[] = [];
 	let current = "";
 	let variable = false;
 	for (const character of value) {
@@ -230,8 +230,8 @@ export function mnemonicMenuLabel(label: string, forceDisableMnemonics = false):
 }
 
 export function mnemonicButtonLabel(label: string, forceDisableMnemonics: true): string;
-export function mnemonicButtonLabel(label: string, forceDisableMnemonics?: false): { readonly withMnemonic: string; readonly withoutMnemonic: string };
-export function mnemonicButtonLabel(label: string, forceDisableMnemonics = false): { readonly withMnemonic: string; readonly withoutMnemonic: string } | string {
+export function mnemonicButtonLabel(label: string, forceDisableMnemonics?: false): { readonly withMnemonic: string; readonly withoutMnemonic: string; };
+export function mnemonicButtonLabel(label: string, forceDisableMnemonics = false): { readonly withMnemonic: string; readonly withoutMnemonic: string; } | string {
 	const withoutMnemonic = label.replace(/\(&&\w\)|&&/gu, "");
 	if (forceDisableMnemonics) return withoutMnemonic;
 	if (isMacintosh) return { withMnemonic: withoutMnemonic, withoutMnemonic };
@@ -247,7 +247,7 @@ export function unmnemonicLabel(label: string): string {
 }
 
 /** Splits a recent workspace label into its visible name and containing path. */
-export function splitRecentLabel(recentLabel: string): { readonly name: string; readonly parentPath: string } {
+export function splitRecentLabel(recentLabel: string): { readonly name: string; readonly parentPath: string; } {
 	if (recentLabel.endsWith("]")) {
 		const suffixStart = recentLabel.lastIndexOf(" [", recentLabel.length - 2);
 		if (suffixStart !== -1) {
@@ -258,7 +258,7 @@ export function splitRecentLabel(recentLabel: string): { readonly name: string; 
 	return splitName(recentLabel);
 }
 
-function splitName(fullPath: string): { readonly name: string; readonly parentPath: string } {
+function splitName(fullPath: string): { readonly name: string; readonly parentPath: string; } {
 	const separator = Math.max(fullPath.lastIndexOf("/"), fullPath.lastIndexOf("\\"));
 	const name = fullPath.slice(separator + 1);
 	const parentPath = separator === -1 ? "" : fullPath.slice(0, separator) || fullPath.slice(0, separator + 1);

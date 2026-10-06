@@ -8,7 +8,7 @@ export class AppServerWebWorkspaceClient implements IWebWorkspaceClient {
 		private readonly endpoint: URL,
 		private readonly token: string,
 		private readonly targetWindow: Window,
-	) {}
+	) { }
 
 	async list(path: string): Promise<IWebWorkspaceDirectoryList> {
 		const request: WebWorkspaceListRequest = { path };

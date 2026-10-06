@@ -30,5 +30,5 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 });
 
 function testViewContext(): ViewContext {
-	return { addEventHandler() {}, removeEventHandler() {} } as unknown as ViewContext;
+	return { addEventHandler() { }, removeEventHandler() { } } as unknown as ViewContext;
 }

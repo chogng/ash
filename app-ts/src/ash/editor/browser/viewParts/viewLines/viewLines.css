@@ -4,7 +4,11 @@
 }
 
 /* Selected text must take precedence over syntax and semantic token foregrounds. */
-.stanza-editor .view-lines .view-line .stanza-editor-line-text > .stanza-editor-token.stanza-editor-selected-text {
+.stanza-editor
+	.view-lines
+	.view-line
+	.stanza-editor-line-text
+	> .stanza-editor-token.stanza-editor-selected-text {
 	color: var(--ash-editor-selection-foreground);
 }
 

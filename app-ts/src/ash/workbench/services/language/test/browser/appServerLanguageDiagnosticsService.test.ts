@@ -353,7 +353,7 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 
 class FakeDirPermissionsService implements IDirPermissionsService {
 	readonly onDidChangePermissions = Event.None;
-	constructor(private readonly dir: string, public value: readonly PermissionDto[]) {}
+	constructor(private readonly dir: string, public value: readonly PermissionDto[]) { }
 	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
 	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }
 	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }

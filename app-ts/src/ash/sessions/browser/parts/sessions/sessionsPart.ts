@@ -61,7 +61,7 @@ export class SessionsPart extends WorkbenchPart {
 
 	appendToDraft(text: string): void { this.view.appendToDraft(text); }
 
-	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> { return this.view.captureActiveDraft(); }
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> { return this.view.captureActiveDraft(); }
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void { this.view.restoreDraft(draft); }
 

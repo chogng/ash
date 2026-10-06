@@ -13,162 +13,486 @@
   ],
   "rules": [
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-sol", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-sol",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 272001 },
       "effectiveRange": { "untilExclusiveUnixMs": 1795305600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "4.00", "cached_input_tokens": "0.40", "cache_write_input_tokens": "5.00", "output_tokens": "20.00" }
+      "rates": {
+        "uncached_input_tokens": "4.00",
+        "cached_input_tokens": "0.40",
+        "cache_write_input_tokens": "5.00",
+        "output_tokens": "20.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-sol", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-sol",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 272001 },
       "effectiveRange": { "untilExclusiveUnixMs": 1795305600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "8.00", "cached_input_tokens": "0.80", "cache_write_input_tokens": "10.00", "output_tokens": "30.00" }
+      "rates": {
+        "uncached_input_tokens": "8.00",
+        "cached_input_tokens": "0.80",
+        "cache_write_input_tokens": "10.00",
+        "output_tokens": "30.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-sol", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-sol",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 272001 },
       "effectiveRange": { "untilExclusiveUnixMs": 1795305600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "8.00", "cached_input_tokens": "0.80", "cache_write_input_tokens": "10.00", "output_tokens": "40.00" }
+      "rates": {
+        "uncached_input_tokens": "8.00",
+        "cached_input_tokens": "0.80",
+        "cache_write_input_tokens": "10.00",
+        "output_tokens": "40.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-sol", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-sol",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 272001 },
       "effectiveRange": { "untilExclusiveUnixMs": 1795305600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "16.00", "cached_input_tokens": "1.60", "cache_write_input_tokens": "20.00", "output_tokens": "60.00" }
+      "rates": {
+        "uncached_input_tokens": "16.00",
+        "cached_input_tokens": "1.60",
+        "cache_write_input_tokens": "20.00",
+        "output_tokens": "60.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-terra", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-terra",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "2.00", "cached_input_tokens": "0.20", "cache_write_input_tokens": "2.50", "output_tokens": "12.00" }
+      "rates": {
+        "uncached_input_tokens": "2.00",
+        "cached_input_tokens": "0.20",
+        "cache_write_input_tokens": "2.50",
+        "output_tokens": "12.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-terra", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-terra",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "4.00", "cached_input_tokens": "0.40", "cache_write_input_tokens": "5.00", "output_tokens": "18.00" }
+      "rates": {
+        "uncached_input_tokens": "4.00",
+        "cached_input_tokens": "0.40",
+        "cache_write_input_tokens": "5.00",
+        "output_tokens": "18.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-terra", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-terra",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "4.00", "cached_input_tokens": "0.40", "cache_write_input_tokens": "5.00", "output_tokens": "24.00" }
+      "rates": {
+        "uncached_input_tokens": "4.00",
+        "cached_input_tokens": "0.40",
+        "cache_write_input_tokens": "5.00",
+        "output_tokens": "24.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-terra", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-terra",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "8.00", "cached_input_tokens": "0.80", "cache_write_input_tokens": "10.00", "output_tokens": "36.00" }
+      "rates": {
+        "uncached_input_tokens": "8.00",
+        "cached_input_tokens": "0.80",
+        "cache_write_input_tokens": "10.00",
+        "output_tokens": "36.00"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-luna", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-luna",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.20", "cached_input_tokens": "0.02", "cache_write_input_tokens": "0.25", "output_tokens": "1.20" }
+      "rates": {
+        "uncached_input_tokens": "0.20",
+        "cached_input_tokens": "0.02",
+        "cache_write_input_tokens": "0.25",
+        "output_tokens": "1.20"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-luna", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-luna",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.40", "cached_input_tokens": "0.04", "cache_write_input_tokens": "0.50", "output_tokens": "1.80" }
+      "rates": {
+        "uncached_input_tokens": "0.40",
+        "cached_input_tokens": "0.04",
+        "cache_write_input_tokens": "0.50",
+        "output_tokens": "1.80"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-luna", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-luna",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.40", "cached_input_tokens": "0.04", "cache_write_input_tokens": "0.50", "output_tokens": "2.40" }
+      "rates": {
+        "uncached_input_tokens": "0.40",
+        "cached_input_tokens": "0.04",
+        "cache_write_input_tokens": "0.50",
+        "output_tokens": "2.40"
+      }
     },
     {
-      "selector": { "provider": "openai", "billingPlatform": "openai_api", "model": "gpt-5.6-luna", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "openai",
+        "billingPlatform": "openai_api",
+        "model": "gpt-5.6-luna",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 272001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.80", "cached_input_tokens": "0.08", "cache_write_input_tokens": "1.00", "output_tokens": "3.60" }
+      "rates": {
+        "uncached_input_tokens": "0.80",
+        "cached_input_tokens": "0.08",
+        "cache_write_input_tokens": "1.00",
+        "output_tokens": "3.60"
+      }
     },
     {
-      "selector": { "provider": "google", "billingPlatform": "gemini_api", "model": "gemini-3.6-flash", "operation": "text_generation", "serviceTier": "standard", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "google",
+        "billingPlatform": "gemini_api",
+        "model": "gemini-3.6-flash",
+        "operation": "text_generation",
+        "serviceTier": "standard",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "effectiveRange": { "untilExclusiveUnixMs": 1798761600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.75", "cached_input_tokens": "0.075", "output_tokens": "3.75" }
+      "rates": {
+        "uncached_input_tokens": "0.75",
+        "cached_input_tokens": "0.075",
+        "output_tokens": "3.75"
+      }
     },
     {
-      "selector": { "provider": "google", "billingPlatform": "gemini_api", "model": "gemini-3.6-flash", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "google",
+        "billingPlatform": "gemini_api",
+        "model": "gemini-3.6-flash",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "effectiveRange": { "untilExclusiveUnixMs": 1798761600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "1.35", "cached_input_tokens": "0.135", "output_tokens": "6.75" }
+      "rates": {
+        "uncached_input_tokens": "1.35",
+        "cached_input_tokens": "0.135",
+        "output_tokens": "6.75"
+      }
     },
     {
-      "selector": { "provider": "google", "billingPlatform": "gemini_api", "model": "gemini-3.6-flash", "operation": "text_generation", "serviceTier": "standard", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "google",
+        "billingPlatform": "gemini_api",
+        "model": "gemini-3.6-flash",
+        "operation": "text_generation",
+        "serviceTier": "standard",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "effectiveRange": { "fromInclusiveUnixMs": 1798761600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "1.50", "cached_input_tokens": "0.15", "output_tokens": "7.50" }
+      "rates": {
+        "uncached_input_tokens": "1.50",
+        "cached_input_tokens": "0.15",
+        "output_tokens": "7.50"
+      }
     },
     {
-      "selector": { "provider": "google", "billingPlatform": "gemini_api", "model": "gemini-3.6-flash", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "google",
+        "billingPlatform": "gemini_api",
+        "model": "gemini-3.6-flash",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "effectiveRange": { "fromInclusiveUnixMs": 1798761600000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "2.70", "cached_input_tokens": "0.27", "output_tokens": "13.50" }
+      "rates": {
+        "uncached_input_tokens": "2.70",
+        "cached_input_tokens": "0.27",
+        "output_tokens": "13.50"
+      }
     },
     {
-      "selector": { "provider": "xai", "billingPlatform": "xai_api", "model": "grok-4.5", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "xai",
+        "billingPlatform": "xai_api",
+        "model": "grok-4.5",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 200000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "2.00", "cached_input_tokens": "0.30", "output_tokens": "6.00" }
+      "rates": {
+        "uncached_input_tokens": "2.00",
+        "cached_input_tokens": "0.30",
+        "output_tokens": "6.00"
+      }
     },
     {
-      "selector": { "provider": "xai", "billingPlatform": "xai_api", "model": "grok-4.5", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "xai",
+        "billingPlatform": "xai_api",
+        "model": "grok-4.5",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 200000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "4.00", "cached_input_tokens": "0.60", "output_tokens": "12.00" }
+      "rates": {
+        "uncached_input_tokens": "4.00",
+        "cached_input_tokens": "0.60",
+        "output_tokens": "12.00"
+      }
     },
     {
-      "selector": { "provider": "xai", "billingPlatform": "xai_api", "model": "grok-4.5", "operation": "text_generation", "serviceTier": "default", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "xai",
+        "billingPlatform": "xai_api",
+        "model": "grok-4.5",
+        "operation": "text_generation",
+        "serviceTier": "default",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 200000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "4.00", "cached_input_tokens": "0.60", "output_tokens": "12.00" }
+      "rates": {
+        "uncached_input_tokens": "4.00",
+        "cached_input_tokens": "0.60",
+        "output_tokens": "12.00"
+      }
     },
     {
-      "selector": { "provider": "xai", "billingPlatform": "xai_api", "model": "grok-4.5", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "xai",
+        "billingPlatform": "xai_api",
+        "model": "grok-4.5",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 200000 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "8.00", "cached_input_tokens": "1.20", "output_tokens": "24.00" }
+      "rates": {
+        "uncached_input_tokens": "8.00",
+        "cached_input_tokens": "1.20",
+        "output_tokens": "24.00"
+      }
     },
     {
-      "selector": { "provider": "minimax", "billingPlatform": "minimax_api", "model": "MiniMax-M3", "operation": "text_generation", "serviceTier": "standard", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "minimax",
+        "billingPlatform": "minimax_api",
+        "model": "MiniMax-M3",
+        "operation": "text_generation",
+        "serviceTier": "standard",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 512001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.30", "cached_input_tokens": "0.06", "output_tokens": "1.20" }
+      "rates": {
+        "uncached_input_tokens": "0.30",
+        "cached_input_tokens": "0.06",
+        "output_tokens": "1.20"
+      }
     },
     {
-      "selector": { "provider": "minimax", "billingPlatform": "minimax_api", "model": "MiniMax-M3", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "minimax",
+        "billingPlatform": "minimax_api",
+        "model": "MiniMax-M3",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 0, "maxExclusive": 512001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.45", "cached_input_tokens": "0.09", "output_tokens": "1.80" }
+      "rates": {
+        "uncached_input_tokens": "0.45",
+        "cached_input_tokens": "0.09",
+        "output_tokens": "1.80"
+      }
     },
     {
-      "selector": { "provider": "minimax", "billingPlatform": "minimax_api", "model": "MiniMax-M3", "operation": "text_generation", "serviceTier": "standard", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "minimax",
+        "billingPlatform": "minimax_api",
+        "model": "MiniMax-M3",
+        "operation": "text_generation",
+        "serviceTier": "standard",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 512001, "maxExclusive": 1000001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.60", "cached_input_tokens": "0.12", "output_tokens": "2.40" }
+      "rates": {
+        "uncached_input_tokens": "0.60",
+        "cached_input_tokens": "0.12",
+        "output_tokens": "2.40"
+      }
     },
     {
-      "selector": { "provider": "minimax", "billingPlatform": "minimax_api", "model": "MiniMax-M3", "operation": "text_generation", "serviceTier": "priority", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "minimax",
+        "billingPlatform": "minimax_api",
+        "model": "MiniMax-M3",
+        "operation": "text_generation",
+        "serviceTier": "priority",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "inputRange": { "minInclusive": 512001, "maxExclusive": 1000001 },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.90", "cached_input_tokens": "0.18", "output_tokens": "3.60" }
+      "rates": {
+        "uncached_input_tokens": "0.90",
+        "cached_input_tokens": "0.18",
+        "output_tokens": "3.60"
+      }
     },
     {
-      "selector": { "provider": "kimi", "billingPlatform": "kimi_api", "model": "kimi-k2.7-code", "operation": "text_generation", "serviceTier": "standard", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "kimi",
+        "billingPlatform": "kimi_api",
+        "model": "kimi-k2.7-code",
+        "operation": "text_generation",
+        "serviceTier": "standard",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "0.95", "cached_input_tokens": "0.19", "output_tokens": "4.00" }
+      "rates": {
+        "uncached_input_tokens": "0.95",
+        "cached_input_tokens": "0.19",
+        "output_tokens": "4.00"
+      }
     },
     {
-      "selector": { "provider": "kimi", "billingPlatform": "kimi_api", "model": "kimi-k2.7-code-highspeed", "operation": "text_generation", "serviceTier": "standard", "region": "global", "pricingVariant": "default" },
+      "selector": {
+        "provider": "kimi",
+        "billingPlatform": "kimi_api",
+        "model": "kimi-k2.7-code-highspeed",
+        "operation": "text_generation",
+        "serviceTier": "standard",
+        "region": "global",
+        "pricingVariant": "default"
+      },
       "currency": "USD",
-      "rates": { "uncached_input_tokens": "1.90", "cached_input_tokens": "0.38", "output_tokens": "8.00" }
+      "rates": {
+        "uncached_input_tokens": "1.90",
+        "cached_input_tokens": "0.38",
+        "output_tokens": "8.00"
+      }
     }
   ]
 }

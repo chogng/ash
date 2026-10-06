@@ -4,7 +4,7 @@ import type { ISkillApi, SkillCatalog, SkillIdentity } from './skillApi.js';
 export interface SkillManagementSnapshot {
 	readonly revision: number;
 	readonly catalog: SkillCatalog;
-	readonly diagnostics: readonly { readonly source: string; readonly subject: string | undefined; readonly message: string }[];
+	readonly diagnostics: readonly { readonly source: string; readonly subject: string | undefined; readonly message: string; }[];
 }
 
 export interface ISkillService extends ISkillApi {

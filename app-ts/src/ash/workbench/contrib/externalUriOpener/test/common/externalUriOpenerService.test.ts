@@ -45,7 +45,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	public accept(index: number): void { this.accepted.fire(this.items[index]!); }
 }
 
-type TestPicker = IQuickPick<IQuickPickItem> & { accept(index: number): void; readonly isDisposed: boolean };
+type TestPicker = IQuickPick<IQuickPickItem> & { accept(index: number): void; readonly isDisposed: boolean; };
 
 class Fixture extends Disposable {
 	public readonly configuration: InMemoryConfigurationService;
@@ -81,7 +81,7 @@ class Fixture extends Disposable {
 			},
 			input: async () => undefined,
 		});
-		this.services.registerInstance(IPreferencesService, { openSettings: async () => {}, openGlobalKeybindingSettings: async () => {}, openUserSettings: async options => { this.settings.push(options!); } });
+		this.services.registerInstance(IPreferencesService, { openSettings: async () => { }, openGlobalKeybindingSettings: async () => { }, openUserSettings: async options => { this.settings.push(options!); } });
 		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.logs.push(entry) }] })));
 		const host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, ['workbench.contrib.externalUriOpener']));
 		host.advance(WorkbenchPhase.BlockRestore);

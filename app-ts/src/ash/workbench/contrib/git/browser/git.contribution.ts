@@ -212,7 +212,7 @@ function isGitHistoryActionTarget(value: unknown): value is GitHistoryActionTarg
 
 type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch'>;
 
-const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; readonly id: string; readonly key: string; readonly title: string }[] = [
+const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; readonly id: string; readonly key: string; readonly title: string; }[] = [
 	{ kind: 'renameBranch', id: 'git.renameBranch', key: 'git.renameBranchTitle', title: 'Git: Rename Branch' },
 	{ kind: 'deleteRemoteBranch', id: 'git.deleteRemoteBranch', key: 'git.deleteRemoteBranchTitle', title: 'Git: Delete Remote Branch' },
 	{ kind: 'merge', id: 'git.merge', key: 'git.mergeBranchTitle', title: 'Git: Merge Branch' },
@@ -484,7 +484,7 @@ MenusRegistry.appendMenuItem(MenuId.SCMHistoryItemContext, { submenu: graphMoreM
 
 type GraphActionKind = 'openRemote' | 'checkoutBranch' | 'checkoutDetached' | 'createBranch' | 'deleteBranch' | 'createTag' | 'cherryPick' | 'compareRemote' | 'compareMergeBase' | 'compare' | 'copyHash' | 'copyMessage';
 
-const graphActions: readonly { kind: GraphActionKind; title: ReturnType<typeof localize2>; menu: MenuId; group: string; order: number; when?: ReturnType<typeof ContextKeyExpr.has> }[] = [
+const graphActions: readonly { kind: GraphActionKind; title: ReturnType<typeof localize2>; menu: MenuId; group: string; order: number; when?: ReturnType<typeof ContextKeyExpr.has>; }[] = [
 	{ kind: 'openRemote', title: localize2('git.graph.openRemote', 'Open Commit in Browser'), menu: MenuId.SCMHistoryItemContext, group: 'scm_0_open', order: 1, when: ContextKeyExpr.has('scmHistoryItemHasRemote') },
 	{ kind: 'compare', title: localize2('git.graph.compare', 'Compare with…'), menu: MenuId.SCMHistoryItemContext, group: 'scm_1_compare', order: 1 },
 	{ kind: 'compareRemote', title: localize2('git.graph.compareRemote', 'Compare with Remote…'), menu: MenuId.SCMHistoryItemContext, group: 'scm_1_compare', order: 2, when: ContextKeyExpr.has('scmHistoryItemHasUpstream') },
@@ -617,7 +617,7 @@ async function runGraphAction(accessor: ServicesAccessor, kind: GraphActionKind,
 				baseReference = baseLabel === undefined ? undefined : `refs/remotes/${baseLabel}`;
 			} else {
 				const [branches, catalog] = await Promise.all([git.branches(repositoryId), git.catalog(repositoryId)]);
-				const options: Array<IQuickPickItem & { reference?: string }> = [
+				const options: Array<IQuickPickItem & { reference?: string; }> = [
 					...branches.map(branch => ({ label: branch.name, description: branch.objectId.slice(0, 7), reference: `refs/heads/${branch.name}` })),
 					...catalog.tags.map(tag => ({ label: tag.name, description: tag.objectId.slice(0, 7), reference: `refs/tags/${tag.name}` })),
 					{ label: localize('git.graph.enterReference', 'Enter Commit or Reference…') },

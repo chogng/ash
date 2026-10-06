@@ -18,9 +18,9 @@ function keyboardEvent(
 		repeat: false,
 		isComposing: false,
 		getModifierState: () => false,
-		preventDefault: () => {},
-		stopPropagation: () => {},
-		stopImmediatePropagation: () => {},
+		preventDefault: () => { },
+		stopPropagation: () => { },
+		stopImmediatePropagation: () => { },
 		...overrides,
 	} as KeyboardEvent;
 }

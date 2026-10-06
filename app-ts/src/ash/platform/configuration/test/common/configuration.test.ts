@@ -139,9 +139,9 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 	});
 	const api = new TestConfigurationApi({
 		revision: 0,
-			document: {
-				version: 1,
-				source: '{ "editor.fontSize": 16 }\n',
+		document: {
+			version: 1,
+			source: '{ "editor.fontSize": 16 }\n',
 		},
 	});
 	using service = new WorkbenchConfigurationService({
@@ -229,7 +229,7 @@ test("workbench configuration applies and reports language overrides", async () 
 		},
 	});
 	using service = new WorkbenchConfigurationService({ api, registry });
-	const changes: Array<{ readonly keys: string[]; readonly overrides: [string, string[]][]; readonly typescript: boolean; readonly javascript: boolean }> = [];
+	const changes: Array<{ readonly keys: string[]; readonly overrides: [string, string[]][]; readonly typescript: boolean; readonly javascript: boolean; }> = [];
 	using listener = service.onDidChangeConfiguration(event => changes.push({
 		keys: event.change.keys,
 		overrides: event.change.overrides,
@@ -394,8 +394,8 @@ test("main configuration service persists atomic revisions", async () => {
 		assert.equal(updated.revision, 1);
 		await assert.rejects(
 			() => service.update({
-					expectedRevision: 0,
-					document: { version: 1, source: '{}' },
+				expectedRevision: 0,
+				document: { version: 1, source: '{}' },
 			}),
 			/revision conflict/,
 		);
@@ -454,7 +454,7 @@ class TestConfigurationApi implements IConfigurationApi {
 
 	onDidChange(
 		listener: (snapshot: unknown) => void,
-	): { dispose(): void } {
+	): { dispose(): void; } {
 		this.listeners.add(listener);
 		return {
 			dispose: () => this.listeners.delete(listener),

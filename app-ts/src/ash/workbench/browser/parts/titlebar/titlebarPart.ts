@@ -128,7 +128,7 @@ export class BrowserTitlebarPart extends WorkbenchPart implements ITitlebarPart 
 	private readonly centerAdjacentActions: MenuWorkbenchToolBar;
 	private readonly actions: MenuWorkbenchToolBar;
 	private readonly activityActionsListener = this._register(new MutableDisposable());
-	private activityActions: { bar: GlobalCompositeBar; showContextMenu: (event: MouseEvent | KeyboardEvent) => void } | undefined;
+	private activityActions: { bar: GlobalCompositeBar; showContextMenu: (event: MouseEvent | KeyboardEvent) => void; } | undefined;
 
 	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
 	override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
@@ -205,7 +205,7 @@ export class BrowserTitlebarPart extends WorkbenchPart implements ITitlebarPart 
 		this.options.windowTitle.registerVariables(variables);
 	}
 
-	public setActivityActions(actions: { bar: GlobalCompositeBar; showContextMenu: (event: MouseEvent | KeyboardEvent) => void } | undefined): void {
+	public setActivityActions(actions: { bar: GlobalCompositeBar; showContextMenu: (event: MouseEvent | KeyboardEvent) => void; } | undefined): void {
 		if (this.activityActions?.bar === actions?.bar) return;
 		this.activityActions = actions;
 		this.activityActionsListener.value = actions?.bar.onDidChangeActions(() => this.actions.setTrailingActions(actions.bar.getActions()));
@@ -221,7 +221,7 @@ export const createBrowserTitlebarPart: TitlebarPartFactory = (container, option
 export interface IAuxiliaryTitlebarPart extends ITitlebarPart, IView {
 	readonly container: HTMLElement;
 	readonly height: number;
-	updateOptions(options: { compact: boolean }): void;
+	updateOptions(options: { compact: boolean; }): void;
 }
 
 /** Uses the shared title UI without calling the main window's host-control API. */
@@ -252,7 +252,7 @@ export class AuxiliaryBrowserTitlebarPart extends BrowserTitlebarPart implements
 		this.domNode.style.height = `${this.height}px`;
 	}
 
-	public updateOptions(options: { compact: boolean }): void {
+	public updateOptions(options: { compact: boolean; }): void {
 		if (this.compact === options.compact) {
 			return;
 		}

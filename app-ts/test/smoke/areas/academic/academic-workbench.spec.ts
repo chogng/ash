@@ -28,7 +28,7 @@ test('browser opens and saves Academic beside code without changing Workbench', 
 	await input.fill('Browser paper');
 	await input.press('ControlOrMeta+S');
 	await expect.poll(() => page.evaluate(async () => {
-		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
+		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>; };
 		const folder = await picker.showDirectoryPicker!();
 		return (await (await folder.getFileHandle('paper.ash-academic')).getFile()).text();
 	})).toContain('Browser paper');

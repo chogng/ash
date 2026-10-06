@@ -257,7 +257,7 @@ export class CodeLensContribution extends Disposable {
 	private executeCommand(command: Command): void {
 		try {
 			const result = this.onExecuteCommand!(command.id, command.arguments);
-			if (result && typeof (result as { readonly then?: unknown }).then === 'function') {
+			if (result && typeof (result as { readonly then?: unknown; }).then === 'function') {
 				void Promise.resolve(result as PromiseLike<void>).catch(this.onError);
 			}
 		} catch (error) {

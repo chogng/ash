@@ -10,13 +10,13 @@
 `ash-rs` 是多个产品共享的 Rust 后端；Core 只是其中的执行控制面。协议、存储、配置、模型、工具和
 产品接口各有独立边界，不能都塞回 Core，产品宿主也不应反向放回这里。
 
-| 想知道什么 | 直接答案 | 从哪里继续 |
-| --- | --- | --- |
-| 哪些状态由 Rust 权威拥有？ | Session、Thread、Turn、工具生命周期、配置与持久化事实 | [核心](#4-核心) |
-| Desktop、`ash-code` 和其他 Agent 客户端如何调用？ | 统一经过 App Server API，不链接 Core、Store 或 Provider | [对外接口](#8-app-server) |
-| protocol、history、Core 和 storage 有什么区别？ | 分别拥有共享事实、持久化记录形状、状态协调和物理读写 | [Protocol 边界](#3-protocol-边界)、[存储](#5-存储端口与物理存储) |
-| 为什么有这么多 crate？ | 按可独立验证的责任拆分，不按功能名称堆成通用 service | [crate 边界](#2-crate-边界) |
-| 具体函数和修改路径在哪里？ | 进入对应 crate README，系统文档不复制私有实现 | [文档规范](../.github/instructions/documentation.instructions.md) |
+| 想知道什么                                        | 直接答案                                                | 从哪里继续                                                        |
+| ------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------- |
+| 哪些状态由 Rust 权威拥有？                        | Session、Thread、Turn、工具生命周期、配置与持久化事实   | [核心](#4-核心)                                                   |
+| Desktop、`ash-code` 和其他 Agent 客户端如何调用？ | 统一经过 App Server API，不链接 Core、Store 或 Provider | [对外接口](#8-app-server)                                         |
+| protocol、history、Core 和 storage 有什么区别？   | 分别拥有共享事实、持久化记录形状、状态协调和物理读写    | [Protocol 边界](#3-protocol-边界)、[存储](#5-存储端口与物理存储)  |
+| 为什么有这么多 crate？                            | 按可独立验证的责任拆分，不按功能名称堆成通用 service    | [crate 边界](#2-crate-边界)                                       |
+| 具体函数和修改路径在哪里？                        | 进入对应 crate README，系统文档不复制私有实现           | [文档规范](../.github/instructions/documentation.instructions.md) |
 
 ## 1. 共享后端职责
 

@@ -36,7 +36,7 @@ export interface EditorOpenOptions extends IEditorOptions {
 }
 
 /** The editor group selected by a resource-navigation request. */
-export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup" | { readonly groupId: string };
+export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup" | { readonly groupId: string; };
 
 /** Resource-oriented editor operations available to Workbench contributions. */
 export interface IEditorService {

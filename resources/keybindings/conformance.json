@@ -60,9 +60,7 @@
   "resolver": [
     {
       "name": "user source wins before explicit priority",
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",
@@ -81,9 +79,7 @@
     },
     {
       "name": "workbench source wins before explicit priority",
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",
@@ -102,9 +98,7 @@
     },
     {
       "name": "explicit priority wins within one source",
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",
@@ -123,9 +117,7 @@
     },
     {
       "name": "latest registration wins a tie",
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",
@@ -145,9 +137,7 @@
     {
       "name": "inactive conditions are filtered",
       "context": ["editor"],
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",
@@ -168,9 +158,7 @@
     },
     {
       "name": "blocker consumes the winning binding",
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",
@@ -189,9 +177,7 @@
     },
     {
       "name": "matching a chord prefix waits for more input",
-      "events": [
-        { "key": "k", "control": true }
-      ],
+      "events": [{ "key": "k", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k ctrl+c",
@@ -204,9 +190,7 @@
     },
     {
       "name": "unmatched input has no result",
-      "events": [
-        { "key": "x", "control": true }
-      ],
+      "events": [{ "key": "x", "control": true }],
       "rules": [
         {
           "binding": "ctrl+k",

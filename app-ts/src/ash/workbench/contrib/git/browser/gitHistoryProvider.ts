@@ -178,7 +178,7 @@ export class GitHistoryProvider extends Disposable implements ISCMHistoryProvide
 		this.hasMore = page.hasMore && page.nextCursor !== undefined && page.commits.length > 0;
 	}
 
-	private remoteLinks(objectId: string): readonly { name: string; uri: URI }[] {
+	private remoteLinks(objectId: string): readonly { name: string; uri: URI; }[] {
 		return this.remotes.flatMap(remote => {
 			const identity = remote.identity;
 			if (!identity || identity.provider === 'other') { return []; }

@@ -10,7 +10,7 @@ export interface IDebugConfiguration {
 	readonly name: string;
 	readonly type: string;
 	readonly request: "launch" | "attach";
-	readonly adapter: { readonly program: string; readonly arguments: readonly string[] };
+	readonly adapter: { readonly program: string; readonly arguments: readonly string[]; };
 	readonly arguments: Readonly<Record<string, unknown>>;
 	readonly preLaunchTask?: string;
 	readonly postDebugTask?: string;

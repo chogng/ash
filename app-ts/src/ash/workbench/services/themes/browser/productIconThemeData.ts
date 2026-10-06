@@ -92,7 +92,7 @@ function validateSvg(source: string, iconId: string, document: Document): string
 }
 
 /** Extension icon defaults use the same verified font resources and artwork as product icon themes. */
-export async function loadExtensionFontIcon(id: string, fontPath: string, character: string, readResource: (path: string) => Promise<Uint8Array>): Promise<{ readonly icon: IconDefinition; readonly font: IconFontDefinition }> {
+export async function loadExtensionFontIcon(id: string, fontPath: string, character: string, readResource: (path: string) => Promise<Uint8Array>): Promise<{ readonly icon: IconDefinition; readonly font: IconFontDefinition; }> {
 	const extension = fontPath.split('.').at(-1)!.toLowerCase();
 	const format = { woff: 'woff', woff2: 'woff2', ttf: 'truetype', otf: 'opentype' }[extension];
 	if (!format) { throw new TypeError('Unsupported icon font format'); }

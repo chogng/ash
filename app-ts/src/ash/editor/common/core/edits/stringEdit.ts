@@ -9,7 +9,7 @@ export abstract class BaseStringEdit<T extends BaseStringReplacement<T> = BaseSt
 		throw new Error('TReplacement is not defined for BaseStringEdit');
 	}
 
-	static trySwap(first: BaseStringEdit, second: BaseStringEdit): { e1: StringEdit; e2: StringEdit } | undefined {
+	static trySwap(first: BaseStringEdit, second: BaseStringEdit): { e1: StringEdit; e2: StringEdit; } | undefined {
 		const firstInverse = first.inverseOnSlice((start, endEx) => " ".repeat(endEx - start));
 		const rebasedFirst = second.tryRebase(firstInverse);
 		if (!rebasedFirst) return undefined;

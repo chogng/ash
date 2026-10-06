@@ -212,7 +212,7 @@ function wheelDeltaFactors(
 	lineHeight: number,
 	pageWidth: number,
 	pageHeight: number,
-): { readonly x: number; readonly y: number; readonly z: number } {
+): { readonly x: number; readonly y: number; readonly z: number; } {
 	if (deltaMode === 1) {
 		return { x: lineHeight, y: lineHeight, z: lineHeight };
 	}

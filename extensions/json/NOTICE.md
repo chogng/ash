@@ -11,4 +11,3 @@ VS Code source tree at `extensions/json/syntaxes`.
 The files are intentionally shipped as resources of the declarative
 `ash.json` extension package. They are not base contracts and
 must not be imported by `workbench/services/textMate/common`.
-

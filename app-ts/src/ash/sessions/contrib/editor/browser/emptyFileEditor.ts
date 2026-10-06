@@ -43,9 +43,9 @@ export class EmptyFileEditor extends Disposable implements IEditorPane {
 		}));
 		updateHint();
 	}
-	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> {}
-	public clearInput(): void {}
-	public setVisible(): void {}
-	public layout(_dimension: IDimension): void {}
+	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	public clearInput(): void { }
+	public setVisible(): void { }
+	public layout(_dimension: IDimension): void { }
 	public focus(): void { this.domNode.focus(); }
 }

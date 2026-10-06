@@ -4,7 +4,7 @@ import { URI } from '../../../base/common/uri.js';
 /** Browser Clipboard API adapter with explicit availability failure. */
 export class BrowserClipboardService implements IClipboardService {
 	private static readonly fileFormat = 'web application/x-ash-resources';
-	constructor(private readonly clipboard: Clipboard | undefined) {}
+	constructor(private readonly clipboard: Clipboard | undefined) { }
 
 	async readText(): Promise<string> {
 		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');

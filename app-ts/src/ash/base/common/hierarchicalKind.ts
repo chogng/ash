@@ -4,7 +4,7 @@ export class HierarchicalKind {
 	static readonly None = new HierarchicalKind('@@none@@');
 	static readonly Empty = new HierarchicalKind('');
 
-	constructor(readonly value: string) {}
+	constructor(readonly value: string) { }
 
 	equals(other: HierarchicalKind): boolean { return this.value === other.value; }
 	contains(other: HierarchicalKind): boolean {

@@ -199,8 +199,10 @@ class OpenLinkAction extends EditorAction {
 	}
 }
 
-registerEditorContribution({ id: LinkDetector.ID, install: context => {
-	if (context.kind !== "text") return;
-	return context.instantiationService.createInstance(LinkDetector, context.view, context.editor, context.onLanguageError);
-} });
+registerEditorContribution({
+	id: LinkDetector.ID, install: context => {
+		if (context.kind !== "text") return;
+		return context.instantiationService.createInstance(LinkDetector, context.view, context.editor, context.onLanguageError);
+	}
+});
 registerEditorAction(OpenLinkAction);

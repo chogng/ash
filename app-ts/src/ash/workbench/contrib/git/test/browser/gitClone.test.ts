@@ -27,13 +27,13 @@ test('Git clone command asks for a repository, clones it, and opens the result',
 		openWorkspace: async (path: string) => { calls.push(`open:${path}`); },
 	} as IWorkspaceOpenService);
 	services.registerInstance(IQuickInputService, {
-		input: async (options: { title?: string }) => { calls.push(options.title ?? ''); return ' https://example.com/example.git '; },
+		input: async (options: { title?: string; }) => { calls.push(options.title ?? ''); return ' https://example.com/example.git '; },
 	} as IQuickInputService);
 	services.registerInstance(INotificationService, {
 		info: () => ({ close: () => calls.push('closeProgress') }),
 	} as unknown as INotificationService);
 	services.registerInstance(IDialogService, {
-		confirm: async (options: { primaryButton?: string }) => { calls.push(options.primaryButton ?? ''); return { confirmed: true }; },
+		confirm: async (options: { primaryButton?: string; }) => { calls.push(options.primaryButton ?? ''); return { confirmed: true }; },
 	} as unknown as IDialogService);
 	using commands = new CommandService(services);
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;

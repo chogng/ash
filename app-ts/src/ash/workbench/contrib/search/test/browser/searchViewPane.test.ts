@@ -152,7 +152,7 @@ test("SearchViewPane submits typed filters and groups highlighted matches", asyn
 
 		await waitFor(() =>
 			pane.element.querySelector(".ash-search-status")?.textContent ===
-				"2 results"
+			"2 results"
 		);
 		assert.deepEqual(submitted, {
 			text: "needle",
@@ -288,7 +288,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
-	const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} };
+	const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
 	const contextView = store.add(new BrowserContextViewService(browser.window.document.body));
 	services.registerInstance(ContentSearchServiceId, search);
 	services.registerInstance(IConfigurationService, configuration);
@@ -296,7 +296,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(IContextMenuService, menus);
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
 	services.registerInstance(IWorkspaceContextService, store.add(new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") })));
-	services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => {}, focusActiveEditor() {} });
+	services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", flushInterval: 0 })));
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
 	const editing = store.add(new BulkEditTestServices([]));

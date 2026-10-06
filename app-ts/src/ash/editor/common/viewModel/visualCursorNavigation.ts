@@ -90,10 +90,10 @@ function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProj
 	);
 	const textOffset = Math.max(0, preferredHorizontalOffset - (visualLine.wrappedTextIndentWidth ?? 0));
 	return new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + nearestCursorColumn(
-			text,
-			textOffset,
-			measureTextWidth,
-		)) + 1);
+		text,
+		textOffset,
+		measureTextWidth,
+	)) + 1);
 }
 
 function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: readonly Selection[], preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): readonly number[] {

@@ -69,7 +69,7 @@ export class CompositeBar extends Disposable {
 	private disabledBadgeIds = new Set<string>();
 	private badgesEnabled = true;
 	private readonly tabWidths = new Map<string, number>();
-	private readonly badges = new Map<string, { readonly count: number; readonly description: string }>();
+	private readonly badges = new Map<string, { readonly count: number; readonly description: string; }>();
 	private actionBarInsetWidth = 0;
 	private actionBarItemGap = 0;
 	private renderedContainerIds: readonly string[] = [];

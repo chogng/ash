@@ -18,32 +18,32 @@
 
 执行 `ash --help` 或 `ash <command> --help` 查看参数。无子命令时启动 TUI。
 
-| 命令 | 行为 |
-| --- | --- |
-| `ash ask PROMPT` | 执行问题并输出最终回答 |
-| `ash exec [OPTIONS] PROMPT` | 非交互任务；支持 `--jsonl`、`--resume`、`--fork` 与审批模式 |
-| `ash resume SESSION_ID THREAD_ID` | 恢复交互会话 |
-| `ash sessions` | 列出已保存会话 |
-| `ash fork SESSION_ID THREAD_ID --title TITLE` | 复制线程历史到独立会话，输出新身份 |
-| `ash archive SESSION_ID` | 归档指定会话 |
-| `ash unarchive SESSION_ID` | 恢复归档会话 |
-| `ash login [chatgpt\|kimi\|xai]` | 设备授权登录；默认 ChatGPT |
-| `ash login chatgpt --browser` | 输出浏览器授权地址并等待完成 |
-| `ash login status` | 读取已登录账户 |
-| `ash login api-key PROVIDER` | 从标准输入读取并保存已配置 Provider 的 API key |
-| `ash logout PROVIDER` | 登出 `login status` 返回的指定 Provider ID |
-| `ash mcp list` / `get ID` | 读取独立 MCP 服务声明 |
-| `ash mcp add ID --url URL [--disabled]` | 新增 HTTP 服务声明 |
-| `ash mcp add ID [--disabled] -- COMMAND [ARGS]` | 新增 stdio 服务声明 |
-| `ash mcp enable ID` / `disable ID` / `remove ID` | 修改服务启用状态或删除声明 |
-| `ash plugin list` | 读取已安装包的版本、授权与启用状态 |
-| `ash plugin enable ID` / `disable ID` | 修改包的启用状态 |
-| `ash plugin grant ID` / `revoke ID` | 授予或撤销包声明的权限 |
-| `ash plugin uninstall ID` | 卸载指定已安装包 |
-| `ash doctor [--json]` | 检查安装、服务握手、配置、账户与运行诊断 |
-| `ash app-server ...` | 服务监听交给随 CLI 一起打包的 `ash-app-server` 程序；`connect` 和 `daemon` 管理本地服务进程 |
-| `ash remote ...` | 远程连接、探测、安装与运行配置管理 |
-| `ash update [--channel latest\|stable]` | 更新程序；`--status` 查看状态 |
+| 命令                                             | 行为                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `ash ask PROMPT`                                 | 执行问题并输出最终回答                                                                      |
+| `ash exec [OPTIONS] PROMPT`                      | 非交互任务；支持 `--jsonl`、`--resume`、`--fork` 与审批模式                                 |
+| `ash resume SESSION_ID THREAD_ID`                | 恢复交互会话                                                                                |
+| `ash sessions`                                   | 列出已保存会话                                                                              |
+| `ash fork SESSION_ID THREAD_ID --title TITLE`    | 复制线程历史到独立会话，输出新身份                                                          |
+| `ash archive SESSION_ID`                         | 归档指定会话                                                                                |
+| `ash unarchive SESSION_ID`                       | 恢复归档会话                                                                                |
+| `ash login [chatgpt\|kimi\|xai]`                 | 设备授权登录；默认 ChatGPT                                                                  |
+| `ash login chatgpt --browser`                    | 输出浏览器授权地址并等待完成                                                                |
+| `ash login status`                               | 读取已登录账户                                                                              |
+| `ash login api-key PROVIDER`                     | 从标准输入读取并保存已配置 Provider 的 API key                                              |
+| `ash logout PROVIDER`                            | 登出 `login status` 返回的指定 Provider ID                                                  |
+| `ash mcp list` / `get ID`                        | 读取独立 MCP 服务声明                                                                       |
+| `ash mcp add ID --url URL [--disabled]`          | 新增 HTTP 服务声明                                                                          |
+| `ash mcp add ID [--disabled] -- COMMAND [ARGS]`  | 新增 stdio 服务声明                                                                         |
+| `ash mcp enable ID` / `disable ID` / `remove ID` | 修改服务启用状态或删除声明                                                                  |
+| `ash plugin list`                                | 读取已安装包的版本、授权与启用状态                                                          |
+| `ash plugin enable ID` / `disable ID`            | 修改包的启用状态                                                                            |
+| `ash plugin grant ID` / `revoke ID`              | 授予或撤销包声明的权限                                                                      |
+| `ash plugin uninstall ID`                        | 卸载指定已安装包                                                                            |
+| `ash doctor [--json]`                            | 检查安装、服务握手、配置、账户与运行诊断                                                    |
+| `ash app-server ...`                             | 服务监听交给随 CLI 一起打包的 `ash-app-server` 程序；`connect` 和 `daemon` 管理本地服务进程 |
+| `ash remote ...`                                 | 远程连接、探测、安装与运行配置管理                                                          |
+| `ash update [--channel latest\|stable]`          | 更新程序；`--status` 查看状态                                                               |
 
 - `exec` 中需要把选项样式的文字作为任务内容时，用 `--` 分隔。
 - 同一个插件 ID 安装了多个版本时，变更命令必须加 `--version VERSION`。启用不自动授予权限。

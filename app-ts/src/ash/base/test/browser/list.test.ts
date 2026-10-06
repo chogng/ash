@@ -356,7 +356,7 @@ test("ListView leaves attached rows untouched during scrolling but refreshes cha
 	const dom = new JSDOM("<!doctype html><body></body>");
 	try {
 		let updates = 0;
-		using view = new ListView<{ id: string; expanded: boolean }>(dom.window.document.body, {
+		using view = new ListView<{ id: string; expanded: boolean; }>(dom.window.document.body, {
 			scrolling: "managed",
 			getId: item => item.id,
 			getHeight: () => 22,
@@ -598,7 +598,7 @@ test("List DnD exposes target sectors and positional feedback", () => {
 	list.items = ["First", "Second"];
 	const first = list.row(0)!;
 	const second = list.row(1)!;
-	second.getBoundingClientRect = () => ({ top: 40, bottom: 80, left: 0, right: 100, width: 100, height: 40, x: 0, y: 40, toJSON() {} });
+	second.getBoundingClientRect = () => ({ top: 40, bottom: 80, left: 0, right: 100, width: 100, height: 40, x: 0, y: 40, toJSON() { } });
 	const transfer = testDataTransfer();
 	first.dispatchEvent(dragEvent(dom, "dragstart", 10, transfer));
 	second.dispatchEvent(dragEvent(dom, "dragover", 79, transfer));
@@ -618,7 +618,7 @@ test("List DnD exposes target sectors and positional feedback", () => {
 test("List DnD distinguishes cross-list and native payloads", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const observed: string[] = [];
-	const source = createDndList(dom, { onDragOver: () => false, drop: () => {} });
+	const source = createDndList(dom, { onDragOver: () => false, drop: () => { } });
 	const target = createDndList(dom, {
 		onDragOver: (data) => {
 			observed.push(`over:${data.kind}:${data.elements.join(",")}:${data.types.join(",")}`);
@@ -650,11 +650,11 @@ test("List DnD distinguishes cross-list and native payloads", () => {
 
 test("List DnD scrolls an overflowing target near its edge", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const list = createDndList(dom, { onDragOver: () => true, drop: () => {} });
+	const list = createDndList(dom, { onDragOver: () => true, drop: () => { } });
 	list.items = ["Target"];
 	Object.defineProperty(list.element, "clientHeight", { configurable: true, value: 100 });
 	Object.defineProperty(list.element, "scrollHeight", { configurable: true, value: 400 });
-	list.element.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON() {} });
+	list.element.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 0, toJSON() { } });
 	const transfer = testDataTransfer(["Files"]);
 	list.row(0)!.dispatchEvent(dragEvent(dom, "dragover", 98, transfer));
 	await new Promise((resolve) => dom.window.setTimeout(resolve, 40));
@@ -667,7 +667,7 @@ test("List DnD scrolls an overflowing target near its edge", async () => {
 test("List DnD keeps feedback across nested leave events and clears an actual leave", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	let leaves = 0;
-	const list = createDndList(dom, { onDragOver: () => true, onDragLeave: () => leaves += 1, drop: () => {} });
+	const list = createDndList(dom, { onDragOver: () => true, onDragLeave: () => leaves += 1, drop: () => { } });
 	list.items = ["Target"];
 	const row = list.row(0)!;
 	const transfer = testDataTransfer(["Files"]);

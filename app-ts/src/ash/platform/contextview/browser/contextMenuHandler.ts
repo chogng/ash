@@ -114,7 +114,7 @@ export class ContextMenuHandler extends Disposable {
 
 function toContextViewAnchor(
 	anchor: ContextMenuAnchor,
-): Element | (IRectangle & { readonly targetWindow?: Window }) {
+): Element | (IRectangle & { readonly targetWindow?: Window; }) {
 	if (isNode(anchor)) return anchor;
 	return {
 		left: anchor.x,

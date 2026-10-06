@@ -45,9 +45,9 @@ export interface ISplitViewView {
 /** Controls the initial placement of a newly added SplitView view. */
 export type SplitViewSizing =
 	| number
-	| { readonly type: "distribute" }
-	| { readonly type: "split"; readonly index: number }
-	| { readonly type: "invisible"; readonly cachedVisibleSize: number };
+	| { readonly type: "distribute"; }
+	| { readonly type: "split"; readonly index: number; }
+	| { readonly type: "invisible"; readonly cachedVisibleSize: number; };
 
 interface ViewItem {
 	readonly view: ISplitViewView;
@@ -376,7 +376,7 @@ export class SplitView extends Disposable {
 
 	private resolveSizing(
 		sizing: SplitViewSizing,
-	): { readonly size: number; readonly visible: boolean } {
+	): { readonly size: number; readonly visible: boolean; } {
 		if (typeof sizing === "number") {
 			assertNonNegativeFinite(sizing, "initial view size");
 			return { size: sizing, visible: true };
@@ -400,7 +400,7 @@ export class SplitView extends Disposable {
 			size: visible.length === 0
 				? this.size
 				: visible.reduce((total, item) => total + item.size, 0) /
-					visible.length,
+				visible.length,
 			visible: true,
 		};
 	}
@@ -511,7 +511,7 @@ export class SplitView extends Disposable {
 			startSnappingEnabled: this.startSnappingEnabled,
 			endSnappingEnabled: this.endSnappingEnabled,
 		});
-		const visibilityChanges: Array<{ readonly item: ViewItem; readonly visible: boolean }> = [];
+		const visibilityChanges: Array<{ readonly item: ViewItem; readonly visible: boolean; }> = [];
 		for (const [index, resized] of resizedItems.entries()) {
 			const item = this.item(index);
 			if (item.visible !== resized.visible) {
@@ -736,7 +736,7 @@ function solveSashResize(items: readonly SplitViewResizeItem[], options: SplitVi
 	const originalSizes = items.map((item) => item.size);
 	const toggledSnapIndexes = new Set<number>();
 
-	for (;;) {
+	for (; ;) {
 		const beforeIndexes = indexesBefore(options.boundaryIndex);
 		const afterIndexes = indexesAfter(options.boundaryIndex, result.length);
 		const { minimumDelta, maximumDelta } = resizeLimits(result, originalSizes, beforeIndexes, afterIndexes);
@@ -797,7 +797,7 @@ function solveWithoutSnapping(items: readonly SplitViewResizeItem[], boundaryInd
 	return result;
 }
 
-function sashRange(items: readonly SplitViewResizeItem[], boundaryIndex: number): { readonly minimumDelta: number; readonly maximumDelta: number } {
+function sashRange(items: readonly SplitViewResizeItem[], boundaryIndex: number): { readonly minimumDelta: number; readonly maximumDelta: number; } {
 	const sizes = items.map((item) => item.size);
 	return resizeLimits(items, sizes, indexesBefore(boundaryIndex), indexesAfter(boundaryIndex, items.length));
 }
@@ -873,7 +873,7 @@ function findSnapCandidate(items: readonly SplitViewResizeItem[], options: Split
 	return undefined;
 }
 
-function resizeLimits(items: readonly SplitViewResizeItem[], originalSizes: readonly number[], beforeIndexes: readonly number[], afterIndexes: readonly number[]): { readonly minimumDelta: number; readonly maximumDelta: number } {
+function resizeLimits(items: readonly SplitViewResizeItem[], originalSizes: readonly number[], beforeIndexes: readonly number[], afterIndexes: readonly number[]): { readonly minimumDelta: number; readonly maximumDelta: number; } {
 	const minimumBefore = beforeIndexes.reduce((total, index) => total + effectiveMinimum(items[index]!) - originalSizes[index]!, 0);
 	const maximumBefore = beforeIndexes.reduce((total, index) => total + items[index]!.maximumSize - originalSizes[index]!, 0);
 	const maximumAfter = afterIndexes.reduce((total, index) => total + originalSizes[index]! - effectiveMinimum(items[index]!), 0);

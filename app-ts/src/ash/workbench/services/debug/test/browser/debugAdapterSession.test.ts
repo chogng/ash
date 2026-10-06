@@ -13,7 +13,7 @@ test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const workspace = URI.file('C:\\workspace');
 	const breakpointPath = breakpoints[0]!.resource.fsPath;
-	const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string }> = [];
+	const updates: Array<{ readonly id: string; readonly verified: boolean; readonly message?: string; }> = [];
 	const terminalRequests: unknown[] = [];
 	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace, runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
 
@@ -111,9 +111,11 @@ test("DebugAdapterSession sends expressions unchanged and does not install unsup
 	using supported = new FakeDebugAdapterProcessService();
 	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: supported, breakpoints: () => points, workspace: URI.file('/workspace') });
 	try {
-		assert.deepEqual(supported.request('setBreakpoints').arguments, { source: { path: points[0]!.resource.fsPath }, breakpoints: [
-			{ line: 4 }, { line: 5, condition: 'answer > 0' }, { line: 6, hitCondition: '% 3' }, { line: 7, logMessage: ' answer = {answer} ' },
-		] });
+		assert.deepEqual(supported.request('setBreakpoints').arguments, {
+			source: { path: points[0]!.resource.fsPath }, breakpoints: [
+				{ line: 4 }, { line: 5, condition: 'answer > 0' }, { line: 6, hitCondition: '% 3' }, { line: 7, logMessage: ' answer = {answer} ' },
+			]
+		});
 	} finally { await session.disconnect(); }
 	using unsupported = new FakeDebugAdapterProcessService(undefined, true, false);
 	const updates: unknown[] = [];
@@ -201,11 +203,13 @@ test("DebugAdapterSession configures all breakpoint families and queries variabl
 test('DebugAdapterSession excludes unsupported conditions from every additional family', async () => {
 	using processes = new FakeDebugAdapterProcessService(undefined, true, false, true);
 	const updates: unknown[] = [];
-	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => [
-		{ kind: 'function', id: 'function', name: 'main', enabled: true, verified: false, condition: 'counter > 0' },
-		{ kind: 'data', id: 'data', dataId: 'memory', description: 'counter', enabled: true, verified: false, accessType: 'write', accessTypes: ['write'], canPersist: true, adapterType: 'example', hitCondition: '2' },
-		{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', enabled: true, verified: false, sessionId: 'debug-1', condition: 'counter > 0' },
-	], workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values) });
+	const session = await DebugAdapterSession.start({
+		configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => [
+			{ kind: 'function', id: 'function', name: 'main', enabled: true, verified: false, condition: 'counter > 0' },
+			{ kind: 'data', id: 'data', dataId: 'memory', description: 'counter', enabled: true, verified: false, accessType: 'write', accessTypes: ['write'], canPersist: true, adapterType: 'example', hitCondition: '2' },
+			{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', enabled: true, verified: false, sessionId: 'debug-1', condition: 'counter > 0' },
+		], workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values)
+	});
 	try {
 		assert.deepEqual(['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].map(command => processes.request(command).arguments), [{ breakpoints: [] }, { breakpoints: [] }, { breakpoints: [] }]);
 		assert.deepEqual(updates, [
@@ -219,11 +223,13 @@ test('DebugAdapterSession excludes unsupported conditions from every additional 
 test("DebugAdapterSession reports unsupported breakpoint families without sending their commands", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const updates: unknown[] = [];
-	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => [
-		{ kind: 'function', id: 'function', name: 'main', enabled: true, verified: false },
-		{ kind: 'data', id: 'data', dataId: 'memory', description: 'value', enabled: true, verified: false, accessType: 'write', accessTypes: ['write'], canPersist: true, adapterType: 'example' },
-		{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', enabled: true, verified: false, sessionId: 'debug-1' },
-	], workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values) });
+	const session = await DebugAdapterSession.start({
+		configuration: configuration(), processService: processes, breakpoints: () => [], additionalBreakpoints: () => [
+			{ kind: 'function', id: 'function', name: 'main', enabled: true, verified: false },
+			{ kind: 'data', id: 'data', dataId: 'memory', description: 'value', enabled: true, verified: false, accessType: 'write', accessTypes: ['write'], canPersist: true, adapterType: 'example' },
+			{ kind: 'instruction', id: 'instruction', instructionReference: '0x1000', enabled: true, verified: false, sessionId: 'debug-1' },
+		], workspace: URI.file('/workspace'), updateBreakpoints: values => updates.push(...values)
+	});
 	try {
 		assert.deepEqual(updates, [
 			{ id: 'function', verified: false, message: 'Debug Adapter does not support function breakpoints' },
@@ -249,10 +255,12 @@ test('disassembly preserves byte and instruction offsets, resolves remote source
 		await assert.rejects(session.disassemble('0x1000', 0.5, 0, 50), /offsets must be integers/);
 		await assert.rejects(session.disassemble('0x1000', 0, 0, 0), /instruction count/);
 		assert.equal(processes.requests('disassemble').length, 1);
-		processes.disassemblyReply = { instructions: [
-			{ address: '0x1000', instruction: 'mov r0, r1', location: { path: '/srv/project/main.ts' }, line: 4 },
-			{ address: '0x1004', instruction: 'ret', line: 5, endLine: 6, endColumn: 3 },
-		] };
+		processes.disassemblyReply = {
+			instructions: [
+				{ address: '0x1000', instruction: 'mov r0, r1', location: { path: '/srv/project/main.ts' }, line: 4 },
+				{ address: '0x1004', instruction: 'ret', line: 5, endLine: 6, endColumn: 3 },
+			]
+		};
 		const sameSource = await session.disassemble('0x1000', 0, 0, 2);
 		assert.equal(sameSource[1]?.location?.resource?.toString(), 'ash-remote://ssh+work-server/srv/project/main.ts');
 		assert.deepEqual({ line: sameSource[1]?.line, endLine: sameSource[1]?.endLine, endColumn: sameSource[1]?.endColumn }, { line: 5, endLine: 6, endColumn: 3 });
@@ -276,9 +284,9 @@ test('unsupported adapters receive neither disassembly nor instruction stepping 
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
-	private readonly messages: Array<{ readonly sequence: number; readonly message: unknown }> = [];
+	private readonly messages: Array<{ readonly sequence: number; readonly message: unknown; }> = [];
 	private nextMessageSequence = 0;
-		readonly sent: Array<Record<string, unknown>> = [];
+	readonly sent: Array<Record<string, unknown>> = [];
 	started: unknown;
 	closed = false;
 	setVariableReply: Record<string, unknown> | undefined;
@@ -288,7 +296,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	dataInfoReply: Record<string, unknown> = { dataId: 'memory:counter', description: 'counter', canPersist: false, accessTypes: ['read', 'write', 'readWrite'] };
 	readonly onConnectionState = this.connectionEmitter.event;
 
-	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false) {}
+	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false) { }
 
 	async start(options: unknown): Promise<string> { this.started = options; return "debug-1"; }
 
@@ -300,17 +308,17 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		if (command === "launch") this.event("initialized");
 		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
 			: command === "threads" ? { threads: [{ id: 7, name: "main" }, { id: 8, name: "worker" }] }
-			: command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
-			: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
-			: command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
-			: command === "setVariable" ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: "number" }
-			: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }
-			: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
-			: command === "disassemble" ? this.disassemblyReply
-			: command === "dataBreakpointInfo" ? this.dataInfoReply
-			: ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(command) ? { breakpoints: ((request.arguments as { breakpoints: unknown[] }).breakpoints).map(() => ({ verified: true })) }
-			: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
-			: {};
+				: command === "stackTrace" ? { stackFrames: [{ id: 11, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
+					: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
+						: command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
+							: command === "setVariable" ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: "number" }
+								: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }
+									: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
+										: command === "disassemble" ? this.disassemblyReply
+											: command === "dataBreakpointInfo" ? this.dataInfoReply
+												: ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(command) ? { breakpoints: ((request.arguments as { breakpoints: unknown[]; }).breakpoints).map(() => ({ verified: true })) }
+													: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
+														: {};
 		const response = { seq: 0, type: "response", request_seq: request.seq, success: true, command, body };
 		if (command === 'setBreakpoints' && this.holdBreakpoints) this.heldBreakpointResponse = response;
 		else this.enqueue(response);

@@ -1,227 +1,231 @@
 .ash-tab-list {
-  width: 100%;
-  height: 100%;
+	width: 100%;
+	height: 100%;
 }
 
 .ash-tab-list-scroll-content,
 .ash-tab-list-scroll-content > .ash-action-bar {
-  height: 100%;
+	height: 100%;
 }
 
 .ash-tab-list-scroll-content > .ash-action-bar {
-  width: max-content;
+	width: max-content;
 }
 
 .ash-tab-list-inset .ash-tab-list-scroll-content > .ash-action-bar {
-  padding: 0 var(--ash-tab-list-content-inset);
+	padding: 0 var(--ash-tab-list-content-inset);
 }
 
 .ash-tab-list-inset {
-  height: var(--ash-tab-height);
+	height: var(--ash-tab-height);
 }
 
 .ash-tab-list-scroll-content > .ash-action-bar.vertical {
-  width: 100%;
-  height: max-content;
+	width: 100%;
+	height: max-content;
 }
 
 /* Tabs own cross-axis alignment instead of ActionBar's stretch default. */
 .ash-tab-list .ash-tab {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  height: var(--ash-tab-height);
-  align-items: center;
-  cursor: pointer;
+	position: relative;
+	display: flex;
+	min-width: 0;
+	height: var(--ash-tab-height);
+	align-items: center;
+	cursor: pointer;
 }
 
 /* A draggable tab remains a pointer target until the drag gesture starts. */
 .ash-tab.ash-dnd-draggable {
-  cursor: pointer;
+	cursor: pointer;
 }
 
 .ash-tab.ash-dnd-draggable:active {
-  cursor: grabbing;
+	cursor: grabbing;
 }
 
 /* Keep the visual gap inside a tab's native drop hit area. */
 .ash-tab-list-scroll-content
-  > .ash-action-bar.ash-action-bar-dnd.horizontal
-  > .ash-tab:not(:last-child)::after {
-  position: absolute;
-  top: 0;
-  left: 100%;
-  width: var(--ash-action-bar-gap);
-  height: 100%;
-  content: "";
-  pointer-events: auto;
+	> .ash-action-bar.ash-action-bar-dnd.horizontal
+	> .ash-tab:not(:last-child)::after {
+	position: absolute;
+	top: 0;
+	left: 100%;
+	width: var(--ash-action-bar-gap);
+	height: 100%;
+	content: "";
+	pointer-events: auto;
 }
 
 .ash-tab-list-scroll-content
-  > .ash-action-bar.ash-action-bar-dnd.vertical
-  > .ash-tab:not(:last-child)::after {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  height: var(--ash-action-bar-gap);
-  content: "";
-  pointer-events: auto;
+	> .ash-action-bar.ash-action-bar-dnd.vertical
+	> .ash-tab:not(:last-child)::after {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	width: 100%;
+	height: var(--ash-action-bar-gap);
+	content: "";
+	pointer-events: auto;
 }
 
 .ash-tab.ash-dnd-drop-before::before,
 .ash-tab.ash-dnd-drop-after::before {
-  position: absolute;
-  top: 0;
-  z-index: 1;
-  width: 2px;
-  height: 100%;
-  content: "";
-  pointer-events: none;
-  background: var(--ash-focus-border);
+	position: absolute;
+	top: 0;
+	z-index: 1;
+	width: 2px;
+	height: 100%;
+	content: "";
+	pointer-events: none;
+	background: var(--ash-focus-border);
 }
 
 .ash-tab.ash-dnd-drop-before::before {
-  left: -2px;
+	left: -2px;
 }
 
 .ash-tab.ash-dnd-drop-after::before {
-  right: -2px;
+	right: -2px;
 }
 
 .ash-tab-label {
-  display: flex;
-  box-sizing: border-box;
-  min-width: 0;
-  padding: 0 var(--ash-tab-list-item-content-inset);
-  border: 0;
-  color: inherit;
-  background: transparent;
-  cursor: inherit;
-  font: inherit;
-  font-weight: var(--ash-font-weight-semi-bold);
+	display: flex;
+	box-sizing: border-box;
+	min-width: 0;
+	padding: 0 var(--ash-tab-list-item-content-inset);
+	border: 0;
+	color: inherit;
+	background: transparent;
+	cursor: inherit;
+	font: inherit;
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-tab-label > .ash-icon-label {
-  min-width: 0;
+	min-width: 0;
 }
 
 .ash-tab-list-inset .ash-tab {
-  min-width: 64px;
-  max-width: 180px;
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-description-foreground);
-  background: var(--ash-tab-list-inactive-background, transparent);
+	min-width: 64px;
+	max-width: 180px;
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-description-foreground);
+	background: var(--ash-tab-list-inactive-background, transparent);
 }
 
 .ash-tab-list .ash-tab.selected {
-  color: var(--ash-foreground);
-  background: color-mix(in srgb, var(--ash-tab-list-active-background) 65%, var(--ash-tab-list-inactive-background, transparent));
+	color: var(--ash-foreground);
+	background: color-mix(
+		in srgb,
+		var(--ash-tab-list-active-background) 65%,
+		var(--ash-tab-list-inactive-background, transparent)
+	);
 }
 
 .ash-tab-list .ash-tab.checked {
-  background: var(--ash-tab-list-active-background);
+	background: var(--ash-tab-list-active-background);
 }
 
 .ash-tab-list-inset .ash-tab:hover,
 .ash-tab-list-inset .ash-tab.checked {
-  color: var(--ash-foreground);
+	color: var(--ash-foreground);
 }
 
 .ash-tab-list-inset .ash-tab-label {
-  --ash-icon-label-text-overflow: ellipsis;
+	--ash-icon-label-text-overflow: ellipsis;
 
-  position: relative;
-  overflow: hidden;
-  height: 100%;
-  flex: 1 1 auto;
-  padding-right: 4px;
-  outline: none;
-  white-space: nowrap;
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+	flex: 1 1 auto;
+	padding-right: 4px;
+	outline: none;
+	white-space: nowrap;
 }
 
 .ash-tab-list-sizing-fit .ash-tab {
-  max-width: none;
-  flex: 0 0 auto;
+	max-width: none;
+	flex: 0 0 auto;
 }
 
 .ash-tab-list-sizing-shrink .ash-tab-list-scroll-content,
 .ash-tab-list-sizing-fixed .ash-tab-list-scroll-content,
 .ash-tab-list-sizing-shrink .ash-tab-list-scroll-content > .ash-action-bar,
 .ash-tab-list-sizing-fixed .ash-tab-list-scroll-content > .ash-action-bar {
-  box-sizing: border-box;
-  width: 100%;
+	box-sizing: border-box;
+	width: 100%;
 }
 
 .ash-tab-list-sizing-shrink .ash-tab {
-  min-width: 80px;
-  max-width: fit-content;
-  flex: 1 1 0;
+	min-width: 80px;
+	max-width: fit-content;
+	flex: 1 1 0;
 }
 
 .ash-tab-list-sizing-fixed .ash-tab {
-  min-width: var(--ash-tab-list-fixed-min-width);
-  max-width: var(--ash-tab-list-fixed-max-width);
-  flex: 1 0 0;
+	min-width: var(--ash-tab-list-fixed-min-width);
+	max-width: var(--ash-tab-list-fixed-max-width);
+	flex: 1 0 0;
 }
 
 .ash-tab-list-sizing-shrink .ash-tab-label,
 .ash-tab-list-sizing-fixed .ash-tab-label {
-  flex: 1 1 auto;
-  overflow: hidden;
+	flex: 1 1 auto;
+	overflow: hidden;
 }
 
 .ash-tab-list-inset .ash-tab-label:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-tab.preview .ash-icon-label-text {
-  font-style: italic;
+	font-style: italic;
 }
 
 .ash-tab .ash-tab-actions {
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 0;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: 0;
 }
 
 .ash-tab-list-inset .ash-tab-actions {
-  padding-right: var(--ash-spacing-size20);
+	padding-right: var(--ash-spacing-size20);
 }
 
 .ash-tab-primary-action {
-  position: relative;
-  visibility: hidden;
+	position: relative;
+	visibility: hidden;
 }
 
 .ash-tab.checked .ash-tab-primary-action,
 .ash-tab:hover .ash-tab-primary-action,
 .ash-tab:focus-within .ash-tab-primary-action,
 .ash-tab-primary-action.custom-action {
-  visibility: visible;
+	visibility: visible;
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-button {
-  width: var(--ash-toolbar-action-size);
-  min-width: var(--ash-toolbar-action-size);
-  height: var(--ash-toolbar-action-size);
-  min-height: var(--ash-toolbar-action-size);
-  flex: 0 0 var(--ash-toolbar-action-size);
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
+	width: var(--ash-toolbar-action-size);
+	min-width: var(--ash-toolbar-action-size);
+	height: var(--ash-toolbar-action-size);
+	min-height: var(--ash-toolbar-action-size);
+	flex: 0 0 var(--ash-toolbar-action-size);
+	padding: 0;
+	border: 0;
+	color: inherit;
+	background: transparent;
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-icon-label-container {
-  display: none;
+	display: none;
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-button:hover {
-  background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-tab.checked .ash-tab-actions .ash-action-view-item.icon .ash-button:hover {
-  background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hover-background);
 }

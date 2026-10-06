@@ -7,8 +7,8 @@ interface SashMeasurements {
 	readonly editorPartDimensionReads: number;
 	readonly durations: number[];
 	readonly frameIntervals: number[];
-	readonly initialRaster: { width: number; height: number };
-	readonly rasters: { width: number; height: number }[];
+	readonly initialRaster: { width: number; height: number; };
+	readonly rasters: { width: number; height: number; }[];
 }
 
 for (const groupCount of [1, 2]) {
@@ -47,7 +47,7 @@ for (const groupCount of [1, 2]) {
 			const initialRaster = { width: canvas.width, height: canvas.height };
 			const durations: number[] = [];
 			const frameIntervals: number[] = [];
-			const rasters: { width: number; height: number }[] = [];
+			const rasters: { width: number; height: number; }[] = [];
 			let paints = 0;
 			let editorPartDimensionReads = 0;
 			const part = canvas.ownerDocument.querySelector<HTMLElement>('[data-part="editor"]')!;
@@ -76,15 +76,17 @@ for (const groupCount of [1, 2]) {
 			};
 			window.addEventListener('pointermove', begin, true);
 			window.addEventListener('pointermove', measure);
-			Object.assign(canvas, { finishMeasurement: () => {
-				cancelAnimationFrame(frame);
-				painter.clearRect = original;
-				window.removeEventListener('pointermove', begin, true);
-				window.removeEventListener('pointermove', measure);
-				for (const name of dimensionProperties) delete (part as unknown as Record<string, unknown>)[name];
-				delete (canvas as HTMLCanvasElement & { finishMeasurement?: unknown }).finishMeasurement;
-				return { paints, editorPartDimensionReads, durations, frameIntervals, initialRaster, rasters };
-			} });
+			Object.assign(canvas, {
+				finishMeasurement: () => {
+					cancelAnimationFrame(frame);
+					painter.clearRect = original;
+					window.removeEventListener('pointermove', begin, true);
+					window.removeEventListener('pointermove', measure);
+					for (const name of dimensionProperties) delete (part as unknown as Record<string, unknown>)[name];
+					delete (canvas as HTMLCanvasElement & { finishMeasurement?: unknown; }).finishMeasurement;
+					return { paints, editorPartDimensionReads, durations, frameIntervals, initialRaster, rasters };
+				}
+			});
 		});
 		let metrics: SashMeasurements;
 		try {
@@ -94,7 +96,7 @@ for (const groupCount of [1, 2]) {
 			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
 		} finally {
 			await page.mouse.up();
-			metrics = await canvas.evaluate(element => (element as HTMLCanvasElement & { finishMeasurement(): typeof metrics }).finishMeasurement());
+			metrics = await canvas.evaluate(element => (element as HTMLCanvasElement & { finishMeasurement(): typeof metrics; }).finishMeasurement());
 		}
 		await testInfo.attach('sash-performance', { body: JSON.stringify(metrics), contentType: 'application/json' });
 		expect(metrics.paints).toBeLessThanOrEqual(24);
@@ -126,7 +128,7 @@ test.describe('startup layout defaults', () => {
 		const page = workbench.page;
 		const workspaceId = target.kind === 'electron'
 			? parseWorkspace(await page.evaluate(() => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 				return ipc.invoke('ash:workspace:context:read');
 			})).id
 			: await page.evaluate(() => sessionStorage.getItem('ash.workbench.emptyWorkspaceId'));
@@ -607,7 +609,7 @@ function approximatelyEqual(first: number, second: number, tolerance: number): b
 	return Math.abs(first - second) <= tolerance;
 }
 
-function contains(container: { x: number; y: number; width: number; height: number }, child: { x: number; y: number; width: number; height: number }, tolerance: number): boolean {
+function contains(container: { x: number; y: number; width: number; height: number; }, child: { x: number; y: number; width: number; height: number; }, tolerance: number): boolean {
 	return child.x >= container.x - tolerance
 		&& child.y >= container.y - tolerance
 		&& child.x + child.width <= container.x + container.width + tolerance

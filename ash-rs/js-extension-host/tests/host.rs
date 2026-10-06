@@ -257,11 +257,13 @@ fn vscode_callbacks_can_handle_a_service_rejection() {
             })
         })
         .unwrap();
-    assert!(result
-        .payload
-        .as_str()
-        .unwrap()
-        .contains("Document read denied"));
+    assert!(
+        result
+            .payload
+            .as_str()
+            .unwrap()
+            .contains("Document read denied")
+    );
 }
 
 #[test]
@@ -454,10 +456,12 @@ fn hover_requires_declared_capability_and_rejects_invalid_snapshots_and_disposed
             Err(ExtensionHostError::HostRejected { .. })
         ));
     }
-    assert!(running
-        .supervisor
-        .invoke(hover_invocation("reversed"))
-        .is_err());
+    assert!(
+        running
+            .supervisor
+            .invoke(hover_invocation("reversed"))
+            .is_err()
+    );
     assert_eq!(
         running
             .supervisor
@@ -466,10 +470,12 @@ fn hover_requires_declared_capability_and_rejects_invalid_snapshots_and_disposed
             .payload,
         Value::Null
     );
-    assert!(running
-        .supervisor
-        .invoke(invocation("hover", json!([]), Duration::from_secs(5)))
-        .is_err());
+    assert!(
+        running
+            .supervisor
+            .invoke(invocation("hover", json!([]), Duration::from_secs(5)))
+            .is_err()
+    );
     run(&running, "disposeHover", json!([])).unwrap();
     assert!(matches!(
         running.supervisor.invoke(hover_invocation("absent")),
@@ -626,10 +632,12 @@ fn deadlines_stop_synchronous_code_promise_continuations_rejection_coercion_and_
     for id in ["spin", "continuationSpin", "rejectionSpin", "wait"] {
         let running = start(include_str!("fixtures/main.js")).unwrap();
         let before = std::time::Instant::now();
-        assert!(running
-            .supervisor
-            .invoke(invocation(id, json!([]), Duration::from_millis(250)))
-            .is_err());
+        assert!(
+            running
+                .supervisor
+                .invoke(invocation(id, json!([]), Duration::from_millis(250)))
+                .is_err()
+        );
         assert!(
             before.elapsed() < Duration::from_secs(3),
             "{id} exceeded the shutdown bound"
@@ -717,10 +725,12 @@ fn quick_pick_preserves_selection_and_cancellation() {
 #[test]
 fn heap_quota_retires_only_the_extension_process() {
     let running = start(include_str!("fixtures/main.js")).unwrap();
-    assert!(running
-        .supervisor
-        .invoke(invocation("heap", json!([]), Duration::from_secs(3)))
-        .is_err());
+    assert!(
+        running
+            .supervisor
+            .invoke(invocation("heap", json!([]), Duration::from_secs(3)))
+            .is_err()
+    );
     assert_eq!(
         run(&running, "echo", json!(["after heap quota"])).unwrap(),
         json!("after heap quota")
@@ -863,10 +873,12 @@ export function activate(context) {
 #[test]
 fn product_js_process_recovers_after_execution_deadline() {
     let running = start_confined(include_str!("fixtures/main.js")).unwrap();
-    assert!(running
-        .supervisor
-        .invoke(invocation("spin", json!([]), Duration::from_millis(100)))
-        .is_err());
+    assert!(
+        running
+            .supervisor
+            .invoke(invocation("spin", json!([]), Duration::from_millis(100)))
+            .is_err()
+    );
     assert_eq!(
         run(&running, "echo", json!(["after timeout"])).unwrap(),
         json!("after timeout")

@@ -43,7 +43,7 @@ export interface TextModelPluginDecorationSource {
 
 export interface TextModelBlockHost {
 	getVersion(): number;
-	commitText(text: string): { readonly version: number; readonly change?: TextModelChange };
+	commitText(text: string): { readonly version: number; readonly change?: TextModelChange; };
 	publishTextChange(change: TextModelChange): void;
 }
 

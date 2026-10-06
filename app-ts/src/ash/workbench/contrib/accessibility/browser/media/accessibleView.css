@@ -1,5 +1,8 @@
 .ash-accessible-view-dialog.ash-dialog {
-	width: min(48rem, calc(100vw - var(--ash-spacing-size160) - var(--ash-spacing-size160)));
+	width: min(
+		48rem,
+		calc(100vw - var(--ash-spacing-size160) - var(--ash-spacing-size160))
+	);
 }
 
 .ash-accessible-view-content {

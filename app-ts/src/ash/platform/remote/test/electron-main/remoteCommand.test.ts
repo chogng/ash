@@ -15,7 +15,7 @@ test("command observer failures reject the command instead of escaping the proce
 test("command cancellation terminates the active local process and preserves its reason", async () => {
 	const cancellation = new AbortController();
 	const command = runRemoteCommand(process.execPath, ["-e", "setInterval(() => {}, 1000)"], process.env, {
-		onStderrData: () => {},
+		onStderrData: () => { },
 		signal: cancellation.signal,
 	});
 	cancellation.abort("user cancelled bootstrap");
@@ -32,7 +32,7 @@ test("an already-cancelled command never starts", () => {
 
 	assert.throws(
 		() => runRemoteCommand(process.execPath, ["-e", "process.exit(99)"], process.env, {
-			onStderrData: () => {},
+			onStderrData: () => { },
 			signal: cancellation.signal,
 		}),
 		(error: unknown) => isCancellationError(error) && error.reason === "cancelled before spawn",

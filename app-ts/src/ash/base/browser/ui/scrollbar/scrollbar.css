@@ -1,216 +1,217 @@
 .ash-scrollbar {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  outline: none;
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	outline: none;
 }
 
 .ash-scrollbar:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-scrollbar-viewport {
-  position: absolute;
-  inset: 0;
-  overflow: scroll;
-  overscroll-behavior: auto;
-  scrollbar-width: none;
+	position: absolute;
+	inset: 0;
+	overflow: scroll;
+	overscroll-behavior: auto;
+	scrollbar-width: none;
 }
 
-.ash-scrollable-element[data-scroll-direction="horizontal"] >
-  .ash-scrollbar-viewport {
-  overflow-x: scroll;
-  overflow-y: hidden;
+.ash-scrollable-element[data-scroll-direction="horizontal"]
+	> .ash-scrollbar-viewport {
+	overflow-x: scroll;
+	overflow-y: hidden;
 }
 
-.ash-scrollable-element[data-scroll-direction="vertical"] >
-  .ash-scrollbar-viewport {
-  overflow-x: hidden;
-  overflow-y: scroll;
+.ash-scrollable-element[data-scroll-direction="vertical"]
+	> .ash-scrollbar-viewport {
+	overflow-x: hidden;
+	overflow-y: scroll;
 }
 
 .ash-scrollbar-viewport::-webkit-scrollbar {
-  display: none;
+	display: none;
 }
 
 .ash-scrollbar-content {
-  min-width: 100%;
-  min-height: 100%;
-  box-sizing: border-box;
-  width: max-content;
+	min-width: 100%;
+	min-height: 100%;
+	box-sizing: border-box;
+	width: max-content;
 }
 
-.ash-scrollable-element[data-scroll-direction="horizontal"] >
-  .ash-scrollbar-viewport >
-  .ash-scrollbar-content {
-  height: 100%;
+.ash-scrollable-element[data-scroll-direction="horizontal"]
+	> .ash-scrollbar-viewport
+	> .ash-scrollbar-content {
+	height: 100%;
 }
 
-.ash-scrollable-element[data-scroll-direction="vertical"] >
-  .ash-scrollbar-viewport >
-  .ash-scrollbar-content {
-  width: 100%;
+.ash-scrollable-element[data-scroll-direction="vertical"]
+	> .ash-scrollbar-viewport
+	> .ash-scrollbar-content {
+	width: 100%;
 }
 
 .ash-scrollbar-track {
-  position: absolute;
-  z-index: 3;
-  background: var(--ash-scrollbar-background);
-  opacity: 1;
-  outline: none;
-  touch-action: none;
-  transition: opacity 100ms linear;
+	position: absolute;
+	z-index: 3;
+	background: var(--ash-scrollbar-background);
+	opacity: 1;
+	outline: none;
+	touch-action: none;
+	transition: opacity 100ms linear;
 }
 
 .ash-scrollbar-track-horizontal {
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: var(--ash-scrollbar-size);
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: var(--ash-scrollbar-size);
 }
 
 .ash-scrollbar-track-vertical {
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--ash-scrollbar-size);
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: var(--ash-scrollbar-size);
 }
 
 .ash-scrollbar-track[data-visibility="auto"] {
-  opacity: 0;
-  pointer-events: none;
+	opacity: 0;
+	pointer-events: none;
 }
 
 .ash-scrollbar-track.active {
-  opacity: 1;
-  pointer-events: auto;
+	opacity: 1;
+	pointer-events: auto;
 }
 
 .ash-scrollbar-track.disabled {
-  pointer-events: none;
+	pointer-events: none;
 }
 
 .ash-scrollbar-thumb {
-  position: absolute;
-  box-sizing: border-box;
-  border-radius: calc(var(--ash-scrollbar-size) / 2);
-  background: var(--ash-scrollbar-slider-background);
-  cursor: default;
-  forced-color-adjust: none;
-  will-change: transform;
+	position: absolute;
+	box-sizing: border-box;
+	border-radius: calc(var(--ash-scrollbar-size) / 2);
+	background: var(--ash-scrollbar-slider-background);
+	cursor: default;
+	forced-color-adjust: none;
+	will-change: transform;
 }
 
 .ash-scrollbar-track-horizontal > .ash-scrollbar-thumb {
-  top: 0;
-  bottom: 0;
-  left: 0;
+	top: 0;
+	bottom: 0;
+	left: 0;
 }
 
 .ash-scrollbar-track-vertical > .ash-scrollbar-thumb {
-  top: 0;
-  right: 0;
-  bottom: auto;
-  left: 0;
+	top: 0;
+	right: 0;
+	bottom: auto;
+	left: 0;
 }
 
 .ash-scrollbar-track:hover > .ash-scrollbar-thumb {
-  background: var(--ash-scrollbar-slider-hover-background);
+	background: var(--ash-scrollbar-slider-hover-background);
 }
 
 .ash-scrollbar-track.active > .ash-scrollbar-thumb {
-  background: var(--ash-scrollbar-slider-active-background);
+	background: var(--ash-scrollbar-slider-active-background);
 }
 
 .ash-scrollbar-track:focus-visible {
-  outline: var(--ash-stroke-thickness) solid
-    var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-scrollbar-corner {
-  position: absolute;
-  z-index: 2;
-  right: 0;
-  bottom: 0;
-  width: var(--ash-scrollbar-size);
-  height: var(--ash-scrollbar-size);
-  background: transparent;
+	position: absolute;
+	z-index: 2;
+	right: 0;
+	bottom: 0;
+	width: var(--ash-scrollbar-size);
+	height: var(--ash-scrollbar-size);
+	background: transparent;
 }
 
 @media (forced-colors: active) {
-  .ash-scrollbar-thumb {
-    background: ButtonText;
-  }
+	.ash-scrollbar-thumb {
+		background: ButtonText;
+	}
 }
 
 .ash-smooth-scrollable {
-  position: absolute;
-  inset: 0;
+	position: absolute;
+	inset: 0;
 }
 
-.ash-smooth-scrollable > .ash-scrollbar-track-horizontal > .ash-scrollbar-thumb {
-  top: 50%;
-  bottom: auto;
-  height: var(--ash-scrollbar-slider-size);
-  translate: 0 -50%;
+.ash-smooth-scrollable
+	> .ash-scrollbar-track-horizontal
+	> .ash-scrollbar-thumb {
+	top: 50%;
+	bottom: auto;
+	height: var(--ash-scrollbar-slider-size);
+	translate: 0 -50%;
 }
 
 .ash-smooth-scrollable > .ash-scrollbar-track-vertical > .ash-scrollbar-thumb {
-  left: 50%;
-  right: auto;
-  width: var(--ash-scrollbar-slider-size);
-  translate: -50% 0;
+	left: 50%;
+	right: auto;
+	width: var(--ash-scrollbar-slider-size);
+	translate: -50% 0;
 }
 
 .ash-scrollbar-arrow {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ash-foreground);
-  font: inherit;
-  line-height: 1;
-  cursor: default;
-  touch-action: none;
+	position: absolute;
+	z-index: 3;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--ash-foreground);
+	font: inherit;
+	line-height: 1;
+	cursor: default;
+	touch-action: none;
 }
 
 .ash-scrollbar-arrow[hidden] {
-  display: none;
+	display: none;
 }
 
 .ash-scrollbar-arrow[data-visibility="auto"] {
-  opacity: 0;
-  pointer-events: none;
+	opacity: 0;
+	pointer-events: none;
 }
 
 .ash-scrollbar-arrow:hover:not(:disabled) {
-  background: var(--ash-scrollbar-slider-hover-background);
+	background: var(--ash-scrollbar-slider-hover-background);
 }
 
 .ash-scrollbar-arrow:active:not(:disabled) {
-  background: var(--ash-scrollbar-slider-active-background);
+	background: var(--ash-scrollbar-slider-active-background);
 }
 
 .ash-scrollbar-arrow:disabled:not([data-visibility="auto"]) {
-  opacity: 0.4;
+	opacity: 0.4;
 }
 
 .ash-scrollbar-arrow:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 @media (forced-colors: active) {
-  .ash-scrollbar-arrow {
-    color: ButtonText;
-  }
+	.ash-scrollbar-arrow {
+		color: ButtonText;
+	}
 
-  .ash-scrollbar-arrow:disabled {
-    color: GrayText;
-  }
+	.ash-scrollbar-arrow:disabled {
+		color: GrayText;
+	}
 }

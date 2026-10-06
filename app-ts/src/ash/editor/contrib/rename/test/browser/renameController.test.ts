@@ -91,11 +91,13 @@ for (const mismatch of ['version', 'expectedText'] as const) {
 	test(`a rename edit with a mismatched ${mismatch} cannot change the model`, async () => {
 		using fixture = createEditor();
 		using provider = fixture.features.renameProvider.register('typescript', {
-			provideRenameEdits: request => ({ entries: [{
-				kind: 'textDocument', resource: request.resource,
-				...(mismatch === 'version' ? { version: request.snapshot.version + 1 } : { expectedText: 'outdated' }),
-				edits: [{ range: fixture.model.getFullModelRange(), text: 'wrong' }],
-			}] }),
+			provideRenameEdits: request => ({
+				entries: [{
+					kind: 'textDocument', resource: request.resource,
+					...(mismatch === 'version' ? { version: request.snapshot.version + 1 } : { expectedText: 'outdated' }),
+					edits: [{ range: fixture.model.getFullModelRange(), text: 'wrong' }],
+				}]
+			}),
 		});
 		await fixture.open();
 		fixture.input.value = 'result';

@@ -97,18 +97,20 @@ function parameterHintsContextValue(request: languages.LanguageParameterHintsReq
 		kind: context.kind,
 		...(context.kind === 'triggerCharacter' ? { triggerCharacter: context.triggerCharacter } : {}),
 		isRetrigger: context.isRetrigger === true,
-		...(hints ? { activeSignatureHelp: {
-			...(hints.activeSignature !== undefined ? { activeSignature: hints.activeSignature } : {}),
-			signatures: hints.signatures.map(signature => ({
-				label: signature.label,
-				...(signature.documentation !== undefined ? { documentation: signature.documentation } : {}),
-				...(signature.activeParameter !== undefined ? { activeParameter: signature.activeParameter } : {}),
-				parameters: signature.parameters.map(parameter => ({
-					label: parameter.label,
-					...(parameter.documentation !== undefined ? { documentation: parameter.documentation } : {}),
+		...(hints ? {
+			activeSignatureHelp: {
+				...(hints.activeSignature !== undefined ? { activeSignature: hints.activeSignature } : {}),
+				signatures: hints.signatures.map(signature => ({
+					label: signature.label,
+					...(signature.documentation !== undefined ? { documentation: signature.documentation } : {}),
+					...(signature.activeParameter !== undefined ? { activeParameter: signature.activeParameter } : {}),
+					parameters: signature.parameters.map(parameter => ({
+						label: parameter.label,
+						...(parameter.documentation !== undefined ? { documentation: parameter.documentation } : {}),
+					})),
 				})),
-			})),
-		} } : {}),
+			}
+		} : {}),
 	};
 }
 
@@ -120,7 +122,7 @@ function completionPayload(request: languages.LanguageCompletionProviderRequest)
 	});
 }
 
-function featurePayload(request: { readonly languageId: string; readonly resource?: { toString(): string }; readonly snapshot: TextSnapshot }, fields: Record<string, JsonValue>): JsonValue {
+function featurePayload(request: { readonly languageId: string; readonly resource?: { toString(): string; }; readonly snapshot: TextSnapshot; }, fields: Record<string, JsonValue>): JsonValue {
 	return Object.freeze({
 		languageId: request.languageId,
 		version: request.snapshot.version,
@@ -238,7 +240,7 @@ function normalizeLinkedEditingResult(value: JsonValue, snapshot: TextSnapshot):
 	return Object.freeze({ ranges });
 }
 
-function modelRequest(model: ITextModel): { readonly languageId: string; readonly resource: { toString(): string }; readonly snapshot: TextSnapshot } {
+function modelRequest(model: ITextModel): { readonly languageId: string; readonly resource: { toString(): string; }; readonly snapshot: TextSnapshot; } {
 	const text = model.getValue();
 	const snapshot: TextSnapshot = Object.freeze({
 		version: model.getVersionId(),

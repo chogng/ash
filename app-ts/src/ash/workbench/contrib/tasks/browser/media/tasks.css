@@ -1,88 +1,88 @@
 .ash-tasks {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 8px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: 8px;
 }
 
 .ash-tasks-run,
 .ash-task-run-button {
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
 }
 
 .ash-tasks-status {
-  min-height: 18px;
-  padding: 6px 2px;
-  color: var(--ash-description-foreground);
-  font-size: 12px;
+	min-height: 18px;
+	padding: 6px 2px;
+	color: var(--ash-description-foreground);
+	font-size: 12px;
 }
 
 .ash-tasks-list {
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  list-style: none;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	list-style: none;
 }
 
 .ash-tasks-run {
-  display: grid;
-  grid-template-columns: minmax(100px, 180px) 100px minmax(160px, 1fr);
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  padding: 6px 8px;
-  text-align: left;
+	display: grid;
+	grid-template-columns: minmax(100px, 180px) 100px minmax(160px, 1fr);
+	gap: 8px;
+	align-items: center;
+	width: 100%;
+	padding: 6px 8px;
+	text-align: left;
 }
 
 .ash-tasks-run:hover,
 .ash-task-run-button:hover {
-  background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-tasks-run:focus-visible,
 .ash-task-run-button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-task-label,
 .ash-task-command {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-task-source {
-  color: var(--ash-description-foreground);
-  font-size: 11px;
+	color: var(--ash-description-foreground);
+	font-size: 11px;
 }
 
 .ash-task-command {
-  color: var(--ash-muted-foreground);
+	color: var(--ash-muted-foreground);
 }
 
 .ash-task-run {
-  margin-top: 6px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
-  padding-top: 6px;
+	margin-top: 6px;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	padding-top: 6px;
 }
 
 .ash-task-run-button {
-  width: 100%;
-  padding: 6px 8px;
-  text-align: left;
+	width: 100%;
+	padding: 6px 8px;
+	text-align: left;
 }
 
 .ash-task-run.failed .ash-task-run-button {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-task-run.succeeded .ash-task-run-button {
-  color: var(--ash-success-foreground);
+	color: var(--ash-success-foreground);
 }

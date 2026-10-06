@@ -41,9 +41,9 @@ export interface MarkdownSanitizerOptions {
 
 export interface MarkdownSanitizerConfig {
 	readonly replaceWithPlaintext?: boolean;
-	readonly allowedTags?: { readonly override: readonly string[] };
-	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule> };
-	readonly allowedLinkSchemes?: { readonly augment: readonly string[] };
+	readonly allowedTags?: { readonly override: readonly string[]; };
+	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule>; };
+	readonly allowedLinkSchemes?: { readonly augment: readonly string[]; };
 	readonly remoteImageIsAllowed?: (uri: URI) => boolean;
 }
 
@@ -127,7 +127,7 @@ const ALLOWED_ATTRIBUTES = [
 	{ attributeName: 'width', shouldKeep: isImageDimension },
 ] as const;
 
-function isImageDimension(element: Element, data: { readonly attrValue: string }): boolean {
+function isImageDimension(element: Element, data: { readonly attrValue: string; }): boolean {
 	return element.tagName === 'IMG' && /^\d+$/u.test(data.attrValue);
 }
 
@@ -263,7 +263,7 @@ export class MarkdownElement extends Disposable {
 			this.ownerDocument,
 			this.checkboxControls,
 		);
-		const workspaceImages: Array<{ readonly image: HTMLImageElement; readonly resource: URI }> = [];
+		const workspaceImages: Array<{ readonly image: HTMLImageElement; readonly resource: URI; }> = [];
 		if (this.imageResourceLoader) {
 			for (const image of fragment.querySelectorAll<HTMLImageElement>('img[src]')) {
 				const resource = URI.parse(image.getAttribute('src')!);
@@ -463,30 +463,36 @@ function createMarkdownParser(
 ): MarkdownParserInstance {
 	const codeBlocks: Tokens.Code[] = [];
 	const parser = new Marked();
-	parser.use({ renderer: {
-		code(token) {
-			codeBlocks.push(token);
-			return false;
-		},
-	} });
-	if (supportAlerts) parser.use(createAlertExtension());
-	parser.use({ renderer: {
-		image(token): string {
-			const { href, dimensions } = parseHrefAndDimensions(token.href);
-			const source = escapeHtmlAttribute(transformUri?.(href, 'image') ?? href);
-			const title = token.title ? ` title="${escapeHtmlAttribute(token.title)}"` : '';
-			const size = dimensions.length ? ` ${dimensions.join(' ')}` : '';
-			return `<img src="${source}" alt="${escapeHtmlAttribute(token.text)}"${title}${size}>`;
-		},
-	} });
-	if (transformUri) {
-		parser.use({ renderer: {
-			link(token): string {
-				const href = escapeHtmlAttribute(transformUri(token.href, 'link'));
-				const title = token.title ? ` title="${escapeHtmlAttribute(token.title)}"` : '';
-				return `<a href="${href}"${title}>${this.parser.parseInline(token.tokens)}</a>`;
+	parser.use({
+		renderer: {
+			code(token) {
+				codeBlocks.push(token);
+				return false;
 			},
-		} });
+		}
+	});
+	if (supportAlerts) parser.use(createAlertExtension());
+	parser.use({
+		renderer: {
+			image(token): string {
+				const { href, dimensions } = parseHrefAndDimensions(token.href);
+				const source = escapeHtmlAttribute(transformUri?.(href, 'image') ?? href);
+				const title = token.title ? ` title="${escapeHtmlAttribute(token.title)}"` : '';
+				const size = dimensions.length ? ` ${dimensions.join(' ')}` : '';
+				return `<img src="${source}" alt="${escapeHtmlAttribute(token.text)}"${title}${size}>`;
+			},
+		}
+	});
+	if (transformUri) {
+		parser.use({
+			renderer: {
+				link(token): string {
+					const href = escapeHtmlAttribute(transformUri(token.href, 'link'));
+					const title = token.title ? ` title="${escapeHtmlAttribute(token.title)}"` : '';
+					return `<a href="${href}"${title}>${this.parser.parseInline(token.tokens)}</a>`;
+				},
+			}
+		});
 	}
 	parser.use(...markedExtensions);
 	parser.use({ renderer: { html: ({ text }) => supportHtml ? text : '' } });

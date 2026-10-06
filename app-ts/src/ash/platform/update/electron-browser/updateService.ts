@@ -4,7 +4,7 @@ import { DESKTOP_UPDATE_POLICY_SETTING, UPDATE_AUTO_CHECK_CHANNEL, UPDATE_CHECK_
 
 /** Desktop renderer adapter for the local signed update host. */
 export class ElectronUpdateService implements IUpdateService {
-	constructor(@IConfigurationService private readonly configuration: IConfigurationService) {}
+	constructor(@IConfigurationService private readonly configuration: IConfigurationService) { }
 
 	public checkForUpdates(): Promise<UpdateCheckResult> {
 		return invoke<UpdateCheckResult>(UPDATE_CHECK_CHANNEL, this.channel());

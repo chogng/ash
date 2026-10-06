@@ -100,7 +100,7 @@ test("Memento reports malformed state, falls back, and repairs storage", async (
 test("Memento reloads external state without discarding pending local state", async () => {
 	const storage = new TestStorageService();
 	const memento = createTestMemento(storage);
-	const changes: Array<{ readonly selected: string | null; readonly external: boolean }> = [];
+	const changes: Array<{ readonly selected: string | null; readonly external: boolean; }> = [];
 	memento.onDidChange(({ state, external }) => {
 		changes.push({ selected: state.selected, external });
 	});
@@ -136,7 +136,7 @@ test("Memento reloads external state without discarding pending local state", as
 	await storage.flush();
 	const stored = JSON.parse(
 		storage.get("memento/test.view", StorageScope.WORKSPACE)!,
-	) as { readonly selected: string };
+	) as { readonly selected: string; };
 	assert.equal(
 		stored.selected,
 		"local",

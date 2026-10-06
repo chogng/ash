@@ -31,7 +31,8 @@
 	box-sizing: border-box;
 	overflow: visible;
 	background: var(--ash-multi-diff-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-multi-diff-editor-border);
+	border: var(--ash-stroke-thickness) solid
+		var(--ash-multi-diff-editor-border);
 	border-radius: var(--ash-corner-radius-medium);
 }
 
@@ -47,7 +48,8 @@
 	min-width: 0;
 	color: inherit;
 	background: var(--ash-multi-diff-editor-header-background);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-multi-diff-editor-border);
+	border-bottom: var(--ash-stroke-thickness) solid
+		var(--ash-multi-diff-editor-border);
 	cursor: pointer;
 }
 
@@ -80,11 +82,13 @@
 }
 
 .stanza-multi-diff-editor-chevron.collapsed-icon,
-.stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-chevron.expanded-icon {
+.stanza-multi-diff-editor-section.collapsed
+	.stanza-multi-diff-editor-chevron.expanded-icon {
 	display: none;
 }
 
-.stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-chevron.collapsed-icon {
+.stanza-multi-diff-editor-section.collapsed
+	.stanza-multi-diff-editor-chevron.collapsed-icon {
 	display: inline-flex;
 }
 

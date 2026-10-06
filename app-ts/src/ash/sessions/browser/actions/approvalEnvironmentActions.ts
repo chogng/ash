@@ -11,7 +11,7 @@ import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/w
 import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
-interface Item extends IQuickPickItem { readonly id: string }
+interface Item extends IQuickPickItem { readonly id: string; }
 
 registerAction2(class PrepareApprovalEnvironment extends Action2 {
 	constructor() {
@@ -45,7 +45,7 @@ registerAction2(class PrepareApprovalEnvironment extends Action2 {
 		let history: ReviewEnvironmentHistoryCoverage | undefined;
 		let options: ReviewEnvironmentScanOptions = { ...profile.scanOptions, summarizeWithModel: true };
 		const editedSources = new Set<string>();
-		for (;;) {
+		for (; ;) {
 			const choice = await pick(input, localize('approvalEnvironment.review', 'Review environment: {0}', root) + (history ? ` — ${localize('approvalEnvironment.coverage', 'Scanned {0}/{1} sessions, {2}/{3} commands; kept {4}/{5} facts', history.sessionsScanned, history.sessionsAvailable, history.commandsScanned, history.commandsAvailable, history.factsIncluded, history.factsAvailable)}` : ''), [
 				{ id: 'scan', label: localize('approvalEnvironment.scan', 'Scan project…'), description: localize('approvalEnvironment.scanDetail', 'Choose scope and create a draft; nothing is accepted automatically') },
 				{ id: 'add', label: localize('approvalEnvironment.add', 'Add a description…') },
@@ -139,7 +139,7 @@ function sourceLabel(entry: ReviewEnvironmentEntry): string {
 
 async function scanOptions(input: IQuickInputService, initial: ReviewEnvironmentScanOptions): Promise<ReviewEnvironmentScanOptions | undefined> {
 	let options = initial;
-	for (;;) {
+	for (; ;) {
 		const choice = await pick(input, localize('approvalEnvironment.scope', 'Scan scope — current project is included'), [
 			{ id: 'summarizeWithModel', label: localize('approvalEnvironment.summarize', 'Summarize with the current task model'), description: localize('approvalEnvironment.modelPrivacy', 'Sends filtered observations to this model; no tools or automatic permissions'), picked: options.summarizeWithModel },
 			{ id: 'recentCommands', label: localize('approvalEnvironment.recent', 'Include recent project sessions'), description: localize('approvalEnvironment.recentDetail', 'Reads this directory’s sessions by recency; aggregates command names and targets; excludes messages and ordinary arguments'), picked: options.recentCommands },

@@ -14,7 +14,7 @@ import { DataChannelService, LinkPresentationService } from '../../../services/d
 import { MainThreadDataChannels } from '../../browser/mainThreadDataChannels.js';
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
-	public registerClientHandler(): { dispose(): void } { throw new Error('Client calls are outside this fixture'); }
+	public registerClientHandler(): { dispose(): void; } { throw new Error('Client calls are outside this fixture'); }
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	public current = snapshot(1, 1);
@@ -45,14 +45,16 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 }
 
 function snapshot(generation: number, incarnation: number): ExtensionHostFleetSnapshot {
-	return normalizeExtensionHostSnapshot({ generation, extensions: [{
-		id: 'acme.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
-		activationGeneration: 1, incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
-		registrations: [
-			{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
-			{ kind: 'linkPresentationProvider', registrationId: 'issues', uriPattern: '^https://example\\.com/issues/', presentationKind: 'issue' },
-		],
-	}] });
+	return normalizeExtensionHostSnapshot({
+		generation, extensions: [{
+			id: 'acme.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+			activationGeneration: 1, incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
+			registrations: [
+				{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
+				{ kind: 'linkPresentationProvider', registrationId: 'issues', uriPattern: '^https://example\\.com/issues/', presentationKind: 'issue' },
+			],
+		}]
+	});
 }
 
 function servicesFor(api: ExtensionHost): InstantiationService {
@@ -153,7 +155,7 @@ test('channel subscriptions bound pending delivery and abort it when their conne
 	api.invokeResult = async () => null;
 	await pending.complete(null);
 	await until(() => api.requests.length === 33);
-	assert.deepEqual(api.requests.map(request => (request.payload as { data: JsonValue }).data), Array.from({ length: 33 }, (_, index) => index));
+	assert.deepEqual(api.requests.map(request => (request.payload as { data: JsonValue; }).data), Array.from({ length: 33 }, (_, index) => index));
 	api.connect('stopped');
 	assert.ok(api.signals.every(signal => signal.aborted));
 	channel.sendData('after close');

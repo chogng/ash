@@ -12,12 +12,12 @@ identity through the Terminal service.
 
 ## Current contract
 
-| Symbol | Responsibility | Must not own |
-| --- | --- | --- |
-| `ITaskService` | Enumerate current workspace tasks, start a selected task, terminate an active run | PTY processes, shell rendering, editor state |
-| `TaskService` | Read task files through `IFileService`, create a named terminal, project command status | Host filesystem paths, automatic command execution |
-| `parseWorkspaceTasks` | Validate the supported `tasks.json` shell/process subset | Variable expansion beyond the documented workspace variables |
-| `TaskRun` | Bind the first terminal command identity to one run and retain its final status | Terminal output buffering or shell integration parsing |
+| Symbol                | Responsibility                                                                          | Must not own                                                 |
+| --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `ITaskService`        | Enumerate current workspace tasks, start a selected task, terminate an active run       | PTY processes, shell rendering, editor state                 |
+| `TaskService`         | Read task files through `IFileService`, create a named terminal, project command status | Host filesystem paths, automatic command execution           |
+| `parseWorkspaceTasks` | Validate the supported `tasks.json` shell/process subset                                | Variable expansion beyond the documented workspace variables |
+| `TaskRun`             | Bind the first terminal command identity to one run and retain its final status         | Terminal output buffering or shell integration parsing       |
 
 The execution path is `Run Task` or `TasksViewPane` → `TaskService.run` →
 `ITerminalService.createTerminal` → one explicit terminal write. The task is

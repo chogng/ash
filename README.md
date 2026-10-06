@@ -2,11 +2,11 @@
 
 Ash is a Rust-first agent workspace with three product lines sharing one App Server contract:
 
-| Product | Description | Source | Start |
-| --- | --- | --- | --- |
-| `ash code` | Terminal UI | [`code`](code) | `just ash` |
-| `ash` | Electron Desktop | [`app-ts`](app-ts) | `just ash-desktop` |
-| `app` | Rust Desktop terminal | [`app-rs`](app-rs) | `just app` |
+| Product    | Description           | Source             | Start              |
+| ---------- | --------------------- | ------------------ | ------------------ |
+| `ash code` | Terminal UI           | [`code`](code)     | `just ash`         |
+| `ash`      | Electron Desktop      | [`app-ts`](app-ts) | `just ash-desktop` |
+| `app`      | Rust Desktop terminal | [`app-rs`](app-rs) | `just app`         |
 
 `ash-rs` contains the shared Rust backend. The product-neutral backend executable is
 `ash-app-server`, owned by [`ash-app-server`](ash-rs/app-server/README.md). Electron's `code` and

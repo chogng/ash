@@ -25,10 +25,12 @@ export const EditorOpenSideBySideDirectionConfiguration = configurationRegistry.
 		get title() { return localize('workbench.editor.openSideBySideDirection.title', 'Workbench › Editor: Open Side by Side Direction'); },
 		get description() { return localize('workbench.editor.openSideBySideDirection.description', 'Controls whether editors open side by side to the right or below.'); },
 		valueType: 'select',
-		get options() { return [
-			{ value: 'right' as const, label: localize('workbench.editor.openSideBySideDirection.right', 'Right') },
-			{ value: 'down' as const, label: localize('workbench.editor.openSideBySideDirection.down', 'Down') },
-		]; },
+		get options() {
+			return [
+				{ value: 'right' as const, label: localize('workbench.editor.openSideBySideDirection.right', 'Right') },
+				{ value: 'down' as const, label: localize('workbench.editor.openSideBySideDirection.down', 'Down') },
+			];
+		},
 	},
 });
 
@@ -47,11 +49,13 @@ export const EditorTabSizingConfiguration = configurationRegistry.registerConfig
 		get title() { return localize('workbench.editor.tabSizing.title', 'Workbench › Editor: Tab Sizing'); },
 		get description() { return localize('workbench.editor.tabSizing.description', 'Controls the width of editor tabs when multiple tabs are shown. Fit shows full labels; Shrink reduces widths when space is limited; Fixed gives tabs equal widths.'); },
 		valueType: 'select',
-		get options() { return [
-			{ value: 'fit' as const, label: localize('workbench.editor.tabSizing.fit', 'Fit') },
-			{ value: 'shrink' as const, label: localize('workbench.editor.tabSizing.shrink', 'Shrink') },
-			{ value: 'fixed' as const, label: localize('workbench.editor.tabSizing.fixed', 'Fixed') },
-		]; },
+		get options() {
+			return [
+				{ value: 'fit' as const, label: localize('workbench.editor.tabSizing.fit', 'Fit') },
+				{ value: 'shrink' as const, label: localize('workbench.editor.tabSizing.shrink', 'Shrink') },
+				{ value: 'fixed' as const, label: localize('workbench.editor.tabSizing.fixed', 'Fixed') },
+			];
+		},
 	},
 });
 
@@ -106,12 +110,14 @@ export const EditorLabelFormatConfiguration = configurationRegistry.registerConf
 		get title() { return localize('workbench.editor.labelFormat.title', 'Workbench › Editor: Label Format'); },
 		get description() { return localize('workbench.editor.labelFormat.description', 'Controls directory information in editor tabs. Default only adds distinguishing paths when files have the same name in one editor group.'); },
 		valueType: 'select',
-		get options() { return [
-			{ value: 'default' as const, label: localize('workbench.editor.labelFormat.default', 'Default') },
-			{ value: 'short' as const, label: localize('workbench.editor.labelFormat.short', 'Parent Directory') },
-			{ value: 'medium' as const, label: localize('workbench.editor.labelFormat.medium', 'Relative Path') },
-			{ value: 'long' as const, label: localize('workbench.editor.labelFormat.long', 'Absolute Path') },
-		]; },
+		get options() {
+			return [
+				{ value: 'default' as const, label: localize('workbench.editor.labelFormat.default', 'Default') },
+				{ value: 'short' as const, label: localize('workbench.editor.labelFormat.short', 'Parent Directory') },
+				{ value: 'medium' as const, label: localize('workbench.editor.labelFormat.medium', 'Relative Path') },
+				{ value: 'long' as const, label: localize('workbench.editor.labelFormat.long', 'Absolute Path') },
+			];
+		},
 	},
 });
 
@@ -125,10 +131,12 @@ export const EditorTitleScrollbarSizingConfiguration = configurationRegistry.reg
 		get title() { return localize('workbench.editor.titleScrollbarSizing.title', 'Workbench › Editor: Title Scrollbar Sizing'); },
 		get description() { return localize('workbench.editor.titleScrollbarSizing.description', 'Controls the size of the scrollbars for editor tabs and breadcrumbs.'); },
 		valueType: 'select',
-		get options() { return [
-			{ value: 'default' as const, label: localize('workbench.editor.titleScrollbarSizing.default', 'Default') },
-			{ value: 'large' as const, label: localize('workbench.editor.titleScrollbarSizing.large', 'Large') },
-		]; },
+		get options() {
+			return [
+				{ value: 'default' as const, label: localize('workbench.editor.titleScrollbarSizing.default', 'Default') },
+				{ value: 'large' as const, label: localize('workbench.editor.titleScrollbarSizing.large', 'Large') },
+			];
+		},
 	},
 });
 
@@ -142,11 +150,13 @@ export const EditorTitleScrollbarVisibilityConfiguration = configurationRegistry
 		get title() { return localize('workbench.editor.titleScrollbarVisibility.title', 'Workbench › Editor: Title Scrollbar Visibility'); },
 		get description() { return localize('workbench.editor.titleScrollbarVisibility.description', 'Controls when scrollbars for editor tabs and breadcrumbs are visible.'); },
 		valueType: 'select',
-		get options() { return [
-			{ value: 'auto' as const, label: localize('workbench.editor.titleScrollbarVisibility.auto', 'Auto') },
-			{ value: 'visible' as const, label: localize('workbench.editor.titleScrollbarVisibility.visible', 'Visible') },
-			{ value: 'hidden' as const, label: localize('workbench.editor.titleScrollbarVisibility.hidden', 'Hidden') },
-		]; },
+		get options() {
+			return [
+				{ value: 'auto' as const, label: localize('workbench.editor.titleScrollbarVisibility.auto', 'Auto') },
+				{ value: 'visible' as const, label: localize('workbench.editor.titleScrollbarVisibility.visible', 'Visible') },
+				{ value: 'hidden' as const, label: localize('workbench.editor.titleScrollbarVisibility.hidden', 'Hidden') },
+			];
+		},
 	},
 });
 

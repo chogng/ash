@@ -8,10 +8,10 @@
 
 ## 使用方与验证
 
-| 使用方 | 验证职责 | 命令 |
-| --- | --- | --- |
-| `http-client` | HTTPS 重定向、超时和响应截断 | `just test ash-http-client transport_tests` |
-| `ash-client` | 实际传输中的取消与禁止重试策略 | `just test ash-client operation::tests` |
+| 使用方           | 验证职责                            | 命令                                           |
+| ---------------- | ----------------------------------- | ---------------------------------------------- |
+| `http-client`    | HTTPS 重定向、超时和响应截断        | `just test ash-http-client transport_tests`    |
+| `ash-client`     | 实际传输中的取消与禁止重试策略      | `just test ash-client operation::tests`        |
 | `backend-client` | 后端路由、认证、JSON 与业务错误映射 | `just test ash-backend-client transport_tests` |
 
 - 测试服务每个连接处理一个带 `Content-Length` 的请求；响应关闭连接。它是受控测试设施，不作为通用 HTTP 服务使用。

@@ -141,14 +141,14 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 });
 
 test('PreferencesService opens User Settings JSON as a pinned JSON editor input', async () => {
-	let opened: { readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target: EditorOpenTarget | undefined } | undefined;
+	let opened: { readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target: EditorOpenTarget | undefined; } | undefined;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
 		openEditor(input, options, target): Promise<void> {
 			opened = { input, options, target };
 			return Promise.resolve();
 		},
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	};
 	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
 	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles);
@@ -202,7 +202,7 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	services.registerInstance(EditorServiceId, {
 		...emptyEditorServiceState,
 		openEditor: async (_input, options) => { selection = options?.selection; },
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	});
 	assert.throws(() => services.createInstance(PreferencesService), /Unknown service: fileTextModelService/u);
 	services.registerInstance(IFileTextModelService, models);
@@ -240,7 +240,7 @@ test('revealing existing settings preserves edits and real external conflicts re
 	using preferences = new PreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async (_input, options) => { selection = options?.selection; },
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	}, models, keybindingProfile.files, keybindingProfile.profiles);
 	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.model.getText(), source);

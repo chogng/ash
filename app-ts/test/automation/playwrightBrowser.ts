@@ -5,11 +5,11 @@ import { PlaywrightDriver, WorkbenchDiagnostics } from "./playwrightDriver.js";
 export interface BrowserLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
 	readonly baseURL: string;
-	readonly webSession?: { readonly endpoint: string; readonly token: string };
+	readonly webSession?: { readonly endpoint: string; readonly token: string; };
 	readonly headless?: boolean;
 	readonly recordVideo?: {
 		readonly directory: string;
-		readonly size: { readonly width: number; readonly height: number };
+		readonly size: { readonly width: number; readonly height: number; };
 	};
 }
 
@@ -48,7 +48,7 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		await page.goto(options.baseURL, { waitUntil: "domcontentloaded" });
 		if (options.appServerMode === "required") {
 			await page.waitForFunction(
-				() => (globalThis as { ashWebWorkbenchHost?: unknown }).ashWebWorkbenchHost !== undefined,
+				() => (globalThis as { ashWebWorkbenchHost?: unknown; }).ashWebWorkbenchHost !== undefined,
 				undefined,
 				{ timeout: 30_000 },
 			);

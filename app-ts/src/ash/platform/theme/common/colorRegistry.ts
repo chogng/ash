@@ -14,11 +14,11 @@ export interface ColorDefaults {
 }
 
 export type ColorTransform =
-	| { readonly op: "transparent"; readonly value: ColorValue; readonly factor: number }
-	| { readonly op: "lighten"; readonly value: ColorValue; readonly factor: number }
-	| { readonly op: "darken"; readonly value: ColorValue; readonly factor: number }
-	| { readonly op: "mix"; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number }
-	| { readonly op: "opaque"; readonly value: ColorValue; readonly background: ColorValue };
+	| { readonly op: "transparent"; readonly value: ColorValue; readonly factor: number; }
+	| { readonly op: "lighten"; readonly value: ColorValue; readonly factor: number; }
+	| { readonly op: "darken"; readonly value: ColorValue; readonly factor: number; }
+	| { readonly op: "mix"; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number; }
+	| { readonly op: "opaque"; readonly value: ColorValue; readonly background: ColorValue; };
 
 export type ColorValue = Color | string | ColorTransform | null;
 

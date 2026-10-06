@@ -12,7 +12,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 	private readonly shutdownVetoEmitter = this._register(new Emitter<void>());
 	private readonly willShutdownEmitter = this._register(new Emitter<IWillShutdownEvent>());
 	private readonly didShutdownEmitter = this._register(new Emitter<ShutdownReason>());
-	private readonly phaseWaiters = new Map<LifecyclePhase, { readonly promise: Promise<void>; readonly resolve: () => void }>();
+	private readonly phaseWaiters = new Map<LifecyclePhase, { readonly promise: Promise<void>; readonly resolve: () => void; }>();
 	private _phase = LifecyclePhase.Starting;
 	private _willShutdown = false;
 	private shutdownPromise: Promise<void> | undefined;
@@ -107,7 +107,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 	}
 
 	private async beginShutdown(reason: ShutdownReason): Promise<void> {
-		const vetos: { readonly id: string; readonly value: boolean | Promise<boolean> }[] = [];
+		const vetos: { readonly id: string; readonly value: boolean | Promise<boolean>; }[] = [];
 		let accepting = true;
 		this.beforeShutdownEmitter.fire({
 			reason,
@@ -128,7 +128,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		this._willShutdown = true;
 		this.shutdownReason = reason;
 		this.logService.trace('lifecycle', `Window shutdown: ${reason}`);
-		const operations: { readonly label: string; readonly operation: Promise<unknown> }[] = [];
+		const operations: { readonly label: string; readonly operation: Promise<unknown>; }[] = [];
 		accepting = true;
 		this.willShutdownEmitter.fire({
 			reason,
@@ -151,7 +151,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		this.didShutdownEmitter.fire(reason);
 	}
 
-	private async handleBeforeShutdown(reason: ShutdownReason, vetos: readonly { readonly id: string; readonly value: boolean | Promise<boolean> }[]): Promise<void> {
+	private async handleBeforeShutdown(reason: ShutdownReason, vetos: readonly { readonly id: string; readonly value: boolean | Promise<boolean>; }[]): Promise<void> {
 		const errors: Error[] = [];
 		const isVetoed = await handleVetos(vetos.map(({ id, value }) => typeof value === 'boolean' ? value : value.catch(error => {
 			throw new Error(`Shutdown veto '${id}' failed`, { cause: error });

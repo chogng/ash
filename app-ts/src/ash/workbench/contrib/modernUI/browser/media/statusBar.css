@@ -1,22 +1,22 @@
-:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui :is(
-  .ash-statusbar-item,
-  .ash-statusbar-item-label
-) {
-  border-radius: var(--ash-corner-radius-small);
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	:is(.ash-statusbar-item, .ash-statusbar-item-label) {
+	border-radius: var(--ash-corner-radius-small);
 }
 
-:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui :is(
-  .ash-statusbar-item.compact-left,
-  .ash-statusbar-item.compact-left > .ash-statusbar-item-label
-) {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	:is(
+		.ash-statusbar-item.compact-left,
+		.ash-statusbar-item.compact-left > .ash-statusbar-item-label
+	) {
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
 }
 
-:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui :is(
-  .ash-statusbar-item.compact-right,
-  .ash-statusbar-item.compact-right > .ash-statusbar-item-label
-) {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	:is(
+		.ash-statusbar-item.compact-right,
+		.ash-statusbar-item.compact-right > .ash-statusbar-item-label
+	) {
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
 }

@@ -39,10 +39,10 @@ const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
 	onDidShowDialog: Event.None,
 	about: async () => { throw new Error('Unexpected about dialog'); },
-	showMessage: async () => {},
-	info: async () => {},
-	warn: async () => {},
-	error: async () => {},
+	showMessage: async () => { },
+	info: async () => { },
+	warn: async () => { },
+	error: async () => { },
 	confirm: async () => ({ confirmed: true }),
 	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: true, values: dialogValues }),
@@ -416,9 +416,11 @@ test("Stanza projects and edits the generic group, typed-block, and line hierarc
 	});
 	const firstLine = schema.createNode("richLine", { id: "line-1", content: [schema.createText("First", { id: "line-text-1" })] });
 	const secondLine = schema.createNode("richLine", { id: "line-2", content: [schema.createText("Second", { id: "line-text-2" })] });
-	const document = schema.createDocument([schema.createNode("group", { id: "group-1", content: [
-		schema.createNode("textBlock", { id: "block-1", content: [firstLine, secondLine] }),
-	] })], "article-1");
+	const document = schema.createDocument([schema.createNode("group", {
+		id: "group-1", content: [
+			schema.createNode("textBlock", { id: "block-1", content: [firstLine, secondLine] }),
+		]
+	})], "article-1");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(new MemoryTextFiles(""), { schema });
@@ -1785,8 +1787,8 @@ async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
 
 class MemoryTextFiles implements ITextFileService {
 	readonly onDidChangeFiles = (_listener: (event: IFileChangeEvent) => void) => ({
-		dispose(): void {},
-		[Symbol.dispose](): void {},
+		dispose(): void { },
+		[Symbol.dispose](): void { },
 	});
 	lastSavedText = "";
 	private revision = 1;
@@ -1804,7 +1806,7 @@ class MemoryTextFiles implements ITextFileService {
 		};
 	}
 
-	async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined }> {
+	async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined; }> {
 		if (request.expectedRevision !== undefined && request.expectedRevision !== this.currentRevision()) {
 			throw new TextFileSaveConflictError(request.resource);
 		}
@@ -1833,8 +1835,8 @@ test('switching a document cancels a pending room and disposes a late connection
 	let disposed = false;
 	using pane = new EditorPane(new MemoryTextFiles('First'), {
 		createDocumentCollaborationService: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { },
+			[Symbol.dispose]() { },
 			async open(input, signal) {
 				openingSignal = signal;
 				await pending;
@@ -1847,7 +1849,7 @@ test('switching a document cancels a pending room and disposes a late connection
 					createInvite: async () => { throw new Error('A stale connection must not invite'); },
 					listMembers: async () => [],
 					rotateMemberAccessToken: async () => { throw new Error('A stale connection must not rotate credentials'); },
-					revokeMember: async () => {},
+					revokeMember: async () => { },
 					dispose: () => { disposed = true; },
 					[Symbol.dispose]: () => { disposed = true; },
 				};

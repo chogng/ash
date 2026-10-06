@@ -94,7 +94,7 @@ function singleModifierLabel(
 		: uiModifierLabels(operatingSystem);
 	return key === "ctrl" ? labels.ctrl :
 		key === "shift" ? labels.shift :
-		key === "alt" ? labels.alt : labels.meta;
+			key === "alt" ? labels.alt : labels.meta;
 }
 
 function formatUserSettingsChord(

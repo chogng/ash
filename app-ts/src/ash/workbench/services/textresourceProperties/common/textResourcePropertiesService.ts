@@ -6,7 +6,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 export class TextResourcePropertiesService implements ITextResourcePropertiesService {
 	declare public readonly _serviceBrand: undefined;
 
-	constructor(@IConfigurationService private readonly configuration: IConfigurationService) {}
+	constructor(@IConfigurationService private readonly configuration: IConfigurationService) { }
 
 	public getEOL(resource: URI, language?: string): string {
 		const value = this.configuration.getValue<'auto' | '\n' | '\r\n'>('files.eol', { resource, overrideIdentifier: language });

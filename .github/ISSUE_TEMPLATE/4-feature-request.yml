@@ -17,9 +17,9 @@ body:
     attributes:
       label: Which Ash product is this for?
       options:
-      - App
-      - CLI
-      - All
+        - App
+        - CLI
+        - All
     validations:
       required: true
   - type: textarea

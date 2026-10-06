@@ -164,7 +164,7 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\status.ts"));
 	const pane = new TestStatusPane(workingCopy);
 	const input: EditorInput = { resource: workingCopy.resource, languageId: "typescript" };
-	const state: { activeInput: EditorInput | undefined; activePane: IEditorPane | undefined } = { activeInput: input, activePane: pane };
+	const state: { activeInput: EditorInput | undefined; activePane: IEditorPane | undefined; } = { activeInput: input, activePane: pane };
 	const editorPart = {
 		domNode: dom.window.document.body,
 		get activeInput() { return state.activeInput; },
@@ -286,12 +286,12 @@ class TestStatusPane extends Disposable implements IEditorPane {
 	constructor(readonly workingCopy: IWorkingCopy | undefined) { super(); }
 	getStatus(): EditorPaneStatus { return this.status; }
 	setStatus(status: EditorPaneStatus): void { this.status = status; this.statusEmitter.fire(); }
-	create(): void {}
-	async setInput(): Promise<void> {}
-	clearInput(): void {}
-	layout(): void {}
-	setVisible(_visibility: EditorPaneVisibility): void {}
-	focus(): void {}
+	create(): void { }
+	async setInput(): Promise<void> { }
+	clearInput(): void { }
+	layout(): void { }
+	setVisible(_visibility: EditorPaneVisibility): void { }
+	focus(): void { }
 }
 
 function statusTexts(statusbar: StatusbarService): string[] {

@@ -296,7 +296,7 @@ function normalizeLabel(
 	matches: readonly IMatch[] | undefined,
 	escapeNewLines: boolean,
 	separator = '/',
-): { readonly value: string | readonly string[] | undefined; readonly matches: readonly IMatch[] | undefined } {
+): { readonly value: string | readonly string[] | undefined; readonly matches: readonly IMatch[] | undefined; } {
 	if (!escapeNewLines || value === undefined) return { value, matches };
 	if (typeof value !== 'string') {
 		let sourceOffset = 0;
@@ -320,7 +320,7 @@ function normalizeLabel(
 	return { value: result.value, matches: matches?.map(match => ({ start: result.offset(match.start), end: result.offset(match.end) })) };
 }
 
-function escapeLabelNewLines(value: string): { readonly value: string; readonly offset: (sourceOffset: number) => number } {
+function escapeLabelNewLines(value: string): { readonly value: string; readonly offset: (sourceOffset: number) => number; } {
 	const offsets = new Array<number>(value.length + 1);
 	let result = '';
 	let sourceOffset = 0;

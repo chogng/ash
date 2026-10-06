@@ -14,7 +14,7 @@ export interface ElectronLaunchOptions {
 	readonly extraArgs?: readonly string[];
 	readonly recordVideo?: {
 		readonly directory: string;
-		readonly size: { readonly width: number; readonly height: number };
+		readonly size: { readonly width: number; readonly height: number; };
 	};
 	/** Owning app-ts package. Scenario bundles pass this explicitly because their output lives outside app-ts. */
 	readonly desktopDirectory?: string;

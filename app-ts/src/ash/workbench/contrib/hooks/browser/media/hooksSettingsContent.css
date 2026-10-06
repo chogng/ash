@@ -3,7 +3,9 @@
 	color: var(--ash-foreground);
 }
 
-.ash-agent-hooks-settings[hidden], .ash-hooks-event[hidden], .ash-hooks-declaration[hidden] {
+.ash-agent-hooks-settings[hidden],
+.ash-hooks-event[hidden],
+.ash-hooks-declaration[hidden] {
 	display: none;
 }
 
@@ -13,7 +15,6 @@
 	gap: var(--ash-spacing-size80);
 	margin-block: var(--ash-spacing-size120);
 }
-
 
 .ash-hooks-event summary:focus-visible {
 	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
@@ -47,7 +48,8 @@
 	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
 }
 
-.ash-hooks-declaration dt, .ash-hooks-declaration dd {
+.ash-hooks-declaration dt,
+.ash-hooks-declaration dd {
 	margin: 0;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;

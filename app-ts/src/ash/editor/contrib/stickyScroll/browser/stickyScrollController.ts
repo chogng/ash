@@ -31,9 +31,9 @@ export class StickyScrollController extends Disposable {
 	private previewLine: number | null = null;
 	private changingFold = false;
 	private menuOpen = false;
-	private pointer: { x: number; y: number } | undefined;
+	private pointer: { x: number; y: number; } | undefined;
 	private definitionRequest: AbortController | undefined;
-	private definitionTarget: { node: HTMLElement; lineNumber: number; startColumn: number; endColumn: number } | undefined;
+	private definitionTarget: { node: HTMLElement; lineNumber: number; startColumn: number; endColumn: number; } | undefined;
 
 	constructor(
 		private readonly editor: ICodeEditor,

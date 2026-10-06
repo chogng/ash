@@ -24,7 +24,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 
 registerWorkbenchContribution('workbench.contrib.onboarding', WorkbenchPhase.AfterRestored, accessor => {
 	accessor.get(IOnboardingScenarioService).start();
-	return { dispose(): void {}, [Symbol.dispose](): void {} };
+	return { dispose(): void { }, [Symbol.dispose](): void { } };
 });
 
 registerAction2(class RunOnboardingScenarioAction extends Action2 {

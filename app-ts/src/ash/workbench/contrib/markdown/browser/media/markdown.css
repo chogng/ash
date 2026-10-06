@@ -1,5 +1,5 @@
 .ash-markdown-document-view {
-  background: var(--ash-editor-background);
-  min-height: 0;
-  min-width: 0;
+	background: var(--ash-editor-background);
+	min-height: 0;
+	min-width: 0;
 }

@@ -12,7 +12,7 @@ export interface IConfigurationOverrides {
 	readonly resource?: URI | null;
 }
 
-export type IConfigurationUpdateOverrides = Omit<IConfigurationOverrides, 'overrideIdentifier'> & { readonly overrideIdentifiers?: string[] | null };
+export type IConfigurationUpdateOverrides = Omit<IConfigurationOverrides, 'overrideIdentifier'> & { readonly overrideIdentifiers?: string[] | null; };
 
 export const enum ConfigurationTarget {
 	APPLICATION = 1,
@@ -53,7 +53,7 @@ export interface IConfigurationChangeEvent {
 export interface IInspectValue<T> {
 	readonly value?: T;
 	readonly override?: T;
-	readonly overrides?: { readonly identifiers: string[]; readonly value: T }[];
+	readonly overrides?: { readonly identifiers: string[]; readonly value: T; }[];
 }
 
 export interface IConfigurationValue<T> {
@@ -75,7 +75,7 @@ export interface IConfigurationValue<T> {
 	readonly workspace?: IInspectValue<T>;
 	readonly workspaceFolder?: IInspectValue<T>;
 	readonly memory?: IInspectValue<T>;
-	readonly policy?: { readonly value?: T };
+	readonly policy?: { readonly value?: T; };
 	readonly overrideIdentifiers?: string[];
 }
 
@@ -123,7 +123,7 @@ export function getConfigValueInTarget<T>(value: IConfigurationValue<T>, target:
 	}
 }
 
-export function isConfigured<T>(value: IConfigurationValue<T>): value is IConfigurationValue<T> & { value: T } {
+export function isConfigured<T>(value: IConfigurationValue<T>): value is IConfigurationValue<T> & { value: T; } {
 	return value.applicationValue !== undefined
 		|| value.userValue !== undefined
 		|| value.userLocalValue !== undefined
@@ -166,7 +166,7 @@ export interface IConfigurationService {
 	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>>;
 	reloadConfiguration(target?: ConfigurationTarget | IWorkspaceFolder): Promise<void>;
-	keys(): { readonly default: string[]; readonly policy: string[]; readonly user: string[]; readonly workspace: string[]; readonly workspaceFolder: string[]; readonly memory?: string[] };
+	keys(): { readonly default: string[]; readonly policy: string[]; readonly user: string[]; readonly workspace: string[]; readonly workspaceFolder: string[]; readonly memory?: string[]; };
 }
 
 export function toValuesTree(properties: IStringDictionary<unknown>, conflictReporter: (message: string) => void): IStringDictionary<unknown> {

@@ -1,315 +1,287 @@
 :root {
-  --ash-font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    system-ui,
-    "Ubuntu",
-    "Droid Sans",
-    sans-serif;
-  --ash-font-family-monospace:
-    ui-monospace,
-    "SFMono-Regular",
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    "Courier New",
-    monospace;
+	--ash-font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Ubuntu",
+		"Droid Sans", sans-serif;
+	--ash-font-family-monospace:
+		ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas,
+		"Liberation Mono", "Courier New", monospace;
 
-  color-scheme: light dark;
-  font-family: var(--ash-font-family);
-  font-size: 13px;
-  background: var(--ash-workbench-background);
-  color: var(--ash-foreground);
+	color-scheme: light dark;
+	font-family: var(--ash-font-family);
+	font-size: 13px;
+	background: var(--ash-workbench-background);
+	color: var(--ash-foreground);
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
 
-html, body, #app { width: 100%; min-width: 0; min-height: 0; height: 100%; margin: 0; }
+html,
+body,
+#app {
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	margin: 0;
+}
 
 body {
-  overflow: hidden;
-  background: var(--ash-workbench-background);
+	overflow: hidden;
+	background: var(--ash-workbench-background);
 }
 
-button, input, select, textarea { font: inherit; }
+button,
+input,
+select,
+textarea {
+	font: inherit;
+}
 
 .ash-workbench[data-os="mac"] {
-  --ash-font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  --ash-font-family-monospace:
-    "SF Mono",
-    Monaco,
-    Menlo,
-    Courier,
-    monospace;
+	--ash-font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+	--ash-font-family-monospace: "SF Mono", Monaco, Menlo, Courier, monospace;
 }
 
 .ash-workbench[data-os="mac"]:lang(zh-Hans) {
-  --ash-font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "PingFang SC",
-    "Hiragino Sans GB",
-    sans-serif;
+	--ash-font-family:
+		-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+		sans-serif;
 }
 
 .ash-workbench[data-os="mac"]:lang(zh-Hant) {
-  --ash-font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "PingFang TC",
-    sans-serif;
+	--ash-font-family:
+		-apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif;
 }
 
 .ash-workbench[data-os="mac"]:lang(ja) {
-  --ash-font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Hiragino Kaku Gothic Pro",
-    sans-serif;
+	--ash-font-family:
+		-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic Pro",
+		sans-serif;
 }
 
 .ash-workbench[data-os="mac"]:lang(ko) {
-  --ash-font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Apple SD Gothic Neo",
-    "Nanum Gothic",
-    AppleGothic,
-    sans-serif;
+	--ash-font-family:
+		-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+		"Nanum Gothic", AppleGothic, sans-serif;
 }
 
 .ash-workbench[data-os="windows"] {
-  --ash-font-family: "Segoe WPC", "Segoe UI", sans-serif;
-  --ash-font-family-monospace: Consolas, "Courier New", monospace;
+	--ash-font-family: "Segoe WPC", "Segoe UI", sans-serif;
+	--ash-font-family-monospace: Consolas, "Courier New", monospace;
 }
 
 .ash-workbench[data-os="windows"]:lang(zh-Hans) {
-  --ash-font-family:
-    "Segoe WPC",
-    "Segoe UI",
-    "Microsoft YaHei",
-    sans-serif;
+	--ash-font-family: "Segoe WPC", "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
 .ash-workbench[data-os="windows"]:lang(zh-Hant) {
-  --ash-font-family:
-    "Segoe WPC",
-    "Segoe UI",
-    "Microsoft Jhenghei",
-    sans-serif;
+	--ash-font-family:
+		"Segoe WPC", "Segoe UI", "Microsoft Jhenghei", sans-serif;
 }
 
 .ash-workbench[data-os="windows"]:lang(ja) {
-  --ash-font-family:
-    "Segoe WPC",
-    "Segoe UI",
-    "Yu Gothic UI",
-    "Meiryo UI",
-    sans-serif;
+	--ash-font-family:
+		"Segoe WPC", "Segoe UI", "Yu Gothic UI", "Meiryo UI", sans-serif;
 }
 
 .ash-workbench[data-os="windows"]:lang(ko) {
-  --ash-font-family:
-    "Segoe WPC",
-    "Segoe UI",
-    "Malgun Gothic",
-    Dotom,
-    sans-serif;
+	--ash-font-family:
+		"Segoe WPC", "Segoe UI", "Malgun Gothic", Dotom, sans-serif;
 }
 
 .ash-workbench[data-os="linux"] {
-  --ash-font-family: system-ui, "Ubuntu", "Droid Sans", sans-serif;
-  --ash-font-family-monospace:
-    "Ubuntu Mono",
-    "Liberation Mono",
-    "DejaVu Sans Mono",
-    "Courier New",
-    monospace;
+	--ash-font-family: system-ui, "Ubuntu", "Droid Sans", sans-serif;
+	--ash-font-family-monospace:
+		"Ubuntu Mono", "Liberation Mono", "DejaVu Sans Mono", "Courier New",
+		monospace;
 }
 
 .ash-workbench[data-os="linux"]:lang(zh-Hans) {
-  --ash-font-family:
-    system-ui,
-    "Ubuntu",
-    "Droid Sans",
-    "Source Han Sans SC",
-    "Source Han Sans CN",
-    "Source Han Sans",
-    sans-serif;
+	--ash-font-family:
+		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans SC",
+		"Source Han Sans CN", "Source Han Sans", sans-serif;
 }
 
 .ash-workbench[data-os="linux"]:lang(zh-Hant) {
-  --ash-font-family:
-    system-ui,
-    "Ubuntu",
-    "Droid Sans",
-    "Source Han Sans TC",
-    "Source Han Sans TW",
-    "Source Han Sans",
-    sans-serif;
+	--ash-font-family:
+		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans TC",
+		"Source Han Sans TW", "Source Han Sans", sans-serif;
 }
 
 .ash-workbench[data-os="linux"]:lang(ja) {
-  --ash-font-family:
-    system-ui,
-    "Ubuntu",
-    "Droid Sans",
-    "Source Han Sans J",
-    "Source Han Sans JP",
-    "Source Han Sans",
-    sans-serif;
+	--ash-font-family:
+		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans J",
+		"Source Han Sans JP", "Source Han Sans", sans-serif;
 }
 
 .ash-workbench[data-os="linux"]:lang(ko) {
-  --ash-font-family:
-    system-ui,
-    "Ubuntu",
-    "Droid Sans",
-    "Source Han Sans K",
-    "Source Han Sans KR",
-    "Source Han Sans",
-    UnDotum,
-    "FBaekmuk Gulim",
-    sans-serif;
+	--ash-font-family:
+		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans K",
+		"Source Han Sans KR", "Source Han Sans", UnDotum, "FBaekmuk Gulim",
+		sans-serif;
 }
 
 .ash-workbench {
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-  flex-direction: column;
-  font-family: var(--ash-font-family);
-  font-size: var(--ash-font-size-body1);
-  font-weight: var(--ash-font-weight-regular);
-  line-height: 1.4;
-  color: var(--ash-foreground);
-  background: var(--ash-workbench-background);
+	position: relative;
+	display: flex;
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	overflow: hidden;
+	flex-direction: column;
+	font-family: var(--ash-font-family);
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-regular);
+	line-height: 1.4;
+	color: var(--ash-foreground);
+	background: var(--ash-workbench-background);
 }
 
 .ash-workbench-layout {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  overflow: hidden;
+	position: relative;
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	flex: 1 1 auto;
+	overflow: hidden;
 }
 
 .ash-workbench-layout > .ash-grid {
-  position: absolute;
-  inset: 0;
+	position: absolute;
+	inset: 0;
 }
 
 .ash-workbench ::selection {
-  color: var(--ash-selection-foreground);
-  background: var(--ash-selection-background);
+	color: var(--ash-selection-foreground);
+	background: var(--ash-selection-background);
 }
 
-.ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-action-view-item > .ash-button:not(:disabled):hover),
-.ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-action-view-item > .ash-action-label:not(:disabled):hover),
-.ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-dropdown-with-primary-action-view-item:not(.disabled):hover),
-.ash-workbench :where(.ash-action-bar:not(.vertical) > .ash-dropdown-with-primary-action-view-item.active) {
-  background: var(--ash-toolbar-hover-background);
+.ash-workbench
+	:where(
+		.ash-action-bar:not(.vertical)
+			> .ash-action-view-item
+			> .ash-button:not(:disabled):hover
+	),
+.ash-workbench
+	:where(
+		.ash-action-bar:not(.vertical)
+			> .ash-action-view-item
+			> .ash-action-label:not(:disabled):hover
+	),
+.ash-workbench
+	:where(
+		.ash-action-bar:not(.vertical)
+			> .ash-dropdown-with-primary-action-view-item:not(.disabled):hover
+	),
+.ash-workbench
+	:where(
+		.ash-action-bar:not(.vertical)
+			> .ash-dropdown-with-primary-action-view-item.active
+	) {
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-workbench.ash-reduce-motion *,
 .ash-workbench.ash-reduce-motion *::before,
 .ash-workbench.ash-reduce-motion *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  scroll-behavior: auto !important;
-  transition-duration: 0.01ms !important;
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	scroll-behavior: auto !important;
+	transition-duration: 0.01ms !important;
 }
 
 .ash-workbench.ash-underline-links a {
-  text-decoration-line: underline;
+	text-decoration-line: underline;
 }
 
 .ash-feedback-host {
-  position: absolute;
-  z-index: 1000;
-  inset-block-end: calc(var(--ash-feedback-statusbar-height) + 8px);
-  inset-inline-end: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(420px, calc(100% - 24px));
-  max-height: calc(100% - var(--ash-feedback-statusbar-height) - 16px);
-  pointer-events: none;
+	position: absolute;
+	z-index: 1000;
+	inset-block-end: calc(var(--ash-feedback-statusbar-height) + 8px);
+	inset-inline-end: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: min(420px, calc(100% - 24px));
+	max-height: calc(100% - var(--ash-feedback-statusbar-height) - 16px);
+	pointer-events: none;
 }
 
 .ash-progress-host {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  overflow-y: auto;
-  pointer-events: auto;
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
+	overflow-y: auto;
+	pointer-events: auto;
 }
 
 .ash-progress-host:empty {
-  display: none;
+	display: none;
 }
 
 .ash-progress-cancel {
-  border: var(--ash-stroke-thickness) solid var(--ash-button-border, var(--ash-foreground));
-  border-radius: var(--ash-corner-radius-small);
-  color: inherit;
-  background: var(--ash-button-background, transparent);
-  cursor: pointer;
+	border: var(--ash-stroke-thickness) solid
+		var(--ash-button-border, var(--ash-foreground));
+	border-radius: var(--ash-corner-radius-small);
+	color: inherit;
+	background: var(--ash-button-background, transparent);
+	cursor: pointer;
 }
 
 .ash-progress-host {
-  gap: 6px;
+	gap: 6px;
 }
 
 .ash-progress-item {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 8px;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground));
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background, var(--ash-workbench-background));
-  pointer-events: auto;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 6px 8px;
+	border: var(--ash-stroke-thickness) solid
+		var(--ash-widget-border, var(--ash-foreground));
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background, var(--ash-workbench-background));
+	pointer-events: auto;
 }
 
 .ash-progress-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-progress-message {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: .8;
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.8;
 }
 
 .ash-progress-item progress {
-  inline-size: 100px;
+	inline-size: 100px;
 }
 
 .ash-progress-indeterminate {
-  inline-size: 14px;
-  block-size: 14px;
-  border: 2px solid currentColor;
-  border-inline-end-color: transparent;
-  border-radius: 50%;
-  animation: ash-progress-spin 900ms linear infinite;
+	inline-size: 14px;
+	block-size: 14px;
+	border: 2px solid currentColor;
+	border-inline-end-color: transparent;
+	border-radius: 50%;
+	animation: ash-progress-spin 900ms linear infinite;
 }
 
 @keyframes ash-progress-spin {
-  to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }

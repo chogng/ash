@@ -70,6 +70,6 @@ function splitViewItem(element: HTMLElement, minimumSize: number, maximumSize: n
 		minimumSize,
 		maximumSize,
 		priority,
-		layout() {},
+		layout() { },
 	};
 }

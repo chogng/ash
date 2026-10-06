@@ -652,7 +652,7 @@ test('an initially empty standalone editor attaches, edits and releases a shared
 	expect(errors).toEqual([]);
 });
 
-async function stickyDefinitionPoint(page: Page): Promise<{ x: number; y: number; column: number }> {
+async function stickyDefinitionPoint(page: Page): Promise<{ x: number; y: number; column: number; }> {
 	const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
 	await expect(text).toHaveText('  function inner() {');
 	return text.evaluate(element => {
@@ -3748,7 +3748,7 @@ for (const scenario of [
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await input.evaluate((element, scenario) => {
-			const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+			const context = (element as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!context) throw new Error('Browser EditContext is unavailable');
 			context.dispatchEvent(Object.assign(new Event('textupdate'), {
 				text: scenario.text, updateRangeStart: scenario.range[0], updateRangeEnd: scenario.range[1],
@@ -3775,7 +3775,7 @@ test('EditContext range update replaces text at every cursor in one transaction'
 	await input.focus();
 	const initial = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
 	await input.evaluate(element => {
-		const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+		const context = (element as HTMLElement & { editContext?: EventTarget; }).editContext;
 		if (!context) throw new Error('Browser EditContext is unavailable');
 		context.dispatchEvent(Object.assign(new Event('textupdate'), {
 			text: 'hi', updateRangeStart: 0, updateRangeEnd: 5, selectionStart: 2, selectionEnd: 2,
@@ -3905,7 +3905,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 				input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'X' }));
 				return;
 			}
-			const context = (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			const context = (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!context) throw new Error('Browser EditContext is unavailable');
 			context.dispatchEvent(Object.assign(new Event('textupdate'), {
 				text: 'X', updateRangeStart: 0, updateRangeEnd: 0, selectionStart: 1, selectionEnd: 1,
@@ -3936,7 +3936,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		await page.evaluate(kind => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
 			if (!input) throw new Error('Caller input is unavailable');
-			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!target) throw new Error('Composition target is unavailable');
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 			if (kind === 'textarea') {
@@ -3996,7 +3996,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		await page.evaluate(kind => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
 			if (!input) throw new Error('Caller input is unavailable');
-			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!target) throw new Error('Composition target is unavailable');
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 			if (kind === 'textarea') {
@@ -4052,7 +4052,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		await page.evaluate(kind => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
 			if (!input) throw new Error('Caller input is unavailable');
-			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!target) throw new Error('Composition target is unavailable');
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 			if (kind === 'textarea') {
@@ -4091,7 +4091,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		const lateStart = await page.evaluate(kind => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
 			if (!input) throw new Error('Caller input is unavailable');
-			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!target) throw new Error('Composition target is unavailable');
 			target.dispatchEvent(new CompositionEvent('compositionend', { data: '你' }));
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
@@ -4101,7 +4101,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		await page.evaluate(kind => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
 			if (!input) throw new Error('Caller input is unavailable');
-			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 			if (!target) throw new Error('Composition target is unavailable');
 			if (kind === 'textarea') {
 				const textArea = input as HTMLTextAreaElement;
@@ -4746,10 +4746,10 @@ test('standalone marker API preserves other models when one owner updates a mode
 		second: ['owned'],
 		afterClear: ['owned'],
 		events: [
-		['inmemory://stanza/caller.txt'],
-		['inmemory://stanza/owned.txt'],
-		['inmemory://stanza/caller.txt'],
-		['inmemory://stanza/owned.txt'],
+			['inmemory://stanza/caller.txt'],
+			['inmemory://stanza/owned.txt'],
+			['inmemory://stanza/caller.txt'],
+			['inmemory://stanza/owned.txt'],
 		],
 	});
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -5283,14 +5283,14 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		await page.keyboard.type('abc');
 		await page.evaluate(() => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input')!;
-			const target = (input as HTMLElement & { editContext?: EventTarget }).editContext ?? input;
+			const target = (input as HTMLElement & { editContext?: EventTarget; }).editContext ?? input;
 			target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
 		});
 		await page.clock.runFor(500);
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([]);
 		await page.evaluate(() => {
 			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input')!;
-			const target = (input as HTMLElement & { editContext?: EventTarget }).editContext ?? input;
+			const target = (input as HTMLElement & { editContext?: EventTarget; }).editContext ?? input;
 			target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
 		});
 		await page.clock.runFor(50);
@@ -5638,7 +5638,7 @@ test('color provider commands query loaded models, return formats and reject inv
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
 	const colors = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeDocumentColorProvider'));
 	expect(colors).toEqual([{ range: { startLineNumber: 1, startColumn: 15, endLineNumber: 1, endColumn: 24 }, color: [1, 0, 0, 128 / 255] }]);
-	const formats = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [0, 1, 0, 1], [1, 15, 1, 24])) as { label: string; textEdit: { text: string } }[];
+	const formats = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [0, 1, 0, 1], [1, 15, 1, 24])) as { label: string; textEdit: { text: string; }; }[];
 	expect(formats.map(format => [format.label, format.textEdit.text])).toEqual([['rgb(0, 255, 0)', 'rgb(0, 255, 0)'], ['hsl(120, 100%, 50%)', 'hsl(120, 100%, 50%)'], ['#00ff00', '#00ff00']]);
 	expect(await page.evaluate(async () => {
 		try { await window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [2, 0, 0, 1], [1, 15, 1, 24]); return ''; }

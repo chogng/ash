@@ -40,7 +40,7 @@ test('getBrowserFeatures distinguishes supported browser engines and hosts', () 
 });
 
 test('getMonacoEnvironment reads the current embedding environment', () => {
-	const globalWithEnvironment = globalThis as typeof globalThis & { MonacoEnvironment?: { globalAPI?: boolean } };
+	const globalWithEnvironment = globalThis as typeof globalThis & { MonacoEnvironment?: { globalAPI?: boolean; }; };
 	const previous = globalWithEnvironment.MonacoEnvironment;
 	try {
 		globalWithEnvironment.MonacoEnvironment = { globalAPI: true };

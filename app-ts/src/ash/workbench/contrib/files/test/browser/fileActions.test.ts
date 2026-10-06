@@ -145,8 +145,8 @@ for (const fileRoot of fileCommandRoots) {
 			using viewRegistration = explorerService.registerView({
 				getContext: () => [new ExplorerItem(URI.parse(`${fileRoot.uri}/src`), 'src', FileKind.Directory)],
 				getAccessibleContent: () => '',
-				selectResource: async () => {},
-				focus() {},
+				selectResource: async () => { },
+				focus() { },
 			});
 			await commands.executeCommand(NEW_FILE_COMMAND_ID);
 			assert.equal(created.at(-1)?.toString(), `${fileRoot.uri}/src/new%20%25%E4%B8%AD.txt`);
@@ -168,8 +168,8 @@ test('New Folder command creates a directory under the selected folder', async (
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(folder, 'src', FileKind.Directory)],
 		getAccessibleContent: () => '',
-		selectResource: async () => {},
-		focus() {},
+		selectResource: async () => { },
+		focus() { },
 	});
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -203,7 +203,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	let selected: readonly ExplorerItem[] = [first, second];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
-	using registration = explorer.registerView({ getContext: () => selected, getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
+	using registration = explorer.registerView({ getContext: () => selected, getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 	const existing = new Set(['/project/one.txt', '/project/two.txt', '/project/dest', '/project/dest/one.txt']);
 	const copied: string[] = [];
 	const renamed: string[] = [];
@@ -213,7 +213,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
 		readText: async () => '',
-		writeText: async () => {},
+		writeText: async () => { },
 		readResources: async () => resourceClipboard,
 		writeResources: async (resources, operation) => { resourceClipboard = { resources: [...resources], operation }; },
 		hasResources: async () => resourceClipboard.resources.length > 0,
@@ -255,7 +255,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const clipboard = {
 		readText: async () => '',
-		writeText: async () => {},
+		writeText: async () => { },
 		readResources: async () => clipboardResources,
 		writeResources: async (resources: readonly URI[], operation: 'copy' | 'move') => { clipboardResources = { resources: [...resources], operation }; },
 		hasResources: async () => clipboardResources.resources.length > 0,
@@ -263,8 +263,8 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 	using first = createExplorerService(workspace);
 	using second = createExplorerService(workspace);
-	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
-	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
+	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
+	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 	using firstServices = new InstantiationService();
 	firstServices.registerInstance(IWorkspaceContextService, workspace);
 	firstServices.registerInstance(IExplorerService, first);
@@ -311,7 +311,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 		],
 	});
 	using explorer = createExplorerService(workspace);
-	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
+	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const operations: string[] = [];
 	using services = new InstantiationService();
@@ -319,7 +319,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
 		readText: async () => '',
-		writeText: async () => {},
+		writeText: async () => { },
 		readResources: async () => clipboardResources,
 		writeResources: async (resources, operation) => { clipboardResources = { resources, operation }; },
 		hasResources: async () => clipboardResources.resources.length > 0,
@@ -348,8 +348,8 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 		const destination = URI.file('/project/destination');
 		using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
-		const pastes: { directory: string; moveRequested: boolean }[] = [];
+		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
+		const pastes: { directory: string; moveRequested: boolean; }[] = [];
 		using services = new InstantiationService();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
@@ -392,8 +392,8 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		});
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => {}, focus() {} });
-		const writes: { resource: string; bytes: number[] }[] = [];
+		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
+		const writes: { resource: string; bytes: number[]; }[] = [];
 		const attemptedTransfers: string[] = [];
 		using services = new InstantiationService();
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -440,7 +440,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 			readText: async () => copied.at(-1) ?? '',
 			writeText: async (value: string) => { copied.push(value); },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
-			writeResources: async () => {},
+			writeResources: async () => { },
 			hasResources: async () => false,
 		});
 		using commands = new CommandService(services);
@@ -480,7 +480,7 @@ for (const fileRoot of fileCommandRoots) {
 				downloadedBlob = blob;
 				return 'blob:ash-download';
 			};
-			browser.window.URL.revokeObjectURL = () => {};
+			browser.window.URL.revokeObjectURL = () => { };
 			browser.window.HTMLAnchorElement.prototype.click = function () {
 				downloadedName = this.download;
 			};
@@ -519,8 +519,8 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(selected, 'old.ts', FileKind.File)],
 		getAccessibleContent: () => '',
-		selectResource: async () => {},
-		focus() {},
+		selectResource: async () => { },
+		focus() { },
 	});
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -580,8 +580,8 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 	using registration = explorer.registerView({
 		getContext: () => [new ExplorerItem(selected, 'main.ts', FileKind.File)],
 		getAccessibleContent: () => '',
-		selectResource: async () => {},
-		focus() {},
+		selectResource: async () => { },
+		focus() { },
 	});
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -651,7 +651,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 		getContext: () => [new ExplorerItem(active.resource, active.label, FileKind.File)],
 		getAccessibleContent: () => '',
 		selectResource: async (resource, reveal) => { effects.push(['select', resource?.toString(), reveal]); },
-		focus() {},
+		focus() { },
 	});
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -662,7 +662,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	services.registerInstance(IViewsService, {
 		openView: async (id: string) => {
 			effects.push(['open', id]);
-			return { id, focus: () => { effects.push(['focus']); }, isVisible: () => true, setVisible() {} };
+			return { id, focus: () => { effects.push(['focus']); }, isVisible: () => true, setVisible() { } };
 		},
 		focusView: async () => false,
 		getViewWithId: () => null,

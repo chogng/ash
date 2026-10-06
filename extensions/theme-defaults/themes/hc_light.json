@@ -1,10 +1,10 @@
 {
-	"$schema": "vscode://schemas/color-theme",
-	"name": "Light High Contrast",
-	"colors": {
-		"actionBar.toggledBackground": "#dddddd",
-		"statusBarItem.remoteBackground": "#FFFFFF",
-		"statusBarItem.remoteForeground": "#000000"
-	},
-	"include": "./hc_light_syntax.json"
+  "$schema": "vscode://schemas/color-theme",
+  "name": "Light High Contrast",
+  "colors": {
+    "actionBar.toggledBackground": "#dddddd",
+    "statusBarItem.remoteBackground": "#FFFFFF",
+    "statusBarItem.remoteForeground": "#000000"
+  },
+  "include": "./hc_light_syntax.json"
 }

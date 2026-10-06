@@ -17,7 +17,7 @@ export interface IBoundingBox {
 export interface IRasterizedGlyph {
 	source: OffscreenCanvas;
 	boundingBox: IBoundingBox;
-	originOffset: { x: number; y: number };
+	originOffset: { x: number; y: number; };
 	fontBoundingBoxAscent: number;
 	fontBoundingBoxDescent: number;
 }

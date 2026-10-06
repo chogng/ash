@@ -34,7 +34,7 @@ export class ColorPicker extends Disposable {
 	public readonly onDidRequestClose = this.closeEmitter.event;
 	private selectedColor = Color.white;
 	private format: ColorFormat = 'hex';
-	private gesture: { readonly pointerId: number; readonly color: Color } | undefined;
+	private gesture: { readonly pointerId: number; readonly color: Color; } | undefined;
 	private rangeOriginal: Color | undefined;
 
 	constructor(ownerDocument: Document, variant: 'dialog' | 'embedded' = 'dialog') {
@@ -156,7 +156,7 @@ export class ColorPicker extends Disposable {
 
 	public focus(): void { this.areaDomNode.focus(); }
 
-	public setPalettes(palettes: readonly { readonly label: string; readonly colors: readonly Color[] }[]): void {
+	public setPalettes(palettes: readonly { readonly label: string; readonly colors: readonly Color[]; }[]): void {
 		this.paletteResources.clear();
 		this.palettesDomNode.replaceChildren();
 		for (const palette of palettes) {

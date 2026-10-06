@@ -13,12 +13,12 @@
 
 ## 1. 边界与依赖
 
-| 拥有 | 不拥有 |
-| --- | --- |
-| canonical `SlashCommandDefinition` 的名称、描述、冲突校验与稳定顺序 | 命令实际执行与授权 |
-| `SlashCommandInput` 的 `/` 查询、补全范围和参数解析 | composer 文本存储、键盘或鼠标事件 |
-| `SlashCommandsState` 的匹配、选择与 dismiss 状态 | Ratatui、WGPU、DOM 或各宿主 renderer 的绘制与滚动几何 |
-| 与 model 分离的 server/local contribution kind | Skill selector、App Server 初始化、IPC 或 Renderer lifecycle |
+| 拥有                                                                | 不拥有                                                       |
+| ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| canonical `SlashCommandDefinition` 的名称、描述、冲突校验与稳定顺序 | 命令实际执行与授权                                           |
+| `SlashCommandInput` 的 `/` 查询、补全范围和参数解析                 | composer 文本存储、键盘或鼠标事件                            |
+| `SlashCommandsState` 的匹配、选择与 dismiss 状态                    | Ratatui、WGPU、DOM 或各宿主 renderer 的绘制与滚动几何        |
+| 与 model 分离的 server/local contribution kind                      | Skill selector、App Server 初始化、IPC 或 Renderer lifecycle |
 
 本 crate 拥有命令定义、参数模式和产品管理命令，不依赖 App Server 协议或任何 UI。协议层引用
 这份定义，并通过 `json-schema` / `export` feature 生成 schema 和 TypeScript；传输字段名称保持不变。
@@ -41,12 +41,12 @@ hyphen；空描述、非法名称和跨来源冲突都使整份 catalog 构造�
 
 ## 3. 内部接口地图
 
-| Symbol | 可见性 | 职责 | 漂移信号 |
-| --- | --- | --- | --- |
-| `catalog::append_commands` | private | 校验并按 origin 追加完整 snapshot | caller 绕过它直接修改 command vector |
-| `catalog::validate_command` | private | 固定 canonical name 与 description 规则 | 客户端重新实现另一套校验 |
-| `input::command_name_range` | private | 找出首个 `/name` token 的 byte range | popup 和 submission 使用不同 grammar |
-| `input::trimmed_range` | private | 保留参数在原输入中的 exact range | adapter 自行切割参数文本 |
+| Symbol                        | 可见性  | 职责                                      | 漂移信号                                  |
+| ----------------------------- | ------- | ----------------------------------------- | ----------------------------------------- |
+| `catalog::append_commands`    | private | 校验并按 origin 追加完整 snapshot         | caller 绕过它直接修改 command vector      |
+| `catalog::validate_command`   | private | 固定 canonical name 与 description 规则   | 客户端重新实现另一套校验                  |
+| `input::command_name_range`   | private | 找出首个 `/name` token 的 byte range      | popup 和 submission 使用不同 grammar      |
+| `input::trimmed_range`        | private | 保留参数在原输入中的 exact range          | adapter 自行切割参数文本                  |
 | `SlashCommandsState::refresh` | private | 从 input、cursor 与 catalog 原子重建 view | renderer 保存第二份匹配或 query authority |
 
 调用关系：

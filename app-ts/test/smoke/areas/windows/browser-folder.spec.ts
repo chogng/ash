@@ -52,7 +52,7 @@ test('standalone browser executes its extension command in a Worker and retires 
 	let extensionWorker: ReturnType<typeof page.workers>[number] | undefined;
 	await expect.poll(async () => {
 		for (const worker of page.workers()) {
-			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
+			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
 			if (state) { extensionWorker = worker; return state; }
 		}
 		return undefined;
@@ -64,7 +64,7 @@ test('standalone browser executes its extension command in a Worker and retires 
 	await workbench.quickaccess.runCommand('ash.web.fixture.run');
 	await expect.poll(async () => {
 		for (const worker of page.workers()) {
-			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
+			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
 			if (state) { return state; }
 		}
 		return undefined;
@@ -80,7 +80,7 @@ test('standalone browser executes its extension command in a Worker and retires 
 			await workbench.quickaccess.runCommand('ash.web.fixture.run');
 			await expect.poll(async () => {
 				for (const worker of page.workers()) {
-					const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown }).ashWebExtensionFixture);
+					const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
 					if (state) { return state; }
 				}
 				return undefined;

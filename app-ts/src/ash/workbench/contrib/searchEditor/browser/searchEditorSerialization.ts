@@ -25,7 +25,7 @@ export function serializeSearchResultForEditor(query: IContentSearchQuery, resul
 export function parseSearchEditor(text: string): IContentSearchQuery {
 	const firstLine = text.split('\n', 1)[0]!;
 	if (!firstLine.startsWith(header)) { throw new TypeError('Invalid search editor header'); }
-	const value = JSON.parse(firstLine.slice(header.length)) as { version?: unknown; query?: unknown };
+	const value = JSON.parse(firstLine.slice(header.length)) as { version?: unknown; query?: unknown; };
 	if (!value || value.version !== 1 || !value.query || typeof value.query !== 'object') { throw new TypeError('Invalid search editor format'); }
 	const query = value.query as Partial<IContentSearchQuery>;
 	if (typeof query.text !== 'string' || query.text.length > 16384 || query.text.includes('\0')
@@ -41,7 +41,7 @@ export function parseSearchEditor(text: string): IContentSearchQuery {
 	return { text: query.text, patternKind: query.patternKind!, caseSensitivity: query.caseSensitivity!, wholeWord: query.wholeWord, includePatterns: query.includePatterns, excludePatterns: query.excludePatterns, maxResults: query.maxResults, freshness: query.freshness };
 }
 
-export function searchEditorLocation(text: string, lineNumber: number): { resource: URI; range: Range } | undefined {
+export function searchEditorLocation(text: string, lineNumber: number): { resource: URI; range: Range; } | undefined {
 	const lines = text.split('\n');
 	const row = /^ {2}(\d+):(\d+)-(\d+):(\d+): /.exec(lines[lineNumber - 1] ?? '');
 	if (!row) { return undefined; }

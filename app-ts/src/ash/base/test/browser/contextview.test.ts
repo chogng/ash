@@ -16,7 +16,7 @@ Object.defineProperties(environment.window, {
 });
 Object.defineProperty(environment.window.Element.prototype, "scrollTo", {
 	configurable: true,
-	value: () => {},
+	value: () => { },
 });
 
 const { ContextView, ContextViewFocusRestore, ContextViewHideReason } = await import("../../browser/ui/contextview/contextview.js");
@@ -158,9 +158,9 @@ test("ContextView hides when a resized element anchor is no longer connected", (
 			listener = callback;
 		}
 
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
+		observe(): void { }
+		unobserve(): void { }
+		disconnect(): void { }
 	}
 	Object.defineProperty(environment.window, "ResizeObserver", {
 		configurable: true,

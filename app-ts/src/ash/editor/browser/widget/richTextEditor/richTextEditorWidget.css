@@ -1,123 +1,125 @@
 .stanza-structured-format-toolbar {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px 12px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
-  background: var(--ash-editor-background);
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 6px 12px;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
 }
 
 .stanza-structured-format-toolbar .ash-action-bar {
-  gap: 2px;
+	gap: 2px;
 }
 
 .stanza-structured-format-typography-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-inline: 6px;
-  border-inline: var(--ash-stroke-thickness) solid var(--ash-border);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-inline: 6px;
+	border-inline: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .stanza-structured-format-select-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--ash-description-foreground, var(--ash-editor-foreground));
-  font-size: 0.9em;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--ash-description-foreground, var(--ash-editor-foreground));
+	font-size: 0.9em;
 }
 
 .stanza-structured-format-select {
-  min-width: 88px;
-  height: 24px;
-  padding-inline: 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-input-background, var(--ash-editor-background));
-  font: inherit;
+	min-width: 88px;
+	height: 24px;
+	padding-inline: 6px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-input-background, var(--ash-editor-background));
+	font: inherit;
 }
 
-.stanza-structured-format-font-size .stanza-structured-format-select { min-width: 64px; }
+.stanza-structured-format-font-size .stanza-structured-format-select {
+	min-width: 64px;
+}
 
 .stanza-structured-format-select:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-structured-format-code-context {
-  color: var(--ash-description-foreground, var(--ash-editor-foreground));
-  font-size: 0.9em;
+	color: var(--ash-description-foreground, var(--ash-editor-foreground));
+	font-size: 0.9em;
 }
 
 .ash-text-editor-widget-layout {
-  box-sizing: border-box;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
+	box-sizing: border-box;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
 }
 
 .stanza-document-outline {
-  box-sizing: border-box;
-  flex: 0 0 240px;
-  overflow: auto;
-  border-inline-end: var(--ash-stroke-thickness) solid var(--ash-border);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-editor-background);
+	box-sizing: border-box;
+	flex: 0 0 240px;
+	overflow: auto;
+	border-inline-end: var(--ash-stroke-thickness) solid var(--ash-border);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
 }
 
 .stanza-document-outline-title {
-  padding: 12px 16px 8px;
-  color: var(--ash-editor-foreground);
-  font-size: 0.85em;
-  font-weight: var(--ash-font-weight-semi-bold);
-  text-transform: uppercase;
+	padding: 12px 16px 8px;
+	color: var(--ash-editor-foreground);
+	font-size: 0.85em;
+	font-weight: var(--ash-font-weight-semi-bold);
+	text-transform: uppercase;
 }
 
 .stanza-document-outline-list {
-  margin: 0;
-  padding: 0 0 12px;
-  list-style: none;
+	margin: 0;
+	padding: 0 0 12px;
+	list-style: none;
 }
 
 .stanza-document-outline-entry {
-  box-sizing: border-box;
-  display: block;
-  width: 100%;
-  padding-block: 6px;
-  padding-inline-end: 8px;
-  overflow: hidden;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  text-align: start;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	box-sizing: border-box;
+	display: block;
+	width: 100%;
+	padding-block: 6px;
+	padding-inline-end: 8px;
+	overflow: hidden;
+	border: 0;
+	color: inherit;
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+	text-align: start;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-document-outline-entry:hover,
 .stanza-document-outline-entry:focus-visible {
-  background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hover-background);
 }
 
 .stanza-document-outline-entry:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-text-editor-widget-pane {
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-  overflow: auto;
-  padding: 32px 40px 40px;
-  color: var(--ash-editor-foreground);
-  background: var(--ash-editor-background);
+	box-sizing: border-box;
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	overflow: auto;
+	padding: 32px 40px 40px;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
 }
 
 .stanza-document-paragraph,
@@ -127,196 +129,270 @@
 .stanza-document-list,
 .stanza-document-group,
 .stanza-document-block {
-  max-width: 860px;
-  margin: 0 auto 12px;
+	max-width: 860px;
+	margin: 0 auto 12px;
 }
 
 .stanza-document-line {
-  min-width: 0;
+	min-width: 0;
 }
 
-.stanza-document-heading[data-level="1"] { font-size: 2em; }
-.stanza-document-heading[data-level="2"] { font-size: 1.5em; }
-.stanza-document-heading[data-level="3"] { font-size: 1.25em; }
+.stanza-document-heading[data-level="1"] {
+	font-size: 2em;
+}
+.stanza-document-heading[data-level="2"] {
+	font-size: 1.5em;
+}
+.stanza-document-heading[data-level="3"] {
+	font-size: 1.25em;
+}
 
 .ash-academic-title,
 .ash-academic-abstract,
 .ash-academic-section {
-  max-width: 860px;
-  margin: 0 auto 20px;
+	max-width: 860px;
+	margin: 0 auto 20px;
 }
 
 .ash-academic-title {
-  padding-bottom: 16px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	padding-bottom: 16px;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-academic-abstract {
-  padding: 12px 16px;
-  border-left: 3px solid var(--ash-border);
+	padding: 12px 16px;
+	border-left: 3px solid var(--ash-border);
 }
 
 .ash-academic-section {
-  margin-bottom: 28px;
+	margin-bottom: 28px;
 }
 
 .stanza-document-text-input {
-  box-sizing: border-box;
-  display: block;
-  width: 100%;
-  min-height: 28px;
-  padding: 2px 0;
-  resize: none;
-  border: 0;
-  outline: 0;
-  overflow: hidden;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  line-height: 1.6;
+	box-sizing: border-box;
+	display: block;
+	width: 100%;
+	min-height: 28px;
+	padding: 2px 0;
+	resize: none;
+	border: 0;
+	outline: 0;
+	overflow: hidden;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	line-height: 1.6;
 }
 
 .stanza-document-rich-text-input {
-  box-sizing: border-box;
-  min-height: 28px;
-  padding: 2px 0;
-  outline: 0;
-  white-space: pre-wrap;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  line-height: 1.6;
+	box-sizing: border-box;
+	min-height: 28px;
+	padding: 2px 0;
+	outline: 0;
+	white-space: pre-wrap;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	line-height: 1.6;
 }
 
 .stanza-document-text-input:focus-visible,
 .stanza-document-rich-text-input:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
-.stanza-document-inline-run { white-space: pre-wrap; }
+.stanza-document-inline-run {
+	white-space: pre-wrap;
+}
 .stanza-document-inline-image {
-  max-width: 100%;
-  vertical-align: middle;
-  cursor: pointer;
+	max-width: 100%;
+	vertical-align: middle;
+	cursor: pointer;
 }
 .stanza-document-inline-image.stanza-document-inline-node-selected {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: 2px;
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: 2px;
 }
 .stanza-document-inline-node {
-  display: inline-block;
-  margin: 0 2px;
-  padding: 0 4px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  background: var(--ash-toolbar-hover-background);
-  cursor: pointer;
+	display: inline-block;
+	margin: 0 2px;
+	padding: 0 4px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	background: var(--ash-toolbar-hover-background);
+	cursor: pointer;
 }
 .stanza-document-inline-node.stanza-document-inline-node-selected {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 .ash-citation {
-  display: inline-block;
-  margin-inline: 2px;
-  padding-inline: 4px;
-  color: var(--ash-accent-foreground);
-  cursor: pointer;
-  font-size: 0.9em;
+	display: inline-block;
+	margin-inline: 2px;
+	padding-inline: 4px;
+	color: var(--ash-accent-foreground);
+	cursor: pointer;
+	font-size: 0.9em;
 }
 .ash-citation-unresolved {
-  text-decoration: underline wavy;
-  text-decoration-color: var(--ash-error-foreground);
+	text-decoration: underline wavy;
+	text-decoration-color: var(--ash-error-foreground);
 }
 .ash-citation.stanza-document-inline-node-selected {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 .ash-citation-bibliography {
-  margin-top: 24px;
-  padding-top: 12px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	margin-top: 24px;
+	padding-top: 12px;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 .ash-citation-reference {
-  margin: 6px 0;
+	margin: 6px 0;
 }
-.stanza-document-mark-strong { font-weight: var(--ash-font-weight-semi-bold); }
-.stanza-document-mark-em { font-style: italic; }
-.stanza-document-mark-textStyle[data-font-family="sans"] { font-family: var(--ash-font-family); }
-.stanza-document-mark-textStyle[data-font-family="serif"] { font-family: Georgia, "Times New Roman", serif; }
-.stanza-document-mark-textStyle[data-font-family="monospace"] { font-family: var(--ash-font-family-monospace); }
+.stanza-document-mark-strong {
+	font-weight: var(--ash-font-weight-semi-bold);
+}
+.stanza-document-mark-em {
+	font-style: italic;
+}
+.stanza-document-mark-textStyle[data-font-family="sans"] {
+	font-family: var(--ash-font-family);
+}
+.stanza-document-mark-textStyle[data-font-family="serif"] {
+	font-family: Georgia, "Times New Roman", serif;
+}
+.stanza-document-mark-textStyle[data-font-family="monospace"] {
+	font-family: var(--ash-font-family-monospace);
+}
 .stanza-document-mark-code {
-  padding: 0 2px;
-  border-radius: var(--ash-corner-radius-small);
-  background: var(--ash-text-code-block-background);
-  font-family: var(--ash-font-family-monospace);
+	padding: 0 2px;
+	border-radius: var(--ash-corner-radius-small);
+	background: var(--ash-text-code-block-background);
+	font-family: var(--ash-font-family-monospace);
 }
 .stanza-document-mark-link {
-  color: var(--ash-accent-foreground);
-  text-decoration: underline;
+	color: var(--ash-accent-foreground);
+	text-decoration: underline;
 }
 
 .stanza-document-remote-selection {
-  border-radius: var(--ash-corner-radius-x-small);
-  box-decoration-break: clone;
+	border-radius: var(--ash-corner-radius-x-small);
+	box-decoration-break: clone;
 }
 
-.stanza-document-remote-selection-0 { background: color-mix(in srgb, var(--ash-collaboration-selection0-background) 26%, transparent); }
-.stanza-document-remote-selection-1 { background: color-mix(in srgb, var(--ash-collaboration-selection1-background) 26%, transparent); }
-.stanza-document-remote-selection-2 { background: color-mix(in srgb, var(--ash-collaboration-selection2-background) 26%, transparent); }
-.stanza-document-remote-selection-3 { background: color-mix(in srgb, var(--ash-collaboration-selection3-background) 26%, transparent); }
-
-:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection {
-  background: var(--ash-editor-background);
+.stanza-document-remote-selection-0 {
+	background: color-mix(
+		in srgb,
+		var(--ash-collaboration-selection0-background) 26%,
+		transparent
+	);
+}
+.stanza-document-remote-selection-1 {
+	background: color-mix(
+		in srgb,
+		var(--ash-collaboration-selection1-background) 26%,
+		transparent
+	);
+}
+.stanza-document-remote-selection-2 {
+	background: color-mix(
+		in srgb,
+		var(--ash-collaboration-selection2-background) 26%,
+		transparent
+	);
+}
+.stanza-document-remote-selection-3 {
+	background: color-mix(
+		in srgb,
+		var(--ash-collaboration-selection3-background) 26%,
+		transparent
+	);
 }
 
-:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-0 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection0-background); }
-:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-1 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection1-background); }
-:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-2 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection2-background); }
-:is([data-color-scheme="high-contrast-dark"], [data-color-scheme="high-contrast-light"]) .stanza-document-remote-selection-3 { outline: var(--ash-stroke-thickness) solid var(--ash-collaboration-selection3-background); }
+:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.stanza-document-remote-selection {
+	background: var(--ash-editor-background);
+}
+
+:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.stanza-document-remote-selection-0 {
+	outline: var(--ash-stroke-thickness) solid
+		var(--ash-collaboration-selection0-background);
+}
+:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.stanza-document-remote-selection-1 {
+	outline: var(--ash-stroke-thickness) solid
+		var(--ash-collaboration-selection1-background);
+}
+:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.stanza-document-remote-selection-2 {
+	outline: var(--ash-stroke-thickness) solid
+		var(--ash-collaboration-selection2-background);
+}
+:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.stanza-document-remote-selection-3 {
+	outline: var(--ash-stroke-thickness) solid
+		var(--ash-collaboration-selection3-background);
+}
 
 .stanza-document-code-block {
-  padding: 12px 16px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-medium);
-  background: var(--ash-text-code-block-background);
-  font-family: var(--ash-font-family-monospace);
+	padding: 12px 16px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-medium);
+	background: var(--ash-text-code-block-background);
+	font-family: var(--ash-font-family-monospace);
 }
 
 .stanza-document-embedded-text-editor {
-  height: 180px;
-  min-height: 120px;
+	height: 180px;
+	min-height: 120px;
 }
 
 .stanza-document-blockquote {
-  padding-left: 16px;
-  border-left: 3px solid var(--ash-border);
+	padding-left: 16px;
+	border-left: 3px solid var(--ash-border);
 }
 
 .stanza-document-list {
-  padding-left: 32px;
+	padding-left: 32px;
 }
 
 .stanza-document-list-item {
-  margin-bottom: 8px;
+	margin-bottom: 8px;
 }
 
 .stanza-document-table {
-  width: min(100%, 860px);
-  margin: 0 auto 12px;
-  border-collapse: collapse;
-  table-layout: fixed;
+	width: min(100%, 860px);
+	margin: 0 auto 12px;
+	border-collapse: collapse;
+	table-layout: fixed;
 }
 
 .stanza-document-table-cell {
-  min-width: 120px;
-  padding: 8px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  vertical-align: top;
+	min-width: 120px;
+	padding: 8px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	vertical-align: top;
 }
 
 .stanza-document-table-cell > .stanza-document-paragraph,
 .stanza-document-table-cell > .stanza-document-heading {
-  margin-bottom: 0;
+	margin-bottom: 0;
 }

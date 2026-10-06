@@ -12,7 +12,7 @@ export interface IVisibleItemRange {
 }
 
 /** Owns the continuous scroll surface and mounts only file templates near its viewport. */
-export class CompressedVirtualizedScrollView<TItem extends IDisposable & { readonly domNode: HTMLElement }> extends Disposable {
+export class CompressedVirtualizedScrollView<TItem extends IDisposable & { readonly domNode: HTMLElement; }> extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly contentDomNode: HTMLDivElement;
 	public readonly sections: VirtualizedItemManager<TItem>;

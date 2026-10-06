@@ -6,12 +6,12 @@
 [`worktree`](../worktree/README.md) 拥有。产品流程见
 [Turn 变更账本](../../docs/chat-session-inspector.md) 和 [能力方案](../../docs/git-capabilities.md)。
 
-| 实现 | 所有权 |
-| --- | --- |
-| `ledger.rs`、`watcher.rs` | 按 Session / Thread / Turn / repository 捕获、封存和保留 tree/blob；工具写入生命周期与文件刷新 |
-| `model.rs` | 不可变变化证据、捕获与消息状态、revision；提交进度是读取时计算的结果 |
-| `commit.rs` | 文件选择、归属与版本校验、按捕获顺序重放、固定预览、提交记录和发布恢复 |
-| `store.rs`、`TurnCommitStore` | 完整记录 CAS、原子选择占用、命令回执与发布回执的存储契约 |
+| 实现                          | 所有权                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `ledger.rs`、`watcher.rs`     | 按 Session / Thread / Turn / repository 捕获、封存和保留 tree/blob；工具写入生命周期与文件刷新 |
+| `model.rs`                    | 不可变变化证据、捕获与消息状态、revision；提交进度是读取时计算的结果                           |
+| `commit.rs`                   | 文件选择、归属与版本校验、按捕获顺序重放、固定预览、提交记录和发布恢复                         |
+| `store.rs`、`TurnCommitStore` | 完整记录 CAS、原子选择占用、命令回执与发布回执的存储契约                                       |
 
 `TurnChangeSet` 仍然有用：它记录这一轮到底改了什么。提交不会改写 before/after、路径、blob、mode
 或归属证据。`TurnCommitRecord` 单独保存实际选择、目标、固定消息、准备对象、执行状态和结果。

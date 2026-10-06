@@ -62,7 +62,7 @@ export class WordBasedCompletionItemProvider implements LanguageCompletionProvid
 	readonly id = 'language.word';
 	readonly languageIds = ['*'];
 
-	constructor(private readonly worker: IVersionedEditorWorkerClient) {}
+	constructor(private readonly worker: IVersionedEditorWorkerClient) { }
 
 	provideCompletions(request: LanguageCompletionRequest, signal: AbortSignal): Promise<LanguageCompletionResult | undefined> {
 		return this.worker.textualSuggest(request, signal);

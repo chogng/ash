@@ -16,7 +16,7 @@ export interface IWindowCreationOptions {
 }
 
 export interface ICodeWindowHandle {
-	readonly webContents: { once(event: 'render-process-gone', listener: () => void): unknown };
+	readonly webContents: { once(event: 'render-process-gone', listener: () => void): unknown; };
 	once(event: 'ready-to-show' | 'closed', listener: () => void): this;
 	isDestroyed(): boolean;
 	show(): void;

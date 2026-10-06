@@ -7,7 +7,7 @@ interface LanguageServer {
 }
 
 export class AppServerLanguageSupport {
-	constructor(private readonly directories: ReadonlyMap<string, readonly LanguageServer[]> = new Map()) {}
+	constructor(private readonly directories: ReadonlyMap<string, readonly LanguageServer[]> = new Map()) { }
 
 	static async read(api: ILanguageApi, workspace: IWorkspaceContextService): Promise<AppServerLanguageSupport> {
 		const folders = workspace.getWorkspace().folders;

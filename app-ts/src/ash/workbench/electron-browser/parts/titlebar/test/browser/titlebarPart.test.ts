@@ -46,49 +46,49 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		const menus = new MenuService(commands, contextKeys);
 		services.registerInstance(IMenuService, menus);
 		services.registerInstance(ICommandService, commands);
-		services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
+		services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
 		const applied: INativeWindowTheme[] = [];
 		services.registerInstance(IThemeService, themes);
 		services.registerInstance(INativeHostService, {
 			isAdmin: async () => false,
-			onDidRequestOpenExternalUri: () => ({ dispose() {} }),
+			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },
-		showNativeDialog: async () => { throw new Error('unused'); },
+			showNativeDialog: async () => { throw new Error('unused'); },
 			installShellCommand: async () => '',
 			uninstallShellCommand: async () => '',
 			listWindows: async () => [],
-			focusWindowById: async () => {},
-			focusWindow: async () => {},
-			closeWindow: async () => {},
-			closeOtherWindows: async () => {},
+			focusWindowById: async () => { },
+			focusWindow: async () => { },
+			closeWindow: async () => { },
+			closeOtherWindows: async () => { },
 			getZoomLevel: async () => 0,
-			onDidChangeZoomLevel: () => ({ dispose() {} }),
-			setZoomLevel: async () => {},
+			onDidChangeZoomLevel: () => ({ dispose() { } }),
+			setZoomLevel: async () => { },
 			isAlwaysOnTop: async () => false,
-			setAlwaysOnTop: async () => {},
-			performNativeTabAction: async () => {},
-			openNewWindowTab: async () => {},
+			setAlwaysOnTop: async () => { },
+			performNativeTabAction: async () => { },
+			openNewWindowTab: async () => { },
 			setWindowTheme: async theme => { applied.push(theme); },
-			setWindowDimmed: async () => {},
+			setWindowDimmed: async () => { },
 			pickFolder: async () => undefined,
 			pickFile: async () => undefined,
-			openWorkspace: async () => {},
-			openWindow: async () => {},
-			openAgentsWindow: async () => {},
+			openWorkspace: async () => { },
+			openWindow: async () => { },
+			openAgentsWindow: async () => { },
 			syncSystemWideKeybindings: async () => ({ failed: [] }),
-			revealFile: async () => {},
-			toggleDeveloperTools: async () => {},
+			revealFile: async () => { },
+			toggleDeveloperTools: async () => { },
 			saveFile: async () => undefined,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
-		onDidChangeColorScheme: () => ({ dispose() {} }),
-		isAccessibilitySupportEnabled: async () => false,
-			onDidChangeAccessibilitySupport: () => ({ dispose() {} }),
+			onDidChangeColorScheme: () => ({ dispose() { } }),
+			isAccessibilitySupportEnabled: async () => false,
+			onDidChangeAccessibilitySupport: () => ({ dispose() { } }),
 		});
-		const factory = createElectronTitlebarPartFactory({ update: async () => {}, onDidSelect: () => ({ dispose() {} }) });
+		const factory = createElectronTitlebarPartFactory({ update: async () => { }, onDidSelect: () => ({ dispose() { } }) });
 		const options = {
-			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() {}, registerVariables() {} },
+			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 			menuService: menus,
-			contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} },
+			contextMenuService: { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } },
 			localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);

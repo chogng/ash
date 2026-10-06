@@ -162,10 +162,10 @@ suiteTeardown(() => {
 
 test("Chat Markdown links route resource, command, and external targets through their owning services", async () => {
 	const editorResources: URI[] = [];
-	const externalTargets: { target: string; options: OpenOptions }[] = [];
-	const commands: Array<{ readonly id: string; readonly args: readonly unknown[] }> = [];
+	const externalTargets: { target: string; options: OpenOptions; }[] = [];
+	const commands: Array<{ readonly id: string; readonly args: readonly unknown[]; }> = [];
 	const editorService = {
-		openEditor: async ({ resource }: { readonly resource: URI }) => { editorResources.push(resource); },
+		openEditor: async ({ resource }: { readonly resource: URI; }) => { editorResources.push(resource); },
 	} as unknown as IEditorService;
 	const openerService = {
 		open: async (target: string, options: OpenOptions) => { externalTargets.push({ target, options }); },
@@ -200,7 +200,7 @@ test("Chat Markdown links route resource, command, and external targets through 
 
 test('Chat loads an Ash remote workspace image through the file service', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	dom.window.HTMLElement.prototype.scrollTo = () => {};
+	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	const resource = 'ash-remote://ssh+host/workspace/pixel.png';
 	const fake = fakeApi({ sessions: [session('session-1', 'thread-1')], thread: () => thread(`![pixel](${resource})`) });
 	const requests: URI[] = [];
@@ -247,13 +247,13 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 	}
 });
 
-function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement } | undefined }): HTMLElement {
+function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement; } | undefined; }): HTMLElement {
 	const content = pane.partTitleProjection?.content;
 	assert.ok(content);
 	return content;
 }
 
-function chatTitleActions(pane: { readonly partTitleProjection: { readonly actions?: HTMLElement } | undefined }): HTMLElement {
+function chatTitleActions(pane: { readonly partTitleProjection: { readonly actions?: HTMLElement; } | undefined; }): HTMLElement {
 	const actions = pane.partTitleProjection?.actions;
 	assert.ok(actions);
 	return actions;
@@ -277,7 +277,7 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
 
 test("Chat title separates Session tabs from its action toolbar", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	dom.window.HTMLElement.prototype.scrollTo = () => {};
+	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const subscriptionModel = {
 		model: { provider: "openai", model: "gpt-6.1-sol" },
@@ -308,7 +308,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	using preferences: PreferencesService = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles);
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
@@ -327,7 +327,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	} as unknown as IViewsService);
 	let shownContextMenuActions: readonly IAction[] = [];
 	const contextMenuService = {
-		showContextMenu: (options: { readonly getActions: () => readonly IAction[] }) => {
+		showContextMenu: (options: { readonly getActions: () => readonly IAction[]; }) => {
 			shownContextMenuActions = options.getActions();
 		},
 	} as unknown as IContextMenuService;
@@ -420,7 +420,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	const paneHost = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host');
 	assert.ok(paneHost);
 	const activeTab = chatTitleContent(pane).querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-	const paneChanges = new dom.window.MutationObserver(() => {});
+	const paneChanges = new dom.window.MutationObserver(() => { });
 	paneChanges.observe(paneHost, { childList: true });
 	sessions.setUntitledSessionAgent(draftId, { name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' });
 	assert.equal(paneChanges.takeRecords().flatMap(record => [...record.removedNodes]).length, 0);
@@ -618,8 +618,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	await nextTask();
 
 	assert.deepEqual(
-			fake.stopRequests.map(({ sessionId }) => ({ sessionId })),
-			[{ sessionId: "session-1" }],
+		fake.stopRequests.map(({ sessionId }) => ({ sessionId })),
+		[{ sessionId: "session-1" }],
 	);
 	assert.equal(sessions.active?.session.sessionId, "session-2");
 	assert.deepEqual(
@@ -797,7 +797,7 @@ test('sending from one session preserves a later draft during first-session crea
 	await widgetModel.initialize();
 	assert.equal(input?.getAttribute('aria-busy'), 'false');
 	assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
-	const attachment = new DeferredPromise<{ name: string; content: string }>();
+	const attachment = new DeferredPromise<{ name: string; content: string; }>();
 	widget.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
 	const sending = widget.acceptInput('Start this work');
 	view.openNewSession();
@@ -829,7 +829,7 @@ test('sending from one session preserves a later draft during first-session crea
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	dom.window.HTMLElement.prototype.scrollTo = () => {};
+	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	let failAgentList = false;
 	const createdSession = session("session-1", undefined, "New Chat");
@@ -1300,7 +1300,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 		openPaneComposite: async id => { assert.equal(id, CHAT_VIEW_CONTAINER_ID); return composite; },
 		getActivePaneComposite: () => composite,
 		getPartId: () => 'auxiliarybar',
-		hideActivePaneComposite() {},
+		hideActivePaneComposite() { },
 		getLastActivePaneCompositeId: () => CHAT_VIEW_CONTAINER_ID,
 	} as import('../../../workbench/services/panecomposite/browser/panecomposite.js').IPaneCompositePartService);
 	using service = services.createInstance(ViewsService);
@@ -1347,8 +1347,8 @@ test("SessionsManagementService archives a Session and selects the next active o
 	await service.archiveSession("session-1");
 
 	assert.deepEqual(
-			fake.archiveRequests.map(({ sessionId }) => ({ sessionId })),
-			[{ sessionId: "session-1" }],
+		fake.archiveRequests.map(({ sessionId }) => ({ sessionId })),
+		[{ sessionId: "session-1" }],
 	);
 	assert.equal(
 		service.sessions.find(({ sessionId }) => sessionId === "session-1")
@@ -1568,7 +1568,7 @@ test("ChatWidgetModel mechanically clears and replaces transient transcript entr
 	await model.initialize();
 	let transcriptRevision = 1;
 	const emitChanges = (
-		changes: Extract<ServerNotification, { method: "session/thread/transcript/update" }>["params"]["changes"],
+		changes: Extract<ServerNotification, { method: "session/thread/transcript/update"; }>["params"]["changes"],
 		revision = ++transcriptRevision,
 	): void => {
 		fake.emit({
@@ -1663,7 +1663,7 @@ test("ChatWidgetModel projects a durable Turn failure into the conversation", as
 
 test("Turn error presentation is selected only from the stable error code", () => {
 	const message = "same opaque message";
-	const cases: readonly { readonly code: TurnError["code"]; readonly retryable: boolean }[] = [
+	const cases: readonly { readonly code: TurnError["code"]; readonly retryable: boolean; }[] = [
 		{ code: "modelInvocationFailed", retryable: true },
 		{ code: "contextOverflow", retryable: true },
 		{ code: "providerAuth", retryable: false },
@@ -1752,7 +1752,7 @@ test("ChatWidgetModel retries only the latest retryable failed Turn as a new vis
 });
 
 interface FakeOptions {
-	readonly agents?: readonly { readonly name: string; readonly description: string; readonly sourceId: string }[];
+	readonly agents?: readonly { readonly name: string; readonly description: string; readonly sourceId: string; }[];
 	readonly agentListFails?: () => boolean;
 	readonly sessions?: readonly ISession[];
 	readonly createSession?: ISession;
@@ -1763,7 +1763,7 @@ interface FakeOptions {
 	};
 	readonly thread?: () => Thread;
 	readonly skills?: readonly {
-		readonly id: { readonly source: string; readonly name: string };
+		readonly id: { readonly source: string; readonly name: string; };
 		readonly description: string;
 		readonly contentDigest: string;
 		readonly enabled: boolean;
@@ -1773,13 +1773,13 @@ interface FakeOptions {
 		readonly model: ModelRef;
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
-		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null }[];
+		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null; }[];
 		readonly modelReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
-	readonly providerModels?: Readonly<Record<string, readonly { readonly model: ModelRef; readonly displayName: string }[]>>;
-	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number };
+	readonly providerModels?: Readonly<Record<string, readonly { readonly model: ModelRef; readonly displayName: string; }[]>>;
+	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number; };
 }
 
 function createTestStorage(): InstanceType<typeof BrowserStorageService> {
@@ -1831,11 +1831,13 @@ test('closing during subscription waits for the request before releasing the bac
 	const fake = fakeApi();
 	const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
 	const released: string[] = [];
-	using chat = createChatService({ ...fake.api, thread: {
-		...fake.api.thread,
-		subscribe: () => pending.p,
-		unsubscribe: async ({ threadId }) => { released.push(threadId); },
-	} });
+	using chat = createChatService({
+		...fake.api, thread: {
+			...fake.api.thread,
+			subscribe: () => pending.p,
+			unsubscribe: async ({ threadId }) => { released.push(threadId); },
+		}
+	});
 	const owner = {};
 	const subscribing = chat.subscribeThread('session-1', 'thread-1', 0, owner);
 	const closing = chat.unsubscribeThread('session-1', 'thread-1', owner);
@@ -1931,13 +1933,15 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 		enabled: true,
 		compatible: true,
 	};
-	const fake = fakeApi({ skills: [
-		commit,
-		{ ...commit, id: { source: "workspace:disabled-commit", name: "commit" }, enabled: false },
-		{ ...commit, id: { source: "workspace:one", name: "duplicate" } },
-		{ ...commit, id: { source: "workspace:two", name: "duplicate" } },
-		{ ...commit, id: { source: "workspace:disabled", name: "disabled" }, enabled: false },
-	] });
+	const fake = fakeApi({
+		skills: [
+			commit,
+			{ ...commit, id: { source: "workspace:disabled-commit", name: "commit" }, enabled: false },
+			{ ...commit, id: { source: "workspace:one", name: "duplicate" } },
+			{ ...commit, id: { source: "workspace:two", name: "duplicate" } },
+			{ ...commit, id: { source: "workspace:disabled", name: "disabled" }, enabled: false },
+		]
+	});
 	using chat = createChatService(fake.api);
 
 	const selectors = await chat.listSkillSelectors();
@@ -2084,11 +2088,13 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
 	const fake = fakeApi();
 	let loads = 0;
-	using chat = createChatService({ ...fake.api, model: {
-		...fake.api.model,
-		listModels: async () => ++loads === 1 ? initial.p : { models: [discovered] },
-		listProviderModels: async () => [discovered],
-	} });
+	using chat = createChatService({
+		...fake.api, model: {
+			...fake.api.model,
+			listModels: async () => ++loads === 1 ? initial.p : { models: [discovered] },
+			listProviderModels: async () => [discovered],
+		}
+	});
 	const models = modelsFor(chat);
 	const oldCatalog = models.listModelCatalog();
 	const discovery = models.discoverProviderModels('custom-gateway');
@@ -2414,11 +2420,13 @@ test('ChatWidgetModel follows switch_mode while preserving a different next-mess
 			method: 'session/thread/update',
 			params: {
 				sessionId: 'session-1', threadId: 'thread-1', durableSequence: value.sequence,
-				update: { type: 'committed', event: {
-					type: 'turnModeChanged', threadId: 'thread-1', turnId: 'turn-1',
-					fromMode: 'agent', mode: 'plan',
-					instructions: { owner: 'test', id: 'approach', revision: '1', body: 'Plan the task.' },
-				} },
+				update: {
+					type: 'committed', event: {
+						type: 'turnModeChanged', threadId: 'thread-1', turnId: 'turn-1',
+						fromMode: 'agent', mode: 'plan',
+						instructions: { owner: 'test', id: 'approach', revision: '1', body: 'Plan the task.' },
+					}
+				},
 			},
 		};
 		fake.emit(update);
@@ -2510,8 +2518,8 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
 	readonly providerModelRequests: readonly string[];
-	readonly providerKeyRequests: readonly { readonly connection: string; readonly apiKey: string }[];
-	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
+	readonly providerKeyRequests: readonly { readonly connection: string; readonly apiKey: string; }[];
+	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef; }[];
 	readonly savedAdvisorDefaults: readonly (AdvisorConfig | null)[];
 	readonly emit: (notification: ServerNotification) => void;
 	readonly emitReady: () => void;
@@ -2530,9 +2538,9 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
 	const providerModelRequests: string[] = [];
-	const providerKeyRequests: { connection: string; apiKey: string }[] = [];
+	const providerKeyRequests: { connection: string; apiKey: string; }[] = [];
 	let providers = options.providers?.map(provider => ({ ...provider })) ?? [];
-	const modelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
+	const modelRequests: { readonly commandId: string; readonly model: ModelRef; }[] = [];
 	const savedAdvisorDefaults: (AdvisorConfig | null)[] = [];
 	let advisorDefault: AdvisorConfig | null = options.advisorDefault ?? null;
 	const currentThread = () => options.thread?.() ?? thread();
@@ -2557,11 +2565,11 @@ function fakeApi(options: FakeOptions = {}): {
 			list: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			subscribeCatalog: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			unsubscribeCatalog: async () => undefined,
-			readCatalog: async ({ sessionId }: { sessionId: string }) => ({ session: sessionDto(currentSession(sessionId)) }),
-			read: async ({ sessionId }: { sessionId: string }) => ({
+			readCatalog: async ({ sessionId }: { sessionId: string; }) => ({ session: sessionDto(currentSession(sessionId)) }),
+			read: async ({ sessionId }: { sessionId: string; }) => ({
 				session: sessionDto(currentSession(sessionId)),
 			}),
-			subscribe: async ({ sessionId }: { sessionId: string }) => ({
+			subscribe: async ({ sessionId }: { sessionId: string; }) => ({
 				session: sessionDto(currentSession(sessionId)),
 				updates: [],
 				threadProjections: [],
@@ -2589,7 +2597,7 @@ function fakeApi(options: FakeOptions = {}): {
 				return {
 					session: {
 						...sessionDto(archived),
-							status: "archived" as const,
+						status: "archived" as const,
 					},
 				};
 			},
@@ -2601,13 +2609,13 @@ function fakeApi(options: FakeOptions = {}): {
 				return {
 					session: {
 						...sessionDto(stopped),
-							status: "archived" as const,
+						status: "archived" as const,
 					},
 				};
 			},
 		},
 		model: {
-			setModelPreferences: async () => {},
+			setModelPreferences: async () => { },
 			listModels: async () => {
 				modelListRequests.push(undefined);
 				return { models: (options.models ?? []).map(entry => createTestModel({ ...entry, supportedReasoningEfforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })) })) };
@@ -2617,19 +2625,19 @@ function fakeApi(options: FakeOptions = {}): {
 				providerModelRequests.push(connection);
 				return (options.providerModels?.[connection] ?? []).map(entry => createTestModel(entry));
 			},
-			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string }) => {
+			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string; }) => {
 				providerKeyRequests.push({ connection, apiKey });
 				providers = providers.map(entry => entry.connection === connection ? { ...entry, apiKeyConfigured: true, active: true, configured: true, ready: true } : entry);
 				return { connection, apiKeyConfigured: true };
 			},
 			readAdvisorDefault: async () => advisorDefault,
 			readConfiguredProviderIds: async () => options.configuredProviders ?? [],
-			setAdvisorDefault: async ({ advisor }: { readonly advisor: AdvisorConfig | null }) => {
+			setAdvisorDefault: async ({ advisor }: { readonly advisor: AdvisorConfig | null; }) => {
 				advisorDefault = advisor;
 				savedAdvisorDefaults.push(advisor);
 			},
 			readModel: async () => options.sessions?.find(session => session.model)?.model ?? null,
-			setModel: async (params: { readonly commandId: string; readonly model: ModelRef }) => {
+			setModel: async (params: { readonly commandId: string; readonly model: ModelRef; }) => {
 				modelRequests.push(params);
 			},
 		},
@@ -2846,9 +2854,9 @@ function recordingDialogService(messages: IMessageDialogOptions[]): IDialogServi
 		onDidShowDialog: Event.None,
 		about: async () => { throw new Error('Unexpected about dialog'); },
 		showMessage: async options => { messages.push(options); },
-		info: async () => {},
-		warn: async () => {},
-		error: async () => {},
+		info: async () => { },
+		warn: async () => { },
+		error: async () => { },
 		confirm: async () => ({ confirmed: false }),
 		input: async () => { throw new Error('Unexpected input dialog'); },
 		prompt: async () => { throw new Error('Unexpected prompt'); },
@@ -2959,7 +2967,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles);
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
@@ -2981,10 +2989,12 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 
 test('Chat Settings saves a masked provider key through the model API and refreshes the catalog', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const fake = fakeApi({ providers: [
-		{ provider: 'ollama', connection: 'ollama', access: 'apiKey', active: false, configured: false, ready: true, displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
-		{ provider: 'openai', connection: 'openai', access: 'apiKey', active: false, configured: false, ready: false, displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false },
-	] });
+	const fake = fakeApi({
+		providers: [
+			{ provider: 'ollama', connection: 'ollama', access: 'apiKey', active: false, configured: false, ready: true, displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
+			{ provider: 'openai', connection: 'openai', access: 'apiKey', active: false, configured: false, ready: false, displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false },
+		]
+	});
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
@@ -2999,7 +3009,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	using preferences = new BrowserPreferencesService({
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles);
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
@@ -3079,10 +3089,10 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 	const services = createInputServices(contextView, chat);
 	const delegate: ChatInputDelegate = {
 		send: text => model.send(text),
-		executeCommand: async () => {}, executeServerCommand: async () => {}, interrupt: async () => {},
-		selectModel: async () => {}, selectReasoningEffort: async () => {}, selectAutomaticModel: async () => {},
-		listAgents: async () => [], selectAgent: () => {}, selectMode: () => {},
-		openModelSettings: async () => {}, resolveInteraction: async () => {},
+		executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+		selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
+		listAgents: async () => [], selectAgent: () => { }, selectMode: () => { },
+		openModelSettings: async () => { }, resolveInteraction: async () => { },
 	};
 	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, []);
 	using changed = model.onDidChange(() => part.render(model.inputState));

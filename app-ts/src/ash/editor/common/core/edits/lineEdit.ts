@@ -83,7 +83,7 @@ export class LineEdit {
 export type SerializedLineEdit = SerializedLineReplacement[];
 
 export class LineReplacement {
-	constructor(readonly lineRange: LineRange, readonly newLines: readonly string[]) {}
+	constructor(readonly lineRange: LineRange, readonly newLines: readonly string[]) { }
 
 	static deserialize(value: SerializedLineReplacement): LineReplacement { return new LineReplacement(new LineRange(value[0], value[1]), value[2]); }
 	static fromSingleTextEdit(edit: TextReplacement, initialValue: AbstractText): LineReplacement {

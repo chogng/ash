@@ -26,7 +26,7 @@ interface DiffViewZone {
 export class DiffEditorViewZones extends Disposable {
 	private originalZones: string[] = [];
 	private modifiedZones: string[] = [];
-	private inlineOriginalLines: { readonly version: number; readonly lines: { readonly element: HTMLElement; readonly lineNumber: number }[] } | undefined;
+	private inlineOriginalLines: { readonly version: number; readonly lines: { readonly element: HTMLElement; readonly lineNumber: number; }[]; } | undefined;
 
 	constructor(
 		private readonly originalEditor: CodeEditorWidget,
@@ -52,7 +52,7 @@ export class DiffEditorViewZones extends Disposable {
 		this.inlineOriginalLines = undefined;
 		if (inlineView) {
 			const layout = this.modifiedEditor.getLayoutInfo();
-			const lines: { readonly element: HTMLElement; readonly lineNumber: number }[] = [];
+			const lines: { readonly element: HTMLElement; readonly lineNumber: number; }[] = [];
 			this.inlineOriginalLines = { version: this.model.original.version, lines };
 			this.originalEditor.changeViewZones(accessor => {
 				for (const id of this.originalZones) accessor.removeZone(id);

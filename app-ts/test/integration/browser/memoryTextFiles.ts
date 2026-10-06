@@ -31,7 +31,7 @@ export class MemoryTextFiles implements ITextFileService {
 		});
 	}
 
-	async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined }> {
+	async save(request: TextFileSaveRequest, _signal: AbortSignal): Promise<{ readonly revision: string | undefined; }> {
 		if (request.expectedRevision !== undefined && request.expectedRevision !== this.revisionFor(request.resource)) {
 			throw new TextFileSaveConflictError(request.resource);
 		}

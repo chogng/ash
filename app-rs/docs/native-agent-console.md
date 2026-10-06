@@ -6,13 +6,13 @@
 
 `app` 是为 Coding Agent 提供完整开发环境能力、同时让人类按结果观察和介入工作的原生开发环境。它不按照“传统 IDE 有什么”选择功能，而按照一项能力能否提高 Agent 完成代码变更闭环的成功率选择功能；底层拥有某项能力不意味着必须为它实现完整 GUI。
 
-| 用户场景 | Agent 获得什么 | 用户默认看到什么 | 是否需要独立 GUI |
-| --- | --- | --- | --- |
-| 理解代码 | 文件、搜索、语法、符号、定义、引用和类型信息 | 当前目标、关键发现和相关文件摘要 | 通常不需要；需要检查时进入 Editor 或符号导航 |
-| 修改代码 | 条件写入、Patch、Rename、Code Action 和格式化 | Changed Files、Diff 和冲突状态 | 需要结果界面，不需要暴露每个内部编辑步骤 |
-| 验证修改 | 编译诊断、测试结果、构建状态和运行时反馈 | 通过/失败、剩余问题和失败位置 | 需要结构化结果；原始输出按需展开 |
-| 恢复或介入 | Git baseline、checkpoint、restore 和重试边界 | Accept、Revert、Retry、Stop 和需要批准的风险动作 | 需要明确控制入口 |
-| 纯只读内部查询 | 可供下一步推理使用的结构化机器反馈 | 默认不单独显示；最终只呈现影响结论的发现 | 不需要 |
+| 用户场景       | Agent 获得什么                                | 用户默认看到什么                                 | 是否需要独立 GUI                             |
+| -------------- | --------------------------------------------- | ------------------------------------------------ | -------------------------------------------- |
+| 理解代码       | 文件、搜索、语法、符号、定义、引用和类型信息  | 当前目标、关键发现和相关文件摘要                 | 通常不需要；需要检查时进入 Editor 或符号导航 |
+| 修改代码       | 条件写入、Patch、Rename、Code Action 和格式化 | Changed Files、Diff 和冲突状态                   | 需要结果界面，不需要暴露每个内部编辑步骤     |
+| 验证修改       | 编译诊断、测试结果、构建状态和运行时反馈      | 通过/失败、剩余问题和失败位置                    | 需要结构化结果；原始输出按需展开             |
+| 恢复或介入     | Git baseline、checkpoint、restore 和重试边界  | Accept、Revert、Retry、Stop 和需要批准的风险动作 | 需要明确控制入口                             |
+| 纯只读内部查询 | 可供下一步推理使用的结构化机器反馈            | 默认不单独显示；最终只呈现影响结论的发现         | 不需要                                       |
 
 产品原则是：**Make agents more capable. Make their work more observable.** 这里的“可观测”分为机器可观测和人类可观测：Agent 必须获得足够精确的结构化反馈继续闭环；用户默认只看结果、影响、风险和介入点，不需要阅读每次查询、每个 token 或完整工具日志。
 
@@ -26,24 +26,24 @@
 2. 它产生的反馈、修改、风险和恢复边界由谁拥有，是否能结构化表达？
 3. 用户是否需要知道结果、检查影响或介入；如果需要，最小用户界面是什么？
 
-| 判断结果 | 产品处理 |
-| --- | --- |
-| 只提高 Agent 的只读理解能力 | 加入工作区能力层；提供机器可读结果，不自动新增用户界面 |
-| 改变文件、Git、进程或任务结论 | 记录可追溯证据，并在人类观测层显示结果摘要和影响范围 |
-| 需要用户授权或可能产生难以恢复的影响 | 在执行前提供批准、停止或缩小范围的入口 |
-| 用户需要深入检查或直接接管 | 复用 Editor、Diff、Diagnostics、Tests 或 Terminal，不为每项能力创建专属面板 |
-| 既不提高 Agent 闭环能力，也不改善用户检查或控制 | 不进入 `app` 产品范围 |
+| 判断结果                                        | 产品处理                                                                    |
+| ----------------------------------------------- | --------------------------------------------------------------------------- |
+| 只提高 Agent 的只读理解能力                     | 加入工作区能力层；提供机器可读结果，不自动新增用户界面                      |
+| 改变文件、Git、进程或任务结论                   | 记录可追溯证据，并在人类观测层显示结果摘要和影响范围                        |
+| 需要用户授权或可能产生难以恢复的影响            | 在执行前提供批准、停止或缩小范围的入口                                      |
+| 用户需要深入检查或直接接管                      | 复用 Editor、Diff、Diagnostics、Tests 或 Terminal，不为每项能力创建专属面板 |
+| 既不提高 Agent 闭环能力，也不改善用户检查或控制 | 不进入 `app` 产品范围                                                       |
 
 因此，拥有 LSP 能力不推出一套完整 IDE，拥有 Git 能力也不推出一套完整 Git 客户端。Minimap、复杂 Editor Group、装饰性 SCM 面板或与任务闭环无关的 Marketplace 不能仅因其他 IDE 已有而获得优先级。
 
 ## 能力、证据与用户界面分离
 
-| 概念 | 负责什么 | 不负责什么 |
-| --- | --- | --- |
-| 工作区能力（workspace capability） | 提供文件、Git、LSP、搜索、语法、PTY、构建、测试和 Remote 的查询或动作 | 决定如何向用户展示一次任务 |
-| Agent Runtime | 规划、调用能力、解释结构化反馈、验证、重试和停止 | 复制文件、Git、LSP 或 Terminal 的权威状态 |
-| 证据（evidence） | 绑定一次任务中的输入事实、修改、验证结果、风险和恢复点 | 保存不可重建的第二份工作区状态 |
-| 人类观测与控制界面（Human Surface） | 呈现结果、影响、风险和操作入口 | 为每个底层 API 暴露一套 GUI，或默认倾倒原始工具日志 |
+| 概念                                | 负责什么                                                              | 不负责什么                                          |
+| ----------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+| 工作区能力（workspace capability）  | 提供文件、Git、LSP、搜索、语法、PTY、构建、测试和 Remote 的查询或动作 | 决定如何向用户展示一次任务                          |
+| Agent Runtime                       | 规划、调用能力、解释结构化反馈、验证、重试和停止                      | 复制文件、Git、LSP 或 Terminal 的权威状态           |
+| 证据（evidence）                    | 绑定一次任务中的输入事实、修改、验证结果、风险和恢复点                | 保存不可重建的第二份工作区状态                      |
+| 人类观测与控制界面（Human Surface） | 呈现结果、影响、风险和操作入口                                        | 为每个底层 API 暴露一套 GUI，或默认倾倒原始工具日志 |
 
 ```mermaid
 flowchart TB
@@ -130,34 +130,34 @@ Terminal 不拥有 Ash Session、Thread 或 transcript。Ash 发起的普通非�
 
 ## 当前能力与计划方向
 
-| 能力 | 当前实现 | Agent 原生能力方向 | 人类观测方向 |
-| --- | --- | --- | --- |
-| 文件系统 | Agent 已有 read/write/edit/grep/glob；Native Files 和 Editor 通过 App Server 读写 | 保持条件写入、revision 和 Workspace 边界 | Changed Files、文件预览、冲突和 Diff |
-| 搜索 | Agent 已有 grep/glob；Native 有文件模糊搜索 | 计划增加索引结果、符号和语义查询的统一机器契约 | 默认只显示关键发现；需要时打开 Search/Editor |
-| LSP | Native 已有 diagnostics、hover、completion 和位置跳转；Agent local tool suite 尚未直接消费 LSP | 计划把 definition、references、symbols、diagnostics、rename 和 code actions 作为 code intelligence substrate | Diagnostics、跳转、引用和修改后错误变化；不建设完整 IDE 工作台 |
-| Git | App Server 已有 repository、status、diff 和 branch typed contract；Agent 目前主要通过受控 Shell 使用 Git | 计划提供 baseline、diff、history、blame、restore 和 Agent-made change attribution | Files Changed、Diff、Untracked、Accept 和 Revert；不复制 GitKraken |
-| 语法与 AST | Editor 已消费 syntax projection；Agent 没有通用 typed AST query | 计划只暴露能提高定位、结构化修改和验证的查询 | 通常不单独呈现；最终关键发现可进入结果摘要 |
-| 构建与测试 | Agent 可通过 shell-command 执行；结果当前主要是 Tool output | 计划增加 test discovery、structured result、diagnostic binding 和 retry scope | Passed/Failed、失败位置、耗时和原始输出展开 |
-| Terminal 与 PTY | Local/Remote Terminal、direct Shell Turn 和交互式 Terminal Surface 已接入 | Ash 继续使用结构化执行能力；外部 AI CLI 通过独立 adapter 启动 | Ash CommandCard 与外部 CLI Terminal 分开显示 |
-| Remote | Remote Workspace、Agent、Language、Terminal 和 Tunnel 基础路径已接入 | 保持能力在远端 Workspace authority 内执行 | 连接状态、失败、重试和执行位置 |
+| 能力            | 当前实现                                                                                                 | Agent 原生能力方向                                                                                           | 人类观测方向                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 文件系统        | Agent 已有 read/write/edit/grep/glob；Native Files 和 Editor 通过 App Server 读写                        | 保持条件写入、revision 和 Workspace 边界                                                                     | Changed Files、文件预览、冲突和 Diff                               |
+| 搜索            | Agent 已有 grep/glob；Native 有文件模糊搜索                                                              | 计划增加索引结果、符号和语义查询的统一机器契约                                                               | 默认只显示关键发现；需要时打开 Search/Editor                       |
+| LSP             | Native 已有 diagnostics、hover、completion 和位置跳转；Agent local tool suite 尚未直接消费 LSP           | 计划把 definition、references、symbols、diagnostics、rename 和 code actions 作为 code intelligence substrate | Diagnostics、跳转、引用和修改后错误变化；不建设完整 IDE 工作台     |
+| Git             | App Server 已有 repository、status、diff 和 branch typed contract；Agent 目前主要通过受控 Shell 使用 Git | 计划提供 baseline、diff、history、blame、restore 和 Agent-made change attribution                            | Files Changed、Diff、Untracked、Accept 和 Revert；不复制 GitKraken |
+| 语法与 AST      | Editor 已消费 syntax projection；Agent 没有通用 typed AST query                                          | 计划只暴露能提高定位、结构化修改和验证的查询                                                                 | 通常不单独呈现；最终关键发现可进入结果摘要                         |
+| 构建与测试      | Agent 可通过 shell-command 执行；结果当前主要是 Tool output                                              | 计划增加 test discovery、structured result、diagnostic binding 和 retry scope                                | Passed/Failed、失败位置、耗时和原始输出展开                        |
+| Terminal 与 PTY | Local/Remote Terminal、direct Shell Turn 和交互式 Terminal Surface 已接入                                | Ash 继续使用结构化执行能力；外部 AI CLI 通过独立 adapter 启动                                                | Ash CommandCard 与外部 CLI Terminal 分开显示                       |
+| Remote          | Remote Workspace、Agent、Language、Terminal 和 Tunnel 基础路径已接入                                     | 保持能力在远端 Workspace authority 内执行                                                                    | 连接状态、失败、重试和执行位置                                     |
 
 上表中的“计划”是 Proposed，不表示对应 Agent tool 或人类 Surface 已经存在。实现时先扩展 canonical capability 和结构化结果，再选择是否需要持久证据与用户 Surface；不得先画完整面板再反推底层 contract。
 
 ## 所有权
 
-| 状态或能力 | Owner | `app` 义务 |
-| --- | --- | --- |
-| Session、Thread、Turn 与 durable ThreadItem | Core / App Server | 订阅 snapshot/update，不复制 reducer |
-| 文件、Git、LSP、搜索、PTY 与 Remote authority | 对应 `ash-rs` domain / App Server | 复用 typed contract，不从 UI 或 terminal output 反推状态 |
-| Agent capability selection 与 Tool execution | Core Tool registry / scheduler | 投影动作、结果、批准和失败，不在 Native 建第二套 Agent runtime |
-| transient Agent/Tool delta | App Server update stream | 检测 stream cursor gap；gap 后重新订阅 |
-| 任务证据的权威事实 | Core / App Server Thread facts + Workspace domain revision | 保留动作、修改、验证、风险和恢复所需的 identity，不保存平行工作区状态 |
-| 结果摘要 | Proposed Native Thread projection | 从权威事实重建，默认呈现结果并按需展开过程 |
-| Timeline scroll、展开、选择和布局 | Native presentation | 可丢弃、可从 snapshot 重建 |
-| Composer text、routing、IME 与 caret | `ash-session::SessionPaneState` + `ash-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation |
-| Files、Changes 与 Terminal Pane | 对应 domain presentation owner | 让用户检查和接管 canonical state；Editor 和 Diff 作为视图内部内容组合 |
-| Approval、Stop 与 Retry | Core authority + Native command adapter | 明确作用范围、失败语义和恢复边界 |
-| Accept 与 Revert | Proposed domain authority + Native command adapter | 绑定明确的 Change Set 或 Checkpoint identity，不按当前屏幕内容猜测目标 |
+| 状态或能力                                    | Owner                                                              | `app` 义务                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Session、Thread、Turn 与 durable ThreadItem   | Core / App Server                                                  | 订阅 snapshot/update，不复制 reducer                                   |
+| 文件、Git、LSP、搜索、PTY 与 Remote authority | 对应 `ash-rs` domain / App Server                                  | 复用 typed contract，不从 UI 或 terminal output 反推状态               |
+| Agent capability selection 与 Tool execution  | Core Tool registry / scheduler                                     | 投影动作、结果、批准和失败，不在 Native 建第二套 Agent runtime         |
+| transient Agent/Tool delta                    | App Server update stream                                           | 检测 stream cursor gap；gap 后重新订阅                                 |
+| 任务证据的权威事实                            | Core / App Server Thread facts + Workspace domain revision         | 保留动作、修改、验证、风险和恢复所需的 identity，不保存平行工作区状态  |
+| 结果摘要                                      | Proposed Native Thread projection                                  | 从权威事实重建，默认呈现结果并按需展开过程                             |
+| Timeline scroll、展开、选择和布局             | Native presentation                                                | 可丢弃、可从 snapshot 重建                                             |
+| Composer text、routing、IME 与 caret          | `ash-session::SessionPaneState` + `ash-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation          |
+| Files、Changes 与 Terminal Pane               | 对应 domain presentation owner                                     | 让用户检查和接管 canonical state；Editor 和 Diff 作为视图内部内容组合  |
+| Approval、Stop 与 Retry                       | Core authority + Native command adapter                            | 明确作用范围、失败语义和恢复边界                                       |
+| Accept 与 Revert                              | Proposed domain authority + Native command adapter                 | 绑定明确的 Change Set 或 Checkpoint identity，不按当前屏幕内容猜测目标 |
 
 ## Composer 与执行语义
 
@@ -186,32 +186,32 @@ Native 首次选择 Session 时调用 `session/subscribe`。App Server 返回 Se
 
 ## Roadmap 筛选器
 
-| 候选能力 | Agent 闭环提升 | 人类检查或介入价值 | 产品判断 |
-| --- | --- | --- | --- |
-| LSP code intelligence | 很高 | 高 | 优先；先完成 Agent typed consumer，再复用 Diagnostics/Editor 界面 |
-| Git baseline、diff 和 restore | 很高 | 很高 | 优先；与 change attribution、Accept/Revert 一起设计 |
-| structured tests/build | 很高 | 很高 | 优先；命令输出之外建立 result contract |
-| Workspace index/search | 很高 | 中 | 优先；大部分查询无需默认用户观测 |
-| AST/tree-sitter queries | 高 | 低 | 主要作为内部能力；不做独立 AST GUI |
-| Terminal/PTY/runtime logs | 很高 | 很高 | 核心；区分有界 CommandCard 与交互 Terminal |
-| Remote Workspace | 很高 | 中 | 核心；用户只需看到执行位置、状态和恢复动作 |
-| Files 与 Changes 视图 | 高 | 很高 | 分别承载文件编辑与 Diff 审查 |
-| DAP debugger | Potentially high | 高 | Potential；先验证可复现问题、结构化状态和 Agent consumer |
-| CI、browser/dev-server feedback | Potentially high | 高 | Potential；需要可信身份、取消、revision 和结果绑定 |
-| Minimap、复杂 Editor Group | 低 | 低到中 | Non-goal，除非真实 Agent workflow 证明必要 |
-| 为每项 capability 建独立面板 | 无 | 低 | Non-goal |
+| 候选能力                        | Agent 闭环提升   | 人类检查或介入价值 | 产品判断                                                          |
+| ------------------------------- | ---------------- | ------------------ | ----------------------------------------------------------------- |
+| LSP code intelligence           | 很高             | 高                 | 优先；先完成 Agent typed consumer，再复用 Diagnostics/Editor 界面 |
+| Git baseline、diff 和 restore   | 很高             | 很高               | 优先；与 change attribution、Accept/Revert 一起设计               |
+| structured tests/build          | 很高             | 很高               | 优先；命令输出之外建立 result contract                            |
+| Workspace index/search          | 很高             | 中                 | 优先；大部分查询无需默认用户观测                                  |
+| AST/tree-sitter queries         | 高               | 低                 | 主要作为内部能力；不做独立 AST GUI                                |
+| Terminal/PTY/runtime logs       | 很高             | 很高               | 核心；区分有界 CommandCard 与交互 Terminal                        |
+| Remote Workspace                | 很高             | 中                 | 核心；用户只需看到执行位置、状态和恢复动作                        |
+| Files 与 Changes 视图           | 高               | 很高               | 分别承载文件编辑与 Diff 审查                                      |
+| DAP debugger                    | Potentially high | 高                 | Potential；先验证可复现问题、结构化状态和 Agent consumer          |
+| CI、browser/dev-server feedback | Potentially high | 高                 | Potential；需要可信身份、取消、revision 和结果绑定                |
+| Minimap、复杂 Editor Group      | 低               | 低到中             | Non-goal，除非真实 Agent workflow 证明必要                        |
+| 为每项 capability 建独立面板    | 无               | 低                 | Non-goal                                                          |
 
 ## 当前限制与下一阶段
 
-| 项目 | 当前边界 | 下一阶段 |
-| --- | --- | --- |
-| Agent code intelligence | 主要依赖 read/grep/glob/shell，LSP 尚未进入 Agent tool suite | 定义 revision-bound LSP query/result contract，并接入 Agent Tool registry |
-| Change attribution | 有 Workspace Git projection 和 durable ToolCall，但未形成每 Turn 的 change set | 绑定 Turn baseline、修改文件、Diff 和 Agent-made attribution |
-| Verification | shell ToolResult 可见，但测试、构建和 diagnostics 尚未汇聚成 outcome | 建立结构化 verification evidence 和未验证状态 |
-| Outcome-first Timeline | 当前呈现基本 ThreadItem、Plan 和 Tool output | 增加 Found、Changed、Diagnostics、Tests 和 intervention summary；原始过程默认折叠 |
-| Recovery | Git 和文件写入有底层保护，用户级 Accept/Revert 尚未形成统一闭环 | 定义 checkpoint identity、作用范围和安全失败语义 |
-| Tool output latency | stdout/stderr 类型已贯通；local adapter 仍可能在进程完成后发布捕获结果 | 从 executor pipe reader 实时发布有界 chunk |
-| Terminal layout | 当前为独立全主区域 Surface | Proposed：与 Agent conversation 组成 Session Flow；交互协议在原位进入全格网格，不改变 Agent/Workspace authority |
+| 项目                    | 当前边界                                                                       | 下一阶段                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Agent code intelligence | 主要依赖 read/grep/glob/shell，LSP 尚未进入 Agent tool suite                   | 定义 revision-bound LSP query/result contract，并接入 Agent Tool registry                                       |
+| Change attribution      | 有 Workspace Git projection 和 durable ToolCall，但未形成每 Turn 的 change set | 绑定 Turn baseline、修改文件、Diff 和 Agent-made attribution                                                    |
+| Verification            | shell ToolResult 可见，但测试、构建和 diagnostics 尚未汇聚成 outcome           | 建立结构化 verification evidence 和未验证状态                                                                   |
+| Outcome-first Timeline  | 当前呈现基本 ThreadItem、Plan 和 Tool output                                   | 增加 Found、Changed、Diagnostics、Tests 和 intervention summary；原始过程默认折叠                               |
+| Recovery                | Git 和文件写入有底层保护，用户级 Accept/Revert 尚未形成统一闭环                | 定义 checkpoint identity、作用范围和安全失败语义                                                                |
+| Tool output latency     | stdout/stderr 类型已贯通；local adapter 仍可能在进程完成后发布捕获结果         | 从 executor pipe reader 实时发布有界 chunk                                                                      |
+| Terminal layout         | 当前为独立全主区域 Surface                                                     | Proposed：与 Agent conversation 组成 Session Flow；交互协议在原位进入全格网格，不改变 Agent/Workspace authority |
 
 ## 长期不变量
 

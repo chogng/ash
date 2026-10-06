@@ -26,11 +26,11 @@ test('edit-context factory owns browser object construction and reports missing 
 		readonly selectionStart = 0;
 		readonly selectionEnd = 0;
 		constructor(readonly options?: EditContextInit) { super(); }
-		updateText(): void {}
-		updateSelection(): void {}
-		updateControlBounds(): void {}
-		updateSelectionBounds(): void {}
-		updateCharacterBounds(): void {}
+		updateText(): void { }
+		updateSelection(): void { }
+		updateControlBounds(): void { }
+		updateSelectionBounds(): void { }
+		updateCharacterBounds(): void { }
 	}
 	const options = { text: 'draft', selectionStart: 1, selectionEnd: 1 };
 	const instance = EditContext.create({ EditContext: TestEditContext } as unknown as Window, options);

@@ -95,11 +95,11 @@ export interface IViewContainerModel {
 	readonly activeViewDescriptors: readonly IViewDescriptor[];
 	readonly visibleViewDescriptors: readonly IViewDescriptor[];
 	readonly onDidChangeAllViewDescriptors:
-		Event<IViewDescriptorsChangeEvent>;
+	Event<IViewDescriptorsChangeEvent>;
 	readonly onDidChangeActiveViewDescriptors:
-		Event<IViewDescriptorsChangeEvent>;
+	Event<IViewDescriptorsChangeEvent>;
 	readonly onDidChangeVisibleViewDescriptors:
-		Event<IViewDescriptorsChangeEvent>;
+	Event<IViewDescriptorsChangeEvent>;
 
 	isVisible(viewId: string): boolean;
 	setVisible(viewId: string, visible: boolean): void;
@@ -141,10 +141,10 @@ export class WorkbenchViewRegistry {
 
 	readonly onDidRegisterViewContainer:
 		Event<IViewContainerDescriptor> =
-			this._onDidRegisterViewContainer.event;
+		this._onDidRegisterViewContainer.event;
 	readonly onDidDeregisterViewContainer:
 		Event<IViewContainerDescriptor> =
-			this._onDidDeregisterViewContainer.event;
+		this._onDidDeregisterViewContainer.event;
 	readonly onDidRegisterViews: Event<IViewsChangeEvent> =
 		this._onDidRegisterViews.event;
 	readonly onDidDeregisterViews: Event<IViewsChangeEvent> =
@@ -181,9 +181,8 @@ export class WorkbenchViewRegistry {
 			)
 		) {
 			throw new Error(
-				`Default view container is already registered for ${
-          descriptor.location
-        }`,
+				`Default view container is already registered for ${descriptor.location
+				}`,
 			);
 		}
 		const registered: IRegisteredViewContainer = {

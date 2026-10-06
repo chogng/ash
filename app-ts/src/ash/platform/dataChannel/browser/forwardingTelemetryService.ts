@@ -5,7 +5,7 @@ import { IDataChannelService } from '../common/dataChannel.js';
 export class InterceptingTelemetryService implements ITelemetryService {
 	public readonly _serviceBrand = undefined;
 
-	constructor(private readonly baseService: ITelemetryService, private readonly intercept: (eventName: string, data?: ITelemetryData) => void) {}
+	constructor(private readonly baseService: ITelemetryService, private readonly intercept: (eventName: string, data?: ITelemetryData) => void) { }
 
 	public get telemetryLevel(): TelemetryLevel { return this.baseService.telemetryLevel; }
 	public get sessionId(): string { return this.baseService.sessionId; }

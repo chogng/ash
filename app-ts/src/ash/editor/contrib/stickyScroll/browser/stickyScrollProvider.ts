@@ -16,7 +16,7 @@ export class StickyLineCandidate {
 		public readonly endLineNumber: number,
 		public readonly top: number,
 		public readonly height: number,
-	) {}
+	) { }
 }
 
 export interface IStickyLineCandidateProvider {

@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { enableHotReload, isHotReloadEnabled, registerHotReloadHandler } from "../../common/hotReload.js";
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string; readonly config?: { readonly mode?: "patch-prototype" } }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
+	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string; readonly config?: { readonly mode?: "patch-prototype"; }; }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
 };
 
 test("hot reload patches existing class instances and preserves canonical exports", () => {
@@ -21,7 +21,7 @@ test("hot reload patches existing class instances and preserves canonical export
 	const oldExports: Record<string, unknown> = { Example: Initial };
 	const newExports: Record<string, unknown> = { Example: Replacement };
 	const accept = hotReloadGlobal().$hotReload_applyNewExports?.({ oldExports, newSrc: "test/example.ts", config: { mode: "patch-prototype" } });
-	const instance = new Initial() as Initial & { added(): string; stale?: () => string };
+	const instance = new Initial() as Initial & { added(): string; stale?: () => string; };
 
 	assert.equal(accept?.(newExports), true);
 	assert.equal(instance.value(), "replacement");
@@ -31,10 +31,10 @@ test("hot reload patches existing class instances and preserves canonical export
 });
 
 test("hot reload rejects incompatible prototype and export shapes", () => {
-	class FirstBase {}
-	class SecondBase {}
-	class Initial extends FirstBase {}
-	class Replacement extends SecondBase {}
+	class FirstBase { }
+	class SecondBase { }
+	class Initial extends FirstBase { }
+	class Replacement extends SecondBase { }
 	const apply = hotReloadGlobal().$hotReload_applyNewExports;
 
 	const incompatible = apply?.({ oldExports: { Example: Initial }, newSrc: "test/incompatible.ts", config: { mode: "patch-prototype" } });

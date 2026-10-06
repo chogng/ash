@@ -3,7 +3,7 @@ import type { ICodebaseApi } from "../../../../platform/codebase/common/codebase
 import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseProviderConfiguration, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from "../../../../platform/codebase/common/codebaseService.js";
 
 export class AppServerCodebaseService implements ICodebaseService {
-	constructor(private readonly api: ICodebaseApi) {}
+	constructor(private readonly api: ICodebaseApi) { }
 
 	async readConfig(): Promise<CodebaseConfigurationSnapshot> { return projectConfiguration(await this.api.readConfig()); }
 

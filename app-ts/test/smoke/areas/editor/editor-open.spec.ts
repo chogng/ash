@@ -13,7 +13,7 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'pnpm-lock.yaml', exact: true });
 	await expect(file).toBeVisible();
 	await page.evaluate(() => {
-		const frames: { milliseconds: number; highlighted: boolean }[] = [];
+		const frames: { milliseconds: number; highlighted: boolean; }[] = [];
 		const started = performance.now();
 		let frame: number;
 		const sample = (): void => {
@@ -24,7 +24,7 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 			}
 			frame = requestAnimationFrame(sample);
 		};
-		(window as Window & { stopSyntaxFrames?: () => typeof frames }).stopSyntaxFrames = () => {
+		(window as Window & { stopSyntaxFrames?: () => typeof frames; }).stopSyntaxFrames = () => {
 			cancelAnimationFrame(frame);
 			return frames;
 		};
@@ -40,7 +40,7 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 	await expect(key).not.toHaveCSS('color', foreground);
 	await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
 	const frames = await page.evaluate(() => {
-		const host = window as Window & { stopSyntaxFrames?: () => { milliseconds: number; highlighted: boolean }[] };
+		const host = window as Window & { stopSyntaxFrames?: () => { milliseconds: number; highlighted: boolean; }[]; };
 		const result = host.stopSyntaxFrames!();
 		delete host.stopSyntaxFrames;
 		return result;
@@ -162,11 +162,11 @@ test('file tab copy and reveal actions target inactive and selected files', asyn
 		const electron = application as ElectronApplication;
 		await electron.evaluate(({ shell }) => {
 			const paths: string[] = [];
-			(globalThis as typeof globalThis & { ashRevealedPaths: string[] }).ashRevealedPaths = paths;
+			(globalThis as typeof globalThis & { ashRevealedPaths: string[]; }).ashRevealedPaths = paths;
 			shell.showItemInFolder = path => { paths.push(path); };
 		});
 		await menu.getByRole('menuitem', { name: osLabel, exact: true }).click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashRevealedPaths: string[] }).ashRevealedPaths)).toEqual([await realpath(join(testWorkspace.directory, 'reveal-folder', 'target.ts'))]);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashRevealedPaths: string[]; }).ashRevealedPaths)).toEqual([await realpath(join(testWorkspace.directory, 'reveal-folder', 'target.ts'))]);
 		await expect(sidebar).toBeHidden();
 		await clicked.focus();
 		await clicked.press('Shift+F10');
@@ -1164,7 +1164,7 @@ test("Code renders workspace PDFs and persists review annotations", async ({ tar
 	await expect.poll(
 		async () => {
 			try {
-				const document = JSON.parse(await readFile(`${testWorkspace.pdfFile}.ash-annotations.json`, "utf8")) as { annotations: unknown[] };
+				const document = JSON.parse(await readFile(`${testWorkspace.pdfFile}.ash-annotations.json`, "utf8")) as { annotations: unknown[]; };
 				return document.annotations.length;
 			} catch {
 				return 0;
@@ -1343,7 +1343,7 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 			opening.onerror = () => reject(opening.error ?? new Error("Could not inspect working-copy backups"));
 		});
 		try {
-			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
+			const records = await new Promise<Array<{ readonly content?: string; }>>((resolve, reject) => {
 				const request = database.transaction("backups", "readonly").objectStore("backups").getAll();
 				request.onsuccess = () => resolve(request.result);
 				request.onerror = () => reject(request.error ?? new Error("Could not read working-copy backups"));
@@ -1558,8 +1558,8 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 	await input.focus();
 	await input.press('ControlOrMeta+Home');
 	await input.type('unsaved ');
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
-	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string };
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
+	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string; };
 	expect(snapshot).toMatchObject({ kind: 'document', text: 'unsaved first\r\nsecond' });
 	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [{ relativePath: name, text: 'unsaved first\r\nsecond' }] });
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent first\nsecond' }] })).toEqual({ kind: 'applied' });
@@ -1571,7 +1571,7 @@ test('Agent document requests preserve unsaved editor content, undo, BOM and CRL
 	await expect(group.editor.lines).toHaveText(['unsaved first', 'second']);
 	await input.press('ControlOrMeta+s');
 	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFunsaved first\r\nsecond'));
-	const stale = await request('textDocument/read', { path }) as { snapshot: string };
+	const stale = await request('textDocument/read', { path }) as { snapshot: string; };
 	await input.press('ControlOrMeta+Home');
 	await input.type('user ');
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: stale.snapshot, text: 'stale agent' }] })).toEqual({ kind: 'conflict' });
@@ -1587,8 +1587,8 @@ test('Agent document requests use the Agents window model and save closed files 
 	await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
 	const path = join(testWorkspace.directory, 'agents-document.txt');
 	await writeFile(path, '\uFEFForiginal\r\nsecond');
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
-	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string };
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
+	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string; };
 	expect(snapshot).toMatchObject({ kind: 'document', text: 'original\r\nsecond' });
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent\nsecond' }] })).toEqual({ kind: 'applied' });
 	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent\r\nsecond'));
@@ -1630,8 +1630,8 @@ test('Agent review accepts individual hunks and rejects the remainder without lo
 	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
 	const group = workbench.editors.groupAt(0);
 	const input = group.content.getByRole('textbox', { name, exact: true });
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
-	const snapshot = await request('textDocument/read', { path }) as { snapshot: string };
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
+	const snapshot = await request('textDocument/read', { path }) as { snapshot: string; };
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: original.replace('first', 'agent first').replace('last', 'agent last') }] })).toEqual({ kind: 'applied' });
 	const review = group.content.locator('.ash-chat-editing-overlay');
 	await expect(review).toBeVisible();
@@ -1689,7 +1689,7 @@ test('Agent review accepts individual hunks and rejects the remainder without lo
 	// Closed files remain reviewable through the command, using the same model baseline.
 	const closed = join(testWorkspace.directory, 'agent-review-closed.txt');
 	await writeFile(closed, 'closed original');
-	const closedSnapshot = await request('textDocument/read', { path: closed }) as { snapshot: string };
+	const closedSnapshot = await request('textDocument/read', { path: closed }) as { snapshot: string; };
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: closedSnapshot.snapshot, text: 'closed agent' }] })).toEqual({ kind: 'applied' });
 	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
 	await expect.poll(() => readFile(closed, 'utf8')).toBe('closed original');
@@ -1713,7 +1713,7 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 		let port: MessagePort | undefined;
 		let injecting = false;
 		const takeReply = (frame: string): boolean => {
-			const message = JSON.parse(frame) as { id?: string; result?: unknown; error?: unknown };
+			const message = JSON.parse(frame) as { id?: string; result?: unknown; error?: unknown; };
 			if (typeof message.id !== 'string' || !message.id.startsWith('test-document:')) { return false; }
 			replies.get(message.id)?.(message.result ?? message.error);
 			replies.delete(message.id);
@@ -1728,7 +1728,7 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			send.call(this, data);
 		};
 		const post = MessagePort.prototype.postMessage;
-		MessagePort.prototype.postMessage = function (message: { frame?: string; ack?: boolean }, options?: Transferable[] | StructuredSerializeOptions): void {
+		MessagePort.prototype.postMessage = function (message: { frame?: string; ack?: boolean; }, options?: Transferable[] | StructuredSerializeOptions): void {
 			if (message.frame) {
 				if (JSON.parse(message.frame).method === 'initialize') { port = this; }
 				if (takeReply(message.frame)) {
@@ -1739,7 +1739,7 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			if (injecting && message.ack) { return; }
 			post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
 		};
-		(window as Window & { documentRequest?: (method: string, params: unknown) => Promise<unknown> }).documentRequest = (method, params) => {
+		(window as Window & { documentRequest?: (method: string, params: unknown) => Promise<unknown>; }).documentRequest = (method, params) => {
 			const id = `test-document:${++sequence}`;
 			const result = new Promise(resolve => replies.set(id, resolve));
 			const frame = JSON.stringify({ jsonrpc: '2.0', id, method, params });
@@ -1751,7 +1751,7 @@ async function installDocumentProtocolProbe(page: Page): Promise<void> {
 			} finally { injecting = false; }
 			return result;
 		};
-		(window as Window & { documentTurnFinished?: (turnId: string) => void }).documentTurnFinished = turnId => {
+		(window as Window & { documentTurnFinished?: (turnId: string) => void; }).documentTurnFinished = turnId => {
 			const frame = JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/turnFinished', params: { threadId: 'review-thread', turnId, outcome: 'completed' } });
 			injecting = true;
 			try {
@@ -1816,9 +1816,9 @@ test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a 
 	await writeFile(path, 'original');
 	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
 	const group = workbench.editors.groupAt(0);
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown> }).documentRequest(method, params), { method, params });
-	const finish = (turnId: string): Promise<void> => page.evaluate(turnId => (window as unknown as Window & { documentTurnFinished: (turnId: string) => void }).documentTurnFinished(turnId), turnId);
-	const first = await request('textDocument/read', { path }) as { snapshot: string };
+	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
+	const finish = (turnId: string): Promise<void> => page.evaluate(turnId => (window as unknown as Window & { documentTurnFinished: (turnId: string) => void; }).documentTurnFinished(turnId), turnId);
+	const first = await request('textDocument/read', { path }) as { snapshot: string; };
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'first-turn', changes: [{ kind: 'update', snapshot: first.snapshot, text: 'agent first' }] })).toEqual({ kind: 'applied' });
 	const review = group.content.locator('.ash-chat-editing-overlay');
 	await expect(review).toBeVisible();
@@ -1837,7 +1837,7 @@ test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a 
 	await page.clock.runFor(5000);
 	await expect(review).toBeVisible();
 	await expect(cancel).toHaveCount(0);
-	const next = await request('textDocument/read', { path }) as { snapshot: string };
+	const next = await request('textDocument/read', { path }) as { snapshot: string; };
 	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'next-turn', changes: [{ kind: 'update', snapshot: next.snapshot, text: 'agent next' }] })).toEqual({ kind: 'applied' });
 	await finish('next-turn');
 	await expect(review.locator('.ash-chat-editing-auto-accept')).toHaveText('Accepting in 3s');

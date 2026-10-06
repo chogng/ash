@@ -13,7 +13,7 @@ const resource = URI.joinPath(root, 'main.ts');
 const query: IContentSearchQuery = { text: '(needle)', patternKind: 'regex', caseSensitivity: 'insensitive', includePatterns: [], excludePatterns: [] };
 const options = { preview: false, preserveCase: false, signal: new AbortController().signal };
 
-function results(preview: string, ranges: readonly { start: number; end: number }[]): SearchResultImpl {
+function results(preview: string, ranges: readonly { start: number; end: number; }[]): SearchResultImpl {
 	const result = new SearchResultImpl([{ id: 'workspace', index: 0, name: 'workspace', uri: root }]);
 	result.add([{ dirId: 'workspace', path: 'main.ts', lineNumber: 1, preview, ranges }]);
 	return result;
@@ -100,7 +100,7 @@ test('replacement retains an open dirty model on save failure and undo saves its
 		backup: () => reference.model.getText(), restoreBackup: text => reference.model.setValue(text),
 		save: signal => reference.save(signal), revert: signal => reference.revert(signal),
 		saveAs: async () => { throw new Error('This test saves the existing file'); },
-		dispose() {}, [Symbol.dispose]() {},
+		dispose() { }, [Symbol.dispose]() { },
 	});
 	fixture.store.failNextSave = new Error('Saving failed');
 	const matches = results('needle', [{ start: 0, end: 6 }]);

@@ -12,11 +12,11 @@
 
 终端文本快照统一放在 [`snapshots/`](snapshots)，按实际绘制的模式和功能目录查证：
 
-| 目录 | 内容 |
-| --- | --- |
-| `snapshots/fullscreen/` | 全屏页面、模态框及模式切换后绘制的全屏画面 |
-| `snapshots/inline/` | Inline 页面、临时面板及模式切换后绘制的 inline 画面 |
-| `snapshots/shared/` | 不依赖屏幕模式的组件、正文渲染及提示文字 |
+| 目录                    | 内容                                                |
+| ----------------------- | --------------------------------------------------- |
+| `snapshots/fullscreen/` | 全屏页面、模态框及模式切换后绘制的全屏画面          |
+| `snapshots/inline/`     | Inline 页面、临时面板及模式切换后绘制的 inline 画面 |
+| `snapshots/shared/`     | 不依赖屏幕模式的组件、正文渲染及提示文字            |
 
 各目录再按 `home`、`header`、`composer`、`mode`、`widgets` 等测试所属功能划分。文件名只保留场景名，例如 `fullscreen/home/help_chinese.snap`；快照头部的 `source` 指向测试源码，测试仍放在所属实现旁边。
 

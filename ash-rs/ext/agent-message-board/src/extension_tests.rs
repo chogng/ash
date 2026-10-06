@@ -32,7 +32,7 @@ fn unread_context_queries_honor_the_receiving_turn_cancellation() {
     cancellation.cancel();
     let result = runtime.registry.contribute_turn_input(
         TurnInputContext::for_session(&runtime.session, &runtime.root, &runtime.turn, &[])
-        .with_cancellation(cancellation.token()),
+            .with_cancellation(cancellation.token()),
     );
     assert!(result.is_err());
 }

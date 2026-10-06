@@ -1,121 +1,122 @@
 .ash-settings-editor {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  flex: 1 1 auto;
-  flex-direction: column;
+	display: flex;
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	flex: 1 1 auto;
+	flex-direction: column;
 }
 
 .ash-settings-layout {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  flex: 1 1 auto;
-  grid-template-columns: 232px minmax(0, 1fr);
+	display: grid;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	flex: 1 1 auto;
+	grid-template-columns: 232px minmax(0, 1fr);
 }
 
 .ash-settings-sidebar {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  background: var(--ash-side-bar-background);
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	background: var(--ash-side-bar-background);
 }
 
 .ash-settings-sidebar-scrollable,
 .ash-settings-page-scrollable {
-  width: 100%;
-  height: 100%;
+	width: 100%;
+	height: 100%;
 }
 
 .ash-settings-navigation-tree {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 20px 12px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 20px 12px;
 }
 
 .ash-settings-navigation-empty {
-  margin: 0;
-  padding: 20px 24px;
-  color: var(--ash-description-foreground);
-  line-height: 1.5;
+	margin: 0;
+	padding: 20px 24px;
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
 }
 
 .ash-settings-navigation-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-settings-page {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .ash-settings-page-inner {
-  padding: 32px 40px;
+	padding: 32px 40px;
 }
 
 .ash-settings-page h3 {
-  margin: 0 0 8px;
-  color: var(--ash-settings-header-foreground);
-  font-size: var(--ash-font-size-heading2);
-  font-weight: var(--ash-font-weight-semi-bold);
+	margin: 0 0 8px;
+	color: var(--ash-settings-header-foreground);
+	font-size: var(--ash-font-size-heading2);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-settings-description {
-  max-width: 680px;
-  margin: 0 0 28px;
-  color: var(--ash-description-foreground);
-  line-height: 1.5;
+	max-width: 680px;
+	margin: 0 0 28px;
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
 }
 
 .ash-settings-content {
-  min-height: 1px;
+	min-height: 1px;
 }
 
 .ash-configuration-settings-status {
-  min-height: 18px;
-  margin: -18px 0 0;
-  color: var(--ash-description-foreground);
-  font-size: 12px;
+	min-height: 18px;
+	margin: -18px 0 0;
+	color: var(--ash-description-foreground);
+	font-size: 12px;
 }
 
 .ash-configuration-settings-status.is-error {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 @media (max-width: 720px) {
-  .ash-settings-layout {
-    grid-template-columns: minmax(164px, 36%) minmax(0, 1fr);
-  }
+	.ash-settings-layout {
+		grid-template-columns: minmax(164px, 36%) minmax(0, 1fr);
+	}
 
-  .ash-settings-page-inner {
-    padding: 24px;
-  }
+	.ash-settings-page-inner {
+		padding: 24px;
+	}
 }
 
 @media (max-width: 480px) {
-  .ash-settings-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(132px, 36%) minmax(0, 1fr);
-  }
+	.ash-settings-layout {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(132px, 36%) minmax(0, 1fr);
+	}
 
-  .ash-settings-sidebar {
-    border-right: 0;
-    border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  }
+	.ash-settings-sidebar {
+		border-right: 0;
+		border-bottom: var(--ash-stroke-thickness) solid
+			var(--ash-widget-border);
+	}
 
-  .ash-settings-navigation-tree {
-    padding: 10px;
-  }
+	.ash-settings-navigation-tree {
+		padding: 10px;
+	}
 
-  .ash-settings-page-inner {
-    padding: 20px;
-  }
+	.ash-settings-page-inner {
+		padding: 20px;
+	}
 }

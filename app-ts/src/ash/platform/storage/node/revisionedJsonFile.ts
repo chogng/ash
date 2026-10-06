@@ -112,7 +112,7 @@ export class RevisionedJsonFile<T> extends Disposable {
 				if (expectedRevision !== this.revision) {
 					throw new Error(
 						`${this.label} revision conflict: expected ` +
-							`${expectedRevision}, actual ${this.revision}`,
+						`${expectedRevision}, actual ${this.revision}`,
 					);
 				}
 				const value = this.validate(candidate);

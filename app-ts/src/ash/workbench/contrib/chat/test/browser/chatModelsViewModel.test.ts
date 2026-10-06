@@ -22,15 +22,15 @@ function fixture(provider: CustomModelProvider) {
 	let catalog: readonly ModelCatalogEntry[] = [];
 	let failDiscovery = false;
 	let failSave = false;
-	let pendingProbe: Promise<{ type: 'passed' }> | undefined;
+	let pendingProbe: Promise<{ type: 'passed'; }> | undefined;
 	const models: ILanguageModelsService = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
-		setModelPreferences: async () => {},
+		setApprovalReviewModel: async () => { },
+		setModelPreferences: async () => { },
 		onDidChangeModels: Event.None,
 		listModels: async () => [],
 		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel() {},
+		rememberSelectedModel() { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [provider],
 		saveCustomModelProvider: async value => { if (failSave) throw new Error('Write rejected'); writes.push(value); },
@@ -40,8 +40,8 @@ function fixture(provider: CustomModelProvider) {
 			return id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' };
 		},
 		listModelProviders: async () => [],
-		setModelProviderApiKey: async () => {},
-		removeModelProviderApiKey: async () => {},
+		setModelProviderApiKey: async () => { },
+		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: async () => [],
 		refreshModels: async () => catalog,
 		isModelVisible: model => enabled.has(model.model),
@@ -61,7 +61,7 @@ function fixture(provider: CustomModelProvider) {
 		set catalog(value: readonly ModelCatalogEntry[]) { catalog = value; },
 		set failDiscovery(value: boolean) { failDiscovery = value; },
 		set failSave(value: boolean) { failSave = value; },
-		set pendingProbe(value: Promise<{ type: 'passed' }>) { pendingProbe = value; },
+		set pendingProbe(value: Promise<{ type: 'passed'; }>) { pendingProbe = value; },
 	};
 }
 const provider: CustomModelProvider = { id: 'custom-test', name: 'Test gateway', baseUrl: 'https://test.example/v1', apiFormat: 'chatCompletions', order: 1, models: [] };
@@ -71,13 +71,13 @@ test('Test models discovers an empty table once, tests every row and reports one
 	const context = fixture(provider);
 	using resources = context.resources;
 	context.catalog = [discovered('available'), discovered('rejected')];
-	await context.view.testModels(async () => {});
+	await context.view.testModels(async () => { });
 	assert.equal(context.discoveryCalls, 1);
 	assert.deepEqual(context.tests, ['available', 'rejected']);
 	assert.deepEqual(context.view.rows.map(row => [row.id, row.status]), [['available', 'passed'], ['rejected', 'failed']]);
 	assert.deepEqual([...context.enabled], []);
 	assert.deepEqual(context.notifications.getNotifications().map(item => [item.severity, item.message]), [['warning', 'Test gateway: 1 of 2 models passed.']]);
-	await context.view.testModels(async () => {});
+	await context.view.testModels(async () => { });
 	assert.equal(context.discoveryCalls, 1);
 	assert.deepEqual(context.tests, ['available', 'rejected', 'available', 'rejected']);
 });
@@ -93,12 +93,12 @@ test('Refreshing and reopening retain discovered membership, context mappings an
 	assert.deepEqual(context.view.rows.map(row => [row.id, row.manual]), [['available', false], ['local-alias', true]]);
 	assert.equal(context.view.isEnabled('available'), false);
 	await context.view.setEnabled('available', true);
-	await context.view.refresh(async () => {});
+	await context.view.refresh(async () => { });
 	assert.equal(context.view.isEnabled('available'), true);
 	assert.deepEqual(context.view.provider.models, [{ id: 'local-alias', contextWindow: 128_000, upstreamModel: 'available' }]);
 	context.failDiscovery = true;
 	const before = context.view.rows.map(row => row.id);
-	await context.view.refresh(async () => {});
+	await context.view.refresh(async () => { });
 	assert.deepEqual(context.view.rows.map(row => row.id), before);
 	assert.match(context.notifications.getNotifications().at(-1)!.message, /Endpoint unavailable/);
 });
@@ -106,7 +106,7 @@ test('Refreshing and reopening retain discovered membership, context mappings an
 test('Manual-only IDs test without discovery and failed deletion preserves the declaration', async () => {
 	const context = fixture({ ...provider, models: [{ id: 'manual', contextWindow: 128_000 }] });
 	using resources = context.resources;
-	await context.view.testModels(async () => {});
+	await context.view.testModels(async () => { });
 	assert.equal(context.discoveryCalls, 0);
 	assert.deepEqual(context.tests, ['manual']);
 	context.failSave = true;
@@ -117,11 +117,11 @@ test('Manual-only IDs test without discovery and failed deletion preserves the d
 test('An empty successful response stays distinct from a discovery failure', async () => {
 	const context = fixture(provider);
 	using resources = context.resources;
-	await context.view.refresh(async () => {});
+	await context.view.refresh(async () => { });
 	assert.match(context.view.message, /returned no models/);
 	assert.equal(context.notifications.getNotifications().length, 0);
 	context.failDiscovery = true;
-	await context.view.testModels(async () => {});
+	await context.view.testModels(async () => { });
 	assert.deepEqual(context.tests, []);
 	assert.equal(context.view.busy, false);
 	assert.match(context.view.message, /Endpoint unavailable/);
@@ -131,9 +131,9 @@ test('An empty successful response stays distinct from a discovery failure', asy
 test('Disposing a testing card prevents its late response from announcing success', async () => {
 	const context = fixture({ ...provider, models: [{ id: 'manual', contextWindow: 128_000 }] });
 	using resources = context.resources;
-	const pending = new DeferredPromise<{ type: 'passed' }>();
+	const pending = new DeferredPromise<{ type: 'passed'; }>();
 	context.pendingProbe = pending.p;
-	const testing = context.view.testModels(async () => {});
+	const testing = context.view.testModels(async () => { });
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	assert.equal(context.view.busy, true);
 	context.view.dispose();

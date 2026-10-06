@@ -373,7 +373,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 	get onDidAccept(): Event<CompressibleTreeAcceptEvent<T>> { return this.tree.onDidAccept as Event<CompressibleTreeAcceptEvent<T>>; }
 	get onDidChangeFocus(): Event<CompressibleTreeFocusChangeEvent<T>> { return this.tree.onDidChangeFocus as Event<CompressibleTreeFocusChangeEvent<T>>; }
 	get onDidChangeSelection(): Event<CompressibleTreeSelectionChangeEvent<T>> { return this.tree.onDidChangeSelection as Event<CompressibleTreeSelectionChangeEvent<T>>; }
-	get onDidChangeCollapseState(): Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }> { return this.tree.onDidChangeCollapseState as Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }>; }
+	get onDidChangeCollapseState(): Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }> { return this.tree.onDidChangeCollapseState as Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }>; }
 
 	getCompressedTreeNode(element: T): CompressedTreeNode<T> | undefined { return this.tree.getCompressedTreeNode?.(element); }
 

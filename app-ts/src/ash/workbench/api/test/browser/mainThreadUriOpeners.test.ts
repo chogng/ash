@@ -26,15 +26,17 @@ import { MainThreadUriOpeners } from '../../browser/mainThreadUriOpeners.js';
 
 const openerId = 'extension:acme.links:browser';
 function snapshot(incarnation = 1): ExtensionHostFleetSnapshot {
-	return normalizeExtensionHostSnapshot({ generation: incarnation, extensions: [{
-		id: 'acme.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
-		activationGeneration: 1, incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
-		registrations: [{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Acme browser' }],
-	}] });
+	return normalizeExtensionHostSnapshot({
+		generation: incarnation, extensions: [{
+			id: 'acme.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+			activationGeneration: 1, incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
+			registrations: [{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Acme browser' }],
+		}]
+	});
 }
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
-	public registerClientHandler(): { dispose(): void } { throw new Error('Client calls are outside this fixture'); }
+	public registerClientHandler(): { dispose(): void; } { throw new Error('Client calls are outside this fixture'); }
 	private readonly changed = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	public current = snapshot();
@@ -66,7 +68,7 @@ class Fixture extends DisposableStore {
 	constructor() {
 		super();
 		this.services.registerInstance(IExtensionHostApi, this.api);
-		this.services.registerInstance(IPreferencesService, { openSettings: async () => {}, openGlobalKeybindingSettings: async () => {}, openUserSettings: async () => {} });
+		this.services.registerInstance(IPreferencesService, { openSettings: async () => { }, openGlobalKeybindingSettings: async () => { }, openUserSettings: async () => { } });
 		this.services.registerInstance(IExternalUriOpenerService, this.add(this.services.createInstance(ExternalUriOpenerService)));
 		this.bridge = this.add(this.services.createInstance(MainThreadUriOpeners, 1_000));
 	}

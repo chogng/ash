@@ -6,31 +6,31 @@
 
 ## 意图驱动的 Agent 开发流程
 
-| 文档 | 类型 | 一句话 |
-| --- | --- | --- |
-| [`development-workflow.md`](development-workflow.md) | 规范 | 仅 `/develop` 使用的阶段产物、记录模板与验收规则 |
-| [`develop.md`](develop.md) | 设计 | 从自然对话到 Intent、Spec、Plan、实施、验收和收口的统一系统设计 |
+| 文档                                                 | 类型 | 一句话                                                          |
+| ---------------------------------------------------- | ---- | --------------------------------------------------------------- |
+| [`development-workflow.md`](development-workflow.md) | 规范 | 仅 `/develop` 使用的阶段产物、记录模板与验收规则                |
+| [`develop.md`](develop.md)                           | 设计 | 从自然对话到 Intent、Spec、Plan、实施、验收和收口的统一系统设计 |
 
 ## Agent 与运行时
 
-| 文档 | 类型 | 一句话 |
-| --- | --- | --- |
-| [`agent-tools-spec.md`](agent-tools-spec.md) | 规格 | 逐工具 schema / 描述正文 / 错误文案 + 系统提示词扩写 |
-| [`agent-harness-design.md`](agent-harness-design.md) | 设计 | harness 行为策略：提示词、循环、失败、裁剪、压缩、缓存 |
-| [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E |
-| [`core.md`](core.md) | 设计 | ash-core 的 ownership、组件、端口、提交顺序 |
-| [`core-context.md`](core-context.md) | 设计 | ContextPlan / Manager / checkpoint / compaction 机制 |
-| [`core-multi-agent.md`](core-multi-agent.md) | 设计 | 同 Session Agent 的委托、Fresh spawn、消息交付和隔离（部分实现，缺口见状态头） |
-| [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.ash` 与外部导入边界 |
-| [`agents.md`](agents.md) | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束 |
-| [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
-| [`exec.md`](exec.md) | 设计 | 进程执行 |
-| [`core-plugins.md`](../ash-rs/docs/core-plugins.md) | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线 |
-| [`localization.md`](localization.md) | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback |
-| [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
-| [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Ash 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
-| [`mcp.md`](mcp.md) | 设计 | MCP 客户端协议会话、能力调用与 Connector ready binding |
-| [`slash-commands.md`](slash-commands.md) | 设计 | Slash Command 与统一斜杠启动面板边界 |
+| 文档                                                                                     | 类型 | 一句话                                                                         |
+| ---------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------ |
+| [`agent-tools-spec.md`](agent-tools-spec.md)                                             | 规格 | 逐工具 schema / 描述正文 / 错误文案 + 系统提示词扩写                           |
+| [`agent-harness-design.md`](agent-harness-design.md)                                     | 设计 | harness 行为策略：提示词、循环、失败、裁剪、压缩、缓存                         |
+| [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)                 | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E                                       |
+| [`core.md`](core.md)                                                                     | 设计 | ash-core 的 ownership、组件、端口、提交顺序                                    |
+| [`core-context.md`](core-context.md)                                                     | 设计 | ContextPlan / Manager / checkpoint / compaction 机制                           |
+| [`core-multi-agent.md`](core-multi-agent.md)                                             | 设计 | 同 Session Agent 的委托、Fresh spawn、消息交付和隔离（部分实现，缺口见状态头） |
+| [`agent-customizations.md`](agent-customizations.md)                                     | 设计 | Instructions / Skills / Agents、`.ash` 与外部导入边界                          |
+| [`agents.md`](agents.md)                                                                 | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束                    |
+| [`tools.md`](tools.md)                                                                   | 设计 | 工具三层契约、registry snapshot                                                |
+| [`exec.md`](exec.md)                                                                     | 设计 | 进程执行                                                                       |
+| [`core-plugins.md`](../ash-rs/docs/core-plugins.md)                                      | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线             |
+| [`localization.md`](localization.md)                                                     | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback                 |
+| [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界                 |
+| [`editor-extensions.md`](editor-extensions.md)                                           | 设计 | 声明式扩展与 Ash 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态   |
+| [`mcp.md`](mcp.md)                                                                       | 设计 | MCP 客户端协议会话、能力调用与 Connector ready binding                         |
+| [`slash-commands.md`](slash-commands.md)                                                 | 设计 | Slash Command 与统一斜杠启动面板边界                                           |
 
 ## 协议与 API
 
@@ -85,14 +85,14 @@
 
 ## 产品研究
 
-| 文档 | 类型 | 一句话 |
-| --- | --- | --- |
+| 文档                   | 类型            | 一句话                                                                      |
+| ---------------------- | --------------- | --------------------------------------------------------------------------- |
 | [`delta.md`](delta.md) | 参考 / 体验指南 | Delta 核心能力、评论与审查操作、GitHub 与 Land 边界、完整体验请求及证据记录 |
 
 ## 计划与迁移
 
-| 文档 | 状态 |
-| --- | --- |
+| 文档                                                                                  | 状态            |
+| ------------------------------------------------------------------------------------- | --------------- |
 | [`app-rs/docs/native-deprecation-plan.md`](../app-rs/docs/native-deprecation-plan.md) | Native 弃用迁移 |
-| [`app-rs/docs/app-migration-plan.md`](../app-rs/docs/app-migration-plan.md) | App 迁移 |
-| [`app-rs/docs/app-release-graph.md`](../app-rs/docs/app-release-graph.md) | App 发布依赖 |
+| [`app-rs/docs/app-migration-plan.md`](../app-rs/docs/app-migration-plan.md)           | App 迁移        |
+| [`app-rs/docs/app-release-graph.md`](../app-rs/docs/app-release-graph.md)             | App 发布依赖    |

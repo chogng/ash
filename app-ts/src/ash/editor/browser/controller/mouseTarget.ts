@@ -14,7 +14,7 @@ export class PointerHandlerLastRenderData {
 	constructor(
 		public readonly lastViewCursorsRenderData: IViewCursorRenderData[],
 		public readonly lastTextareaPosition: Position | null,
-	) {}
+	) { }
 }
 
 /** Creates the public editor mouse-target variants without an intermediate target protocol. */
@@ -88,7 +88,7 @@ export class MouseTargetFactory {
 	constructor(
 		private readonly context: ViewContext,
 		private readonly viewHelper: IPointerHandlerHelper,
-	) {}
+	) { }
 
 	public mouseTargetIsWidget(event: EditorMouseEvent): boolean {
 		const element = eventTargetElement(event.target, this.viewHelper.viewDomNode.ownerDocument);

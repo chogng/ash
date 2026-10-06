@@ -5,7 +5,7 @@ import { FindOptionOverride, FindReplaceState } from '../../browser/findState.js
 
 test('find state announces effective option changes and clamps match navigation', () => {
 	using state = new FindReplaceState();
-	const changes: Array<{ regex: boolean; position: boolean; count: boolean }> = [];
+	const changes: Array<{ regex: boolean; position: boolean; count: boolean; }> = [];
 	using listener = state.onFindReplaceStateChange(event => {
 		changes.push({ regex: event.isRegex, position: event.matchesPosition, count: event.matchesCount });
 	});

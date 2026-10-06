@@ -1,29 +1,42 @@
 .ash-workbench-titlebar.ash-sessions-titlebar {
-  padding: 0;
-  background: var(--ash-title-bar-background);
+	padding: 0;
+	background: var(--ash-title-bar-background);
 }
 
 .ash-sessions-titlebar > .ash-workbench-part-content {
-  display: flex;
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
-  padding: 0 var(--ash-spacing-size160) 0 calc((var(--ash-sessions-titlebar-leading-width) - var(--ash-spacing-size280)) / 2);
+	display: flex;
+	width: 100%;
+	flex-direction: row;
+	align-items: center;
+	padding: 0 var(--ash-spacing-size160) 0
+		calc(
+			(
+					var(--ash-sessions-titlebar-leading-width) -
+						var(--ash-spacing-size280)
+				) /
+				2
+		);
 }
 
 .ash-sessions-titlebar-left {
-  display: flex;
-  min-width: 0;
-  align-items: center;
+	display: flex;
+	min-width: 0;
+	align-items: center;
 }
 
-.ash-sessions-titlebar-left { align-self: stretch; }
+.ash-sessions-titlebar-left {
+	align-self: stretch;
+}
 
-.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar { -webkit-app-region: drag; }
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {
+	-webkit-app-region: drag;
+}
 
 .ash-sessions-window-controls-spacer {
-  flex: 0 0 max(70px, calc(70px * var(--ash-sessions-inverse-zoom-factor)));
-  align-self: stretch;
+	flex: 0 0 max(70px, calc(70px * var(--ash-sessions-inverse-zoom-factor)));
+	align-self: stretch;
 }
 
-.ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer { display: none; }
+.ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer {
+	display: none;
+}

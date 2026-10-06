@@ -55,7 +55,7 @@ test("point anchors render in the window that owns their viewport coordinates", 
 	assert.ok(container);
 	const service = new BrowserContextViewService(container);
 	const content = h(environment.window.document, "div");
-	const anchor: IRectangle & { readonly targetWindow: Window } = {
+	const anchor: IRectangle & { readonly targetWindow: Window; } = {
 		left: 24,
 		top: 36,
 		width: 0,

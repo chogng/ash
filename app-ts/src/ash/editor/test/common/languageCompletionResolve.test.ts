@@ -19,7 +19,7 @@ test("Completion service resolves deferred details against the exact provider it
 			resolvedData = request.item.resolveData;
 			return {
 				detail: "global variable",
-				documentation: `Documentation for ${(request.item.resolveData as { symbol: string }).symbol}`,
+				documentation: `Documentation for ${(request.item.resolveData as { symbol: string; }).symbol}`,
 			};
 		},
 	}));
@@ -74,7 +74,7 @@ test("Resolve requests reject stale results and removed providers", async () => 
 test("Resolve output cannot mutate completion edit identity", async () => {
 	using model = new TextModel("con");
 	using registry = new LanguageCompletionProviderRegistry();
-	const errors: Array<{ readonly providerId: string; readonly error: unknown }> = [];
+	const errors: Array<{ readonly providerId: string; readonly error: unknown; }> = [];
 	using registration = registry.register(provider({
 		resolveData: { symbol: "console" },
 		resolve: () => ({ insertText: "danger" }) as never,

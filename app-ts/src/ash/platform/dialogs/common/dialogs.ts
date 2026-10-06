@@ -16,7 +16,7 @@ export interface IDialogOptions {
 	readonly title?: string;
 	readonly message: string;
 	readonly detail?: string;
-	readonly checkbox?: { readonly label: string; readonly checked?: boolean };
+	readonly checkbox?: { readonly label: string; readonly checked?: boolean; };
 }
 
 export interface IDialogInput {
@@ -63,7 +63,7 @@ export interface IPromptDialogOptions extends IDialogOptions {
 
 export interface IActionPromptButton<T> {
 	readonly label: string;
-	run(checkbox: { readonly checkboxChecked?: boolean }): T | Promise<T>;
+	run(checkbox: { readonly checkboxChecked?: boolean; }): T | Promise<T>;
 }
 
 export interface IActionPromptOptions<T> extends IDialogOptions {

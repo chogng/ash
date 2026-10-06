@@ -85,10 +85,12 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(directory, 'debug-adapter.cjs'), adapter);
 	await writeFile(join(directory, 'debug-program.js'), 'const answer = 42;\nconsole.log(answer);\nconsole.log("finished");\n');
 	await writeFile(join(directory, 'debug-requests.jsonl'), '');
-	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{
-		name: 'Debug smoke', type: 'smoke', request: 'launch',
-		debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] },
-	}] }));
+	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({
+		version: '0.2.0', configurations: [{
+			name: 'Debug smoke', type: 'smoke', request: 'launch',
+			debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] },
+		}]
+	}));
 });
 
 test('debugging locates stopped source, edits nested variables by keyboard, refreshes watches, steps and stops', async ({ workbench, testWorkspace }) => {
@@ -109,7 +111,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await pane.getByRole('textbox', { name: 'Hit count condition', exact: true }).fill('>= 2');
 	await pane.getByRole('textbox', { name: 'Log message', exact: true }).fill('answer={answer}');
 	await pane.getByRole('button', { name: 'Save breakpoint', exact: true }).click();
-	const breakpointRequests = async () => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints?: unknown[] } }).filter(request => request.command === 'setBreakpoints');
+	const breakpointRequests = async () => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints?: unknown[]; }; }).filter(request => request.command === 'setBreakpoints');
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
 	await breakpoint.getByRole('checkbox').uncheck();
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
@@ -118,7 +120,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
 
-	const lastArguments = async (command: string) => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown }).filter(request => request.command === command).at(-1)?.arguments;
+	const lastArguments = async (command: string) => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown; }).filter(request => request.command === command).at(-1)?.arguments;
 	await pane.getByRole('button', { name: 'Add Function Breakpoint', exact: true }).click();
 	const functionName = pane.getByRole('textbox', { name: 'Function name', exact: true });
 	await functionName.fill('main');
@@ -228,7 +230,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await expect(disassembly.locator('[data-instruction-address]')).toHaveCount(0);
 	await expect(pane.locator('.ash-debug-frame, .ash-debug-variable')).toHaveCount(0);
 	await expect(pane.getByRole('toolbar', { name: 'Debug controls' })).toBeHidden();
-	const requests = (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown });
+	const requests = (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown; });
 	expect(requests.filter(request => request.command === 'setVariable').map(request => request.arguments)).toEqual([
 		{ variablesReference: 10, name: 'answer', value: 'invalid' },
 		{ variablesReference: 10, name: 'answer', value: '43' },

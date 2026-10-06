@@ -1,99 +1,110 @@
 .ash-sessions-chat-view {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
 }
 
 .ash-sessions-chat-grid {
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  --ash-sash-hover-background: var(--ash-focus-border);
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	--ash-sash-hover-background: var(--ash-focus-border);
 }
 
 .ash-sessions-chat-slot {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  flex-direction: column;
-  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
-  background: var(--ash-editor-background);
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	flex-direction: column;
+	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
 }
 
 .ash-sessions-chat-slot.last-slot {
-  border-right: 0;
+	border-right: 0;
 }
 
 .ash-sessions-chat-slot-header {
-  display: flex;
-  min-height: 36px;
-  align-items: center;
-  gap: var(--ash-spacing-size80);
-  padding: 0 var(--ash-spacing-size120);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
-  color: var(--ash-description-foreground);
+	display: flex;
+	min-height: 36px;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size120);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	color: var(--ash-description-foreground);
 }
 
-.ash-sessions-chat-slot.active .ash-sessions-chat-slot-header { color: var(--ash-foreground); }
+.ash-sessions-chat-slot.active .ash-sessions-chat-slot-header {
+	color: var(--ash-foreground);
+}
 
 .ash-sessions-chat-slot-title,
 .ash-sessions-chat-slot-close {
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
+	border: 0;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
 }
 
 .ash-sessions-chat-slot-title {
-  min-width: 0;
-  overflow: hidden;
-  flex: 1 1 auto;
-  padding: var(--ash-spacing-size80) 0;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	flex: 1 1 auto;
+	padding: var(--ash-spacing-size80) 0;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-sessions-chat-slot-close {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border-radius: var(--ash-corner-radius-small);
-  font-size: var(--ash-font-size-heading2);
-  line-height: 1;
+	width: 28px;
+	height: 28px;
+	flex: 0 0 auto;
+	border-radius: var(--ash-corner-radius-small);
+	font-size: var(--ash-font-size-heading2);
+	line-height: 1;
 }
 
 .ash-sessions-chat-slot-title:hover,
-.ash-sessions-chat-slot-close:hover { background: var(--ash-list-hover-background); }
+.ash-sessions-chat-slot-close:hover {
+	background: var(--ash-list-hover-background);
+}
 
 .ash-sessions-chat-slot-title:focus-visible,
 .ash-sessions-chat-slot-close:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-sessions-chat-slot > .ash-chat {
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
 }
 
 .ash-sessions-chat-view.single-chat .ash-sessions-chat-slot-header {
-  display: none;
+	display: none;
 }
 
 .ash-sessions-chat-view-empty {
-  display: grid;
-  max-width: 480px;
-  align-content: center;
-  gap: var(--ash-spacing-size80);
-  margin: auto;
-  padding: var(--ash-spacing-size400);
+	display: grid;
+	max-width: 480px;
+	align-content: center;
+	gap: var(--ash-spacing-size80);
+	margin: auto;
+	padding: var(--ash-spacing-size400);
 }
 
-.ash-sessions-chat-view-empty h2 { margin: 0; font-size: var(--ash-font-size-heading1); }
-.ash-sessions-chat-view-empty p { margin: 0; color: var(--ash-description-foreground); font-size: var(--ash-font-size-body1); }
+.ash-sessions-chat-view-empty h2 {
+	margin: 0;
+	font-size: var(--ash-font-size-heading1);
+}
+.ash-sessions-chat-view-empty p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-body1);
+}

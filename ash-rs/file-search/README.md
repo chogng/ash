@@ -77,13 +77,13 @@ cargo run --manifest-path Cargo.toml -p ash-file-search -- \
   --json --compute-indices --limit 20 mention -C ash-rs
 ```
 
-| 参数 | 语义 |
-| --- | --- |
-| `[PATTERN]` | fuzzy pattern；省略时列出 directory 文件 |
-| `-C, --cwd <DIR>` | 搜索 root；默认当前目录 |
-| `-l, --limit <N>` | 输出上限；默认 64 |
-| `--threads <N>` | walker 和 Nucleo worker 数；默认 2 |
-| `--json` | 每个 match 输出一行 JSON |
+| 参数                | 语义                                               |
+| ------------------- | -------------------------------------------------- |
+| `[PATTERN]`         | fuzzy pattern；省略时列出 directory 文件           |
+| `-C, --cwd <DIR>`   | 搜索 root；默认当前目录                            |
+| `-l, --limit <N>`   | 输出上限；默认 64                                  |
+| `--threads <N>`     | walker 和 Nucleo worker 数；默认 2                 |
+| `--json`            | 每个 match 输出一行 JSON                           |
 | `--compute-indices` | JSON 包含 indices；TTY plain output 对命中字符加粗 |
 
 CLI 等待当前 `query_revision` 的 `search_complete` snapshot 后输出，因此不会显示中间结果。结果被
@@ -92,13 +92,13 @@ limit 截断时，warning 写入 stderr；JSON match 仍写入 stdout，方便�
 
 ## 内部接口地图
 
-| Symbol | 职责 | 不承担 |
-| --- | --- | --- |
-| `SearchInner` | 搜索 root、worker 配置、shutdown 与进度共享状态 | popup/query 生命周期 |
-| `walker_worker` | 遍历并向 Nucleo 注入 relative file path | 读取文件内容、排序结果 |
-| `matcher_worker` | 合并 query/walker/notify signal，驱动增量 tick | UI stale-result policy |
-| `build_snapshot` | 生成有界、稳定排序且带高亮索引的 immutable snapshot | 发送 UI event |
-| `cli::execute` | 等待 final snapshot 并选择 stdout/stderr 编码 | 扫描或 fuzzy matching |
+| Symbol           | 职责                                                | 不承担                 |
+| ---------------- | --------------------------------------------------- | ---------------------- |
+| `SearchInner`    | 搜索 root、worker 配置、shutdown 与进度共享状态     | popup/query 生命周期   |
+| `walker_worker`  | 遍历并向 Nucleo 注入 relative file path             | 读取文件内容、排序结果 |
+| `matcher_worker` | 合并 query/walker/notify signal，驱动增量 tick      | UI stale-result policy |
+| `build_snapshot` | 生成有界、稳定排序且带高亮索引的 immutable snapshot | 发送 UI event          |
+| `cli::execute`   | 等待 final snapshot 并选择 stdout/stderr 编码       | 扫描或 fuzzy matching  |
 
 如果该 crate 开始读取候选文件内容、实现模型 Tool binding，或保存 TUI popup state，说明 ownership
 已经漂移；这些职责分别属于公共 grep、Tool registry 和 `ash-tui`。

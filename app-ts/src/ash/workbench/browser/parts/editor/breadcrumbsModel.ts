@@ -10,17 +10,17 @@ export class FileElement {
 		readonly uri: URI,
 		readonly kind: FileKind,
 		readonly label: string,
-	) {}
+	) { }
 }
 
 export class SymbolElement {
-	constructor(readonly symbol: LanguageDocumentSymbol) {}
+	constructor(readonly symbol: LanguageDocumentSymbol) { }
 	get label(): string { return this.symbol.name; }
 }
 
 /** Builds the resource path displayed for one editor input. */
 export class BreadcrumbsModel {
-	constructor(readonly resource: URI, private readonly workspaceFolder: IWorkspaceFolder | null, private readonly fallbackLabel?: string) {}
+	constructor(readonly resource: URI, private readonly workspaceFolder: IWorkspaceFolder | null, private readonly fallbackLabel?: string) { }
 
 	getElements(): readonly FileElement[] {
 		const segments = this.resource.toEncodedComponents().path.split("/").filter(Boolean);

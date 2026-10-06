@@ -23,8 +23,8 @@ export interface RemoteTunnel {
 
 /** State change emitted when a tunnel opens, recovers, fails, or is removed. */
 export type RemoteTunnelChange =
-	| { readonly kind: "upsert"; readonly tunnel: RemoteTunnel }
-	| { readonly kind: "removed"; readonly id: string };
+	| { readonly kind: "upsert"; readonly tunnel: RemoteTunnel; }
+	| { readonly kind: "removed"; readonly id: string; };
 
 /** Transport-neutral contract for host-owned Remote tunnel lifecycle. */
 export interface IRemoteTunnelService {
@@ -43,5 +43,5 @@ export const UnavailableRemoteTunnelService: IRemoteTunnelService = Object.freez
 	open: () => Promise.reject(new Error("Remote tunnels require a native product host")),
 	close: () => Promise.resolve(),
 	closeAll: () => Promise.resolve(),
-	onDidChange: () => ({ dispose() {} }),
+	onDidChange: () => ({ dispose() { } }),
 });

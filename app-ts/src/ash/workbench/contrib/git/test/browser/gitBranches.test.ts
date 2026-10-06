@@ -252,7 +252,7 @@ test('Git hunk action sends its reviewed comparison and selected block to the pi
 		editIndex: async (...args: unknown[]) => { calls.push(args); },
 	} as unknown as IGitService);
 	services.registerInstance(IQuickInputService, quickInputSelecting(() => 0, []));
-	services.registerInstance(INotificationService, { info: () => {}, error: (message: string) => { calls.push(message); } } as unknown as INotificationService);
+	services.registerInstance(INotificationService, { info: () => { }, error: (message: string) => { calls.push(message); } } as unknown as INotificationService);
 	using commands = new CommandService(services);
 	await commands.executeCommand('git.stageHunk');
 	assert.deepEqual(calls, [['file.txt', 'unstaged', reviewed, { kind: 'hunk', index: 2 }, 'repo-1']]);

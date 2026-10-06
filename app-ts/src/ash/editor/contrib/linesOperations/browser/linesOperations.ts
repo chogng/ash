@@ -25,7 +25,7 @@ interface TransposeOperation {
 	readonly selectionIndex: number;
 	readonly startOffset: number;
 	readonly endOffset: number;
-	readonly edit: { readonly range: Range; readonly text: string };
+	readonly edit: { readonly range: Range; readonly text: string; };
 }
 
 abstract class CopyLinesAction extends EditorAction {
@@ -296,8 +296,8 @@ function joinLines(editor: ICodeEditor): void {
 	if (!model || !selections) return;
 	const edits = reduceJoinTargets(selections).map(target => joinEdit(model, target));
 	if (edits.every(edit => edit.startOffset === edit.endOffset)) return;
-	const operations: Array<{ readonly range: Range; readonly text: string }> = [];
-	const selectionOffsets: Array<{ readonly anchorOffset: number; readonly activeOffset: number }> = [];
+	const operations: Array<{ readonly range: Range; readonly text: string; }> = [];
+	const selectionOffsets: Array<{ readonly anchorOffset: number; readonly activeOffset: number; }> = [];
 	let primarySelectionIndex = 0;
 	let delta = 0;
 	for (const edit of edits) {
@@ -381,7 +381,7 @@ function joinEdit(model: ITextModel, target: JoinTarget): JoinEdit {
 	};
 }
 
-function joinText(model: ITextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly lastPartLength: number } {
+function joinText(model: ITextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly lastPartLength: number; } {
 	let text = model.getLineContent(startLineNumber);
 	let lastPartLength = 0;
 	for (let lineNumber = startLineNumber + 1; lineNumber <= endLineNumber; lineNumber += 1) {

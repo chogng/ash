@@ -41,7 +41,7 @@ export class RulersGpu extends ViewPart {
 	public override prepareRender(_context: RenderingContext): void {
 	}
 
-	public render(_context: RestrictedRenderingContext): void {}
+	public render(_context: RestrictedRenderingContext): void { }
 
 	private updateEntries(reader: IReader | undefined, theme: IColorTheme = this._context.theme.value): void {
 		const devicePixelRatio = this.gpuContext.devicePixelRatio.read(reader);

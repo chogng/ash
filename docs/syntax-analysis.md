@@ -13,21 +13,21 @@
 `CodeEditor` 或 `DiffEditor`，只提供文档、语言、主题和平台输入；它不获得独立 syntax service，
 也不通过 App Server 同步编辑器内部 revision。
 
-| 能力 | 当前 owner | 状态 |
-| --- | --- | --- |
-| Rust/JSON/JSONC/Shell grammar、query 与增量 tree | `ash-syntax`，由 Rust `CodeEditor` 私有组合 | ✅ |
-| 文本、selection、undo/redo、语言切换和 syntax token 生命周期 | `ash-editor::CodeEditorDocument` | ✅ |
-| Native 普通代码结构折叠、visible-row mapping 与 gutter control | `ash-editor::CodeEditorDocument` / `CodeEditor` | ✅；宿主只转交点击 |
-| Native Composer 的 Shell 高亮 | `CodeEditorDocument::from_text_with_language` / `set_language` | ✅ |
-| Native 文件 document lifecycle | `ash-text-file` + `FileEditorHost` / `FileEditorPane` | ✅；独立 crate 拥有 baseline/version/dirty/conflict，Native 已接通 Tab、Explorer load、save、关闭确认、外部重载/显式乐观覆盖、中心 Editor Surface 以及 keyboard/IME/pointer/clipboard/viewport 输入 |
-| Native `DiffEditor` 两侧 syntax token 投影 | `ash-editor::DiffEditorDocument` / `DiffEditor` | ✅；宿主只提交 diff 与 language |
-| Stanza bundled-language token | TextMate worker + lexical fallback | ✅ |
-| Stanza parser facts | `ash-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell diagnostic/symbol/folding/selection |
-| App Server syntax RPC | 按连接和模型保留解析文档 | ✅；相邻版本增量更新语法树，仅服务异步 facts |
-| Stanza Smart Select | Stanza selection/history + `ash-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
-| completion、type、definition/reference、rename | `ash-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 provider collection 决定 |
-| workspace code chunk index | `ash-codebase` 消费 `ash-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
-| workspace symbol/reference capability | `ash-lsp` + App Server language runtime | ✅ workspace symbols 与按需 references 已接通；持久化全局 semantic graph 仍属于可选 index 演进，不属于单个 editor document |
+| 能力                                                           | 当前 owner                                                     | 状态                                                                                                                                                                                                |
+| -------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust/JSON/JSONC/Shell grammar、query 与增量 tree               | `ash-syntax`，由 Rust `CodeEditor` 私有组合                    | ✅                                                                                                                                                                                                  |
+| 文本、selection、undo/redo、语言切换和 syntax token 生命周期   | `ash-editor::CodeEditorDocument`                               | ✅                                                                                                                                                                                                  |
+| Native 普通代码结构折叠、visible-row mapping 与 gutter control | `ash-editor::CodeEditorDocument` / `CodeEditor`                | ✅；宿主只转交点击                                                                                                                                                                                  |
+| Native Composer 的 Shell 高亮                                  | `CodeEditorDocument::from_text_with_language` / `set_language` | ✅                                                                                                                                                                                                  |
+| Native 文件 document lifecycle                                 | `ash-text-file` + `FileEditorHost` / `FileEditorPane`          | ✅；独立 crate 拥有 baseline/version/dirty/conflict，Native 已接通 Tab、Explorer load、save、关闭确认、外部重载/显式乐观覆盖、中心 Editor Surface 以及 keyboard/IME/pointer/clipboard/viewport 输入 |
+| Native `DiffEditor` 两侧 syntax token 投影                     | `ash-editor::DiffEditorDocument` / `DiffEditor`                | ✅；宿主只提交 diff 与 language                                                                                                                                                                     |
+| Stanza bundled-language token                                  | TextMate worker + lexical fallback                             | ✅                                                                                                                                                                                                  |
+| Stanza parser facts                                            | `ash-rs/syntax` via bounded `platform/syntax` adapter          | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell diagnostic/symbol/folding/selection                                                                                                      |
+| App Server syntax RPC                                          | 按连接和模型保留解析文档                                       | ✅；相邻版本增量更新语法树，仅服务异步 facts                                                                                                                                                        |
+| Stanza Smart Select                                            | Stanza selection/history + `ash-syntax` on-demand scopes       | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback                                                                                                                |
+| completion、type、definition/reference、rename                 | `ash-lsp` + language server，经编辑器 language feature 接入    | ✅ Code 主路径；语言覆盖由 provider collection 决定                                                                                                                                                 |
+| workspace code chunk index                                     | `ash-codebase` 消费 `ash-syntax` declaration facts             | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph                                                                                                                                           |
+| workspace symbol/reference capability                          | `ash-lsp` + App Server language runtime                        | ✅ workspace symbols 与按需 references 已接通；持久化全局 semantic graph 仍属于可选 index 演进，不属于单个 editor document                                                                          |
 
 ## 一次 CodeEditor 编辑
 
@@ -59,15 +59,15 @@ Native host
 
 ## 所有权边界
 
-| 能力 | `ash-syntax` | `CodeEditor` / Stanza | 产品宿主 | App Server | `ash-lsp` |
-| --- | --- | --- | --- | --- | --- |
-| grammar、query、tree-sitter tree | ✅ | 组合/消费 | ❌ | ❌ | ❌ |
-| editor text、selection、language 与本地 revision | ❌ | ✅ | 选择初始资源与语言 | ❌ | 消费同步 |
-| syntax token、parse facts 与 selection scopes | 计算 | ✅ 生命周期、selection history 与展示 | ❌ | 按连接保留可释放的解析状态，投影有界结果 | ❌ |
-| theme color、DOM/native geometry、fold UI state | ❌ | ✅ | 注入主题/布局 | ❌ | ❌ |
-| 文件 dirty/save/conflict | ❌ | ❌ | 组合 `ash-text-file` | 可提供独立文件 I/O capability | ❌ |
-| type、completion、definition/reference、rename | ❌ | 交互入口 | 协调 | 可承载独立 LSP runtime | ✅ |
-| workspace 扫描、watch 与 symbol index | ❌ | ❌ | 协调 | ✅ 承载 LSP workspace symbols/references；持久化 graph 可独立演进 | 消费/提供事实 |
+| 能力                                             | `ash-syntax` | `CodeEditor` / Stanza                 | 产品宿主             | App Server                                                        | `ash-lsp`     |
+| ------------------------------------------------ | ------------ | ------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------- |
+| grammar、query、tree-sitter tree                 | ✅           | 组合/消费                             | ❌                   | ❌                                                                | ❌            |
+| editor text、selection、language 与本地 revision | ❌           | ✅                                    | 选择初始资源与语言   | ❌                                                                | 消费同步      |
+| syntax token、parse facts 与 selection scopes    | 计算         | ✅ 生命周期、selection history 与展示 | ❌                   | 按连接保留可释放的解析状态，投影有界结果                          | ❌            |
+| theme color、DOM/native geometry、fold UI state  | ❌           | ✅                                    | 注入主题/布局        | ❌                                                                | ❌            |
+| 文件 dirty/save/conflict                         | ❌           | ❌                                    | 组合 `ash-text-file` | 可提供独立文件 I/O capability                                     | ❌            |
+| type、completion、definition/reference、rename   | ❌           | 交互入口                              | 协调                 | 可承载独立 LSP runtime                                            | ✅            |
+| workspace 扫描、watch 与 symbol index            | ❌           | ❌                                    | 协调                 | ✅ 承载 LSP workspace symbols/references；持久化 graph 可独立演进 | 消费/提供事实 |
 
 `ash-syntax` 仍保持独立 crate，因为 grammar、query、资源上限和增量 tree 算法需要可测试的领域
 边界；但它不是产品对外服务。`ash-editor` 是当前唯一产品 consumer，Native 不直接依赖它。

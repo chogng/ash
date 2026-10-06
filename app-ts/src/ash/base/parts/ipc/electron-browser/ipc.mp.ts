@@ -26,7 +26,7 @@ export function acquirePort(
 	let settled = false;
 	let cancel: () => void;
 	const result = new Promise<MessagePort>((resolve, reject) => {
-		const finish = (outcome: { port: MessagePort } | { error: unknown }): void => {
+		const finish = (outcome: { port: MessagePort; } | { error: unknown; }): void => {
 			if (settled) { return; }
 			settled = true;
 			resources.dispose();

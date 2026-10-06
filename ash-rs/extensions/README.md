@@ -14,12 +14,12 @@
 之后追加的扩展反向调用服务代码已暂停，尚未完成协议生成和端到端验证；这些改动不能计为可用作者 API。
 本 README 不再提供 Rust 作者入门步骤，也不再把补齐 Rust SDK 当作后续计划。
 
-| 现有部分 | 当前职责 | 目标处理 |
-| --- | --- | --- |
-| `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口 | 作者能力改由 TS SDK 承担 |
-| `runtime.rs`、`cancellation.rs` | Rust 程序的 stdio 分发、并发回调与取消 | 扩展入口由独立 JS 运行环境执行，生命周期由 TS 宿主管理 |
-| `client.rs` | 尚未完成验证的反向服务请求补充 | 不再沿 Rust 作者 SDK 扩展，权限与业务调用在 TS SDK / 宿主 / Rust 服务接入 |
-| `ash-editor-extension-protocol` | 现有可执行 Host v1 的共享 wire 定义 | 按生产调用方清理；目标业务协议继续由 Rust owner 生成 |
+| 现有部分                                  | 当前职责                               | 目标处理                                                                  |
+| ----------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口          | 作者能力改由 TS SDK 承担                                                  |
+| `runtime.rs`、`cancellation.rs`           | Rust 程序的 stdio 分发、并发回调与取消 | 扩展入口由独立 JS 运行环境执行，生命周期由 TS 宿主管理                    |
+| `client.rs`                               | 尚未完成验证的反向服务请求补充         | 不再沿 Rust 作者 SDK 扩展，权限与业务调用在 TS SDK / 宿主 / Rust 服务接入 |
+| `ash-editor-extension-protocol`           | 现有可执行 Host v1 的共享 wire 定义    | 按生产调用方清理；目标业务协议继续由 Rust owner 生成                      |
 
 包安装、授权记录、资源目录和 Rust 领域业务具有独立用途。SDK 退场不等于删除这些能力，也不把
 GitHub、Git、存储或凭据逻辑搬回扩展包。静态目录实现属于

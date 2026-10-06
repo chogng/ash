@@ -10,7 +10,7 @@ import { LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry
 import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface ColorData {
-	readonly information: IColorInformation & { readonly range: Range };
+	readonly information: IColorInformation & { readonly range: Range; };
 	readonly provider: LanguageColorProvider;
 }
 

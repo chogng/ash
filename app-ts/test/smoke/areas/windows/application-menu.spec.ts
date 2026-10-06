@@ -105,7 +105,7 @@ test.describe('File menu closes the workspace', () => {
 		if (target.kind === 'electron') {
 			expect((application as ElectronApplication).windows()).toHaveLength(1);
 			expect(await (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id)).toBe(originalWindow);
-			const context = await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: unknown[] }> } } }).ash.ipcRenderer.invoke('ash:workspace:context:read'));
+			const context = await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: unknown[]; }>; }; }; }).ash.ipcRenderer.invoke('ash:workspace:context:read'));
 			expect(context.folders).toEqual([]);
 		}
 	});
@@ -117,7 +117,7 @@ test.describe('File menu closes the workspace', () => {
 		const electron = application as ElectronApplication;
 		await electron.evaluate(({ dialog }, destination) => {
 			const originalSave = dialog.showSaveDialog.bind(dialog);
-			const state = globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void };
+			const state = globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void; };
 			state.ashRestoreCloseDialogs = () => { dialog.showSaveDialog = originalSave; delete state.ashRestoreCloseDialogs; };
 
 			dialog.showSaveDialog = (async () => ({ canceled: false, filePath: destination })) as typeof dialog.showSaveDialog;
@@ -139,7 +139,7 @@ test.describe('File menu closes the workspace', () => {
 			await expect(workbench.editors.element.getByRole('tab')).toHaveText(['Welcome']);
 			expect(await readFile(destination, 'utf8')).toBe('saved through workspace shutdown');
 		} finally {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void }).ashRestoreCloseDialogs?.());
+			await electron.evaluate(() => (globalThis as typeof globalThis & { ashRestoreCloseDialogs?: () => void; }).ashRestoreCloseDialogs?.());
 		}
 	});
 });
@@ -216,21 +216,21 @@ test('macOS menu style switches context menus without a titlebar menu button', a
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ Menu }) => {
 		const originalPopup = Menu.prototype.popup;
-		const state = globalThis as typeof globalThis & { ashMenuStyleTest?: { count: number; restore: () => void } };
+		const state = globalThis as typeof globalThis & { ashMenuStyleTest?: { count: number; restore: () => void; }; };
 		state.ashMenuStyleTest = { count: 0, restore: () => { Menu.prototype.popup = originalPopup; } };
-		Menu.prototype.popup = function(options) {
+		Menu.prototype.popup = function (options) {
 			state.ashMenuStyleTest!.count++;
 			options?.callback?.();
 		};
 	});
 	try {
 		await search.click({ button: 'right' });
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuStyleTest?: { count: number } }).ashMenuStyleTest?.count)).toBe(1);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuStyleTest?: { count: number; }; }).ashMenuStyleTest?.count)).toBe(1);
 		await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' })).toHaveCount(0);
 		await expect(page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button')).toBeVisible();
 	} finally {
 		await electron.evaluate(({ Menu }) => {
-			const state = (globalThis as typeof globalThis & { ashMenuStyleTest?: { restore: () => void } }).ashMenuStyleTest;
+			const state = (globalThis as typeof globalThis & { ashMenuStyleTest?: { restore: () => void; }; }).ashMenuStyleTest;
 			state?.restore();
 		});
 	}

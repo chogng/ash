@@ -287,18 +287,18 @@ async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration:
 	using configuration = new InMemoryConfigurationService();
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
-		using fixture = new BulkEditTestServices([
-			[URI.file('C:\\workspace\\first.ts'), ''], [URI.file('C:\\workspace\\second.ts'), ''],
-			[URI.file('C:\\workspace\\independent.ts'), ''],
-			[URI.file('/workspace/one.ts'), 'ab'], [URI.file('/workspace/sequential.ts'), 'a'], [URI.file('/workspace/independent.ts'), ''],
-		]);
-		services.registerInstance(ITextModelResourceService, fixture.models);
-		services.registerInstance(IFileTextModelService, fixture.models);
-		services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-		services.registerInstance(IFileService, fixture.files);
-		using contextKeys = new ContextKeyService();
-		services.registerInstance(IContextKeyService, contextKeys);
-		services.registerInstance(IEditorService, new TestEditorService());
+	using fixture = new BulkEditTestServices([
+		[URI.file('C:\\workspace\\first.ts'), ''], [URI.file('C:\\workspace\\second.ts'), ''],
+		[URI.file('C:\\workspace\\independent.ts'), ''],
+		[URI.file('/workspace/one.ts'), 'ab'], [URI.file('/workspace/sequential.ts'), 'a'], [URI.file('/workspace/independent.ts'), ''],
+	]);
+	services.registerInstance(ITextModelResourceService, fixture.models);
+	services.registerInstance(IFileTextModelService, fixture.models);
+	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
+	services.registerInstance(IFileService, fixture.files);
+	using contextKeys = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(IEditorService, new TestEditorService());
 	try {
 		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		browser.window.document.body.append(pane.element);
@@ -351,10 +351,12 @@ test('preview selection distinguishes two insertions that reuse the same text ed
 	await withPane(async pane => {
 		const payload = { range: new Range(1, 1, 1, 1), text: '!' };
 		const resource = URI.file('/workspace/one.ts');
-		const edits = ResourceEdit.convert({ entries: [
-			{ kind: 'textDocument', resource, expectedText: 'ab', edits: [payload] },
-			{ kind: 'textDocument', resource, expectedText: '!ab', edits: [payload] },
-		] });
+		const edits = ResourceEdit.convert({
+			entries: [
+				{ kind: 'textDocument', resource, expectedText: 'ab', edits: [payload] },
+				{ kind: 'textDocument', resource, expectedText: '!ab', edits: [payload] },
+			]
+		});
 		const pending = pane.setInput(edits, new AbortController().signal);
 		await previewReady(pane);
 		pane.element.querySelector<HTMLInputElement>('input[data-bulk-edit-index="1"]')!.click();

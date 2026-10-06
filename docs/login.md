@@ -14,31 +14,31 @@
 
 登录系统是面向用户的多账户控制面。`LoginService` 按 provider 注册 driver，拥有稳定 login ID、取消、完成、provider-scoped 登出和 revisioned account collection；ChatGPT、Kimi、Super Grok 的授权与凭据生命周期分别由 `ash-chatgpt`、`ash-kimi`、`ash-supergrok` 处理。BigModel 与 Z.AI Coding Plan、Start Plan 的 ZCode 凭据只读复用、浏览器授权和 Ash 内部请求凭据由 `ash-glm` 处理，见[GLM 接入](models/glm.md)。
 
-| 用户动作或凭据类型 | 由谁处理 | Ash 登录系统能看到什么 |
-| --- | --- | --- |
-| ChatGPT 设备码登录 | 本机 `ash-chatgpt` | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Ash 维护 |
-| Kimi 设备码登录 | 本机 `ash-kimi` | 授权地址、一次性用户码和脱敏账户状态；凭据由 Kimi 适配器保存到 profile SecretStore |
-| Super Grok 设备码登录 | 本机 `ash-supergrok` | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
-| BigModel、Z.AI Coding Plan 账号 | 本机 `ash-glm` 与 `ash-backend-client` | ZCode 已登录时只读使用其账号和请求密钥；否则提供浏览器授权，在 Ash 内保存取得的请求凭据 |
-| GitHub 浏览器登录 | 本机 `ash-github` 与 Cloudflare Worker | 浏览器授权地址和脱敏账户状态；Worker 保存 GitHub App Client Secret，本机接收回调并把凭据保存在 profile SecretStore |
-| 登出、取消或切换账户 | 登录控制面协调，供应商适配器执行 | 稳定状态和脱敏结果 |
-| 没有受支持订阅 OAuth 的供应商 API key | 对应模型凭据领域 | 不属于交互式登录，也不是 OAuth 失败后的降级 |
-| AWS 凭据链、Google ADC、Azure 托管身份 | 对应供应商运行时 | 不包装成通用 OAuth |
-| access token、refresh token、cookie | 精确供应商适配器 | 不进入 Ash RPC、日志或遥测 |
+| 用户动作或凭据类型                     | 由谁处理                               | Ash 登录系统能看到什么                                                                                                    |
+| -------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| ChatGPT 设备码登录                     | 本机 `ash-chatgpt`                     | 授权地址、一次性用户码和脱敏账户状态；首次 token 保存为 Codex 兼容 auth.json；有 Codex 时只读复用，无 Codex 时由 Ash 维护 |
+| Kimi 设备码登录                        | 本机 `ash-kimi`                        | 授权地址、一次性用户码和脱敏账户状态；凭据由 Kimi 适配器保存到 profile SecretStore                                        |
+| Super Grok 设备码登录                  | 本机 `ash-supergrok`                   | 授权地址、一次性用户码和脱敏账户状态；Ash 登录凭据保存在 profile SecretStore，没有 Ash 凭据时可只读使用宿主 Grok 登录文件 |
+| BigModel、Z.AI Coding Plan 账号        | 本机 `ash-glm` 与 `ash-backend-client` | ZCode 已登录时只读使用其账号和请求密钥；否则提供浏览器授权，在 Ash 内保存取得的请求凭据                                   |
+| GitHub 浏览器登录                      | 本机 `ash-github` 与 Cloudflare Worker | 浏览器授权地址和脱敏账户状态；Worker 保存 GitHub App Client Secret，本机接收回调并把凭据保存在 profile SecretStore        |
+| 登出、取消或切换账户                   | 登录控制面协调，供应商适配器执行       | 稳定状态和脱敏结果                                                                                                        |
+| 没有受支持订阅 OAuth 的供应商 API key  | 对应模型凭据领域                       | 不属于交互式登录，也不是 OAuth 失败后的降级                                                                               |
+| AWS 凭据链、Google ADC、Azure 托管身份 | 对应供应商运行时                       | 不包装成通用 OAuth                                                                                                        |
+| access token、refresh token、cookie    | 精确供应商适配器                       | 不进入 Ash RPC、日志或遥测                                                                                                |
 
 ### 订阅入口与 API 入口
 
 Ash Code 的“配置 → 提供商”把订阅接入和开发者 API 分组展示。名称用于帮助用户选对凭据与服务端点，不代表 Ash 已核实账户购买的具体套餐、额度或服务权限。实际等级来自哪里、外部登录文件与 Ash 凭据各由谁维护，见[入口名称、实际套餐与凭据归属](subscriptions.md#入口名称实际套餐与凭据归属)。
 
-| 订阅区名称 | 订阅 ID | 对应 API 入口与 ID | 订阅区的接入方式 |
-| --- | --- | --- | --- |
-| ChatGPT | `chatgpt-subscription` | OpenAI：`openai` | ChatGPT 设备码登录，使用独立的订阅服务与 OAuth 凭据 |
-| Kimi | `kimi-subscription` | Kimi：`kimi` | Kimi 设备码登录，使用 Kimi Coding API |
-| Super Grok | `xai-subscription` | xAI：`xai` | xAI 设备码登录，使用 Grok 订阅代理 |
-| BigModel | `bigmodel-coding-plan` | BigModel：`bigmodel` | 只读复用 ZCode 账号，或浏览器登录，连接 `open.bigmodel.cn` 的 Coding Plan 端点 |
-| Z.AI | `zai-coding-plan` | Z.AI：`zai` | 只读复用 ZCode 账号，或浏览器登录，连接 `api.z.ai` 的 Coding Plan 端点 |
-| BigModel Start Plan | `bigmodel-start-plan` | BigModel：`bigmodel` | 只读复用匹配当前区域的 ZCode JWT，或浏览器登录，连接 ZCode Start Plan 服务 |
-| Z.AI Start Plan | `zai-start-plan` | Z.AI：`zai` | 同上，使用 Z.AI 账户 |
+| 订阅区名称          | 订阅 ID                | 对应 API 入口与 ID   | 订阅区的接入方式                                                               |
+| ------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| ChatGPT             | `chatgpt-subscription` | OpenAI：`openai`     | ChatGPT 设备码登录，使用独立的订阅服务与 OAuth 凭据                            |
+| Kimi                | `kimi-subscription`    | Kimi：`kimi`         | Kimi 设备码登录，使用 Kimi Coding API                                          |
+| Super Grok          | `xai-subscription`     | xAI：`xai`           | xAI 设备码登录，使用 Grok 订阅代理                                             |
+| BigModel            | `bigmodel-coding-plan` | BigModel：`bigmodel` | 只读复用 ZCode 账号，或浏览器登录，连接 `open.bigmodel.cn` 的 Coding Plan 端点 |
+| Z.AI                | `zai-coding-plan`      | Z.AI：`zai`          | 只读复用 ZCode 账号，或浏览器登录，连接 `api.z.ai` 的 Coding Plan 端点         |
+| BigModel Start Plan | `bigmodel-start-plan`  | BigModel：`bigmodel` | 只读复用匹配当前区域的 ZCode JWT，或浏览器登录，连接 ZCode Start Plan 服务     |
+| Z.AI Start Plan     | `zai-start-plan`       | Z.AI：`zai`          | 同上，使用 Z.AI 账户                                                           |
 
 订阅区与 API 区均显示 `BigModel`、`Z.AI`，由分组区分入口；内部连接 ID、凭据和端点仍独立。Google 目前只在 API 区显示为 `Google`。API 区的 `OpenAI`、`xAI` 等名称不追加“API 密钥”，但进入后仍按各供应商的凭据要求录入密钥。已有 `zai` API 密钥继续属于 Z.AI API，不自动归入任一 Coding Plan。
 

@@ -53,7 +53,7 @@ class Transport implements AppServerTransport {
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'test', workspaceRoot: '/workspace' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string }).frame) as { id: number | string; method?: string; result?: unknown; error?: unknown };
+		const request = JSON.parse((payload as { frame: string; }).frame) as { id: number | string; method?: string; result?: unknown; error?: unknown; };
 		if (request.method === 'initialize') {
 			let result: InitializeResult;
 			const capabilities = {
@@ -95,7 +95,7 @@ class Transport implements AppServerTransport {
 }
 
 class Files extends Disposable implements IFileService {
-	private readonly changes = this._register(new Emitter<{ resources: readonly URI[] }>());
+	private readonly changes = this._register(new Emitter<{ resources: readonly URI[]; }>());
 	public readonly onDidChangeFiles = this.changes.event;
 	public readonly contents = new Map<string, string>();
 	public failRename = false;
@@ -164,7 +164,7 @@ async function snapshot(transport: Transport, resource: URI): Promise<string> {
 }
 
 function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService['acquire']>>): IWorkingCopy {
-	return { resource: reference.resource, backupKind: 'text', get isDirty() { return reference.isDirty; }, get hasExternalChange() { return reference.hasExternalChange; }, onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange, onDidChangeContent: listener => reference.model.onDidChangeContent(() => listener()), backup: () => reference.model.getText(), restoreBackup: content => reference.model.reset(content), save: signal => reference.save(signal), saveAs: async () => {}, revert: signal => reference.revert(signal), ...toDisposable(() => {}) };
+	return { resource: reference.resource, backupKind: 'text', get isDirty() { return reference.isDirty; }, get hasExternalChange() { return reference.hasExternalChange; }, onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange, onDidChangeContent: listener => reference.model.onDidChangeContent(() => listener()), backup: () => reference.model.getText(), restoreBackup: content => reference.model.reset(content), save: signal => reference.save(signal), saveAs: async () => { }, revert: signal => reference.revert(signal), ...toDisposable(() => { }) };
 }
 
 test('Agent review rejects one hunk, accepts another, saves the baseline and retains user edits', async () => {
@@ -430,10 +430,12 @@ test('deleting a BOM document restores its original bytes when a later operation
 	const a = await snapshot(host.transport, first);
 	const b = await snapshot(host.transport, second);
 	host.files.failRename = true;
-	const result = await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [
-		{ kind: 'delete', snapshot: a },
-		{ kind: 'move', snapshot: b, target: 'c:/workspace/new.txt', text: 'other' },
-	] });
+	const result = await host.transport.call('textDocument/apply', {
+		threadId: 'review-thread', turnId: 'review-turn', changes: [
+			{ kind: 'delete', snapshot: a },
+			{ kind: 'move', snapshot: b, target: 'c:/workspace/new.txt', text: 'other' },
+		]
+	});
 	assert.equal(result.kind, 'failed');
 	assert.equal(host.files.contents.get(first.toString()), '\uFEFForiginal\r\n');
 });
@@ -444,9 +446,11 @@ test('a changed BOM document moves with its serialized format', async () => {
 	const target = URI.file('c:/workspace/target.txt');
 	host.files.contents.set(source.toString(), '\uFEFForiginal\r\n');
 	const id = await snapshot(host.transport, source);
-	const result = await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [
-		{ kind: 'move', snapshot: id, target: target.fsPath, text: 'moved\n' },
-	] });
+	const result = await host.transport.call('textDocument/apply', {
+		threadId: 'review-thread', turnId: 'review-turn', changes: [
+			{ kind: 'move', snapshot: id, target: target.fsPath, text: 'moved\n' },
+		]
+	});
 	assert.deepEqual(result, { kind: 'applied' });
 	assert.equal(host.files.contents.get(target.toString()), '\uFEFFmoved\r\n');
 	assert.equal(host.files.contents.has(source.toString()), false);

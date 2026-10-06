@@ -1,140 +1,140 @@
 .stanza-document-collaboration-toolbar {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 34px;
-  padding: 4px 12px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
-  color: var(--ash-description-foreground, var(--ash-editor-foreground));
-  background: var(--ash-editor-background);
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	min-height: 34px;
+	padding: 4px 12px;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	color: var(--ash-description-foreground, var(--ash-editor-foreground));
+	background: var(--ash-editor-background);
 }
 
 .stanza-document-collaboration-toolbar[data-state="connected"] {
-  color: var(--ash-success-foreground);
+	color: var(--ash-success-foreground);
 }
 
 .stanza-document-collaboration-toolbar[data-state="error"],
 .stanza-document-collaboration-toolbar[data-state="resyncRequired"] {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .stanza-document-collaboration-actions .ash-action-bar {
-  gap: 2px;
+	gap: 2px;
 }
 
 .stanza-document-collaboration-status {
-  overflow: hidden;
-  font-size: 0.9em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	font-size: 0.9em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-document-collaboration-invitation {
-  display: flex;
-  flex: 1 0 100%;
-  align-items: flex-start;
-  gap: 8px;
-  padding-block: 4px;
+	display: flex;
+	flex: 1 0 100%;
+	align-items: flex-start;
+	gap: 8px;
+	padding-block: 4px;
 }
 
 .stanza-document-collaboration-invitation-token {
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  padding: 4px 6px;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-input-background, var(--ash-editor-background));
-  font: inherit;
+	box-sizing: border-box;
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	padding: 4px 6px;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-input-background, var(--ash-editor-background));
+	font: inherit;
 }
 
 .stanza-document-collaboration-invitation-token:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-document-collaboration-invitation-dismiss {
-  padding: 4px 8px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-toolbar-hover-background);
-  font: inherit;
+	padding: 4px 8px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-toolbar-hover-background);
+	font: inherit;
 }
 
 .stanza-document-collaboration-invitation-dismiss:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-document-collaboration-members {
-  flex: 1 0 100%;
-  min-width: 0;
+	flex: 1 0 100%;
+	min-width: 0;
 }
 
 .stanza-document-collaboration-member-list {
-  display: grid;
-  gap: 4px;
+	display: grid;
+	gap: 4px;
 }
 
 .stanza-document-collaboration-member {
-  display: grid;
-  grid-template-columns: minmax(96px, 0.5fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-input-background, var(--ash-editor-background));
+	display: grid;
+	grid-template-columns: minmax(96px, 0.5fr) minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-input-background, var(--ash-editor-background));
 }
 
 .stanza-document-collaboration-member-identity {
-  overflow: hidden;
-  font-weight: var(--ash-font-weight-semi-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	font-weight: var(--ash-font-weight-semi-bold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-document-collaboration-member-details {
-  overflow: hidden;
-  color: var(--ash-description-foreground, var(--ash-editor-foreground));
-  font-size: 0.9em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	color: var(--ash-description-foreground, var(--ash-editor-foreground));
+	font-size: 0.9em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-document-collaboration-member-actions {
-  display: flex;
-  gap: 4px;
+	display: flex;
+	gap: 4px;
 }
 
 .stanza-document-collaboration-member-actions button {
-  padding: 4px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-editor-foreground);
-  background: var(--ash-toolbar-hover-background);
-  font: inherit;
+	padding: 4px 6px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-editor-foreground);
+	background: var(--ash-toolbar-hover-background);
+	font: inherit;
 }
 
 .stanza-document-collaboration-member-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+	cursor: not-allowed;
+	opacity: 0.55;
 }
 
 .stanza-document-collaboration-member-actions button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-document-collaboration-members-empty {
-  padding: 4px 6px;
-  color: var(--ash-description-foreground, var(--ash-editor-foreground));
+	padding: 4px 6px;
+	color: var(--ash-description-foreground, var(--ash-editor-foreground));
 }

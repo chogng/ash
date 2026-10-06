@@ -6,7 +6,7 @@ export class SyncDescriptor<T> {
 		public readonly ctor: Constructor<T>,
 		public readonly staticArguments: readonly unknown[] = [],
 		public readonly supportsDelayedInstantiation: boolean = false,
-	) {}
+	) { }
 }
 
 export interface SyncDescriptor0<T> {

@@ -18,7 +18,7 @@ export function groupByMap<K, T>(items: Iterable<T>, keyOf: (item: T) => K): Map
 	return result;
 }
 
-export function diffSets<T>(before: ReadonlySet<T>, after: ReadonlySet<T>): { readonly removed: T[]; readonly added: T[] } {
+export function diffSets<T>(before: ReadonlySet<T>, after: ReadonlySet<T>): { readonly removed: T[]; readonly added: T[]; } {
 	return {
 		removed: [...before].filter(item => !after.has(item)),
 		added: [...after].filter(item => !before.has(item)),
@@ -29,7 +29,7 @@ export function equalSets<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boole
 	return left === right || left.size === right.size && [...left].every(item => right.has(item));
 }
 
-export function diffMaps<K, T>(before: ReadonlyMap<K, T>, after: ReadonlyMap<K, T>): { readonly removed: T[]; readonly added: T[] } {
+export function diffMaps<K, T>(before: ReadonlyMap<K, T>, after: ReadonlyMap<K, T>): { readonly removed: T[]; readonly added: T[]; } {
 	return {
 		removed: [...before].filter(([key]) => !after.has(key)).map(([, value]) => value),
 		added: [...after].filter(([key]) => !before.has(key)).map(([, value]) => value),

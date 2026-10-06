@@ -22,7 +22,7 @@ export function createRemoveMatchingBracketsCommand(bracketPairs: IBracketPairsT
 }
 
 class RemoveMatchingBracketsCommand implements ICommand {
-	constructor(private readonly opening: Range, private readonly closing: Range) {}
+	constructor(private readonly opening: Range, private readonly closing: Range) { }
 
 	getEditOperations(_model: ITextModel, builder: IEditOperationBuilder): void {
 		builder.addTrackedEditOperation(this.opening, '');

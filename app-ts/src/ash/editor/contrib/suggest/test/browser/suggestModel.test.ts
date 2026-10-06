@@ -46,7 +46,7 @@ test("Completion session opens at the matching cursor and navigates cyclically",
 	assert.equal(session.state!.selectedItem!.id, "constant");
 	assert.equal(session.selectPrevious(), true);
 	assert.equal(session.state!.selectedItem!.id, "continue");
-	assert.deepEqual(events.map(event => (event as { reason: string }).reason), [
+	assert.deepEqual(events.map(event => (event as { reason: string; }).reason), [
 		LanguageCompletionSessionChangeReason.Store,
 		LanguageCompletionSessionChangeReason.Focus,
 		LanguageCompletionSessionChangeReason.Focus,
@@ -139,7 +139,7 @@ test("Completion commands run after insertion against the updated model", async 
 	using model = new TextModel("con");
 	using editor = editorAt(model, new Position((0) + 1, (3) + 1));
 	using store = createLanguageCompletionStore(model);
-	const accepted: Array<{ readonly text: string; readonly item: LanguageCompletionItem }> = [];
+	const accepted: Array<{ readonly text: string; readonly item: LanguageCompletionItem; }> = [];
 	using session = new SuggestModel(store, editor, { onDidAccept: item => { accepted.push({ text: model.getText(), item }); } });
 	accept(store, model, 1, [{
 		...completion("console", "console"),

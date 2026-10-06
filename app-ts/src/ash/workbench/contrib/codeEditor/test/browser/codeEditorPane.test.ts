@@ -56,9 +56,9 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	ResizeObserver: class {
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
+		observe(): void { }
+		unobserve(): void { }
+		disconnect(): void { }
 	},
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -361,7 +361,7 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 });
 
 class RecordingLanguageDiagnosticsService implements ILanguageDiagnosticsService {
-	readonly acquired: Array<{ readonly resource: URI; readonly languageId: string; readonly model: TextModel }> = [];
+	readonly acquired: Array<{ readonly resource: URI; readonly languageId: string; readonly model: TextModel; }> = [];
 	activeAcquisitions = 0;
 	readonly onDidChangeDiagnostics = () => toDisposable(() => undefined);
 	acquire(resource: URI, languageId: string, model: TextModel) {
@@ -640,7 +640,7 @@ class ImmediateTextFiles implements ITextFileService {
 	failSave = false;
 	private revision = 1;
 
-	constructor(private text: string) {}
+	constructor(private text: string) { }
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
 		return {
@@ -652,7 +652,7 @@ class ImmediateTextFiles implements ITextFileService {
 		};
 	}
 
-	async save(request: { readonly text: string }): Promise<{ readonly revision: string | undefined }> {
+	async save(request: { readonly text: string; }): Promise<{ readonly revision: string | undefined; }> {
 		if (this.failSave) throw new Error("conflict");
 		this.savedTexts.push(request.text);
 		this.text = request.text;
@@ -680,12 +680,12 @@ async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
 
 function inertFileChanges() {
 	return {
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(resolver => {
 		resolve = resolver;
@@ -743,26 +743,26 @@ function createInertEditorPart(): EditorPanePart {
 		onDidScrollChange: Event.None,
 		onDidChangeConfiguration: Event.None,
 		onDidLayoutChange: Event.None,
-		layout: () => {},
-		focus: () => {},
+		layout: () => { },
+		focus: () => { },
 		getValue: () => '',
 		getModel: () => null,
-		createDecorationsCollection: () => ({ onDidChange: Event.None, set: () => [], append: () => [], clear: () => {}, getRange: () => null, getRanges: () => [], has: () => false, length: 0 }),
+		createDecorationsCollection: () => ({ onDidChange: Event.None, set: () => [], append: () => [], clear: () => { }, getRange: () => null, getRanges: () => [], has: () => false, length: 0 }),
 		getScrollTop: () => 0,
 		getScrollLeft: () => 0,
 		getVisibleRanges: () => [],
 		getTopForLineNumber: () => 0,
 		getBottomForLineNumber: () => 0,
 		getLayoutInfo: () => { throw new Error('Inert editor has no layout'); },
-		setScrollTop: () => {},
-		setScrollLeft: () => {},
-		changeViewZones: () => {},
+		setScrollTop: () => { },
+		setScrollLeft: () => { },
+		changeViewZones: () => { },
 		executeEdits: () => false,
 		getSelections: () => null,
-		setSelection: () => {},
-		updateOptions: () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		setSelection: () => { },
+		updateOptions: () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 }
 

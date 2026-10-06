@@ -8,7 +8,7 @@ import { wrapInReloadableClass1 } from '../../common/wrapInReloadableClass.js';
 import { hotClassGetOriginalInstance } from '../../common/wrapInHotClass.js';
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
+	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string; }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
 };
 
 test('wrapInReloadableClass1 keeps one caller argument and resolves services for every instance', () => {

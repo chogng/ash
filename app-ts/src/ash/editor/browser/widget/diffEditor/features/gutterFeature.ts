@@ -26,7 +26,7 @@ export class DiffEditorGutter extends Disposable {
 	private readonly domNode: HTMLDivElement;
 	private readonly toolbars = this._register(new DisposableStore());
 	private readonly scope: IContextKeyService;
-	private readonly items: { domNode: HTMLElement; lineNumber: number }[] = [];
+	private readonly items: { domNode: HTMLElement; lineNumber: number; }[] = [];
 	private enabled = false;
 	private available = false;
 	private height = 0;

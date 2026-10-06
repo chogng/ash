@@ -114,7 +114,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 			// User edits outside Agent hunks update the baseline. Editing an Agent hunk
 			// adopts that hunk, so Reject never discards the user's replacement.
 			const edits = event.changes.map(change => ({ start: change.rangeOffset, end: change.rangeOffset + change.rangeLength, text: change.text }));
-			const groups: { start: number; end: number; edits: typeof edits }[] = [];
+			const groups: { start: number; end: number; edits: typeof edits; }[] = [];
 			for (const edit of edits.sort((a, b) => a.start - b.start)) {
 				let start = edit.start;
 				let end = edit.end;

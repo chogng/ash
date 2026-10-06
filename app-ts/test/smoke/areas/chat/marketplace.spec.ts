@@ -44,9 +44,9 @@ test('Marketplace view tab uses the extensions icon', async ({ workbench }) => {
 	await search.focus();
 	await search.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-    await expect(help.getByRole('textbox')).toHaveValue(/Install, update, and uninstall affect the whole package/u);
-    await expect(help.getByRole('textbox')).toHaveValue(/Install extension from workspace and Manage local extensions/u);
-    await expect(help.getByRole('textbox')).toHaveValue(/Manage Marketplace extension execution/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Install, update, and uninstall affect the whole package/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Install extension from workspace and Manage local extensions/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Manage Marketplace extension execution/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
 });
@@ -59,8 +59,12 @@ test('Local SDK extension installs, runs only after grant, survives restart and 
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 		schemaVersion: 1, id: 'acme/sdk-smoke', version: '1.0.0', displayName: 'SDK smoke',
 		compatibility: { ash: '>=0.1.0' },
-		contributions: { editorExtensions: [{ id: 'inspect', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
-			activationEvents: [{ type: 'onCommand', id: 'acme.sdkSmoke.inspect' }], capabilities: ['command'] }] },
+		contributions: {
+			editorExtensions: [{
+				id: 'inspect', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				activationEvents: [{ type: 'onCommand', id: 'acme.sdkSmoke.inspect' }], capabilities: ['command']
+			}]
+		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeFile(join(root, 'extension.js'), `

@@ -11,15 +11,15 @@
 
 最终只有一条调用事实链：供应商响应由 `ash-api` 归一化，Core 为每次真实请求提交一条完整的模型调用事实，Thread reducer 计算当前 Thread/Turn 汇总，`ash-model-accounting` 从已提交事实建立跨 Thread 查询数据并执行计价和预算。桌面、TUI 与命令行不各算一遍费用。
 
-| 结论 | 设计 |
-| --- | --- |
-| 是否拆 crate | 是，新增 `ash-model-accounting` |
+| 结论             | 设计                                                                    |
+| ---------------- | ----------------------------------------------------------------------- |
+| 是否拆 crate     | 是，新增 `ash-model-accounting`                                         |
 | token 事实放哪里 | 稳定类型和 Thread 事件放 `ash-protocol`，供应商字段归一化留在 `ash-api` |
-| 价格放哪里 | 不放进模型 catalog；使用独立、不可变、可审计的价目表版本 |
-| 费用叫什么 | `参考成本`，不冒充供应商账单 |
-| 价格无法精确匹配 | 记录用量并标记 `Unpriced`，不猜价格 |
-| 跨 Thread 查询 | 由后端持久查询库提供，界面只消费 typed API |
-| 硬预算 | 调用前原子预留，调用后按已提交事实结算 |
+| 价格放哪里       | 不放进模型 catalog；使用独立、不可变、可审计的价目表版本                |
+| 费用叫什么       | `参考成本`，不冒充供应商账单                                            |
+| 价格无法精确匹配 | 记录用量并标记 `Unpriced`，不猜价格                                     |
+| 跨 Thread 查询   | 由后端持久查询库提供，界面只消费 typed API                              |
+| 硬预算           | 调用前原子预留，调用后按已提交事实结算                                  |
 
 ## 要解决的问题
 
@@ -44,29 +44,29 @@
 
 ## 当前状态
 
-| 能力 | 当前状态 | 主要缺口 |
-| --- | --- | --- |
-| 单次响应用量 | 已具备 | 成功响应写入独立调用 ID、模型、时间、用量和输入估算；失败或取消且没有响应的请求尚未写入调用事实 |
-| Thread/Turn token 汇总 | 已具备 | 只覆盖当前 Thread/Turn，不支持跨 Thread 分组查询 |
-| 缓存命中统计 | 部分具备 | 有缓存读取 token，但没有完整度明确的产品级命中率语义 |
-| 版本化价格 | 部分具备 | crate 已支持不可变 revision、内容摘要、生效区间、规则冲突校验和加速公开价目表；其他公开价格仍需进入数据包 |
-| 参考成本 | 部分具备 | 已接入真实成功响应，支持 OpenAI 响应模型与 `service_tier`、Kimi HighSpeed 固定模型身份；响应头等级、更多价目表和失败调用仍待接入 |
-| 持久查询与导出 | 尚未完成 | Thread journal 适合回放，不适合按时间、供应商和模型扫描 |
-| 金钱预算与告警 | 尚未完成 | 没有跨并发调用的预留和结算机制 |
+| 能力                   | 当前状态 | 主要缺口                                                                                                                         |
+| ---------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 单次响应用量           | 已具备   | 成功响应写入独立调用 ID、模型、时间、用量和输入估算；失败或取消且没有响应的请求尚未写入调用事实                                  |
+| Thread/Turn token 汇总 | 已具备   | 只覆盖当前 Thread/Turn，不支持跨 Thread 分组查询                                                                                 |
+| 缓存命中统计           | 部分具备 | 有缓存读取 token，但没有完整度明确的产品级命中率语义                                                                             |
+| 版本化价格             | 部分具备 | crate 已支持不可变 revision、内容摘要、生效区间、规则冲突校验和加速公开价目表；其他公开价格仍需进入数据包                        |
+| 参考成本               | 部分具备 | 已接入真实成功响应，支持 OpenAI 响应模型与 `service_tier`、Kimi HighSpeed 固定模型身份；响应头等级、更多价目表和失败调用仍待接入 |
+| 持久查询与导出         | 尚未完成 | Thread journal 适合回放，不适合按时间、供应商和模型扫描                                                                          |
+| 金钱预算与告警         | 尚未完成 | 没有跨并发调用的预留和结算机制                                                                                                   |
 
 ## 最终所有权
 
-| Owner | 负责 | 不负责 |
-| --- | --- | --- |
-| `ash-api` | 解析供应商响应；归一化供应商返回的 token 明细、实际模型和服务等级 | 价格选择、费用汇总、预算、跨 Thread 存储 |
-| `models-manager` | 模型能力、可用性、生命周期和元数据来源 | 价目表和历史费用 |
-| `ash-protocol` | 稳定的调用事实、用量、计价结果、预算值对象和 Thread 事件 contract | 存储、查询和业务执行 |
-| Core | 为每次真实供应商请求分配调用 ID；冻结计价上下文；调用预算预留；提交终态事实 | 自己维护价格表或跨 Thread 查询库 |
-| `thread-store` | 按顺序持久化 Thread 事件并支持回放 | 跨 Thread 费用查询和预算并发控制 |
-| `ash-model-accounting` | 价目表校验与选择、精确计价、查询库、预算预留与结算、汇总和导出 | 供应商 HTTP、模型选择、Thread reducer、UI |
-| `app-server-protocol` | typed request、response、notification、resource 与运行时 decoder 的唯一线上 contract | 领域计算和持久状态 |
-| `app-server` | 持有领域服务实例；typed dispatch；跨领域编排 | 价格规则、查询 SQL、界面状态 |
-| 桌面、TUI、命令行 | 展示、筛选、触发导出和预算配置 | 重算价格、直接写查询库、维护第二份调用事实 |
+| Owner                  | 负责                                                                                 | 不负责                                     |
+| ---------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `ash-api`              | 解析供应商响应；归一化供应商返回的 token 明细、实际模型和服务等级                    | 价格选择、费用汇总、预算、跨 Thread 存储   |
+| `models-manager`       | 模型能力、可用性、生命周期和元数据来源                                               | 价目表和历史费用                           |
+| `ash-protocol`         | 稳定的调用事实、用量、计价结果、预算值对象和 Thread 事件 contract                    | 存储、查询和业务执行                       |
+| Core                   | 为每次真实供应商请求分配调用 ID；冻结计价上下文；调用预算预留；提交终态事实          | 自己维护价格表或跨 Thread 查询库           |
+| `thread-store`         | 按顺序持久化 Thread 事件并支持回放                                                   | 跨 Thread 费用查询和预算并发控制           |
+| `ash-model-accounting` | 价目表校验与选择、精确计价、查询库、预算预留与结算、汇总和导出                       | 供应商 HTTP、模型选择、Thread reducer、UI  |
+| `app-server-protocol`  | typed request、response、notification、resource 与运行时 decoder 的唯一线上 contract | 领域计算和持久状态                         |
+| `app-server`           | 持有领域服务实例；typed dispatch；跨领域编排                                         | 价格规则、查询 SQL、界面状态               |
+| 桌面、TUI、命令行      | 展示、筛选、触发导出和预算配置                                                       | 重算价格、直接写查询库、维护第二份调用事实 |
 
 桌面最终通过前端 `modelAccounting` 领域 service 和 app-server adapter 访问后端。一个应用 Host 只有一个共享 app-server process，每个 renderer 使用自己的 connection，但所有窗口看到同一个后端查询结果。Main 只负责共享进程和透明 relay，不解析或缓存计价数据。
 
@@ -155,29 +155,29 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 ### 当前内置模型覆盖
 
-| Ash 模型 | 接入方式 | 首版计价状态 |
-| --- | --- | --- |
-| `openai/gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | ChatGPT subscription | `Unpriced(SubscriptionPlan)` |
-| `openai/gpt-5.6` | OpenAI 按量 API；当前别名指向 `gpt-5.6-sol` | 使用 OpenAI API 表；仍记录实际返回模型 |
-| `anthropic/claude-sonnet-4-20250514` | Anthropic API key | 有公开历史价格；供应商当前标记为 retired，新调用需按实际计费平台判断 |
-| `google/gemini-3.6-flash` | Gemini 按量 API | 已覆盖 Standard、Batch、Flex、Priority |
-| `xai/grok-4.5` | xAI 按量 API | 已覆盖 Standard、Priority |
-| `kimi/kimi-k2.6` | Kimi 按量 API | 已覆盖 |
-| `kimi/kimi-k2.7-code` | Kimi Code subscription | `Unpriced(SubscriptionPlan)` |
-| `deepseek/deepseek-v4-pro` | DeepSeek 按量 API | 已覆盖峰谷 UTC 时段 |
-| `zai/glm-5.1` | Z.AI 按量 API | 已覆盖 |
+| Ash 模型                                                         | 接入方式                                    | 首版计价状态                                                         |
+| ---------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
+| `openai/gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | ChatGPT subscription                        | `Unpriced(SubscriptionPlan)`                                         |
+| `openai/gpt-5.6`                                                 | OpenAI 按量 API；当前别名指向 `gpt-5.6-sol` | 使用 OpenAI API 表；仍记录实际返回模型                               |
+| `anthropic/claude-sonnet-4-20250514`                             | Anthropic API key                           | 有公开历史价格；供应商当前标记为 retired，新调用需按实际计费平台判断 |
+| `google/gemini-3.6-flash`                                        | Gemini 按量 API                             | 已覆盖 Standard、Batch、Flex、Priority                               |
+| `xai/grok-4.5`                                                   | xAI 按量 API                                | 已覆盖 Standard、Priority                                            |
+| `kimi/kimi-k2.6`                                                 | Kimi 按量 API                               | 已覆盖                                                               |
+| `kimi/kimi-k2.7-code`                                            | Kimi Code subscription                      | `Unpriced(SubscriptionPlan)`                                         |
+| `deepseek/deepseek-v4-pro`                                       | DeepSeek 按量 API                           | 已覆盖峰谷 UTC 时段                                                  |
+| `zai/glm-5.1`                                                    | Z.AI 按量 API                               | 已覆盖                                                               |
 
 ### 加速调用如何进入计价
 
 “更快”不是一个可以跨供应商直接复用的价格开关。首版 contract 同时保存请求值和响应事实，并按下面三种机制选择价格：
 
-| 机制 | 当前模型 | 请求表达 | 结算依据 |
-| --- | --- | --- | --- |
-| OpenAI 同一模型的服务等级 | GPT-5.6 | 请求 `priority` | 响应 `service_tier`；`priority` 用 Fast 价，`default` 用 Standard 价 |
-| Google 同一模型的服务等级 | Gemini 3.6 Flash | 请求 `priority` | 响应 `x-gemini-service-tier`；被降到 `standard` 时用 Standard 价 |
-| xAI 同一模型的服务等级 | Grok 4.5 | 请求 `priority` | 响应 `service_tier`；只有 `priority` 使用 2 倍价格 |
-| 独立高速模型 ID | Kimi K2.7 Code HighSpeed | 请求 `kimi-k2.7-code-highspeed` | 响应实际模型；不能给普通模型追加 Fast 标签 |
-| 当前模型不支持加速 | Claude Sonnet 4、DeepSeek V4 Pro、GLM-5.1 | 不允许构造不存在的服务等级 | 只匹配这些模型已验证的公开规则 |
+| 机制                      | 当前模型                                  | 请求表达                        | 结算依据                                                             |
+| ------------------------- | ----------------------------------------- | ------------------------------- | -------------------------------------------------------------------- |
+| OpenAI 同一模型的服务等级 | GPT-5.6                                   | 请求 `priority`                 | 响应 `service_tier`；`priority` 用 Fast 价，`default` 用 Standard 价 |
+| Google 同一模型的服务等级 | Gemini 3.6 Flash                          | 请求 `priority`                 | 响应 `x-gemini-service-tier`；被降到 `standard` 时用 Standard 价     |
+| xAI 同一模型的服务等级    | Grok 4.5                                  | 请求 `priority`                 | 响应 `service_tier`；只有 `priority` 使用 2 倍价格                   |
+| 独立高速模型 ID           | Kimi K2.7 Code HighSpeed                  | 请求 `kimi-k2.7-code-highspeed` | 响应实际模型；不能给普通模型追加 Fast 标签                           |
+| 当前模型不支持加速        | Claude Sonnet 4、DeepSeek V4 Pro、GLM-5.1 | 不允许构造不存在的服务等级      | 只匹配这些模型已验证的公开规则                                       |
 
 模型目录的 `settings.serviceTiers` 现在保存供应商等级 ID、展示名称和说明，`settings.acceleration` 分别声明服务等级、速度参数或高速型号。OpenAI 的展示名称 `Fast` 对应请求 ID `priority`；Anthropic 的 `speed=fast` 是独立速度参数；Kimi 高速型号由冻结的模型声明选择，再由连接转换上游 ID。名称和“用量增加”等说明只用于界面，不参与 rate selector 或价格倍率。可解析格式见 [模型目录说明](../model-provider-info/README.md#统一静态模型清单)。
 
@@ -191,20 +191,20 @@ OpenAI 请求可传 `fast` 或历史名称 `priority`，GPT-5.6 响应都报告 
 
 币种为 USD。`gpt-5.6` 是 `gpt-5.6-sol` 的别名。短上下文为输入不超过 272K；超过 272K 后，整个请求按长上下文列计价。符合数据驻留条件的区域处理 endpoint 另加 10%。[来源：OpenAI API Pricing](https://developers.openai.com/api/docs/pricing)
 
-| 实际模型 | 服务等级 | 短输入 | 短缓存读 | 短缓存写 | 短输出 | 长输入 | 长缓存读 | 长缓存写 | 长输出 |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `gpt-5.6-sol` | Standard | $4.00 | $0.40 | $5.00 | $20.00 | $8.00 | $0.80 | $10.00 | $30.00 |
-| `gpt-5.6-sol` | Batch | $2.00 | $0.20 | $2.50 | $10.00 | $4.00 | $0.40 | $5.00 | $15.00 |
-| `gpt-5.6-sol` | Flex | $2.00 | $0.20 | $2.50 | $10.00 | $4.00 | $0.40 | $5.00 | $15.00 |
-| `gpt-5.6-sol` | Fast | $8.00 | $0.80 | $10.00 | $40.00 | $16.00 | $1.60 | $20.00 | $60.00 |
-| `gpt-5.6-terra` | Standard | $2.00 | $0.20 | $2.50 | $12.00 | $4.00 | $0.40 | $5.00 | $18.00 |
-| `gpt-5.6-terra` | Batch | $1.00 | $0.10 | $1.25 | $6.00 | $2.00 | $0.20 | $2.50 | $9.00 |
-| `gpt-5.6-terra` | Flex | $1.00 | $0.10 | $1.25 | $6.00 | $2.00 | $0.20 | $2.50 | $9.00 |
-| `gpt-5.6-terra` | Fast | $4.00 | $0.40 | $5.00 | $24.00 | $8.00 | $0.80 | $10.00 | $36.00 |
-| `gpt-5.6-luna` | Standard | $0.20 | $0.02 | $0.25 | $1.20 | $0.40 | $0.04 | $0.50 | $1.80 |
-| `gpt-5.6-luna` | Batch | $0.10 | $0.01 | $0.125 | $0.60 | $0.20 | $0.02 | $0.25 | $0.90 |
-| `gpt-5.6-luna` | Flex | $0.10 | $0.01 | $0.125 | $0.60 | $0.20 | $0.02 | $0.25 | $0.90 |
-| `gpt-5.6-luna` | Fast | $0.40 | $0.04 | $0.50 | $2.40 | $0.80 | $0.08 | $1.00 | $3.60 |
+| 实际模型        | 服务等级 | 短输入 | 短缓存读 | 短缓存写 | 短输出 | 长输入 | 长缓存读 | 长缓存写 | 长输出 |
+| --------------- | -------- | -----: | -------: | -------: | -----: | -----: | -------: | -------: | -----: |
+| `gpt-5.6-sol`   | Standard |  $4.00 |    $0.40 |    $5.00 | $20.00 |  $8.00 |    $0.80 |   $10.00 | $30.00 |
+| `gpt-5.6-sol`   | Batch    |  $2.00 |    $0.20 |    $2.50 | $10.00 |  $4.00 |    $0.40 |    $5.00 | $15.00 |
+| `gpt-5.6-sol`   | Flex     |  $2.00 |    $0.20 |    $2.50 | $10.00 |  $4.00 |    $0.40 |    $5.00 | $15.00 |
+| `gpt-5.6-sol`   | Fast     |  $8.00 |    $0.80 |   $10.00 | $40.00 | $16.00 |    $1.60 |   $20.00 | $60.00 |
+| `gpt-5.6-terra` | Standard |  $2.00 |    $0.20 |    $2.50 | $12.00 |  $4.00 |    $0.40 |    $5.00 | $18.00 |
+| `gpt-5.6-terra` | Batch    |  $1.00 |    $0.10 |    $1.25 |  $6.00 |  $2.00 |    $0.20 |    $2.50 |  $9.00 |
+| `gpt-5.6-terra` | Flex     |  $1.00 |    $0.10 |    $1.25 |  $6.00 |  $2.00 |    $0.20 |    $2.50 |  $9.00 |
+| `gpt-5.6-terra` | Fast     |  $4.00 |    $0.40 |    $5.00 | $24.00 |  $8.00 |    $0.80 |   $10.00 | $36.00 |
+| `gpt-5.6-luna`  | Standard |  $0.20 |    $0.02 |    $0.25 |  $1.20 |  $0.40 |    $0.04 |    $0.50 |  $1.80 |
+| `gpt-5.6-luna`  | Batch    |  $0.10 |    $0.01 |   $0.125 |  $0.60 |  $0.20 |    $0.02 |    $0.25 |  $0.90 |
+| `gpt-5.6-luna`  | Flex     |  $0.10 |    $0.01 |   $0.125 |  $0.60 |  $0.20 |    $0.02 |    $0.25 |  $0.90 |
+| `gpt-5.6-luna`  | Fast     |  $0.40 |    $0.04 |    $0.50 |  $2.40 |  $0.80 |    $0.08 |    $1.00 |  $3.60 |
 
 `gpt-5.6-sol` 当前公开价是促销价格，官方说明至少持续到 2026-11-21；价目表必须给该 revision 设置明确复核日期，不能假设永久有效。
 
@@ -212,10 +212,10 @@ OpenAI 请求可传 `fast` 或历史名称 `priority`，GPT-5.6 响应都报告 
 
 币种为 USD。官方当前把 Claude Sonnet 4 标记为 retired，只有 Bedrock 和 Google Cloud 仍保留；不同云平台必须使用各自价目表，不能把下面的 Claude API 基准直接用于云平台账单。[来源：Anthropic Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing)
 
-| 模型 | 模式 | 普通输入 | 缓存写 5m | 缓存写 1h | 缓存读 | 输出 |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `claude-sonnet-4-20250514` | Standard | $3.00 | $3.75 | $6.00 | $0.30 | $15.00 |
-| `claude-sonnet-4-20250514` | Batch | $1.50 | $1.875 | $3.00 | $0.15 | $7.50 |
+| 模型                       | 模式     | 普通输入 | 缓存写 5m | 缓存写 1h | 缓存读 |   输出 |
+| -------------------------- | -------- | -------: | --------: | --------: | -----: | -----: |
+| `claude-sonnet-4-20250514` | Standard |    $3.00 |     $3.75 |     $6.00 |  $0.30 | $15.00 |
+| `claude-sonnet-4-20250514` | Batch    |    $1.50 |    $1.875 |     $3.00 |  $0.15 |  $7.50 |
 
 Batch 基准按官方 50% input/output 折扣及缓存 multiplier 叠加计算。历史 direct API 调用只有在 `billing_platform` 和生效区间可确认时才匹配这条规则。
 
@@ -223,12 +223,12 @@ Batch 基准按官方 50% input/output 折扣及缓存 multiplier 叠加计算�
 
 币种为 USD，以下为 Paid Tier 的促销价格，有效至 2026-12-31；官方已公布 2027-01-01 起价格翻倍，因此两段时间必须是两个 rate rules。[来源：Gemini Developer API pricing](https://ai.google.dev/gemini-api/docs/pricing)
 
-| 服务等级 | 输入 | 缓存读 | 输出 | 缓存存储/小时 |
-| --- | ---: | ---: | ---: | ---: |
-| Standard | $0.75 | $0.075 | $3.75 | $0.50 |
-| Batch | $0.375 | $0.0375 | $1.875 | $0.50 |
-| Flex | $0.375 | $0.0375 | $1.875 | $0.50 |
-| Priority | $1.35 | $0.135 | $6.75 | $0.50 |
+| 服务等级 |   输入 |  缓存读 |   输出 | 缓存存储/小时 |
+| -------- | -----: | ------: | -----: | ------------: |
+| Standard |  $0.75 |  $0.075 |  $3.75 |         $0.50 |
+| Batch    | $0.375 | $0.0375 | $1.875 |         $0.50 |
+| Flex     | $0.375 | $0.0375 | $1.875 |         $0.50 |
+| Priority |  $1.35 |  $0.135 |  $6.75 |         $0.50 |
 
 输出价格已经包含 thinking tokens，不能把 thinking token 再计一次。缓存存储的单位是每 1M tokens 每小时，第一阶段只统计 token 推理费用时必须把它标成未覆盖费用，而不是忽略后仍声称成本完整。
 
@@ -236,29 +236,29 @@ Batch 基准按官方 50% input/output 折扣及缓存 multiplier 叠加计算�
 
 币种为 USD。输入达到 200K 时，整个请求使用高上下文价格；该模型当前不支持 Batch。Priority Processing 是同一模型的服务等级，对输入、缓存读、输出和推理 token 都按 Standard 的 2 倍计价，缓存折扣先应用、再应用 2 倍系数。只有响应返回 `service_tier: "priority"` 才使用 Priority 价格。[来源：xAI Grok 4.5](https://docs.x.ai/developers/models/grok-4.5)、[xAI Priority Processing Pricing](https://docs.x.ai/developers/pricing#priority-processing-pricing)
 
-| 输入区间 | 服务等级 | 输入 | 缓存读 | 输出 |
-| --- | --- | ---: | ---: | ---: |
-| `< 200K` | Standard | $2.00 | $0.30 | $6.00 |
-| `< 200K` | Priority | $4.00 | $0.60 | $12.00 |
-| `>= 200K` | Standard | $4.00 | $0.60 | $12.00 |
-| `>= 200K` | Priority | $8.00 | $1.20 | $24.00 |
+| 输入区间  | 服务等级 |  输入 | 缓存读 |   输出 |
+| --------- | -------- | ----: | -----: | -----: |
+| `< 200K`  | Standard | $2.00 |  $0.30 |  $6.00 |
+| `< 200K`  | Priority | $4.00 |  $0.60 | $12.00 |
+| `>= 200K` | Standard | $4.00 |  $0.60 | $12.00 |
+| `>= 200K` | Priority | $8.00 |  $1.20 | $24.00 |
 
 ### Kimi K2.6
 
 币种为 USD。[来源：Kimi K2.6 pricing](https://platform.kimi.ai/docs/pricing/chat-k26)
 
-| 缓存命中输入 | 缓存未命中输入 | 输出 |
-| ---: | ---: | ---: |
-| $0.16 | $0.95 | $4.00 |
+| 缓存命中输入 | 缓存未命中输入 |  输出 |
+| -----------: | -------------: | ----: |
+|        $0.16 |          $0.95 | $4.00 |
 
 `kimi-k2.7-code` 在当前 Ash catalog 中走 Kimi Code subscription，不使用按量 API 价格。
 
 Kimi API 另有独立的高速模型 ID。下面的价格只用于未来明确采用 Kimi 按量 API 的调用，不能用于当前 subscription 接入。[来源：Kimi K2.7 Code pricing](https://platform.kimi.ai/docs/pricing/chat-k27-code)
 
-| 实际模型 | 缓存命中输入 | 缓存未命中输入 | 输出 |
-| --- | ---: | ---: | ---: |
-| `kimi-k2.7-code` | $0.19 | $0.95 | $4.00 |
-| `kimi-k2.7-code-highspeed` | $0.38 | $1.90 | $8.00 |
+| 实际模型                   | 缓存命中输入 | 缓存未命中输入 |  输出 |
+| -------------------------- | -----------: | -------------: | ----: |
+| `kimi-k2.7-code`           |        $0.19 |          $0.95 | $4.00 |
+| `kimi-k2.7-code-highspeed` |        $0.38 |          $1.90 | $8.00 |
 
 `kimi-k2.7-code-highspeed` 约为普通版 2 倍价格，但 rate selector 必须按实际模型 ID 匹配，不能实现成 `service_tier = fast` 的倍率规则。
 
@@ -266,30 +266,30 @@ Kimi API 另有独立的高速模型 ID。下面的价格只用于未来明确�
 
 币种为 USD。峰值时段是周一至周五 UTC 01:00–04:00 和 06:00–10:00，其余时间为谷值；时间边界按调用开始时间选择。[来源：DeepSeek Models & Pricing](https://api-docs.deepseek.com/quick_start/pricing/)
 
-| 时段 | 缓存命中输入 | 缓存未命中输入 | 输出 |
-| --- | ---: | ---: | ---: |
-| Peak | $0.044 | $1.32 | $3.96 |
-| Off-peak | $0.022 | $0.66 | $1.98 |
+| 时段     | 缓存命中输入 | 缓存未命中输入 |  输出 |
+| -------- | -----------: | -------------: | ----: |
+| Peak     |       $0.044 |          $1.32 | $3.96 |
+| Off-peak |       $0.022 |          $0.66 | $1.98 |
 
 ### Z.AI GLM-5.1
 
 币种为 USD。[来源：Z.AI pricing](https://docs.z.ai/guides/overview/pricing)
 
-| 输入 | 缓存读 | 输出 | 缓存存储 |
-| ---: | ---: | ---: | --- |
-| $1.40 | $0.26 | $4.40 | 限时免费 |
+|  输入 | 缓存读 |  输出 | 缓存存储 |
+| ----: | -----: | ----: | -------- |
+| $1.40 |  $0.26 | $4.40 | 限时免费 |
 
 “限时免费”不是零成本永久规则，必须作为带复核期限的 rate rule；期限不明时不能用于硬预算的长期上界。
 
 ## 为什么需要这些维度
 
-| 供应商规则示例 | 对 contract 的要求 |
-| --- | --- |
+| 供应商规则示例                                                                     | 对 contract 的要求                                 |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------- |
 | OpenAI 区分标准、Batch、Flex、Fast mode，短/长上下文、缓存读取、缓存写入和区域加价 | 记录实际服务等级、上下文区间、区域和缓存写入 token |
-| Anthropic 区分缓存读取、5 分钟与 1 小时缓存写入、Batch、Fast mode 和推理区域 | 缓存写入不能只保留一个合计数 |
-| xAI 的 Priority 只在响应确认后使用加速价格 | 同时保存请求等级和响应实际等级，按响应事实计价 |
-| Kimi HighSpeed 使用独立模型 ID | 服务等级和实际模型必须分开，不能只保存“是否加速” |
-| DeepSeek 公开价格区分缓存命中/未命中，并可按 UTC 峰谷时段变化 | 价格选择必须使用调用开始时间和缓存读取量 |
+| Anthropic 区分缓存读取、5 分钟与 1 小时缓存写入、Batch、Fast mode 和推理区域       | 缓存写入不能只保留一个合计数                       |
+| xAI 的 Priority 只在响应确认后使用加速价格                                         | 同时保存请求等级和响应实际等级，按响应事实计价     |
+| Kimi HighSpeed 使用独立模型 ID                                                     | 服务等级和实际模型必须分开，不能只保存“是否加速”   |
+| DeepSeek 公开价格区分缓存命中/未命中，并可按 UTC 峰谷时段变化                      | 价格选择必须使用调用开始时间和缓存读取量           |
 
 以上表格同时给出首版价目表的复核快照和必须支持的计价维度。运行时使用的数据仍属于具体 `RateCardRevision`，价格更新时由官方 fixture 验证；架构代码本身不写死这些数字。
 
@@ -345,11 +345,11 @@ flowchart TD
 
 预算有 token 与金额两类，彼此不替代：
 
-| 预算 | Owner | 语义 |
-| --- | --- | --- |
-| Goal token budget | Core/Goal | 限制当前 Goal 可使用的 token |
-| 金额软预算 | `ash-model-accounting` | 达到阈值后产生告警，不阻止调用 |
-| 金额硬预算 | `ash-model-accounting` | 调用前必须成功预留，否则拒绝调用 |
+| 预算              | Owner                  | 语义                             |
+| ----------------- | ---------------------- | -------------------------------- |
+| Goal token budget | Core/Goal              | 限制当前 Goal 可使用的 token     |
+| 金额软预算        | `ash-model-accounting` | 达到阈值后产生告警，不阻止调用   |
+| 金额硬预算        | `ash-model-accounting` | 调用前必须成功预留，否则拒绝调用 |
 
 金额预算支持 Thread、Project 和供应商账户作用域，以及一次性、每日或每月 UTC 周期。预算判断使用“已结算参考成本 + 活跃预留 + 本次预留”，并按预算作用域原子串行，避免并发调用同时穿透上限。
 
@@ -365,16 +365,16 @@ flowchart TD
 
 建议的稳定 App Server contract：
 
-| Method/resource | 语义 |
-| --- | --- |
-| `modelAccounting/summary/read` | 返回有界时间段内的 token、缓存命中、参考成本和完整度汇总 |
-| `modelAccounting/entries/list` | 按 cursor 分页返回调用明细与计价行 |
-| `modelAccounting/budgets/list` | 返回预算、已结算、活跃预留和告警状态 |
-| `modelAccounting/budget/put` | 以稳定 budget ID 创建或替换预算，按作用域串行 |
-| `modelAccounting/budget/remove` | 删除预算定义，不删除历史调用 |
-| `modelAccounting/export/start` | 使用 client-generated resource ID 流式导出 CSV 或 JSON |
-| `modelAccounting/export/stop` | 停止导出；response 返回后不再发送该 resource 的 notification |
-| `modelAccounting/changed` | 携带 revision，通知前端重新读取受影响摘要 |
+| Method/resource                 | 语义                                                         |
+| ------------------------------- | ------------------------------------------------------------ |
+| `modelAccounting/summary/read`  | 返回有界时间段内的 token、缓存命中、参考成本和完整度汇总     |
+| `modelAccounting/entries/list`  | 按 cursor 分页返回调用明细与计价行                           |
+| `modelAccounting/budgets/list`  | 返回预算、已结算、活跃预留和告警状态                         |
+| `modelAccounting/budget/put`    | 以稳定 budget ID 创建或替换预算，按作用域串行                |
+| `modelAccounting/budget/remove` | 删除预算定义，不删除历史调用                                 |
+| `modelAccounting/export/start`  | 使用 client-generated resource ID 流式导出 CSV 或 JSON       |
+| `modelAccounting/export/stop`   | 停止导出；response 返回后不再发送该 resource 的 notification |
+| `modelAccounting/changed`       | 携带 revision，通知前端重新读取受影响摘要                    |
 
 `summary/read` 返回 snapshot revision；adapter 在 snapshot 建立前先注册 `changed`，确保 snapshot 与 notification 之间没有缺口。不同 renderer 各自保存短生命周期的显示缓存，后端仍是唯一持久状态 owner。
 
@@ -457,17 +457,17 @@ src/platform/modelAccounting/browser/modelAccountingAppServerAdapter.ts
 
 ## 测试与验收
 
-| 层 | 必测内容 |
-| --- | --- |
-| 供应商 adapter | 缺失字段、缓存读取/写入拆分、实际模型、请求服务等级、实际计费服务等级及证据来源归一化 |
-| 价目表 | schema、摘要、来源、生效区间、规则不重叠、零匹配和多匹配 |
-| 计价器 | OpenAI Fast 降级、Google/xAI Priority、Kimi HighSpeed 模型、长上下文、区域、Anthropic 缓存 TTL/Batch、DeepSeek 峰谷 UTC 边界 |
-| 数值 | checked arithmetic、单位换算、聚合无浮点误差、溢出拒绝 |
-| Thread 回放 | 每次请求唯一 ID、重试与压缩独立计数、legacy 事件只保留 token |
-| 查询库 | 重复事件幂等、checkpoint 恢复、损坏重建、Thread 删除级联 |
-| 预算 | 同作用域并发预留、周期切换、结算竞争、崩溃后的 `NeedsReview` |
-| 协议 | method map、运行时 decoder、分页 cursor、snapshot/notification 无缺口、导出停止后无事件 |
-| 产品 | 桌面/TUI/CLI 对同一 fixture 展示相同 token、命中率、成本和完整度 |
+| 层             | 必测内容                                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 供应商 adapter | 缺失字段、缓存读取/写入拆分、实际模型、请求服务等级、实际计费服务等级及证据来源归一化                                        |
+| 价目表         | schema、摘要、来源、生效区间、规则不重叠、零匹配和多匹配                                                                     |
+| 计价器         | OpenAI Fast 降级、Google/xAI Priority、Kimi HighSpeed 模型、长上下文、区域、Anthropic 缓存 TTL/Batch、DeepSeek 峰谷 UTC 边界 |
+| 数值           | checked arithmetic、单位换算、聚合无浮点误差、溢出拒绝                                                                       |
+| Thread 回放    | 每次请求唯一 ID、重试与压缩独立计数、legacy 事件只保留 token                                                                 |
+| 查询库         | 重复事件幂等、checkpoint 恢复、损坏重建、Thread 删除级联                                                                     |
+| 预算           | 同作用域并发预留、周期切换、结算竞争、崩溃后的 `NeedsReview`                                                                 |
+| 协议           | method map、运行时 decoder、分页 cursor、snapshot/notification 无缺口、导出停止后无事件                                      |
+| 产品           | 桌面/TUI/CLI 对同一 fixture 展示相同 token、命中率、成本和完整度                                                             |
 
 价目表 fixture 必须记录官方来源和复核日期。CI 不联网抓取价格；价格更新由单独 review 修改数据包并运行全部计价 golden tests。
 

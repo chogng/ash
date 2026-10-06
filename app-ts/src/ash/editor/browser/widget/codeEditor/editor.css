@@ -120,7 +120,8 @@
 	pointer-events: none;
 }
 
-.stanza-editor .view-overlays > div, .stanza-editor .margin-view-overlays > div {
+.stanza-editor .view-overlays > div,
+.stanza-editor .margin-view-overlays > div {
 	position: absolute;
 	width: 100%;
 }

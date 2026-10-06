@@ -69,7 +69,7 @@ export class IndexTree<T> extends Disposable {
 	private readonly _onDidChangeFocus = this._register(new Emitter<IndexTreeEvent<T>>());
 	private readonly _onDidChangeSelection = this._register(new Emitter<IndexTreeSelectionEvent<T>>());
 	private readonly _onDidChangeCollapseState = this._register(new Emitter<IndexTreeCollapseStateChangeEvent<T>>());
-	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent } | undefined;
+	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent; } | undefined;
 
 	readonly onPointer: Event<IndexTreePointerEvent<T>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<IndexTreePointerEvent<T>> = this._onDidDoubleClick.event;

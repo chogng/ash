@@ -54,7 +54,7 @@ test("Remote connection IPC rejects credentials, extra fields, invalid paths, an
 	assert.throws(() => connect.validate({ name: "a".repeat(65) }), /maximum encoded length/);
 });
 
-function route(routes: readonly { readonly channel: string; readonly validate: (value: unknown) => unknown; readonly invoke: (value: unknown) => unknown }[], channel: string) {
+function route(routes: readonly { readonly channel: string; readonly validate: (value: unknown) => unknown; readonly invoke: (value: unknown) => unknown; }[], channel: string) {
 	return routes.find(candidate => candidate.channel === channel)!;
 }
 
@@ -65,6 +65,6 @@ function testService(): IRemoteConnectionService {
 		save: async connection => connection,
 		update: async (_originalName, connection) => connection,
 		remove: async () => undefined,
-		connect: async () => {},
+		connect: async () => { },
 	};
 }

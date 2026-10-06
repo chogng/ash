@@ -17,8 +17,8 @@ interface DictationCallbacks {
 }
 
 type ActiveDictation = DictationCallbacks & (
-	{ readonly source: 'local' } |
-	{ readonly source: 'cloud'; readonly resourceId: string; finalDelivered: boolean }
+	{ readonly source: 'local'; } |
+	{ readonly source: 'cloud'; readonly resourceId: string; finalDelivered: boolean; }
 );
 
 export class AppServerDictationService extends Disposable implements IDictationService {
@@ -78,7 +78,7 @@ export class AppServerDictationService extends Disposable implements IDictationS
 	}
 	public async prepareModel(): Promise<void> {
 		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);
-		if (backend.type === 'local') { await this.localTranscription.prepareModel(backend.modelId, () => {}).completed; }
+		if (backend.type === 'local') { await this.localTranscription.prepareModel(backend.modelId, () => { }).completed; }
 	}
 	public async cancelPreparation(): Promise<void> {
 		const backend = dictationBackend(validateConfigurationSnapshot(await this.configuration.read()).document);

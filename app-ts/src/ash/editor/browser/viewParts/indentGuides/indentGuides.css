@@ -9,7 +9,8 @@
 .stanza-editor .stanza-editor-indent-guide {
 	top: 0;
 	height: 100%;
-	border-left: var(--ash-stroke-thickness) solid var(--ash-editor-indent-guide-background1);
+	border-left: var(--ash-stroke-thickness) solid
+		var(--ash-editor-indent-guide-background1);
 }
 
 .stanza-editor .stanza-editor-indent-guide.active {

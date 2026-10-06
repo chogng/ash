@@ -895,7 +895,7 @@ function keyEventData() {
 
 function keyboardEvent(
 	overrides: Partial<KeyboardEvent> = {},
-): { event: KeyboardEvent; readonly prevented: boolean } {
+): { event: KeyboardEvent; readonly prevented: boolean; } {
 	let prevented = false;
 	const event = {
 		key: "p",
@@ -912,8 +912,8 @@ function keyboardEvent(
 		preventDefault: () => {
 			prevented = true;
 		},
-		stopPropagation: () => {},
-		stopImmediatePropagation: () => {},
+		stopPropagation: () => { },
+		stopImmediatePropagation: () => { },
 		...overrides,
 	} as KeyboardEvent;
 	return {

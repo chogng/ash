@@ -2,24 +2,39 @@
 	background: var(--ash-activity-bar-background);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical > .ash-action-bar {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	> .ash-action-bar {
 	gap: var(--ash-spacing-size80);
 	align-items: center;
-	padding-top: calc(var(--ash-spacing-size80) / 2 - var(--ash-stroke-thickness));
+	padding-top: calc(
+		var(--ash-spacing-size80) / 2 - var(--ash-stroke-thickness)
+	);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical.ash-composite-bar-icon
+	> .ash-action-bar
+	> .ash-composite-bar-item {
 	width: 36px;
 	min-width: 36px;
 	height: 36px;
 	min-height: 36px;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::before {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item.checked::before {
 	display: none;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item::after {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item::after {
 	position: absolute;
 	top: var(--ash-spacing-size20);
 	left: 50%;
@@ -27,87 +42,158 @@
 	height: var(--ash-spacing-size320);
 	z-index: 0;
 	border-radius: var(--ash-corner-radius-small);
-	content: '';
+	content: "";
 	pointer-events: none;
 	transform: translateX(-50%);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item:hover::after {
 	background: var(--ash-modern-activity-bar-item-hover-background);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item.checked::after {
 	background: var(--ash-modern-activity-bar-item-active-background);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item.checked {
 	color: var(--ash-modern-activity-bar-item-active-foreground);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item > .ash-composite-bar-action {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item
+	> .ash-composite-bar-action {
 	position: relative;
 	z-index: 1;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-global-composite-bar
+	.ash-action-view-item {
 	height: 36px;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button:hover,
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar .ash-action-view-item > button[aria-expanded='true'] {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-global-composite-bar
+	.ash-action-view-item
+	> button:hover,
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-global-composite-bar
+	.ash-action-view-item
+	> button[aria-expanded="true"] {
 	color: var(--ash-modern-activity-bar-item-active-foreground);
 	background: var(--ash-modern-activity-bar-item-hover-background);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar .ash-global-composite-bar > .ash-action-bar {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
+	.ash-global-composite-bar
+	> .ash-action-bar {
 	gap: var(--ash-spacing-size80);
-	padding-bottom: calc(var(--ash-spacing-size80) / 2 - var(--ash-stroke-thickness));
+	padding-bottom: calc(
+		var(--ash-spacing-size80) / 2 - var(--ash-stroke-thickness)
+	);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical > .ash-action-bar,
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar > .ash-action-bar {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-composite-bar-vertical
+	> .ash-action-bar,
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-global-composite-bar
+	> .ash-action-bar {
 	gap: var(--ash-spacing-size40);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item,
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar .ash-action-view-item {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-composite-bar-vertical.ash-composite-bar-icon
+	> .ash-action-bar
+	> .ash-composite-bar-item,
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-global-composite-bar
+	.ash-action-view-item {
 	height: 28px;
 	min-height: 28px;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-composite-bar-vertical.ash-composite-bar-icon
+	> .ash-action-bar
+	> .ash-composite-bar-item {
 	width: 28px;
 	min-width: 28px;
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-composite-bar-vertical .ash-composite-bar-item::after {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item::after {
 	width: var(--ash-spacing-size240);
 	height: var(--ash-spacing-size240);
 }
 
-.ash-workbench.modern-ui .ash-workbench-activitybar.compact .ash-global-composite-bar .ash-action-view-item > button {
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar.compact
+	.ash-global-composite-bar
+	.ash-action-view-item
+	> button {
 	width: 24px;
 	height: 24px;
 	padding: var(--ash-spacing-size40);
 }
 
-.ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
+.ash-workbench.modern-ui:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item:hover::after {
 	background: transparent;
 	outline: var(--ash-stroke-thickness) dashed var(--ash-focus-border);
 }
 
-.ash-workbench.modern-ui:is([data-color-scheme='high-contrast-dark'], [data-color-scheme='high-contrast-light']) .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
+.ash-workbench.modern-ui:is(
+		[data-color-scheme="high-contrast-dark"],
+		[data-color-scheme="high-contrast-light"]
+	)
+	.ash-workbench-activitybar
+	.ash-composite-bar-vertical
+	.ash-composite-bar-item.checked::after {
 	background: transparent;
 	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 @media (forced-colors: active) {
-	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item:hover::after {
+	.ash-workbench.modern-ui
+		.ash-workbench-activitybar
+		.ash-composite-bar-vertical
+		.ash-composite-bar-item:hover::after {
 		background: transparent;
 		outline: var(--ash-stroke-thickness) dashed Highlight;
 	}
 
-	.ash-workbench.modern-ui .ash-workbench-activitybar .ash-composite-bar-vertical .ash-composite-bar-item.checked::after {
+	.ash-workbench.modern-ui
+		.ash-workbench-activitybar
+		.ash-composite-bar-vertical
+		.ash-composite-bar-item.checked::after {
 		background: transparent;
 		outline: var(--ash-stroke-thickness) solid Highlight;
 	}

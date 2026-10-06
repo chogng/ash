@@ -55,7 +55,7 @@ class Connection extends Disposable {
 			connection = (async () => {
 				const cdp = await page.context().newCDPSession(page);
 				const { targetInfo } = await cdp.send('Target.getTargetInfo');
-				const viewId = (targetInfo as typeof targetInfo & { browserViewId: unknown }).browserViewId;
+				const viewId = (targetInfo as typeof targetInfo & { browserViewId: unknown; }).browserViewId;
 				if (typeof viewId !== 'string') { throw new Error('BrowserCDPIdentityUnavailable'); }
 				page.once('close', () => { void cdp.detach().catch(() => { }); });
 				return { page, cdp, id: viewId };
@@ -96,9 +96,11 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			const png = options.includeScreenshot ? await page.screenshot({ type: 'png' }) : undefined;
 			signal.throwIfAborted();
 			if (png && png.byteLength > MAX_SCREENSHOT_BYTES) { throw new Error('BrowserScreenshotTooLarge'); }
-			return { targetId: pageId, url: page.url(), title: await page.title(), loading: false,
+			return {
+				targetId: pageId, url: page.url(), title: await page.title(), loading: false,
 				...(accessibilityTree === undefined ? {} : { accessibilityTree }), ...(domSnapshot === undefined ? {} : { domSnapshot }),
-				...(png === undefined ? {} : { screenshot: { mimeType: 'image/png' as const, dataBase64: png.toString('base64'), decodedLength: png.byteLength } }) };
+				...(png === undefined ? {} : { screenshot: { mimeType: 'image/png' as const, dataBase64: png.toString('base64'), decodedLength: png.byteLength } })
+			};
 		});
 	}
 	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction): Promise<void> {
@@ -108,10 +110,12 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 				case 'click': {
 					const objectId = await resolveNode(cdp, action.target.nodeId);
 					try {
-						const location = await cdp.send('Runtime.callFunctionOn', { objectId,
-							functionDeclaration: "function () { this.scrollIntoView({ block: 'center', inline: 'center' }); const rect = this.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; }", returnByValue: true });
+						const location = await cdp.send('Runtime.callFunctionOn', {
+							objectId,
+							functionDeclaration: "function () { this.scrollIntoView({ block: 'center', inline: 'center' }); const rect = this.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; }", returnByValue: true
+						});
 						signal.throwIfAborted();
-						const { x, y } = location.result.value as { x: number; y: number };
+						const { x, y } = location.result.value as { x: number; y: number; };
 						if (!Number.isFinite(x) || !Number.isFinite(y)) { throw new Error('BrowserNodeUnavailable'); }
 						await page.mouse.click(x, y);
 					} finally { await cdp.send('Runtime.releaseObject', { objectId }).catch(() => { }); }
@@ -121,8 +125,10 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 					if (action.target.type === 'element') {
 						const objectId = await resolveNode(cdp, action.target.target.nodeId);
 						try {
-							const focused = await cdp.send('Runtime.callFunctionOn', { objectId,
-								functionDeclaration: "function () { if (!this.isConnected || this.disabled || this.readOnly) return false; this.focus(); return this.getRootNode().activeElement === this; }", returnByValue: true });
+							const focused = await cdp.send('Runtime.callFunctionOn', {
+								objectId,
+								functionDeclaration: "function () { if (!this.isConnected || this.disabled || this.readOnly) return false; this.focus(); return this.getRootNode().activeElement === this; }", returnByValue: true
+							});
 							if (focused.exceptionDetails || focused.result.value !== true) { throw new Error('BrowserNodeNotEditable'); }
 						} finally { await cdp.send('Runtime.releaseObject', { objectId }).catch(() => { }); }
 					}

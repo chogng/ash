@@ -12,13 +12,13 @@
 
 Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的命令选择器。Skill 使用独立 `$name` selector，文件和 Plugin 上下文使用 `@`，三条入口不共享命名空间。
 
-| 用户看到或产品要做的事 | 正确抽象 | 谁决定内容 |
-| --- | --- | --- |
-| 输入 `/` 后出现快速选择面板 | Slash Launcher | 产品选择并组合列表 |
-| TUI 展示可执行 `/command` | Slash Command list | `ash-code` 的命令 adapter |
-| TUI/Desktop 展示可调用 Skills | `$name` Skill selector | 客户端的 Skill adapter |
-| app 展示文件或 Plugin 上下文 | `@` context selector | 对应上下文来源 |
-| 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner |
+| 用户看到或产品要做的事         | 正确抽象                 | 谁决定内容                |
+| ------------------------------ | ------------------------ | ------------------------- |
+| 输入 `/` 后出现快速选择面板    | Slash Launcher           | 产品选择并组合列表        |
+| TUI 展示可执行 `/command`      | Slash Command list       | `ash-code` 的命令 adapter |
+| TUI/Desktop 展示可调用 Skills  | `$name` Skill selector   | 客户端的 Skill adapter    |
+| app 展示文件或 Plugin 上下文   | `@` context selector     | 对应上下文来源            |
+| 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner       |
 
 App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个客户端再与自身真正可执行的本地命令合并。TUI 的 `/` 补全和 `/help` 同时投影这份合并目录，因此本地与服务端命令使用同一名称、描述和参数声明。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源匹配和面板选择属于 Slash Launcher；行布局、DOM、WGPU、Ratatui 绘制和平台输入事件仍留在各呈现层。默认服务端快照包含 `/compact`，允许保留可选的行内提示。
 
@@ -39,11 +39,11 @@ App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个�
 表格描述的是迁移前的现有 Slash Command 接入，不能据此把 Skill projection 当作 Launcher 的长期
 抽象。
 
-| 现有 Surface | Catalog 来源 | Core/adapter | Renderer owner |
-| --- | --- | --- | --- |
-| TUI | built-ins + initialize snapshot | 直接使用 `ash-slash-commands` | Ratatui popup |
-| Codex Rust UI | local `/model` + initialize snapshot | 直接使用 `ash-slash-commands`；该端另拥有 model picker | WGPU composer interaction rows |
-| Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + action binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
+| 现有 Surface  | Catalog 来源                            | Core/adapter                                                  | Renderer owner                                                              |
+| ------------- | --------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| TUI           | built-ins + initialize snapshot         | 直接使用 `ash-slash-commands`                                 | Ratatui popup                                                               |
+| Codex Rust UI | local `/model` + initialize snapshot    | 直接使用 `ash-slash-commands`；该端另拥有 model picker        | WGPU composer interaction rows                                              |
+| Desktop Chat  | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + action binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
 TUI 与 Desktop 的 Skill adapter 独立消费 `skills/list` metadata，并为 `$name` 候选绑定 exact pinned `SkillRef`；Skill 不再生成 command definition，也不参与 Slash Command 冲突检查。
 
@@ -81,33 +81,33 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 
 ### 1. 参数模式
 
-| 模式 (`argument_mode`) | 含义 | 行为表现 |
-| :--- | :--- | :--- |
-| `none` | 不接受参数 | 命令后若输入额外参数，整行不作为该命令执行 |
-| `required` | 必须提供参数 | 提交时若缺少参数则提示错误或拒绝执行 |
-| `optional` | 参数可选 | 无参数时触发默认行为或打开选择面板，有参数时直接应用 |
+| 模式 (`argument_mode`) | 含义         | 行为表现                                             |
+| :--------------------- | :----------- | :--------------------------------------------------- |
+| `none`                 | 不接受参数   | 命令后若输入额外参数，整行不作为该命令执行           |
+| `required`             | 必须提供参数 | 提交时若缺少参数则提示错误或拒绝执行                 |
+| `optional`             | 参数可选     | 无参数时触发默认行为或打开选择面板，有参数时直接应用 |
 
 ### 2. 占位虚提示与内置命令规范
 
 `SlashCommandDefinition` 的 `argument_hint`（Rust `Option<String>`，TypeScript `argumentHint?: string`）定义参数占位符。占位符遵循统一规范，使用尖括号包裹小写描述（如 `<path>`）：
 
-| 命令 | 模式 | 虚提示 (`argument_hint`) | 说明 |
-| :--- | :--- | :--- | :--- |
-| `/cd` | `required` | `<path>` | 切换工作目录 |
-| `/add-dir` | `required` | `<path>` | 添加工作区目录 |
-| `/export` | `required` | `<path>` | 导出当前对话内容 |
-| `/model` | `optional` | `<model> [effort]` | 切换模型与思考量级别（如 `openai/o3-mini high` 或 `clear`），无参数打开选择器 |
-| `/theme` | `optional` | `<theme>` | 切换主题，带参数直接设置，无参数打开选择器 |
-| `/permission` | `optional` | `<manual\|auto\|bypassPermissions>` | 选择下一轮权限，无参数打开菜单；替代 `/policy` |
-| `/guardian` | `optional` | `[setup]` | 打开项目审核资料管理；`/guardian setup` 使用同一入口 |
-| `/resume` | `required` | `<session-id>` | 恢复指定会话 |
-| `/rewind` | `required` | `<checkpoint>` | 回退到指定检查点 |
-| `/branch` | `optional` | `<name>` | 从当前节点复制分支并立即切换；不启动模型 |
-| `/fork` | `optional` | `<prompt>` | 复制当前对话到独立 session，留在当前会话；有 prompt 时后台执行，无 prompt 时等待输入；结果不自动回传 |
-| `/new` | `optional` | `<prompt>` | 新建会话，可选初始提示语 |
-| `/compact` | `optional` | 无 | 压缩上下文，由服务端声明 |
-| `/clear` | `none` | 无 | 清空当前对话，不接受参数 |
-| `/help` | `none` | 无 | 显示帮助信息，不接受参数 |
+| 命令          | 模式       | 虚提示 (`argument_hint`)            | 说明                                                                                                 |
+| :------------ | :--------- | :---------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| `/cd`         | `required` | `<path>`                            | 切换工作目录                                                                                         |
+| `/add-dir`    | `required` | `<path>`                            | 添加工作区目录                                                                                       |
+| `/export`     | `required` | `<path>`                            | 导出当前对话内容                                                                                     |
+| `/model`      | `optional` | `<model> [effort]`                  | 切换模型与思考量级别（如 `openai/o3-mini high` 或 `clear`），无参数打开选择器                        |
+| `/theme`      | `optional` | `<theme>`                           | 切换主题，带参数直接设置，无参数打开选择器                                                           |
+| `/permission` | `optional` | `<manual\|auto\|bypassPermissions>` | 选择下一轮权限，无参数打开菜单；替代 `/policy`                                                       |
+| `/guardian`   | `optional` | `[setup]`                           | 打开项目审核资料管理；`/guardian setup` 使用同一入口                                                 |
+| `/resume`     | `required` | `<session-id>`                      | 恢复指定会话                                                                                         |
+| `/rewind`     | `required` | `<checkpoint>`                      | 回退到指定检查点                                                                                     |
+| `/branch`     | `optional` | `<name>`                            | 从当前节点复制分支并立即切换；不启动模型                                                             |
+| `/fork`       | `optional` | `<prompt>`                          | 复制当前对话到独立 session，留在当前会话；有 prompt 时后台执行，无 prompt 时等待输入；结果不自动回传 |
+| `/new`        | `optional` | `<prompt>`                          | 新建会话，可选初始提示语                                                                             |
+| `/compact`    | `optional` | 无                                  | 压缩上下文，由服务端声明                                                                             |
+| `/clear`      | `none`     | 无                                  | 清空当前对话，不接受参数                                                                             |
+| `/help`       | `none`     | 无                                  | 显示帮助信息，不接受参数                                                                             |
 
 ### 3. 虚提示交互生命周期
 
@@ -120,13 +120,13 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
 [`Core Plugins`](../ash-rs/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
 
-| 入口 | 用户操作 | 安装相关操作 |
-| --- | --- | --- |
-| `/marketplace` | 搜索所有来源、查看包内容与版本、安装、更新、卸载 | 使用同一个 Core Plugins 服务 |
-| `/skills` | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用 | 在 TUI 中用 `/marketplace` 搜索可安装 Skill |
-| `/lsp` | 查看当前语言与服务器、配置启用状态和路径、检查运行故障 | “查找服务器”打开 Marketplace 的语言筛选 |
-| `/plugins` | Ash Code 管理已安装插件的启停；Workbench 打开 Marketplace 的插件分类 | 包更新和卸载由 Marketplace 提供 |
-| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command | Marketplace 提供对应 capability 筛选 |
+| 入口                | 用户操作                                                             | 安装相关操作                                |
+| ------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
+| `/marketplace`      | 搜索所有来源、查看包内容与版本、安装、更新、卸载                     | 使用同一个 Core Plugins 服务                |
+| `/skills`           | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用               | 在 TUI 中用 `/marketplace` 搜索可安装 Skill |
+| `/lsp`              | 查看当前语言与服务器、配置启用状态和路径、检查运行故障               | “查找服务器”打开 Marketplace 的语言筛选     |
+| `/plugins`          | Ash Code 管理已安装插件的启停；Workbench 打开 Marketplace 的插件分类 | 包更新和卸载由 Marketplace 提供             |
+| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command       | Marketplace 提供对应 capability 筛选        |
 
 - package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
 - 领域页面可直接提供安装按钮，但必须调用同一个包管理服务，并明确显示实际安装的整个包。

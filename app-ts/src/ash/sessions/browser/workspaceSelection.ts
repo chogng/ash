@@ -20,8 +20,8 @@ function selectionFromResource(resource: URI): SessionExecutionTarget {
 	return { type: 'ssh', host: authority.host, root: getRemoteWorkspacePath(resource) };
 }
 
-export function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[]): Promise<SessionExecutionTarget | undefined> {
-	const picker = quickInput.createQuickPick<{ label: string; description: string; target: SessionExecutionTarget }>();
+export function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> {
+	const picker = quickInput.createQuickPick<{ label: string; description: string; target: SessionExecutionTarget; }>();
 	picker.items = folders.map(folder => ({ label: folder.label, description: folder.target.type === 'ssh' ? `${folder.target.host}:${folder.target.root}` : folder.target.root, target: folder.target }));
 	picker.placeholder = localize('sessions.selectExecutionFolder', 'Select a folder for this session');
 	picker.ariaLabel = picker.placeholder;

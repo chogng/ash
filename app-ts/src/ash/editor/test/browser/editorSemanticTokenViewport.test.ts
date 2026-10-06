@@ -242,7 +242,7 @@ function renderedTokenLines(root: ParentNode): string[] {
 	));
 }
 
-function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null }[] {
+function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null; }[] {
 	return [...root.querySelectorAll<HTMLElement>(".stanza-editor-token")].map(element => ({
 		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
 		text: element.textContent,

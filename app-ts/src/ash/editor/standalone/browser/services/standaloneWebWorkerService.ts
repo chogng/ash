@@ -56,7 +56,7 @@ export class StandaloneWebWorkerService<T extends object> extends Disposable {
 			this._register(client.onDidFail(() => this.clearModels()));
 			return client;
 		});
-		void this.ready.catch(() => {});
+		void this.ready.catch(() => { });
 		this._register(toDisposable(() => this.clearModels()));
 	}
 

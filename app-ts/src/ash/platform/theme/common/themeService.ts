@@ -37,7 +37,7 @@ export interface ISemanticTokenThemeRule {
 export interface IColorTheme {
 	readonly tokenColors?: readonly {
 		readonly scopes: readonly string[];
-		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string };
+		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string; };
 	}[];
 	readonly semanticHighlighting?: boolean;
 	readonly semanticTokenRules?: readonly ISemanticTokenThemeRule[];

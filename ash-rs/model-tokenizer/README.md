@@ -10,28 +10,28 @@
 
 ## 1. 边界与公共契约
 
-| Symbol | 职责 | 接入义务 |
-| --- | --- | --- |
-| `PinnedTokenizerAsset` | 绑定本地路径、上游 revision 和文件 SHA-256 | 宿主必须先安装资产并提供不可变 revision |
-| `LocalTokenizerBinding` | 将 tokenizer、chat template 和模板全局变量绑定到完整 `ModelRef` | provider 与 model 任一变化都必须建立独立绑定 |
-| `LocalTokenizerRegistry::register` | 读取、验摘要、解析 tokenizer 并编译模板 | 启动或配置 safe point 调用；失败不得注册半成品 |
-| `LocalTokenizerService` | provider adapter 使用的只读计数端口 | 必须返回随两份资产变化的 source revision |
-| `LocalTokenizationOutcome` | 区分已计数和不支持的请求 | 图片等没有 processor 的输入必须明确返回 unsupported |
-| `ManagedLocalTokenizerService` | 首次使用时后台发现/下载、持久化摘要清单并维护内存 LRU | 网络失败不得阻塞模型调用或每次请求重复下载 |
-| `TokenizerAssetDiscoverer` | 宿主按完整 `ModelRef` 提供固定版本的资产清单 | 返回前解析不可变 revision 并计算内容摘要 |
+| Symbol                             | 职责                                                            | 接入义务                                            |
+| ---------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| `PinnedTokenizerAsset`             | 绑定本地路径、上游 revision 和文件 SHA-256                      | 宿主必须先安装资产并提供不可变 revision             |
+| `LocalTokenizerBinding`            | 将 tokenizer、chat template 和模板全局变量绑定到完整 `ModelRef` | provider 与 model 任一变化都必须建立独立绑定        |
+| `LocalTokenizerRegistry::register` | 读取、验摘要、解析 tokenizer 并编译模板                         | 启动或配置 safe point 调用；失败不得注册半成品      |
+| `LocalTokenizerService`            | provider adapter 使用的只读计数端口                             | 必须返回随两份资产变化的 source revision            |
+| `LocalTokenizationOutcome`         | 区分已计数和不支持的请求                                        | 图片等没有 processor 的输入必须明确返回 unsupported |
+| `ManagedLocalTokenizerService`     | 首次使用时后台发现/下载、持久化摘要清单并维护内存 LRU           | 网络失败不得阻塞模型调用或每次请求重复下载          |
+| `TokenizerAssetDiscoverer`         | 宿主按完整 `ModelRef` 提供固定版本的资产清单                    | 返回前解析不可变 revision 并计算内容摘要            |
 
 `hf-chat-template` 负责 tokenizer 配置中的 special token、Python/Jinja 兼容方法、`tojson`、
 `strftime_now` 与 named template 语义；Ash 仍拥有 revision/SHA、磁盘目录、后台准备和 LRU。
 
 ## 2. 内部接口地图与调用路径
 
-| Symbol | 可见性 | 单一职责 | 漂移信号 |
-| --- | --- | --- | --- |
-| `LoadedTokenizer::load` | private | 校验并一次性加载 tokenizer 与模板配置 | 网络、Hub branch 解析或 provider 名称判断进入此处 |
-| `verified_asset` | private | SHA-256 校验后才返回字节 | 只信路径或只记录 revision 而不验内容 |
-| `request::render_input` | private | canonical request 转换为 HF 风格 `messages`/`tools` | provider wire JSON 或预算策略进入转换层 |
-| `LoadedTokenizer::count` | private | 模板渲染后用 `add_special_tokens=false` 编码 | 跳过 chat template，只对正文编码 |
-| `source_revision` | private | 组合两份 revision 与摘要 | tokenizer 或 template 任一变化后仍复用旧来源版本 |
+| Symbol                   | 可见性  | 单一职责                                            | 漂移信号                                          |
+| ------------------------ | ------- | --------------------------------------------------- | ------------------------------------------------- |
+| `LoadedTokenizer::load`  | private | 校验并一次性加载 tokenizer 与模板配置               | 网络、Hub branch 解析或 provider 名称判断进入此处 |
+| `verified_asset`         | private | SHA-256 校验后才返回字节                            | 只信路径或只记录 revision 而不验内容              |
+| `request::render_input`  | private | canonical request 转换为 HF 风格 `messages`/`tools` | provider wire JSON 或预算策略进入转换层           |
+| `LoadedTokenizer::count` | private | 模板渲染后用 `add_special_tokens=false` 编码        | 跳过 chat template，只对正文编码                  |
+| `source_revision`        | private | 组合两份 revision 与摘要                            | tokenizer 或 template 任一变化后仍复用旧来源版本  |
 
 ```text
 exact ModelRef + complete ModelRequest

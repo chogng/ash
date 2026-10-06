@@ -15,9 +15,9 @@ export interface PluginPackageView {
 }
 
 export type PluginPermission =
-	| { readonly type: 'directory'; readonly access: 'read' | 'write' }
-	| { readonly type: 'process'; readonly executable: string }
-	| { readonly type: 'network'; readonly hosts: readonly string[] };
+	| { readonly type: 'directory'; readonly access: 'read' | 'write'; }
+	| { readonly type: 'process'; readonly executable: string; }
+	| { readonly type: 'network'; readonly hosts: readonly string[]; };
 
 export interface PluginInstallation {
 	readonly id: string;

@@ -122,7 +122,7 @@ export class CustomLineHeightData {
 		readonly startLineNumber: number,
 		readonly endLineNumber: number,
 		readonly lineHeight: number,
-	) {}
+	) { }
 
 	static fromDecorations(decorations: IModelDecoration[], coordinatesConverter: ICoordinatesConverter, configuration: IEditorConfiguration): CustomLineHeightData[] {
 		const baseHeight = configuration.options.get(EditorOption.lineHeight);

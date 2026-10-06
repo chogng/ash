@@ -15,7 +15,7 @@ export class PageCoordinates {
 	constructor(
 		public readonly x: number,
 		public readonly y: number,
-	) {}
+	) { }
 
 	toClientCoordinates(targetWindow: Window): ClientCoordinates {
 		return new ClientCoordinates(this.x - targetWindow.scrollX, this.y - targetWindow.scrollY);
@@ -29,7 +29,7 @@ export class ClientCoordinates {
 	constructor(
 		public readonly clientX: number,
 		public readonly clientY: number,
-	) {}
+	) { }
 
 	toPageCoordinates(targetWindow: Window): PageCoordinates {
 		return new PageCoordinates(this.clientX + targetWindow.scrollX, this.clientY + targetWindow.scrollY);
@@ -45,7 +45,7 @@ export class EditorPagePosition {
 		public readonly y: number,
 		public readonly width: number,
 		public readonly height: number,
-	) {}
+	) { }
 }
 
 /** Coordinates transformed into the editor's unscaled layout space. */
@@ -55,7 +55,7 @@ export class CoordinatesRelativeToEditor {
 	constructor(
 		public readonly x: number,
 		public readonly y: number,
-	) {}
+	) { }
 }
 
 export function createEditorPagePosition(editorViewDomNode: HTMLElement): EditorPagePosition {
@@ -104,7 +104,7 @@ export class EditorMouseEvent extends StandardMouseEvent {
 
 /** Creates disposable editor-coordinate mouse listeners. */
 export class EditorMouseEventFactory {
-	constructor(private readonly editorViewDomNode: HTMLElement) {}
+	constructor(private readonly editorViewDomNode: HTMLElement) { }
 
 	onContextMenu(target: HTMLElement, callback: (event: EditorMouseEvent) => void): IDisposable {
 		return this.listen<MouseEvent>(target, 'contextmenu', callback);
@@ -143,7 +143,7 @@ export class EditorMouseEventFactory {
 
 /** Creates disposable editor-coordinate pointer listeners. */
 export class EditorPointerEventFactory {
-	constructor(private readonly editorViewDomNode: HTMLElement) {}
+	constructor(private readonly editorViewDomNode: HTMLElement) { }
 
 	onPointerUp(target: HTMLElement, callback: (event: EditorMouseEvent) => void): IDisposable {
 		return this.listen(target, 'pointerup', callback);
@@ -292,7 +292,7 @@ export class EditorDom extends Disposable {
 		contentDomNode.setHeight(height);
 	}
 
-	private requireHandles(): { readonly domNode: FastDomNode<HTMLDivElement>; readonly contentDomNode: FastDomNode<HTMLDivElement> } {
+	private requireHandles(): { readonly domNode: FastDomNode<HTMLDivElement>; readonly contentDomNode: FastDomNode<HTMLDivElement>; } {
 		if (!this.domNodeHandle || !this.contentDomNodeHandle) throw new ReferenceError('Editor DOM has not been attached');
 		return { domNode: this.domNodeHandle, contentDomNode: this.contentDomNodeHandle };
 	}
@@ -310,7 +310,7 @@ export class DynamicCssRules implements IDisposable {
 	private readonly garbageCollectionScheduler = new RunOnceScheduler(() => this.garbageCollect(), 1_000);
 	private disposed = false;
 
-	constructor(private readonly editor: ICodeEditor) {}
+	constructor(private readonly editor: ICodeEditor) { }
 
 	dispose(): void {
 		if (this.disposed) return;

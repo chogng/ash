@@ -80,18 +80,18 @@ TextMate token scope rules.
 
 Supported declarative fields are deliberately narrower than a VS Code extension host:
 
-| Contribution | Current state | Owner |
-| --- | --- | --- |
-| `languages`, file/first-line associations, `language-configuration.json` | ✅ loaded and registered | Editor language registry/configuration |
-| `snippets` | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor | Editor language completion / extension template registry |
-| `grammars` | ✅ loaded through Rust resource APIs and TextMate catalog snapshots | Workbench TextMate service |
-| `embeddedLanguages`, `tokenTypes`, bracket scope metadata | ✅ validated, transported, and projected to Stanza token language/type/bracket metadata | TextMate adapter |
-| `iconThemes` | Loaded from package resources; supports font and SVG/PNG file icons, light variants, and `workbench.iconTheme` selection | Workbench theme service |
-| `themes` | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection | Extension/theme/TextMate services |
-| `debuggers` | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API | Extension registry / Debug service |
-| `configurationDefaults`, `semanticTokenScopes` | 尚未接入；bundled manifest 中的字段不会被投影 | 后续领域 adapter |
-| extension JavaScript | 声明式扫描不执行；可信 `browser` 包由独立 Worker 路径执行 | TS 扩展宿主 |
-| Marketplace LSP executable | 由已验证 catalog 映射并运行 | App Server / LSP manager |
+| Contribution                                                             | Current state                                                                                                            | Owner                                                    |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `languages`, file/first-line associations, `language-configuration.json` | ✅ loaded and registered                                                                                                 | Editor language registry/configuration                   |
+| `snippets`                                                               | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor            | Editor language completion / extension template registry |
+| `grammars`                                                               | ✅ loaded through Rust resource APIs and TextMate catalog snapshots                                                      | Workbench TextMate service                               |
+| `embeddedLanguages`, `tokenTypes`, bracket scope metadata                | ✅ validated, transported, and projected to Stanza token language/type/bracket metadata                                  | TextMate adapter                                         |
+| `iconThemes`                                                             | Loaded from package resources; supports font and SVG/PNG file icons, light variants, and `workbench.iconTheme` selection | Workbench theme service                                  |
+| `themes`                                                                 | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection                            | Extension/theme/TextMate services                        |
+| `debuggers`                                                              | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API                                                | Extension registry / Debug service                       |
+| `configurationDefaults`, `semanticTokenScopes`                           | 尚未接入；bundled manifest 中的字段不会被投影                                                                            | 后续领域 adapter                                         |
+| extension JavaScript                                                     | 声明式扫描不执行；可信 `browser` 包由独立 Worker 路径执行                                                                | TS 扩展宿主                                              |
+| Marketplace LSP executable                                               | 由已验证 catalog 映射并运行                                                                                              | App Server / LSP manager                                 |
 
 User packages are read from the host-selected profile extension root, but the current Editor
 Extension system has no registry, download, enable/disable, signature, or grant authority. Built-in

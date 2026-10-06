@@ -7,18 +7,49 @@
     "languages": [
       {
         "id": "json",
-        "aliases": ["JSON", "json"],
-        "extensions": [".json", ".jsonl"],
-        "filenames": ["composer.lock", ".watchmanconfig"],
-        "mimetypes": ["application/json", "application/manifest+json"],
+        "aliases": [
+          "JSON",
+          "json"
+        ],
+        "extensions": [
+          ".json",
+          ".jsonl"
+        ],
+        "filenames": [
+          "composer.lock",
+          ".watchmanconfig"
+        ],
+        "mimetypes": [
+          "application/json",
+          "application/manifest+json"
+        ],
         "configuration": "./language-configuration.json"
       },
       {
         "id": "jsonc",
-        "aliases": ["JSON with Comments"],
-        "extensions": [".jsonc", ".eslintrc", ".eslintrc.json", ".jsfmtrc", ".jshintrc", ".swcrc", ".hintrc", ".babelrc"],
-        "filenames": ["babel.config.json", "bun.lock", ".babelrc.json", ".ember-cli", "typedoc.json"],
-        "filenamePatterns": ["**/.github/hooks/*.json"],
+        "aliases": [
+          "JSON with Comments"
+        ],
+        "extensions": [
+          ".jsonc",
+          ".eslintrc",
+          ".eslintrc.json",
+          ".jsfmtrc",
+          ".jshintrc",
+          ".swcrc",
+          ".hintrc",
+          ".babelrc"
+        ],
+        "filenames": [
+          "babel.config.json",
+          "bun.lock",
+          ".babelrc.json",
+          ".ember-cli",
+          "typedoc.json"
+        ],
+        "filenamePatterns": [
+          "**/.github/hooks/*.json"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],

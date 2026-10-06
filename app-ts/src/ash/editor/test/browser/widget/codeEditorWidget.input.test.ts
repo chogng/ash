@@ -48,13 +48,13 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
+	setAccessibilitySupport: () => { },
+	alert: () => { },
+	status: () => { },
 };
 
 function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: number, clientX: number, clientY: number): Event {
-	const event = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons, clientX, clientY }) as unknown as Event & { pointerId: number };
+	const event = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons, clientX, clientY }) as unknown as Event & { pointerId: number; };
 	Object.defineProperty(event, 'pointerId', { configurable: true, value: pointerId });
 	return event;
 }
@@ -69,7 +69,7 @@ test('code editor reports vertical scroll changes for linked editor views', () =
 	using model = new TextModel(Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n'));
 	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
 	editor.layout({ width: 320, height: 80 });
-	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }[] = [];
+	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }[] = [];
 	using listener = editor.onDidScrollChange(event => changes.push(event));
 	editor.setScrollTop(80, ScrollType.Immediate);
 	assert.ok(changes.some(change => change.scrollTopChanged));
@@ -265,7 +265,7 @@ test('setSelection accepts ranges, preserves selection direction, and reports it
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editor = createTestCodeEditor({ container, model });
 	const api: ICodeEditor = editor;
-	const events: { selection: string; source: string }[] = [];
+	const events: { selection: string; source: string; }[] = [];
 	using listener = api.onDidChangeCursorSelection(event => events.push({ selection: event.selection.toString(), source: event.source }));
 	api.setSelections([new Selection(1, 1, 1, 1), new Selection(2, 1, 2, 1)]);
 	events.length = 0;
@@ -426,7 +426,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		public selectionEnd = 0;
 		public selectionBounds: DOMRect | undefined;
 		public controlBounds: DOMRect | undefined;
-		public updateCharacterBounds(): void {}
+		public updateCharacterBounds(): void { }
 		public updateText(start: number, end: number, text: string): void {
 			this.text = `${this.text.slice(0, start)}${text}${this.text.slice(end)}`;
 		}
@@ -460,7 +460,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.ok(editContext.nativeContext.updateSelectionBounds);
 	assert.ok((editContext.nativeContext as TestEditContext).selectionBounds);
 	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
-	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown };
+	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown; };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 	editContext.focus();
 	let receivedKeyDown: IKeyboardEvent | undefined;
@@ -736,7 +736,7 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }));
 	assert.equal(editor.getPosition()?.lineNumber, 2);
 
-	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {}) => editor.controller.dispatchMouse({
+	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean; } = {}) => editor.controller.dispatchMouse({
 		position,
 		mouseColumn: position.column,
 		revealType: NavigationCommandRevealType.None,
@@ -894,7 +894,8 @@ class TestClipboardData {
 	private readonly values = new Map<string, string>();
 
 	get types(): string[] { return [...this.values.keys()]; }
-	getData(type: string): string { return this.values.get(type) ?? '';
+	getData(type: string): string {
+		return this.values.get(type) ?? '';
 	}
 	setData(type: string, value: string): void { this.values.set(type, value); }
 }

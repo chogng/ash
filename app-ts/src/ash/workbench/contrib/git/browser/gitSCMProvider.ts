@@ -49,7 +49,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	public readonly onDidChangeResources = this.changeEmitter.event;
 	private readonly decorationChangeEmitter = this._register(new Emitter<readonly URI[]>());
 	public readonly onDidChange = this.decorationChangeEmitter.event;
-	private readonly decorations = new Map<string, { readonly resource: URI; readonly data: IDecorationData }>();
+	private readonly decorations = new Map<string, { readonly resource: URI; readonly data: IDecorationData; }>();
 	public readonly id: string;
 	public readonly providerId = 'git';
 	public readonly label: string;

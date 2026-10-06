@@ -198,7 +198,7 @@ class SelectionEditCommand extends ReplaceCommand {
 }
 
 class GraphemeOvertypeCommand implements ICommand {
-	constructor(private readonly selection: Selection, private readonly text: string) {}
+	constructor(private readonly selection: Selection, private readonly text: string) { }
 
 	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		let range: Range = this.selection;

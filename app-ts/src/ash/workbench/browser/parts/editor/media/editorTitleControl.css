@@ -1,47 +1,51 @@
 .ash-editor-title-control {
-  position: relative;
-  min-width: 0;
-  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
-  flex: 0 0 calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
+	position: relative;
+	min-width: 0;
+	height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
+	flex: 0 0 calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
 }
 
 .ash-editor-title-control.ash-editor-title-with-breadcrumbs {
-  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px);
-  flex-basis: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px);
+	height: calc(
+		var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px
+	);
+	flex-basis: calc(
+		var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1) + 22px
+	);
 }
 
 .ash-editor-tabs-and-actions {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
+	position: relative;
+	display: flex;
+	min-width: 0;
+	height: calc(var(--ash-pane-title-height) * var(--ash-editor-tab-rows, 1));
 }
 
 .ash-editor-tabs-and-actions.multiple {
-  background: var(--ash-editor-group-header-tabs-background);
+	background: var(--ash-editor-group-header-tabs-background);
 }
 
 .ash-editor-title-control::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 1px;
-  background: var(--ash-border);
-  content: "";
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: 1px;
+	background: var(--ash-border);
+	content: "";
 }
 
 .ash-editor-title-actions {
-  display: flex;
-  height: var(--ash-pane-title-height);
-  flex: 0 0 auto;
-  align-items: center;
-  margin-left: auto;
-  padding: 0 4px;
+	display: flex;
+	height: var(--ash-pane-title-height);
+	flex: 0 0 auto;
+	align-items: center;
+	margin-left: auto;
+	padding: 0 4px;
 }
 .ash-editor-group-lock-indicator {
-  align-self: center;
-  flex: 0 0 auto;
-  padding: 0 6px;
-  color: var(--ash-description-foreground);
+	align-self: center;
+	flex: 0 0 auto;
+	padding: 0 6px;
+	color: var(--ash-description-foreground);
 }

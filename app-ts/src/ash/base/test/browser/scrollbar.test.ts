@@ -255,10 +255,10 @@ test("Scrollbar owns two-axis state, elements, visibility, and ARIA", () => {
 
 test("Scrollbar normalizes wheel input and propagates at boundaries", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const positions: Array<{ readonly left: number; readonly top: number }> = [];
+	const positions: Array<{ readonly left: number; readonly top: number; }> = [];
 	const changes: Array<{
-		readonly previous: { readonly left: number; readonly top: number };
-		readonly current: { readonly left: number; readonly top: number };
+		readonly previous: { readonly left: number; readonly top: number; };
+		readonly current: { readonly left: number; readonly top: number; };
 	}> = [];
 	const scrollbar = new Scrollbar(dom.window.document.body, {
 		onScroll: (position) => positions.push(position),
@@ -371,7 +371,7 @@ test("Scrollbar supports keyboard, track clicks, and thumb dragging", () => {
 		left: 190,
 		width: 10,
 		height: 100,
-		toJSON() {},
+		toJSON() { },
 	});
 
 	vertical.dispatchEvent(new dom.window.KeyboardEvent("keydown", {

@@ -2,15 +2,15 @@
 
 以下是 2026-09-26 核对的公开套餐名称。第三列表示 Ash 能否读取当前账户返回的套餐名称；第四列比较订阅连接和对应的开发者按量 API 是否按相同规则扣费。✅ 表示相同，❌ 表示不同。上游返回的名称不一定能区分表中每个细分档次。
 
-| 服务 | 套餐 | Ash 可读取当前套餐 | 和按量 API 一样计费？ |
-| --- | --- | --- | --- |
-| [ChatGPT 个人](https://chatgpt.com/pricing/) | Free、Go、Plus、Pro 5×、Pro 20× | ✅ | ❌ |
-| [ChatGPT 组织](https://openai.com/business/pricing/) | Business Standard、Business Premium、Enterprise、Edu | ✅ | ❌ |
-| [Kimi Code 新套餐](https://www.kimi.com/code/docs/en/kimi-code/models.html) | Go、Plus、Pro、Max、Ultra | 部分具备 | ❌ |
-| [Kimi Code 旧套餐](https://www.kimi.com/help/membership/membership-pricing) | Andante、Moderato、Allegretto、Allegro | 部分具备 | ❌ |
-| [Super Grok](https://x.ai/news/grok-bot-more-plans) | Free、SuperGrok、SuperGrok Plus、SuperGrok Heavy | ✅ | ❌ |
-| [BigModel Coding Plan](https://zcode.z.ai/cn) | Lite、Pro、Max | ❌ | ❌ |
-| [Z.AI Coding Plan](https://zcode.z.ai/en) | Lite、Pro、Max | ❌ | ❌ |
+| 服务                                                                        | 套餐                                                 | Ash 可读取当前套餐 | 和按量 API 一样计费？ |
+| --------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------ | --------------------- |
+| [ChatGPT 个人](https://chatgpt.com/pricing/)                                | Free、Go、Plus、Pro 5×、Pro 20×                      | ✅                 | ❌                    |
+| [ChatGPT 组织](https://openai.com/business/pricing/)                        | Business Standard、Business Premium、Enterprise、Edu | ✅                 | ❌                    |
+| [Kimi Code 新套餐](https://www.kimi.com/code/docs/en/kimi-code/models.html) | Go、Plus、Pro、Max、Ultra                            | 部分具备           | ❌                    |
+| [Kimi Code 旧套餐](https://www.kimi.com/help/membership/membership-pricing) | Andante、Moderato、Allegretto、Allegro               | 部分具备           | ❌                    |
+| [Super Grok](https://x.ai/news/grok-bot-more-plans)                         | Free、SuperGrok、SuperGrok Plus、SuperGrok Heavy     | ✅                 | ❌                    |
+| [BigModel Coding Plan](https://zcode.z.ai/cn)                               | Lite、Pro、Max                                       | ❌                 | ❌                    |
+| [Z.AI Coding Plan](https://zcode.z.ai/en)                                   | Lite、Pro、Max                                       | ❌                 | ❌                    |
 
 ChatGPT 的 Student 是学生优惠，不是独立套餐。Kimi 仅在 `/coding/v1/me` 返回 `user_level_name` 时显示该名称；Ash 不根据其他字段推断具体档次。
 

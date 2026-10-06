@@ -14,16 +14,16 @@
 
 ## 1. 对话与组织
 
-| 概念 | 回答的问题 | 是否独立持久化 |
-| --- | --- | --- |
-| `Project` | 用户长期保存哪些根目录、Session 和共同工作入口？ | 是；拥有名称、描述、多根目录表、弱关联和生命周期 |
-| `Team` | 哪些长期 Agent 身份作为成员跨任务协作？ | 目标设计；拥有成员关系、协调者和关联任务，当前尚未实现 |
-| `TeamRunId` | 哪次工作使用了哪个 Team 与成员快照？ | 目标设计；持久关联一次工作与所属 Session，不保存执行状态机 |
-| `AgentId` | 哪个长期 Agent 身份执行这些分支？ | 是；一个身份可绑定多个任务的 Thread，删除任务后保留 |
-| `session_id` | 哪些 Thread 属于同一棵会话树？ | 作为 Thread 字段保存，不单独建立事实源 |
-| `Thread` | 当前操作的是哪条具体对话分支？ | 是；拥有自己的事件、顺序、恢复和执行状态 |
-| `Turn` | Thread 中一次输入与执行周期是什么？ | 随 Thread 保存 |
-| `Item` | Turn 中具体消息、工具调用或结果是什么？ | 随 Thread 保存 |
+| 概念         | 回答的问题                                       | 是否独立持久化                                             |
+| ------------ | ------------------------------------------------ | ---------------------------------------------------------- |
+| `Project`    | 用户长期保存哪些根目录、Session 和共同工作入口？ | 是；拥有名称、描述、多根目录表、弱关联和生命周期           |
+| `Team`       | 哪些长期 Agent 身份作为成员跨任务协作？          | 目标设计；拥有成员关系、协调者和关联任务，当前尚未实现     |
+| `TeamRunId`  | 哪次工作使用了哪个 Team 与成员快照？             | 目标设计；持久关联一次工作与所属 Session，不保存执行状态机 |
+| `AgentId`    | 哪个长期 Agent 身份执行这些分支？                | 是；一个身份可绑定多个任务的 Thread，删除任务后保留        |
+| `session_id` | 哪些 Thread 属于同一棵会话树？                   | 作为 Thread 字段保存，不单独建立事实源                     |
+| `Thread`     | 当前操作的是哪条具体对话分支？                   | 是；拥有自己的事件、顺序、恢复和执行状态                   |
+| `Turn`       | Thread 中一次输入与执行周期是什么？              | 随 Thread 保存                                             |
+| `Item`       | Turn 中具体消息、工具调用或结果是什么？          | 随 Thread 保存                                             |
 
 基本关系：
 
@@ -59,11 +59,11 @@ Agent 身份、任务分组和执行分支分别表达。普通 fork、消息恢
 
 Project 在后端表示长期多根工作中心，但它不是目录、Workspace、权限主体或跨 Session 协调器。它当前关联：
 
-| 关联内容 | 负责什么 | 不负责什么 |
-| --- | --- | --- |
-| 根目录表 | 保存 Environment + Dir 的稳定引用、显示名称、用途和可选仓库摘要 | 授予文件、命令、配置或 Hook 权限 |
-| Session tree | 让用户长期查找和归类独立 Agent 方向 | 改变 Session/Thread 身份、取消或上下文 |
-Project 可以关联同一 Environment 中的多个根，也可以关联本地和远程等不同 Environment 的根。每个 Session 明确选择自己的 Environment 和目录授权；Project 不会把多个 Session 自动解释成一次协作，也不能让一次工具调用隐式跨越执行位置。
+| 关联内容                                                                                                                                                                                                                            | 负责什么                                                        | 不负责什么                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------- |
+| 根目录表                                                                                                                                                                                                                            | 保存 Environment + Dir 的稳定引用、显示名称、用途和可选仓库摘要 | 授予文件、命令、配置或 Hook 权限       |
+| Session tree                                                                                                                                                                                                                        | 让用户长期查找和归类独立 Agent 方向                             | 改变 Session/Thread 身份、取消或上下文 |
+| Project 可以关联同一 Environment 中的多个根，也可以关联本地和远程等不同 Environment 的根。每个 Session 明确选择自己的 Environment 和目录授权；Project 不会把多个 Session 自动解释成一次协作，也不能让一次工具调用隐式跨越执行位置。 |
 
 受信 host 只能把 Session 已有目录授权中的精确 `DirId` 加入 Project，路径和 Environment 由 host 重建，客户端不能提交路径冒充根。这个动作只写 Project 目录表，不创建、恢复或修改 Grant。Session 创建或扩大工作范围时仍需选择 Project 根目录表的明确子集并为每个根取得独立 Grant；实际执行绑定选中根的 `DirId`、权限、配置来源和不可变 baseline。Project 后续增加、删除或重新排序根，不会静默改变已运行 Session 或工作尝试。
 
@@ -74,12 +74,12 @@ Project 可以关联同一 Environment 中的多个根，也可以关联本地�
 前端可以拥有稳定的 `ISession`，这不等于后端要把 `session_id` 扩成第二套持久化实体。两层关系
 应当明确写成：
 
-| 后端事实 | 前端产品对象 | 作用 |
-| --- | --- | --- |
-| `session_id` + `Session { title, status, threads }` | `ISession` | 让列表、标题、状态和多个 Chat 有稳定对象可用 |
-| `Thread` | `IChat` | 表示一条可恢复、可执行的具体对话分支 |
-| `session/changed` | provider 的失效信号 | 重新读取 Session；它不是事件流，也没有 Session sequence |
-| `session/thread/update` + Thread sequence | Chat 的增量更新 | 只推进对应 Thread，不推进 Session |
+| 后端事实                                            | 前端产品对象        | 作用                                                    |
+| --------------------------------------------------- | ------------------- | ------------------------------------------------------- |
+| `session_id` + `Session { title, status, threads }` | `ISession`          | 让列表、标题、状态和多个 Chat 有稳定对象可用            |
+| `Thread`                                            | `IChat`             | 表示一条可恢复、可执行的具体对话分支                    |
+| `session/changed`                                   | provider 的失效信号 | 重新读取 Session；它不是事件流，也没有 Session sequence |
+| `session/thread/update` + Thread sequence           | Chat 的增量更新     | 只推进对应 Thread，不推进 Session                       |
 
 这里借鉴 VS Code Sessions 的职责边界，而不是照搬它的后端模型：provider 负责把 App Server
 协议转成前端 `ISession / IChat`；management service 负责列表、草稿和操作；window sessions
@@ -111,14 +111,14 @@ Turn overrides?
 effective context = Thread defaults + Turn overrides
 ```
 
-| 概念 | 负责什么 | 不负责什么 |
-| --- | --- | --- |
-| `Environment` / `Env` | 本机、远端或隔离环境的执行与文件系统位置 | 项目组织、会话树身份 |
-| working scope | 某次执行的 `cwd`、可访问目录和有效授权 | 独立身份与持久生命周期 |
-| `cwd` | 相对路径解析起点 | 权限、项目根、主目录 |
-| `Dir` | `EnvId + canonical path` 的目录身份与边界 | 是否获权、具备哪些 Permission |
-| `Path` | 在环境中定位资源 | 跨环境身份与授权 |
-| `Repo` / `Worktree` | Git 仓库与检出关系 | 会话或目录权限 |
+| 概念                  | 负责什么                                  | 不负责什么                    |
+| --------------------- | ----------------------------------------- | ----------------------------- |
+| `Environment` / `Env` | 本机、远端或隔离环境的执行与文件系统位置  | 项目组织、会话树身份          |
+| working scope         | 某次执行的 `cwd`、可访问目录和有效授权    | 独立身份与持久生命周期        |
+| `cwd`                 | 相对路径解析起点                          | 权限、项目根、主目录          |
+| `Dir`                 | `EnvId + canonical path` 的目录身份与边界 | 是否获权、具备哪些 Permission |
+| `Path`                | 在环境中定位资源                          | 跨环境身份与授权              |
+| `Repo` / `Worktree`   | Git 仓库与检出关系                        | 会话或目录权限                |
 
 工作范围是一组执行参数，不应为了换掉 Workspace 而再造一个同样沉重的
 `WorkingScopeService` 或持久表。只有跨公开边界传递这组值时，才使用 `WorkingScope` 或
@@ -144,12 +144,12 @@ Project 根目录表与 Workspace 都可能展示多个文件夹，但生命周�
 
 ## 4. 安全模型
 
-| 概念 | 语义 | 例子 |
-| --- | --- | --- |
-| `Permission` | 可授予的动作种类 | `ReadFiles`、`WriteFiles`、`ExecuteCommands` |
-| `Grant` | 主体在明确范围内获得的一组 Permission，并带来源和撤销生命周期 | Session tree S 对目录 D 可读写 |
-| `ApprovalRequest` | 当前缺少 Grant 时，向用户请求一次授权或创建明确规则的交互 | 请求允许本次网络动作 |
-| `AuthorizationDecision` | 对一次具体动作的 `allow` 或 `deny(reason)` 结果 | `Result<Authorization, PermissionDenied>` |
+| 概念                    | 语义                                                          | 例子                                         |
+| ----------------------- | ------------------------------------------------------------- | -------------------------------------------- |
+| `Permission`            | 可授予的动作种类                                              | `ReadFiles`、`WriteFiles`、`ExecuteCommands` |
+| `Grant`                 | 主体在明确范围内获得的一组 Permission，并带来源和撤销生命周期 | Session tree S 对目录 D 可读写               |
+| `ApprovalRequest`       | 当前缺少 Grant 时，向用户请求一次授权或创建明确规则的交互     | 请求允许本次网络动作                         |
+| `AuthorizationDecision` | 对一次具体动作的 `allow` 或 `deny(reason)` 结果               | `Result<Authorization, PermissionDenied>`    |
 
 `Permit` 不作为领域类型或持久对象。允许分支可以携带一个只供当前操作立即消费的
 `Authorization`，用于绑定主体、目录、Permission 和撤销租约；它不是新的 Grant，也不能保存后
@@ -163,13 +163,13 @@ Project 根目录表与 Workspace 都可能展示多个文件夹，但生命周�
 
 先判断作用域和歧义，再决定写全称还是短词：
 
-| 场景 | 推荐 | 避免 |
-| --- | --- | --- |
-| 跨模块公开类型 | `AuthorizationDecision`、`DirPermissionsService` | `AuthResult`、`PermSvc` |
-| 目录模块内公开动作 | `add_dir`、`remove_dir` | `add_additional_directory` |
-| `Dirs` 或 `DirGrants` 的私有方法 | `add`、`remove`、`list` | 重复接收者已经表达的领域词 |
-| 局部集合 | `dirs`、`grants` | `additional_directories`、`permission_grant_items` |
-| 稳定领域缩写 | `Env`、`Dir`、`cwd`、`id` | 随意的 `cfg`、`ctx`、`auth` |
+| 场景                             | 推荐                                             | 避免                                               |
+| -------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| 跨模块公开类型                   | `AuthorizationDecision`、`DirPermissionsService` | `AuthResult`、`PermSvc`                            |
+| 目录模块内公开动作               | `add_dir`、`remove_dir`                          | `add_additional_directory`                         |
+| `Dirs` 或 `DirGrants` 的私有方法 | `add`、`remove`、`list`                          | 重复接收者已经表达的领域词                         |
+| 局部集合                         | `dirs`、`grants`                                 | `additional_directories`、`permission_grant_items` |
+| 稳定领域缩写                     | `Env`、`Dir`、`cwd`、`id`                        | 随意的 `cfg`、`ctx`、`auth`                        |
 
 `snake_case` 的 `_` 只分隔真实单词。`add_dir` 是动词加对象，需要 `_`；`dirs` 是一个词，不需要。
 公开类型要在脱离文件上下文后仍然清楚；局部变量则使用最短且不歧义的名字。

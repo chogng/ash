@@ -432,7 +432,7 @@ function numberSetting(title: string, description: string, minimum: number, maxi
 	return { valueType: "number", title, description, minimum, maximum } as const;
 }
 
-function selectSetting<T extends string>(title: string, description: string, options: readonly { readonly value: T; readonly label: string }[]) {
+function selectSetting<T extends string>(title: string, description: string, options: readonly { readonly value: T; readonly label: string; }[]) {
 	return { valueType: "select", title, description, options } as const;
 }
 

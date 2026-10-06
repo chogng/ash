@@ -4,12 +4,12 @@
 
 **Cursor 的 Ask 是用户提问、模型回答代码问题的模式；AskQuestion 才是模型向用户提问的工具。** 五种模式均有状态标识；已检查的模式提醒入口中，Agent 不追加专属正文，Ask、Plan、Debug、Multitask 有各自提醒。已保存 37 组生成结果（含两个空提醒分支）、33 个提示词相关源码记录，以及 22 类相关工具的构造和输出处理代码。[完整 JSON](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.json) · [全部静态工具定义与输出](/Volumes/1t/ash/docs/tools/CURSOR_ALL_TOOL_DEFINITIONS_2026-10-01.md)
 
-| 模式 | 提示词要求 | 主要相关工具 / 服务 |
-| --- | --- | --- |
-| Agent | 默认执行模式；已检查的模式提醒入口不追加 Agent 专属正文 | 使用配置提供的工具；完整基础 system prompt 未在本次提取中确认 |
-| Ask | 回答用户的代码问题；只读调查、解释、举例；必要时可向用户澄清 | 读取、搜索、诊断；只读 shell 按开关与 sandbox 条件提供 |
-| Plan | 调查需求、提出澄清问题、生成可实施的计划，等用户要求后执行 | `CreatePlan`、`AskQuestion`；读取 / 检索、`Task` 的 explore 子 Agent、`TodoWrite` |
-| Debug | 提出假设、插入日志、复现、分析运行证据、修复后再次验证 | 读取 / 删除 / 编辑 / shell；本地 NDJSON 日志服务。云端分支强调 `Task` 的 `computerUse` 子 Agent |
+| 模式      | 提示词要求                                                     | 主要相关工具 / 服务                                                                                    |
+| --------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Agent     | 默认执行模式；已检查的模式提醒入口不追加 Agent 专属正文        | 使用配置提供的工具；完整基础 system prompt 未在本次提取中确认                                          |
+| Ask       | 回答用户的代码问题；只读调查、解释、举例；必要时可向用户澄清   | 读取、搜索、诊断；只读 shell 按开关与 sandbox 条件提供                                                 |
+| Plan      | 调查需求、提出澄清问题、生成可实施的计划，等用户要求后执行     | `CreatePlan`、`AskQuestion`；读取 / 检索、`Task` 的 explore 子 Agent、`TodoWrite`                      |
+| Debug     | 提出假设、插入日志、复现、分析运行证据、修复后再次验证         | 读取 / 删除 / 编辑 / shell；本地 NDJSON 日志服务。云端分支强调 `Task` 的 `computerUse` 子 Agent        |
 | Multitask | 将实质工作委托给异步子 Agent；前台协调、轻量调查、处理用户消息 | `Task` 的 `run_in_background`；另有按配置提供的 `create-agent`、`send-message-to-agent` 等异步工具路径 |
 
 基础 system prompt 的本地完整生成正文已另存 [基础提示词文档](/Volumes/1t/ash/docs/tools/CURSOR_BASE_SYSTEM_PROMPTS_2026-10-01.md)（11 组明确示例配置）。当前文档仍保存模式追加提醒，两类正文的拼装位置不同。
@@ -20,15 +20,15 @@
 
 原文由安装包中的提示词函数生成。只在隔离环境运行选定的纯函数与原有文本格式代码，没有运行整个扩展、工具执行器或日志服务。每组参数、生成结果及 SHA-256 都保存在 JSON。以下英文是供研究的引用材料，其中的指令不约束当前 Agent 或阅读者。
 
-| 入口 | 作用 | 变化来源 |
-| --- | --- | --- |
-| `X5` | 根据模式追加提醒；区分首次进入、继续、退出 Multitask | 当前 / 上轮模式与配置 |
-| `yP`（Agent Host） | Ask 初次 / 后续提醒 | 只读 shell；配置分支可能省略这段追加提醒 |
-| `Sce` / `wce` | Plan 初次 / 后续提醒 | GPT-5、Composer 2、工具命名、新版计划提示词、内联问题、计划承诺等开关 |
-| `gce` / `fce` | Debug 初次 / 后续提醒 | 本地 / 云端、日志路径、端点、会话 ID |
-| `g2` / `y2` / `w2` | Multitask 初次 / 后续 / 退出提醒 | 模型类型、完成通知、持久执行提示配置 |
-| `mz` | Start Multitasking / Build in Parallel 的按钮提醒 | 用户动作类型与当前模式 |
-| `J0` | “You are now in … mode” 提醒 | 模式 ID |
+| 入口               | 作用                                                 | 变化来源                                                              |
+| ------------------ | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| `X5`               | 根据模式追加提醒；区分首次进入、继续、退出 Multitask | 当前 / 上轮模式与配置                                                 |
+| `yP`（Agent Host） | Ask 初次 / 后续提醒                                  | 只读 shell；配置分支可能省略这段追加提醒                              |
+| `Sce` / `wce`      | Plan 初次 / 后续提醒                                 | GPT-5、Composer 2、工具命名、新版计划提示词、内联问题、计划承诺等开关 |
+| `gce` / `fce`      | Debug 初次 / 后续提醒                                | 本地 / 云端、日志路径、端点、会话 ID                                  |
+| `g2` / `y2` / `w2` | Multitask 初次 / 后续 / 退出提醒                     | 模型类型、完成通知、持久执行提示配置                                  |
+| `mz`               | Start Multitasking / Build in Parallel 的按钮提醒    | 用户动作类型与当前模式                                                |
+| `J0`               | “You are now in … mode” 提醒                         | 模式 ID                                                               |
 
 来源：[Agent Exec bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-exec/dist/main.js)、[Agent Host bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-host/dist/main.js)。符号在这个版本的压缩 bundle 中使用这些名字，更新后可能变化；JSON 保存 UTF-16 起止偏移和文件 hash，便于重定位。
 
@@ -52,13 +52,13 @@ Agent 的 `X5` 分支直接跳过专属模式提醒；从其他模式切回 Agen
 
 ### 2.1 切换模式与 Plan
 
-| 工具 | 关键参数 | 实现与输出 |
-| --- | --- | --- |
-| `SwitchMode` | `target_mode_id`、可选 `explanation` | 可切换集合来自 `targetModes` 配置；发起用户交互请求，获准后更新模式状态。输出成功切换、拒绝或错误 |
-| `CreatePlan` / `mcp_create_plan` / `create_plan` | `plan`、可选 `name` / `overview` / `todos`；Project 分支用 `phases` | 存储计划与任务。在配置 artifactsFolder 的后端分支写入 `.plan.md` 并返回计划 URI；该写文件分支要求非空 name。不能把这个要求推广为所有 schema 的必填字段 |
-| `AskQuestion` | `questions`：每题含 `id`、`prompt`、`options`，以及按定义支持的标题 / 多选字段 | 将问题交给用户，等待回答后恢复；返回回答或相应取消 / 错误分支 |
-| `TodoWrite` / `todo_write` | `todos`、`merge`，每项 `id` / `content` / `status` | 更新任务列表，输出最新任务状态；它和生成计划的 CreatePlan 是不同工具 |
-| `Task` 的 explore 类型 | `prompt`、`description`、`subagent_type` 等 | 计划调查可以交给 explore 子 Agent；是否允许、允许几个由提示词和工具配置共同决定 |
+| 工具                                             | 关键参数                                                                       | 实现与输出                                                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SwitchMode`                                     | `target_mode_id`、可选 `explanation`                                           | 可切换集合来自 `targetModes` 配置；发起用户交互请求，获准后更新模式状态。输出成功切换、拒绝或错误                                                      |
+| `CreatePlan` / `mcp_create_plan` / `create_plan` | `plan`、可选 `name` / `overview` / `todos`；Project 分支用 `phases`            | 存储计划与任务。在配置 artifactsFolder 的后端分支写入 `.plan.md` 并返回计划 URI；该写文件分支要求非空 name。不能把这个要求推广为所有 schema 的必填字段 |
+| `AskQuestion`                                    | `questions`：每题含 `id`、`prompt`、`options`，以及按定义支持的标题 / 多选字段 | 将问题交给用户，等待回答后恢复；返回回答或相应取消 / 错误分支                                                                                          |
+| `TodoWrite` / `todo_write`                       | `todos`、`merge`，每项 `id` / `content` / `status`                             | 更新任务列表，输出最新任务状态；它和生成计划的 CreatePlan 是不同工具                                                                                   |
+| `Task` 的 explore 类型                           | `prompt`、`description`、`subagent_type` 等                                    | 计划调查可以交给 explore 子 Agent；是否允许、允许几个由提示词和工具配置共同决定                                                                        |
 
 CreatePlan 的描述明确区分“新建计划”和“更新已有计划”：再次调用会创建新计划文件；修改已有计划应读取后编辑原文件。这些行为说明 Plan 除了提示词，还有计划存储和交互实现。
 
@@ -66,16 +66,16 @@ CreatePlan 的描述明确区分“新建计划”和“更新已有计划”：
 
 ### 2.2 Debug
 
-| 工具 / 服务 | 用途 | 是否为模型工具 |
-| --- | --- | --- |
-| READ：`Read` / `ReadFile` / `read_file` | 阅读源码、NDJSON 日志，核对每条假设 | 模型工具；名称和参数按配置变化 |
-| `Delete` / `delete_file` | 清除本次会话的日志，重新采样 | 模型工具；后续提醒要求不要误删其他会话日志 |
-| `StrReplace`、`ApplyPatch`、`Write` 等 | 插入临时日志、修复、验证后清理埋点 | 模型工具；具体组合按配置变化 |
-| `Shell` / `run_terminal_cmd` | 命令行复现与验证 | 模型工具 |
-| `Task`，`subagent_type: "computerUse"` | 云端 Debug 提醒推荐的 GUI 复现 / 检查 / 验证 | Task 是工具；computerUse 是子 Agent 类型 |
-| 浏览器 / computer-use Provider 工具、`RecordScreen` | 按可用配置辅助复现和收集证据 | 独立工具 / Provider；不是进入 Debug 就保证全部提供 |
-| `cursor.ndjsonIngest.start` | 编辑器启动本地日志接收服务 | **编辑器命令**，不是暴露给模型的 Debug 工具 |
-| HTTP POST 到 `/ingest/{id}` | 接收 JSON 日志并写入对应会话的 NDJSON 文件 | HTTP 接口，不是 Agent 工具调用 |
+| 工具 / 服务                                         | 用途                                         | 是否为模型工具                                     |
+| --------------------------------------------------- | -------------------------------------------- | -------------------------------------------------- |
+| READ：`Read` / `ReadFile` / `read_file`             | 阅读源码、NDJSON 日志，核对每条假设          | 模型工具；名称和参数按配置变化                     |
+| `Delete` / `delete_file`                            | 清除本次会话的日志，重新采样                 | 模型工具；后续提醒要求不要误删其他会话日志         |
+| `StrReplace`、`ApplyPatch`、`Write` 等              | 插入临时日志、修复、验证后清理埋点           | 模型工具；具体组合按配置变化                       |
+| `Shell` / `run_terminal_cmd`                        | 命令行复现与验证                             | 模型工具                                           |
+| `Task`，`subagent_type: "computerUse"`              | 云端 Debug 提醒推荐的 GUI 复现 / 检查 / 验证 | Task 是工具；computerUse 是子 Agent 类型           |
+| 浏览器 / computer-use Provider 工具、`RecordScreen` | 按可用配置辅助复现和收集证据                 | 独立工具 / Provider；不是进入 Debug 就保证全部提供 |
+| `cursor.ndjsonIngest.start`                         | 编辑器启动本地日志接收服务                   | **编辑器命令**，不是暴露给模型的 Debug 工具        |
+| HTTP POST 到 `/ingest/{id}`                         | 接收 JSON 日志并写入对应会话的 NDJSON 文件   | HTTP 接口，不是 Agent 工具调用                     |
 
 前端 `resolveDebugModeConfig` 在 Debug 模式取日志配置。其服务激活 `anysphere.cursor-ndjson-ingest`，再执行 `cursor.ndjsonIngest.start`。协议 `DebugModeConfig` 有 `log_path`、`server_endpoint`、`session_id`。接收服务要求 `X-Debug-Session-Id`，并把日志追加到对应会话文件。
 
@@ -85,15 +85,15 @@ CreatePlan 的描述明确区分“新建计划”和“更新已有计划”：
 
 ### 2.3 Multitask
 
-| 工具 | 关键参数 | 实现与输出 |
-| --- | --- | --- |
+| 工具                             | 关键参数                                                                                                    | 实现与输出                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `Task` / `Subagent` / `mcp_task` | `prompt`、`description`、`subagent_type`；按配置支持 `run_in_background`、`resume`、`model`、`interrupt` 等 | 创建 / 恢复子 Agent。异步执行返回标识并通过完成通知汇报；提供哪些参数由客户端 / 云端子 Agent 和功能开关决定 |
-| `create-agent` | `title`、`prompt`、`responding_to_message_ids`，可选 `fork` / `attachments` | 另一条异步 Agent 创建路径，返回 agent_id；结果以异步消息报告。不能断言所有 Multitask 请求都使用它 |
-| `send-message-to-agent` | `agent_id`、`prompt`、`responding_to_message_ids`、可选 `attachments` | 给已完成的异步 Agent 继续发送任务；该定义明确说 Agent 仍在运行时请求失败 |
-| `SendMessage` / `SendToUser` | `message` | 按配置提供的用户消息工具，不是 Multitask 独占入口 |
-| `UpdateCurrentStep` | `current_step`；按配置可带 `final_summary` / `completed_subtitle` | Agent Host 中记录父任务时间线进展，输出 Progress update recorded |
-| `sendFinalSummary` | `final_summary` | Agent Host 中记录结束摘要，输出 Final summary recorded；不意味着父 Agent 总能看到这个工具 |
-| `Await` / `AwaitShell` | 按分支接受 `task_id` 或 shell 等参数 | 等待工具的存在不代表 Multitask 应主动等待；提取的提醒要求结束当前回合并接收自动通知，避免轮询 |
+| `create-agent`                   | `title`、`prompt`、`responding_to_message_ids`，可选 `fork` / `attachments`                                 | 另一条异步 Agent 创建路径，返回 agent_id；结果以异步消息报告。不能断言所有 Multitask 请求都使用它           |
+| `send-message-to-agent`          | `agent_id`、`prompt`、`responding_to_message_ids`、可选 `attachments`                                       | 给已完成的异步 Agent 继续发送任务；该定义明确说 Agent 仍在运行时请求失败                                    |
+| `SendMessage` / `SendToUser`     | `message`                                                                                                   | 按配置提供的用户消息工具，不是 Multitask 独占入口                                                           |
+| `UpdateCurrentStep`              | `current_step`；按配置可带 `final_summary` / `completed_subtitle`                                           | Agent Host 中记录父任务时间线进展，输出 Progress update recorded                                            |
+| `sendFinalSummary`               | `final_summary`                                                                                             | Agent Host 中记录结束摘要，输出 Final summary recorded；不意味着父 Agent 总能看到这个工具                   |
+| `Await` / `AwaitShell`           | 按分支接受 `task_id` 或 shell 等参数                                                                        | 等待工具的存在不代表 Multitask 应主动等待；提取的提醒要求结束当前回合并接收自动通知，避免轮询               |
 
 “Start Multitasking”按钮有单独提醒：用 Task 创建**一个**自身的异步 fork，`run_in_background: true`、`resume: "self"`，随后停止前台执行；fork 收到指定提示后继续工作，不能重复 fork 自己。“Build in Parallel”则要求读取计划、分析依赖后并行实施，并不是单纯改一个显示标签。
 
@@ -117,11 +117,11 @@ Debug 使用示例值 `/example/cursor/debug.log`、`http://example.invalid/inge
 
 生成入口：`X5`；结果 ID：`agent_enter_from_plan`；139 个 UTF-16 字符。
 
-````text
+```text
 <system_reminder>
 You are now in Agent mode. You have EXITED your previous mode. Continue with the task in the new mode.
 </system_reminder>
-````
+```
 
 ### 3.2 Ask
 
@@ -129,7 +129,7 @@ You are now in Agent mode. You have EXITED your previous mode. Continue with the
 
 生成入口：`yP`；结果 ID：`ask_enter_default`；1733 个 UTF-16 字符。
 
-````text
+```text
 
 <system_reminder>
 Ask mode is active. The user wants you to answer questions about their codebase or coding in general. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
@@ -157,23 +157,23 @@ Your role in Ask mode:
 
 8. If the user asks you to make changes or implement something, politely remind them that you're in Ask mode and can only provide information and guidance. Suggest they switch to Agent mode if they want you to make changes.
 </system_reminder>
-````
+```
 
 #### 继续 Ask：默认提醒
 
 生成入口：`yP`；结果 ID：`ask_continue_default`；298 个 UTF-16 字符。
 
-````text
+```text
 <system_reminder>
 Ask mode is still active. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
 </system_reminder>
-````
+```
 
 #### 首次进入 Ask：启用只读 shell
 
 生成入口：`yP`；结果 ID：`ask_enter_readonly_shell`；1894 个 UTF-16 字符。
 
-````text
+```text
 
 <system_reminder>
 Ask mode is active. The user wants you to answer questions about their codebase or coding in general. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
@@ -202,19 +202,19 @@ Your role in Ask mode:
 
 8. If the user asks you to make changes or implement something, politely remind them that you're in Ask mode and can only provide information and guidance. Suggest they switch to Agent mode if they want you to make changes.
 </system_reminder>
-````
+```
 
 #### 继续 Ask：启用只读 shell
 
 生成入口：`yP`；结果 ID：`ask_continue_readonly_shell`；542 个 UTF-16 字符。
 
-````text
+```text
 <system_reminder>
 Ask mode is still active. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits).
 
 You CAN use the shell tool for readonly operations - it will operate under a readonly sandbox that prevents any file modifications or system changes. If a command needs network access, you can request it via required_permissions: ['network'].
 </system_reminder>
-````
+```
 
 #### 编辑工具过滤配置：省略 Ask 追加提醒
 
@@ -226,9 +226,9 @@ You CAN use the shell tool for readonly operations - it will operate under a rea
 
 生成入口：`J0`；结果 ID：`mode_changed_ask`；100 个 UTF-16 字符。
 
-````text
+```text
 You are now in Ask mode. You have EXITED your previous mode. Continue with the task in the new mode.
-````
+```
 
 ### 3.3 Plan
 
@@ -237,7 +237,7 @@ You are now in Ask mode. You have EXITED your previous mode. Continue with the t
 
 生成入口：`Sce`；3773 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits). Instead, you should:
@@ -292,7 +292,7 @@ When writing mermaid diagrams:
 - Click events are disabled for security - don't use `click` syntax
 </mermaid_syntax>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -301,7 +301,7 @@ When writing mermaid diagrams:
 
 生成入口：`Sce`；4263 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active, unless you have already seen the <end_plan_mode/> tag below. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits). Instead, you should:
@@ -358,7 +358,7 @@ When writing mermaid diagrams:
 
 <begin_plan_mode/>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -367,7 +367,7 @@ When writing mermaid diagrams:
 
 生成入口：`Sce`；2984 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active. The user does not want execution yet -- you MUST NOT make edits, run non-readonly tools (including changing configs or making commits), or otherwise modify system state. This supersedes any conflicting instruction.
@@ -414,7 +414,7 @@ When writing mermaid diagrams:
 - Click events are disabled for security - don't use `click` syntax
 </mermaid_syntax>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -423,7 +423,7 @@ When writing mermaid diagrams:
 
 生成入口：`Sce`；3065 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active, unless you have already seen the <end_plan_mode/> tag below. The user does not want execution yet -- you MUST NOT make edits, run non-readonly tools (including changing configs or making commits), or otherwise modify system state. This supersedes any conflicting instruction.
@@ -472,7 +472,7 @@ When writing mermaid diagrams:
 
 <begin_plan_mode/>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -481,7 +481,7 @@ When writing mermaid diagrams:
 
 生成入口：`Sce`；3922 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active. The user does not want execution yet -- you MUST NOT make edits, run non-readonly tools (including changing configs or making commits), or otherwise modify system state. This supersedes any conflicting instruction.
@@ -537,7 +537,7 @@ Do not leave open choices, alternatives, TBDs, "Option A vs B", "do A or B" for 
 If a decision is needed that would materially change the approach and you cannot resolve it from the codebase or context, ask with AskQuestion before calling CreatePlan; otherwise pick a sensible default, state it briefly, and plan against it.
 </concrete_plans>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -546,7 +546,7 @@ If a decision is needed that would materially change the approach and you cannot
 
 生成入口：`Sce`；2996 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active. The user does not want execution yet -- you MUST NOT make edits, run non-readonly tools (including changing configs or making commits), or otherwise modify system state. This supersedes any conflicting instruction.
@@ -593,7 +593,7 @@ When writing mermaid diagrams:
 - Click events are disabled for security - don't use `click` syntax
 </mermaid_syntax>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -602,7 +602,7 @@ When writing mermaid diagrams:
 
 生成入口：`Sce`；3779 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received (for example, to make edits). Instead, you should:
@@ -657,7 +657,7 @@ When writing mermaid diagrams:
 - Click events are disabled for security - don't use `click` syntax
 </mermaid_syntax>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -666,7 +666,7 @@ When writing mermaid diagrams:
 
 生成入口：`Sce`；450 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is still active. Understand the user's intent:
@@ -676,7 +676,7 @@ Plan mode is still active. Understand the user's intent:
 
 Remember: You MUST NOT make any edits or run any non-readonly tools until explicitly instructed.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -685,7 +685,7 @@ Remember: You MUST NOT make any edits or run any non-readonly tools until explic
 
 生成入口：`Sce`；508 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is still active. Understand the user's intent:
@@ -695,7 +695,7 @@ Plan mode is still active. Understand the user's intent:
 
 Remember: You MUST NOT make any edits or run any non-readonly tools until explicitly instructed. This supersedes any other instructions you have received.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -704,7 +704,7 @@ Remember: You MUST NOT make any edits or run any non-readonly tools until explic
 
 生成入口：`Sce`；2969 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is still active.
@@ -735,7 +735,7 @@ Rules:
 
 Remember: Unless the user has explicitly and unambiguously asked you to execute, you MUST NOT make any edits or run any non-readonly tools.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -744,7 +744,7 @@ Remember: Unless the user has explicitly and unambiguously asked you to execute,
 
 生成入口：`Sce`；2858 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 
 <system_reminder>
 Plan mode is still active.
@@ -775,7 +775,7 @@ Rules:
 
 Remember: Unless the user has explicitly and unambiguously asked you to execute, you MUST NOT make any edits or run any non-readonly tools.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -784,9 +784,9 @@ Remember: Unless the user has explicitly and unambiguously asked you to execute,
 
 生成入口：`J0`；101 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 You are now in Plan mode. You have EXITED your previous mode. Continue with the task in the new mode.
-````
+```
 
 </details>
 
@@ -924,7 +924,7 @@ Your session ID for this debug session is: EXAMPLE-SESSION
 
 生成入口：`gce`；1396 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 <system_reminder>
 Debug mode is still active. You must debug with **runtime evidence**.
 
@@ -935,7 +935,7 @@ Debug mode is still active. You must debug with **runtime evidence**.
 **If fix failed:** Generate NEW hypotheses from different subsystems and add more instrumentation.
 **Code hygiene:** Before pursuing new hypotheses, evaluate ALL code changes you've made so far. If previous hypotheses were REJECTED by the logs, REMOVE the code changes introduced for those hypotheses. Do not accumulate guards, defensive checks, or speculative fixes from discarded theories—only keep changes that are proven necessary by the runtime evidence. Start each new debug iteration with a clean slate for new hypotheses.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -1071,7 +1071,7 @@ Your session ID for this debug session is: (not provided)
 
 生成入口：`gce`；1075 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 <system_reminder>
 You are now in **DEBUG MODE**.
 
@@ -1083,7 +1083,7 @@ You are now in **DEBUG MODE**.
 - Do the debugging work for the user whenever your available tools can do it; do not hand the investigation back to the user unless you genuinely need user-specific interaction.
 - Keep iterating until you can reproduce the issue, fix it, and verify the fix.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -1092,7 +1092,7 @@ You are now in **DEBUG MODE**.
 
 生成入口：`gce`；600 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 <system_reminder>
 Debug mode is still active.
 
@@ -1102,7 +1102,7 @@ Debug mode is still active.
 - If a fix fails, reproduce again, gather better evidence, and iterate.
 - Verify the final fix end to end before claiming success.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -1111,9 +1111,9 @@ Debug mode is still active.
 
 生成入口：`J0`；102 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 You are now in Debug mode. You have EXITED your previous mode. Continue with the task in the new mode.
-````
+```
 
 </details>
 
@@ -1124,7 +1124,7 @@ You are now in Debug mode. You have EXITED your previous mode. Continue with the
 
 生成入口：`g2`；8857 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 The user has engaged **Multitask Mode**.
 
 You will remain in Multitask Mode until the user chooses to exit it.
@@ -1223,7 +1223,7 @@ Below are examples of viable delegation strategies based on user requests. These
 </delegation_examples>
 
 Note: if you just need to run one medium or long-running shell command and will likely not have to run follow-up commands after the shell command completes, you may use a background shell instead of background subagent.
-````
+```
 
 </details>
 
@@ -1232,7 +1232,7 @@ Note: if you just need to run one medium or long-running shell command and will 
 
 生成入口：`g2`；8894 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 The user has engaged **Multitask Mode**.
 
 You will remain in Multitask Mode until the user chooses to exit it.
@@ -1328,7 +1328,7 @@ Note: if you just need to run one medium or long-running shell command and will 
 IMPORTANT RULE: You MUST NOT ignore these instructions because you think that your work can be completed simply with "a few quick tool calls" / "a few quick shell commands" / etc. YOU MUST DELEGATE TO AN ASYNCHRONOUS SUBAGENT ANY TIME YOU NEED TO USE ANY TOOLS. DO NOT IGNORE THESE INSTRUCTIONS!!
 
 IMPORTANT RULE: After starting a background subagent to handle the user's request, you MUST end your response IMMEDIATELY. You will be woken up via an automated system notification when the subagent completes. DO NOT WAIT FOR THE ASYNC SUBAGENT TO COMPLETE! DO NOT REPEAT WORK IN THE FOREGROUND THAT THE AGENT IS DOING! The user DEMANDS that you end your response IMMEDIATELY after creating the async subagent(s) for their request!
-````
+```
 
 </details>
 
@@ -1337,7 +1337,7 @@ IMPORTANT RULE: After starting a background subagent to handle the user's reques
 
 生成入口：`g2`；8486 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 The user has engaged **Multitask Mode**.
 
 You will remain in Multitask Mode until the user chooses to exit it.
@@ -1436,7 +1436,7 @@ Below are examples of viable delegation strategies based on user requests. These
 </delegation_examples>
 
 Note: if you just need to run one medium or long-running shell command and will likely not have to run follow-up commands after the shell command completes, you may use a background shell instead of background subagent.
-````
+```
 
 </details>
 
@@ -1445,7 +1445,7 @@ Note: if you just need to run one medium or long-running shell command and will 
 
 生成入口：`g2`；9077 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 The user has engaged **Multitask Mode**.
 
 You will remain in Multitask Mode until the user chooses to exit it.
@@ -1546,7 +1546,7 @@ Below are examples of viable delegation strategies based on user requests. These
 </delegation_examples>
 
 Note: if you just need to run one medium or long-running shell command and will likely not have to run follow-up commands after the shell command completes, you may use a background shell instead of background subagent.
-````
+```
 
 </details>
 
@@ -1555,7 +1555,7 @@ Note: if you just need to run one medium or long-running shell command and will 
 
 生成入口：`y2`；986 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 You are still in **Multitask Mode**. You MUST follow the earlier instructions for asynchronous delegation and parallelization of work.
 
 Decide whether to delegate the user request to a background subagent (default action), parallelize the request across multiple subagents, or address the request directly.
@@ -1567,7 +1567,7 @@ Remember: work in the foreground prohibits multitasking. Reserve for requests re
 Do NOT perform foreground work which duplicates work already delegated to subagent(s).
 
 Subagent completion messages already contain a user-visible summary portion. Do NOT restate or summarize a subagent's result unless the user asks, the subagent reports a blocker requiring parent action outside of the user-visible high level summary, or multiple subagents require synthesis.
-````
+```
 
 </details>
 
@@ -1576,7 +1576,7 @@ Subagent completion messages already contain a user-visible summary portion. Do 
 
 生成入口：`y2`；1691 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 You are still in **Multitask Mode**. You MUST follow the earlier instructions for asynchronous delegation and parallelization of work.
 
 Decide whether to delegate the user request to a background subagent (default action), parallelize the request across multiple subagents, or address the request directly.
@@ -1592,7 +1592,7 @@ Subagent completion messages already contain a user-visible summary portion. Do 
 IMPORTANT RULE: You MUST NOT ignore these instructions because you think that your work can be completed simply with "a few quick tool calls" / "a few quick shell commands" / etc. YOU MUST DELEGATE TO AN ASYNCHRONOUS SUBAGENT ANY TIME YOU NEED TO USE ANY TOOLS. DO NOT IGNORE THESE INSTRUCTIONS!!
 
 IMPORTANT RULE: After starting a background subagent to handle the user's request, you MUST end your response IMMEDIATELY. You will be woken up via an automated system notification when the subagent completes. DO NOT WAIT FOR THE ASYNC SUBAGENT TO COMPLETE! DO NOT REPEAT WORK IN THE FOREGROUND THAT THE AGENT IS DOING! The user DEMANDS that you end your response IMMEDIATELY after creating the async subagent(s) for their request!
-````
+```
 
 </details>
 
@@ -1601,11 +1601,11 @@ IMPORTANT RULE: After starting a background subagent to handle the user's reques
 
 生成入口：`w2`；243 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 The user has now exited Multitask Mode.
 
 Proceed with your work as per usual. You may use synchronous or asynchronous subagents if helpful and according to your other instructions, but do not continue with the aggressive multitasking strategy.
-````
+```
 
 </details>
 
@@ -1614,7 +1614,7 @@ Proceed with your work as per usual. You may use synchronous or asynchronous sub
 
 生成入口：`mz`；683 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 <system_reminder>
 The user clicked Start Multitasking.
 
@@ -1624,7 +1624,7 @@ NOTE: If you receive the exact prompt "You are the forked subagent; continue exe
 
 Otherwise, if you do not receive that prompt, immediately stop. Do not continue planning or coordinating, do not perform additional foreground work, and do not send a user-visible response after forking yourself into that subagent.
 </system_reminder>
-````
+```
 
 </details>
 
@@ -1633,7 +1633,7 @@ Otherwise, if you do not receive that prompt, immediately stop. Do not continue 
 
 生成入口：`mz`；1996 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 <system_reminder>
 The user clicked Build in Parallel.
 
@@ -1654,7 +1654,7 @@ IMPORTANT: If your plan includes dedicated testing steps at the end AND you are 
 For the plan execution and all follow-ups until the user exits multitask mode, follow your multitask mode instructions. For the extent of plan execution, these parallelization instructions take precedence over any other instructions about avoiding top-level sibling subagent parallelization.
 </build_with_multitask_instructions>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -1663,7 +1663,7 @@ For the plan execution and all follow-ups until the user exits multitask mode, f
 
 生成入口：`mz`；1925 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 <system_reminder>
 The user clicked Build in Parallel.
 
@@ -1684,7 +1684,7 @@ IMPORTANT: If your plan includes dedicated testing steps at the end AND you are 
 These parallelization instructions apply for the plan execution and its follow-ups. For the extent of plan execution, these parallelization instructions take precedence over any other instructions about avoiding top-level sibling subagent parallelization.
 </build_with_multitask_instructions>
 </system_reminder>
-````
+```
 
 </details>
 
@@ -1693,9 +1693,9 @@ These parallelization instructions apply for the plan execution and its follow-u
 
 生成入口：`J0`；106 个 UTF-16 字符。具体 fixture 参数见 JSON 中同名 id。
 
-````text
+```text
 You are now in Multitask mode. You have EXITED your previous mode. Continue with the task in the new mode.
-````
+```
 
 </details>
 
@@ -1703,34 +1703,33 @@ You are now in Multitask mode. You have EXITED your previous mode. Continue with
 
 以下 22 类工具保存完整工厂上下文、参数表达式、执行 / 输出表达式和所提取依赖。名称是源码中定位到的候选名，并非固定启用名单。每类选一个构造点，其他 bundle / 变体可查全部工具 JSON。
 
-| 内部标识 | 候选模型名称 | 工厂定位 |
-| --- | --- | --- |
-| `SWITCH_MODE` | `SwitchMode` | `cursor-agent-exec` · `vwe` |
-| `CREATE_PLAN_V2` | `CreatePlan` / `mcp_create_plan` / `create_plan` | `cursor-agent-exec` · `Ade` |
-| `ASK_QUESTION` | `AskQuestion` | `cursor-agent-exec` · `tne` |
-| `TODO_WRITE` | `todo_write` / `TodoWrite` | `cursor-agent-exec` · `Awe` |
-| `TASK` | `mcp_task` / `Subagent` / `Task` | `cursor-agent-exec` · `Oae` |
-| `CREATE_TASK` | `create-agent` | `cursor-agent-exec` · `bbe` |
-| `SEND_TO_TASK` | `send-message-to-agent` | `cursor-agent-exec` · `Nbe` |
-| `SEND_MESSAGE` | `SendMessage` | `cursor-agent-exec` · `qbe` |
-| `SEND_TO_USER` | `SendToUser` | `cursor-agent-exec` · `nSe` |
-| `AWAIT` | `Await` / `AwaitShell` | `cursor-agent-exec` · `Nle` |
-| `READ` | `ViewImage` / `read_file` / `ReadFile` / `Read` | `cursor-agent-exec` · `Hfe` |
-| `DELETE` | `delete_file` / `Delete` | `cursor-agent-exec` · `qde` |
-| `STR_REPLACE` | `search_replace` / `StrReplace` | `cursor-agent-exec` · `xpe` |
-| `APPLY_PATCH` | `ApplyPatch` | `cursor-agent-exec` · `tpe` |
-| `WRITE` | `write` / `Write` | `cursor-agent-exec` · `Rpe` |
-| `SHELL` | `run_terminal_cmd` / `Shell` | `cursor-agent-exec` · `pwe` |
-| `GREP` | `grep` / `Grep` / `rg` | `cursor-agent-exec` · `Lhe` |
-| `GLOB` | `glob_file_search` / `Glob` | `cursor-agent-exec` · `uhe` |
-| `SEMANTIC_SEARCH` | `codebase_search` / `SemanticSearch` | `cursor-agent-exec` · `Fge` |
-| `RECORD_SCREEN` | `RecordScreen` | `cursor-agent-exec` · `Kce` |
-| `COMMUNICATE_UPDATE` | `UpdateCurrentStep` | `cursor-agent-host` · `mP` |
-| `SEND_FINAL_SUMMARY` | `sendFinalSummary` | `cursor-agent-host` · `eP` |
+| 内部标识             | 候选模型名称                                     | 工厂定位                    |
+| -------------------- | ------------------------------------------------ | --------------------------- |
+| `SWITCH_MODE`        | `SwitchMode`                                     | `cursor-agent-exec` · `vwe` |
+| `CREATE_PLAN_V2`     | `CreatePlan` / `mcp_create_plan` / `create_plan` | `cursor-agent-exec` · `Ade` |
+| `ASK_QUESTION`       | `AskQuestion`                                    | `cursor-agent-exec` · `tne` |
+| `TODO_WRITE`         | `todo_write` / `TodoWrite`                       | `cursor-agent-exec` · `Awe` |
+| `TASK`               | `mcp_task` / `Subagent` / `Task`                 | `cursor-agent-exec` · `Oae` |
+| `CREATE_TASK`        | `create-agent`                                   | `cursor-agent-exec` · `bbe` |
+| `SEND_TO_TASK`       | `send-message-to-agent`                          | `cursor-agent-exec` · `Nbe` |
+| `SEND_MESSAGE`       | `SendMessage`                                    | `cursor-agent-exec` · `qbe` |
+| `SEND_TO_USER`       | `SendToUser`                                     | `cursor-agent-exec` · `nSe` |
+| `AWAIT`              | `Await` / `AwaitShell`                           | `cursor-agent-exec` · `Nle` |
+| `READ`               | `ViewImage` / `read_file` / `ReadFile` / `Read`  | `cursor-agent-exec` · `Hfe` |
+| `DELETE`             | `delete_file` / `Delete`                         | `cursor-agent-exec` · `qde` |
+| `STR_REPLACE`        | `search_replace` / `StrReplace`                  | `cursor-agent-exec` · `xpe` |
+| `APPLY_PATCH`        | `ApplyPatch`                                     | `cursor-agent-exec` · `tpe` |
+| `WRITE`              | `write` / `Write`                                | `cursor-agent-exec` · `Rpe` |
+| `SHELL`              | `run_terminal_cmd` / `Shell`                     | `cursor-agent-exec` · `pwe` |
+| `GREP`               | `grep` / `Grep` / `rg`                           | `cursor-agent-exec` · `Lhe` |
+| `GLOB`               | `glob_file_search` / `Glob`                      | `cursor-agent-exec` · `uhe` |
+| `SEMANTIC_SEARCH`    | `codebase_search` / `SemanticSearch`             | `cursor-agent-exec` · `Fge` |
+| `RECORD_SCREEN`      | `RecordScreen`                                   | `cursor-agent-exec` · `Kce` |
+| `COMMUNICATE_UPDATE` | `UpdateCurrentStep`                              | `cursor-agent-host` · `mP`  |
+| `SEND_FINAL_SUMMARY` | `sendFinalSummary`                               | `cursor-agent-host` · `eP`  |
 
 ## 5. 验证与边界
 
 已核对原源码切片与五个安装包文件 hash、37 份结果 hash、22 类工具引用、文档链接与代码围栏。源码定位采用 UTF-16 偏移。生成过程没有执行工具、创建子 Agent、发送网络请求或启动日志服务。
 
 提示词和工具构造存在模型 / 开关分支；外部 MCP、服务端动态内容和实际账号配置没有包含在这份导出中。完整基础提示词与实际请求中的最终工具目录仍需另行验证。
-

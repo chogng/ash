@@ -27,7 +27,7 @@ export class TokenTheme {
 		private readonly colors: readonly Color[],
 		private readonly foreground: number,
 		private readonly background: number,
-	) {}
+	) { }
 
 	public static createFromRawTokenTheme(source: ITokenThemeRule[], customTokenColors: string[]): TokenTheme {
 		const colors = [Color.transparent];

@@ -1,16 +1,16 @@
 .ash-markdown {
-  color: var(--ash-foreground);
-  font-size: 13px;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
+	color: var(--ash-foreground);
+	font-size: 13px;
+	line-height: 1.55;
+	overflow-wrap: anywhere;
 }
 
 .ash-markdown > :first-child {
-  margin-top: 0;
+	margin-top: 0;
 }
 
 .ash-markdown > :last-child {
-  margin-bottom: 0;
+	margin-bottom: 0;
 }
 
 .ash-markdown h1,
@@ -19,8 +19,8 @@
 .ash-markdown h4,
 .ash-markdown h5,
 .ash-markdown h6 {
-  line-height: 1.25;
-  margin: 1.25em 0 0.55em;
+	line-height: 1.25;
+	margin: 1.25em 0 0.55em;
 }
 
 .ash-markdown p,
@@ -29,97 +29,97 @@
 .ash-markdown table,
 .ash-markdown ul,
 .ash-markdown ol {
-  margin: 0.75em 0;
+	margin: 0.75em 0;
 }
 
 .ash-markdown blockquote {
-  border-left: 3px solid var(--ash-border);
-  color: var(--ash-muted-foreground);
-  padding-left: 0.9em;
+	border-left: 3px solid var(--ash-border);
+	color: var(--ash-muted-foreground);
+	padding-left: 0.9em;
 }
 
 .ash-markdown blockquote.ash-markdown-alert {
-  background: var(--ash-input-background);
-  border-left-color: var(--ash-markdown-alert-color, var(--ash-border));
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-foreground);
-  padding: 0.6em 0.9em;
+	background: var(--ash-input-background);
+	border-left-color: var(--ash-markdown-alert-color, var(--ash-border));
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-foreground);
+	padding: 0.6em 0.9em;
 }
 
 .ash-markdown-alert-note,
 .ash-markdown-alert-important {
-  --ash-markdown-alert-color: var(--ash-accent-foreground);
+	--ash-markdown-alert-color: var(--ash-accent-foreground);
 }
 
 .ash-markdown-alert-tip {
-  --ash-markdown-alert-color: var(--ash-success-foreground);
+	--ash-markdown-alert-color: var(--ash-success-foreground);
 }
 
 .ash-markdown-alert-warning {
-  --ash-markdown-alert-color: var(--ash-warning-foreground);
+	--ash-markdown-alert-color: var(--ash-warning-foreground);
 }
 
 .ash-markdown-alert-caution {
-  --ash-markdown-alert-color: var(--ash-error-foreground);
+	--ash-markdown-alert-color: var(--ash-error-foreground);
 }
 
 .ash-markdown .ash-markdown-alert-label {
-  color: var(--ash-markdown-alert-color);
-  font-weight: 600;
+	color: var(--ash-markdown-alert-color);
+	font-weight: 600;
 }
 
 .ash-markdown .ash-markdown-alert-icon {
-  color: var(--ash-markdown-alert-color);
-  margin-inline-end: 0.4em;
-  vertical-align: -0.1em;
+	color: var(--ash-markdown-alert-color);
+	margin-inline-end: 0.4em;
+	vertical-align: -0.1em;
 }
 
 .ash-markdown code,
 .ash-markdown pre {
-  font-family: var(--ash-font-family-monospace, ui-monospace, monospace);
+	font-family: var(--ash-font-family-monospace, ui-monospace, monospace);
 }
 
 .ash-markdown code {
-  background: var(--ash-input-background);
-  border-radius: var(--ash-corner-radius-small);
-  padding: 0.12em 0.3em;
+	background: var(--ash-input-background);
+	border-radius: var(--ash-corner-radius-small);
+	padding: 0.12em 0.3em;
 }
 
 .ash-markdown pre {
-  background: var(--ash-input-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-small);
-  overflow: auto;
-  padding: 0.8em;
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	overflow: auto;
+	padding: 0.8em;
 }
 
 .ash-markdown pre code {
-  background: none;
-  padding: 0;
+	background: none;
+	padding: 0;
 }
 
 .ash-markdown a {
-  color: var(--ash-accent-foreground);
-  cursor: pointer;
-  text-decoration: underline;
+	color: var(--ash-accent-foreground);
+	cursor: pointer;
+	text-decoration: underline;
 }
 
 .ash-markdown img {
-  max-width: 100%;
+	max-width: 100%;
 }
 
 .ash-markdown table {
-  border-collapse: collapse;
-  width: max-content;
-  max-width: 100%;
+	border-collapse: collapse;
+	width: max-content;
+	max-width: 100%;
 }
 
 .ash-markdown th,
 .ash-markdown td {
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  padding: 0.35em 0.65em;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	padding: 0.35em 0.65em;
 }
 
 .ash-markdown input[type="checkbox"] {
-  margin: 0 0.35em 0 0;
+	margin: 0 0.35em 0 0;
 }

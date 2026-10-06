@@ -34,7 +34,7 @@ import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.
 test('selected product icon theme refreshes mounted SVGs and returns to defaults', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
 		const icon = registerIcon('test-workbench-product-icon', () => '<svg viewBox="0 0 16 16"><path d="M1 1"/></svg>', 'Workbench product icon test');
 		using registration = WorkbenchProductIconThemesRegistry.registerThemes();
 		registration.replace([{ id: 'test-workbench-svg', label: 'Test SVG', icons: new Map([[icon.id, () => '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4"/></svg>']]) }]);
@@ -75,13 +75,15 @@ const document = {
 test('persisted color customizations override themes, update live, and restore themed colors when removed', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
 		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editor.selectionBackground': '#123456', 'editor.selectionForeground': '#abcdef' } }), 'selection-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
-		using configuration = new WorkbenchConfigurationService({ initialSnapshot: {
-			revision: 1,
-			document: { version: 1, source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}` },
-		} });
+		using configuration = new WorkbenchConfigurationService({
+			initialSnapshot: {
+				revision: 1,
+				document: { version: 1, source: `// user colors\n${JSON.stringify({ 'workbench.colorTheme': theme.id, 'workbench.colorCustomizations': { 'editor.selectionBackground': '#456789', 'editor.selectionForeground': '#112233' } })}` },
+			}
+		});
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using languages = new LanguageService();
@@ -149,7 +151,7 @@ test('user and extension themes preserve semantic token selectors and styles', (
 test('active semantic theme styles follow the selected theme', async () => {
 	const browser = new JSDOM('<!doctype html><body><div class="stanza-editor"><span class="stanza-editor-token" data-ash-semantic-type="function" data-ash-semantic-modifiers="declaration" data-ash-semantic-language="typescript">call</span></div></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
 		const theme = parseUserColorTheme(JSON.stringify({ name: 'Semantic', type: 'dark', semanticHighlighting: true, semanticTokenColors: { '*': '#112233', 'function.declaration:typescript': { foreground: '#abcdef', bold: true } } }), 'test-semantic-active');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
@@ -215,7 +217,7 @@ test('theme exports contain standard fields and resolved colors', () => {
 test('active user themes apply overrides for colors registered after theme loading', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
 		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editorCursor.foreground': '#aabbcc', 'test.workbenchLate': '#fedcba' } }), 'late-workbench-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
@@ -401,11 +403,13 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 	const service = await loadThemes(files, directory);
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({
-			matches: false,
-			addEventListener: () => {},
-			removeEventListener: () => {},
-		}) });
+		Object.defineProperty(browser.window, 'matchMedia', {
+			value: () => ({
+				matches: false,
+				addEventListener: () => { },
+				removeEventListener: () => { },
+			})
+		});
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);

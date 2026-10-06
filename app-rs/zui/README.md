@@ -6,39 +6,39 @@
 
 ## 1. Crate 边界
 
-| 能力 | 规范公共入口 | 内部 owner |
-| --- | --- | --- |
-| Geometry、声明式 Element/style、layout、text、scene、inspection、view state 与 component lifecycle | `zui::ui`、`zui::style!`、`zui::ui!` | `ui/foundation` / `ui/layout` / `ui/text` / `ui/presentation` |
-| Interaction、animation、deadline、retained lifecycle | `zui::runtime`，并由 `zui::ui` 聚合常用类型 | `runtime` |
-| Application、多窗口 lifecycle、退出策略与跨线程投递 | `zui::app` | `app` |
-| Application relaunch 调度 | `AppProxy` / `ApplicationHandle` / application 与 window context | `app/relaunch.rs` |
-| Application name、app path 与标准用户目录 | `ApplicationPath` / app capabilities | `app/paths.rs` / `app/paths/platform.rs` |
-| Application locale、system locale、country 与首选语言 | `ApplicationLocale` / app capabilities | `app/locale.rs` / `app/locale/platform.rs` |
-| Application focus/active 与 macOS hide/show | `AppContext` | `app/presentation.rs` / `app/presentation/platform.rs` |
-| Single-instance 协调与 second-instance lifecycle | `zui::app::{SingleInstanceOptions, SecondInstance}` / `App::second_instance` | `app/single_instance.rs` / `app/single_instance/transport.rs` |
-| 后台任务、作用域取消与 event-loop timer | `zui::runtime`；`zui::task` 是兼容入口 | `runtime/task.rs` / `runtime/timer.rs` |
-| Window、display snapshot、event、theme、cursor、文件拖放与 chrome capability | `zui::window` | `window` |
-| Keyboard、pointer 与 IME | `zui::input` | `input`；pointer/IME 事件由 `window/event.rs` 统一拥有 |
-| 基础 hover 进入、离开、延迟与 deadline | `zui::ui::{Hover,HoverPresence}` | `ui/foundation/hover.rs`；具体颜色、显隐和 active 语义由组件解释 |
-| Clipboard、dialog、opener、notification、menu、tray 与 global shortcut | `zui::services` | `services` |
-| OS login item | `zui::services::LoginItemHandle` / application capabilities | `services/login_item.rs` / `services/login_item/platform` |
-| OS 最近使用文档 | `zui::services::RecentDocumentHandle` / application 与 window context | `services/recent_document.rs` / `services/recent_document/platform.rs` |
-| OS 默认协议客户端关联 | `zui::services::ProtocolClientHandle` / application capabilities | `services/protocol_client.rs` / `services/protocol_client/platform.rs` |
-| Application badge 与 desktop identity | `ApplicationBadgeHandle` / `ApplicationBuilder::with_desktop_file_name` | `services/application_badge.rs` / native window identity |
-| Windows Jump List | `JumpListHandle` / application capabilities | `services/jump_list.rs` / `services/jump_list/platform/windows.rs` |
-| OS file icon | `FileIconHandle` / application capabilities | `services/file_icon.rs` / `services/file_icon/platform` |
-| Packaged resource 与 shell-free child process | `zui::services` | `services/resource.rs` / `services/process.rs` |
-| Signed update check、staging 与 installer handoff | `zui::services` | `services/update.rs` |
-| Custom protocol URL 启动与转发 | `zui::app::ProtocolScheme` / `App::open_url` | `app/protocol.rs` / `app/runtime_event.rs` |
-| Bundle、协议声明与 native installer | `zui::distribution` / `zui-packager` | `distribution` |
-| Bounded runtime trace 与 live snapshot | `zui::devtools` | `devtools.rs` |
-| OS accessibility tree 与 action 回流 | `zui::accessibility` / `App::accessibility_action` | `accessibility.rs` |
-| Renderer、factory 与 presentation target | `zui::render` | `render` |
-| 默认 GPU composition | `zui::app::Application::run` | private `render/wgpu` |
-| 常用最小导入 | `zui::prelude` | `prelude.rs` |
-| 手动时钟、确定性 lifecycle/timer 与 headless renderer | `zui::testing`；`zui::testkit` 是兼容别名 | `testing` |
-| Button、List、Dropdown | 不属于 `zui` | `ash-ui-components` |
-| Workbench Titlebar、TabContainer 与交互标识 | 不属于 `zui` | `ash-workbench` |
+| 能力                                                                                               | 规范公共入口                                                                 | 内部 owner                                                             |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Geometry、声明式 Element/style、layout、text、scene、inspection、view state 与 component lifecycle | `zui::ui`、`zui::style!`、`zui::ui!`                                         | `ui/foundation` / `ui/layout` / `ui/text` / `ui/presentation`          |
+| Interaction、animation、deadline、retained lifecycle                                               | `zui::runtime`，并由 `zui::ui` 聚合常用类型                                  | `runtime`                                                              |
+| Application、多窗口 lifecycle、退出策略与跨线程投递                                                | `zui::app`                                                                   | `app`                                                                  |
+| Application relaunch 调度                                                                          | `AppProxy` / `ApplicationHandle` / application 与 window context             | `app/relaunch.rs`                                                      |
+| Application name、app path 与标准用户目录                                                          | `ApplicationPath` / app capabilities                                         | `app/paths.rs` / `app/paths/platform.rs`                               |
+| Application locale、system locale、country 与首选语言                                              | `ApplicationLocale` / app capabilities                                       | `app/locale.rs` / `app/locale/platform.rs`                             |
+| Application focus/active 与 macOS hide/show                                                        | `AppContext`                                                                 | `app/presentation.rs` / `app/presentation/platform.rs`                 |
+| Single-instance 协调与 second-instance lifecycle                                                   | `zui::app::{SingleInstanceOptions, SecondInstance}` / `App::second_instance` | `app/single_instance.rs` / `app/single_instance/transport.rs`          |
+| 后台任务、作用域取消与 event-loop timer                                                            | `zui::runtime`；`zui::task` 是兼容入口                                       | `runtime/task.rs` / `runtime/timer.rs`                                 |
+| Window、display snapshot、event、theme、cursor、文件拖放与 chrome capability                       | `zui::window`                                                                | `window`                                                               |
+| Keyboard、pointer 与 IME                                                                           | `zui::input`                                                                 | `input`；pointer/IME 事件由 `window/event.rs` 统一拥有                 |
+| 基础 hover 进入、离开、延迟与 deadline                                                             | `zui::ui::{Hover,HoverPresence}`                                             | `ui/foundation/hover.rs`；具体颜色、显隐和 active 语义由组件解释       |
+| Clipboard、dialog、opener、notification、menu、tray 与 global shortcut                             | `zui::services`                                                              | `services`                                                             |
+| OS login item                                                                                      | `zui::services::LoginItemHandle` / application capabilities                  | `services/login_item.rs` / `services/login_item/platform`              |
+| OS 最近使用文档                                                                                    | `zui::services::RecentDocumentHandle` / application 与 window context        | `services/recent_document.rs` / `services/recent_document/platform.rs` |
+| OS 默认协议客户端关联                                                                              | `zui::services::ProtocolClientHandle` / application capabilities             | `services/protocol_client.rs` / `services/protocol_client/platform.rs` |
+| Application badge 与 desktop identity                                                              | `ApplicationBadgeHandle` / `ApplicationBuilder::with_desktop_file_name`      | `services/application_badge.rs` / native window identity               |
+| Windows Jump List                                                                                  | `JumpListHandle` / application capabilities                                  | `services/jump_list.rs` / `services/jump_list/platform/windows.rs`     |
+| OS file icon                                                                                       | `FileIconHandle` / application capabilities                                  | `services/file_icon.rs` / `services/file_icon/platform`                |
+| Packaged resource 与 shell-free child process                                                      | `zui::services`                                                              | `services/resource.rs` / `services/process.rs`                         |
+| Signed update check、staging 与 installer handoff                                                  | `zui::services`                                                              | `services/update.rs`                                                   |
+| Custom protocol URL 启动与转发                                                                     | `zui::app::ProtocolScheme` / `App::open_url`                                 | `app/protocol.rs` / `app/runtime_event.rs`                             |
+| Bundle、协议声明与 native installer                                                                | `zui::distribution` / `zui-packager`                                         | `distribution`                                                         |
+| Bounded runtime trace 与 live snapshot                                                             | `zui::devtools`                                                              | `devtools.rs`                                                          |
+| OS accessibility tree 与 action 回流                                                               | `zui::accessibility` / `App::accessibility_action`                           | `accessibility.rs`                                                     |
+| Renderer、factory 与 presentation target                                                           | `zui::render`                                                                | `render`                                                               |
+| 默认 GPU composition                                                                               | `zui::app::Application::run`                                                 | private `render/wgpu`                                                  |
+| 常用最小导入                                                                                       | `zui::prelude`                                                               | `prelude.rs`                                                           |
+| 手动时钟、确定性 lifecycle/timer 与 headless renderer                                              | `zui::testing`；`zui::testkit` 是兼容别名                                    | `testing`                                                              |
+| Button、List、Dropdown                                                                             | 不属于 `zui`                                                                 | `ash-ui-components`                                                    |
+| Workbench Titlebar、TabContainer 与交互标识                                                        | 不属于 `zui`                                                                 | `ash-workbench`                                                        |
 
 `src/lib.rs` 只声明这些同名能力模块，不再通过 `api.rs` 拼装第二套目录。根级类型导出、`zui::task` 和 `zui::testkit` 暂时作为现有消费者兼容入口保留；新代码使用上表的规范入口。
 
@@ -74,30 +74,30 @@ src/
 └── internal.rs                      crate-private native integration bridge
 ```
 
-| 模块 | 负责 | 禁止 |
-| --- | --- | --- |
-| `ui/foundation` | dependency-free value types、identity、geometry、color、icon asset | window、GPU、component 或产品状态 |
-| `ui/layout` | 通用 Split/Grid geometry 与 resize constraints | pane 产品语义、窗口状态、绘制 |
-| `ui/text` | font catalog、shaping、logical text/input geometry 与 editing | window event、GPU glyph atlas |
-| `ui/presentation` | Element、computed layout、paint primitive、inspection、immutable ordered scene、view-local state/subscription 与 identity-keyed component lifecycle | event loop、surface、输入分发、产品 reducer 与业务副作用 |
-| `runtime` | interaction、animation、deadline、frame invalidation 与 retained fragment lifecycle | presentation/renderer ownership、产品 reducer |
-| `render` | backend-neutral renderer contract 与 factory | 产品状态、输入分发、accessibility owner |
-| `render/wgpu` | physical conversion、pipeline、atlas、shader、surface recovery 与 present | 产品状态、layout、interaction/accessibility |
-| `window` / `input` | winit adapter、native window owner、ZUI event conversion 与 live capability | scene、产品状态 |
-| `app` | App callbacks、window registry、event-loop orchestration 与退出策略 | 产品领域状态、具体组件 |
-| `services` | 可注入系统服务、进程隔离与更新 | 产品状态、发布凭证 |
-| `distribution` | bundle layout、OS protocol metadata、installer plan 与 direct tool invocation | 签名密钥、发布凭证、产品更新策略 |
-| `testing` | 手动 clock、headless window/renderer、确定性 event/timer queue | native event loop、真实系统服务、产品断言逻辑 |
+| 模块               | 负责                                                                                                                                                | 禁止                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `ui/foundation`    | dependency-free value types、identity、geometry、color、icon asset                                                                                  | window、GPU、component 或产品状态                        |
+| `ui/layout`        | 通用 Split/Grid geometry 与 resize constraints                                                                                                      | pane 产品语义、窗口状态、绘制                            |
+| `ui/text`          | font catalog、shaping、logical text/input geometry 与 editing                                                                                       | window event、GPU glyph atlas                            |
+| `ui/presentation`  | Element、computed layout、paint primitive、inspection、immutable ordered scene、view-local state/subscription 与 identity-keyed component lifecycle | event loop、surface、输入分发、产品 reducer 与业务副作用 |
+| `runtime`          | interaction、animation、deadline、frame invalidation 与 retained fragment lifecycle                                                                 | presentation/renderer ownership、产品 reducer            |
+| `render`           | backend-neutral renderer contract 与 factory                                                                                                        | 产品状态、输入分发、accessibility owner                  |
+| `render/wgpu`      | physical conversion、pipeline、atlas、shader、surface recovery 与 present                                                                           | 产品状态、layout、interaction/accessibility              |
+| `window` / `input` | winit adapter、native window owner、ZUI event conversion 与 live capability                                                                         | scene、产品状态                                          |
+| `app`              | App callbacks、window registry、event-loop orchestration 与退出策略                                                                                 | 产品领域状态、具体组件                                   |
+| `services`         | 可注入系统服务、进程隔离与更新                                                                                                                      | 产品状态、发布凭证                                       |
+| `distribution`     | bundle layout、OS protocol metadata、installer plan 与 direct tool invocation                                                                       | 签名密钥、发布凭证、产品更新策略                         |
+| `testing`          | 手动 clock、headless window/renderer、确定性 event/timer queue                                                                                      | native event loop、真实系统服务、产品断言逻辑            |
 
 能力根文件负责模块声明和规范 re-export，具体状态与算法进入同名目录。`internal.rs` 只能连接 crate-private native 类型，不能重新成为 `platform` 式的综合 owner；若新增代码找不到清晰能力目录，应先修正 ownership。
 
 ## 4. Feature 边界
 
-| Feature | 提供 | 适用场景 |
-| --- | --- | --- |
-| 无 feature | backend-neutral UI、layout、text、scene、runtime 与 `Renderer` | 组件 crate、headless tests、替代 host |
-| `native` | Application、task/timer、system services、accessibility、distribution tooling、testing、ZUI-owned input/window contracts 与 private native adapter | 自定义 renderer 的原生应用及 runtime tests |
-| `wgpu`（default） | `native` + 默认 wgpu renderer composition | 开箱即用的桌面应用 |
+| Feature           | 提供                                                                                                                                               | 适用场景                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 无 feature        | backend-neutral UI、layout、text、scene、runtime 与 `Renderer`                                                                                     | 组件 crate、headless tests、替代 host      |
+| `native`          | Application、task/timer、system services、accessibility、distribution tooling、testing、ZUI-owned input/window contracts 与 private native adapter | 自定义 renderer 的原生应用及 runtime tests |
+| `wgpu`（default） | `native` + 默认 wgpu renderer composition                                                                                                          | 开箱即用的桌面应用                         |
 
 组件库使用 `zui = { default-features = false }`。需要原生 Application runtime 但不使用默认 GPU backend 的 host 使用 `features = ["native"]`。普通桌面产品启用默认 feature。
 
@@ -152,28 +152,28 @@ zui::app::Application::run
 
 ZUI 采用 Electron 的 application-host 思路，不承诺复刻 Electron/Chromium 对象表。下表是当前完成边界；`尚未完成` 代表仍可进入后续平台 capability，`委托` 和 `不适用` 不是缺失的同义词。
 
-| Electron 能力组 | ZUI 状态 | 当前 owner / 边界 |
-| --- | --- | --- |
-| ready、isReady、whenReady | 已具备 | `App::ready`、`ApplicationHandle` 与 context readiness |
-| window-all-closed、before-quit、will-quit、quit | 已具备 | `App` lifecycle、cancelable child-first window close 与 `ApplicationExitDecision` |
-| exit、relaunch | 已具备 | `force_exit(code)` 与退出后 FIFO relaunch queue |
-| getName/setName/getVersion/getAppPath/getPath/setPath/setAppLogsPath | 已具备 | application metadata 与 `ApplicationPath` |
-| focus/isActive、hide/isHidden/show | 已具备 | `AppContext`；hide/show/hidden 保持 macOS-only |
-| getLocale/getSystemLocale/getPreferredSystemLanguages/getLocaleCountryCode | 已具备 | validated application language 与 immutable native locale snapshot |
-| request/has/release single-instance lock、second-instance | 已具备 | builder-owned single-instance lifecycle；不暴露可误释放的裸锁 |
-| activate、open-url、open-file | 部分具备 | macOS native lifecycle；Windows/Linux URL 由 single-instance argv + allowlist 统一转发，文件关联仍由产品解释 argv |
-| dialog、menu、clipboard、notification、tray、globalShortcut、shell opener、autoUpdater | 委托 | `zui::services` typed capability，不塞回 `app` façade |
-| addRecentDocument、clearRecentDocuments、getRecentDocuments | 部分具备 | macOS 由 `NSDocumentController` 提供 add/clear/list；Windows Shell 提供 add/clear，list 显式返回 `Unsupported`；Linux 不在 Electron 此接口的支持边界内 |
-| setAsDefaultProtocolClient、isDefaultProtocolClient、removeAsDefaultProtocolClient | 已具备 | 可注入 `ProtocolClientService`；macOS LaunchServices、Windows 当前用户 registry、Linux GIO set/query，Linux remove 与 Electron 一样不提供受支持语义 |
-| set/getLoginItemSettings | 部分具备 | 可注入 `LoginItemService`；macOS `SMAppService` 与 Windows Run/StartupApproved 的 set/query 已具备，`wasOpenedAtLogin` 和 Windows launch-item enumeration 尚未公开 |
-| setDesktopName、set/getBadgeCount | 已具备 | builder 在建窗前固定 `.desktop` identity；macOS Dock 与 Linux LauncherEntry，Windows 不在 Electron 的 badge 支持边界内 |
-| setUserTasks、getJumpListSettings、setJumpList | 已具备 | Windows typed task/category/item、removed destination、atomic commit/reset 与 injectable backend |
-| getFileIcon | 已具备 | async injectable service；small/normal/large 尺寸与 macOS large unsupported 边界对齐 Electron |
-| about/emoji panel | 已具备 | macOS 标准 About/character panel；其他平台 About 复用可注入 message dialog，Windows 10 RS4+ Emoji 使用系统 picker |
-| Dock | 部分具备 | badge、macOS 显隐/查询/图标已具备；窗口 attention 继续委托 `winit`，Dock menu 与 download-finished notification 尚未公开 |
-| Handoff | 部分具备 | macOS `set/get/update/resign/invalidate` 直接映射 `NSUserActivity`；接收另一设备 activity 的 lifecycle callback 尚未公开 |
-| AppUserModelId、packaged identity | 部分具备 | `BundleManifest` / installer 拥有安装期身份；尚无完整 runtime 查询或修改接口 |
-| webContents/session/certificate/WebAuthn/Chromium commandLine、GPU/renderer process state、Chromium sandbox | 不适用 | ZUI 没有 Chromium renderer；对应能力不能用空实现伪装 |
+| Electron 能力组                                                                                             | ZUI 状态 | 当前 owner / 边界                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ready、isReady、whenReady                                                                                   | 已具备   | `App::ready`、`ApplicationHandle` 与 context readiness                                                                                                             |
+| window-all-closed、before-quit、will-quit、quit                                                             | 已具备   | `App` lifecycle、cancelable child-first window close 与 `ApplicationExitDecision`                                                                                  |
+| exit、relaunch                                                                                              | 已具备   | `force_exit(code)` 与退出后 FIFO relaunch queue                                                                                                                    |
+| getName/setName/getVersion/getAppPath/getPath/setPath/setAppLogsPath                                        | 已具备   | application metadata 与 `ApplicationPath`                                                                                                                          |
+| focus/isActive、hide/isHidden/show                                                                          | 已具备   | `AppContext`；hide/show/hidden 保持 macOS-only                                                                                                                     |
+| getLocale/getSystemLocale/getPreferredSystemLanguages/getLocaleCountryCode                                  | 已具备   | validated application language 与 immutable native locale snapshot                                                                                                 |
+| request/has/release single-instance lock、second-instance                                                   | 已具备   | builder-owned single-instance lifecycle；不暴露可误释放的裸锁                                                                                                      |
+| activate、open-url、open-file                                                                               | 部分具备 | macOS native lifecycle；Windows/Linux URL 由 single-instance argv + allowlist 统一转发，文件关联仍由产品解释 argv                                                  |
+| dialog、menu、clipboard、notification、tray、globalShortcut、shell opener、autoUpdater                      | 委托     | `zui::services` typed capability，不塞回 `app` façade                                                                                                              |
+| addRecentDocument、clearRecentDocuments、getRecentDocuments                                                 | 部分具备 | macOS 由 `NSDocumentController` 提供 add/clear/list；Windows Shell 提供 add/clear，list 显式返回 `Unsupported`；Linux 不在 Electron 此接口的支持边界内             |
+| setAsDefaultProtocolClient、isDefaultProtocolClient、removeAsDefaultProtocolClient                          | 已具备   | 可注入 `ProtocolClientService`；macOS LaunchServices、Windows 当前用户 registry、Linux GIO set/query，Linux remove 与 Electron 一样不提供受支持语义                |
+| set/getLoginItemSettings                                                                                    | 部分具备 | 可注入 `LoginItemService`；macOS `SMAppService` 与 Windows Run/StartupApproved 的 set/query 已具备，`wasOpenedAtLogin` 和 Windows launch-item enumeration 尚未公开 |
+| setDesktopName、set/getBadgeCount                                                                           | 已具备   | builder 在建窗前固定 `.desktop` identity；macOS Dock 与 Linux LauncherEntry，Windows 不在 Electron 的 badge 支持边界内                                             |
+| setUserTasks、getJumpListSettings、setJumpList                                                              | 已具备   | Windows typed task/category/item、removed destination、atomic commit/reset 与 injectable backend                                                                   |
+| getFileIcon                                                                                                 | 已具备   | async injectable service；small/normal/large 尺寸与 macOS large unsupported 边界对齐 Electron                                                                      |
+| about/emoji panel                                                                                           | 已具备   | macOS 标准 About/character panel；其他平台 About 复用可注入 message dialog，Windows 10 RS4+ Emoji 使用系统 picker                                                  |
+| Dock                                                                                                        | 部分具备 | badge、macOS 显隐/查询/图标已具备；窗口 attention 继续委托 `winit`，Dock menu 与 download-finished notification 尚未公开                                           |
+| Handoff                                                                                                     | 部分具备 | macOS `set/get/update/resign/invalidate` 直接映射 `NSUserActivity`；接收另一设备 activity 的 lifecycle callback 尚未公开                                           |
+| AppUserModelId、packaged identity                                                                           | 部分具备 | `BundleManifest` / installer 拥有安装期身份；尚无完整 runtime 查询或修改接口                                                                                       |
+| webContents/session/certificate/WebAuthn/Chromium commandLine、GPU/renderer process state、Chromium sandbox | 不适用   | ZUI 没有 Chromium renderer；对应能力不能用空实现伪装                                                                                                               |
 
 默认 `Application::run` 使用私有 wgpu backend。测试或第三方 backend 实现公开的 `Renderer` 与 `RendererFactory`，再使用 `Application::run_with_renderer` 或 `ApplicationBuilder::with_renderer` 注入；组件与产品 scene 构造不改变。Clipboard、file/message dialog、opener、notification、menu、tray、global shortcut、resource 与 process 都能通过 builder 注入替代实现。`ClipboardHandle` 当前支持 text、HTML + plain-text representation、validated RGBA8 image 与全格式清空；旧的 text-only injected backend 通过 trait 默认方法对富内容返回 `ClipboardError::Unsupported`，不会因接口扩展而获得伪实现。
 
@@ -224,11 +224,11 @@ let outcome = zui::app::Application::builder()
 
 `BundleManifest` 是 library API 与 `zui-packager` CLI 的共同输入。JSON 中的 executable、icon 和 resource source 相对于 manifest 文件目录解析；`ResourcePath` 继续约束 bundle 内 destination。生成器只接受普通文件和目录，拒绝输入 symlink、路径穿越和既有输出，因此失败重试不会覆盖发布目录。
 
-| 目标 | Bundle 产物 | 协议声明 | Installer backend |
-| --- | --- | --- | --- |
-| macOS | `<name>.app` | `Contents/Info.plist` 的 `CFBundleURLTypes` | `/usr/bin/pkgbuild` 生成 `.pkg` |
-| Linux | `<name>.AppDir`，含 `AppRun` | 根 `.desktop` 与 `usr/share/applications` MIME handler | `appimagetool` 生成 `.AppImage` |
-| Windows | `<name>-windows`，含可选 AppContainer runner | 显式 `register-protocols.ps1` | WiX 4 `.wxs` + `wix build` 生成每用户 `.msi` |
+| 目标    | Bundle 产物                                  | 协议声明                                               | Installer backend                            |
+| ------- | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
+| macOS   | `<name>.app`                                 | `Contents/Info.plist` 的 `CFBundleURLTypes`            | `/usr/bin/pkgbuild` 生成 `.pkg`              |
+| Linux   | `<name>.AppDir`，含 `AppRun`                 | 根 `.desktop` 与 `usr/share/applications` MIME handler | `appimagetool` 生成 `.AppImage`              |
+| Windows | `<name>-windows`，含可选 AppContainer runner | 显式 `register-protocols.ps1`                          | WiX 4 `.wxs` + `wix build` 生成每用户 `.msi` |
 
 最小 manifest 见 [`examples/bundle-manifest.json`](examples/bundle-manifest.json)。Windows 产品若使用默认严格 sandbox，必须设置 `windows_appcontainer_runner`；packager 会验证并复制 helper。`bundle` 只生成可检查的目录；`installer` 先生成同一 bundle，再直接执行当前目标的外部工具，不经过 shell；`release` 在 installer 之后执行平台签名与验收：
 
@@ -281,18 +281,18 @@ ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发�
 
 这些能力构成 Electron 类原生应用 framework 的一组可用基础，但当前不能声明“完整核心职责边界”。剩余状态如下：
 
-| 边界 | 当前状态 |
-| --- | --- |
+| 边界                                                                                                                                            | 当前状态                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Application / Window lifecycle、readiness、registry/focus 查询、cross-thread proxy、异步窗口创建、frame commit、window state 与 operation error | 部分具备；constructor/main-thread/testing 共享 `is_ready`/owned `when_ready` contract，首次 `App::ready` 返回后才提交，提前退出显式报错；原生与程序化 `close` 统一投递可取消的 `WindowEvent::CloseRequested`，显式 `destroy` 提供无回调强制路径；正常显式退出先经过 `App::before_exit`，再按 child-first 顺序逐窗请求关闭，任一窗口可取消且不会伪发 `window-all-closed`，全部窗口关闭后由 `App::will_exit` 提供最后取消点，最后窗口策略也依次保留 before/will-exit 取消点；`force_exit(code)` 保留退出码并像 Electron `app.exit(code)` 一样跳过 application/window 取消回调，fatal/platform 退出同样不可取消；三平台 single-instance 将 second-instance argv/cwd/opaque data 和允许的协议 URL 投递给存活主实例，macOS 已接入 `App::activated`、原生 `App::open_file` 与运行期 URL forwarding；Windows/Linux 遵循 Electron 的平台契约，由产品解析启动/second-instance argv 中的文件关联路径，不伪造不存在的 native open-file callback |
-| Display topology / global cursor | 部分具备；已提供 application/window scoped immutable snapshot、primary/current、mode、可选 work area/rotation/internal classification、按 identity/点/矩形查询与确定性 diff，macOS/Windows 使用原生 change source，Linux 使用有界 snapshot polling 投递 `App::display_event`；全局物理 cursor query 覆盖 macOS/Windows/X11，Wayland 显式 `Unsupported`；Linux 当前无可信全局 work area/rotation，保持 `None` |
-| Parent / modal window relationship | 部分具备；macOS/Windows parent 使用真实 native relationship，Windows modal 具备 owner input 禁用/恢复、multi-modal ref-count 语义与 child-first cascade；Linux parent 与 macOS modal 显式 `Unsupported`，不伪装 |
-| `Element` / `Component` composition | 已具备 row/column、固定/填充/内容自然尺寸、gap、主轴/交叉轴排列和统一 layout/inspection/interaction/paint frame，并提供 `ViewState` revision/subscription，以及按稳定 identity 保留 local state、外部 observation 和 RAII resource 的 `ComponentRuntime`；产品 reducer、业务副作用和完整 virtual DOM/effect scheduler 仍由 host 拥有或明确不提供 |
-| Platform event vocabulary | 当前 backend 词汇已穷尽转换为 ZUI-owned window、keyboard、IME、pointer、touch、gesture、file、appearance 与 raw-device event；raw device 使用运行期稳定 `DeviceId`，memory warning 进入 application lifecycle；backend 新增事件会在编译期要求补 contract，不再静默折叠 |
-| Async system capability | 已覆盖 task、timer、经校验且支持 non-owning window-modal parent 的单/多文件与目录 picker、save/message dialog，以及 opener、notification、process spawn/wait 与 update check/download/install；Linux parent dialog 取决于 XDG portal backend，opener/notification/process/update backend 保持同步注入面，但应用 handle 统一返回 owned `Send` future |
-| Deterministic host testing | 部分具备；与 native 共用 lifecycle/frame core，但不模拟真实 OS chrome、dialog、accessibility 或 GPU surface recovery |
-| Linux application menu | 尚未完成；当前 muda Linux backend 只能把 `gtk::MenuBar` 插入 `gtk::Window`/`gtk::Container`，而 ZUI 的 Linux window owner 是 winit X11/Wayland window，raw handle 不能满足该 ownership contract；完成它需要更换 Linux window owner 或引入 framework-owned client-side chrome，tray menu 已有独立 backend |
-| Default DevTools | scene/runtime Inspector 已具备；不提供也不计划伪装 Chromium DOM/CSS/JavaScript debugger |
-| Platform acceptance | 真实 tray、portal、screen reader、签名账户与安装验收仍依赖对应平台 CI/smoke test |
+| Display topology / global cursor                                                                                                                | 部分具备；已提供 application/window scoped immutable snapshot、primary/current、mode、可选 work area/rotation/internal classification、按 identity/点/矩形查询与确定性 diff，macOS/Windows 使用原生 change source，Linux 使用有界 snapshot polling 投递 `App::display_event`；全局物理 cursor query 覆盖 macOS/Windows/X11，Wayland 显式 `Unsupported`；Linux 当前无可信全局 work area/rotation，保持 `None`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Parent / modal window relationship                                                                                                              | 部分具备；macOS/Windows parent 使用真实 native relationship，Windows modal 具备 owner input 禁用/恢复、multi-modal ref-count 语义与 child-first cascade；Linux parent 与 macOS modal 显式 `Unsupported`，不伪装                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `Element` / `Component` composition                                                                                                             | 已具备 row/column、固定/填充/内容自然尺寸、gap、主轴/交叉轴排列和统一 layout/inspection/interaction/paint frame，并提供 `ViewState` revision/subscription，以及按稳定 identity 保留 local state、外部 observation 和 RAII resource 的 `ComponentRuntime`；产品 reducer、业务副作用和完整 virtual DOM/effect scheduler 仍由 host 拥有或明确不提供                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Platform event vocabulary                                                                                                                       | 当前 backend 词汇已穷尽转换为 ZUI-owned window、keyboard、IME、pointer、touch、gesture、file、appearance 与 raw-device event；raw device 使用运行期稳定 `DeviceId`，memory warning 进入 application lifecycle；backend 新增事件会在编译期要求补 contract，不再静默折叠                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Async system capability                                                                                                                         | 已覆盖 task、timer、经校验且支持 non-owning window-modal parent 的单/多文件与目录 picker、save/message dialog，以及 opener、notification、process spawn/wait 与 update check/download/install；Linux parent dialog 取决于 XDG portal backend，opener/notification/process/update backend 保持同步注入面，但应用 handle 统一返回 owned `Send` future                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Deterministic host testing                                                                                                                      | 部分具备；与 native 共用 lifecycle/frame core，但不模拟真实 OS chrome、dialog、accessibility 或 GPU surface recovery                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Linux application menu                                                                                                                          | 尚未完成；当前 muda Linux backend 只能把 `gtk::MenuBar` 插入 `gtk::Window`/`gtk::Container`，而 ZUI 的 Linux window owner 是 winit X11/Wayland window，raw handle 不能满足该 ownership contract；完成它需要更换 Linux window owner 或引入 framework-owned client-side chrome，tray menu 已有独立 backend                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Default DevTools                                                                                                                                | scene/runtime Inspector 已具备；不提供也不计划伪装 Chromium DOM/CSS/JavaScript debugger                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Platform acceptance                                                                                                                             | 真实 tray、portal、screen reader、签名账户与安装验收仍依赖对应平台 CI/smoke test                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 root compatibility exports 尚未进入正式移除周期；Windows AppContainer 继续只接受能够无降级表达的权限组合。后续接口必须先补 contract、错误语义和 deterministic test，再把能力列为完成。
 

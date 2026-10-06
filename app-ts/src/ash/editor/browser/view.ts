@@ -116,7 +116,7 @@ export interface EditorViewportOptions {
 	readonly dimension?: IDimension;
 	readonly padding?: EditorViewportPadding;
 	readonly ariaLabel?: string;
-	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean };
+	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean; };
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly configurationService?: IConfigurationService;
 	readonly presentation?: EditorViewportPresentation;
@@ -169,7 +169,7 @@ export class View extends ViewEventHandler {
 	private readonly marginViewOverlays: MarginViewOverlays;
 	private readonly decorations: DecorationsOverlay;
 	private readonly viewCursors: ViewCursors;
-	private readonly textMeasurer: TextMeasurer & { refresh?(): boolean };
+	private readonly textMeasurer: TextMeasurer & { refresh?(): boolean; };
 	private readonly viewModel: IViewModel;
 	readonly coordinatesConverter: IViewModel['coordinatesConverter'];
 	readonly cursorConfig: IViewModel['cursorConfig'];
@@ -1007,7 +1007,7 @@ export class View extends ViewEventHandler {
 	}
 
 	private computeGlyphMarginLanes(): void {
-		const glyphs: { readonly range: Range; readonly lane: GlyphMarginLane; readonly persist?: boolean }[] = [];
+		const glyphs: { readonly range: Range; readonly lane: GlyphMarginLane; readonly persist?: boolean; }[] = [];
 		let maxLineNumber = 0;
 		for (const decoration of this.model.getAllMarginDecorations()) {
 			const lane = decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center;

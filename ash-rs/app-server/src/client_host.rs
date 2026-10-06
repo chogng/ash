@@ -404,7 +404,9 @@ impl ClientHost {
 
         let deadline = Instant::now() + timeout.min(REQUEST_TIMEOUT);
         let value = loop {
-            match receiver.recv_timeout(CANCELLATION_POLL.min(deadline.saturating_duration_since(Instant::now()))) {
+            match receiver.recv_timeout(
+                CANCELLATION_POLL.min(deadline.saturating_duration_since(Instant::now())),
+            ) {
                 Ok(result) => break result?,
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     break Err(ClientHostError::CapabilityUnavailable)?;

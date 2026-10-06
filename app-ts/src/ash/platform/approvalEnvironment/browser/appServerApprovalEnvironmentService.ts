@@ -7,7 +7,7 @@ import type { IApprovalEnvironmentService, ReviewEnvironmentDraft, ReviewEnviron
 
 /** Mechanical transport adapter; profile state and source verification stay in the backend. */
 export class AppServerApprovalEnvironmentService implements IApprovalEnvironmentService {
-	constructor(private readonly client: AppServerProtocolClient) {}
+	constructor(private readonly client: AppServerProtocolClient) { }
 	async read(scope: ReviewEnvironmentScope): Promise<ReviewEnvironmentProfile> {
 		return profile(await this.client.request(APP_SERVER_METHODS['approval/environment/read'], { scope }).catch(explain));
 	}

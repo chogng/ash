@@ -160,8 +160,8 @@ export class MarkdownPreview extends Disposable {
 		}, parserHtml);
 		this.webview.setHtml(
 			`<style>${PREVIEW_STYLE}</style>` +
-				`<main class="ash-markdown-preview">${safeHtml}</main>` +
-				`<script>${LINK_BRIDGE_SCRIPT}</script>`,
+			`<main class="ash-markdown-preview">${safeHtml}</main>` +
+			`<script>${LINK_BRIDGE_SCRIPT}</script>`,
 		);
 	}
 

@@ -11,19 +11,19 @@
 
 ## 所有权与公共接口
 
-| API / type | 当前职责 | 明确不做 |
-| --- | --- | --- |
-| `LspManager` | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients | 保存编辑器文本或直接修改 UI |
-| `LspManagerConfiguration` | 固定 directory root、启用状态和 resolved server definitions | 读取设置、PATH 或安装目录 |
-| `LanguageServerRestartPolicy` | 定义 Never 或有限指数退避、重启预算和 healthy-window reset | 发现 executable 或绘制错误 UI |
-| `LanguageServerState` | 向产品发布 Starting、Ready、BackingOff、CrashLoop、Failed、Stopped | 保存设置或作为协议状态 |
-| `ash-lsp-server-provider::LanguageServerDefinition` | resolver/provider 委托的唯一 route、canonical command 与 initialize options | 在 runtime 内重新查询 PATH |
-| `LspDocumentSnapshot` | 传递绝对路径、language ID、精确 editor revision 和 authoritative full text | 充当磁盘 revision 或文件缓存 |
-| `LanguageDiagnostics` | 绑定路径、精确 editor revision 和 product-neutral UTF-8 ranges | 保存 LSP URI、version 或 paint style |
-| `LanguageRequestId` / `LanguageDocumentPosition` | 非阻塞请求 identity 与 editor-owned UTF-8 source position；本地 service 或 Remote product adapter 在请求边界分配 identity | 暴露 LSP position encoding |
-| `LanguageHover` / `LanguageCompletions` / `LanguageDefinitions` | capability-gated、revision-fresh 的产品结果 | 绘制 popup、读取定义文件或持有 editor text |
-| `LspManagerEventSink` | 快速接收分开的通知与请求结果 | 在 callback 中阻塞或反向调用 manager |
-| `LspRequestMetricsSink` | 接收不含源码、路径、query 或 position 的请求结果指标 | 做 telemetry transport、保存用户内容或控制请求 |
+| API / type                                                      | 当前职责                                                                                                                  | 明确不做                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `LspManager`                                                    | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients                                              | 保存编辑器文本或直接修改 UI                    |
+| `LspManagerConfiguration`                                       | 固定 directory root、启用状态和 resolved server definitions                                                               | 读取设置、PATH 或安装目录                      |
+| `LanguageServerRestartPolicy`                                   | 定义 Never 或有限指数退避、重启预算和 healthy-window reset                                                                | 发现 executable 或绘制错误 UI                  |
+| `LanguageServerState`                                           | 向产品发布 Starting、Ready、BackingOff、CrashLoop、Failed、Stopped                                                        | 保存设置或作为协议状态                         |
+| `ash-lsp-server-provider::LanguageServerDefinition`             | resolver/provider 委托的唯一 route、canonical command 与 initialize options                                               | 在 runtime 内重新查询 PATH                     |
+| `LspDocumentSnapshot`                                           | 传递绝对路径、language ID、精确 editor revision 和 authoritative full text                                                | 充当磁盘 revision 或文件缓存                   |
+| `LanguageDiagnostics`                                           | 绑定路径、精确 editor revision 和 product-neutral UTF-8 ranges                                                            | 保存 LSP URI、version 或 paint style           |
+| `LanguageRequestId` / `LanguageDocumentPosition`                | 非阻塞请求 identity 与 editor-owned UTF-8 source position；本地 service 或 Remote product adapter 在请求边界分配 identity | 暴露 LSP position encoding                     |
+| `LanguageHover` / `LanguageCompletions` / `LanguageDefinitions` | capability-gated、revision-fresh 的产品结果                                                                               | 绘制 popup、读取定义文件或持有 editor text     |
+| `LspManagerEventSink`                                           | 快速接收分开的通知与请求结果                                                                                              | 在 callback 中阻塞或反向调用 manager           |
+| `LspRequestMetricsSink`                                         | 接收不含源码、路径、query 或 position 的请求结果指标                                                                      | 做 telemetry transport、保存用户内容或控制请求 |
 
 `LspManagerEnablement::Disabled` 会保留最新文档快照但不启动 server。调用方必须显式提供
 `Enabled` 和非歧义 resolver/provider 结果，manager 才会把 resolved command 委托给 `ash-lsp` 启动。

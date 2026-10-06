@@ -231,7 +231,7 @@ test("EnterOperation inserts blank lines before and after every cursor line", ()
 	assert.equal(model.getText(), "\n\nzero\none\n\n\ntwo");
 });
 
-async function enterWithTokens(initialText: string, position: Position): Promise<{ readonly text: string; readonly position: Position }> {
+async function enterWithTokens(initialText: string, position: Position): Promise<{ readonly text: string; readonly position: Position; }> {
 	using tokens = registerTestTokens(new Map([
 		['const text = "{"', [{ offset: 0, type: "" }, { offset: 13, type: "string" }]],
 		["// {", [{ offset: 0, type: "comment" }]],
@@ -263,7 +263,7 @@ function createLanguageEnterCommand(
 	model: TextModel,
 	selections: readonly Selection[],
 	configuration: ResolvedLanguageConfiguration,
-	options: { readonly indentation?: EditorIndentationOptions } = {},
+	options: { readonly indentation?: EditorIndentationOptions; } = {},
 ) {
 	resolveEditorIndentationOptions(options.indentation);
 	const languageConfigurationService = {

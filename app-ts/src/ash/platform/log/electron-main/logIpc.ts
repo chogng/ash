@@ -4,7 +4,7 @@ import { validateLogEntry } from '../common/logIpc.js';
 import type { LoggerService } from '../node/loggerService.js';
 
 export class LoggerChannel implements IServerChannel {
-	constructor(private readonly loggerService: LoggerService) {}
+	constructor(private readonly loggerService: LoggerService) { }
 
 	public async call<T>(context: string, command: string, arg: unknown): Promise<T> {
 		if (!/^window:[1-9]\d*$/.test(context)) { throw new TypeError('Invalid logger window'); }

@@ -18,7 +18,7 @@ suite('Browser view groups', () => {
 		const parents: string[] = [];
 		for (const commandId of [1, 2]) {
 			await groups.sendCDPMessage(id, { id: commandId, method: 'Target.attachToBrowserTarget' });
-			parents.push(((messages.at(-1) as CDPResponse).result as { sessionId: string }).sessionId);
+			parents.push(((messages.at(-1) as CDPResponse).result as { sessionId: string; }).sessionId);
 		}
 		for (const sessionId of parents) {
 			await groups.sendCDPMessage(id, { id: 3, method: 'Target.setAutoAttach', params: { autoAttach: true, flatten: true }, sessionId });
@@ -104,12 +104,12 @@ suite('Browser view groups', () => {
 		const messages: Array<CDPEvent | CDPResponse> = [];
 		f.store.add(groups.onDynamicCDPMessage(first)(message => messages.push(message)));
 		await groups.sendCDPMessage(first, { id: 1, method: 'Target.attachToTarget', params: { targetId: page.id, flatten: true } });
-		const sessionId = ((messages.at(-1) as CDPResponse).result as { sessionId: string }).sessionId;
+		const sessionId = ((messages.at(-1) as CDPResponse).result as { sessionId: string; }).sessionId;
 		await groups.sendCDPMessage(second, { id: 2, method: 'Target.setAutoAttach', params: { autoAttach: true, flatten: true } });
 		await groups.sendCDPMessage(first, { id: 3, method: 'Runtime.evaluate', params: { expression: '1 + 1' }, sessionId });
 		assert.equal(f.commands.at(-1)?.method, 'Runtime.evaluate');
 		await groups.sendCDPMessage(first, { id: 4, method: 'Target.getTargets', sessionId });
-		assert.deepEqual(((messages.at(-1) as CDPResponse).result as { targetInfos: { browserViewId: string }[] }).targetInfos.map(info => info.browserViewId), [page.id]);
+		assert.deepEqual(((messages.at(-1) as CDPResponse).result as { targetInfos: { browserViewId: string; }[]; }).targetInfos.map(info => info.browserViewId), [page.id]);
 		page.webContents.debugger.emit('message', {}, 'Runtime.consoleAPICalled', { value: 'one' }, '');
 		assert.deepEqual(messages.at(-1), { method: 'Runtime.consoleAPICalled', params: { value: 'one' }, sessionId });
 		await groups.sendCDPMessage(second, { id: 4, method: 'Runtime.evaluate', sessionId });
@@ -149,7 +149,7 @@ suite('Browser view groups', () => {
 		f.store.add(groups.onDynamicCDPMessage(id)(message => messages.push(message)));
 		await f.manager.setSharing(pageId, ['one']);
 		await groups.sendCDPMessage(id, { id: 1, method: 'Target.attachToTarget', params: { targetId: pageId, flatten: true } });
-		const sessionId = ((messages.at(-1) as CDPResponse).result as { sessionId: string }).sessionId;
+		const sessionId = ((messages.at(-1) as CDPResponse).result as { sessionId: string; }).sessionId;
 		const started = promiseWithResolvers<void>();
 		const finish = promiseWithResolvers<void>();
 		f.command = async () => { started.resolve(); await finish.promise; return { secret: 'signed-in content' }; };
@@ -162,7 +162,7 @@ suite('Browser view groups', () => {
 		finish.resolve();
 		await groups.sendCDPMessage(id, { id: 3, method: 'Target.getTargets' });
 		assert.deepEqual((messages.at(-1) as CDPResponse).result, { targetInfos: [] });
-		assert.equal(messages.some(message => 'result' in message && (message.result as { secret?: string } | undefined)?.secret), false);
+		assert.equal(messages.some(message => 'result' in message && (message.result as { secret?: string; } | undefined)?.secret), false);
 		await f.manager.loadURL(pageId, 'https://example.test/still-private');
 		assert.equal((await f.manager.getState(pageId)).url, 'https://example.test/still-private');
 	});

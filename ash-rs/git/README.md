@@ -20,37 +20,37 @@ HEAD 与工作树对象，导入验证摘要之外的 Git 完整性和对象类�
 本 crate 吸收了 Codex `git-utils` 中值得保留的 agent/host 侧优化，但把这些能力组织在一个明确的
 Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 
-| 容易被低估的能力 | 当前实现价值 |
-| --- | --- |
-| 有界进程 | query 默认 5 秒、mutation 默认 30 秒；stdout/stderr 各自有 8 MiB 上限，达到上限后仍继续 drain child，最终返回明确错误 |
-| 仓库探测并发 | 同目录正在进行的探测共享结果；整个进程最多同时执行 8 次仓库探测 |
-| 非交互执行 | 禁用 terminal prompt 和 credential-manager 交互，固定 `LC_ALL=C`，避免后台调用等待 UI/input |
-| repository config 隔离 | 所有内部命令禁用 configured hooks；query 禁用 optional locks |
-| fsmonitor 安全与性能 | 不执行 repository-selected fsmonitor helper；仅当配置确实是 boolean true 且 Git 声明 built-in daemon capability 时保留 daemon |
-| 机器可读 status | 使用 porcelain v2 + NUL 分隔，保留 index/worktree、rename original path、conflict、submodule 和 upstream ahead/behind |
-| 结构化 patch | 用 enum 区分 check/apply 与 forward/reverse；区分 `AppliedWithConflicts` 和未应用的 `Rejected`，不与 spawn/timeout/输出损坏混为一谈 |
-| 路径边界 | `git apply` 不启用 `--unsafe-paths`；diff header path 做排序、去重和 quoted-path 解析 |
+| 容易被低估的能力       | 当前实现价值                                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 有界进程               | query 默认 5 秒、mutation 默认 30 秒；stdout/stderr 各自有 8 MiB 上限，达到上限后仍继续 drain child，最终返回明确错误               |
+| 仓库探测并发           | 同目录正在进行的探测共享结果；整个进程最多同时执行 8 次仓库探测                                                                     |
+| 非交互执行             | 禁用 terminal prompt 和 credential-manager 交互，固定 `LC_ALL=C`，避免后台调用等待 UI/input                                         |
+| repository config 隔离 | 所有内部命令禁用 configured hooks；query 禁用 optional locks                                                                        |
+| fsmonitor 安全与性能   | 不执行 repository-selected fsmonitor helper；仅当配置确实是 boolean true 且 Git 声明 built-in daemon capability 时保留 daemon       |
+| 机器可读 status        | 使用 porcelain v2 + NUL 分隔，保留 index/worktree、rename original path、conflict、submodule 和 upstream ahead/behind               |
+| 结构化 patch           | 用 enum 区分 check/apply 与 forward/reverse；区分 `AppliedWithConflicts` 和未应用的 `Rejected`，不与 spawn/timeout/输出损坏混为一谈 |
+| 路径边界               | `git apply` 不启用 `--unsafe-paths`；diff header path 做排序、去重和 quoted-path 解析                                               |
 
 因此，新增 Git 命令与解析时应扩展本 crate，而不是在 App Server、Desktop adapter 或 Tool 中直接新增
 `Command::new("git")`。
 
 ## 当前所有权
 
-| 文件 | 当前职责 | 关键 symbol |
-| --- | --- | --- |
-| `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config，以及流式 query process 生命周期 | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`GitQueryStream`、`read_bounded` |
-| `src/repository.rs` | 仓库初始化、从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
-| `src/discovery.rs` | 合并进行中的仓库探测、限制并发，并随最后一个调用方取消工作 | private `Coordinator` |
-| `src/working_copy.rs` 与 `src/working_copy/` | status、忽略规则、工作文件内容、文本 Diff、index 编辑、patch、普通 stage/unstage/discard/commit，以及 checkout 层保持 | `GitRepositorySnapshot`、`GitIndexEdit`、`GitCommitRequest` |
-| `src/history.rs` 与 `src/history/` | 提交详情、最近历史、分页图与历史内容 | `GitGraphCursor`、`GitCommitDetails`、`GitCommitSummary` |
-| `src/references.rs` 与 `src/references/` | 分支、标签、stash、检出、整合状态、封闭操作入口与 ref CAS | `GitCommand`、`GitIntegration`、`GitBranch` |
-| `src/remote.rs` | remote 清单与配置身份、fetch/pull/push、分支推送 | `GitRemote`、`GitRemoteIdentity` |
-| `src/objects.rs` 与 `src/objects/` | tree/blob 捕获与保留、精确文件 delta、三方重放、commit 对象、对象包完整性 | `GitTreeId`、`GitTreeReplayResult`、`GitPrivateRef`、`GitPackBase` |
-| `src/worktree.rs` | Git worktree 清单、创建、锁定、修复和删除原语 | `GitWorktree`、`GitWorktreeAvailability` |
-| `src/operation_lock.rs` | 按 common directory 协调目标发布与交互 Git 写入 | `repository_operation_lock` |
-| `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
-| `src/path.rs` | porcelain path bytes 到 platform `PathBuf` | private `path_from_git_bytes` |
-| `src/error.rs` | transport、timeout、limit、Git exit 和 parse failure 的稳定区分 | `GitError` |
+| 文件                                         | 当前职责                                                                                                                    | 关键 symbol                                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `src/client.rs`                              | Git executable identity、process profile、timeout、bounded capture、non-interactive config，以及流式 query process 生命周期 | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`GitQueryStream`、`read_bounded` |
+| `src/repository.rs`                          | 仓库初始化、从已有 path 打开 working tree，解析 worktree/git/common metadata path                                           | `GitRepository`、`GitRepositoryKind`、`existing_directory`                                                        |
+| `src/discovery.rs`                           | 合并进行中的仓库探测、限制并发，并随最后一个调用方取消工作                                                                  | private `Coordinator`                                                                                             |
+| `src/working_copy.rs` 与 `src/working_copy/` | status、忽略规则、工作文件内容、文本 Diff、index 编辑、patch、普通 stage/unstage/discard/commit，以及 checkout 层保持       | `GitRepositorySnapshot`、`GitIndexEdit`、`GitCommitRequest`                                                       |
+| `src/history.rs` 与 `src/history/`           | 提交详情、最近历史、分页图与历史内容                                                                                        | `GitGraphCursor`、`GitCommitDetails`、`GitCommitSummary`                                                          |
+| `src/references.rs` 与 `src/references/`     | 分支、标签、stash、检出、整合状态、封闭操作入口与 ref CAS                                                                   | `GitCommand`、`GitIntegration`、`GitBranch`                                                                       |
+| `src/remote.rs`                              | remote 清单与配置身份、fetch/pull/push、分支推送                                                                            | `GitRemote`、`GitRemoteIdentity`                                                                                  |
+| `src/objects.rs` 与 `src/objects/`           | tree/blob 捕获与保留、精确文件 delta、三方重放、commit 对象、对象包完整性                                                   | `GitTreeId`、`GitTreeReplayResult`、`GitPrivateRef`、`GitPackBase`                                                |
+| `src/worktree.rs`                            | Git worktree 清单、创建、锁定、修复和删除原语                                                                               | `GitWorktree`、`GitWorktreeAvailability`                                                                          |
+| `src/operation_lock.rs`                      | 按 common directory 协调目标发布与交互 Git 写入                                                                             | `repository_operation_lock`                                                                                       |
+| `src/fsmonitor.rs`                           | effective config 与 built-in daemon capability 探测                                                                         | private `detect_fsmonitor_override`                                                                               |
+| `src/path.rs`                                | porcelain path bytes 到 platform `PathBuf`                                                                                  | private `path_from_git_bytes`                                                                                     |
+| `src/error.rs`                               | transport、timeout、limit、Git exit 和 parse failure 的稳定区分                                                             | `GitError`                                                                                                        |
 
 所有实现 module 均为 private，`src/lib.rs` 显式导出 crate API。把 App Server repository registry、
 watch subscription、operation queue 或 wire DTO 放进上述 module，意味着 ownership 已经漂移。
@@ -225,12 +225,12 @@ Git revision 或复制统计规则。
 `GitPatchRequest` 用 `GitPatchExecution` 和 `GitPatchDirection` 避免 `apply(false, true)` 一类不透明
 callsite：
 
-| Request | Git invocation | Working tree |
-| --- | --- | --- |
-| `Check + Forward` | `git apply --recount --check -` | 不修改 |
-| `Check + Reverse` | `git apply --recount --check -R -` | 不修改 |
-| `Apply + Forward` | `git apply --recount --3way -` | 可能修改并产生 conflict |
-| `Apply + Reverse` | `git apply --recount --3way -R -` | 可能修改并产生 conflict |
+| Request           | Git invocation                     | Working tree            |
+| ----------------- | ---------------------------------- | ----------------------- |
+| `Check + Forward` | `git apply --recount --check -`    | 不修改                  |
+| `Check + Reverse` | `git apply --recount --check -R -` | 不修改                  |
+| `Apply + Forward` | `git apply --recount --3way -`     | 可能修改并产生 conflict |
+| `Apply + Reverse` | `git apply --recount --3way -R -`  | 可能修改并产生 conflict |
 
 成功 check 返回 `Applicable`，成功 apply 返回 `Applied`。当 Git 明确报告三方应用已经写入
 conflict 时返回 `AppliedWithConflicts`；其他 nonzero exit 返回 `Rejected`。后两者都表示进程已经
@@ -246,11 +246,11 @@ path 错称为 `applied_paths`。Diagnostics path 是对 Git 文本输出的 bes
 
 private `GitCommandProfile` 固定三类执行：
 
-| Profile | Timeout | Optional locks | fsmonitor |
-| --- | ---: | --- | --- |
-| Query | query timeout | disabled | explicit safe override |
-| Configuration probe | query timeout | disabled | 不覆盖被探测值 |
-| Mutation | mutation timeout | Git 默认 | disabled |
+| Profile             |          Timeout | Optional locks | fsmonitor              |
+| ------------------- | ---------------: | -------------- | ---------------------- |
+| Query               |    query timeout | disabled       | explicit safe override |
+| Configuration probe |    query timeout | disabled       | 不覆盖被探测值         |
+| Mutation            | mutation timeout | Git 默认       | disabled               |
 
 所有 profile 禁用 configured hooks、terminal prompts 和 color。stdout/stderr reader 在保留上限
 后继续 drain，避免 child 因 pipe backpressure 卡死；最终以 `OutputLimitExceeded` 失败，不返回

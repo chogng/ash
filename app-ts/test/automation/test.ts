@@ -15,8 +15,8 @@ interface RunningApplication {
 	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'errors'>;
 	deferRestart(): Promise<void>;
 	restartMessage(): Promise<string>;
-	reload(): Promise<{ application: PlaywrightApplication; workbench: Workbench }>;
-	restart(): Promise<{ application: PlaywrightApplication; workbench: Workbench }>;
+	reload(): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
+	restart(): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
 }
 
 interface PlaywrightFixtures {
@@ -46,7 +46,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	reportIssueUrl: [undefined, { option: true }],
 	// Workspace options may depend on the platform. Connection addresses belong
 	// to the later launch, otherwise target -> server -> workspace -> target cycles.
-	target: async ({}, use, testInfo) => {
+	target: async ({ }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
 	webAppServer: [async ({ testWorkspace, reportIssueUrl }, use, testInfo) => {
@@ -103,7 +103,8 @@ export const test = base.extend<PlaywrightFixtures>({
 			if (url === undefined) throw new Error(`Browser project '${testInfo.project.name}' requires a baseURL`);
 			const { application, driver } = await launchBrowser({ ...target, baseURL: url, webSession: webAppServer?.connection });
 			generations.push(driver.diagnostics);
-			const running: RunningApplication = { driver, diagnostics,
+			const running: RunningApplication = {
+				driver, diagnostics,
 				reload: async () => {
 					await driver.workbench.page.context().tracing.stop();
 					await driver.workbench.reloadWindow();
@@ -114,14 +115,15 @@ export const test = base.extend<PlaywrightFixtures>({
 				deferRestart: async () => { await driver.workbench.page.getByRole('button', { name: /^(Later|稍后)$/u }).click(); },
 				restartMessage: async () => driver.workbench.page.locator('.ash-dialog-message').textContent().then(text => text ?? ''),
 				restart: async () => {
-				await driver.workbench.page.context().tracing.stop();
-				const loaded = driver.workbench.page.waitForEvent('domcontentloaded');
-				await driver.workbench.page.getByRole('button', { name: /^(Restart now|立即重启)$/u }).click();
-				await loaded;
-				await driver.workbench.waitForReady();
-				await driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
-				return { application, workbench: driver.workbench };
-			} };
+					await driver.workbench.page.context().tracing.stop();
+					const loaded = driver.workbench.page.waitForEvent('domcontentloaded');
+					await driver.workbench.page.getByRole('button', { name: /^(Restart now|立即重启)$/u }).click();
+					await loaded;
+					await driver.workbench.waitForReady();
+					await driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+					return { application, workbench: driver.workbench };
+				}
+			};
 			try { await useApplication(running); } finally { await application.close(); }
 			return;
 		}
@@ -143,7 +145,8 @@ export const test = base.extend<PlaywrightFixtures>({
 				generations.push(current.driver.diagnostics);
 				await captureRestartDialogs(current.application);
 				let generation = 0;
-				const running: RunningApplication = { driver: current.driver, diagnostics,
+				const running: RunningApplication = {
+					driver: current.driver, diagnostics,
 					reload: async () => {
 						await current.driver.workbench.page.context().tracing.stop();
 						const page = current.driver.workbench.page;
@@ -165,32 +168,33 @@ export const test = base.extend<PlaywrightFixtures>({
 					},
 					restartMessage: async () => current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog?.message ?? ''),
 					restart: async () => {
-					const marker = join(userDataDirectory, `restart-${++generation}`);
-					// Playwright owns process launch so it can attach to the replacement. Verify the
-					// production shutdown reaches app.relaunch, then launch with the same profile.
-					await current.application.evaluate(({ app }, marker) => {
-						const fs = process.getBuiltinModule('fs');
-						app.relaunch = () => { fs.writeFileSync(marker, 'relaunch'); };
-					}, marker);
-					await current.driver.workbench.page.context().tracing.stop();
-					const childProcess = current.application.process();
-					let processOutput = '';
-					childProcess.stderr?.on('data', data => { processOutput += data.toString(); });
-					const exited = new Promise<void>(resolve => childProcess.once('exit', () => resolve()));
-					const closed = current.application.waitForEvent('close');
-					await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
-					await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond(0));
-					await closed;
-					await exited;
-					const relaunched = await readFile(marker, 'utf8').catch(() => 'missing');
-					if (relaunched !== 'relaunch') throw new Error(`Desktop shutdown did not request relaunch. Exit ${childProcess.exitCode}; ${processOutput}`);
-					current = await launchElectron(options);
-					generations.push(current.driver.diagnostics);
-					await captureRestartDialogs(current.application);
-					running.driver = current.driver;
-					await current.driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
-					return { application: current.application, workbench: current.driver.workbench };
-				} };
+						const marker = join(userDataDirectory, `restart-${++generation}`);
+						// Playwright owns process launch so it can attach to the replacement. Verify the
+						// production shutdown reaches app.relaunch, then launch with the same profile.
+						await current.application.evaluate(({ app }, marker) => {
+							const fs = process.getBuiltinModule('fs');
+							app.relaunch = () => { fs.writeFileSync(marker, 'relaunch'); };
+						}, marker);
+						await current.driver.workbench.page.context().tracing.stop();
+						const childProcess = current.application.process();
+						let processOutput = '';
+						childProcess.stderr?.on('data', data => { processOutput += data.toString(); });
+						const exited = new Promise<void>(resolve => childProcess.once('exit', () => resolve()));
+						const closed = current.application.waitForEvent('close');
+						await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
+						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond(0));
+						await closed;
+						await exited;
+						const relaunched = await readFile(marker, 'utf8').catch(() => 'missing');
+						if (relaunched !== 'relaunch') throw new Error(`Desktop shutdown did not request relaunch. Exit ${childProcess.exitCode}; ${processOutput}`);
+						current = await launchElectron(options);
+						generations.push(current.driver.diagnostics);
+						await captureRestartDialogs(current.application);
+						running.driver = current.driver;
+						await current.driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+						return { application: current.application, workbench: current.driver.workbench };
+					}
+				};
 				await useApplication(running);
 			} finally {
 				await current.close();
@@ -211,7 +215,7 @@ export const test = base.extend<PlaywrightFixtures>({
 });
 
 interface RestartDialogGlobal {
-	ashTestRestartDialog?: { message: string; respond(response: number): void };
+	ashTestRestartDialog?: { message: string; respond(response: number): void; };
 }
 
 async function captureRestartDialogs(application: import('@playwright/test').ElectronApplication): Promise<void> {
@@ -222,10 +226,12 @@ async function captureRestartDialogs(application: import('@playwright/test').Ele
 			if (!/^(Restart Ash|重启 Ash)/u.test(options.message)) return suppliedOptions
 				? original(windowOrOptions as Electron.BrowserWindow, suppliedOptions) : original(options);
 			return new Promise<Electron.MessageBoxReturnValue>(resolve => {
-				(globalThis as RestartDialogGlobal).ashTestRestartDialog = { message: options.message, respond(response) {
-					delete (globalThis as RestartDialogGlobal).ashTestRestartDialog;
-					resolve({ response, checkboxChecked: false });
-				} };
+				(globalThis as RestartDialogGlobal).ashTestRestartDialog = {
+					message: options.message, respond(response) {
+						delete (globalThis as RestartDialogGlobal).ashTestRestartDialog;
+						resolve({ response, checkboxChecked: false });
+					}
+				};
 			});
 		}) as typeof dialog.showMessageBox;
 	});

@@ -28,12 +28,12 @@ export class SessionsAccountMenu extends Disposable {
 			const label = account.plan
 				? localize('sessions.account.nameAndPlan', '{0} · {1}', name, account.plan)
 				: name;
-			return { id: `ash.sessions.account.${account.provider}`, label, tooltip: label, enabled: false, run() {} };
+			return { id: `ash.sessions.account.${account.provider}`, label, tooltip: label, enabled: false, run() { } };
 		});
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
 		if (this.loadFailed) {
 			const label = localize('sessions.account.unavailable', 'Accounts unavailable');
-			accountActions.push({ id: 'ash.sessions.accountsUnavailable', label, tooltip: label, enabled: false, run() {} });
+			accountActions.push({ id: 'ash.sessions.accountsUnavailable', label, tooltip: label, enabled: false, run() { } });
 		}
 		const returnLabel = localize('sessions.menu.workbench', 'Return to Workbench');
 		const actions = Separator.join(accountActions, [

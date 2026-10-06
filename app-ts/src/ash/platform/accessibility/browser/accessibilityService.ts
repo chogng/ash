@@ -166,7 +166,7 @@ function createMediaMatcher(ownerWindow: Window | null, query: string): MediaQue
 
 function listenToMediaQuery(matcher: MediaQueryList, listener: () => void) {
 	const eventListener = () => listener();
-	const legacyMatcher = matcher as MediaQueryList & { addListener?: (listener: (event: MediaQueryListEvent) => void) => void; removeListener?: (listener: (event: MediaQueryListEvent) => void) => void };
+	const legacyMatcher = matcher as MediaQueryList & { addListener?: (listener: (event: MediaQueryListEvent) => void) => void; removeListener?: (listener: (event: MediaQueryListEvent) => void) => void; };
 	if (typeof matcher.addEventListener === "function") {
 		matcher.addEventListener("change", eventListener);
 		return toDisposable(() => matcher.removeEventListener("change", eventListener));

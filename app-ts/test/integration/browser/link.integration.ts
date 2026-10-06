@@ -46,7 +46,7 @@ declare global {
 		ashLinkIntegration: {
 			readonly opened: readonly string[];
 			readonly customOpened: readonly string[];
-			readonly files: readonly { resource: string; line: number; column: number }[];
+			readonly files: readonly { resource: string; line: number; column: number; }[];
 			readonly contributed: readonly string[];
 			readonly settingsRevealed: readonly string[];
 			installExternalOpeners(chinese?: boolean): void;
@@ -57,14 +57,14 @@ declare global {
 			disposeLink(): void;
 			appendOutput(): void;
 			appendOutputLines(count: number): void;
-			getOutputScroll(): { top: number; end: number };
+			getOutputScroll(): { top: number; end: number; };
 			clearOutput(): void;
 			disposeOutput(): void;
 			openOutputEditor(): Promise<void>;
 			filterOutput(value: string): void;
 			runOpenLink(): Promise<void>;
-			getOutputState(): { panelText: string; editorText: string; sameModel: boolean; readonly: boolean };
-		}
+			getOutputState(): { panelText: string; editorText: string; sameModel: boolean; readonly: boolean; };
+		};
 	}
 }
 
@@ -78,7 +78,7 @@ const contextViews = resources.add(new BrowserContextViewService(document.body))
 // Menu presentation and editor display are boundaries outside this component scenario.
 const menus: IContextMenuService = {
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() {},
+	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 };
 services.registerInstance(IHoverService, resources.add(new HoverService(configuration, contextViews, menus)));
 const opener = resources.add(services.createInstance(OpenerService));
@@ -99,7 +99,7 @@ const workspace = resources.add(new WorkspaceContextService({ id: 'link-test', u
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IContextMenuService, menus);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'link', backend: window.localStorage, flushInterval: 0 })));
-services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {} });
+services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
 const store: ITextResourceStore = {
 	onDidChange: Event.None,
 	resolve: async request => ({ resource: request.resource, text: '', revision: undefined }),
@@ -110,7 +110,7 @@ services.registerSingleton(ITextModelService, () => services.createInstance(Text
 const output = resources.add(services.createInstance(OutputService));
 services.registerInstance(IOutputService, output);
 const channel = resources.add(output.createChannel({ id: 'link-test', label: 'Link test' }));
-const files: { resource: string; line: number; column: number }[] = [];
+const files: { resource: string; line: number; column: number; }[] = [];
 const contributed: string[] = [];
 const settingsRevealed: string[] = [];
 const pane = resources.add(services.createInstance(OutputViewPane, document.querySelector<HTMLElement>('#output')!, { id: 'link-test', title: 'Output' }));
@@ -141,7 +141,7 @@ window.ashLinkIntegration = {
 		}
 		services.registerInstance(IQuickInputService, resources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
 		services.registerInstance(IPreferencesService, {
-			openSettings: async () => {}, openGlobalKeybindingSettings: async () => {},
+			openSettings: async () => { }, openGlobalKeybindingSettings: async () => { },
 			openUserSettings: async options => { settingsRevealed.push(options!.revealSetting!.key); },
 		});
 		const external = resources.add(services.createInstance(ExternalUriOpenerService));

@@ -84,8 +84,8 @@ interface RenderOwnershipState {
 	readonly clearedScrollWidth: number;
 	readonly cursorScans: number;
 	readonly resizeScans: number;
-	readonly minimapCanvas: { readonly width: number; readonly height: number };
-	readonly configuredCanvas: { readonly width: number; readonly height: number };
+	readonly minimapCanvas: { readonly width: number; readonly height: number; };
+	readonly configuredCanvas: { readonly width: number; readonly height: number; };
 }
 
 interface CreationEvent {
@@ -136,7 +136,7 @@ interface ViewZoneState {
 }
 
 interface InlineRequestState {
-	requests: { kind: string; text: string; languageId: string; aborted: boolean }[];
+	requests: { kind: string; text: string; languageId: string; aborted: boolean; }[];
 	delay: number;
 	shared: boolean;
 }
@@ -179,17 +179,17 @@ interface StandaloneHarness {
 	setTokenInspectionPosition(column: number): void;
 	detachTokenInspectionModel(): void;
 	removeMonarchCommentStart(): void;
-	colorizePreview(): Promise<{ modelsBefore: number; modelsAfter: number }>;
-	readTokenTheme(): { colors: string[]; styles: number[]; languages: string[]; html: string | null; factoryCalls: number };
+	colorizePreview(): Promise<{ modelsBefore: number; modelsAfter: number; }>;
+	readTokenTheme(): { colors: string[]; styles: number[]; languages: string[]; html: string | null; factoryCalls: number; };
 	finishTokenProvider(): void;
 	removeTokenProvider(): void;
-	createEmptyEditor(): { readonly modelsAdded: number; readonly model: null; readonly id: string };
+	createEmptyEditor(): { readonly modelsAdded: number; readonly model: null; readonly id: string; };
 	attachEmptyEditor(): void;
-	detachEmptyEditor(): { readonly value: string; readonly modelDisposed: boolean };
+	detachEmptyEditor(): { readonly value: string; readonly modelDisposed: boolean; };
 	updateContributionOptions(options: IEditorOptions): void;
 	saveFoldingViewState(): void;
 	restoreFoldingViewState(): void;
-	readContributionDecorations(): { colors: number; highlights: number; folding: number };
+	readContributionDecorations(): { colors: number; highlights: number; folding: number; };
 	prepareStickyHeaders(): void;
 	prepareStickySymbols(): void;
 	changeStickySources(change: 'initial' | 'larger' | 'remove' | 'empty'): Promise<void>;
@@ -197,19 +197,19 @@ interface StandaloneHarness {
 	runStickyCommand(id: string): Promise<void>;
 	scrollSticky(top: number, left?: number): void;
 	hideStickyLines(start: number, end: number): void;
-	readStickyState(): { starts: number[]; ends: number[]; offset: number; focused: boolean; line: number; scrollLeft: number; hidden: number[][] };
+	readStickyState(): { starts: number[]; ends: number[]; offset: number; focused: boolean; line: number; scrollLeft: number; hidden: number[][]; };
 	setStickyTheme(name: string): void;
 	setKeyboardReadOnly(readOnly: boolean): void;
 	layoutContribution(width: number, height?: number): void;
 	toggleClosedFindOption(): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
-	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
+	readCompletionGeometry(): { caret: { left: number; top: number; height: number; }; api: { left: number; top: number; height: number; }; widget: { left: number; top: number; }; contentLeft: number; textLeft: number; };
 	prepareContributionRequests(kind: ContributionRequestKind, triggerCharacters?: readonly string[]): void;
 	prepareLinkCandidates(): void;
-	readContributionRequests(): { languageId: string; aborted: boolean }[];
+	readContributionRequests(): { languageId: string; aborted: boolean; }[];
 	finishContributionRequest(index: number, empty?: boolean): Promise<void>;
 	changeContributionState(reason: 'language' | 'edit' | 'dispose' | 'provider' | 'off' | 'on' | 'selection' | 'blur' | 'readonly'): void;
-	contributionPoint(column: number): { x: number; y: number };
+	contributionPoint(column: number): { x: number; y: number; };
 	readSelectionHighlights(): number;
 	prepareColorPicker(documentation?: boolean): void;
 	executeColorCommand(id: string, color?: number[], range?: [number, number, number, number]): Promise<unknown>;
@@ -220,25 +220,25 @@ interface StandaloneHarness {
 	selectFoldingProvider(id: string | null): void;
 	readFoldingProviderRanges(): number[][];
 	prepareFoldingKeybinding(command?: string, args?: unknown): void;
-	readFoldingCommandState(): { supported: boolean; inChordMode: boolean };
+	readFoldingCommandState(): { supported: boolean; inChordMode: boolean; };
 	runFoldingCommand(command: string, args?: unknown): Promise<void>;
-	readFoldingMetadata(command: string): Omit<ICommandMetadata, 'args'> & { args: { name: string; description?: string; schema?: unknown }[] };
-	readLanguageActions(): { rename: boolean; quickFix: boolean };
+	readFoldingMetadata(command: string): Omit<ICommandMetadata, 'args'> & { args: { name: string; description?: string; schema?: unknown; }[]; };
+	readLanguageActions(): { rename: boolean; quickFix: boolean; };
 	prepareLanguageRequest(kind: LanguageRequestKind, emptyDefinition?: boolean): void;
 	prepareMultipleDocumentSymbols(): void;
 	readDocumentSymbolCommand(): Promise<readonly string[]>;
-	languageHoverPoint(): { x: number; y: number };
-	readLanguageRequests(): { languageId: string; aborted: boolean }[];
-	readDefinitionPosition(): { lineNumber: number; column: number } | null;
+	languageHoverPoint(): { x: number; y: number; };
+	readLanguageRequests(): { languageId: string; aborted: boolean; }[];
+	readDefinitionPosition(): { lineNumber: number; column: number; } | null;
 	prepareStickyMenu(): void;
-	readStickyMenu(): { callerEnabled: boolean; ownedEnabled: boolean; inChordMode: boolean; errors: string[] };
+	readStickyMenu(): { callerEnabled: boolean; ownedEnabled: boolean; inChordMode: boolean; errors: string[]; };
 	finishLanguageRequest(index: number): Promise<void>;
 	changeLanguageRequest(reason: LanguageRequestChange): void;
 	prepareParameterHints(enabled?: boolean, cycle?: boolean, triggers?: readonly string[], retriggers?: readonly string[]): void;
 	readParameterHintRequests(): ParameterHintRequestState[];
 	finishParameterHintRequest(index: number, outcome: 'hints' | 'empty' | 'error', hints?: stanza.LanguageParameterHints): Promise<void>;
 	runParameterHintCommand(id: string, global?: boolean): Promise<void>;
-	readParameterHintContext(): { supported: boolean; visible: boolean | undefined; multiple: boolean | undefined };
+	readParameterHintContext(): { supported: boolean; visible: boolean | undefined; multiple: boolean | undefined; };
 	changeParameterHintsState(reason: 'text' | 'selection' | 'language' | 'provider' | 'off' | 'on' | 'model' | 'contribution' | 'dispose' | 'blur'): void;
 	queueParameterHints(reason: 'escape' | 'selection' | 'off' | 'blur' | 'dispose' | 'type'): void;
 	shareParameterHintsModel(): void;
@@ -251,7 +251,7 @@ interface StandaloneHarness {
 	finishCodeActionRequest(index: number, outcome: CodeActionOutcome): Promise<void>;
 	changeCodeActionState(reason: 'text' | 'selection' | 'language' | 'provider' | 'readonly' | 'model' | 'contribution' | 'dispose'): void;
 	prepareInlayRequests(): void;
-	readInlayRequests(): { text: string; languageId: string; resource: string | undefined; range: string; aborted: boolean }[];
+	readInlayRequests(): { text: string; languageId: string; resource: string | undefined; range: string; aborted: boolean; }[];
 	finishInlayRequest(index: number, label: string): Promise<void>;
 	changeInlayState(reason: 'text' | 'shrink' | 'language' | 'provider' | 'off' | 'on' | 'contribution' | 'model' | 'dispose' | 'layout'): void;
 	addBrokenInlayProvider(): void;
@@ -265,49 +265,49 @@ interface StandaloneHarness {
 	readLinkAtCursor(): string | undefined;
 	setSemanticProvider(tokenType: string | null): void;
 	prepareLanguageWorkers(): void;
-	readLanguageWorkers(): { tokens: string[]; diagnostics: string[]; current: boolean };
+	readLanguageWorkers(): { tokens: string[]; diagnostics: string[]; current: boolean; };
 
-	runSharedInlineSnooze(): Promise<{ shared: boolean; visibleBefore: number; visibleAfter: number; callsWhilePaused: number; pausedAfterDispose: boolean; resumed: boolean }>;
-	runEmptyWordPattern(): { word: string; startColumn: number; endColumn: number } | null;
-	runDisposedLanguageRequest(kind: 'codeAction' | 'rename' | 'parameterHints' | 'queuedParameterHints'): Promise<{ calls: number; aborted: boolean }>;
+	runSharedInlineSnooze(): Promise<{ shared: boolean; visibleBefore: number; visibleAfter: number; callsWhilePaused: number; pausedAfterDispose: boolean; resumed: boolean; }>;
+	runEmptyWordPattern(): { word: string; startColumn: number; endColumn: number; } | null;
+	runDisposedLanguageRequest(kind: 'codeAction' | 'rename' | 'parameterHints' | 'queuedParameterHints'): Promise<{ calls: number; aborted: boolean; }>;
 	runEditorActivity(): Promise<boolean[]>;
 	runHistoryCommands(useAlias: boolean): Promise<string[]>;
 	prepareStandaloneCommands(): void;
 	prepareDynamicKeybindings(): void;
 	setDynamicKeybindingContext(enabled: boolean): void;
 	prepareStandaloneAction(): void;
-	readStandaloneAction(): { calls: string[]; available: boolean; menu: boolean; registered: boolean };
+	readStandaloneAction(): { calls: string[]; available: boolean; menu: boolean; registered: boolean; };
 	runStandaloneAction(value: string): Promise<void>;
 	runStandaloneActionCommand(value: string): Promise<void>;
 	releaseStandaloneAction(): void;
 	runStandaloneCommand(value: string): Promise<string>;
-	readStandaloneCommands(): { readonly calls: string[]; readonly registered: boolean };
+	readStandaloneCommands(): { readonly calls: string[]; readonly registered: boolean; };
 	releaseStandaloneCommands(): void;
 	prepareInputHistory(): void;
 	runInputHistoryCommand(command: 'undo' | 'redo' | 'default:undo' | 'default:redo'): Promise<string[]>;
-	runSelectAllCommand(): Promise<{ selections: string[]; inputSelection: string }>;
+	runSelectAllCommand(): Promise<{ selections: string[]; inputSelection: string; }>;
 	runFocusRouting(): Promise<{
-		states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string }[];
+		states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string; }[];
 		events: string[];
 		activeAfterBlur: boolean;
 		values: string[];
 		activeAfterDispose: boolean;
 	}>;
 
-	runFormatterChoice(outcome: 'second' | 'empty' | 'decline' | 'error' | 'cancel' | 'silent' | 'languageChoice' | 'languageResult'): Promise<{ value: string; calls: string[]; modes: number[]; errors: string[] }>;
+	runFormatterChoice(outcome: 'second' | 'empty' | 'decline' | 'error' | 'cancel' | 'silent' | 'languageChoice' | 'languageResult'): Promise<{ value: string; calls: string[]; modes: number[]; errors: string[]; }>;
 
-	runOverlappingFormatting(cancel: boolean): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
+	runOverlappingFormatting(cancel: boolean): Promise<{ value: string; ranges: string[]; cancelled: boolean; }>;
 
-	runSelectionFormatting(mode: 'ranges' | 'single' | 'empty' | 'cancel' | 'readonly'): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
+	runSelectionFormatting(mode: 'ranges' | 'single' | 'empty' | 'cancel' | 'readonly'): Promise<{ value: string; ranges: string[]; cancelled: boolean; }>;
 
 	prepareDeferredFormatting(): void;
-	readDeferredFormatting(): { aborted: boolean[]; value: string };
+	readDeferredFormatting(): { aborted: boolean[]; value: string; };
 	finishDeferredFormatting(): void;
 	readEOL(): string;
 	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol' | 'returnPosition' | 'range'): Promise<string>;
 	runUnicodeFormatting(original: string, formatted: string): Promise<string>;
 
-	prepareLineComment(options?: { insertSpace?: boolean; ignoreEmptyLines?: boolean; readOnly?: boolean; languageId?: string; value?: string }): void;
+	prepareLineComment(options?: { insertSpace?: boolean; ignoreEmptyLines?: boolean; readOnly?: boolean; languageId?: string; value?: string; }): void;
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: (number | [number, number])[], readOnly?: boolean): void;
 	configureBracketColors(enabled: boolean, independent: boolean): void;
@@ -320,54 +320,54 @@ interface StandaloneHarness {
 	prepareMulticursor(): void;
 	prepareEditorContextMenu(providers: boolean, readOnly?: boolean): void;
 	changeEditorContextMenuState(change: 'language' | 'provider' | 'readonly' | 'selection' | 'other'): void;
-	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
-	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
-	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[] }>;
-	runFilePaste(): { value: string; handled: boolean; fileReads: number };
-	runFileDrop(): { value: string; dragOverHandled: boolean; dropHandled: boolean; fileReads: number };
-	runTextDrop(enabled: boolean): Promise<{ value: string; dragOverHandled: boolean; dropHandled: boolean }>;
-	runUriPaste(enabled: boolean): Promise<{ value: string; handled: boolean }>;
-	startPasteAsPicker(args?: { readonly preferences: readonly string[] }, plainText?: boolean): void;
-	runPasteProviderSelector(): Promise<{ value: string; handled: boolean }>;
-	runPasteSnippetWithAdditionalEdit(): Promise<{ value: string; otherValue: string; handled: boolean }>;
+	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string; }>;
+	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean; }>;
+	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[]; }>;
+	runFilePaste(): { value: string; handled: boolean; fileReads: number; };
+	runFileDrop(): { value: string; dragOverHandled: boolean; dropHandled: boolean; fileReads: number; };
+	runTextDrop(enabled: boolean): Promise<{ value: string; dragOverHandled: boolean; dropHandled: boolean; }>;
+	runUriPaste(enabled: boolean): Promise<{ value: string; handled: boolean; }>;
+	startPasteAsPicker(args?: { readonly preferences: readonly string[]; }, plainText?: boolean): void;
+	runPasteProviderSelector(): Promise<{ value: string; handled: boolean; }>;
+	runPasteSnippetWithAdditionalEdit(): Promise<{ value: string; otherValue: string; handled: boolean; }>;
 	runLineAction(id: string, args?: unknown): Promise<void>;
 	prepareMoveSelectedText(): void;
 	prepareFinalNewLine(): void;
 	prepareInPlaceReplace(): void;
-	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean }>;
-	readLineCopy(): { value: string; selections: string[] };
+	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean; }>;
+	readLineCopy(): { value: string; selections: string[]; };
 	prepareLongLine(): void;
 	readLongLineLimit(): number;
 	prepareReferencePreview(): void;
 	setParentFontSize(): void;
 	updateRenderingOptions(enabled: boolean): number;
-	readFontMetrics(): { halfwidth: number; fullwidth: number; space: number; digit: number };
-	configureAccessibility(hostEnabled: boolean, option: 'auto' | 'on' | 'off'): { support: number; indent: number };
+	readFontMetrics(): { halfwidth: number; fullwidth: number; space: number; digit: number; };
+	configureAccessibility(hostEnabled: boolean, option: 'auto' | 'on' | 'off'): { support: number; indent: number; };
 	prepareLineCountConfiguration(lines: number, size: 'fill' | 'fit', content?: string): void;
 	foldConfigurationLines(folded: boolean): void;
-	readLineCountConfiguration(): { lines: number; viewLines: number; digitWidth: number; layout: EditorLayoutInfo };
+	readLineCountConfiguration(): { lines: number; viewLines: number; digitWidth: number; layout: EditorLayoutInfo; };
 	setTestMarkers(enabled: boolean): void;
-	exerciseMarkerApi(): { readonly first: string[]; readonly second: string[]; readonly afterClear: string[]; readonly events: string[][] };
+	exerciseMarkerApi(): { readonly first: string[]; readonly second: string[]; readonly afterClear: string[]; readonly events: string[][]; };
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
 	exerciseRenderOwnership(): RenderOwnershipState;
 
-	checkContracts(): Promise<{ wrapping: string; wrapped: boolean; animated: boolean; settled: boolean; top: number; interrupted: boolean; detached: boolean; eventTexts: string[] }>;
+	checkContracts(): Promise<{ wrapping: string; wrapped: boolean; animated: boolean; settled: boolean; top: number; interrupted: boolean; detached: boolean; eventTexts: string[]; }>;
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
-	switchOwnedToCaller(): { readonly ownedModelDisposed: boolean; readonly ownedModelRegistered: boolean; readonly rootRetained: boolean; readonly editorCount: number; readonly currentModelIsCaller: boolean };
-	detachOwned(): { readonly modelIsNull: boolean; readonly value: string; readonly rootMounted: boolean; readonly inputCount: number };
+	switchOwnedToCaller(): { readonly ownedModelDisposed: boolean; readonly ownedModelRegistered: boolean; readonly rootRetained: boolean; readonly editorCount: number; readonly currentModelIsCaller: boolean; };
+	detachOwned(): { readonly modelIsNull: boolean; readonly value: string; readonly rootMounted: boolean; readonly inputCount: number; };
 	reattachOwned(): void;
 	getOwnedValue(): string;
 	getCallerVersion(): number;
-	tryOverlappingSurrogateEdits(): { readonly rejected: boolean; readonly value: string; readonly versionUnchanged: boolean };
+	tryOverlappingSurrogateEdits(): { readonly rejected: boolean; readonly value: string; readonly versionUnchanged: boolean; };
 	applySurrogateEdit(): string;
 	resetSameValue(): {
 		readonly beforeVersion: number;
 		readonly afterVersion: number;
 		readonly alternativeVersion: number;
 		readonly snapshotValue: string | null;
-		readonly events: readonly { readonly version: number; readonly reason: string; readonly changes: number }[];
+		readonly events: readonly { readonly version: number; readonly reason: string; readonly changes: number; }[];
 	};
 	prepareSelectionUndo(): UndoState;
 	applySelectionEdit(): UndoState;
@@ -388,7 +388,7 @@ interface StandaloneHarness {
 		readonly firstChunkPrefix: string;
 	};
 	enableCompletionNavigation(snippet?: string): void;
-	getCallerPosition(): { readonly lineNumber: number; readonly column: number } | null;
+	getCallerPosition(): { readonly lineNumber: number; readonly column: number; } | null;
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
 	selectRange(): KeyboardEditingState;
@@ -403,19 +403,19 @@ interface StandaloneHarness {
 	prepareFoldedViewZone(showInHiddenAreas: boolean): number;
 	resizeViewZone(height: number, afterLineNumber: number): ViewZoneState;
 	removeViewZone(): ViewZoneState;
-	prepareVisibleRows(): { readonly lineCount: number; readonly version: number };
+	prepareVisibleRows(): { readonly lineCount: number; readonly version: number; };
 	scrollVisibleRows(top: number): number;
 	editVisibleRow(lineIndex: number): string;
-	prepareCursorGutter(): { readonly version: number; readonly modelLineCount: number };
+	prepareCursorGutter(): { readonly version: number; readonly modelLineCount: number; };
 	moveGutterCaret(lineNumber: number, column: number): void;
 	shortenGutterLine(): number;
 	preparePointerSelection(): void;
-	readPointerSelection(): { readonly value: string; readonly version: number; readonly selection: string | null; readonly ownedSelection: string | null; readonly focused: boolean; readonly mouseUpEvents: number };
+	readPointerSelection(): { readonly value: string; readonly version: number; readonly selection: string | null; readonly ownedSelection: string | null; readonly focused: boolean; readonly mouseUpEvents: number; };
 	prepareMultiCursor(): void;
-	readMultiCursor(): { readonly value: string; readonly version: number; readonly selections: readonly string[]; readonly ownedSelections: readonly string[]; readonly focused: boolean };
+	readMultiCursor(): { readonly value: string; readonly version: number; readonly selections: readonly string[]; readonly ownedSelections: readonly string[]; readonly focused: boolean; };
 	releaseCaller(): void;
 	releaseOwned(): void;
-	runStandaloneWebWorker(): Promise<{ readonly initial: readonly { uri: string; version: number; value: string }[]; readonly changed: readonly { uri: string; version: number; value: string }[]; readonly afterRemoval: readonly { uri: string; version: number; value: string }[]; readonly host: string; readonly disposed: boolean }>;
+	runStandaloneWebWorker(): Promise<{ readonly initial: readonly { uri: string; version: number; value: string; }[]; readonly changed: readonly { uri: string; version: number; value: string; }[]; readonly afterRemoval: readonly { uri: string; version: number; value: string; }[]; readonly host: string; readonly disposed: boolean; }>;
 	dispose(): void;
 }
 
@@ -499,9 +499,9 @@ const languageRequestProviders = new DisposableStore();
 const tokenThemeResources = new DisposableStore();
 let finishTokenProvider: (() => void) | undefined;
 let tokenFactoryCalls = 0;
-const languageRequests: { languageId: string; signal: AbortSignal; finish: () => void }[] = [];
-let definitionPosition: { lineNumber: number; column: number } | null = null;
-let referenceRegistration: { dispose(): void } | undefined;
+const languageRequests: { languageId: string; signal: AbortSignal; finish: () => void; }[] = [];
+let definitionPosition: { lineNumber: number; column: number; } | null = null;
+let referenceRegistration: { dispose(): void; } | undefined;
 let parameterHintsRegistration: ReturnType<typeof stanza.languages.registerSignatureHelpProvider> | undefined;
 const parameterHintRequests: {
 	state: Omit<ParameterHintRequestState, 'aborted'>;
@@ -523,7 +523,7 @@ const codeActionRequests: {
 }[] = [];
 let inlineRegistration: ReturnType<typeof stanza.languages.registerInlineCompletionsProvider> | undefined;
 const inlineBracketResources = new DisposableStore();
-const inlineRequests: { kind: string; text: string; languageId: string; signal: AbortSignal; resolve: () => void }[] = [];
+const inlineRequests: { kind: string; text: string; languageId: string; signal: AbortSignal; resolve: () => void; }[] = [];
 let inlayRegistration: ReturnType<typeof stanza.languages.registerInlayHintsProvider> | undefined;
 let brokenInlayRegistration: ReturnType<typeof stanza.languages.registerInlayHintsProvider> | undefined;
 const inlayRequests: {
@@ -541,7 +541,7 @@ const standaloneCommands = new DisposableStore();
 const standaloneAction = new DisposableStore();
 const standaloneActionCalls: string[] = [];
 const standaloneCommandCalls: string[] = [];
-const contributionRequests: { languageId: string; isAborted: () => boolean; finish: (empty: boolean) => void }[] = [];
+const contributionRequests: { languageId: string; isAborted: () => boolean; finish: (empty: boolean) => void; }[] = [];
 
 function deferContributionRequest<T>(languageId: string, isAborted: () => boolean, result: T, empty: T): Promise<T> {
 	return new Promise(resolve => contributionRequests.push({ languageId, isAborted, finish: isEmpty => resolve(isEmpty ? empty : result) }));
@@ -626,11 +626,11 @@ function readViewZone(): ViewZoneState {
 	};
 }
 
-let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = [];
-let formattingProvider: { dispose(): void } | undefined;
-let bracketTokenRegistration: { dispose(): void } | undefined;
-let stickySyntaxRegistration: { dispose(): void } | undefined;
-let stickyOutlineRegistration: { dispose(): void } | undefined;
+let deferredFormatting: { token: CancellationToken; resolve: () => void; }[] = [];
+let formattingProvider: { dispose(): void; } | undefined;
+let bracketTokenRegistration: { dispose(): void; } | undefined;
+let stickySyntaxRegistration: { dispose(): void; } | undefined;
+let stickyOutlineRegistration: { dispose(): void; } | undefined;
 const emptyResources = new DisposableStore();
 let emptyEditor: stanza.IStandaloneCodeEditor;
 let savedFoldingViewState: ReturnType<typeof callerEditor.saveViewState> = null;
@@ -642,14 +642,18 @@ window.ashStandaloneIntegration = {
 		tokenThemeResources.clear();
 		tokenFactoryCalls = 0;
 		finishTokenProvider = undefined;
-		stanza.editor.defineTheme('token-theme-first', { base: 'vs', inherit: true, rules: [
-			{ token: 'entity', foreground: '123456', fontStyle: 'italic' },
-			{ token: 'comment', foreground: '654321' },
-		], colors: {} });
-		stanza.editor.defineTheme('token-theme-second', { base: 'vs-dark', inherit: true, rules: [
-			{ token: 'entity', foreground: '234567', fontStyle: 'bold' },
-			{ token: 'comment', foreground: '765432' },
-		], colors: {} });
+		stanza.editor.defineTheme('token-theme-first', {
+			base: 'vs', inherit: true, rules: [
+				{ token: 'entity', foreground: '123456', fontStyle: 'italic' },
+				{ token: 'comment', foreground: '654321' },
+			], colors: {}
+		});
+		stanza.editor.defineTheme('token-theme-second', {
+			base: 'vs-dark', inherit: true, rules: [
+				{ token: 'entity', foreground: '234567', fontStyle: 'bold' },
+				{ token: 'comment', foreground: '765432' },
+			], colors: {}
+		});
 		stanza.editor.setTheme('token-theme-first');
 		stanza.editor.setModelLanguage(callerModel, 'plaintext');
 		callerEditor.setValue('alpha beta');
@@ -663,10 +667,12 @@ window.ashStandaloneIntegration = {
 			const languageId = stanza.languages.getEncodedLanguageId('plaintext');
 			tokenThemeResources.add(stanza.languages.setTokensProvider('plaintext', {
 				getInitialState: () => state,
-				tokenizeEncoded: () => ({ endState: state, tokens: new Uint32Array([
-					0, languageId | (3 << MetadataConsts.FOREGROUND_OFFSET) | (2 << MetadataConsts.BACKGROUND_OFFSET) | (FontStyle.Bold << MetadataConsts.FONT_STYLE_OFFSET),
-					6, languageId | (1 << MetadataConsts.FOREGROUND_OFFSET) | (2 << MetadataConsts.BACKGROUND_OFFSET),
-				]) }),
+				tokenizeEncoded: () => ({
+					endState: state, tokens: new Uint32Array([
+						0, languageId | (3 << MetadataConsts.FOREGROUND_OFFSET) | (2 << MetadataConsts.BACKGROUND_OFFSET) | (FontStyle.Bold << MetadataConsts.FONT_STYLE_OFFSET),
+						6, languageId | (1 << MetadataConsts.FOREGROUND_OFFSET) | (2 << MetadataConsts.BACKGROUND_OFFSET),
+					])
+				}),
 			}));
 			tokenThemeResources.add(toDisposable(() => stanza.languages.setColorMap(null)));
 		} else if (kind === 'monarch-embedded') {
@@ -1222,11 +1228,13 @@ window.ashStandaloneIntegration = {
 					if (outcome === 'error') {
 						reject(new Error('parameter hints failed'));
 					} else {
-						resolve(hints ?? { signatures: outcome === 'empty' ? [] : [{
-							label: `call(value): ${request.languageId}`,
-							parameters: [{ label: 'value' }],
-							activeParameter: 0,
-						}] });
+						resolve(hints ?? {
+							signatures: outcome === 'empty' ? [] : [{
+								label: `call(value): ${request.languageId}`,
+								parameters: [{ label: 'value' }],
+								activeParameter: 0,
+							}]
+						});
 					}
 				},
 			})),
@@ -1312,11 +1320,13 @@ window.ashStandaloneIntegration = {
 			},
 			provideRenameEdits: async (context, signal) => {
 				const outcome = phase === 'edit' ? await wait('edit', context, signal) : 'edit';
-				return { entries: outcome === 'empty' ? [] : [{
-					kind: 'textDocument', resource: context.resource,
-					version: context.snapshot.version + (outcome === 'stale' ? 1 : 0),
-					edits: [{ range: new stanza.Range(1, 1, 1, 6), text: context.newName! }],
-				}] };
+				return {
+					entries: outcome === 'empty' ? [] : [{
+						kind: 'textDocument', resource: context.resource,
+						version: context.snapshot.version + (outcome === 'stale' ? 1 : 0),
+						edits: [{ range: new stanza.Range(1, 1, 1, 6), text: context.newName! }],
+					}]
+				};
 			},
 		});
 	},
@@ -1369,11 +1379,13 @@ window.ashStandaloneIntegration = {
 					resolve({
 						...action,
 						...(outcome === 'disabled' ? { disabledReason: 'Action is unavailable' } : {}),
-						edit: { entries: [{
-							kind: 'textDocument', resource: context.resource,
-							version: context.snapshot.version + (outcome === 'stale' ? 1 : 0),
-							edits: [{ range: context.range, text: 'result' }],
-						}] },
+						edit: {
+							entries: [{
+								kind: 'textDocument', resource: context.resource,
+								version: context.snapshot.version + (outcome === 'stale' ? 1 : 0),
+								edits: [{ range: context.range, text: 'result' }],
+							}]
+						},
 					});
 				},
 			}));
@@ -1493,15 +1505,19 @@ window.ashStandaloneIntegration = {
 			inlineBracketResources.add(stanza.languages.registerSyntaxProvider({
 				id: 'inline-bracket-test', languageIds: ['typescript'], tokenPriority: 100,
 				provideTokens: () => ({ tokens: [] }),
-				provideTokensForLines: request => ({ tokens: request.tokenize.lines.flatMap((line, index) => line.length ? [{
-					range: new stanza.Range(index + 1, 1, index + 1, line.length + 1), tokenType, modifiers: [],
-				}] : []) }),
+				provideTokensForLines: request => ({
+					tokens: request.tokenize.lines.flatMap((line, index) => line.length ? [{
+						range: new stanza.Range(index + 1, 1, index + 1, line.length + 1), tokenType, modifiers: [],
+					}] : [])
+				}),
 			}));
 		}
-		inlineRegistration = stanza.languages.registerInlineCompletionsProvider('typescript', { provideInlineCompletions: () => [{
-			insertText, completeBracketPairs, range: new stanza.Range(1, column, 1, column + replaceLength),
-			additionalTextEdits: [{ range: new stanza.Range(1, 1, 1, 1), text: '/* accepted */ ' }],
-		}] });
+		inlineRegistration = stanza.languages.registerInlineCompletionsProvider('typescript', {
+			provideInlineCompletions: () => [{
+				insertText, completeBracketPairs, range: new stanza.Range(1, column, 1, column + replaceLength),
+				additionalTextEdits: [{ range: new stanza.Range(1, 1, 1, 1), text: '/* accepted */ ' }],
+			}]
+		});
 		callerEditor.focus();
 	},
 	prepareInlineRequests: () => {
@@ -1652,7 +1668,7 @@ window.ashStandaloneIntegration = {
 			if (kind !== FormattingKind.File) throw new Error('Unexpected formatting kind');
 			modes.push(mode);
 			choosing();
-			if (outcome === 'cancel') return new Promise(() => {});
+			if (outcome === 'cancel') return new Promise(() => { });
 			if (outcome === 'languageChoice') await gate;
 			return outcome === 'decline' ? undefined : providers[1];
 		});
@@ -1687,7 +1703,7 @@ window.ashStandaloneIntegration = {
 					if (cancel) {
 						callerEditor.setSelections([new stanza.Selection(1, 1, 1, 6), new stanza.Selection(3, 2, 3, 6)]);
 						cancelled = token.isCancellationRequested;
-						return new Promise(() => {});
+						return new Promise(() => { });
 					}
 					return [{ range, text: model.getValueInRange(range).toUpperCase() }];
 				}
@@ -1723,7 +1739,7 @@ window.ashStandaloneIntegration = {
 		const provider = stanza.languages.registerDocumentRangeFormattingEditProvider('*', {
 			provideDocumentRangeFormattingEdits: (_model, range, _options, token) => provide([range], token),
 			...(mode === 'single' ? {} : {
-				provideDocumentRangesFormattingEdits: (_model: ITextModel, ranges: Range[], _options: { tabSize: number; insertSpaces: boolean }, token: CancellationToken) => provide(ranges, token),
+				provideDocumentRangesFormattingEdits: (_model: ITextModel, ranges: Range[], _options: { tabSize: number; insertSpaces: boolean; }, token: CancellationToken) => provide(ranges, token),
 			}),
 		});
 		try {
@@ -1840,10 +1856,12 @@ window.ashStandaloneIntegration = {
 		bracketTokenRegistration = stanza.languages.registerSyntaxProvider({
 			id: 'bracket-color-test',
 			languageIds: ['typescript'],
-			provideTokens: request => ({ tokens: [{
-				range: new stanza.Range(1, 1, 1, request.snapshot.getText().length + 1),
-				tokenType: 'other', modifiers: [], presentation: { foreground: '#123456', fontStyle: ['bold'] },
-			}] }),
+			provideTokens: request => ({
+				tokens: [{
+					range: new stanza.Range(1, 1, 1, request.snapshot.getText().length + 1),
+					tokenType: 'other', modifiers: [], presentation: { foreground: '#123456', fontStyle: ['bold'] },
+				}]
+			}),
 		});
 	},
 	prepareGuides: value => {
@@ -2053,7 +2071,7 @@ window.ashStandaloneIntegration = {
 		listeners.add(callerEditor.onDidFocusEditorWidget(() => events.push('focus')));
 		listeners.add(callerEditor.onDidBlurEditorWidget(() => events.push('blur')));
 		const observed = observableCodeEditor(callerEditor);
-		const states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string }[] = [];
+		const states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string; }[] = [];
 		const read = (stage: string): void => {
 			const context = callerEditor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
 			states.push({
@@ -2198,7 +2216,7 @@ window.ashStandaloneIntegration = {
 				callerEditor.updateOptions({ readOnly: true });
 				callerEditor.updateOptions({ readOnly: false });
 			} else if (change === 'composition') {
-				const target = input instanceof HTMLTextAreaElement ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+				const target = input instanceof HTMLTextAreaElement ? input : (input as HTMLElement & { editContext?: EventTarget; }).editContext;
 				if (!target) throw new Error('Composition target is unavailable');
 				target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 				target.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
@@ -2230,10 +2248,12 @@ window.ashStandaloneIntegration = {
 		callerEditor.focus();
 		let fileReads = 0;
 		const file = new File(['content'], 'snippet.txt', { type: 'text/plain' });
-		Object.defineProperty(file, 'text', { value: () => {
-			fileReads += 1;
-			return Promise.resolve('content');
-		} });
+		Object.defineProperty(file, 'text', {
+			value: () => {
+				fileReads += 1;
+				return Promise.resolve('content');
+			}
+		});
 		const clipboardData = new DataTransfer();
 		clipboardData.items.add(file);
 		const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
@@ -2246,10 +2266,12 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('alpha');
 		let fileReads = 0;
 		const file = new File(['content'], 'snippet.txt', { type: 'text/plain' });
-		Object.defineProperty(file, 'text', { value: () => {
-			fileReads += 1;
-			return Promise.resolve('content');
-		} });
+		Object.defineProperty(file, 'text', {
+			value: () => {
+				fileReads += 1;
+				return Promise.resolve('content');
+			}
+		});
 		const dataTransfer = new DataTransfer();
 		dataTransfer.items.add(file);
 		const node = callerEditor.getDomNode()!;
@@ -2343,7 +2365,7 @@ window.ashStandaloneIntegration = {
 			pasteMimeTypes: ['text/plain'],
 			providedPasteEditKinds: [kind],
 			async provideDocumentPasteEdits() {
-				return { edits: [{ title: 'Insert Browser Test Text', kind, insertText: 'CUSTOM' }], dispose() {} };
+				return { edits: [{ title: 'Insert Browser Test Text', kind, insertText: 'CUSTOM' }], dispose() { } };
 			},
 		}));
 		const clipboardData = new DataTransfer();
@@ -2376,7 +2398,7 @@ window.ashStandaloneIntegration = {
 						insertText: { snippet: '${1:name}(${2:value})$0' },
 						additionalEdit: { edits: [{ resource: ownedModel.uri, textEdit: { range: new stanza.Range(1, 1, 1, 6), text: 'EXTRA' } }] },
 					}],
-					dispose() {},
+					dispose() { },
 				};
 			},
 		}));
@@ -2689,7 +2711,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('stable');
 		const snapshot = callerModel.createSnapshot();
 		const beforeVersion = callerModel.getVersionId();
-		const events: Array<{ readonly version: number; readonly reason: string; readonly changes: number }> = [];
+		const events: Array<{ readonly version: number; readonly reason: string; readonly changes: number; }> = [];
 		using listener = callerModel.onDidChangeContent(change => events.push({
 			version: change.version,
 			reason: change.reason,
@@ -2753,16 +2775,16 @@ window.ashStandaloneIntegration = {
 			acquire: async (input, signal) => input.resource.toString() === callerModel.uri.toString() ? ({
 				resource: callerModel.uri, model: callerModel, isDirty: false, hasExternalChange: false,
 				onDidChangeDirty: EventUtils.None, onDidChangeExternalChange: EventUtils.None,
-				save: async () => {}, revert: async () => {}, dispose: () => {}, [Symbol.dispose]: () => {},
+				save: async () => { }, revert: async () => { }, dispose: () => { }, [Symbol.dispose]: () => { },
 			}) : await snapshots.acquire(input, signal),
-			dispose: () => {}, [Symbol.dispose]: () => {},
+			dispose: () => { }, [Symbol.dispose]: () => { },
 		});
 		services.registerInstance(IFileTextModelService, {
 			...services.get(ITextModelResourceService),
 			getModel: resource => resource.toString() === callerModel.uri.toString() ? callerModel : null,
 			onModelRemoved: EventUtils.None,
 			onModelLanguageChanged: EventUtils.None,
-			refresh: async () => {},
+			refresh: async () => { },
 			onModelAdded: EventUtils.None,
 		});
 		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(new BrowserWorkingCopyService()));
@@ -2770,7 +2792,7 @@ window.ashStandaloneIntegration = {
 		services.registerInstance(IDialogService, new TestDialogService());
 		services.registerInstance(IEditorService, {
 			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,
-			activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => {},
+			activeEditor: undefined, visibleEditors: [], focusActiveEditor: () => { },
 			openEditor: async input => {
 				const host = h(document, 'div');
 				host.id = 'action-preview-diff';
@@ -2807,10 +2829,16 @@ window.ashStandaloneIntegration = {
 		}));
 		const previewEditor = actionPreviewResources.add(services.createInstance(StandaloneEditor, { container: editorHost, model: callerModel, ariaLabel: 'preview.ts', dimension: { width: 640, height: 100 } }, callerModel, false));
 		actionPreviewResources.add(StandaloneServices.get(ILanguageFeaturesService).codeActionProvider.register('plaintext', {
-			provideCodeActions: () => [{ title: 'Replace value with result', kind: 'refactor.rewrite', edit: { entries: [{ kind: 'textDocument', resource: callerModel.uri, version: callerModel.getVersionId(), edits: kind === 'multiple' ? [
-				{ range: new stanza.Range(1, 1, 1, 3), text: 're' },
-				{ range: new stanza.Range(1, 3, 1, 6), text: 'sult' },
-			] : [{ range: callerModel.getFullModelRange(), text: 'result' }] }] } }],
+			provideCodeActions: () => [{
+				title: 'Replace value with result', kind: 'refactor.rewrite', edit: {
+					entries: [{
+						kind: 'textDocument', resource: callerModel.uri, version: callerModel.getVersionId(), edits: kind === 'multiple' ? [
+							{ range: new stanza.Range(1, 1, 1, 3), text: 're' },
+							{ range: new stanza.Range(1, 3, 1, 6), text: 'sult' },
+						] : [{ range: callerModel.getFullModelRange(), text: 'result' }]
+					}]
+				}
+			}],
 		}));
 		previewEditor.focus();
 	},
@@ -3053,7 +3081,7 @@ window.ashStandaloneIntegration = {
 	runStandaloneWebWorker: async () => {
 		const extra = stanza.editor.createModel('second', 'plaintext', stanza.URI.parse('inmemory://stanza/worker-extra.txt'));
 		const worker = stanza.editor.createWebWorker<{
-			readModels(): Promise<{ uri: string; version: number; value: string }[]>;
+			readModels(): Promise<{ uri: string; version: number; value: string; }[]>;
 			callHost(value: string): Promise<string>;
 		}>({
 			worker: new Worker(new URL('./standaloneWebWorker.worker.ts', import.meta.url), { type: 'module' }),

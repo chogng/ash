@@ -15,7 +15,7 @@ interface EditorQuickPickItem extends IQuickPickItem {
 export class AllEditorsByMostRecentlyUsedQuickAccess implements IQuickAccessProvider {
 	static readonly PREFIX = "edt mru ";
 
-	constructor(@IEditorPart private readonly editorPart: IEditorPart) {}
+	constructor(@IEditorPart private readonly editorPart: IEditorPart) { }
 
 	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
 		const disposables = new DisposableStore();

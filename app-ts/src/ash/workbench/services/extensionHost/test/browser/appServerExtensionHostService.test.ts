@@ -160,7 +160,7 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 	assert.equal(api.invocations[0]?.activationGeneration, 11);
 	assert.equal(api.invocations[0]?.incarnation, 3);
 	const payload = api.invocations[0]?.payload;
-	assert.deepEqual(typeof payload === "object" && payload !== null && !Array.isArray(payload) ? (payload as { readonly arguments?: JsonValue }).arguments : undefined, ["argument"]);
+	assert.deepEqual(typeof payload === "object" && payload !== null && !Array.isArray(payload) ? (payload as { readonly arguments?: JsonValue; }).arguments : undefined, ["argument"]);
 
 	assert.deepEqual(await tasks.providers[0]!.provideTasks(new AbortController().signal), [{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]);
 	assert.deepEqual(await tests.providers[0]!.provideTestProfiles(new AbortController().signal), [{ id: "unit", label: "Unit", taskId: "extension:extensionHost.61636d652e64656d6f.7461736b73:unit" }]);
@@ -215,9 +215,9 @@ test("projects supported language operations while diagnosing unsupported operat
 	};
 	assert.deepEqual(await languages.hoverProvider.ordered(model)[0]!.provideHover(request, signal), { contents: ["Host hover"] });
 	assert.deepEqual(await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints(request, signal), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
-	assert.deepEqual((api.invocations.find(request => request.operation === "hover")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });
-	assert.deepEqual((api.invocations.find(request => request.operation === "parameterHints")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });
-	assert.deepEqual((api.invocations.find(request => request.operation === 'parameterHints')!.payload as { readonly context: unknown }).context, request.context);
+	assert.deepEqual((api.invocations.find(request => request.operation === "hover")!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
+	assert.deepEqual((api.invocations.find(request => request.operation === "parameterHints")!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
+	assert.deepEqual((api.invocations.find(request => request.operation === 'parameterHints')!.payload as { readonly context: unknown; }).context, request.context);
 	assert.equal(service.state, "degraded");
 	assert.ok(failures.includes("unsupportedRegistrationBridge"));
 });
@@ -410,11 +410,11 @@ test('extension API resets output for a new process and ignores stale output eve
 	assert.equal(output.getChannel('extension.acme.demo.review')?.getText(), 'new');
 });
 
-class FixtureLifecycleService extends AbstractLifecycleService {}
+class FixtureLifecycleService extends AbstractLifecycleService { }
 
 class FakeExtensionHostApi implements IExtensionHostApi {
 	public clientHandler: Parameters<IExtensionHostApi['registerClientHandler']>[0] | undefined;
-	public registerClientHandler(handler: Parameters<IExtensionHostApi['registerClientHandler']>[0]): { dispose(): void } {
+	public registerClientHandler(handler: Parameters<IExtensionHostApi['registerClientHandler']>[0]): { dispose(): void; } {
 		this.clientHandler = handler;
 		return { dispose: () => { this.clientHandler = undefined; } };
 	}
@@ -511,7 +511,7 @@ function snapshot(generation: number, command: string, additional: readonly Exte
 	});
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; resolve(value: T): void } {
+function deferred<T>(): { readonly promise: Promise<T>; resolve(value: T): void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };
@@ -551,11 +551,13 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 
 function dormantSnapshot(events: readonly string[] = ['onCommand:acme.lazy']): ExtensionHostFleetSnapshot {
 	const ready = snapshot(1, 'acme.lazy');
-	return Object.freeze({ ...ready, extensions: Object.freeze([Object.freeze({
-		...ready.extensions[0]!, incarnation: undefined, lifecycle: 'dormant' as const,
-		activation: Object.freeze({ events: Object.freeze([...events]), commands: Object.freeze([{ command: 'acme.lazy', title: 'Lazy command' }]) }),
-		registrations: Object.freeze([]),
-	})]) });
+	return Object.freeze({
+		...ready, extensions: Object.freeze([Object.freeze({
+			...ready.extensions[0]!, incarnation: undefined, lifecycle: 'dormant' as const,
+			activation: Object.freeze({ events: Object.freeze([...events]), commands: Object.freeze([{ command: 'acme.lazy', title: 'Lazy command' }]) }),
+			registrations: Object.freeze([]),
+		})])
+	});
 }
 
 test('declared command starts on first use and invokes the actual registered incarnation', async () => {

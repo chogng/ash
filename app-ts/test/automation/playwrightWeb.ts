@@ -9,12 +9,12 @@ import { decodeWebSessionInfo } from '../../src/ash/platform/app-server/common/g
 import { createTestEnvironment } from './testEnvironment.js';
 
 export interface WebLaunchResult {
-	readonly connection: { readonly endpoint: string; readonly token: string };
+	readonly connection: { readonly endpoint: string; readonly token: string; };
 	close(): Promise<void>;
 }
 
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(workspaceDirectory: string, productServices: { readonly reportIssueUrl?: string } = {}): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, productServices: { readonly reportIssueUrl?: string; } = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');

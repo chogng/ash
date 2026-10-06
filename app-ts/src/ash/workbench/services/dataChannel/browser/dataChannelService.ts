@@ -14,10 +14,12 @@ export class DataChannelService extends Disposable implements IDataChannelServic
 
 	public getDataChannel<T>(channelId: string): CoreDataChannel<T> {
 		this.assertNotDisposed();
-		return { sendData: data => {
-			this.assertNotDisposed();
-			this.sendEmitter.fire({ channelId, data });
-		} };
+		return {
+			sendData: data => {
+				this.assertNotDisposed();
+				this.sendEmitter.fire({ channelId, data });
+			}
+		};
 	}
 }
 

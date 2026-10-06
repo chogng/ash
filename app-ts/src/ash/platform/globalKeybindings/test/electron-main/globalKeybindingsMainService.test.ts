@@ -61,7 +61,7 @@ test('unavailable operating-system shortcut reports its user label', () => {
 	using service = new GlobalKeybindingsMainService({
 		shortcuts,
 		activeWindowId: () => 1,
-		runCommand: () => {},
+		runCommand: () => { },
 		onError: error => { throw error; },
 	});
 
@@ -81,7 +81,7 @@ test('system-wide shortcut retains and dispatches arguments after the editor own
 		onError: error => { throw error; },
 	});
 	const payload = validateSystemWideKeybindings(JSON.parse(JSON.stringify([{ ...binding('Control+Shift+A'), args }])));
-	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => {} }]), /must be an object/);
+	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => { } }]), /must be an object/);
 	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), unexpected: true }]), /Invalid system-wide/);
 	service.updateKeybindings(1, payload);
 	service.updateKeybindings(2, payload);

@@ -1,59 +1,59 @@
 .ash-input-box input {
-  width: 100%;
-  box-sizing: border-box;
-  font: inherit;
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
 }
 
 .ash-input-box-field {
-  min-height: 30px;
-  box-sizing: border-box;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
+	min-height: 30px;
+	box-sizing: border-box;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
 }
 
 .ash-input-box-field input {
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 0;
-  outline: none;
-  color: inherit;
-  background: transparent;
+	min-height: 28px;
+	padding: 4px 8px;
+	border: 0;
+	outline: none;
+	color: inherit;
+	background: transparent;
 }
 
 .ash-input-box-field.ash-input-box-compact {
-  min-height: 24px;
+	min-height: 24px;
 }
 
 .ash-input-box-field.ash-input-box-compact input {
-  min-height: 22px;
-  padding: 0 8px;
+	min-height: 22px;
+	padding: 0 8px;
 }
 
 .ash-input-box-field input::placeholder {
-  color: var(--ash-input-placeholder-foreground);
+	color: var(--ash-input-placeholder-foreground);
 }
 
 .ash-input-box-field input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
+	-moz-appearance: textfield;
+	appearance: textfield;
 }
 
 .ash-input-box-field input[type="number"]::-webkit-inner-spin-button,
 .ash-input-box-field input[type="number"]::-webkit-outer-spin-button {
-  margin: 0;
-  -webkit-appearance: none;
+	margin: 0;
+	-webkit-appearance: none;
 }
 
 .ash-input-box-field.is-focused {
-  border-color: var(--ash-focus-border);
+	border-color: var(--ash-focus-border);
 }
 
 .ash-input-box.is-disabled {
-  opacity: 0.6;
+	opacity: 0.6;
 }
 
 .ash-input-box-message {
-  margin-top: 4px;
+	margin-top: 4px;
 }

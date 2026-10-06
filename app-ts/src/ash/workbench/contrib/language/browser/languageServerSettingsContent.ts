@@ -66,7 +66,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 	private loading = false;
 	private working = false;
 	private generation = 0;
-	private statusMessage: { readonly key: string; readonly text: string; readonly parameters: readonly (string | number)[] } | undefined;
+	private statusMessage: { readonly key: string; readonly text: string; readonly parameters: readonly (string | number)[]; } | undefined;
 	private readonly instanceId = ++nextLanguageServerSettingsId;
 
 	constructor(
@@ -162,11 +162,13 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 	public getNodes(_query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsContentItem>[] {
 		return [{
 			element: { kind: 'group', id: LanguageServerSettingsTarget, title: this.label('title', 'Language Servers'), description: this.label('description', 'Configure language servers. View their logs and failures in Output.') },
-			children: [{ element: {
-				kind: 'item', id: 'language-servers.configuration', title: this.label('title', 'Language Servers'), description: this.note.textContent ?? '',
-				keywords: ['lsp', 'language servers', 'output', 'marketplace', 'executable', this.language.value, ...Object.keys(this.snapshot?.configurations ?? {}), ...(this.snapshot?.servers.flatMap(server => [server.id, ...server.languageIds]) ?? [])],
-				value: { domNode: this.domNode },
-			} }],
+			children: [{
+				element: {
+					kind: 'item', id: 'language-servers.configuration', title: this.label('title', 'Language Servers'), description: this.note.textContent ?? '',
+					keywords: ['lsp', 'language servers', 'output', 'marketplace', 'executable', this.language.value, ...Object.keys(this.snapshot?.configurations ?? {}), ...(this.snapshot?.servers.flatMap(server => [server.id, ...server.languageIds]) ?? [])],
+					value: { domNode: this.domNode },
+				}
+			}],
 		}];
 	}
 

@@ -64,14 +64,14 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	get output(): string { return this.retainedOutput; }
 	emitOutput(value: string): void { this.retainedOutput += value; this.outputEmitter.fire(value); }
 	async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { return { result: "42", type: "number", variablesReference: 0 }; }
-	async continue() {}
-	async pause() {}
-	async stepOver() {}
-	async stepInto() {}
-	async stepOut() {}
-	async restart() {}
+	async continue() { }
+	async pause() { }
+	async stepOver() { }
+	async stepInto() { }
+	async stepOut() { }
+	async restart() { }
 	async threads() { return []; }
-	selectThread() {}
+	selectThread() { }
 	async stackTrace() { return []; }
 	async scopes() { return []; }
 	async variables() { return []; }
@@ -79,6 +79,6 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	async source() { return { content: "" }; }
 	async dataBreakpointInfo(): Promise<never> { throw new Error("No data breakpoints in the console fixture"); }
 	async disassemble(): Promise<never> { throw new Error("No disassembly in the console fixture"); }
-	async setExceptionBreakpoints() {}
-	async disconnect() {}
+	async setExceptionBreakpoints() { }
+	async disconnect() { }
 }

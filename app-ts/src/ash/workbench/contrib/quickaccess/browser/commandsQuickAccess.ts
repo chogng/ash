@@ -24,7 +24,7 @@ export class CommandsQuickAccessProvider implements IQuickAccessProvider {
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@ICodeEditorService private readonly codeEditorService: ICodeEditorService,
-	) {}
+	) { }
 
 	provide(picker: IQuickPick<IQuickPickItem>): DisposableStore {
 		const disposables = new DisposableStore();

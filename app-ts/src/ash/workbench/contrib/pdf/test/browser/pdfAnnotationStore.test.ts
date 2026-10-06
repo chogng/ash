@@ -38,8 +38,8 @@ test("PDF annotation store reads and conditionally writes its sibling sidecar", 
 });
 
 class TestFileService implements IFileService {
-	readonly onDidChangeFiles = () => toDisposable(() => {});
-	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind }[] = [];
+	readonly onDidChangeFiles = () => toDisposable(() => { });
+	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[] = [];
 	content = "";
 	revision = "revision";
 	readonly readFileRequests: URI[] = [];
@@ -49,7 +49,7 @@ class TestFileService implements IFileService {
 		return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 	}
 
-	async readDirectory(): Promise<readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind }[]> {
+	async readDirectory(): Promise<readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[]> {
 		return this.entries;
 	}
 

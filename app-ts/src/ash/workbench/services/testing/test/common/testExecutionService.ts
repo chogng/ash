@@ -11,7 +11,7 @@ export class TestExecutionService extends Disposable implements ITestExecutionSe
 	readonly onDidDisconnect = this.disconnected.event;
 	readonly snapshots = new Map<string, TestSnapshot>();
 	readonly released: string[] = [];
-	readonly runs: { id: string; tests: readonly string[] }[] = [];
+	readonly runs: { id: string; tests: readonly string[]; }[] = [];
 	pendingDiscovery: Promise<void> | undefined;
 	holdRuns = false;
 	items: readonly TestItem[] = [
@@ -62,7 +62,7 @@ export class TestExecutionService extends Disposable implements ITestExecutionSe
 		this.released.push(id);
 	}
 
-	update(id: string, change: { status?: TestSnapshot['status']; tests?: readonly TestItem[]; result?: TestResult; launch?: TestDebugLaunch }): void {
+	update(id: string, change: { status?: TestSnapshot['status']; tests?: readonly TestItem[]; result?: TestResult; launch?: TestDebugLaunch; }): void {
 		const before = this.snapshots.get(id)!;
 		const results = change.result ? [...before.results.filter(result => result.testId !== change.result!.testId), change.result] : before.results;
 		const snapshot = { ...before, status: change.status ?? before.status, tests: change.tests ?? before.tests, results, launch: change.launch ?? before.launch, sequence: before.sequence + 1 };

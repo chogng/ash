@@ -4,10 +4,7 @@
   "type": "object",
   "properties": {
     "$schema": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "models": {
       "type": "array",
@@ -17,9 +14,7 @@
     }
   },
   "additionalProperties": false,
-  "required": [
-    "models"
-  ],
+  "required": ["models"],
   "$defs": {
     "ModelAcceleration": {
       "description": "The model catalog owns how the product's acceleration preference changes a call.\nA speed parameter and a different model ID must never be recorded as service tiers.",
@@ -35,10 +30,7 @@
               "const": "serviceTier"
             }
           },
-          "required": [
-            "type",
-            "serviceTier"
-          ]
+          "required": ["type", "serviceTier"]
         },
         {
           "type": "object",
@@ -57,12 +49,7 @@
               "const": "speed"
             }
           },
-          "required": [
-            "type",
-            "speed",
-            "name",
-            "description"
-          ]
+          "required": ["type", "speed", "name", "description"]
         },
         {
           "type": "object",
@@ -81,12 +68,7 @@
               "const": "model"
             }
           },
-          "required": [
-            "type",
-            "model",
-            "name",
-            "description"
-          ]
+          "required": ["type", "model", "name", "description"]
         }
       ]
     },
@@ -95,35 +77,20 @@
       "properties": {
         "fastMode": {
           "description": "Whether acceleration is supported; settings.acceleration declares the request mechanism.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "imageDetailOriginal": {
           "description": "Whether original-detail image requests are supported; image input is declared separately.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "parallelToolCalls": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "reasoning": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "tools": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         }
       },
       "additionalProperties": false
@@ -133,11 +100,7 @@
     },
     "ModelInputModality": {
       "type": "string",
-      "enum": [
-        "text",
-        "image",
-        "audio"
-      ]
+      "enum": ["text", "image", "audio"]
     },
     "ModelInstructions": {
       "description": "Complete base instructions owned by one model entry, independently editable and versioned.",
@@ -153,38 +116,25 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "revision",
-        "body"
-      ]
+      "required": ["revision", "body"]
     },
     "ModelReasoningEffortOption": {
       "description": "A selectable effort and its catalog explanation. Missing copy is unknown metadata;\nthe effort remains a request value and never implies a fixed token budget.",
       "type": "object",
       "properties": {
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "effort": {
           "$ref": "#/$defs/ReasoningEffort"
         }
       },
       "additionalProperties": false,
-      "required": [
-        "effort"
-      ]
+      "required": ["effort"]
     },
     "ModelReasoningSummary": {
       "type": "string",
-      "enum": [
-        "none",
-        "auto",
-        "concise",
-        "detailed"
-      ]
+      "enum": ["none", "auto", "concise", "detailed"]
     },
     "ModelServiceTier": {
       "description": "A provider service tier ID is a request value; its label and explanation are display metadata.",
@@ -201,11 +151,7 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "id",
-        "name",
-        "description"
-      ]
+      "required": ["id", "name", "description"]
     },
     "ModelSettingsDeclaration": {
       "type": "object",
@@ -234,10 +180,7 @@
         },
         "defaultServiceTier": {
           "description": "Ash's request default referencing a declared serviceTiers ID.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "defaultVerbosity": {
           "description": "Ash's request default; requires verbosity=true. This is not an inferred provider default.",
@@ -252,27 +195,18 @@
         },
         "inputModalities": {
           "description": "Declared input kinds; a declared list must include text. Omission means unknown.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/$defs/ModelInputModality"
           }
         },
         "reasoningSummary": {
           "description": "Support for returning reasoning summaries, separate from effort and replayable reasoning history.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "serviceTiers": {
           "description": "Exact provider tier IDs with display names and explanations; these do not grant account access.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/$defs/ModelServiceTier"
           }
@@ -290,10 +224,7 @@
         },
         "verbosity": {
           "description": "Support for a verbosity request parameter: true supported, false unsupported, null or omission unknown.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         }
       },
       "additionalProperties": false
@@ -301,9 +232,7 @@
     "ModelSpeed": {
       "description": "Inference speed is independent of provider scheduling and billing service tiers.",
       "type": "string",
-      "enum": [
-        "fast"
-      ]
+      "enum": ["fast"]
     },
     "ModelToolOutputLimit": {
       "description": "Limits model-visible tool text; original durable tool results remain intact.\nToken limits use the shared output utility's UTF-8 byte approximation, not token measurement.",
@@ -321,10 +250,7 @@
               "const": "bytes"
             }
           },
-          "required": [
-            "mode",
-            "limit"
-          ]
+          "required": ["mode", "limit"]
         },
         {
           "type": "object",
@@ -339,32 +265,17 @@
               "const": "tokens"
             }
           },
-          "required": [
-            "mode",
-            "limit"
-          ]
+          "required": ["mode", "limit"]
         }
       ]
     },
     "ModelVerbosity": {
       "type": "string",
-      "enum": [
-        "low",
-        "medium",
-        "high"
-      ]
+      "enum": ["low", "medium", "high"]
     },
     "ReasoningEffort": {
       "type": "string",
-      "enum": [
-        "none",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "extraHigh",
-        "max"
-      ]
+      "enum": ["none", "minimal", "low", "medium", "high", "extraHigh", "max"]
     },
     "StaticModelSpec": {
       "description": "One row in Ash's bundled JSON model catalog, independent of account access.",
@@ -372,10 +283,7 @@
       "properties": {
         "auto_compact_token_limit": {
           "description": "Optional model-specific compaction threshold, constrained by the effective execution budget.",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint32",
           "minimum": 0
         },
@@ -385,10 +293,7 @@
         },
         "context_window": {
           "description": "Declared model capacity in tokens; null or omission means unknown, not unlimited.",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint32",
           "minimum": 0
         },
@@ -403,10 +308,7 @@
           }
         },
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "display_name": {
           "type": "string"
@@ -447,12 +349,7 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "provider_id",
-        "model_id",
-        "display_name",
-        "instructions"
-      ]
+      "required": ["provider_id", "model_id", "display_name", "instructions"]
     }
   }
 }

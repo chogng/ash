@@ -13,18 +13,18 @@ directory capability。
 
 ## 所有权与公共接口
 
-| API / type | 当前职责 | 明确不做 |
-| --- | --- | --- |
-| `LspServerResolver` | 保存内置 server 与 preference，按 directory 生成一次冻结 resolution | 持有 live client 或自动重启 |
-| `LanguageServerPreference` / `LanguageServerMode` | 表达 Disabled、Enabled 和 authoritative executable override | 用布尔值混合启用与发现语义 |
-| `LanguageServerExecutionPolicy` | 接收产品宿主已经作出的 process allow/disallow 决策 | 自行读取或持久化 directory capability |
-| `LanguageServerExecutableCandidates` | 注入有优先级的冻结候选；`InstallContext` 是当前实现 | 搜索时启动或 probe 进程 |
-| `LspServerResolution` | 同时返回 resolved definitions 与每个内置 server 的 availability | 表示 server 已经 initialize |
-| `LanguageServerDefinition` | 冻结唯一 route、canonical executable command 和 initialize options | 在 runtime 内重新查询 PATH |
-| `LanguageServerProvider` / `LspServerProviders` | 把已验证、已安装的 server 包和运行时绑定为稳定 language route 与 definition | 下载、验签、启动进程或监督重启 |
-| `ManagedNodeRuntime` | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node |
-| `CssLanguageServerProvider` | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss` | 复制 LSP client/supervisor 或解释 Marketplace metadata |
-| `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider | 下载、安装、解析远端 catalog 或持有 live process |
+| API / type                                                                  | 当前职责                                                                                                                                          | 明确不做                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `LspServerResolver`                                                         | 保存内置 server 与 preference，按 directory 生成一次冻结 resolution                                                                               | 持有 live client 或自动重启                            |
+| `LanguageServerPreference` / `LanguageServerMode`                           | 表达 Disabled、Enabled 和 authoritative executable override                                                                                       | 用布尔值混合启用与发现语义                             |
+| `LanguageServerExecutionPolicy`                                             | 接收产品宿主已经作出的 process allow/disallow 决策                                                                                                | 自行读取或持久化 directory capability                  |
+| `LanguageServerExecutableCandidates`                                        | 注入有优先级的冻结候选；`InstallContext` 是当前实现                                                                                               | 搜索时启动或 probe 进程                                |
+| `LspServerResolution`                                                       | 同时返回 resolved definitions 与每个内置 server 的 availability                                                                                   | 表示 server 已经 initialize                            |
+| `LanguageServerDefinition`                                                  | 冻结唯一 route、canonical executable command 和 initialize options                                                                                | 在 runtime 内重新查询 PATH                             |
+| `LanguageServerProvider` / `LspServerProviders`                             | 把已验证、已安装的 server 包和运行时绑定为稳定 language route 与 definition                                                                       | 下载、验签、启动进程或监督重启                         |
+| `ManagedNodeRuntime`                                                        | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node        |
+| `CssLanguageServerProvider`                                                 | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss`                                                          | 复制 LSP client/supervisor 或解释 Marketplace metadata |
+| `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider                                                                  | 下载、安装、解析远端 catalog 或持有 live process       |
 
 当前内置项包括 `rust-analyzer → rust`、`vscode-json-language-server --stdio → json/jsonc` 和
 `bash-language-server start → shellscript`。CSS 是独立 provider，不进入 PATH built-in 列表。Desktop/App Server 从

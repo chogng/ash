@@ -2,7 +2,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test.beforeEach(async ({  }) => {
+test.beforeEach(async ({ }) => {
 });
 
 test('Quick Access runs an exact command ID and can reopen for another command', async ({ workbench }) => {

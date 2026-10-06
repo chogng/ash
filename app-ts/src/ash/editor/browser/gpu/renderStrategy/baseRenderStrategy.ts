@@ -17,7 +17,7 @@ export abstract class BaseRenderStrategy extends ViewEventHandler implements IGp
 		protected readonly _context: ViewContext,
 		protected readonly _viewGpuContext: ViewGpuContext,
 		protected readonly _device: GPUDevice,
-		protected readonly _glyphRasterizer: { value: GlyphRasterizer },
+		protected readonly _glyphRasterizer: { value: GlyphRasterizer; },
 	) {
 		super();
 		this._context.addEventHandler(this);

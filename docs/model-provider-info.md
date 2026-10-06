@@ -17,13 +17,13 @@
 
 内置模型固定登记，接入独立配置，每次调用为每个厂商选择一条已就绪连接。`ModelRef` 表示厂商＋模型，`ModelConnectionId` 表示接入。GLM 全部使用 `glm` 模型厂商；`bigmodel`、`zai` 和两个 Coding Plan 服务 ID 是四个独立接入，凭据与端点各自保留。配置文件以 `connections` 保存接入；实际选择由运行时根据凭据状态决定。规则见[登录与账户系统](login.md#1-结论)。
 
-| 读者首先会问 | 直接答案 | 深入阅读 |
-| --- | --- | --- |
-| 这里保存什么？ | 可序列化的供应商定义、API 配置档案、默认值和唯一静态模型目录 | [静态模型元数据](#7-静态模型元数据) |
-| 用户覆盖如何生效？ | 按字段规则合并后进行确定性规范化，相同输入必须得到相同结果 | [合并与规范化](#5-合并与规范化) |
-| 可以在这里读取 API key 吗？ | 不可以；配置只能保存不敏感的凭据引用 | [拥有与不拥有](#2-拥有与不拥有) |
-| 可以探测端点是否可用吗？ | 不可以；网络、凭据和运行时状态不能参与静态配置校验 | [Base URL 边界](#6-base-url-与端点的边界) |
-| 当前完成到哪里？ | 已有基础声明、默认 HTTP `ApiProfile` 和独立 WebSocket profile，多档案允许列表与用户覆盖仍待实现 | [当前实现审计](#3-当前实现审计) |
+| 读者首先会问                | 直接答案                                                                                        | 深入阅读                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 这里保存什么？              | 可序列化的供应商定义、API 配置档案、默认值和唯一静态模型目录                                    | [静态模型元数据](#7-静态模型元数据)       |
+| 用户覆盖如何生效？          | 按字段规则合并后进行确定性规范化，相同输入必须得到相同结果                                      | [合并与规范化](#5-合并与规范化)           |
+| 可以在这里读取 API key 吗？ | 不可以；配置只能保存不敏感的凭据引用                                                            | [拥有与不拥有](#2-拥有与不拥有)           |
+| 可以探测端点是否可用吗？    | 不可以；网络、凭据和运行时状态不能参与静态配置校验                                              | [Base URL 边界](#6-base-url-与端点的边界) |
+| 当前完成到哪里？            | 已有基础声明、默认 HTTP `ApiProfile` 和独立 WebSocket profile，多档案允许列表与用户覆盖仍待实现 | [当前实现审计](#3-当前实现审计)           |
 
 ## 1. 结论
 
@@ -100,14 +100,14 @@ ash-http-client      负责底层网络传输
 
 当前需要演进的地方：
 
-| 当前形态 | 问题 | 目标 |
-| --- | --- | --- |
-| `ProviderAdapter` 同时近似 Provider 名称和 runtime 实现 | 容易与 `ash-api::Api` 再建一套分派 | 明确它是 runtime adapter identity，API endpoint 由 runtime 选择 |
-| `EndpointPolicy` 只描述 base URL | 名称容易被理解为 `/messages` 等协议 endpoint | 改称或文档化为 `BaseUrlPolicy` 语义 |
-| definition 目前只有一个 `api_profile` | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy |
-| count binding 已独立声明 profile/target/models | invocation 与 count 可能不共享 base path | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀 |
-| Responses WebSocket 与 Realtime profile 分别声明 | HTTP 或文本订阅支持不代表语音服务可用 | runtime 分别校验能力与凭据；实连证据按服务记录 |
-| 静态模型与接入分离 | 远端目录不能代表内置目录 | 模型固定可选，请求只使用明确选中的接入 |
+| 当前形态                                                | 问题                                                | 目标                                                            |
+| ------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
+| `ProviderAdapter` 同时近似 Provider 名称和 runtime 实现 | 容易与 `ash-api::Api` 再建一套分派                  | 明确它是 runtime adapter identity，API endpoint 由 runtime 选择 |
+| `EndpointPolicy` 只描述 base URL                        | 名称容易被理解为 `/messages` 等协议 endpoint        | 改称或文档化为 `BaseUrlPolicy` 语义                             |
+| definition 目前只有一个 `api_profile`                   | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy                 |
+| count binding 已独立声明 profile/target/models          | invocation 与 count 可能不共享 base path            | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀       |
+| Responses WebSocket 与 Realtime profile 分别声明        | HTTP 或文本订阅支持不代表语音服务可用               | runtime 分别校验能力与凭据；实连证据按服务记录                  |
+| 静态模型与接入分离                                      | 远端目录不能代表内置目录                            | 模型固定可选，请求只使用明确选中的接入                          |
 
 协议、端点与认证声明属于接入；模型自身规格只维护一份。
 
@@ -219,11 +219,11 @@ Normalization 不得：
 
 三种概念必须分开：
 
-| 概念 | Owner | 示例 |
-| --- | --- | --- |
-| 默认 base URL | `model-provider-info` | `https://api.anthropic.com` |
-| resolved runtime target | `model-provider` | base URL + credential/runtime headers |
-| relative API endpoint | `ash-api` | `POST /v1/messages` |
+| 概念                    | Owner                 | 示例                                  |
+| ----------------------- | --------------------- | ------------------------------------- |
+| 默认 base URL           | `model-provider-info` | `https://api.anthropic.com`           |
+| resolved runtime target | `model-provider`      | base URL + credential/runtime headers |
+| relative API endpoint   | `ash-api`             | `POST /v1/messages`                   |
 
 配置层禁止把完整 invocation URL 当成通用字符串模板，也禁止通过删除 `/v1` 猜测 catalog 或原生
 endpoint。Google 和 Ollama 的 invocation/catalog 地址可能不共享同一个 base path，必须由

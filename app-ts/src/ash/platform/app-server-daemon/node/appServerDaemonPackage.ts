@@ -14,8 +14,8 @@ export interface AppServerDaemonPackageLocation {
 interface AshPackageMetadata {
 	readonly buildId?: unknown;
 	readonly components?: {
-		readonly appServerDaemon?: { readonly binarySha256?: unknown };
-		readonly appServer?: { readonly binarySha256?: unknown };
+		readonly appServerDaemon?: { readonly binarySha256?: unknown; };
+		readonly appServer?: { readonly binarySha256?: unknown; };
 	};
 	readonly entrypoint?: unknown;
 	readonly layoutVersion?: unknown;

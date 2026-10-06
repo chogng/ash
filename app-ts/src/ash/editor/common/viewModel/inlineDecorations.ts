@@ -61,7 +61,7 @@ export interface IInlineModelDecorationsComputerContext {
 
 export class InlineModelDecorationsComputer implements IInlineDecorationsComputer {
 
-	private _decorationsCache: { [decorationId: string]: ViewModelDecoration };
+	private _decorationsCache: { [decorationId: string]: ViewModelDecoration; };
 
 	constructor(
 		private readonly context: IInlineModelDecorationsComputerContext,

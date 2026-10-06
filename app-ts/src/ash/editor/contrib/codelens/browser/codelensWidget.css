@@ -1,47 +1,47 @@
 .stanza-editor-codelens {
-  position: absolute;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  max-width: calc(100% - 8px);
-  overflow: hidden;
-  color: var(--ash-description-foreground);
-  font-family: inherit;
-  font-size: 0.9em;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	position: absolute;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	max-width: calc(100% - 8px);
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	font-family: inherit;
+	font-size: 0.9em;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-editor-codelens-command {
-  min-width: 0;
-  padding: 0;
-  overflow: hidden;
-  color: inherit;
-  font: inherit;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: none;
-  background: transparent;
-  border: 0;
+	min-width: 0;
+	padding: 0;
+	overflow: hidden;
+	color: inherit;
+	font: inherit;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	user-select: none;
+	background: transparent;
+	border: 0;
 }
 
 button.stanza-editor-codelens-command {
-  cursor: pointer;
+	cursor: pointer;
 }
 
 button.stanza-editor-codelens-command:hover {
-  color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
-  text-decoration: underline;
+	color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
+	text-decoration: underline;
 }
 
 button.stanza-editor-codelens-command:focus-visible {
-  color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	color: var(--ash-text-link-active-foreground, var(--ash-editor-foreground));
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .stanza-editor-codelens-separator {
-  color: inherit;
-  user-select: none;
+	color: inherit;
+	user-select: none;
 }

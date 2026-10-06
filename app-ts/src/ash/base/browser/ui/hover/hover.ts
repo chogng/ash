@@ -233,7 +233,7 @@ export class Hover extends Disposable {
 		this.contextView.layout();
 	}
 
-	private resolvePosition(position: HoverPosition | undefined): { anchorAxisAlignment: AnchorAxisAlignment; anchorPosition: AnchorPosition } {
+	private resolvePosition(position: HoverPosition | undefined): { anchorAxisAlignment: AnchorAxisAlignment; anchorPosition: AnchorPosition; } {
 		let anchorAxisAlignment = this.anchorAxisAlignment;
 		let anchorPosition = this.anchorPosition;
 		switch (position) {

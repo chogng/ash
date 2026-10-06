@@ -193,7 +193,7 @@ interface CompletionOverrides {
 	readonly kind?: LanguageCompletionItemKind;
 }
 
-function completion(id: string, label: string, startColumn: number, endColumn: number, overrides: CompletionOverrides = {}): LanguageCompletionItem & { label: string } {
+function completion(id: string, label: string, startColumn: number, endColumn: number, overrides: CompletionOverrides = {}): LanguageCompletionItem & { label: string; } {
 	return {
 		providerId: overrides.providerId ?? "test",
 		id,

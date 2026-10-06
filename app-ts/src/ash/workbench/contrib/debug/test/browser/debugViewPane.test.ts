@@ -18,7 +18,7 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const opened: unknown[] = [];
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened.push(input); }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened.push(input); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -57,7 +57,7 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	let opened: EditorInput | undefined;
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened = input; }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened = input; }, focusActiveEditor() { } };
 	const resource = URI.parse("ash-remote://ssh+work-server/srv/project/src/main.ts");
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
@@ -82,7 +82,7 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 test("Debug controls follow session state, dispatch actions, and retain collapsed sections across refreshes", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -127,7 +127,7 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 test("Debug view initializes Chinese labels and retains its draft and collapsed section during refresh", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -156,12 +156,12 @@ test("Debug view initializes Chinese labels and retains its draft and collapsed 
 	}
 });
 
-const contextMenus: IContextMenuService = { onDidShowContextMenu: CommonEvent.None, onDidHideContextMenu: CommonEvent.None, showContextMenu() {}, hideContextMenu() {} };
+const contextMenus: IContextMenuService = { onDidShowContextMenu: CommonEvent.None, onDidHideContextMenu: CommonEvent.None, showContextMenu() { }, hideContextMenu() { } };
 
 test("Debug variable editing uses its parent reference, refreshes watches, cancels, and restores focus", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -213,7 +213,7 @@ test("Debug variable editing uses its parent reference, refreshes watches, cance
 test("Debug source failures preserve variable and Watch inspection", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { throw new Error("Source unavailable"); }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { throw new Error("Source unavailable"); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService({ name: "main.ts", resource: URI.file('/workspace/main.ts') });
@@ -234,7 +234,7 @@ test("Debug inspection retires pending variable and virtual source replies when 
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
 	const opened: EditorInput[] = [];
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -275,7 +275,7 @@ test("Debug inspection retires pending variable and virtual source replies when 
 test("Debug variable editing respects read-only hints, retains adapter errors, and retires an in-flight assignment on session switch", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => {}, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -320,7 +320,7 @@ test("Debug welcome creates a launch document and reopens existing configuration
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
 	const opened: EditorInput[] = [];
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();

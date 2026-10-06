@@ -25,25 +25,25 @@ export function remoteConnectionIpcRoutes(service: IRemoteConnectionService): re
 		{
 			channel: REMOTE_CONNECTION_CONNECT_CHANNEL,
 			validate: namedParams,
-			invoke: params => service.connect((params as { readonly name: string }).name),
+			invoke: params => service.connect((params as { readonly name: string; }).name),
 		},
 		{
 			channel: REMOTE_CONNECTION_SAVE_CHANNEL,
 			validate: saveParams,
-			invoke: params => service.save((params as { readonly connection: RemoteConnectionDefinition }).connection),
+			invoke: params => service.save((params as { readonly connection: RemoteConnectionDefinition; }).connection),
 		},
 		{
 			channel: REMOTE_CONNECTION_UPDATE_CHANNEL,
 			validate: updateParams,
 			invoke: params => {
-				const request = params as { readonly originalName: string; readonly connection: RemoteConnectionDefinition };
+				const request = params as { readonly originalName: string; readonly connection: RemoteConnectionDefinition; };
 				return service.update(request.originalName, request.connection);
 			},
 		},
 		{
 			channel: REMOTE_CONNECTION_REMOVE_CHANNEL,
 			validate: namedParams,
-			invoke: params => service.remove((params as { readonly name: string }).name),
+			invoke: params => service.remove((params as { readonly name: string; }).name),
 		},
 	];
 }
@@ -53,17 +53,17 @@ function emptyParams(value: unknown): undefined {
 	return undefined;
 }
 
-function namedParams(value: unknown): { readonly name: string } {
+function namedParams(value: unknown): { readonly name: string; } {
 	const params = record(value, ["name"]);
 	return { name: canonicalRemoteConnectionName(boundedString(params.name, "name", 64)) };
 }
 
-function saveParams(value: unknown): { readonly connection: RemoteConnectionDefinition } {
+function saveParams(value: unknown): { readonly connection: RemoteConnectionDefinition; } {
 	const params = record(value, ["connection"]);
 	return { connection: connectionDefinition(params.connection) };
 }
 
-function updateParams(value: unknown): { readonly originalName: string; readonly connection: RemoteConnectionDefinition } {
+function updateParams(value: unknown): { readonly originalName: string; readonly connection: RemoteConnectionDefinition; } {
 	const params = record(value, ["originalName", "connection"]);
 	return {
 		originalName: canonicalRemoteConnectionName(boundedString(params.originalName, "originalName", 64)),

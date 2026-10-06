@@ -23,7 +23,7 @@ import type { IWorkingCopyService } from '../../../../services/workingCopy/commo
 test('SCM status displays provider branch and upstream commands', async () => {
 	const changes = new Emitter<GitStatus>();
 	let status = branchStatus(2, 3);
-	const commands: Array<{ id: string; repositoryId: string }> = [];
+	const commands: Array<{ id: string; repositoryId: string; }> = [];
 	const focusedViews: string[] = [];
 	using fixture = createFixture(changes, () => Promise.resolve(status), commands, focusedViews);
 	await settle();
@@ -54,7 +54,7 @@ test('Git provider status events supersede an older in-flight status request', a
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'event-branch');
 });
 
-function createFixture(changes: Emitter<GitStatus>, status: () => Promise<GitStatus>, commands: Array<{ id: string; repositoryId: string }>, focusedViews: string[]): DisposableStore & { readonly statusbar: StatusbarService; readonly viewService: SCMViewService } {
+function createFixture(changes: Emitter<GitStatus>, status: () => Promise<GitStatus>, commands: Array<{ id: string; repositoryId: string; }>, focusedViews: string[]): DisposableStore & { readonly statusbar: StatusbarService; readonly viewService: SCMViewService; } {
 	const resources = new DisposableStore();
 	resources.add(changes);
 	const scmService = resources.add(new SCMService());

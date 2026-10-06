@@ -67,15 +67,19 @@ export class DesignMotionWidget extends Disposable {
 			}));
 		}
 		this.addButton = this._register(new Button(playback, { label: localize('sessions.design.addKeyframe', 'Add keyframe'), onClick: () => this.addKeyframe() }));
-		this.removeButton = this._register(new Button(playback, { label: localize('sessions.design.removeKeyframe', 'Remove keyframe'), onClick: () => {
-			const motion = this.shape!.motion!;
-			this.commit({ ...motion, keyframes: motion.keyframes.filter((_, index) => index !== this.frameIndex) });
-		} }));
-		this.clearButton = this._register(new Button(playback, { label: localize('sessions.design.clearMotion', 'Remove animation'), onClick: () => {
-			const { motion, ...shape } = this.shape!;
-			this.stop();
-			this.commands.updateShape(shape);
-		} }));
+		this.removeButton = this._register(new Button(playback, {
+			label: localize('sessions.design.removeKeyframe', 'Remove keyframe'), onClick: () => {
+				const motion = this.shape!.motion!;
+				this.commit({ ...motion, keyframes: motion.keyframes.filter((_, index) => index !== this.frameIndex) });
+			}
+		}));
+		this.clearButton = this._register(new Button(playback, {
+			label: localize('sessions.design.clearMotion', 'Remove animation'), onClick: () => {
+				const { motion, ...shape } = this.shape!;
+				this.stop();
+				this.commands.updateShape(shape);
+			}
+		}));
 		this.domNode.append(hint, playback, properties);
 		this._register(addDisposableListener(this.timeline, 'input', () => { this.stop(); this.setTime(this.timeline.valueAsNumber); }));
 		this._register(addDisposableListener(this.durationInput, 'change', () => {

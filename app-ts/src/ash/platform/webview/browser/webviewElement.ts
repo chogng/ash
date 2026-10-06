@@ -192,9 +192,8 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="${
-    escapeAttribute(WEBVIEW_CONTENT_SECURITY_POLICY)
-  }">
+  <meta http-equiv="Content-Security-Policy" content="${escapeAttribute(WEBVIEW_CONTENT_SECURITY_POLICY)
+		}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script>${bootstrap}</script>
 </head>

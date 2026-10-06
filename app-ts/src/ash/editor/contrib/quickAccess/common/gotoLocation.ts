@@ -8,8 +8,8 @@ export interface GotoLocation {
 }
 
 export type GotoLocationParseResult =
-	| { readonly kind: "empty" | "invalid"; readonly message: string }
-	| { readonly kind: "location"; readonly location: GotoLocation; readonly message: string };
+	| { readonly kind: "empty" | "invalid"; readonly message: string; }
+	| { readonly kind: "location"; readonly location: GotoLocation; readonly message: string; };
 
 /**
  * Parses Stanza's Go to Line input into a clamped model position.

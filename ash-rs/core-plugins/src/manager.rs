@@ -513,7 +513,11 @@ impl PluginPackageService for PluginsManager {
             return Err(installation_in_use());
         }
         let spec = activation::acquire_spec(&self.store, &installation, &capability)?;
-        let lease = self.insert_lease(&mut runtime, request.capability, installation.installation_id);
+        let lease = self.insert_lease(
+            &mut runtime,
+            request.capability,
+            installation.installation_id,
+        );
         Ok(AcquiredCapability { lease, spec })
     }
 

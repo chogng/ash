@@ -91,10 +91,12 @@ test('DebugService persists durable breakpoint families and retires session addr
 	await (session as DebugAdapterSession).syncBreakpoints();
 	const last = (command: string) => processes.requests.filter(request => request.command === command).at(-1)?.arguments;
 	assert.deepEqual(last('setFunctionBreakpoints'), { breakpoints: [{ name: 'app::worker', condition: ' counter > 0 ', hitCondition: '>= 2' }] });
-	assert.deepEqual(last('setDataBreakpoints'), { breakpoints: [
-		{ dataId: ' memory:counter ', accessType: 'readWrite', condition: 'counter > 0' },
-		{ dataId: 'stack:counter', accessType: 'readWrite', condition: 'counter > 0' },
-	] });
+	assert.deepEqual(last('setDataBreakpoints'), {
+		breakpoints: [
+			{ dataId: ' memory:counter ', accessType: 'readWrite', condition: 'counter > 0' },
+			{ dataId: 'stack:counter', accessType: 'readWrite', condition: 'counter > 0' },
+		]
+	});
 	assert.deepEqual(last('setInstructionBreakpoints'), { breakpoints: [{ instructionReference: '0x1000', offset: -4, hitCondition: '2' }] });
 	await service.stop(session);
 	assert.equal(service.focusedStackFrame, undefined);
@@ -197,7 +199,7 @@ test('DebugService launches and restarts supplied test configurations without la
 
 class FakeFileService implements IFileService {
 	readonly onDidChangeFiles = Event.None;
-	constructor(private readonly root: URI, private readonly document = launchJson) {}
+	constructor(private readonly root: URI, private readonly document = launchJson) { }
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.document.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readFile(resource: URI) { if (!resource.path.endsWith("/.vscode/launch.json")) throw new FileNotFoundError(resource); return { resource, content: this.document, revision: "1" }; }
 	async readDirectory() { return []; }
@@ -223,12 +225,12 @@ class FakeTaskService extends Disposable implements ITaskService {
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
 	async refresh() { return this.tasks; }
 	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, terminalId: "task-terminal", status: "succeeded" as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
-	async terminate() {}
+	async terminate() { }
 }
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
-	private readonly sessions = new Map<string, { messages: Array<{ readonly sequence: number; readonly message: unknown }>; next: number }>();
+	private readonly sessions = new Map<string, { messages: Array<{ readonly sequence: number; readonly message: unknown; }>; next: number; }>();
 	private nextSession = 1;
 	readonly requests: Record<string, unknown>[] = [];
 	readonly onConnectionState = this.connectionEmitter.event;
@@ -240,7 +242,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		this.requests.push(request);
 		const command = String(request.command);
 		if (command === "launch") this.enqueue(state, { seq: 0, type: "event", event: "initialized" });
-		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true } : command.startsWith('set') && command.endsWith('Breakpoints') ? { breakpoints: ((request.arguments as { breakpoints?: unknown[] })?.breakpoints ?? []).map(() => ({ verified: true })) } : {};
+		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true } : command.startsWith('set') && command.endsWith('Breakpoints') ? { breakpoints: ((request.arguments as { breakpoints?: unknown[]; })?.breakpoints ?? []).map(() => ({ verified: true })) } : {};
 		this.enqueue(state, { seq: 0, type: "response", request_seq: request.seq, success: true, command, body });
 	}
 	async read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> { const state = this.sessions.get(sessionId)!; return { messages: state.messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages), nextSequence: state.next, outputGap: false, stderr: "", exited: false, exitCode: null, protocolError: null }; }
@@ -249,7 +251,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	async getConnectionState(): Promise<AppServerConnectionState> { return "ready"; }
 	dispose(): void { this.connectionEmitter.dispose(); }
 	[Symbol.dispose](): void { this.dispose(); }
-	private enqueue(state: { messages: Array<{ readonly sequence: number; readonly message: unknown }>; next: number }, message: unknown): void { state.messages.push({ sequence: state.next++, message }); }
+	private enqueue(state: { messages: Array<{ readonly sequence: number; readonly message: unknown; }>; next: number; }, message: unknown): void { state.messages.push({ sequence: state.next++, message }); }
 }
 
 class TestStorageService implements IStorageService {

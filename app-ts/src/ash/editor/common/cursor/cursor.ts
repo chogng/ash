@@ -734,10 +734,10 @@ export class CursorsController extends Disposable {
 			return;
 		}
 		const reason = rawEvent.isUndoing
-				? CursorChangeReason.Undo
-				: rawEvent.isRedoing
-					? CursorChangeReason.Redo
-					: CursorChangeReason.RecoverFromMarkers;
+			? CursorChangeReason.Undo
+			: rawEvent.isRedoing
+				? CursorChangeReason.Redo
+				: CursorChangeReason.RecoverFromMarkers;
 		const selections = this.hasFocus && rawEvent.resultingSelection?.length
 			? rawEvent.resultingSelection
 			: this.cursors.readSelectionFromMarkers();

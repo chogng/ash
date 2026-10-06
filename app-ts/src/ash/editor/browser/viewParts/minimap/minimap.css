@@ -10,7 +10,7 @@
 
 .stanza-editor .minimap.has-right-overflow::after {
 	/* Clip the shadow source outside the map so only its soft edge covers the raster. */
-	content: '';
+	content: "";
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -34,23 +34,31 @@
 	pointer-events: none;
 }
 
-.stanza-editor .stanza-editor-minimap-hover-slider .stanza-editor-minimap-slider {
+.stanza-editor
+	.stanza-editor-minimap-hover-slider
+	.stanza-editor-minimap-slider {
 	opacity: 0;
 	transition: opacity 100ms linear;
 }
 
-.stanza-editor .stanza-editor-minimap-hover-slider:hover .stanza-editor-minimap-slider {
+.stanza-editor
+	.stanza-editor-minimap-hover-slider:hover
+	.stanza-editor-minimap-slider {
 	opacity: 1;
 	background-color: var(--ash-minimap-slider-hover-background);
 }
 
-.stanza-editor .minimap.stanza-editor-minimap-dragging .stanza-editor-minimap-slider {
+.stanza-editor
+	.minimap.stanza-editor-minimap-dragging
+	.stanza-editor-minimap-slider {
 	opacity: 1;
 	background-color: var(--ash-minimap-slider-active-background);
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.stanza-editor .stanza-editor-minimap-hover-slider .stanza-editor-minimap-slider {
+	.stanza-editor
+		.stanza-editor-minimap-hover-slider
+		.stanza-editor-minimap-slider {
 		transition: none;
 	}
 }

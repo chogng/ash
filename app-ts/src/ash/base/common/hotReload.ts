@@ -15,7 +15,7 @@ export type AcceptNewExportsHandler = (newExports: Record<string, unknown>) => b
 export type HotReloadHandler = (request: HotReloadRequest) => AcceptNewExportsHandler | undefined;
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: Omit<HotReloadRequest, "config"> & { readonly config?: HotReloadConfig }) => AcceptNewExportsHandler | undefined;
+	$hotReload_applyNewExports?: (request: Omit<HotReloadRequest, "config"> & { readonly config?: HotReloadConfig; }) => AcceptNewExportsHandler | undefined;
 };
 
 let enabled = false;
@@ -36,12 +36,12 @@ export function isHotReloadEnabled(): boolean {
 
 /** Registers a runtime strategy that may accept one Vite module replacement. */
 export function registerHotReloadHandler(handler: HotReloadHandler): IDisposable {
-	if (!enabled) return toDisposable(() => {});
+	if (!enabled) return toDisposable(() => { });
 	handlers.add(handler);
 	return toDisposable(() => handlers.delete(handler));
 }
 
-function applyNewExports(request: Omit<HotReloadRequest, "config"> & { readonly config?: HotReloadConfig }): AcceptNewExportsHandler | undefined {
+function applyNewExports(request: Omit<HotReloadRequest, "config"> & { readonly config?: HotReloadConfig; }): AcceptNewExportsHandler | undefined {
 	const normalized: HotReloadRequest = { ...request, config: request.config ?? {} };
 	const acceptors = [...handlers].map(handler => handler(normalized)).filter((handler): handler is AcceptNewExportsHandler => handler !== undefined);
 	if (acceptors.length === 0) return undefined;
@@ -57,7 +57,7 @@ function createPrototypePatchHandler(): HotReloadHandler {
 
 function patchExportedPrototypes(oldExports: Record<string, unknown>, newExports: Record<string, unknown>, source: string): boolean {
 	if (!sameKeys(oldExports, newExports)) return false;
-	const replacements: Array<{ readonly current: object; readonly replacement: object; readonly name: string }> = [];
+	const replacements: Array<{ readonly current: object; readonly replacement: object; readonly name: string; }> = [];
 	for (const name of Object.keys(newExports)) {
 		const current = oldExports[name];
 		const replacement = newExports[name];
@@ -80,7 +80,7 @@ function sameKeys(first: Record<string, unknown>, second: Record<string, unknown
 	return firstKeys.length === secondKeys.length && firstKeys.every((key, index) => key === secondKeys[index]);
 }
 
-function isClassLike(value: unknown): value is Function & { readonly prototype: object } {
+function isClassLike(value: unknown): value is Function & { readonly prototype: object; } {
 	return typeof value === "function" && typeof value.prototype === "object" && value.prototype !== null;
 }
 

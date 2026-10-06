@@ -25,7 +25,7 @@ export const IWorkspaceOpenService =
 export interface IWebWorkspaceDirectoryList {
 	readonly path: string;
 	readonly parent: string | null;
-	readonly directories: readonly { readonly name: string; readonly path: string }[];
+	readonly directories: readonly { readonly name: string; readonly path: string; }[];
 }
 
 export interface IWebWorkspaceClient {
@@ -43,7 +43,7 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 		private readonly fileDialogs: IFileDialogService,
 		private readonly dialogs: () => IDialogService,
 		private readonly prepareSwitch: () => Promise<boolean>,
-	) {}
+	) { }
 
 	async openFolder(): Promise<void> {
 		const path = await this.pickFolder();
@@ -130,7 +130,7 @@ export class BrowserWorkspaceOpenService implements IWorkspaceOpenService {
 		private readonly provider: HTMLFileSystemProvider,
 		private readonly updateWorkspace: (workspace: IWorkspace) => Promise<void>,
 		private readonly fileDialogs: IFileDialogService,
-	) {}
+	) { }
 
 	public async openFolder(): Promise<void> {
 		const resource = await this.pickFolderResource();

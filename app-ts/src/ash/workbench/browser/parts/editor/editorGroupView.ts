@@ -736,7 +736,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.panes.layout(this.dimension);
 	}
 
-	public get titleHeight(): { readonly offset: number; readonly total: number } {
+	public get titleHeight(): { readonly offset: number; readonly total: number; } {
 		return { offset: this.titleControl.height, total: this.titleControl.height };
 	}
 
@@ -803,7 +803,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		});
 	}
 
-	private selectTab(input: EditorInput, modifiers: { toggle: boolean; range: boolean }): boolean {
+	private selectTab(input: EditorInput, modifiers: { toggle: boolean; range: boolean; }): boolean {
 		if (!modifiers.toggle && !modifiers.range) return false;
 		const entry = this.requireEntry(input);
 		const restoreFocus = this.domNode.ownerDocument.activeElement?.id === entry.tabId;

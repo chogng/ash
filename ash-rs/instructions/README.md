@@ -17,15 +17,15 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授�
 
 ## 快速理解
 
-| 文件状态 | 结果 |
-| --- | --- |
-| Instruction 目录不存在 | 空 catalog，无错误 |
-| `AGENTS.md` / `ASH.md` | 作为纯 Markdown always-on 规则，按此顺序进入上下文 |
-| 合法 `.md` | 进入确定性 catalog |
-| 单文件格式错误 | 产生隔离 diagnostic，其他文件继续 |
-| `load: global` | 注入后续模型调用 |
-| `load: contextual` | 本 Turn 成功读取的目录内文件命中 `patterns` 时注入 |
-| `load: on-demand` | Agent 读取准确文件、用户显式附加，或 Agent definition 引用时加载 |
+| 文件状态               | 结果                                                             |
+| ---------------------- | ---------------------------------------------------------------- |
+| Instruction 目录不存在 | 空 catalog，无错误                                               |
+| `AGENTS.md` / `ASH.md` | 作为纯 Markdown always-on 规则，按此顺序进入上下文               |
+| 合法 `.md`             | 进入确定性 catalog                                               |
+| 单文件格式错误         | 产生隔离 diagnostic，其他文件继续                                |
+| `load: global`         | 注入后续模型调用                                                 |
+| `load: contextual`     | 本 Turn 成功读取的目录内文件命中 `patterns` 时注入               |
+| `load: on-demand`      | Agent 读取准确文件、用户显式附加，或 Agent definition 引用时加载 |
 
 ## 边界与公共契约
 
@@ -62,12 +62,12 @@ UTF-8、空正文和未知 frontmatter 字段均不会进入 catalog。
 
 ## 内部所有权与调用路径
 
-| 文件 / symbol | 职责 |
-| --- | --- |
-| `catalog.rs::scan` | 固定路径、entry limit、排序与隔离诊断 |
-| `catalog.rs::load_entry` | metadata、类型、大小、UTF-8、frontmatter 和正文校验 |
-| `catalog.rs::load_policy` | 三态加载策略的不变量 |
-| `model.rs::InstructionCatalogSnapshot` | immutable entries/diagnostics 与自动匹配渲染 |
+| 文件 / symbol                          | 职责                                                |
+| -------------------------------------- | --------------------------------------------------- |
+| `catalog.rs::scan`                     | 固定路径、entry limit、排序与隔离诊断               |
+| `catalog.rs::load_entry`               | metadata、类型、大小、UTF-8、frontmatter 和正文校验 |
+| `catalog.rs::load_policy`              | 三态加载策略的不变量                                |
+| `model.rs::InstructionCatalogSnapshot` | immutable entries/diagnostics 与自动匹配渲染        |
 
 ```text
 InstructionCatalog::discover / refresh

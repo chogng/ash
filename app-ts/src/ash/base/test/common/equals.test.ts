@@ -16,7 +16,7 @@ test('equality comparer factories compose domain equality', () => {
 	assert.equal(equalsIfDefinedC(caseInsensitive)(undefined, undefined), true);
 	assert.equal(equalsIfDefinedC(caseInsensitive)(undefined, 'value'), false);
 	class EquatableValue {
-		constructor(readonly id: number) {}
+		constructor(readonly id: number) { }
 		equals(other: EquatableValue): boolean { return this.id === other.id; }
 	}
 	assert.equal(thisEqualsC<EquatableValue>()(new EquatableValue(1), new EquatableValue(1)), true);

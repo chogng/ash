@@ -12,7 +12,7 @@ const artifact = Object.freeze({
 });
 
 test("Electron Main delegates installation to the shared ash remote command", async () => {
-	let invocation: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv } | undefined;
+	let invocation: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv; } | undefined;
 	const installer = new RemoteRuntimeInstaller({
 		remoteExecutable: "/Applications/Ash.app/Contents/Resources/bin/ash-remote",
 		sshExecutable: "/usr/bin/ssh",
@@ -30,7 +30,7 @@ test("Electron Main delegates installation to the shared ash remote command", as
 	assert.equal(executable, "/srv/ash runtime/runtimes/x86_64-unknown-linux-gnu/0.1.0/abc/bin/ash-remote-server");
 	assert.deepEqual(invocation, {
 		executable: "/Applications/Ash.app/Contents/Resources/bin/ash-remote",
-		args: [ "install",
+		args: ["install",
 			"--host", "build-linux",
 			"--archive", "/cache/ash-package.tar.gz",
 			"--version", "0.1.0",
@@ -117,7 +117,7 @@ test("installer fails closed on malformed structured progress", async () => {
 		sshExecutable: "ssh",
 		environment: {},
 		artifact,
-		onProgress: () => {},
+		onProgress: () => { },
 		runCommand: async (_executable, _args, _environment, observer) => {
 			observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":');
 			return { exitCode: 0, stdout: "/srv/ash/runtime/bin/ash-remote-server\n", stderr: "" };

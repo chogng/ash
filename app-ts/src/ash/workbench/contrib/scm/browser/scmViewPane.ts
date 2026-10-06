@@ -22,8 +22,8 @@ import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, typ
 export const GIT_VIEW_ID = 'ash.gitView';
 
 type TreeElement =
-	| { readonly id: string; readonly group: ISCMResourceGroup }
-	| { readonly id: string; readonly resource: ISCMResource };
+	| { readonly id: string; readonly group: ISCMResourceGroup; }
+	| { readonly id: string; readonly resource: ISCMResource; };
 
 /** Displays resources and actions from the selected SCM provider. */
 export class ScmViewPane extends ViewPane {
@@ -94,9 +94,11 @@ export class ScmViewPane extends ViewPane {
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// In a flat changes list, file icons occupy the empty arrow column even when the theme supplies folder icons.
-			this.tree.updateOptions({ twistieAdditionalCssClass: element => 'resource' in element && theme.hasFileIcons
-				? 'ash-tree-twistie-hidden'
-				: 'ash-tree-twistie-with-icon-gap' });
+			this.tree.updateOptions({
+				twistieAdditionalCssClass: element => 'resource' in element && theme.hasFileIcons
+					? 'ash-tree-twistie-hidden'
+					: 'ash-tree-twistie-with-icon-gap'
+			});
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
@@ -199,7 +201,7 @@ export class ScmViewPane extends ViewPane {
 		return heading;
 	}
 
-	private renderResource(element: { readonly id: string; readonly resource: ISCMResource }): HTMLElement {
+	private renderResource(element: { readonly id: string; readonly resource: ISCMResource; }): HTMLElement {
 		const resource = element.resource;
 		const document = this.element.ownerDocument;
 		const item = h(document, 'div');

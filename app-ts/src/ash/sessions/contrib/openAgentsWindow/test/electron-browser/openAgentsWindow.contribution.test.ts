@@ -32,7 +32,7 @@ class TestKeybindingService extends Disposable implements IKeybindingService {
 	public resolveUserBinding() { return undefined; }
 	public lookupKeybinding() { return undefined; }
 	public lookupKeybindings() { return []; }
-	public async reload(): Promise<void> {}
+	public async reload(): Promise<void> { }
 	public async updateKeybindings(bindings: readonly IUserFriendlyKeybinding[]): Promise<void> {
 		this.bindings = bindings;
 		this.changed.fire();
@@ -63,37 +63,37 @@ class Fixture extends Disposable {
 			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,
-			onDidRequestOpenExternalUri: () => ({ dispose() {} }),
+			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },
 			showNativeDialog: async () => { throw new Error('unused'); },
 			installShellCommand: async () => '',
 			uninstallShellCommand: async () => '',
 			listWindows: async () => [],
-			focusWindowById: async () => {},
-			focusWindow: async () => {},
-			closeWindow: async () => {},
-			closeOtherWindows: async () => {},
+			focusWindowById: async () => { },
+			focusWindow: async () => { },
+			closeWindow: async () => { },
+			closeOtherWindows: async () => { },
 			getZoomLevel: async () => 0,
 			onDidChangeZoomLevel: () => Disposable.None,
-			setZoomLevel: async () => {},
+			setZoomLevel: async () => { },
 			isAlwaysOnTop: async () => false,
-			setAlwaysOnTop: async () => {},
-			performNativeTabAction: async () => {},
-			openNewWindowTab: async () => {},
+			setAlwaysOnTop: async () => { },
+			performNativeTabAction: async () => { },
+			openNewWindowTab: async () => { },
 			pickFolder: async () => undefined,
 			pickFile: async () => undefined,
-			openWorkspace: async () => {},
-			openWindow: async () => {},
+			openWorkspace: async () => { },
+			openWindow: async () => { },
 			openAgentsWindow: async options => { this.opened.push(options); },
 			syncSystemWideKeybindings: async bindings => {
 				this.payloads.push(structuredClone([...bindings]));
 				if (this.error) { throw this.error; }
 				return this.result;
 			},
-			revealFile: async () => {},
-			setWindowTheme: async () => {},
-			setWindowDimmed: async () => {},
-			toggleDeveloperTools: async () => {},
+			revealFile: async () => { },
+			setWindowTheme: async () => { },
+			setWindowDimmed: async () => { },
+			toggleDeveloperTools: async () => { },
 			saveFile: async () => undefined,
 			isAccessibilitySupportEnabled: async () => false,
 			onDidChangeAccessibilitySupport: () => Disposable.None,

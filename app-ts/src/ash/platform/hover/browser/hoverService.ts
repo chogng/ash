@@ -43,7 +43,7 @@ export class HoverService extends Disposable implements IHoverService {
 	private activeHover: ManagedHover | undefined;
 	private contextMenuVisible = false;
 	private pointerHoverSuppressed = false;
-	private pointerActivationPosition: { readonly x: number; readonly y: number } | undefined;
+	private pointerActivationPosition: { readonly x: number; readonly y: number; } | undefined;
 	private lastGroupId: string | undefined;
 	private lastHideTime = 0;
 

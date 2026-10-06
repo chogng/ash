@@ -61,7 +61,7 @@ const BaseEditorInputSerializer = Object.freeze({ typeId: 'workbench.editorInput
 
 function serializeBaseEditorInput(input: EditorInput): unknown {
 	const icon = input.getIcon?.();
-	let serializedIcon: string | { id: string; color?: string } | undefined;
+	let serializedIcon: string | { id: string; color?: string; } | undefined;
 	if (icon instanceof URI) {
 		serializedIcon = icon.toString();
 	} else if (icon) {

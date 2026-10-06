@@ -8,7 +8,7 @@ export interface CacheResult<T> extends IDisposable {
 export class Cache<T> {
 	private result: CacheResult<T> | null = null;
 
-	constructor(private task: (ct: CancellationToken) => Promise<T>) {}
+	constructor(private task: (ct: CancellationToken) => Promise<T>) { }
 
 	get(): CacheResult<T> {
 		if (this.result) return this.result;

@@ -8,13 +8,13 @@
 
 ## 1. “完整”到哪一层
 
-| 内容 | 本次结果 |
-| --- | --- |
-| 安装包中的基础提示词模板与生成代码 | 已提取分支入口和 261 个静态依赖记录；导入的模块及动态输入另列 |
-| 指定示例配置下的基础 system prompt 全文 | 已成功生成 11 份，包含通用、GPT、Codex、Spark、Composer、computerUse 与云端分支 |
-| Agent、Ask、Plan、Debug、Multitask 的追加提醒 | 另存 37 组结果，详见模式文档 |
-| 某次会话的完整模型输入 | 本次未捕获；还需该会话的模型配置、规则、环境、历史与当时的工具目录 |
-| 服务端是否继续追加或改写内容 | 本次未验证，不能从本地安装包推断 |
+| 内容                                          | 本次结果                                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| 安装包中的基础提示词模板与生成代码            | 已提取分支入口和 261 个静态依赖记录；导入的模块及动态输入另列                   |
+| 指定示例配置下的基础 system prompt 全文       | 已成功生成 11 份，包含通用、GPT、Codex、Spark、Composer、computerUse 与云端分支 |
+| Agent、Ask、Plan、Debug、Multitask 的追加提醒 | 另存 37 组结果，详见模式文档                                                    |
+| 某次会话的完整模型输入                        | 本次未捕获；还需该会话的模型配置、规则、环境、历史与当时的工具目录              |
+| 服务端是否继续追加或改写内容                  | 本次未验证，不能从本地安装包推断                                                |
 
 这里的“完整正文”指**原生成器在所列配置下的全部返回文本**，不是账号实际请求的逐字抓取。基础模板会根据模型、产品入口、模式、云端来源、功能开关和工具集合选择不同内容，因此不存在一份适用于所有 Cursor 请求的固定文本。
 
@@ -24,27 +24,27 @@
 
 本地执行代码先调用 `systemPromptGenerator`，再把返回正文加入 `role: "system"` 的消息。`X5` 负责生成模式提醒；检查的内容拼装路径将提醒加入输入内容块，并不只是把所有内容拼成同一个 system 字符串。
 
-| 层次 | 代码作用 | 输入来源 |
-| --- | --- | --- |
-| 基础 system prompt | 按模型与宿主配置选择模板，组合通用工作方式和工具使用指导 | 模型标记、功能开关、运行类型、工具元数据、环境等 |
-| 模式提醒 | Ask / Plan / Debug / Multitask 改变本轮处理方式，Agent 默认没有独立追加正文 | 当前 / 上轮模式、日志配置等 |
-| 用户与项目上下文 | 规则、环境、文件、附件、用户输入及其他上下文内容 | 当前工作区与会话 |
-| 对话历史 | 用户消息、先前回答、工具调用与结果，可能经过压缩 | 当前会话记录 |
-| 工具定义 | 当次允许的名称、描述与参数 schema | 已选工具、MCP、动态工具和配置 |
+| 层次               | 代码作用                                                                    | 输入来源                                         |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------ |
+| 基础 system prompt | 按模型与宿主配置选择模板，组合通用工作方式和工具使用指导                    | 模型标记、功能开关、运行类型、工具元数据、环境等 |
+| 模式提醒           | Ask / Plan / Debug / Multitask 改变本轮处理方式，Agent 默认没有独立追加正文 | 当前 / 上轮模式、日志配置等                      |
+| 用户与项目上下文   | 规则、环境、文件、附件、用户输入及其他上下文内容                            | 当前工作区与会话                                 |
+| 对话历史           | 用户消息、先前回答、工具调用与结果，可能经过压缩                            | 当前会话记录                                     |
+| 工具定义           | 当次允许的名称、描述与参数 schema                                           | 已选工具、MCP、动态工具和配置                    |
 
 因此，把“基础正文 + 模式提醒”手工串起来可以帮助研究，但不能称为实际完整请求。工具定义也通常作为请求的结构化字段提供，不应凭空嵌入正文冒充原始 system prompt。
 
 本次用于重建的入口是 Agent Exec bundle 的 `tAe`。Agent Host 的 `FH.systemPromptGenerator` 与 `wf` 分支选择代码也已保存，能看到桌面宿主如何进入基础提示词生成。11 份输出使用 Exec 中的原生成器；未把 Host 的实际运行配置当成已经捕获。
 
-| 本地分支 | 生成入口 / 组件 |
-| --- | --- |
-| 通用模型 | `tAe` → `g1` → 原文本格式器 `qj` / `Dj` |
-| GPT-5 | `tAe` → `O1` |
-| Codex / GPT-5.5 / GPT-5.6 | `tAe` → `n1`；后台类型走 `t1` |
-| Spark | `tAe` → `p1` |
-| Composer | `tAe` → `bSe`；`promptVersion` 继续选择不同模板 |
-| computerUse | `tAe` → `G1`，与普通主 Agent 分开 |
-| 自定义正文 | 如果 `customSystemPrompt` 存在，`tAe` 可直接返回该正文；本次示例未设置 |
+| 本地分支                  | 生成入口 / 组件                                                        |
+| ------------------------- | ---------------------------------------------------------------------- |
+| 通用模型                  | `tAe` → `g1` → 原文本格式器 `qj` / `Dj`                                |
+| GPT-5                     | `tAe` → `O1`                                                           |
+| Codex / GPT-5.5 / GPT-5.6 | `tAe` → `n1`；后台类型走 `t1`                                          |
+| Spark                     | `tAe` → `p1`                                                           |
+| Composer                  | `tAe` → `bSe`；`promptVersion` 继续选择不同模板                        |
+| computerUse               | `tAe` → `G1`，与普通主 Agent 分开                                      |
+| 自定义正文                | 如果 `customSystemPrompt` 存在，`tAe` 可直接返回该正文；本次示例未设置 |
 
 来源：[Agent Exec bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-exec/dist/main.js)、[Agent Host bundle](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-host/dist/main.js)。JSON 保存源码切片、UTF-16 定位与文件 SHA-256。
 
@@ -60,19 +60,19 @@
 
 ## 4. 完整基础正文索引
 
-| 配置 ID | 分支 | 正文长度（UTF-16） |
-| --- | --- | --- |
-| `generic_ide` | 通用模型 / IDE | 4938 |
-| `gpt5_ide` | GPT-5 分支 / IDE | 21177 |
-| `gpt53_codex_ide` | GPT-5.3 Codex 分支 / IDE | 11096 |
-| `gpt55_ide` | GPT-5.5 分支 / IDE | 15209 |
-| `gpt56_ide` | GPT-5.6 分支 / IDE | 11344 |
-| `spark_ide` | Spark 分支 / IDE | 17291 |
-| `composer_latest_ide` | Composer 分支 / latest | 3976 |
-| `composer_cursor0226_ide` | Composer 分支 / cursor-0226 | 2512 |
-| `composer_dsv31205_ide` | Composer 分支 / dsv3-1205 | 5586 |
-| `computer_use_subagent` | computerUse 子 Agent | 5998 |
-| `gpt53_codex_cloud` | GPT-5.3 Codex / 云端 | 8777 |
+| 配置 ID                   | 分支                        | 正文长度（UTF-16） |
+| ------------------------- | --------------------------- | ------------------ |
+| `generic_ide`             | 通用模型 / IDE              | 4938               |
+| `gpt5_ide`                | GPT-5 分支 / IDE            | 21177              |
+| `gpt53_codex_ide`         | GPT-5.3 Codex 分支 / IDE    | 11096              |
+| `gpt55_ide`               | GPT-5.5 分支 / IDE          | 15209              |
+| `gpt56_ide`               | GPT-5.6 分支 / IDE          | 11344              |
+| `spark_ide`               | Spark 分支 / IDE            | 17291              |
+| `composer_latest_ide`     | Composer 分支 / latest      | 3976               |
+| `composer_cursor0226_ide` | Composer 分支 / cursor-0226 | 2512               |
+| `composer_dsv31205_ide`   | Composer 分支 / dsv3-1205   | 5586               |
+| `computer_use_subagent`   | computerUse 子 Agent        | 5998               |
+| `gpt53_codex_cloud`       | GPT-5.3 Codex / 云端        | 8777               |
 
 ### 4.1 通用模型 / IDE
 
@@ -140,7 +140,6 @@ You have access to the todo_write tool to help you manage and plan tasks. Use th
 IMPORTANT: Make sure you don't end your turn before you've completed all todos.
 </task_management>
 ````
-
 
 ### 4.2 GPT-5 分支 / IDE
 
@@ -543,7 +542,6 @@ IMPORTANT - You MUST NEVER track the following in your todo list because they ar
 </todo_spec>
 ````
 
-
 ### 4.3 GPT-5.3 Codex 分支 / IDE
 
 配置 ID：`gpt53_codex_ide`。下方是原生成器完整返回值；没有省略正文。完整参数见 JSON 同名配置。
@@ -669,7 +667,6 @@ You are producing plain text that will later be styled by Cursor. Follow these r
 Your main goal is to follow the USER's instructions at each message, denoted by the <user_query> tag.
 </main_goal>
 ````
-
 
 ### 4.4 GPT-5.5 分支 / IDE
 
@@ -815,7 +812,6 @@ Requirements for your final answer:
 Your main goal is to follow the USER's instructions at each message, denoted by the <user_query> tag.
 </main_goal>
 ````
-
 
 ### 4.5 GPT-5.6 分支 / IDE
 
@@ -970,7 +966,6 @@ When visualization guidance is available, follow it for an immutable visual outp
 Your main goal is to follow the USER's instructions at each message, denoted by the <user_query> tag.
 </main_goal>
 ````
-
 
 ### 4.6 Spark 分支 / IDE
 
@@ -1277,12 +1272,11 @@ BAD:
 </inline_line_numbers>
 ````
 
-
 ### 4.7 Composer 分支 / latest
 
 配置 ID：`composer_latest_ide`。下方是原生成器完整返回值；没有省略正文。完整参数见 JSON 同名配置。
 
-````text
+```text
 You are a powerful agentic AI coding assistant powered by Cursor. You operate exclusively in Cursor, the world's best IDE.
 
 You are pair programming with a USER to solve their coding task.
@@ -1328,8 +1322,7 @@ When making code changes, NEVER output code to the USER, unless requested. Inste
 2. If an external API requires an API Key, be sure to point this out to the USER. Adhere to best security practices (e.g. DO NOT hardcode an API key in a place where it can be exposed)
 </calling_external_apis>
 Answer the user's request using the relevant tool(s), if they are available. Check that all the required parameters for each tool call are provided or can reasonably be inferred from context. IF there are no relevant tools or there are missing values for required parameters, ask the user to supply these values. If the user provides a specific value for a parameter (for example provided in quotes), make sure to use that value EXACTLY. DO NOT make up values for or ask about optional parameters. Carefully analyze descriptive terms in the request as they may indicate required parameter values that should be included even if not explicitly quoted.
-````
-
+```
 
 ### 4.8 Composer 分支 / cursor-0226
 
@@ -1383,7 +1376,6 @@ last_exit_code: 1
 
 You can use <think> tags to think through problems step by step before providing your response. Your thinking will not be shown to the user.
 ````
-
 
 ### 4.9 Composer 分支 / dsv3-1205
 
@@ -1453,12 +1445,11 @@ IMPORTANT: Make sure you don't end your turn before you've completed all todos.
 Answer the user's request using the relevant tool(s), if they are available. Check that all the required parameters for each tool call are provided or can reasonably be inferred from context. IF there are no relevant tools or there are missing values for required parameters, ask the user to supply these values. If the user provides a specific value for a parameter (for example provided in quotes), make sure to use that value EXACTLY. DO NOT make up values for or ask about optional parameters. Carefully analyze descriptive terms in the request as they may indicate required parameter values that should be included even if not explicitly quoted.
 ````
 
-
 ### 4.10 computerUse 子 Agent
 
 配置 ID：`computer_use_subagent`。下方是原生成器完整返回值；没有省略正文。完整参数见 JSON 同名配置。
 
-````text
+```text
 You are an AI coding assistant, powered by EXAMPLE_MODEL.
 
 You are running as a COMPUTER USE agent. You have access to the `computer` tool which allows you to interact with the desktop. Use the instructions below and the tools available to you to assist the user.
@@ -1562,14 +1553,13 @@ When an error is encountered, respond with a longer message that begins with 'Er
 
 You are running fully autonomously with no user present. Never wait for feedback. Complete the task, then stop with a concise report of what you did, what you saw, and anything that blocked you.
 </autonomous_mode>
-````
-
+```
 
 ### 4.11 GPT-5.3 Codex / 云端
 
 配置 ID：`gpt53_codex_cloud`。下方是原生成器完整返回值；没有省略正文。完整参数见 JSON 同名配置。
 
-````text
+```text
 You are EXAMPLE_MODEL. You are running in autonomous mode as a coding agent on a Cursor Cloud machine where you can work without restrictions.
 
 ## General
@@ -1645,11 +1635,10 @@ You have 2 ways of communicating with the users:
 - After you have sufficient context, and the work is substantial you provide a longer plan (this is the only user update that may be longer than 2 sentences and can contain formatting).
 - Before performing file edits of any kind, you provide updates explaining what edits you are making.
 - As you are thinking, you very frequently provide updates even if not taking any actions, informing the user of your progress. You interrupt your thinking and send multiple updates in a row if thinking for more than 100 words.
-````
+```
 
 ## 5. 验证
 
 11 个生成配置全部成功；已核对源码切片、安装包文件 hash、每份正文 SHA-256、Markdown 围栏和链接。未进行真实模型请求的端到端验证。
 
 要得到某一次请求的逐字完整输入，还需要确认模型与开关，取得那次调用的消息数组和工具字段，并核对最终发送边界。仅凭这些静态模板不能补造缺失的会话内容，也不能推断服务端后续处理。
-

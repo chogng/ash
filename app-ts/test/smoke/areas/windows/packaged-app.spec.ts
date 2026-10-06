@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
 import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench.js';
 
-test('Windows package saves files, executes a terminal command and restarts with its bundled backend', async ({}, testInfo) => {
+test('Windows package saves files, executes a terminal command and restarts with its bundled backend', async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	test.skip(process.platform !== 'win32', 'The Windows package requires a Windows host.');
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
@@ -31,7 +31,7 @@ test('Windows package saves files, executes a terminal command and restarts with
 	}
 });
 
-test('macOS package launches, opens a window tab, and installs its shell command', async ({}, testInfo) => {
+test('macOS package launches, opens a window tab, and installs its shell command', async ({ }, testInfo) => {
 	test.skip(process.platform !== 'darwin', 'The macOS package requires a macOS host.');
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash.app directory.');
@@ -58,18 +58,18 @@ test('macOS package launches, opens a window tab, and installs its shell command
 		await new Workbench(page).waitForReady();
 		expect(await application.evaluate(({ app }) => ({ packaged: app.isPackaged, dockVisible: app.dock!.isVisible() }))).toEqual({ packaged: true, dockVisible: true });
 		const commandPath = await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			return ipc.invoke('ash:native-host:shell-command', 'install') as Promise<string>;
 		});
 		await access(commandPath);
 		expect(await readFile(commandPath, 'utf8')).toContain(bundlePath);
 		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:native-host:shell-command', 'uninstall');
 		});
 		expect(await access(commandPath).then(() => true, () => false)).toBe(false);
 		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'newTab' });
 		});
 		await expect.poll(() => application.windows().length).toBe(2);

@@ -30,7 +30,7 @@ import { DefaultTextPasteOrDropEditProvider } from './defaultProviders.js';
 import { sortEditsByYieldTo } from './edit.js';
 import { PostEditWidgetManager } from './postEditWidget.js';
 
-type PasteEditWithProvider = DocumentPasteEdit & { readonly provider: DocumentPasteEditProvider };
+type PasteEditWithProvider = DocumentPasteEdit & { readonly provider: DocumentPasteEditProvider; };
 interface PreparedCopy {
 	readonly id: string;
 	readonly text: string;
@@ -44,9 +44,9 @@ export const pasteWidgetVisibleCtx = new RawContextKey<boolean>('pasteWidgetVisi
 export const changePasteTypeCommandId = 'editor.changePasteType';
 export const pasteAsPreferenceConfig = 'editor.pasteAs.preferences';
 export type PastePreference =
-	| { readonly only: HierarchicalKind }
-	| { readonly preferences: readonly HierarchicalKind[] }
-	| { readonly providerId: string };
+	| { readonly only: HierarchicalKind; }
+	| { readonly preferences: readonly HierarchicalKind[]; }
+	| { readonly providerId: string; };
 export type PreferredPasteConfiguration = string;
 
 export class CopyPasteController extends Disposable implements IEditorContribution {

@@ -75,11 +75,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		get activeUntitledSession() { return untitledSessions.find(session => session.untitledSessionId === activeUntitledSessionId); },
 		state: "ready",
 		error: undefined,
-		async initialize() {},
+		async initialize() { },
 		async listAgents() { return []; },
-		async openThread() {},
-		selectThread() {},
-		async interruptThread() {},
+		async openThread() { },
+		selectThread() { },
+		async interruptThread() { },
 		createUntitledSession() {
 			const untitledSession = { untitledSessionId: `untitled-${++nextUntitledSessionId}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 			untitledSessions = [...untitledSessions, untitledSession];
@@ -100,13 +100,13 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 			if (activeUntitledSessionId === untitledSessionId) activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
 			onDidChange.fire();
 		},
-		setUntitledSessionModel() {},
-		setUntitledSessionDefaultModel() {},
-		setUntitledSessionAgent() {},
+		setUntitledSessionModel() { },
+		setUntitledSessionDefaultModel() { },
+		setUntitledSessionAgent() { },
 		async materializeUntitledSession() {
 			throw new Error("Session creation is unavailable");
 		},
-		promoteUntitledSession() {},
+		promoteUntitledSession() { },
 		async ensureActiveThread() {
 			throw new Error("No active thread");
 		},
@@ -127,48 +127,48 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
-		configureAdvisor: async () => {},
-		consultAdvisor: async () => {},
+		configureAdvisor: async () => { },
+		consultAdvisor: async () => { },
 		readAdvisorDefault: async () => null,
-		saveAdvisorDefault: async () => {},
+		saveAdvisorDefault: async () => { },
 		onDidUpdateThread: threadUpdates.event,
 		onDidUpdateThreadTranscript: transcriptUpdates.event,
-		onDidUpdateGoal: () => toDisposable(() => {}),
+		onDidUpdateGoal: () => toDisposable(() => { }),
 		onDidBecomeReady: ready.event,
 		onDidChangeModels: ready.event,
 		onDidChangeQueue: ready.event,
 		onDidChangeSkills: ready.event,
-		onDidUpdateTurnChanges: () => toDisposable(() => {}),
+		onDidUpdateTurnChanges: () => toDisposable(() => { }),
 		discoverProviderModels: async () => [],
 		async listModels() { return []; },
 		getDefaultNewChatModel() { return undefined; },
-		rememberSelectedModel() {},
+		rememberSelectedModel() { },
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
+		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
-		async setModelProviderApiKey() {},
-		async removeModelProviderApiKey() {},
+		async setModelProviderApiKey() { },
+		async removeModelProviderApiKey() { },
 		async listAdvisorModels() { return []; },
 		async refreshModels() { return []; },
 		isModelVisible() { return true; },
-		async setModelVisible() {},
+		async setModelVisible() { },
 		async listSlashCommands() { return []; },
 		async listSkillSelectors() { return []; },
 		async readThread() { throw new Error("No active Thread"); },
 		async subscribeThread() { throw new Error("No active Thread"); },
-		async unsubscribeThread() {},
-		async startTurn() {},
-		async queueTurn() {},
+		async unsubscribeThread() { },
+		async startTurn() { },
+		async queueTurn() { },
 		async queuedMessageCount() { return 0; },
-		async compactContext() {},
-		async steerTurn() {},
-		async interruptTurn() {},
-		async resolveInteraction() {},
+		async compactContext() { },
+		async steerTurn() { },
+		async interruptTurn() { },
+		async resolveInteraction() { },
 		async listTurnChanges() { return []; },
 		async readTurnChange() { throw new Error("No ChangeSet"); },
 		async readTurnChangeFile() { throw new Error("No ChangeSet file"); },
@@ -184,14 +184,14 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const contextMenuService: IContextMenuService = {
 		onDidShowContextMenu: contextMenuEvents.event,
 		onDidHideContextMenu: contextMenuEvents.event,
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 	};
 	const contextViewService: IContextViewService = {
 		container: dom.window.document.body,
 		show() { return false; },
-		hide() {},
-		layout() {},
+		hide() { },
+		layout() { },
 	};
 	const commandEvents = new Emitter<ICommandEvent>();
 	const commandService: ICommandService = {
@@ -221,10 +221,12 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	registerTestDictationOnboarding(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
 	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
-	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: {
-		chat: { visible: initialDrafts.map(session => ({ kind: 'untitled', session })), active: 1 },
-		code: { visible: [], active: -1 },
-	} }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1, pages: {
+			chat: { visible: initialDrafts.map(session => ({ kind: 'untitled', session })), active: 1 },
+			code: { visible: [], active: -1 },
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const viewService = services.createInstance(SessionsService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));

@@ -13,7 +13,7 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 	private readonly _canvas: OffscreenCanvas;
 	private readonly _ctx: OffscreenCanvasRenderingContext2D;
 	private readonly _workGlyph: IRasterizedGlyph;
-	private _workGlyphConfig: { chars: string | undefined; tokenMetadata: number; decorationStyleSetId: number } = {
+	private _workGlyphConfig: { chars: string | undefined; tokenMetadata: number; decorationStyleSetId: number; } = {
 		chars: undefined,
 		tokenMetadata: 0,
 		decorationStyleSetId: 0,

@@ -4,9 +4,9 @@ import type { ExtensionHostRegistration, JsonValue } from '../common/extensionHo
 type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue> | JsonValue;
 const handlers = new Map<string, Handler>();
 const invocations = new Map<number, AbortController>();
-const commands = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void }>();
+const commands = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 let nextCommand = 1;
-const scope = globalThis as unknown as { onmessage: (event: MessageEvent<BrowserExtensionHostRequest>) => void; postMessage(value: unknown): void };
+const scope = globalThis as unknown as { onmessage: (event: MessageEvent<BrowserExtensionHostRequest>) => void; postMessage(value: unknown): void; };
 
 scope.onmessage = event => {
 	const message = event.data;
@@ -20,7 +20,7 @@ scope.onmessage = event => {
 	void dispatch(message).then(result => scope.postMessage({ id: message.id, success: true, result }), error => scope.postMessage({ id: message.id, success: false, error: String(error) }));
 };
 
-async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'cancel' | 'commandResult' }>): Promise<JsonValue> {
+async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'cancel' | 'commandResult'; }>): Promise<JsonValue> {
 	if (message.type === 'activate') {
 		const registrations: ExtensionHostRegistration[] = [];
 		// Packages supply a bundled ES module; no module executes in the renderer's JavaScript realm.

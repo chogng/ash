@@ -4,25 +4,25 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 
 ## 职责
 
-| 目录 | 当前职责 |
-| --- | --- |
-| `ext/extension-api` | 按身份注册贡献、提示与上下文、续跑、工具与 MCP 生命周期、审核接口、Session/Thread/Turn 临时状态 |
-| `ext/agent` | 根 Agent 与子 Agent 的角色选择、能力范围、工具定义、启动和等待编排 |
-| `ext/agent-message-board` | 同一 Agent 树共享的领域接口、工具、本地存储和未读确认 |
-| `agent-message-board-client` | 远端读写、树范围凭据和当前 Turn 的 SSE 接收 |
-| `ext/workflows` | 当前一次协作任务的 `/team`、`/develop` 命令、阶段、版本、接受、失效与恢复；通过 Core 启动专用角色 |
-| `ext/goal` | Goal 工具、目标提示、续跑条件与重启恢复；通过 Core 的原子入口创建 Turn |
-| `ext/queue` | 消息持久化、FIFO、领取租约、交付结果、空闲唤醒与队列展示 |
-| `ext/guardian-reviewer` | 严格审核协议、结果绑定、并发上限、异步任务、超时、取消和暂时性失败重试 |
-| `ext/guardian-v2` | 配置解析、隔离的模型适配、审核扩展安装；模型没有工具调用能力 |
-| `ext/history-notes` | 当前 Thread 的历史检索与读取，以及可跨重启保存的任务笔记 |
-| `ext/image-generation` | 图片生成与编辑、服务调用、Thread 内图片引用和原子文件发布 |
-| `ext/git-attribution` | 按宿主策略贡献 Git 提交署名和 PR 说明；不授权提交、推送或创建 PR |
-| `ext/sleep` | 模型侧计时等待，复用运行时的截止与取消机制 |
-| `ext/items` | 文本、搜索来源、图片路径和等待结果的结构化数据与边界校验 |
-| `ext/connectors` | 外部账号连接、认证、目录与声明加载；通过所属执行环境的文件接口读取声明 |
-| `ext/mcp` | MCP 会话、工具、生命周期，以及 Marketplace Connector/MCP 的绑定与调用租约 |
-| `ext/skills`、`ext/memories`、`ext/web-search` | Skill 激活、记忆访问和网络搜索；搜索同时发布结构化来源 |
+| 目录                                           | 当前职责                                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ext/extension-api`                            | 按身份注册贡献、提示与上下文、续跑、工具与 MCP 生命周期、审核接口、Session/Thread/Turn 临时状态   |
+| `ext/agent`                                    | 根 Agent 与子 Agent 的角色选择、能力范围、工具定义、启动和等待编排                                |
+| `ext/agent-message-board`                      | 同一 Agent 树共享的领域接口、工具、本地存储和未读确认                                             |
+| `agent-message-board-client`                   | 远端读写、树范围凭据和当前 Turn 的 SSE 接收                                                       |
+| `ext/workflows`                                | 当前一次协作任务的 `/team`、`/develop` 命令、阶段、版本、接受、失效与恢复；通过 Core 启动专用角色 |
+| `ext/goal`                                     | Goal 工具、目标提示、续跑条件与重启恢复；通过 Core 的原子入口创建 Turn                            |
+| `ext/queue`                                    | 消息持久化、FIFO、领取租约、交付结果、空闲唤醒与队列展示                                          |
+| `ext/guardian-reviewer`                        | 严格审核协议、结果绑定、并发上限、异步任务、超时、取消和暂时性失败重试                            |
+| `ext/guardian-v2`                              | 配置解析、隔离的模型适配、审核扩展安装；模型没有工具调用能力                                      |
+| `ext/history-notes`                            | 当前 Thread 的历史检索与读取，以及可跨重启保存的任务笔记                                          |
+| `ext/image-generation`                         | 图片生成与编辑、服务调用、Thread 内图片引用和原子文件发布                                         |
+| `ext/git-attribution`                          | 按宿主策略贡献 Git 提交署名和 PR 说明；不授权提交、推送或创建 PR                                  |
+| `ext/sleep`                                    | 模型侧计时等待，复用运行时的截止与取消机制                                                        |
+| `ext/items`                                    | 文本、搜索来源、图片路径和等待结果的结构化数据与边界校验                                          |
+| `ext/connectors`                               | 外部账号连接、认证、目录与声明加载；通过所属执行环境的文件接口读取声明                            |
+| `ext/mcp`                                      | MCP 会话、工具、生命周期，以及 Marketplace Connector/MCP 的绑定与调用租约                         |
+| `ext/skills`、`ext/memories`、`ext/web-search` | Skill 激活、记忆访问和网络搜索；搜索同时发布结构化来源                                            |
 
 - crate 用于隔离能力与依赖；目录对齐不要求把所有底层存储、协议或执行库移入扩展。
 - Core 通过通用续跑接口请求后续工作，扩展只返回已由 Thread owner 接受的 Turn；执行仍由 Core 启动。
@@ -43,32 +43,32 @@ TUI 将连续的读取、搜索、列出合并展示为 Explore，单次调用�
 
 ## 已收回的实现
 
-| 旧路径 | 当前归属 |
-| --- | --- |
-| `ext/clock` | `ext/sleep` 的 `sleep` 工具；后台命令和子任务使用各自的完成条件 |
-| `ash-rs/connectors` | `ext/connectors` |
-| `ash-rs/queue` | `ext/queue`，包括原 App Server `QueueExtension` |
-| `ash-rs/auto-review` | `ext/guardian-reviewer` |
-| `app-server/src/review.rs` | 模型适配归 `ext/guardian-v2`；授权模式判断归 `core/src/turn_policy.rs` |
-| `app-server/src/server/goal_tool.rs`、Core Goal 提示与续跑策略 | `ext/goal` |
-| `app-server/src/server/multi_agent_tools.rs`、角色选择逻辑 | `ext/agent`；App Server 仅获取已授权目录快照 |
-| `app-server/src/marketplace_connector_runtime.rs` | `ext/mcp/marketplace`；Connector 声明解析归 `ext/connectors/declaration.rs` |
+| 旧路径                                                         | 当前归属                                                                    |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `ext/clock`                                                    | `ext/sleep` 的 `sleep` 工具；后台命令和子任务使用各自的完成条件             |
+| `ash-rs/connectors`                                            | `ext/connectors`                                                            |
+| `ash-rs/queue`                                                 | `ext/queue`，包括原 App Server `QueueExtension`                             |
+| `ash-rs/auto-review`                                           | `ext/guardian-reviewer`                                                     |
+| `app-server/src/review.rs`                                     | 模型适配归 `ext/guardian-v2`；授权模式判断归 `core/src/turn_policy.rs`      |
+| `app-server/src/server/goal_tool.rs`、Core Goal 提示与续跑策略 | `ext/goal`                                                                  |
+| `app-server/src/server/multi_agent_tools.rs`、角色选择逻辑     | `ext/agent`；App Server 仅获取已授权目录快照                                |
+| `app-server/src/marketplace_connector_runtime.rs`              | `ext/mcp/marketplace`；Connector 声明解析归 `ext/connectors/declaration.rs` |
 
 ## Agent 共享讨论板
 
 App Server 默认注册 `board_read` 与 `board_write`。同一 Session 内的根 Agent 和它逐层委托的成员共享讨论板；独立根 Thread、新分叉和其他 Session 各自隔离。默认本地存储已支持同一个 App Server 内的多 Agent 协作，不需要额外消息板进程。调用方 Session、Thread、Turn 来自宿主，模型不能指定。成员参数使用 `spawn_agent` 返回的 Thread ID；`topic` 为消息板根帖的整数 ID。
 
-| 工具与 action | 参数与行为 |
-| --- | --- |
-| `board_read: channels` | 列出频道；可用 `query` 搜索频道名 |
-| `board_read: topics` | `channel` 必填；列出根帖预览和回复数 |
-| `board_read: posts` | 可组合 `channel`、`topic`、`author`、`query`；按话题读取时包含根帖和回复 |
-| `board_read: unread` | 分页列出当前 Agent 在各频道尚未确认的帖子预览；可用 `post` 读取全文 |
-| `board_read: post` | `id` 必填；`offset` 默认 0，`chars` 默认 1000、最多 4000，按 Unicode 字符读取 |
-| `board_write: create_channel` | `channel` 必填；创建频道并订阅该频道的新话题 |
-| `board_write: post` | `channel`、`text` 必填；省略 `topic` 创建话题，指定根帖 ID 则回复；`notify` 可额外通知成员 |
-| `board_write: subscription` | `channel`、`state` 必填，状态为 `on` 或 `off`；指定 `topic` 则修改话题订阅；每个 Agent 只能修改自己的订阅 |
-| `board_write: acknowledge` | `through` 必填；确认自己已读完该帖子 ID 及以前收到的通知，不影响其他 Agent |
+| 工具与 action                 | 参数与行为                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `board_read: channels`        | 列出频道；可用 `query` 搜索频道名                                                                         |
+| `board_read: topics`          | `channel` 必填；列出根帖预览和回复数                                                                      |
+| `board_read: posts`           | 可组合 `channel`、`topic`、`author`、`query`；按话题读取时包含根帖和回复                                  |
+| `board_read: unread`          | 分页列出当前 Agent 在各频道尚未确认的帖子预览；可用 `post` 读取全文                                       |
+| `board_read: post`            | `id` 必填；`offset` 默认 0，`chars` 默认 1000、最多 4000，按 Unicode 字符读取                             |
+| `board_write: create_channel` | `channel` 必填；创建频道并订阅该频道的新话题                                                              |
+| `board_write: post`           | `channel`、`text` 必填；省略 `topic` 创建话题，指定根帖 ID 则回复；`notify` 可额外通知成员                |
+| `board_write: subscription`   | `channel`、`state` 必填，状态为 `on` 或 `off`；指定 `topic` 则修改话题订阅；每个 Agent 只能修改自己的订阅 |
+| `board_write: acknowledge`    | `through` 必填；确认自己已读完该帖子 ID 及以前收到的通知，不影响其他 Agent                                |
 
 - 列表按创建序号倒序，接受 `limit` 和 `cursor`；默认 20 项、最多 50 项，返回 `items` 和 `next_cursor`。游标绑定讨论板、操作和筛选条件；未读列表还绑定当前 Agent。游标按最后返回项的序号推进；新增消息不改变后续页的位置。刷新时省略游标。
 - 列表中的正文预览最多 200 字符，包含 `total_chars`；完整读取返回 `text`、`total_chars` 和 `next_offset`，读完时偏移为 null。每份成功结果最多 8000 字节，包含 JSON 转义和元数据；缩短页面时同步返回实际继续位置。

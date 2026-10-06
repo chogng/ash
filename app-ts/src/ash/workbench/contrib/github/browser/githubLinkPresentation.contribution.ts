@@ -22,9 +22,9 @@ import { createCommitResourceHover, createIssueResourceHover, createPullRequestR
 import { LazyGitHubResourceResolver, parseGitHubReferenceTarget, type IGitHubReferenceTarget } from './lazyGitHubResourceHover.js';
 
 type LinkTarget =
-	| { readonly kind: 'repository'; readonly owner: string; readonly repo: string }
-	| ({ readonly kind: 'issue' | 'pullRequest' } & IGitHubReferenceTarget)
-	| ({ readonly kind: 'commit' } & IGitHubCommitTarget);
+	| { readonly kind: 'repository'; readonly owner: string; readonly repo: string; }
+	| ({ readonly kind: 'issue' | 'pullRequest'; } & IGitHubReferenceTarget)
+	| ({ readonly kind: 'commit'; } & IGitHubCommitTarget);
 
 export class GitHubLinkPresentationContribution extends Disposable {
 	public static readonly ID = 'workbench.contrib.githubLinkPresentations';
@@ -52,7 +52,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 		this.registration.value = store;
 		const resolver = store.add(this.instantiation.createInstance(LazyGitHubResourceResolver));
 		const commits = store.add(this.instantiation.createInstance(GitHubCommitResolver));
-		const references = new Set<{ readonly resource: URI; readonly target: LinkTarget }>();
+		const references = new Set<{ readonly resource: URI; readonly target: LinkTarget; }>();
 		let authenticationShown = false;
 		const reportError = (error: unknown): void => {
 			this.log.warn('github', 'Could not load GitHub link details', error);

@@ -9,11 +9,11 @@
 `<用一段面向调用方的文字说明：这项能力解决什么问题，成功后用户能观察到什么，以及最重要的
 限制是什么。不要从方法名或 DTO 开始。>`
 
-| 常见场景 | 系统行为 | 调用方需要做什么 |
-| --- | --- | --- |
-| `<主要成功场景>` | `<可观察结果>` | `<下一步或无需操作>` |
-| `<需要等待、批准或恢复的场景>` | `<状态与失败语义>` | `<重试、取消或重新读取>` |
-| `<不支持的场景>` | `<明确拒绝或降级方式>` | `<替代入口>` |
+| 常见场景                       | 系统行为               | 调用方需要做什么         |
+| ------------------------------ | ---------------------- | ------------------------ |
+| `<主要成功场景>`               | `<可观察结果>`         | `<下一步或无需操作>`     |
+| `<需要等待、批准或恢复的场景>` | `<状态与失败语义>`     | `<重试、取消或重新读取>` |
+| `<不支持的场景>`               | `<明确拒绝或降级方式>` | `<替代入口>`             |
 
 ## 元数据
 
@@ -50,9 +50,9 @@ lastUpdated: YYYY-MM-DD
 
 ## 方法清单
 
-| Method | Direction | Consumers | Side effect | Idempotent | Capability | Summary |
-|---|---|---|---:|---:|---|---|
-| `<domain/method>` | `<Client → Server request>` | `<Desktop/CLI/host>` | `<yes/no>` | `<required/n/a>` | `<domain/v1>` | `<用途>` |
+| Method            | Direction                   | Consumers            | Side effect |       Idempotent | Capability    | Summary  |
+| ----------------- | --------------------------- | -------------------- | ----------: | ---------------: | ------------- | -------- |
+| `<domain/method>` | `<Client → Server request>` | `<Desktop/CLI/host>` |  `<yes/no>` | `<required/n/a>` | `<domain/v1>` | `<用途>` |
 
 ## `<domain/method>`
 
@@ -66,21 +66,21 @@ lastUpdated: YYYY-MM-DD
 
 ### 参数
 
-| Field | Type | Required | Nullable | Constraints | Meaning |
-|---|---|---:|---:|---|---|
+| Field     | Type     |   Required |   Nullable | Constraints   | Meaning  |
+| --------- | -------- | ---------: | ---------: | ------------- | -------- |
 | `<field>` | `<type>` | `<yes/no>` | `<yes/no>` | `<范围/格式>` | `<含义>` |
 
 ### 结果
 
-| Field | Type | Required | Nullable | Constraints | Meaning |
-|---|---|---:|---:|---|---|
+| Field     | Type     |   Required |   Nullable | Constraints   | Meaning  |
+| --------- | -------- | ---------: | ---------: | ------------- | -------- |
 | `<field>` | `<type>` | `<yes/no>` | `<yes/no>` | `<范围/格式>` | `<含义>` |
 
 ### 错误
 
-| Error | Retryable | Client action | Data |
-|---|---:|---|---|
-| `<StableErrorName>` | `<yes/no>` | `<处理方式>` | `<稳定字段>` |
+| Error               |  Retryable | Client action | Data         |
+| ------------------- | ---------: | ------------- | ------------ |
+| `<StableErrorName>` | `<yes/no>` | `<处理方式>`  | `<稳定字段>` |
 
 ### 路由与所有权
 

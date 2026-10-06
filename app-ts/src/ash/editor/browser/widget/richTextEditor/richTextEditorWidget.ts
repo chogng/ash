@@ -78,7 +78,7 @@ export interface EditorToolbarAction {
 	readonly run: (context: EditorToolbarActionContext) => DocumentCommand | undefined | Promise<DocumentCommand | undefined>;
 }
 
-const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string }[] = [
+const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string; }[] = [
 	{ id: "paragraph", label: "Paragraph" },
 	{ id: "heading", label: "Heading" },
 	{ id: "blockquote", label: "Blockquote" },
@@ -114,7 +114,7 @@ export class RichTextEditorWidget extends Disposable {
 	private readonly modelChangeListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly collaborationControllerSlot = this._register(new MutableDisposable<DocumentCollaborationController>());
 	private readonly collaborationPresenceListenerSlot = this._register(new MutableDisposable<IDisposable>());
-	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
+	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView; }>();
 	private editorDom: EditorDom | undefined;
 	private container: HTMLDivElement | undefined;
 	private formattingContribution: DocumentFormattingContribution | undefined;
@@ -1536,7 +1536,7 @@ function readCompositionText(element: HTMLTextAreaElement | HTMLDivElement): str
 	return element.tagName === "TEXTAREA" ? (element as HTMLTextAreaElement).value : element.textContent ?? "";
 }
 
-function findCompositionDiff(before: string, after: string): { readonly from: number; readonly to: number; readonly text: string } | undefined {
+function findCompositionDiff(before: string, after: string): { readonly from: number; readonly to: number; readonly text: string; } | undefined {
 	let from = 0;
 	while (from < before.length && from < after.length && before[from] === after[from]) from += 1;
 	let beforeEnd = before.length;
@@ -1777,7 +1777,7 @@ function readDocumentTextSelection(container: HTMLDivElement, includeCollapsed =
 	};
 }
 
-function readInlineDocumentTextSelection(editor: HTMLDivElement, includeCollapsed = false): { nodeId: string; selection: DocumentTextSelection } | undefined {
+function readInlineDocumentTextSelection(editor: HTMLDivElement, includeCollapsed = false): { nodeId: string; selection: DocumentTextSelection; } | undefined {
 	const selection = readDocumentTextSelection(editor, includeCollapsed);
 	if (!selection || selection.blockId !== editor.dataset.blockId) return undefined;
 	return { nodeId: selection.nodeId, selection: selection.selection };
@@ -1858,7 +1858,7 @@ function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: Docum
 	domSelection?.addRange(range);
 }
 
-function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly run: HTMLElement; readonly offset: number } | undefined {
+function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly run: HTMLElement; readonly offset: number; } | undefined {
 	const runs = [...editor.querySelectorAll<HTMLElement>("[data-text-node-id]")].filter(run => run.dataset.textNodeId === nodeId);
 	if (runs.length === 0) return undefined;
 	let remaining = Math.max(0, offset);

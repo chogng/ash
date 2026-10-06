@@ -31,10 +31,12 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	let secondaryResolveCount = 0;
 	let disposedLists = 0;
 	const primary: CodeLensProvider = {
-		provideCodeLenses: () => ({ lenses: [
-			lens(1, 4, undefined, 'primary-deferred'),
-			lens(0, 2, command('primary.immediate', 'Primary')),
-		], dispose: () => { disposedLists += 1; } }),
+		provideCodeLenses: () => ({
+			lenses: [
+				lens(1, 4, undefined, 'primary-deferred'),
+				lens(0, 2, command('primary.immediate', 'Primary')),
+			], dispose: () => { disposedLists += 1; }
+		}),
 		resolveCodeLens: (_model, value) => {
 			primaryResolveCount += 1;
 			return { ...value, command: command('primary.resolved', 'Resolved') };
@@ -86,10 +88,12 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 		onDidChange: changeEmitter.event,
 		provideCodeLenses: (_model, token) => {
 			providerToken = token;
-			return { lenses: [
-			lens(1, 0, command('immediate', 'Immediate')),
-			lens(1, 5, undefined, 'deferred'),
-			] };
+			return {
+				lenses: [
+					lens(1, 0, command('immediate', 'Immediate')),
+					lens(1, 5, undefined, 'deferred'),
+				]
+			};
 		},
 		resolveCodeLens: (_model, value) => {
 			resolveCount += 1;
@@ -150,7 +154,7 @@ test('CodeLens model waits for every visible resolve batch in the current reques
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel(Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'), { languageId: 'typescript' });
 	const providers = new LanguageFeatureRegistry<CodeLensProvider>();
-	const requests: Array<{ readonly value: CodeLens; readonly resolve: (value: CodeLens) => void }> = [];
+	const requests: Array<{ readonly value: CodeLens; readonly resolve: (value: CodeLens) => void; }> = [];
 	using registration = providers.register('typescript', {
 		provideCodeLenses: () => ({ lenses: [lens(0, 0, undefined, 'first'), lens(10, 0, undefined, 'second')] }),
 		resolveCodeLens: (_model, value) => new Promise(resolve => requests.push({ value, resolve })),

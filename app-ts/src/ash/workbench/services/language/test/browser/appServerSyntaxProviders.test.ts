@@ -18,8 +18,8 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
 		generation: 1,
-		open: async () => {},
-		update: async () => {},
+		open: async () => { },
+		update: async () => { },
 		analyze: async params => {
 			analyzeCalls += 1;
 			return {
@@ -48,8 +48,8 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 				workerCalls += 1;
 				return request.lane === 'tokens' ? { lane: 'tokens' as const, value: { tokens: [{ range: new Range(1, 1, 1, 3), tokenType: 'keyword', modifiers: [] }] } } : { lane: 'diagnostics' as const, value: { diagnostics: [] } };
 			},
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { },
+			[Symbol.dispose]() { },
 		}),
 	});
 	using folding = new FoldingRangeService(model, languages.foldingRangeProvider);
@@ -100,9 +100,9 @@ test('App Server parser sessions follow each model revision and release independ
 	using first = new TextModel('fn first() {}\n', { languageId: 'rust' });
 	using second = new TextModel('fn second() {}\n', { languageId: 'rust' });
 	using languages = new LanguageFeaturesService();
-	const requests: { documentId: string; revision: number }[] = [];
-	const opened: { documentId: string; revision: number; text: string }[] = [];
-	const updated: { documentId: string; previousRevision: number; revision: number; text: string }[] = [];
+	const requests: { documentId: string; revision: number; }[] = [];
+	const opened: { documentId: string; revision: number; text: string; }[] = [];
+	const updated: { documentId: string; previousRevision: number; revision: number; text: string; }[] = [];
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
 		generation: 1,
@@ -150,12 +150,12 @@ test('App Server parser sessions follow each model revision and release independ
 test('Selection-only parser sessions close with their editor model', async () => {
 	using model = new TextModel('fn selected() {}\n', { languageId: 'rust' });
 	using languages = new LanguageFeaturesService();
-	const selected: { documentId: string; revision: number; text: string }[] = [];
+	const selected: { documentId: string; revision: number; text: string; }[] = [];
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
 		generation: 1,
-		open: async () => {},
-		update: async () => {},
+		open: async () => { },
+		update: async () => { },
 		analyze: async () => { throw new Error('Selection must not request full analysis'); },
 		selectionRanges: async params => {
 			selected.push({ documentId: params.documentId, revision: params.revision, text: '' });
@@ -191,7 +191,7 @@ test('oversized intermediate revisions reopen from the current bounded snapshot'
 		update: async () => { updates += 1; },
 		analyze: async params => ({ revision: params.revision, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] }),
 		selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
-		close: async () => {},
+		close: async () => { },
 	});
 	const signal = new AbortController().signal;
 	const provider = languages.documentSymbolProvider.ordered(model)[0]!;

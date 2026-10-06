@@ -22,8 +22,8 @@ import type { ISessionsService } from '../../services/sessions/browser/sessionsS
 
 class TestPart extends WorkbenchPart {
 	public getTabsHeight(): number { return 35; }
-	public setContentRightInset(_inset: number): void {}
-	public setEditorContentVisible(_visible: boolean): void {}
+	public setContentRightInset(_inset: number): void { }
+	public setEditorContentVisible(_visible: boolean): void { }
 	constructor(container: HTMLElement, id: SessionsPartId) {
 		super(container, id);
 	}
@@ -42,18 +42,18 @@ test('Sessions layout commands update menu state from their owners and release w
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
-		async openThread() {},
+		async openThread() { },
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		get canNavigateBack() { return historyIndex === 1; },
 		get canNavigateForward() { return historyIndex === 0; },
-		async initialize() {},
-		openSession() {},
-		openUntitledSession() {},
+		async initialize() { },
+		openSession() { },
+		openUntitledSession() { },
 		openNewSession() { throw new Error('This scenario does not create sessions'); },
-		activateSelection() {},
-		closeVisibleSelection() {},
+		activateSelection() { },
+		closeVisibleSelection() { },
 		navigateBack() { historyIndex = 0; changed.fire(); },
 		navigateForward() { historyIndex = 1; changed.fire(); },
 	};
@@ -86,8 +86,8 @@ test('Sessions layout commands update menu state from their owners and release w
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
-	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

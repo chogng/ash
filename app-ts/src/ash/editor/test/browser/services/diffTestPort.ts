@@ -12,7 +12,7 @@ export class DiffTestPort extends Disposable implements WebWorkerClientPort {
 
 	constructor() {
 		super();
-		const port = Object.assign(toDisposable(() => {}), {
+		const port = Object.assign(toDisposable(() => { }), {
 			onMessage: this.requests.event,
 			send: (value: unknown): void => this.deliver(this.responses, value),
 		});

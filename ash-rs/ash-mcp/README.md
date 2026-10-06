@@ -10,16 +10,16 @@ catalog、精确 binding 和可取消调用。它不读取 Config 或 Plugin，�
 
 ## 边界与文件
 
-| 文件 / symbol | 当前职责 |
-| --- | --- |
-| `definition.rs` / `McpServerDefinition` | 接收宿主已 materialize 的 stdio 或 Streamable HTTP transport |
-| `session.rs` / `McpSession` | product runtime 使用的单 session 窄接口 |
-| `session.rs` / `McpSessionFactory` | transport/session 创建扩展点；production 由 `RmcpSessionFactory` 实现 |
-| `catalog.rs` / `McpCatalogSnapshot` | 保存跨 server、不可变、按 generation 冻结的工具视图 |
-| `catalog.rs` / `McpToolBinding` | 保存 model alias、exact remote identity、definition digest 和两个 generation |
-| `runtime.rs` / `McpRuntime` | 启动 server set、发现 catalog、路由调用、观察失效和有界 shutdown |
-| `output.rs` / `project_tool_result` | 把不可信 RMCP result 投影到 `ash-tools::ToolOutput` |
-| `error.rs` | 区分构造失败、未开始、结果未知和无效结果 |
+| 文件 / symbol                           | 当前职责                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| `definition.rs` / `McpServerDefinition` | 接收宿主已 materialize 的 stdio 或 Streamable HTTP transport                 |
+| `session.rs` / `McpSession`             | product runtime 使用的单 session 窄接口                                      |
+| `session.rs` / `McpSessionFactory`      | transport/session 创建扩展点；production 由 `RmcpSessionFactory` 实现        |
+| `catalog.rs` / `McpCatalogSnapshot`     | 保存跨 server、不可变、按 generation 冻结的工具视图                          |
+| `catalog.rs` / `McpToolBinding`         | 保存 model alias、exact remote identity、definition digest 和两个 generation |
+| `runtime.rs` / `McpRuntime`             | 启动 server set、发现 catalog、路由调用、观察失效和有界 shutdown             |
+| `output.rs` / `project_tool_result`     | 把不可信 RMCP result 投影到 `ash-tools::ToolOutput`                          |
+| `error.rs`                              | 区分构造失败、未开始、结果未知和无效结果                                     |
 
 依赖方向固定为：
 

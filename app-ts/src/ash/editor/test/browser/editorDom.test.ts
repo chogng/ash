@@ -84,7 +84,7 @@ test('EditorMouseEventFactory listeners stop publishing after disposal', () => {
 	const button = dom.window.document.querySelector<HTMLElement>('button');
 	assert.ok(editor && button);
 	const events = new EditorMouseEventFactory(editor);
-	const positions: Array<{ readonly x: number; readonly y: number }> = [];
+	const positions: Array<{ readonly x: number; readonly y: number; }> = [];
 	const listener = events.onMouseDown(editor, event => positions.push({ x: event.relativePos.x, y: event.relativePos.y }));
 	button.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, clientX: 12, clientY: 18 }));
 	listener.dispose();
@@ -126,7 +126,7 @@ test('GlobalEditorPointerMoveMonitor cancels a pointer session on a non-modifier
 });
 
 function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: number, clientX: number): Event {
-	const event = new dom.window.MouseEvent(type, { buttons, clientX }) as unknown as Event & { pointerId: number };
+	const event = new dom.window.MouseEvent(type, { buttons, clientX }) as unknown as Event & { pointerId: number; };
 	Object.defineProperty(event, 'pointerId', { configurable: true, value: pointerId });
 	return event;
 }

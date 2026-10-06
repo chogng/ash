@@ -122,14 +122,16 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// Without folder icons, a file icon occupies the same column as a folder arrow.
-			this.tree.updateOptions({ twistieAdditionalCssClass: item => {
-				// Nested file groups keep their arrow even when the theme hides directory arrows.
-				if (item.kind !== FileKind.Directory && item.children?.length) {
-					return 'ash-tree-twistie-with-icon-gap';
+			this.tree.updateOptions({
+				twistieAdditionalCssClass: item => {
+					// Nested file groups keep their arrow even when the theme hides directory arrows.
+					if (item.kind !== FileKind.Directory && item.children?.length) {
+						return 'ash-tree-twistie-with-icon-gap';
+					}
+					const hideTwistie = theme.hidesExplorerArrows || theme.hasFileIcons && !theme.hasFolderIcons && item.kind !== FileKind.Directory;
+					return hideTwistie ? 'ash-tree-twistie-hidden' : 'ash-tree-twistie-with-icon-gap';
 				}
-				const hideTwistie = theme.hidesExplorerArrows || theme.hasFileIcons && !theme.hasFolderIcons && item.kind !== FileKind.Directory;
-				return hideTwistie ? 'ash-tree-twistie-hidden' : 'ash-tree-twistie-with-icon-gap';
-			} });
+			});
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
@@ -237,7 +239,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 					[root, ...this.tree.getVisibleElements().filter(item => item.kind === FileKind.Directory)]
 						.map(item => [extUriBiasedIgnorePathCase.getComparisonKey(item.resource), item] as const),
 				);
-				const targets = new Map<string, { item: ExplorerItem; recursive: boolean }>();
+				const targets = new Map<string, { item: ExplorerItem; recursive: boolean; }>();
 				for (const resource of changed) {
 					const parent = dirname(resource);
 					const directory = directories.get(extUriBiasedIgnorePathCase.getComparisonKey(parent));

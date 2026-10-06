@@ -137,7 +137,7 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		throw new Error(`Unable to reload in-memory configuration target ${typeof target === 'number' ? target : 'workspace folder'}.`);
 	}
 
-	public keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory: string[] } {
+	public keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory: string[]; } {
 		this.assertNotDisposed();
 		const memory = new Set(this.values.keys());
 		for (const values of this.overrideValues.values()) {
@@ -204,8 +204,8 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		return this.getRegisteredConfiguration(key).defaultValue;
 	}
 
-	private getOverrideEntries<T>(key: string): { identifiers: string[]; value: Readonly<T> }[] {
-		const result: { identifiers: string[]; value: Readonly<T> }[] = [];
+	private getOverrideEntries<T>(key: string): { identifiers: string[]; value: Readonly<T>; }[] {
+		const result: { identifiers: string[]; value: Readonly<T>; }[] = [];
 		for (const block of this.overrideBlocks.values()) {
 			if (!block.values.has(key)) continue;
 			result.push({ identifiers: [...block.identifiers], value: block.values.get(key) as Readonly<T> });

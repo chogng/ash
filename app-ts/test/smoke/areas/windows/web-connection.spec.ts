@@ -22,7 +22,7 @@ test('two desktops isolate browser targets and closing one preserves the other',
 	const desktops: Awaited<ReturnType<typeof launchElectron>>[] = [];
 	const closed = new Set<Awaited<ReturnType<typeof launchElectron>>>();
 	const hostCall = (page: Page, method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-window-thread', ...params } });
+		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-window-thread', ...params } });
 	}, { method, params });
 	try {
 		await promisify(execFile)(daemon, ['start'], { env: environment, windowsHide: true, timeout: 30_000 });
@@ -61,11 +61,13 @@ test('authenticated Web cannot claim directory authority or read an ungranted wo
 		return new Promise<unknown>((resolve, reject) => {
 			const socket = new WebSocket(url, `ash-session.${token}`);
 			const timeout = setTimeout(() => { socket.close(); reject(new Error('Authority check timed out')); }, 5_000);
-			socket.onopen = () => socket.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
-				clientInfo: { name: 'untrusted-browser', version: '1' }, capabilities: { dirPermissionsHost: { version: 1 } },
-			} }));
+			socket.onopen = () => socket.send(JSON.stringify({
+				jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+					clientInfo: { name: 'untrusted-browser', version: '1' }, capabilities: { dirPermissionsHost: { version: 1 } },
+				}
+			}));
 			socket.onmessage = event => {
-				const response = JSON.parse(String(event.data)) as { id?: number; error?: unknown };
+				const response = JSON.parse(String(event.data)) as { id?: number; error?: unknown; };
 				if (response.id === 1) { clearTimeout(timeout); socket.close(); resolve(response.error); }
 			};
 			socket.onerror = () => { clearTimeout(timeout); socket.close(); reject(new Error('Authority check connection failed')); };
@@ -121,7 +123,7 @@ test('Web opens a selected server folder with explicit authorization and a separ
 		headers: { Origin: new URL(original.endpoint).origin, Authorization: `Bearer ${original.token}` },
 	});
 	expect(prior.status()).toBe(200);
-	expect(URI.file((await prior.json() as { workspaceRoot: string }).workspaceRoot).fsPath).toBe(URI.file(original.root).fsPath);
+	expect(URI.file((await prior.json() as { workspaceRoot: string; }).workspaceRoot).fsPath).toBe(URI.file(original.root).fsPath);
 });
 
 test('built Web workbench reads workspace files and reconnects after reload', async ({ target, testWorkspace, workbench }) => {

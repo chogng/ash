@@ -47,7 +47,7 @@ test("Diagnostic bridge projects existing results, replacements, and clear", () 
 	store.clear();
 	assert.deepEqual(bridge.decorations.decorations, []);
 	assert.deepEqual(events.map(event => (
-		event as { readonly reason: TextDecorationChangeReason }
+		event as { readonly reason: TextDecorationChangeReason; }
 	).reason), [
 		TextDecorationChangeReason.Content,
 		TextDecorationChangeReason.Content,

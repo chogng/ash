@@ -72,9 +72,9 @@ class NativeTitleHover implements IManagedHover {
 		this.update(content);
 	}
 
-	show(): void {}
+	show(): void { }
 
-	hide(): void {}
+	hide(): void { }
 
 	update(content: HoverContent): void {
 		if (this.disposed) return;

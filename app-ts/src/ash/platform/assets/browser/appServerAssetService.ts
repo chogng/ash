@@ -9,7 +9,7 @@ import type { AssetCatalog, AssetCollection, AssetImport, AssetVersion, IAssetSe
 
 /** Only this adapter handles generated DTOs; the backend owns all committed content and metadata. */
 export class AppServerAssetService implements IAssetService {
-	constructor(private readonly connection: AppServerProtocolClient) {}
+	constructor(private readonly connection: AppServerProtocolClient) { }
 
 	public async getCatalog(): Promise<AssetCatalog> {
 		this.requireAssets();

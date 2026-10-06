@@ -70,7 +70,7 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
 		menuButton().click();
 		assert.deepEqual(shownActions.map(action => action.label), ['File', 'Help']);
-		menubar.setTrailingActions([{ id: 'test.sessions.menubar.toggle', label: 'Toggle', tooltip: 'Toggle', enabled: true, checked: true, run() {} }]);
+		menubar.setTrailingActions([{ id: 'test.sessions.menubar.toggle', label: 'Toggle', tooltip: 'Toggle', enabled: true, checked: true, run() { } }]);
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
 		assert.deepEqual([...menubar.domNode.querySelectorAll('button')].map(button => [button.getAttribute('aria-label'), button.getAttribute('aria-pressed')]), [['Application menu', null], ['Toggle', 'true']]);
 		using selections = new Emitter<INativeMenubarSelection>();

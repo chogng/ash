@@ -1,13 +1,13 @@
 .stanza-editor-placeholder-text {
-  position: absolute;
-  z-index: 7;
-  overflow: hidden;
-  color: var(--ash-description-foreground);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
+	position: absolute;
+	z-index: 7;
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
 }
 
 .stanza-editor-embedded .stanza-editor-placeholder-text {
-  color: var(--ash-input-placeholder-foreground);
+	color: var(--ash-input-placeholder-foreground);
 }

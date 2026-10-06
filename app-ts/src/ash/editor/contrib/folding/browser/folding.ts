@@ -40,7 +40,7 @@ const foldingEnabled = new RawContextKey<boolean>('foldingEnabled', false);
 export type FoldingRangeProviderSelector = (providers: LanguageFoldingRangeProvider[], document: ITextModel) => LanguageFoldingRangeProvider[] | undefined;
 
 // Registrations live in one JavaScript realm; each editor owns its change subscription.
-const providerSelectors: { readonly select: FoldingRangeProviderSelector }[] = [];
+const providerSelectors: { readonly select: FoldingRangeProviderSelector; }[] = [];
 const providerSelectionChanged = new Emitter<void>();
 
 interface FoldingStateMemento {
@@ -251,7 +251,7 @@ export class FoldingController extends Disposable {
 	public setContainingFoldCollapsed(collapsed: boolean, options: FoldingArguments = {}): void {
 		if (!this.editor.getOption(EditorOption.folding)) return;
 		const lines = options.selectionLines ?? this.editor.getSelections()?.map(selection => selection.startLineNumber - 1) ?? [];
-		let scope: { levels: number; direction: 'up' | 'down' } | undefined;
+		let scope: { levels: number; direction: 'up' | 'down'; } | undefined;
 		if (!collapsed || options.levels !== undefined || options.direction !== undefined) {
 			scope = { levels: options.levels || 1, direction: options.direction === 'up' ? 'up' : 'down' };
 		}

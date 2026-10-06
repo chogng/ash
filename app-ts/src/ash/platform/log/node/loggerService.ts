@@ -45,12 +45,14 @@ export class LoggerService extends Disposable implements ILoggerService {
 
 	public createLogger(category: string): LogService {
 		if (!category.trim()) { throw new TypeError('Invalid logger category'); }
-		return new LogService({ sinks: [new ConsoleLogSink(), {
-			log: entry => {
-				void this.log('main', { ...entry, category: entry.category === 'application' ? category : entry.category })
-					.catch(error => console.error('Failed to persist Desktop log', error));
-			},
-		}] });
+		return new LogService({
+			sinks: [new ConsoleLogSink(), {
+				log: entry => {
+					void this.log('main', { ...entry, category: entry.category === 'application' ? category : entry.category })
+						.catch(error => console.error('Failed to persist Desktop log', error));
+				},
+			}]
+		});
 	}
 
 	public log(source: string, entry: LogEntry): Promise<void> {

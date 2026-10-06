@@ -82,7 +82,7 @@ export function runWithBufferedEvents<T>(mutation: () => T): T {
 	let failed = false;
 	try {
 		result = mutation();
-		if (typeof (result as { readonly then?: unknown } | undefined)?.then === 'function') {
+		if (typeof (result as { readonly then?: unknown; } | undefined)?.then === 'function') {
 			throw new TypeError('Buffered event mutations must be synchronous');
 		}
 	} catch (error) {
@@ -200,7 +200,7 @@ export class PauseableEmitter<T> extends Emitter<T> {
 	private readonly eventQueue: T[] = [];
 	private readonly merge: ((events: readonly T[]) => T) | undefined;
 
-	constructor(options: EmitterOptions & { readonly merge?: (events: readonly T[]) => T } = {}) {
+	constructor(options: EmitterOptions & { readonly merge?: (events: readonly T[]) => T; } = {}) {
 		super(options);
 		this.merge = options.merge;
 	}
@@ -255,7 +255,7 @@ export class ValueWithChangeEvent<T> implements IValueWithChangeEvent<T> {
 	private readonly changeEmitter = new Emitter<void>();
 	readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private currentValue: T) {}
+	constructor(private currentValue: T) { }
 
 	get value(): T {
 		return this.currentValue;

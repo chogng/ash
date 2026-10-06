@@ -63,7 +63,7 @@ class SessionsWorkbenchLayoutStateModel {
 	constructor(
 		private readonly storageService: IStorageService,
 		private readonly defaults: SessionsWorkbenchLayoutState,
-	) {}
+	) { }
 
 	get state(): SessionsWorkbenchLayoutState {
 		const storage = this.storageService;
@@ -285,7 +285,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private grid!: SerializableGrid<SessionsWorkbenchPartView>;
 	private partUpdateDepth = 0;
 	private readonly unavailableParts = new Set<SessionsPartId>();
-	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean };
+	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean; };
 	private titlebarHeight = 0;
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;

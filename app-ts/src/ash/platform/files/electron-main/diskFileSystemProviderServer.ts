@@ -7,37 +7,39 @@ import { FileNotFoundError, FileRevisionConflictError, type IFileService } from 
 export function diskFileSystemProviderRoutes(provider: IFileService, userDataHome: URI): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{ channel: `${LOCAL_FILE_SYSTEM_CHANNEL_NAME}:userDataHome`, validate: value => { if (value !== undefined) throw new Error('No arguments expected'); return value; }, invoke: () => userDataHome.toString() },
-		{ channel: LOCAL_FILE_SYSTEM_CHANNEL_NAME, validate: validateRequest, invoke: async value => {
-			const request = validateRequest(value);
-			const resource = URI.parse(request.resource as string);
-			try {
-				let result: unknown;
-				switch (request.operation) {
-					case 'stat': result = { ...await provider.stat(resource), resource: resource.toString() }; break;
-					case 'readDirectory': result = (await provider.readDirectory(resource)).map(entry => ({ ...entry, resource: entry.resource.toString() })); break;
-					case 'readFile': result = { ...await provider.readFile(resource), resource: resource.toString() }; break;
-					case 'readFileBytes': result = { ...await provider.readFileBytes(resource), resource: resource.toString() }; break;
-					case 'writeFile': {
-						const written = await provider.writeFile({ resource, content: request.content as string, ...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision as string }) });
-						result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
-						break;
+		{
+			channel: LOCAL_FILE_SYSTEM_CHANNEL_NAME, validate: validateRequest, invoke: async value => {
+				const request = validateRequest(value);
+				const resource = URI.parse(request.resource as string);
+				try {
+					let result: unknown;
+					switch (request.operation) {
+						case 'stat': result = { ...await provider.stat(resource), resource: resource.toString() }; break;
+						case 'readDirectory': result = (await provider.readDirectory(resource)).map(entry => ({ ...entry, resource: entry.resource.toString() })); break;
+						case 'readFile': result = { ...await provider.readFile(resource), resource: resource.toString() }; break;
+						case 'readFileBytes': result = { ...await provider.readFileBytes(resource), resource: resource.toString() }; break;
+						case 'writeFile': {
+							const written = await provider.writeFile({ resource, content: request.content as string, ...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision as string }) });
+							result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
+							break;
+						}
+						case 'writeFileBytes': {
+							const written = await provider.writeFileBytes(resource, new Uint8Array(request.bytes as ArrayLike<number>));
+							result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
+							break;
+						}
+						case 'createFile': result = { ...await provider.createFile(resource, request.existing as 'error' | 'overwrite' | 'ignore'), resource: resource.toString() }; break;
+						case 'createDirectory': result = { ...await provider.createDirectory(resource), resource: resource.toString() }; break;
+						case 'copy': result = await provider.copy(resource, URI.parse(request.target as string)); break;
+						case 'rename': result = await provider.rename(resource, URI.parse(request.target as string), request.existing as 'error' | 'overwrite' | 'ignore'); break;
+						case 'delete': result = await provider.delete(resource, request.missing as 'error' | 'ignore', request.mode as 'fileOrEmptyDirectory' | 'recursive'); break;
 					}
-					case 'writeFileBytes': {
-						const written = await provider.writeFileBytes(resource, new Uint8Array(request.bytes as ArrayLike<number>));
-						result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
-						break;
-					}
-					case 'createFile': result = { ...await provider.createFile(resource, request.existing as 'error' | 'overwrite' | 'ignore'), resource: resource.toString() }; break;
-					case 'createDirectory': result = { ...await provider.createDirectory(resource), resource: resource.toString() }; break;
-					case 'copy': result = await provider.copy(resource, URI.parse(request.target as string)); break;
-					case 'rename': result = await provider.rename(resource, URI.parse(request.target as string), request.existing as 'error' | 'overwrite' | 'ignore'); break;
-					case 'delete': result = await provider.delete(resource, request.missing as 'error' | 'ignore', request.mode as 'fileOrEmptyDirectory' | 'recursive'); break;
+					return { ok: true, value: result };
+				} catch (error) {
+					return { ok: false, code: error instanceof FileNotFoundError ? 'notFound' : error instanceof FileRevisionConflictError ? 'conflict' : 'failed', message: error instanceof Error ? error.message : String(error) };
 				}
-				return { ok: true, value: result };
-			} catch (error) {
-				return { ok: false, code: error instanceof FileNotFoundError ? 'notFound' : error instanceof FileRevisionConflictError ? 'conflict' : 'failed', message: error instanceof Error ? error.message : String(error) };
 			}
-		} },
+		},
 	];
 }
 

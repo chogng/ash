@@ -39,7 +39,12 @@
 	display: block;
 	flex: 0 0 auto;
 	background-color: var(--ash-editor-background);
-	background-image: conic-gradient(var(--ash-editor-widget-background) 25%, transparent 0 50%, var(--ash-editor-widget-background) 0 75%, transparent 0);
+	background-image: conic-gradient(
+		var(--ash-editor-widget-background) 25%,
+		transparent 0 50%,
+		var(--ash-editor-widget-background) 0 75%,
+		transparent 0
+	);
 	background-size: var(--ash-spacing-size160) var(--ash-spacing-size160);
 }
 

@@ -18,7 +18,7 @@ test('InlineProgressManager delays, positions, cancels, and releases its widget'
 	const editor = {
 		getContainerDomNode: () => container,
 		addContentWidget: (value: IContentWidget) => { widget = value; },
-		layoutContentWidget: () => {},
+		layoutContentWidget: () => { },
 		removeContentWidget: (value: IContentWidget) => {
 			if (widget === value) removed = true;
 		},

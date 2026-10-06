@@ -44,9 +44,9 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
+	setAccessibilitySupport: () => { },
+	alert: () => { },
+	status: () => { },
 };
 
 function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Promise<void> {
@@ -206,11 +206,13 @@ test('force retokenize action refreshes the active model through its syntax prov
 	using registration = providers.register({
 		id: 'test.retokenize',
 		languageIds: ['retokenize'],
-		provideTokens: () => ({ tokens: [{
-			range: new Range(1, 1, 1, 6),
-			tokenType: ++requests === 1 ? 'string' : 'comment',
-			modifiers: [],
-		}] }),
+		provideTokens: () => ({
+			tokens: [{
+				range: new Range(1, 1, 1, 6),
+				tokenType: ++requests === 1 ? 'string' : 'comment',
+				modifiers: [],
+			}]
+		}),
 	});
 	using model = new TextModel('value', { languageId: 'retokenize', tokenization: { syntaxProviderRegistry: providers } });
 	for (let attempt = 0; attempt < 20 && !model.tokenization.hasAccurateTokensForLine(1); attempt++) {
@@ -926,7 +928,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 
 test('trigger dispatches actions and commands in the receiving editor with its context', async () => {
 	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
-	const calls: { editor: ICodeEditor; args: unknown }[] = [];
+	const calls: { editor: ICodeEditor; args: unknown; }[] = [];
 	const condition = ContextKeyExpr.has('test.trigger.enabled');
 	registerEditorAction(class extends EditorAction {
 		constructor() { super({ id: 'test.trigger.action', label: 'Test trigger', alias: 'Test trigger', precondition: condition }); }

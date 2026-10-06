@@ -110,7 +110,7 @@ test('GitHub cancels its original operation and releases cancellation listeners'
 	const rejected = assert.rejects(pending, isCancellationError);
 	cancellation.cancel();
 	assert.equal(transport.requests.at(-1)!.method, 'github/cancel');
-	assert.deepEqual(transport.requests.at(-1)!.params, { operationId: (original.params as { operationId: string }).operationId });
+	assert.deepEqual(transport.requests.at(-1)!.params, { operationId: (original.params as { operationId: string; }).operationId });
 	transport.respondAt(-1, { status: 'requested' });
 	transport.rejectAt(originalIndex, { code: -32800, message: 'RequestCancelled', data: { kind: 'RequestCancelled' } });
 	await rejected;
@@ -156,7 +156,7 @@ test('GitHub merge carries the reviewed head and file limits remain visible', as
 	using cleanup = toDisposable(() => connected.dispose());
 	const commit = 'a'.repeat(40);
 	const merge = connected.api.github.mergePullRequest(githubRepository, 7, { commit, method: GitHubMergeMethod.Squash });
-	const params = transport.requests.at(-1)!.params as { commit: string; method: string };
+	const params = transport.requests.at(-1)!.params as { commit: string; method: string; };
 	assert.deepEqual({ commit: params.commit, method: params.method }, { commit, method: 'squash' });
 	transport.respondAt(-1, { commit: 'b'.repeat(40), merged: true, message: 'Merged' });
 	assert.equal((await merge).merged, true);
@@ -190,7 +190,7 @@ test('Git ignore cancellation reaches the server and consumes the original termi
 	cancellation.cancel();
 	const cancelIndex = transport.requests.length - 1;
 	assert.equal(transport.requests[cancelIndex]!.method, 'git/checkIgnore/cancel');
-	assert.deepEqual(transport.requests[cancelIndex]!.params, { operationId: (original.params as { operationId: string }).operationId });
+	assert.deepEqual(transport.requests[cancelIndex]!.params, { operationId: (original.params as { operationId: string; }).operationId });
 	transport.respondAt(cancelIndex, { status: 'requested' });
 	transport.rejectAt(originalIndex, { code: -32800, message: 'RequestCancelled', data: { kind: 'RequestCancelled' } });
 	await rejected;
@@ -261,12 +261,18 @@ test('Hooks use the shared protocol, retain disabled declarations, and refresh o
 	const pending = connected.api.hooks.read('session-hooks');
 	assert.deepEqual(transport.requests.at(-1)?.params, { sessionId: 'session-hooks' });
 	assert.equal(transport.requests.at(-1)?.method, 'hook/list');
-	transport.respondAt(-1, { sources: [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [
-		{ id: 'user:hook:check', event: 'preToolUse', enablement: 'disabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: '/program with spaces', args: ['two words', '"quote"'] } },
-	] }] });
-	assert.deepEqual(await pending, [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [
-		{ id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'] },
-	] }]);
+	transport.respondAt(-1, {
+		sources: [{
+			namespace: 'user', configPath: '/profile/config.toml', hooks: [
+				{ id: 'user:hook:check', event: 'preToolUse', enablement: 'disabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: '/program with spaces', args: ['two words', '"quote"'] } },
+			]
+		}]
+	});
+	assert.deepEqual(await pending, [{
+		namespace: 'user', configPath: '/profile/config.toml', hooks: [
+			{ id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'] },
+		]
+	}]);
 	const userRead = connected.api.hooks.read();
 	assert.deepEqual(transport.requests.at(-1)?.params, {});
 	transport.respondAt(-1, { sources: [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [] }] });
@@ -319,7 +325,7 @@ test('review environment adapter preserves scope, provenance, cancellation, and 
 });
 
 class FakeTransport implements AppServerTransport {
-	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value, private readonly initializeDelayMs = 0) {}
+	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value, private readonly initializeDelayMs = 0) { }
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];
 	readonly sentEvents: string[] = [];
@@ -460,7 +466,7 @@ test("connects, initializes, maps renderer requests, and disposes the Web connec
 	assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
 	assert.deepEqual(await connected.api.session.list(), { sessions: [] });
 	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
-	assert.equal((hot.requests[0]?.params as { capabilities: { dirPermissionsHost?: unknown } }).capabilities.dirPermissionsHost, undefined);
+	assert.equal((hot.requests[0]?.params as { capabilities: { dirPermissionsHost?: unknown; }; }).capabilities.dirPermissionsHost, undefined);
 	connected.dispose();
 	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });
@@ -571,7 +577,7 @@ test('renderer dispatches host requests and rejects late results after disconnec
 	const client = new AppServerProtocolClient(hot);
 	using cleanup = toDisposable(() => client.dispose());
 	let signal: AbortSignal | undefined;
-	let finish!: (value: { targetId: string }) => void;
+	let finish!: (value: { targetId: string; }) => void;
 	const handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
 		signal = context.signal;
 		return new Promise(resolve => { finish = resolve; });
@@ -635,7 +641,7 @@ test('Call service is assembled from the negotiated contract and ignores stale o
 		const calls = connected.api.calls;
 		assert.ok(calls);
 		const starting = calls.start({ type: 'local' });
-		const params = transport.requests.at(-1)?.params as { resourceId: string };
+		const params = transport.requests.at(-1)?.params as { resourceId: string; };
 		const status = {
 			resourceId: params.resourceId, sequence: 1, connection: 'connected' as const,
 			call: { id: 'call', revision: 1, mediaEpoch: 1, mediaRoom: 'room', mediaState: { state: 'ready' as const }, members: [{ id: 'owner', role: 'owner' as const }] },

@@ -19,7 +19,7 @@ export class ExplorerFindProvider extends Disposable {
 	private readonly input: HTMLInputElement;
 
 	constructor(
-		private readonly tree: { readonly element: HTMLElement; setFindPattern(pattern: string): void; findNext(): ExplorerItem | undefined; clearFind(): void; domFocus(): void },
+		private readonly tree: { readonly element: HTMLElement; setFindPattern(pattern: string): void; findNext(): ExplorerItem | undefined; clearFind(): void; domFocus(): void; },
 		host: HTMLElement,
 	) {
 		super();
@@ -74,7 +74,7 @@ export class ExplorerDataSource {
 		private readonly fileService: IFileService,
 		private readonly sorter: FileSorter,
 		private readonly configurationService: IConfigurationService,
-	) {}
+	) { }
 
 	public hasChildren(item: ExplorerItem): boolean {
 		return item.kind === FileKind.Directory || !!item.children?.length;

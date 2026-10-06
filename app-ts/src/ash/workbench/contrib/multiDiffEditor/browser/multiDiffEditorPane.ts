@@ -360,7 +360,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 }
 
 class PaneAction implements IAction {
-	constructor(readonly id: string, readonly label: string, readonly tooltip: string, readonly icon: IAction['icon'], readonly enabled: boolean, private readonly execute: (input: MultiDiffEditorInputItem) => unknown, readonly checked?: boolean) {}
+	constructor(readonly id: string, readonly label: string, readonly tooltip: string, readonly icon: IAction['icon'], readonly enabled: boolean, private readonly execute: (input: MultiDiffEditorInputItem) => unknown, readonly checked?: boolean) { }
 
 	public run(context?: unknown): unknown {
 		return this.execute(context as MultiDiffEditorInputItem);

@@ -9,14 +9,14 @@
 
 ## 连接状态契约
 
-| 类型 | 职责 |
-| --- | --- |
-| `ConnectorId` / `ConnectorAccountId` | 分别标识外部服务声明和外部账号 |
-| `ConnectorDefinition` / `ConnectorDefinitionDigest` | 服务描述、运行时绑定与授权版本摘要 |
-| `ConnectorRuntimeBinding` | 当前支持 MCP server ID；不持有会话 |
-| `ConnectorAccount` / `ConnectorCredentialRef` | 账号信息和凭据引用；不包含凭据内容 |
-| `ConnectorConnection` / `ConnectorConnectionGeneration` | 连接状态与单调递增的连接代次 |
-| `ConnectorSnapshot` / `ConnectorSnapshotGeneration` | 不可变目录与单调递增的快照代次 |
+| 类型                                                    | 职责                               |
+| ------------------------------------------------------- | ---------------------------------- |
+| `ConnectorId` / `ConnectorAccountId`                    | 分别标识外部服务声明和外部账号     |
+| `ConnectorDefinition` / `ConnectorDefinitionDigest`     | 服务描述、运行时绑定与授权版本摘要 |
+| `ConnectorRuntimeBinding`                               | 当前支持 MCP server ID；不持有会话 |
+| `ConnectorAccount` / `ConnectorCredentialRef`           | 账号信息和凭据引用；不包含凭据内容 |
+| `ConnectorConnection` / `ConnectorConnectionGeneration` | 连接状态与单调递增的连接代次       |
+| `ConnectorSnapshot` / `ConnectorSnapshotGeneration`     | 不可变目录与单调递增的快照代次     |
 
 - 身份和展示文本拒绝空值、控制字符、首尾空白和超长输入。
 - `Begin` 使用更大的连接代次进入 `Connecting`；`Connected` 必须匹配该代次，不能跳过 `Connecting`。
@@ -29,22 +29,22 @@
 
 ## 当前公共契约
 
-| Symbol | 职责 | 关键失败语义 |
-| --- | --- | --- |
-| `ConnectorCatalog::from_activation` | 从 exact activation package digest 构造授权兼容 revision | duplicate identity / invalid contribution fail closed |
-| `ConnectorCatalog::from_packages` | 用调用方提供的 package 集合构造目录 | 不提供 activation generation |
-| `ConnectorCatalog::from_manifests` | 从 manifest 读取服务声明 | 不覆盖 MCP definition 文件内容；生产 activation 应优先使用 package API |
-| `ConnectorAuthority::open_sqlite` | 恢复 snapshot、事件和 command receipts | event + receipt 在一个 SQLite transaction 中提交 |
-| `ConnectorAuthority::apply` | expected-generation CAS 与 exact command replay | 同 ID 不同 payload 为 `CommandConflict` |
-| `ConnectorCredentialService::connect_api_token` | Begin → secret store → Complete | secret store 失败时不会发布 `Connected` |
-| `ConnectorCredentialService::disconnect` | 先撤销 readiness，再 best-effort delete secret | cleanup 失败返回 `RetryRequired`，不回滚断连 |
-| `ConnectorAuthority::with_authorized_invocation` | 把 dispatch 与 disconnect commit 线性化 | stale generation/digest 不执行 closure |
-| `ConnectorOAuthService` | state + PKCE + exact redirect、one-shot callback、refresh/revoke 编排 | provider wire protocol 与 callback host 由 adapter/产品拥有 |
-| `ConnectorDeviceOAuthService` | device-code attempt、provider interval/slow-down、expiry/cancel 与 authority transition | device code 只驻留内存，不进入 protocol、history 或 SecretStore |
-| `ConnectorOAuthProvider` | 一个具体服务的授权 URL 与 code exchange 端口 | 不持久化 secret，不修改 authority |
-| `GitHubBrokeredOAuthProvider` | 经产品 broker 执行 PKCE exchange/refresh/revoke | client 不持有 GitHub App secret；broker deployment 不属于本 crate |
-| `GitHubDeviceOAuthProvider` | GitHub public-client device grant 与账户读取 | 无 client secret；不声明 GitHub 未提供的 refresh/remote revoke |
-| `GitHubOAuthProvider` | confidential direct GitHub adapter | 仅供可信 host 显式注入 client secret |
+| Symbol                                           | 职责                                                                                    | 关键失败语义                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `ConnectorCatalog::from_activation`              | 从 exact activation package digest 构造授权兼容 revision                                | duplicate identity / invalid contribution fail closed                  |
+| `ConnectorCatalog::from_packages`                | 用调用方提供的 package 集合构造目录                                                     | 不提供 activation generation                                           |
+| `ConnectorCatalog::from_manifests`               | 从 manifest 读取服务声明                                                                | 不覆盖 MCP definition 文件内容；生产 activation 应优先使用 package API |
+| `ConnectorAuthority::open_sqlite`                | 恢复 snapshot、事件和 command receipts                                                  | event + receipt 在一个 SQLite transaction 中提交                       |
+| `ConnectorAuthority::apply`                      | expected-generation CAS 与 exact command replay                                         | 同 ID 不同 payload 为 `CommandConflict`                                |
+| `ConnectorCredentialService::connect_api_token`  | Begin → secret store → Complete                                                         | secret store 失败时不会发布 `Connected`                                |
+| `ConnectorCredentialService::disconnect`         | 先撤销 readiness，再 best-effort delete secret                                          | cleanup 失败返回 `RetryRequired`，不回滚断连                           |
+| `ConnectorAuthority::with_authorized_invocation` | 把 dispatch 与 disconnect commit 线性化                                                 | stale generation/digest 不执行 closure                                 |
+| `ConnectorOAuthService`                          | state + PKCE + exact redirect、one-shot callback、refresh/revoke 编排                   | provider wire protocol 与 callback host 由 adapter/产品拥有            |
+| `ConnectorDeviceOAuthService`                    | device-code attempt、provider interval/slow-down、expiry/cancel 与 authority transition | device code 只驻留内存，不进入 protocol、history 或 SecretStore        |
+| `ConnectorOAuthProvider`                         | 一个具体服务的授权 URL 与 code exchange 端口                                            | 不持久化 secret，不修改 authority                                      |
+| `GitHubBrokeredOAuthProvider`                    | 经产品 broker 执行 PKCE exchange/refresh/revoke                                         | client 不持有 GitHub App secret；broker deployment 不属于本 crate      |
+| `GitHubDeviceOAuthProvider`                      | GitHub public-client device grant 与账户读取                                            | 无 client secret；不声明 GitHub 未提供的 refresh/remote revoke         |
+| `GitHubOAuthProvider`                            | confidential direct GitHub adapter                                                      | 仅供可信 host 显式注入 client secret                                   |
 
 ## 内部调用路径
 

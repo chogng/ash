@@ -154,14 +154,14 @@ class WindowTaskQueue extends Disposable implements ITaskQueue {
 	}
 
 	private request(callback: CallbackWithDeadline): number {
-		const requestIdleCallback = (this.ownerWindow as Window & { requestIdleCallback?: (callback: CallbackWithDeadline) => number }).requestIdleCallback;
+		const requestIdleCallback = (this.ownerWindow as Window & { requestIdleCallback?: (callback: CallbackWithDeadline) => number; }).requestIdleCallback;
 		return requestIdleCallback
 			? requestIdleCallback.call(this.ownerWindow, callback)
 			: this.ownerWindow.setTimeout(() => callback({ timeRemaining: () => 1 }), 0);
 	}
 
 	private cancel(identifier: number): void {
-		const cancelIdleCallback = (this.ownerWindow as Window & { cancelIdleCallback?: (identifier: number) => void }).cancelIdleCallback;
+		const cancelIdleCallback = (this.ownerWindow as Window & { cancelIdleCallback?: (identifier: number) => void; }).cancelIdleCallback;
 		if (cancelIdleCallback) cancelIdleCallback.call(this.ownerWindow, identifier);
 		else this.ownerWindow.clearTimeout(identifier);
 	}

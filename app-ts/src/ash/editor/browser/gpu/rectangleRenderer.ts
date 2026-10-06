@@ -10,8 +10,8 @@ import { createObjectCollectionBuffer, type IObjectCollectionBuffer, type IObjec
 import { RectangleRendererBindingId, rectangleRendererWgsl } from './rectangleRenderer.wgsl.js';
 
 export type RectangleRendererEntrySpec = [
-	{ name: 'x' }, { name: 'y' }, { name: 'width' }, { name: 'height' },
-	{ name: 'red' }, { name: 'green' }, { name: 'blue' }, { name: 'alpha' },
+	{ name: 'x'; }, { name: 'y'; }, { name: 'width'; }, { name: 'height'; },
+	{ name: 'red'; }, { name: 'green'; }, { name: 'blue'; }, { name: 'alpha'; },
 ];
 
 const rectangleProperties: RectangleRendererEntrySpec = [

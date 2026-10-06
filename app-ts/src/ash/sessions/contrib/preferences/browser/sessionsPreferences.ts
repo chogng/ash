@@ -201,8 +201,8 @@ export class SessionsPreferences extends Disposable {
 		if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 		let activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
-			: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-			: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
+				: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
+					: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
 		const tree = resources.add(new SettingsTree(list, {
 			model: treeModel,
@@ -275,7 +275,7 @@ export class SessionsPreferences extends Disposable {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 				: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-				: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
+					: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
 			searchInput.value = '';
 			render();
 			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);
@@ -341,7 +341,7 @@ export class SessionsPreferences extends Disposable {
 			valueType: 'boolean',
 			configuration: configuration<boolean>(SessionsConfiguration.activityBarCompact),
 			title: localize('sessions.activityBar.compact.title', 'Compact Activity Bar'),
-				description: localize('sessions.activityBar.compact.description', 'Use smaller buttons when the Activity Bar is on the side.'),
+			description: localize('sessions.activityBar.compact.description', 'Use smaller buttons when the Activity Bar is on the side.'),
 		}];
 		// Existing accessibility preferences live under General without changing their stored keys.
 		const generalSettings: readonly ISetting[] = [{

@@ -107,7 +107,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 
 		this.pendingWrites += 1;
 		const write = this.writeTail.then(() => this.writeFrame(`${frame}\n`));
-		this.writeTail = write.catch(() => {});
+		this.writeTail = write.catch(() => { });
 		return write.finally(() => {
 			this.pendingWrites -= 1;
 		});

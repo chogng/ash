@@ -44,9 +44,9 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	clearInput(): void {}
-	layout(_dimension: IDimension): void {}
-	setVisible(_visibility: EditorPaneVisibility): void {}
+	clearInput(): void { }
+	layout(_dimension: IDimension): void { }
+	setVisible(_visibility: EditorPaneVisibility): void { }
 	focus(): void { this.documentView.focus(); }
 
 	private render(): void {

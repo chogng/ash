@@ -250,39 +250,43 @@ const insertLineEnds = registerEditorAction(InsertCursorAtEndOfEachLineSelected)
 const selectNext = registerEditorAction(AddSelectionToNextFindMatchAction);
 const selectAll = registerEditorAction(SelectHighlightsAction);
 
-registerEditorContribution({ id: "editor.contrib.multicursor", install: context => {
-	if (context.kind !== "text") return;
-	context.register(context.editor.onKeyDown(event => {
-		if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) return;
-		let action: EditorAction | undefined;
-		const direction = resolveStanzaAdjacentCursorDirection(event, operatingSystem);
-		if (direction) action = direction === 'up' ? insertAbove : insertBelow;
-		else if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'i') action = insertLineEnds;
-		else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'd') action = selectNext;
-		else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'l') action = selectAll;
-		if (!action) return;
-		if (action === insertLineEnds && !context.viewModel.getSelections().some(selection => !selection.isEmpty())) return;
-		const editorAction = context.editor.getAction(action.id);
-		if (!editorAction?.isSupported()) return;
-		event.stop();
-		void editorAction.run().catch(context.onLanguageError);
-	}));
-} });
-
-registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
-	if (context.kind !== "text") return;
-	const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
-	if (!context.model.largeFile.tooLargeForTokenization) {
-		return new SelectionHighlighter(
-			context.editor,
-			decorations,
-			{
-				languageId: context.model.getLanguageId(),
-				languageFeaturesService: context.languageFeaturesService,
-			},
-		);
+registerEditorContribution({
+	id: "editor.contrib.multicursor", install: context => {
+		if (context.kind !== "text") return;
+		context.register(context.editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) return;
+			let action: EditorAction | undefined;
+			const direction = resolveStanzaAdjacentCursorDirection(event, operatingSystem);
+			if (direction) action = direction === 'up' ? insertAbove : insertBelow;
+			else if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'i') action = insertLineEnds;
+			else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'd') action = selectNext;
+			else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'l') action = selectAll;
+			if (!action) return;
+			if (action === insertLineEnds && !context.viewModel.getSelections().some(selection => !selection.isEmpty())) return;
+			const editorAction = context.editor.getAction(action.id);
+			if (!editorAction?.isSupported()) return;
+			event.stop();
+			void editorAction.run().catch(context.onLanguageError);
+		}));
 	}
-} });
+});
+
+registerEditorContribution({
+	id: SelectionHighlighter.ID, install: context => {
+		if (context.kind !== "text") return;
+		const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
+		if (!context.model.largeFile.tooLargeForTokenization) {
+			return new SelectionHighlighter(
+				context.editor,
+				decorations,
+				{
+					languageId: context.model.getLanguageId(),
+					languageFeaturesService: context.languageFeaturesService,
+				},
+			);
+		}
+	}
+});
 
 /** Replaces non-empty selections with one caret at each selected physical line end. */
 function addCursorsToSelectedLineEnds(model: ITextModel, selections: readonly Selection[]): readonly Selection[] {

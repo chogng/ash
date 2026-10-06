@@ -27,7 +27,7 @@ class TestWorkbenchServices extends InstantiationService {
 	public readonly resources = this._register(new DisposableStore());
 }
 
-export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService } = {}): InstantiationService {
+export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; } = {}): InstantiationService {
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
@@ -47,7 +47,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	}
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ITextModelResourceService, {
-		...toDisposable(() => {}),
+		...toDisposable(() => { }),
 		acquire: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
 	});
 	services.registerInstance(ITextModelService, services.createInstance(TextModelResolverService));

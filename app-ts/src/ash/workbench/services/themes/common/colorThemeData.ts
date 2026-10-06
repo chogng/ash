@@ -9,7 +9,7 @@ import type { IColorTheme, ISemanticTokenThemeRule } from '../../../../platform/
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { colorThemeSchema, colorThemeSchemaId } from './colorThemeSchema.js';
 
-const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace }).default ?? textMateNamespace;
+const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace; }).default ?? textMateNamespace;
 
 export interface ColorThemeDocument {
 	readonly $schema?: string;
@@ -20,7 +20,7 @@ export interface ColorThemeDocument {
 	readonly tokenColors?: string | readonly {
 		readonly name?: string;
 		readonly scope?: string | readonly string[];
-		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string };
+		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string; };
 	}[];
 	readonly semanticHighlighting?: boolean;
 	readonly semanticTokenColors?: Readonly<Record<string, string | {
@@ -172,8 +172,10 @@ export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticToke
 		const [typeAndModifiers, language] = selector.split(':');
 		const [type, ...modifiers] = typeAndModifiers!.split('.');
 		const style = typeof value === 'string' ? { foreground: value } : value;
-		return Object.freeze({ selector, type: type!, modifiers: Object.freeze(modifiers), ...(language ? { language } : {}),
-			...style });
+		return Object.freeze({
+			selector, type: type!, modifiers: Object.freeze(modifiers), ...(language ? { language } : {}),
+			...style
+		});
 	}));
 }
 

@@ -414,7 +414,7 @@ class TestHistoryStorageService implements IStorageService {
 	public readonly onDidChangeValue = Event.None;
 	public readonly onWillSaveState = Event.None;
 
-	constructor(private readonly values: Map<string, string>) {}
+	constructor(private readonly values: Map<string, string>) { }
 
 	public get(key: string, _scope: StorageScope, fallbackValue: string): string;
 	public get(key: string, _scope: StorageScope): string | undefined;
@@ -451,7 +451,7 @@ class TestHistoryStorageService implements IStorageService {
 		return false;
 	}
 
-	public async flush(): Promise<void> {}
+	public async flush(): Promise<void> { }
 }
 
 function startFind(fixture: Fixture, showReplace = false): void {

@@ -15,7 +15,7 @@ export class MoveLinesCommand implements ICommand {
 		private readonly isMovingDown: boolean,
 		_autoIndent: EditorAutoIndentStrategy,
 		_languageConfigurationService: ILanguageConfigurationService,
-	) {}
+	) { }
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		this.lineDelta = 0;
@@ -53,7 +53,7 @@ export class MoveLinesCommand implements ICommand {
 	}
 }
 
-function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number } {
+function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number; } {
 	const endLineNumber = !selection.isEmpty() && selection.endColumn === 1
 		? Math.max(selection.startLineNumber, selection.endLineNumber - 1)
 		: selection.endLineNumber;

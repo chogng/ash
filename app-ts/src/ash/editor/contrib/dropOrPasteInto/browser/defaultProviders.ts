@@ -49,7 +49,7 @@ abstract class TransferProvider implements DocumentPasteEditProvider, DocumentDr
 		token: CancellationToken,
 	): Promise<DocumentPasteEditsSession | undefined> {
 		const edit = await this.getEdit(transfer, token);
-		return edit && !token.isCancellationRequested ? { edits: [edit], dispose() {} } : undefined;
+		return edit && !token.isCancellationRequested ? { edits: [edit], dispose() { } } : undefined;
 	}
 
 	async provideDocumentDropEdits(
@@ -59,7 +59,7 @@ abstract class TransferProvider implements DocumentPasteEditProvider, DocumentDr
 		token: CancellationToken,
 	): Promise<DocumentDropEditsSession | undefined> {
 		const edit = await this.getEdit(transfer, token);
-		return edit && !token.isCancellationRequested ? { edits: [edit as DocumentDropEdit], dispose() {} } : undefined;
+		return edit && !token.isCancellationRequested ? { edits: [edit as DocumentDropEdit], dispose() { } } : undefined;
 	}
 
 	protected abstract getEdit(transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<TransferEdit | undefined>;
@@ -160,15 +160,15 @@ class HtmlPasteProvider implements DocumentPasteEditProvider {
 		if (!markup || token.isCancellationRequested) return undefined;
 		return {
 			edits: [{ title: localize('dropOrPaste.html', 'Insert HTML'), kind: htmlKind, insertText: markup, yieldTo: [{ mimeType: Mimes.text }] }],
-			dispose() {},
+			dispose() { },
 		};
 	}
 }
 
-async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; source: string }[]> {
+async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; source: string; }[]> {
 	const value = await transfer.get(Mimes.uriList)?.asString();
 	if (!value) return [];
-	const result: { uri: URI; source: string }[] = [];
+	const result: { uri: URI; source: string; }[] = [];
 	for (const source of UriList.parse(value)) {
 		if (!source.trim()) continue;
 		try {

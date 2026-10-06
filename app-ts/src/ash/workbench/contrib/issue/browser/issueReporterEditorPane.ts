@@ -97,10 +97,12 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		content.append(this.results);
 		this.account = h(document, 'p'); content.append(this.account);
 		const actions = h(document, 'div'); actions.className = 'issue-reporter-actions'; content.append(actions);
-		this.signIn = this._register(new Button(actions, { label: localize('issue.signIn', 'Sign in to GitHub'), onClick: () => {
-			this.signIn.enabled = false;
-			void this.github.connect().catch(() => { if (!this.isDisposed) { this.status.textContent = localize('issue.signInFailed', 'GitHub sign-in failed. Your report remains here.'); } }).finally(() => { if (!this.isDisposed) { this.signIn.enabled = true; } });
-		} }));
+		this.signIn = this._register(new Button(actions, {
+			label: localize('issue.signIn', 'Sign in to GitHub'), onClick: () => {
+				this.signIn.enabled = false;
+				void this.github.connect().catch(() => { if (!this.isDisposed) { this.status.textContent = localize('issue.signInFailed', 'GitHub sign-in failed. Your report remains here.'); } }).finally(() => { if (!this.isDisposed) { this.signIn.enabled = true; } });
+			}
+		}));
 		this.submit = this._register(new Button(actions, { label: localize('issue.submit', 'Submit to GitHub'), presentation: 'primary', onClick: () => void this.form.submitIssue() }));
 		this.newReport = this._register(new Button(actions, { label: localize('issue.newReport', 'New report'), onClick: () => { this.form.reset(); this.title.focus(); } }));
 		this.created = h(document, 'a'); content.append(this.created); this.openLink(this.created);

@@ -22,16 +22,18 @@ suite('Electron IPC acquisition', () => {
 			send: () => { throw new Error('Unexpected send'); },
 			invoke: (channel, ...args) => {
 				assert.equal(channel, 'ash:ipc:connect');
-				nonce = (args[0] as { nonce: string }).nonce;
+				nonce = (args[0] as { nonce: string; }).nonce;
 				assert.ok(registrations.has(nonce));
 				return new Promise(resolve => { replyToMain = () => resolve(undefined); });
 			},
-			on: () => ({ dispose() {} }),
+			on: () => ({ dispose() { } }),
 		},
-		ipcMessagePort: { acquire: (channel, value) => {
-			assert.equal(channel, 'ash:ipc:port'); registrations.add(value);
-			return { dispose: () => { registrations.delete(value); } };
-		} },
+		ipcMessagePort: {
+			acquire: (channel, value) => {
+				assert.equal(channel, 'ash:ipc:port'); registrations.add(value);
+				return { dispose: () => { registrations.delete(value); } };
+			}
+		},
 		process: { platform: process.platform, arch: process.arch },
 		webUtils: { getPathForFile: () => '' },
 	};
@@ -48,7 +50,7 @@ suite('Electron IPC acquisition', () => {
 	setup(() => {
 		tracker = new DisposableTracker(); tracking = installDisposableTracker(tracker);
 		globals.ipcRenderer.invoke = (channel, ...args) => {
-			assert.equal(channel, 'ash:ipc:connect'); nonce = (args[0] as { nonce: string }).nonce;
+			assert.equal(channel, 'ash:ipc:connect'); nonce = (args[0] as { nonce: string; }).nonce;
 			assert.ok(registrations.has(nonce));
 			return new Promise((resolve, reject) => { replyToMain = () => resolve(undefined); failMain = reject; });
 		};

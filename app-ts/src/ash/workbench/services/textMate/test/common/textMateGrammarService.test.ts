@@ -50,7 +50,7 @@ test("grammar service preserves the last good catalog when a loader fails", asyn
 		loadGrammar: () => grammar("source.alpha"),
 	});
 	const previous = await service.whenReady();
-	const failures: { revision: number; error: unknown }[] = [];
+	const failures: { revision: number; error: unknown; }[] = [];
 	using listener = service.onDidFailCatalog(failure => failures.push(failure));
 	using broken = service.registerGrammar({
 		scopeName: "source.broken",

@@ -100,7 +100,9 @@
 	background: var(--ash-settings-row-hover-background);
 }
 
-.ash-sessions-settings-navigation-item.is-current { background: var(--ash-sessions-selection-background); }
+.ash-sessions-settings-navigation-item.is-current {
+	background: var(--ash-sessions-selection-background);
+}
 
 .ash-sessions-settings-page {
 	grid-column: 2;
@@ -153,7 +155,8 @@
 		grid-row: 1;
 		max-height: 180px;
 		border-right: 0;
-		border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+		border-bottom: var(--ash-stroke-thickness) solid
+			var(--ash-widget-border);
 	}
 
 	.ash-sessions-settings-page {

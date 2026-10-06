@@ -103,9 +103,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-				executeServerCommand: (invocation) => invocation.name === "advisor" && !invocation.argumentsText.trim()
-					? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
-					: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
+			executeServerCommand: (invocation) => invocation.name === "advisor" && !invocation.argumentsText.trim()
+				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
+				: this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
 			selectReasoningEffort: effort => this.model.selectReasoningEffort(effort),
@@ -161,7 +161,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.inputPart.addContext(attachment);
 	}
 
-	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.inputPart.captureDraft();
 	}
 
@@ -309,7 +309,7 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 	return undefined;
 }
 
-function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[] } | undefined {
+function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[]; } | undefined {
 	const match = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?$/i.exec(target);
 	if (!match) return undefined;
 	let id: string;

@@ -128,7 +128,7 @@ abstract class ConvenientObservable<T> implements IObservable<T> {
 }
 
 class ConstantObservable<T> extends ConvenientObservable<T> {
-	readonly onDidChange: Event<T> = () => toDisposable(() => {});
+	readonly onDidChange: Event<T> = () => toDisposable(() => { });
 
 	constructor(private readonly value: T) {
 		super();
@@ -180,7 +180,7 @@ class EventObservable extends ConvenientObservable<void> {
 		this.onDidChange = listener => event(() => listener(undefined));
 	}
 
-	get(): void {}
+	get(): void { }
 }
 
 class EventValueObservable<T> extends ConvenientObservable<T> {

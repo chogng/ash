@@ -55,7 +55,7 @@ const contextMenuService: IContextMenuService = {
 		shownProfileActions = options.getActions?.() ?? [];
 		shownProfileAnchor = options.getAnchor();
 	},
-	hideContextMenu() {},
+	hideContextMenu() { },
 };
 
 test("Terminal profile menu launches the selected shell profile", async () => {
@@ -78,8 +78,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 			createdProfiles.push(profileId);
 		},
 		focusActive: () => focusCount++,
-		relaunchActive() {},
-		killActive() {},
+		relaunchActive() { },
+		killActive() { },
 		clearActive: () => clearCount++,
 	});
 	const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };

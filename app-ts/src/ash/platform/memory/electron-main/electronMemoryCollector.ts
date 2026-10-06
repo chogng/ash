@@ -33,7 +33,7 @@ export async function collectElectronMemory(window: BrowserWindow): Promise<Memo
 			Promise.all([contents.debugger.sendCommand('Runtime.getHeapUsage'), contents.debugger.sendCommand('Memory.getDOMCounters')]),
 			new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Memory collection timed out')), 2000); }),
 		]);
-		const [heap, dom] = values as [{ usedSize: number }, { nodes: number; jsEventListeners: number }];
+		const [heap, dom] = values as [{ usedSize: number; }, { nodes: number; jsEventListeners: number; }];
 		for (const [kind, value] of [['javaScriptHeapBytes', heap.usedSize], ['domNodes', dom.nodes], ['eventListeners', dom.jsEventListeners]] as const) {
 			renderer.metrics.push(Number.isSafeInteger(value) && value >= 0 ? { kind, value, unavailable: null } : { kind, value: null, unavailable: 'readFailed' });
 		}

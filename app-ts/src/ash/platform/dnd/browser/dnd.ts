@@ -12,9 +12,9 @@ export const CodeDataTransfers = {
 
 /** Returns the desktop path associated with a browser File, when available. */
 export function getPathForFile(file: File): string | undefined {
-	const legacyPath = (file as File & { readonly path?: unknown }).path;
+	const legacyPath = (file as File & { readonly path?: unknown; }).path;
 	if (typeof legacyPath === "string" && legacyPath.length > 0) return legacyPath;
-	const globals = (globalThis as typeof globalThis & { readonly ash?: ISandboxGlobals }).ash;
+	const globals = (globalThis as typeof globalThis & { readonly ash?: ISandboxGlobals; }).ash;
 	if (!globals?.webUtils) return undefined;
 	const path = globals.webUtils.getPathForFile(file);
 	return path.length > 0 ? path : undefined;
@@ -33,7 +33,7 @@ export class LocalSelectionTransfer<T> {
 	private data: readonly T[] | undefined;
 	private token: object | undefined;
 
-	private constructor() {}
+	private constructor() { }
 
 	static getInstance<T>(): LocalSelectionTransfer<T> {
 		return LocalSelectionTransfer.instance as LocalSelectionTransfer<T>;

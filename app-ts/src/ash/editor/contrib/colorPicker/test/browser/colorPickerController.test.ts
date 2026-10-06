@@ -28,7 +28,7 @@ test('color hover waits for the committed color presentation and rejects it afte
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('#f00');
 	using features = new LanguageFeaturesService();
-	const requests: { signal: AbortSignal; complete: () => void }[] = [];
+	const requests: { signal: AbortSignal; complete: () => void; }[] = [];
 	using registration = features.colorProvider.register('*', {
 		provideDocumentColors: () => [{ range: new Range(1, 1, 1, 5), color: { red: 1, green: 0, blue: 0, alpha: 1 } }],
 		provideColorPresentations: (request, signal) => new Promise(resolve => requests.push({ signal, complete: () => resolve([{ label: request.color.green > 0.5 ? '#00ff00' : '#ff0000', textEdit: { range: request.range, text: request.color.green > 0.5 ? '#00ff00' : '#ff0000' } }]) })),
@@ -268,7 +268,7 @@ test('color picker guesses the document format from the first current result aft
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('#f00');
 	using features = new LanguageFeaturesService();
-	const requests: { signal: AbortSignal; complete: () => void }[] = [];
+	const requests: { signal: AbortSignal; complete: () => void; }[] = [];
 	using registration = features.colorProvider.register('*', {
 		provideDocumentColors: () => [{ range: new Range(1, 1, 1, 5), color: { red: 1, green: 0, blue: 0, alpha: 1 } }],
 		provideColorPresentations: (request, signal) => new Promise(resolve => requests.push({

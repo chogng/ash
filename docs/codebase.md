@@ -27,26 +27,26 @@ flowchart TD
 
 ## 所有权
 
-| 能力 | Codebase | Cloud Codebase |
-| --- | --- | --- |
-| 目录扫描、ignore、切分和源码 revision | 拥有 | 不拥有 |
-| 全文、符号和设备内向量数据 | 拥有 | 不拥有 |
-| 云端语义索引与查询 | 不拥有 | 拥有 |
-| 当前源码复核、融合和 byte budget | 拥有 | 不拥有 |
-| 外发授权、同步 generation 和远端删除 | 不拥有 | 拥有 |
+| 能力                                  | Codebase | Cloud Codebase |
+| ------------------------------------- | -------- | -------------- |
+| 目录扫描、ignore、切分和源码 revision | 拥有     | 不拥有         |
+| 全文、符号和设备内向量数据            | 拥有     | 不拥有         |
+| 云端语义索引与查询                    | 不拥有   | 拥有           |
+| 当前源码复核、融合和 byte budget      | 拥有     | 不拥有         |
+| 外发授权、同步 generation 和远端删除  | 不拥有   | 拥有           |
 
 Config 只保存模型引用和行为意图。Secret Store 保存凭据。可重建索引由 Codebase Store 保存；
 Cloud grant、同步 generation、撤销和待删除状态由 Cloud Codebase state 保存。
 
 ## 身份与持久化
 
-| 键 | 含义 |
-| --- | --- |
-| `DirId` | 环境内规范化目录的稳定身份 |
-| chunk key + source revision + content hash | 当前代码片段身份 |
-| `EmbeddingIndexKey` | encoder、embedding model 与非敏感配置摘要 |
-| `CloudCodebaseGrantId` | 一次明确外发授权和删除边界 |
-| `CloudCodebaseId` | 服务端长期 Codebase 身份 |
+| 键                                         | 含义                                      |
+| ------------------------------------------ | ----------------------------------------- |
+| `DirId`                                    | 环境内规范化目录的稳定身份                |
+| chunk key + source revision + content hash | 当前代码片段身份                          |
+| `EmbeddingIndexKey`                        | encoder、embedding model 与非敏感配置摘要 |
+| `CloudCodebaseGrantId`                     | 一次明确外发授权和删除边界                |
+| `CloudCodebaseId`                          | 服务端长期 Codebase 身份                  |
 
 ```text
 <profile>/

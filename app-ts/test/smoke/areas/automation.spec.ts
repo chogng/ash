@@ -99,7 +99,7 @@ test('a failed dialog choice cancels the request and permits the next confirmati
 	await expect(tab).toHaveCount(0);
 });
 
-test('failed browser navigation closes the allocated browser', async ({}, testInfo) => {
+test('failed browser navigation closes the allocated browser', async ({ }, testInfo) => {
 	test.skip(testInfo.project.name !== 'browser-ui', 'Checks the Web launcher without a backend.');
 	const launch = chromium.launch;
 	let browser: Browser | undefined;
@@ -152,7 +152,7 @@ for (const scenario of ['first', 'second']) {
 }
 
 
-test('an Electron restoration timeout closes its process before rejecting launch', async ({}, testInfo) => {
+test('an Electron restoration timeout closes its process before rejecting launch', async ({ }, testInfo) => {
 	test.skip(!testInfo.project.name.startsWith('electron-'), 'Checks the desktop process lifecycle.');
 	const directory = await mkdtemp(join(tmpdir(), 'ash-startup-'));
 	const launch = _electron.launch;
@@ -167,7 +167,7 @@ test('an Electron restoration timeout closes its process before rejecting launch
 	Workbench.prototype.waitForReady = async function () {
 		await waitForReady.call(this);
 		reachedRestoration = true;
-		await new Promise<void>(() => {});
+		await new Promise<void>(() => { });
 	};
 	try {
 		await expect(launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 })).rejects.toThrow('Workbench startup timed out');
@@ -214,7 +214,7 @@ test('Electron window waits report a locked desktop instead of a focus timeout',
 	}
 });
 
-test('a pending Dock request does not block the first desktop window', async ({}, testInfo) => {
+test('a pending Dock request does not block the first desktop window', async ({ }, testInfo) => {
 	test.skip(process.platform !== 'darwin' || !testInfo.project.name.startsWith('electron-'), 'Checks macOS application startup.');
 	const directory = await mkdtemp(join(tmpdir(), 'ash-dock-'));
 	const desktopDirectory = resolve(import.meta.dirname, '../../..');
@@ -230,7 +230,7 @@ test('a pending Dock request does not block the first desktop window', async ({}
 		const running = await launchElectron({ appServerMode: 'disabled', userDataDirectory: directory, startupTimeout: 10_000 });
 		try {
 			expect(await running.application.evaluate(({ app }) => ({
-				installed: (globalThis as typeof globalThis & { ashTestDockInstalled?: boolean }).ashTestDockInstalled,
+				installed: (globalThis as typeof globalThis & { ashTestDockInstalled?: boolean; }).ashTestDockInstalled,
 				visible: app.dock!.isVisible(),
 			}))).toEqual({ installed: true, visible: true });
 			await expect(running.driver.workbench.element).toBeVisible();
@@ -243,7 +243,7 @@ test('a pending Dock request does not block the first desktop window', async ({}
 	}
 });
 
-test('an Electron shutdown that refuses to quit terminates its owned process tree', async ({}, testInfo) => {
+test('an Electron shutdown that refuses to quit terminates its owned process tree', async ({ }, testInfo) => {
 	test.skip(!testInfo.project.name.startsWith('electron-'), 'Checks the desktop process lifecycle.');
 	const directory = await mkdtemp(join(tmpdir(), 'ash-shutdown-'));
 	try {
@@ -251,7 +251,7 @@ test('an Electron shutdown that refuses to quit terminates its owned process tre
 		const child = running.application.process();
 		let closing: Promise<void> | undefined;
 		try {
-			await running.application.evaluate(({ app }) => { app.quit = () => {}; });
+			await running.application.evaluate(({ app }) => { app.quit = () => { }; });
 			closing = running.close();
 			await expect(closing).rejects.toThrow('process tree was terminated');
 			expect(child.exitCode !== null || child.signalCode !== null).toBe(true);

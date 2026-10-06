@@ -47,7 +47,7 @@ export class BlockDecorations extends ViewPart {
 		return true;
 	}
 
-	public override prepareRender(_context: RenderingContext): void {}
+	public override prepareRender(_context: RenderingContext): void { }
 
 	public render(context: RestrictedRenderingContext): void {
 		let count = 0;

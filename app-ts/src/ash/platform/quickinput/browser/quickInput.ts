@@ -43,7 +43,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
-	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>());
+	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>());
 	private readonly options: BrowserQuickInputHostOptions;
 	private visible = false;
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');

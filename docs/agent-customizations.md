@@ -22,22 +22,22 @@ Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 
 内置 Agent 不是 `.ash` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
 
-| 用户想表达什么 | Ash 对象 | 何时进入运行时 | 典型入口 |
-| --- | --- | --- | --- |
-| “在这个环境里应长期遵循什么” | Instructions | 全局、上下文匹配或显式按需加载 | 自动解析或用户选择 |
-| “这类工作应该怎样完成” | Skills | 被用户选择或模型匹配后渐进加载 | picker、`$name` 或模型选择 |
-| “由哪种执行配置来工作” | Agents | 启动会话入口、委托执行或工作流阶段时冻结配置引用 | Agent 选择器、委托或工作流 |
-| “现在请完成这件事” | 当前 Turn 的用户输入 | 构造本次 `ModelRequest` 时 | 普通消息 |
-| “快速调用某个能力” | 不是新对象 | `$name` 选择已有 Skill，`/name` 调用产品命令 | `$review`、`/status` |
-| “把别的 Agent 配置带进来” | Import workflow | 用户确认并由目标 authority 发布后 | Desktop import |
+| 用户想表达什么               | Ash 对象             | 何时进入运行时                                   | 典型入口                   |
+| ---------------------------- | -------------------- | ------------------------------------------------ | -------------------------- |
+| “在这个环境里应长期遵循什么” | Instructions         | 全局、上下文匹配或显式按需加载                   | 自动解析或用户选择         |
+| “这类工作应该怎样完成”       | Skills               | 被用户选择或模型匹配后渐进加载                   | picker、`$name` 或模型选择 |
+| “由哪种执行配置来工作”       | Agents               | 启动会话入口、委托执行或工作流阶段时冻结配置引用 | Agent 选择器、委托或工作流 |
+| “现在请完成这件事”           | 当前 Turn 的用户输入 | 构造本次 `ModelRequest` 时                       | 普通消息                   |
+| “快速调用某个能力”           | 不是新对象           | `$name` 选择已有 Skill，`/name` 调用产品命令     | `$review`、`/status`       |
+| “把别的 Agent 配置带进来”    | Import workflow      | 用户确认并由目标 authority 发布后                | Desktop import             |
 
 ## 1. 领域对象只有三类
 
-| 对象 | 回答的问题 | 拥有 | 明确不拥有 |
-| --- | --- | --- | --- |
-| Instructions | Agent 应遵循什么长期或作用域指导？ | 指令正文、作用范围、加载策略、优先级来源和内容摘要 | 可执行脚本、工具授权、模型调用本身 |
-| Skills | Agent 如何完成一类可复用工作？ | `SKILL.md`、渐进加载、引用资源、选择策略和来源身份 | 工具实现、脚本执行权限、当前任务实例 |
-| Agents | 使用什么执行配置？ | 模型/工具/Skill/Instruction 的类型化引用、执行角色和委托约束 | Thread 运行时身份、凭据、批准或工具实现 |
+| 对象         | 回答的问题                         | 拥有                                                         | 明确不拥有                              |
+| ------------ | ---------------------------------- | ------------------------------------------------------------ | --------------------------------------- |
+| Instructions | Agent 应遵循什么长期或作用域指导？ | 指令正文、作用范围、加载策略、优先级来源和内容摘要           | 可执行脚本、工具授权、模型调用本身      |
+| Skills       | Agent 如何完成一类可复用工作？     | `SKILL.md`、渐进加载、引用资源、选择策略和来源身份           | 工具实现、脚本执行权限、当前任务实例    |
+| Agents       | 使用什么执行配置？                 | 模型/工具/Skill/Instruction 的类型化引用、执行角色和委托约束 | Thread 运行时身份、凭据、批准或工具实现 |
 
 三类对象不能按文件扩展名区分语义，也不能合并成一个泛化的 `PromptArtifact`。它们会以不同方式
 参与上下文和执行，因此需要独立 authority、校验与 snapshot。
@@ -56,12 +56,12 @@ Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 
 一个 artifact 的类型不能同时承担“从哪里来”和“何时加载”。目标模型必须分别表达：
 
-| 轴 | 典型取值 | 决定什么 |
-| --- | --- | --- |
-| Artifact kind | Instructions / Skills / Agents | 对象结构、authority 与 runtime contribution |
-| Scope/source | Built-in / User / Directory / Plugin | 生命周期、优先级、可写位置与失效方式 |
-| Provenance | Ash 原生格式 / 从外部生态导入 | 审计、冲突解释和重新导入来源 |
-| Activation policy | 按对象类型定义的 named enum | 自动加载、上下文匹配、用户调用或模型选择 |
+| 轴                | 典型取值                             | 决定什么                                    |
+| ----------------- | ------------------------------------ | ------------------------------------------- |
+| Artifact kind     | Instructions / Skills / Agents       | 对象结构、authority 与 runtime contribution |
+| Scope/source      | Built-in / User / Directory / Plugin | 生命周期、优先级、可写位置与失效方式        |
+| Provenance        | Ash 原生格式 / 从外部生态导入        | 审计、冲突解释和重新导入来源                |
+| Activation policy | 按对象类型定义的 named enum          | 自动加载、上下文匹配、用户调用或模型选择    |
 
 “Imported”不是 User/Directory 的替代 scope。导入后的对象仍属于明确的 User 或 Directory
 authority，同时保留外部生态、来源位置 identity 和 digest 等 provenance。Plugin 贡献继续由
@@ -128,13 +128,13 @@ Skill 统一使用 `$name` 选择器，产品 Slash Command 不注册 Skill 的�
 中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
 extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义。`spawn_agent` 在委托安全点选择并冻结目录定义；新聊天可从已授权的环境目录列出定义，并在创建根 Session 时选择精确来源。已有 Session 的角色不会因选择器操作而改变；工作流入口仍需单独接入。
 
-| Scope/source | 物理 owner | 是否经过 `external-agent-migration` |
-| --- | --- | --- |
-| Built-in | release/package resources | ❌ 原生 authority 直接加载 |
-| User | `<profile_root>/{AGENTS.md,ASH.md,instructions/}` | ❌ 原生 authority 直接加载 |
-| Directory | `<dir_root>/{AGENTS.md,ASH.md,.ash/}` | ❌ 原生 authority 直接加载 |
-| Plugin | Plugin package contribution | ❌ 由 Plugin snapshot 交给目标 authority |
-| External ecosystem | `.codex`、`.agents`、`.claude` 等已知布局 | ✅ 只经 `external-agent-migration` |
+| Scope/source       | 物理 owner                                        | 是否经过 `external-agent-migration`      |
+| ------------------ | ------------------------------------------------- | ---------------------------------------- |
+| Built-in           | release/package resources                         | ❌ 原生 authority 直接加载               |
+| User               | `<profile_root>/{AGENTS.md,ASH.md,instructions/}` | ❌ 原生 authority 直接加载               |
+| Directory          | `<dir_root>/{AGENTS.md,ASH.md,.ash/}`             | ❌ 原生 authority 直接加载               |
+| Plugin             | Plugin package contribution                       | ❌ 由 Plugin snapshot 交给目标 authority |
+| External ecosystem | `.codex`、`.agents`、`.claude` 等已知布局         | ✅ 只经 `external-agent-migration`       |
 
 `<profile_root>` 本身已经是 Ash 的用户级命名空间，因此不再嵌套一个 `~/.ash` 兼容目录。
 Directory `.ash` 继续作为受保护 metadata；普通文件搜索、Agent 工具写入和外部 source
@@ -170,15 +170,15 @@ flowchart LR
     agent --> runtime
 ```
 
-| 责任 | `external-agent-migration` | App Server coordinator | 目标 authority |
-| --- | --- | --- | --- |
-| 已知外部路径与敏感排除 | ✅ | ❌ | ❌ |
-| source-specific bounded parser | ✅ | ❌ | ❌ |
-| normalized preview fragment 与 provenance | ✅ | 组合 | 最终复核 |
-| 用户选择、冲突预览与 apply orchestration | ❌ | ✅（Proposed） | 提供 prepare/publish contract |
-| Ash canonical schema 与领域校验 | ❌ | ❌ | ✅ |
-| `.ash` 原生发现与加载 | ❌ | 协调 snapshot | ✅ |
-| 持久化、enablement 与 runtime activation | ❌ | 调用 | ✅ |
+| 责任                                      | `external-agent-migration` | App Server coordinator | 目标 authority                |
+| ----------------------------------------- | -------------------------- | ---------------------- | ----------------------------- |
+| 已知外部路径与敏感排除                    | ✅                         | ❌                     | ❌                            |
+| source-specific bounded parser            | ✅                         | ❌                     | ❌                            |
+| normalized preview fragment 与 provenance | ✅                         | 组合                   | 最终复核                      |
+| 用户选择、冲突预览与 apply orchestration  | ❌                         | ✅（Proposed）         | 提供 prepare/publish contract |
+| Ash canonical schema 与领域校验           | ❌                         | ❌                     | ✅                            |
+| `.ash` 原生发现与加载                     | ❌                         | 协调 snapshot          | ✅                            |
+| 持久化、enablement 与 runtime activation  | ❌                         | 调用                   | ✅                            |
 
 parser 输出必须是目标明确、可审查的 typed fragment，例如 Instruction、Skill source、Agent
 definition 或 Config mutation fragment；不能输出一段“以后再解释”的原始 JSON/Markdown。外部字段
@@ -192,10 +192,10 @@ definition 或 Config mutation fragment；不能输出一段“以后再解释�
 
 ## 5. Import 与来源注册不等价
 
-| 操作 | 权威正文在哪里 | 外部变化是否自动影响 Ash | 撤销语义 | 适合对象 |
-| --- | --- | --- | --- | --- |
-| Import | Ash 原生 authority | ❌，再次导入需显式触发 | 删除/回滚 Ash artifact 或 import receipt | Instructions、Agents、需要独立管理的 Skills |
-| Register source | 外部只读 root | ✅，刷新后产生新 catalog generation | 禁用或移除 source | 当前已支持的 standalone Skill source |
+| 操作            | 权威正文在哪里     | 外部变化是否自动影响 Ash            | 撤销语义                                 | 适合对象                                    |
+| --------------- | ------------------ | ----------------------------------- | ---------------------------------------- | ------------------------------------------- |
+| Import          | Ash 原生 authority | ❌，再次导入需显式触发              | 删除/回滚 Ash artifact 或 import receipt | Instructions、Agents、需要独立管理的 Skills |
+| Register source | 外部只读 root      | ✅，刷新后产生新 catalog generation | 禁用或移除 source                        | 当前已支持的 standalone Skill source        |
 
 两条路径可以复用相同的外部 discovery、containment 和 parser，但不能共享生命周期决定：
 
@@ -228,20 +228,20 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 
 ## 7. 当前状态与实施顺序
 
-| 能力 | 状态 | 实现证据或前置条件 |
-| --- | --- | --- |
-| `.ash/config.toml` Directory intent | 已实现 | `ash-config` / App Server local composition |
-| Skill built-in/user/Directory catalog 与 enablement | 已实现 | `ash-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
-| Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors |
-| Skill metadata 自动 selector | 已实现 | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文 |
-| Codex/Claude known-path inspection | 已实现 | `external-agent-migration::inspect_agent_paths` |
-| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现 |
-| User Instructions authority | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现 |
-| Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现 |
-| Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；独立管理界面未实现 |
-| `.ash/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
-| External parser、preview 与 apply | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成 |
-| `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
+| 能力                                                             | 状态     | 实现证据或前置条件                                                                                                                            |
+| ---------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.ash/config.toml` Directory intent                              | 已实现   | `ash-config` / App Server local composition                                                                                                   |
+| Skill built-in/user/Directory catalog 与 enablement              | 已实现   | `ash-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md)                                                                     |
+| Skill activation snapshot 与通用 context injection               | 已实现   | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors                                                                 |
+| Skill metadata 自动 selector                                     | 已实现   | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文                                                                                |
+| Codex/Claude known-path inspection                               | 已实现   | `external-agent-migration::inspect_agent_paths`                                                                                               |
+| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现                             |
+| User Instructions authority                                      | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现                                               |
+| Directory Instructions authority                                 | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现                                         |
+| Directory Agents authority                                       | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；独立管理界面未实现 |
+| `.ash/{instructions,skills,agents}` loader                       | 已实现   | 固定 roots、有界校验、Directory activation 与 watcher refresh                                                                                 |
+| External parser、preview 与 apply                                | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成                                           |
+| `$name` Skill selector                                           | 已实现   | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文                                                    |
 
 `$create-instructions` 是创建或更新细分 Instruction 的内置 Skill，复用通用激活机制；`/init`
 保留为初始化 `ASH.md` 的产品命令。两者使用正常文件工具和目录授权；已有文件先读取再修改。

@@ -11,5 +11,5 @@ export interface IChecksumService {
 /** Only Main chooses the installed files. Renderers cannot request arbitrary paths. */
 export interface ApplicationChecksums {
 	readonly isBuilt: boolean;
-	readonly proof: readonly { readonly uri: UriComponents; readonly expected: string; readonly actual: string | null }[];
+	readonly proof: readonly { readonly uri: UriComponents; readonly expected: string; readonly actual: string | null; }[];
 }

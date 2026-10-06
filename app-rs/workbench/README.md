@@ -11,15 +11,15 @@ Sidebar Session item 的运行状态只来自 `Session.manager.status`，状态�
 [Ash Code Session Manager](../../code/tui/src/sessions/manager.rs) 保持一致。
 Workbench 不根据 terminal block、shell 进程退出或摘要文字推断状态，也不保存第二套状态。
 
-| `SessionManagerStatus` | Sidebar icon | 颜色 |
-| --- | --- | --- |
-| `Idle` | `CIRCLE_SMALL` | muted |
-| `NeedsInput` | `ENTER` | warning |
-| `Working` | `SYNC` | accent |
-| `ReadyForReview` | `CODE_REVIEW` | success |
-| `Completed` | `CIRCLE_SMALL_FILLED` | success |
-| `Failed` | `ERROR` | error |
-| `Stopped` | `PAUSE` | warning |
+| `SessionManagerStatus` | Sidebar icon          | 颜色    |
+| ---------------------- | --------------------- | ------- |
+| `Idle`                 | `CIRCLE_SMALL`        | muted   |
+| `NeedsInput`           | `ENTER`               | warning |
+| `Working`              | `SYNC`                | accent  |
+| `ReadyForReview`       | `CODE_REVIEW`         | success |
+| `Completed`            | `CIRCLE_SMALL_FILLED` | success |
+| `Failed`               | `ERROR`               | error   |
+| `Stopped`              | `PAUSE`               | warning |
 
 Session catalog 和 active Session snapshot 通过
 [`session_tab_input`](sidebarpart/session_input.rs) 把该状态写入 Sidebar item；

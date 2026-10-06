@@ -40,7 +40,7 @@ interface GridNodeHost {
 }
 
 abstract class GridNode {
-	constructor(readonly initialSize: number) {}
+	constructor(readonly initialSize: number) { }
 
 	abstract readonly element: HTMLElement;
 	parent: ParentLink | undefined;
@@ -57,9 +57,9 @@ abstract class GridNode {
 	abstract isVisible(): boolean;
 	abstract setDisplayed(visible: boolean): void;
 	abstract layout(width: number, height: number, top: number, left: number): void;
-	setBoundarySashes(_sashes: BoundarySashes): void {}
-	setEdgeSnapping(_enabled: boolean): void {}
-	setSashPresentation(_presentation: SashPresentation): void {}
+	setBoundarySashes(_sashes: BoundarySashes): void { }
+	setEdgeSnapping(_enabled: boolean): void { }
+	setSashPresentation(_presentation: SashPresentation): void { }
 }
 
 class LeafNode extends GridNode {
@@ -219,8 +219,8 @@ class BranchNode extends GridNode {
 		const leadingSize = beforeWidth !== undefined
 			? Math.round(beforeWidth)
 			: afterWidth !== undefined
-			? total - Math.round(afterWidth)
-			: undefined;
+				? total - Math.round(afterWidth)
+				: undefined;
 		this.splitView.resetSash(boundaryIndex, leadingSize);
 	}
 
@@ -279,7 +279,7 @@ class AxisView implements ISplitViewView {
 	constructor(
 		readonly node: GridNode,
 		readonly orientation: SplitViewOrientation,
-	) {}
+	) { }
 
 	get element(): HTMLElement { return this.node.element; }
 	get priority(): SplitViewLayoutPriority {

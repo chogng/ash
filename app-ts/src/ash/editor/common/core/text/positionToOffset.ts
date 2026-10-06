@@ -7,4 +7,4 @@ export { PositionOffsetTransformerBase, PositionOffsetTransformer } from './posi
 
 _setPositionOffsetTransformerDependencies({ StringEdit, StringReplacement, TextReplacement, TextEdit, TextLength });
 
-export function ensureDependenciesAreSet(): void {}
+export function ensureDependenciesAreSet(): void { }

@@ -9,10 +9,10 @@ import { SettingsNavigation, type SettingsCategoryDescriptor, type SettingsCateg
 import type { SettingsContentItem, SettingsTreeModel } from './settingsTreeModels.js';
 
 export type SettingsTOCEntry =
-	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsCategoryGroupDescriptor }
-	| { readonly kind: 'category'; readonly id: string; readonly category: SettingsCategoryDescriptor; readonly searchKeywords: readonly string[] };
+	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsCategoryGroupDescriptor; }
+	| { readonly kind: 'category'; readonly id: string; readonly category: SettingsCategoryDescriptor; readonly searchKeywords: readonly string[]; };
 
-export type SettingsTOCOpenEntry = Extract<SettingsTOCEntry, { readonly kind: 'category' }>;
+export type SettingsTOCOpenEntry = Extract<SettingsTOCEntry, { readonly kind: 'category'; }>;
 
 export interface TOCTreeOptions {
 	readonly ariaLabel: string;
@@ -24,7 +24,7 @@ export interface TOCTreeOptions {
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>) {}
+	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>) { }
 
 	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
 		return SettingsNavigation.map(entry => this.navigationElement(entry));

@@ -44,7 +44,7 @@ export abstract class ActionViewItem extends Disposable {
 	/** Controls whether this item is the ActionBar's page-level Tab stop. */
 	abstract setTabbable(tabbable: boolean): void;
 
-	focus(): void {}
+	focus(): void { }
 
 	/** Creates a Button using the shared delay group for adjacent actions. */
 	protected createButton(container: HTMLElement, options: ButtonOptions): Button {
@@ -206,7 +206,7 @@ export class SeparatorActionViewItem extends ActionViewItem {
 		container.setAttribute("role", "separator");
 	}
 
-	override setTabbable(_tabbable: boolean): void {}
+	override setTabbable(_tabbable: boolean): void { }
 }
 
 /** Creates the base representation used when a platform has no override. */

@@ -30,7 +30,7 @@ interface TerminalRecord {
 	cols: number;
 	generation: number;
 	recoveryDeadline?: number;
-	recovery?: { readonly generation: number; readonly promise: Promise<void> };
+	recovery?: { readonly generation: number; readonly promise: Promise<void>; };
 	closing: boolean;
 }
 
@@ -77,7 +77,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			lease = requireReconnectLease(result.reconnect);
 		} catch (error) {
 			if (result.terminalId) {
-				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(params.dirId), terminalId: result.terminalId }).catch(() => {});
+				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(params.dirId), terminalId: result.terminalId }).catch(() => { });
 			}
 			throw error;
 		}
@@ -249,7 +249,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 }
 
-function workspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+function workspaceFolder(dirId: string | undefined): { readonly dirId?: string; } {
 	return dirId === undefined ? {} : { dirId };
 }
 
@@ -260,7 +260,7 @@ function requireReconnectLease(value: TerminalReconnectLease | null): TerminalRe
 	return value;
 }
 
-class RecoverySupersededError extends Error {}
+class RecoverySupersededError extends Error { }
 
 function defaultReportError(message: string, error: unknown): void {
 	console.error(message, error);

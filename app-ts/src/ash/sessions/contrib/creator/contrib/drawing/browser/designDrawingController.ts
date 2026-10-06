@@ -19,7 +19,7 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changeEmitter.event;
 	private start: DesignPoint | undefined;
-	private nodes: { x: number; y: number; incoming: DesignPoint; outgoing: DesignPoint }[] = [];
+	private nodes: { x: number; y: number; incoming: DesignPoint; outgoing: DesignPoint; }[] = [];
 	private draft: DesignShape | undefined;
 	private isPen = false;
 	private isFreehand = false;

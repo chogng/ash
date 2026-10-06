@@ -13,17 +13,17 @@ Server DTO。
 
 ## 所有权与公共接口
 
-| API / type | 当前职责 | 明确不做 |
-| --- | --- | --- |
-| `SyntaxDocument` | 保存一个打开文档的 text、line index、parser、tree、revision 与 limits | 文件加载、保存、dirty state、并发调度 |
-| `SyntaxLanguage` | 选择 crate 内已注册且经过测试的 grammar/query 组合 | 接受任意 native grammar pointer 或用户 query |
-| `DocumentRevision` | 绑定宿主权威文本和派生 snapshot；更新时必须单调增加 | 充当磁盘 revision、Git identity 或全局 sequence |
-| `SyntaxEdit` | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete；`apply_edits` 原子接收同一旧 revision 上的非重叠 batch | 接受编辑器 UTF-16 position 或猜测编码 |
-| `SyntaxSnapshot` | 返回同一 revision 的 tokens、folds、symbols 与 diagnostics | 暴露 `tree_sitter::Tree`、`Node` 或跨语言统一 AST |
-| `SyntaxDocument::selection_ranges` | 按一个 exact UTF-8 byte range 返回有界、innermost-first named parser scopes | 把整棵 tree 放进普通 snapshot 或声称 semantic AST |
-| `AnalysisLimits` | 限制文档和派生 collection 的资源使用 | 限制宿主队列、IPC message 或 workspace 文件数 |
-| `SyntaxTokenKind` | 提供不含主题颜色的语言中立 highlight category | 决定主题、foreground 或 decoration layer |
-| `DocumentSymbol` | 表达 tree-sitter tags query 发现的语法声明 | 类型解析、跨文件 reference、rename 或 completion |
+| API / type                         | 当前职责                                                                                                         | 明确不做                                          |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `SyntaxDocument`                   | 保存一个打开文档的 text、line index、parser、tree、revision 与 limits                                            | 文件加载、保存、dirty state、并发调度             |
+| `SyntaxLanguage`                   | 选择 crate 内已注册且经过测试的 grammar/query 组合                                                               | 接受任意 native grammar pointer 或用户 query      |
+| `DocumentRevision`                 | 绑定宿主权威文本和派生 snapshot；更新时必须单调增加                                                              | 充当磁盘 revision、Git identity 或全局 sequence   |
+| `SyntaxEdit`                       | 以当前文档的 UTF-8 byte range 表达 replace/insert/delete；`apply_edits` 原子接收同一旧 revision 上的非重叠 batch | 接受编辑器 UTF-16 position 或猜测编码             |
+| `SyntaxSnapshot`                   | 返回同一 revision 的 tokens、folds、symbols 与 diagnostics                                                       | 暴露 `tree_sitter::Tree`、`Node` 或跨语言统一 AST |
+| `SyntaxDocument::selection_ranges` | 按一个 exact UTF-8 byte range 返回有界、innermost-first named parser scopes                                      | 把整棵 tree 放进普通 snapshot 或声称 semantic AST |
+| `AnalysisLimits`                   | 限制文档和派生 collection 的资源使用                                                                             | 限制宿主队列、IPC message 或 workspace 文件数     |
+| `SyntaxTokenKind`                  | 提供不含主题颜色的语言中立 highlight category                                                                    | 决定主题、foreground 或 decoration layer          |
+| `DocumentSymbol`                   | 表达 tree-sitter tags query 发现的语法声明                                                                       | 类型解析、跨文件 reference、rename 或 completion  |
 
 `SyntaxPoint.column` 和 `SyntaxRange.bytes` 都使用 UTF-8 byte offset。Desktop Stanza adapter 必须显式在
 UTF-16 position 与该 contract 之间转换；Native host 可以直接使用 byte range，但仍必须
@@ -31,15 +31,15 @@ UTF-16 position 与该 contract 之间转换；Native host 可以直接使用 by
 
 ## 内部接口与执行路径
 
-| private symbol | 精确职责 | 不能承担 |
-| --- | --- | --- |
-| `LanguageConfiguration::load` | 把 `SyntaxLanguage` 绑定到 grammar、highlights query 和 tags query | product language detection 或动态安装 grammar |
-| `LineIndex` | 以增量 line starts 把 byte offset 转换为 tree-sitter row/byte-column | Unicode display column 或 LSP position encoding |
-| `collect_tokens` | 运行 grammar highlight query、映射稳定 category 并应用结果上限 | 主题选择或编辑器 provider registration |
-| `collect_folding_ranges` | 从已解析 tree 的明确容器节点派生多行范围 | UI 折叠状态 |
-| `collect_selection_ranges` | 只沿 requested selection 的 named ancestor chain 收集 scopes | 全树遍历、selection history 或 edit application |
-| `collect_symbols` | 从 tags query 的 `definition.*` 与 `name` capture 构造声明 | workspace index lifecycle |
-| `collect_diagnostics` | 收集 error/missing node，并应用结果上限 | compiler diagnostics 或 quick fix |
+| private symbol                | 精确职责                                                             | 不能承担                                        |
+| ----------------------------- | -------------------------------------------------------------------- | ----------------------------------------------- |
+| `LanguageConfiguration::load` | 把 `SyntaxLanguage` 绑定到 grammar、highlights query 和 tags query   | product language detection 或动态安装 grammar   |
+| `LineIndex`                   | 以增量 line starts 把 byte offset 转换为 tree-sitter row/byte-column | Unicode display column 或 LSP position encoding |
+| `collect_tokens`              | 运行 grammar highlight query、映射稳定 category 并应用结果上限       | 主题选择或编辑器 provider registration          |
+| `collect_folding_ranges`      | 从已解析 tree 的明确容器节点派生多行范围                             | UI 折叠状态                                     |
+| `collect_selection_ranges`    | 只沿 requested selection 的 named ancestor chain 收集 scopes         | 全树遍历、selection history 或 edit application |
+| `collect_symbols`             | 从 tags query 的 `definition.*` 与 `name` capture 构造声明           | workspace index lifecycle                       |
+| `collect_diagnostics`         | 收集 error/missing node，并应用结果上限                              | compiler diagnostics 或 quick fix               |
 
 ```text
 SyntaxDocument::open / open_with_limits

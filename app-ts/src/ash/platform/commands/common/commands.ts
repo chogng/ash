@@ -43,7 +43,7 @@ export interface ICommandEvent {
 
 /** Stores realm-wide command definitions independently of their UI bindings. */
 export class CommandRegistry {
-	private readonly commands = new Map<CommandId, { readonly owner: object; readonly handler: CommandHandler }>();
+	private readonly commands = new Map<CommandId, { readonly owner: object; readonly handler: CommandHandler; }>();
 
 	register(id: CommandId, command: CommandHandler): IDisposable {
 		return this.registerMany([{ id, handler: command }]);

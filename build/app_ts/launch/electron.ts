@@ -12,8 +12,8 @@ if (watch) args.shift();
 const environment = { ...process.env };
 delete environment.ELECTRON_RUN_AS_NODE;
 if (watch) {
-  environment.ASH_HOME ??= resolve(sourceRoot, '../.build/app-ts/dev/profile');
-  if (!args.some(argument => argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '../.build/app-ts/dev/user-data')}`);
+	environment.ASH_HOME ??= resolve(sourceRoot, '../.build/app-ts/dev/profile');
+	if (!args.some(argument => argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '../.build/app-ts/dev/user-data')}`);
 }
 
 let electron: ChildProcess | undefined;
@@ -23,60 +23,60 @@ let restarting = false;
 let stopped = false;
 
 function launch(): void {
-  const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: 'inherit' });
-  electron = child;
-  child.once('error', error => { console.error(error); process.exitCode = 1; void stop(); });
-  child.once('exit', code => {
-    if (electron === child) electron = undefined;
-    if (!watch) process.exitCode = code ?? 1;
-  });
+	const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: 'inherit' });
+	electron = child;
+	child.once('error', error => { console.error(error); process.exitCode = 1; void stop(); });
+	child.once('exit', code => {
+		if (electron === child) electron = undefined;
+		if (!watch) process.exitCode = code ?? 1;
+	});
 }
 
 async function restart(): Promise<void> {
-  if (restarting) return;
-  restarting = true;
-  try {
-    while (ready && !stopped) {
-      if (electron) await stopElectron(electron);
-      if (!ready || stopped) break;
-      ready = false;
-      launch();
-    }
-  } finally {
-    restarting = false;
-  }
+	if (restarting) return;
+	restarting = true;
+	try {
+		while (ready && !stopped) {
+			if (electron) await stopElectron(electron);
+			if (!ready || stopped) break;
+			ready = false;
+			launch();
+		}
+	} finally {
+		restarting = false;
+	}
 }
 
 function stopElectron(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
-  return new Promise(resolvePromise => {
-    const timeout = setTimeout(() => child.kill('SIGKILL'), 5_000);
-    child.once('close', () => { clearTimeout(timeout); resolvePromise(); });
-    child.kill('SIGTERM');
-  });
+	if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+	return new Promise(resolvePromise => {
+		const timeout = setTimeout(() => child.kill('SIGKILL'), 5_000);
+		child.once('close', () => { clearTimeout(timeout); resolvePromise(); });
+		child.kill('SIGTERM');
+	});
 }
 
 async function stop(): Promise<void> {
-  if (stopped) return;
-  stopped = true;
-  await Promise.all([watcher?.close(), electron ? stopElectron(electron) : undefined]);
+	if (stopped) return;
+	stopped = true;
+	await Promise.all([watcher?.close(), electron ? stopElectron(electron) : undefined]);
 }
 
 process.once('SIGINT', () => { void stop(); });
 process.once('SIGTERM', () => { void stop(); });
 if (watch) {
-  watcher = await watchHost(current => {
-    ready = current;
-    if (ready) void restart();
-  });
-  if (stopped) await watcher.close();
-  try {
-    await watcher.done;
-  } catch (error) {
-    console.error(error);
-    process.exitCode = 1;
-    await stop();
-  }
+	watcher = await watchHost(current => {
+		ready = current;
+		if (ready) void restart();
+	});
+	if (stopped) await watcher.close();
+	try {
+		await watcher.done;
+	} catch (error) {
+		console.error(error);
+		process.exitCode = 1;
+		await stop();
+	}
 } else {
-  launch();
+	launch();
 }

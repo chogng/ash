@@ -55,11 +55,11 @@ interface VariableEdit {
 type DebugOperation = "start" | "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut" | "stop" | "stopAll";
 
 type BreakpointEditorState =
-	| { readonly kind: "source"; readonly breakpoint: IDebugBreakpoint }
-	| { readonly kind: "function"; readonly breakpoint?: IFunctionBreakpoint }
-	| { readonly kind: "data"; readonly breakpoint: IDataBreakpoint; readonly options?: never }
-	| { readonly kind: "data"; readonly breakpoint?: undefined; readonly options: IDataBreakpointOptions }
-	| { readonly kind: "instruction"; readonly breakpoint?: IInstructionBreakpoint; readonly instructionReference: string };
+	| { readonly kind: "source"; readonly breakpoint: IDebugBreakpoint; }
+	| { readonly kind: "function"; readonly breakpoint?: IFunctionBreakpoint; }
+	| { readonly kind: "data"; readonly breakpoint: IDataBreakpoint; readonly options?: never; }
+	| { readonly kind: "data"; readonly breakpoint?: undefined; readonly options: IDataBreakpointOptions; }
+	| { readonly kind: "instruction"; readonly breakpoint?: IInstructionBreakpoint; readonly instructionReference: string; };
 
 /** Code Debug sidebar with multi-session inspection, recursive variables, watches, and exceptions. */
 export class DebugViewPane extends ViewPane {
@@ -95,7 +95,7 @@ export class DebugViewPane extends ViewPane {
 	private readonly instructionToolbar: WorkbenchToolBar;
 	private readonly breakpointItems = this._register(new DisposableMap<string, DebugBreakpointItem>());
 	private readonly breakpointEditControls = this._register(new MutableDisposable<DisposableStore>());
-	private breakpointEdit: { readonly id?: string; readonly form: HTMLFormElement; readonly sessionId?: string } | undefined;
+	private breakpointEdit: { readonly id?: string; readonly form: HTMLFormElement; readonly sessionId?: string; } | undefined;
 	private readonly exceptionControls = this._register(new DisposableStore());
 	private threads: readonly IDebugThread[] = [];
 	private frames: readonly IDebugStackFrame[] = [];

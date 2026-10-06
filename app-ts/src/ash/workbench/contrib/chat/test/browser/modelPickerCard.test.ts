@@ -70,7 +70,7 @@ test('Model card saves the context window while retaining both switches across c
 
 test('Model card hides fixed capacity and disables unsupported preferences', () => {
 	using card = new ModelCard(environment.window.document);
-	card.update({ entry: { ...entry, contextWindow: 500_000, contextWindowOptions: [500_000], maximumContextWindow: 500_000, supportsFast: false }, setPreferences: async () => {} });
+	card.update({ entry: { ...entry, contextWindow: 500_000, contextWindowOptions: [500_000], maximumContextWindow: 500_000, supportsFast: false }, setPreferences: async () => { } });
 	assert.equal(card.domNode.querySelector<HTMLInputElement>('input[aria-label="Fast"]')!.disabled, true);
 	assert.equal((card.domNode.querySelector('.ash-chat-model-card-context') as HTMLElement).hidden, true);
 	assert.equal(card.domNode.textContent, 'Fast');
@@ -107,7 +107,7 @@ for (const locale of ['en', 'zh-CN']) {
 		setNlsMessages(locale, catalog.bundles);
 		try {
 			using card = new ModelCard(environment.window.document);
-			card.update({ entry: { ...entry, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' } }, setPreferences: async () => {} });
+			card.update({ entry: { ...entry, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' } }, setPreferences: async () => { } });
 			const input = card.domNode.querySelector<HTMLInputElement>('input')!;
 			const description = locale === 'zh-CN' ? '响应更快，用量增加' : 'Faster responses, increased usage';
 			assert.equal(input.getAttribute('aria-label'), locale === 'zh-CN' ? '快速' : 'Fast');

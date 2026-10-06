@@ -92,8 +92,8 @@ export class GlobalCompositeBar extends Disposable {
 		const accountsLabel = this.label('workbench.accounts', 'Accounts');
 		const manageLabel = this.label('workbench.manage', 'Manage');
 		return [
-			...(this.accountsVisible && this.host.hasAppServer ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() {} }] : []),
-			{ id: 'ash.activityBar.manage', label: manageLabel, tooltip: manageLabel, icon: Lxicon.gear, enabled: true, run() {} },
+			...(this.accountsVisible && this.host.hasAppServer ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() { } }] : []),
+			{ id: 'ash.activityBar.manage', label: manageLabel, tooltip: manageLabel, icon: Lxicon.gear, enabled: true, run() { } },
 		];
 	}
 

@@ -8,7 +8,7 @@ import { observableSignalFromEvent } from "./observable.js";
 import { observableValue } from "./observable.js";
 
 // All versions share one slot; retaining the original import must not retain every replaced class.
-const replacements = new WeakMap<object, { current: unknown }>();
+const replacements = new WeakMap<object, { current: unknown; }>();
 
 /** Reads an export and invalidates the reader when its defining module reloads. */
 export function readHotReloadableExport<T>(value: T, reader: IReader | undefined): T {

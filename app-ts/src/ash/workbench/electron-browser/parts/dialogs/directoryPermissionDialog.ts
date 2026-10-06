@@ -55,7 +55,7 @@ export class DirectoryPermissionDialog extends Disposable implements IWorkspaceT
 	}
 }
 
-function parseDirectoryPermissionPrompt(value: unknown): Extract<DialogRequest, { readonly kind: 'prompt' }> {
+function parseDirectoryPermissionPrompt(value: unknown): Extract<DialogRequest, { readonly kind: 'prompt'; }> {
 	if (!isRecord(value) || value.kind !== 'prompt'
 		|| Object.keys(value).sort().join(',') !== 'cancelButton,detail,kind,message,primaryButton,secondaryButton,title'
 		|| typeof value.title !== 'string' || typeof value.message !== 'string'
@@ -63,5 +63,5 @@ function parseDirectoryPermissionPrompt(value: unknown): Extract<DialogRequest, 
 		|| typeof value.secondaryButton !== 'string' || typeof value.cancelButton !== 'string') {
 		throw new TypeError('Invalid directory permission prompt');
 	}
-	return value as unknown as Extract<DialogRequest, { readonly kind: 'prompt' }>;
+	return value as unknown as Extract<DialogRequest, { readonly kind: 'prompt'; }>;
 }

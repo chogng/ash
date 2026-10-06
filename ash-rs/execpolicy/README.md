@@ -11,14 +11,14 @@ execution grant。最终执行决定和 exact action binding 属于
 
 ## 公共契约
 
-| 类型 | 责任 |
-| --- | --- |
-| `ExecPolicySubject` | action digest、kind、可信来源、capability 与可选 command/network projection |
-| `ExecPolicySelector` | exact digest、source、command prefix、network、capability scope 与显式组合 |
-| `ExecPolicyLayer` | Host / Organization / User / Workspace rule collection |
-| `ExecPolicySnapshot` | validation、canonical layer ordering、semantic revision 与 deterministic evaluation |
-| `ExecPolicyEvaluation` | effective effect、exact source rule 与完整 matched-rule audit |
-| `ExecPolicyAmendment` | expected-revision 约束下的纯 User layer upsert/remove；不做文件 I/O |
+| 类型                   | 责任                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `ExecPolicySubject`    | action digest、kind、可信来源、capability 与可选 command/network projection         |
+| `ExecPolicySelector`   | exact digest、source、command prefix、network、capability scope 与显式组合          |
+| `ExecPolicyLayer`      | Host / Organization / User / Workspace rule collection                              |
+| `ExecPolicySnapshot`   | validation、canonical layer ordering、semantic revision 与 deterministic evaluation |
+| `ExecPolicyEvaluation` | effective effect、exact source rule 与完整 matched-rule audit                       |
+| `ExecPolicyAmendment`  | expected-revision 约束下的纯 User layer upsert/remove；不做文件 I/O                 |
 
 所有匹配规则中最严格的 effect 生效：`Deny > RequireSandbox > RequireApproval >
 AllowUnsandboxed > Continue`。因此较低信任层不能用 allow 覆盖更严格的上层约束。没有匹配时只
@@ -41,13 +41,13 @@ replacement；本 crate 只负责 typed document 的 validation、merge semantic
 
 ## 关键实现符号
 
-| Symbol | 职责 | 漂移信号 |
-| --- | --- | --- |
-| `ExecPolicySnapshot::new` | layer validation、network name normalization、canonical ordering 与 semantic revision | config adapter 自己实现第二套 hash/merge |
-| `ExecPolicySnapshot::evaluate` | selector match、effect precedence 与完整 audit | effect 直接变成 Tool authority |
-| `validate` | ID、rule 与 Workspace 不可扩权 invariant | Workspace layer 可产生 `AllowUnsandboxed` |
-| `ExecPolicySelector::matches` | 只匹配 host-materialized typed subject | 解析 summary 或 shell 字符串 |
-| `ExecPolicyAmendment::apply` | revision-bound User layer 纯变换 | 读取或写入 config/storage |
+| Symbol                         | 职责                                                                                  | 漂移信号                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `ExecPolicySnapshot::new`      | layer validation、network name normalization、canonical ordering 与 semantic revision | config adapter 自己实现第二套 hash/merge  |
+| `ExecPolicySnapshot::evaluate` | selector match、effect precedence 与完整 audit                                        | effect 直接变成 Tool authority            |
+| `validate`                     | ID、rule 与 Workspace 不可扩权 invariant                                              | Workspace layer 可产生 `AllowUnsandboxed` |
+| `ExecPolicySelector::matches`  | 只匹配 host-materialized typed subject                                                | 解析 summary 或 shell 字符串              |
+| `ExecPolicyAmendment::apply`   | revision-bound User layer 纯变换                                                      | 读取或写入 config/storage                 |
 
 `ash-config::compose_exec_policy` 是当前持久化/来源 adapter：User rules 位于用户 `config.toml`，
 Workspace rules 位于 strict-read `.ash/config.toml` 且只能收紧。App Server 在运行时安全点把它们与

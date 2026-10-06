@@ -1,4 +1,4 @@
-export {};
+export { };
 
 // These errors must remain errors in the same compilation as every common layer.
 // @ts-expect-error Window APIs are not part of the common runtime.
@@ -20,7 +20,7 @@ process;
 // @ts-expect-error Node modules must not leak into common code.
 import 'node:fs';
 
-const handle = setTimeout(() => {}, 0);
+const handle = setTimeout(() => { }, 0);
 clearTimeout(handle);
 // @ts-expect-error Shared timer handles cannot assume browser number handles.
 const browserHandle: number = handle;

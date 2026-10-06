@@ -17,7 +17,7 @@ export interface IPdfAnnotationStore {
 
 /** Persists versioned PDF annotations as a JSON companion file in the workspace. */
 export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
-	constructor(private readonly files: IFileService) {}
+	constructor(private readonly files: IFileService) { }
 
 	async load(resource: URI, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, "PDF annotation loading was cancelled");

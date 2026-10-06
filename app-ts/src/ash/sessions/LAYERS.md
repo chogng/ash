@@ -43,6 +43,7 @@ The sessions layer sits above `ash/workbench` in the Ash source code hierarchy. 
 The foundational layer. It may import from the sessions **services** layer, but not from any `contrib/` code above it.
 
 **Can import from:**
+
 - `ash/base/~`, `ash/base/parts/*/~`
 - `ash/platform/*/~`
 - `ash/editor/~`, `ash/editor/contrib/*/~`
@@ -52,6 +53,7 @@ The foundational layer. It may import from the sessions **services** layer, but 
 > **Note:** The desktop bootstrap entry `src/ash/sessions/electron-browser/sessions.ts` has its own, **more restrictive** rule: it may import only `ash/base/~`, `ash/base/parts/*/~`, `ash/platform/*/~`, `ash/sessions/~`, and `ash/sessions/sessions.desktop.main.js`.
 
 **Cannot import from:**
+
 - ❌ `ash/sessions/contrib/*` — no contrib dependencies
 - ❌ `ash/sessions/contrib/providers/*` — no provider dependencies
 
@@ -64,11 +66,13 @@ The foundational layer. It may import from the sessions **services** layer, but 
 Service layer sits alongside core. Provides shared service interfaces and implementations.
 
 **Can import from:**
+
 - Everything `sessions/~` can import (**except** `ash/workbench/browser/**`, which is not granted to services), plus:
 - `ash/sessions/services/*/~` (sibling services)
 - `ash/workbench/contrib/*/~`
 
 **Cannot import from:**
+
 - ❌ `ash/sessions/contrib/*` — no contrib dependencies
 - ❌ `ash/sessions/contrib/providers/*` — no provider dependencies
 
@@ -81,10 +85,12 @@ Service layer sits alongside core. Provides shared service interfaces and implem
 Feature contributions like `chat`, `sessions`, `changes`, `terminal`, etc.
 
 **Can import from:**
+
 - Everything `sessions/services/*/~` can import, plus:
 - `ash/sessions/contrib/*/~` (sibling contributions)
 
 **Cannot import from:**
+
 - ❌ `ash/sessions/contrib/providers/*/~` — **providers are isolated from non-provider contribs**
 
 ---
@@ -96,6 +102,7 @@ Feature contributions like `chat`, `sessions`, `changes`, `terminal`, etc.
 Provider implementations (`agentHost`, `copilotChatSessions`, `remoteAgentHost`). These are the compute backends that register with `ISessionsProvidersService`.
 
 **Can import from:**
+
 - Everything `sessions/contrib/*/~` can import, plus:
 - `ash/sessions/contrib/providers/*/~` (sibling providers)
 
@@ -105,12 +112,12 @@ This is the **most permissive** contrib layer — providers can reach into non-p
 
 ### Entry Points
 
-| File | Layer | Notes |
-|------|-------|-------|
-| `sessions.common.main.ts` | `browser` | Shared contributions for all platforms |
-| `sessions.desktop.main.ts` | `electron-browser` | Desktop-specific, imports `sessions.common.main.js` |
-| `sessions.web.main.ts` | `browser` | Web-specific, imports `sessions.common.main.js` |
-| `sessions.web.main.internal.ts` | `browser` | Internal web variant, imports `sessions.web.main.js` |
+| File                            | Layer              | Notes                                                |
+| ------------------------------- | ------------------ | ---------------------------------------------------- |
+| `sessions.common.main.ts`       | `browser`          | Shared contributions for all platforms               |
+| `sessions.desktop.main.ts`      | `electron-browser` | Desktop-specific, imports `sessions.common.main.js`  |
+| `sessions.web.main.ts`          | `browser`          | Web-specific, imports `sessions.common.main.js`      |
+| `sessions.web.main.internal.ts` | `browser`          | Internal web variant, imports `sessions.web.main.js` |
 
 Entry points can import from all sessions layers: `sessions/~`, `services/*/~`, `contrib/*/~`, and `contrib/providers/*/~`.
 

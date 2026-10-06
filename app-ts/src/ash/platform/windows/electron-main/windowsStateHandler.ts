@@ -25,7 +25,7 @@ export interface IWindowDisplayService {
 }
 
 export interface INewWindowStateOptions {
-	readonly lastActiveWindow?: { readonly state: IWindowState & IWindowBounds; readonly bounds: IWindowBounds };
+	readonly lastActiveWindow?: { readonly state: IWindowState & IWindowBounds; readonly bounds: IWindowBounds; };
 	readonly lastClosedWindow?: IWindowState;
 	readonly existingWindows: readonly IWindowBounds[];
 	readonly newWindowDimensions: NewWindowDimensions;
@@ -398,7 +398,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 		private readonly stateService: IStateService,
 		private readonly getOpenWindows: () => readonly IWindowSessionWindow<TEntry>[],
 		private readonly isEntry: (entry: IWindowSessionEntry) => entry is TEntry,
-	) {}
+	) { }
 
 	readSession(): IWindowSession<TEntry> | undefined {
 		const value = this.stateService.getItem(WINDOW_SESSION_STATE_KEY);
@@ -508,7 +508,7 @@ function matchesWindowIdentity(
 	if (isSingleFolderWorkspaceIdentifier(workspace)) {
 		return state.folderUri !== undefined &&
 			resourceComparisonKey(state.folderUri) ===
-				resourceComparisonKey(workspace.uri);
+			resourceComparisonKey(workspace.uri);
 	}
 	return isEmptyWorkspaceIdentifier(workspace) &&
 		state.workspace === undefined &&

@@ -31,12 +31,12 @@ test('JSON compatibility scanner exposes VS Code style tokens and decoded values
 });
 
 test('JSON compatibility parser supports visitors, tree paths, and tolerant errors', () => {
-	const errors: { error: ParseErrorCode; offset: number; length: number }[] = [];
+	const errors: { error: ParseErrorCode; offset: number; length: number; }[] = [];
 	const value = parse('{"editor":{"enabled":true,},}', errors);
 	assert.deepEqual(value, { editor: { enabled: true } });
 	assert.deepEqual(errors, []);
 
-	const treeErrors: { error: ParseErrorCode; offset: number; length: number }[] = [];
+	const treeErrors: { error: ParseErrorCode; offset: number; length: number; }[] = [];
 	const tree = parseTree('{"editor":{"enabled":true}}', treeErrors);
 	assert.equal(treeErrors.length, 0);
 	const enabled = findNodeAtLocation(tree, ['editor', 'enabled']);
@@ -47,7 +47,7 @@ test('JSON compatibility parser supports visitors, tree paths, and tolerant erro
 
 test('JSON compatibility location and diagnostics retain source offsets', () => {
 	const source = '{"enabled": true,}';
-	const errors: { error: ParseErrorCode; offset: number; length: number }[] = [];
+	const errors: { error: ParseErrorCode; offset: number; length: number; }[] = [];
 	parse(source, errors, { allowTrailingComma: false });
 	assert.ok(errors.some(error => error.error === ParseErrorCode.PropertyNameExpected));
 

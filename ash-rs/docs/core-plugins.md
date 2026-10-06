@@ -20,14 +20,14 @@ Editor Extension 的目标为 TS/JS 扩展、TS SDK 和受限 Rust 业务接口�
 Marketplace 是 Plugin 来源，不是产品主领域。`ash-core-plugins` 聚合内置、远端和本地来源，
 远端签名 registry 只是其中一个 adapter；它们不是 client/server 进程对，也不通过 JSONL 相连。
 
-| 组件 | 位置 | 职责 |
-| --- | --- | --- |
-| Remote Marketplace | `../../ash-marketplace` + GitHub Pages | catalog、publisher、签名、撤销、TUF metadata 和 package targets |
-| Marketplace registry adapter | `ash-rs/core-plugins/src/registry.rs` | HTTPS/TUF、远端发现和 verified download 的私有适配 |
-| Core Plugins | `ash-rs/core-plugins` | Plugin 来源聚合、本地 artifact、安装、authority、lease 和 opaque resource |
-| Plugin definitions | `ash-rs/plugin` | identity、manifest、path 与 package observation |
-| App Server | `ash-rs/app-server` | 稳定 RPC、connection-owned lease 和 error mapping |
-| capability consumers | Skill/MCP/Connector/Theme/Language/Localization/Editor Extension 各领域 | enable/grant、认证、配置、激活、执行、停用 |
+| 组件                         | 位置                                                                    | 职责                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Remote Marketplace           | `../../ash-marketplace` + GitHub Pages                                  | catalog、publisher、签名、撤销、TUF metadata 和 package targets           |
+| Marketplace registry adapter | `ash-rs/core-plugins/src/registry.rs`                                   | HTTPS/TUF、远端发现和 verified download 的私有适配                        |
+| Core Plugins                 | `ash-rs/core-plugins`                                                   | Plugin 来源聚合、本地 artifact、安装、authority、lease 和 opaque resource |
+| Plugin definitions           | `ash-rs/plugin`                                                         | identity、manifest、path 与 package observation                           |
+| App Server                   | `ash-rs/app-server`                                                     | 稳定 RPC、connection-owned lease 和 error mapping                         |
+| capability consumers         | Skill/MCP/Connector/Theme/Language/Localization/Editor Extension 各领域 | enable/grant、认证、配置、激活、执行、停用                                |
 
 Ash 产品层依赖 Core Plugins，不依赖 Marketplace 的远端存储表现。当前静态分发没有远程业务服务器，
 因此这些实现细节由 `ash-core-plugins::registry` 封装。App Server、Renderer 和 capability runtime 都看不到
@@ -106,16 +106,16 @@ uninstall、lease 或 activation API，因为这些都是本地状态。
 
 ## 所有权
 
-| 能力 | Remote Marketplace | Registry adapter | Core Plugins | 产品 runtime |
-| --- | --- | --- | --- | --- |
-| catalog、publisher、版本发布 | ✅ | consume | ❌ | ❌ |
-| TUF、revocation、target download | 发布 | ✅ verify | ❌ | ❌ |
-| remote cache / temporary extraction | ❌ | ✅ private | ❌ | ❌ |
-| local artifact store / digest recheck | ❌ | handoff | ✅ | ❌ |
-| install/update/uninstall/list | ❌ | ❌ | ✅ | ❌ |
-| capability ref / lease / resource | ❌ | ❌ | ✅ | consume |
-| permission/authentication | ❌ | ❌ | ❌ | ✅ |
-| activation/execution/deactivation | ❌ | ❌ | ❌ | ✅ |
+| 能力                                  | Remote Marketplace | Registry adapter | Core Plugins | 产品 runtime |
+| ------------------------------------- | ------------------ | ---------------- | ------------ | ------------ |
+| catalog、publisher、版本发布          | ✅                 | consume          | ❌           | ❌           |
+| TUF、revocation、target download      | 发布               | ✅ verify        | ❌           | ❌           |
+| remote cache / temporary extraction   | ❌                 | ✅ private       | ❌           | ❌           |
+| local artifact store / digest recheck | ❌                 | handoff          | ✅           | ❌           |
+| install/update/uninstall/list         | ❌                 | ❌               | ✅           | ❌           |
+| capability ref / lease / resource     | ❌                 | ❌               | ✅           | consume      |
+| permission/authentication             | ❌                 | ❌               | ❌           | ✅           |
+| activation/execution/deactivation     | ❌                 | ❌               | ❌           | ✅           |
 
 Marketplace package lifecycle：
 
@@ -147,15 +147,15 @@ PluginsManager；领域页面不另建安装记录、更新策略或下载链路
 不把静态语言资源当作服务器。`packageType` 筛选整个包的 family；`capabilityKind` 筛选包携带的能力，包括 Plugin bundle；
 `languageId` 只匹配明确绑定 executable 的语言，三个筛选条件同时生效。
 
-| Marketplace capability | Ash consumer | 进入方式 | Core Plugins 不拥有 |
-| --- | --- | --- | --- |
-| `skill` | `ash-skills-extension` / Skill catalog | verified exact Skill root | 选择、完整 `SKILL.md` 加载与执行 |
-| `mcp` | MCP composition | HTTPS 或 package-relative stdio transport；调用持有 capability lease | OAuth、审批、Tool policy |
-| `connector` | Connector authority | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入 | 登录、SecretStore、连接状态 |
-| Theme package 的 `asset` | `ash-extension-catalog` → Workbench Theme | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用 |
-| Language package 的 `asset` + `executable` | `ash-extension-catalog` + `LspServerProviders` | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
-| `localization` | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window | 文案提取、产品 bundle 设计与 UI 重建 |
-| `executable` + 可选 `ash/editor-extensions.json` | Editor Extension source/admission → Host | Ash consumer sidecar 绑定 exact executable；admission generation/lease 与 PluginsManager lease 同时成立 | enable/grant、目录执行 capability、进程隔离 |
+| Marketplace capability                           | Ash consumer                                                 | 进入方式                                                                                                            | Core Plugins 不拥有                         |
+| ------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `skill`                                          | `ash-skills-extension` / Skill catalog                       | verified exact Skill root                                                                                           | 选择、完整 `SKILL.md` 加载与执行            |
+| `mcp`                                            | MCP composition                                              | HTTPS 或 package-relative stdio transport；调用持有 capability lease                                                | OAuth、审批、Tool policy                    |
+| `connector`                                      | Connector authority                                          | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入                                                     | 登录、SecretStore、连接状态                 |
+| Theme package 的 `asset`                         | `ash-extension-catalog` → Workbench Theme                    | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用                            |
+| Language package 的 `asset` + `executable`       | `ash-extension-catalog` + `LspServerProviders`               | editor assets 与 LSP route 分别消费同一安装                                                                         | 文档路由、LSP lifecycle                     |
+| `localization`                                   | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window                     | 文案提取、产品 bundle 设计与 UI 重建        |
+| `executable` + 可选 `ash/editor-extensions.json` | Editor Extension source/admission → Host                     | Ash consumer sidecar 绑定 exact executable；admission generation/lease 与 PluginsManager lease 同时成立             | enable/grant、目录执行 capability、进程隔离 |
 
 `ash/editor-extensions.json` 是可选的产品 consumer adapter，并非 Marketplace schema、Plugin package
 或通用发布工具的必需结构。没有 sidecar 的 executable 可以继续被 Language 等其他 consumer 使用；
@@ -180,12 +180,12 @@ repository 链接用于展示与审计，但不会让 Renderer 绕过 Core Plugi
 
 ## 插件标识与 provider
 
-| 值 | 格式与用途 |
-| --- | --- |
-| `PluginId` | `name@marketplace`，用于发现、查询、安装和更新；名称不要求发布者前缀 |
-| `MarketplaceName` | host 配置中的唯一来源名，绑定一个 provider |
+| 值                | 格式与用途                                                                 |
+| ----------------- | -------------------------------------------------------------------------- |
+| `PluginId`        | `name@marketplace`，用于发现、查询、安装和更新；名称不要求发布者前缀       |
+| `MarketplaceName` | host 配置中的唯一来源名，绑定一个 provider                                 |
 | `PluginPackageId` | 现有 `.ash-plugin` 包格式中的 `publisher/name`；仅该包格式和对应消费方使用 |
-| `PackageRef.id` | 对外返回完整 `PluginId`；客户端原样传回，版本和摘要使用独立字段 |
+| `PackageRef.id`   | 对外返回完整 `PluginId`；客户端原样传回，版本和摘要使用独立字段            |
 
 通用 ID 校验只约束非空、长度和安全字符。插件名允许 ASCII 字母、数字、`_`、`-` 与分隔非空名称段的
 `.`；来源名不允许 `.`。禁止路径分隔符、空白和额外的 `@`。字段私有，构造和反序列化使用同一校验。
@@ -281,14 +281,14 @@ generation；同一 profile 也会拒绝绑定第二个 Marketplace authority。
 
 ## 安全和失败语义
 
-| 失败 | 稳定结果 | 行为 |
-| --- | --- | --- |
-| package/version 不存在 | `packageNotFound` / `versionNotFound` | 展示业务错误，可重新查询 |
-| trust、expiry、rollback、digest、revocation、archive 失败 | `packageUntrusted` | fail closed，不落盘、不激活 |
-| local artifact/state I/O 失败 | `storageUnavailable` | Marketplace 调用失败，不泄露路径 |
-| capability 无 path-free handoff | `capabilityUnsupported` | package 可保持 installed，不走路径 fallback |
-| installation 有 lease | `installationInUse` 或 `pendingRemoval` | 等待 release 后删除 |
-| remote 网络不可用 | `serviceUnavailable` | Marketplace 功能不可用，其他 App Server 能力继续工作 |
+| 失败                                                      | 稳定结果                                | 行为                                                 |
+| --------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| package/version 不存在                                    | `packageNotFound` / `versionNotFound`   | 展示业务错误，可重新查询                             |
+| trust、expiry、rollback、digest、revocation、archive 失败 | `packageUntrusted`                      | fail closed，不落盘、不激活                          |
+| local artifact/state I/O 失败                             | `storageUnavailable`                    | Marketplace 调用失败，不泄露路径                     |
+| capability 无 path-free handoff                           | `capabilityUnsupported`                 | package 可保持 installed，不走路径 fallback          |
+| installation 有 lease                                     | `installationInUse` 或 `pendingRemoval` | 等待 release 后删除                                  |
+| remote 网络不可用                                         | `serviceUnavailable`                    | Marketplace 功能不可用，其他 App Server 能力继续工作 |
 
 PluginsManager 在复制远端 verified payload 后再次计算 `marketplace-package-v1` normalized digest，并核对
 签名的 file count/total bytes；复用已有 artifact 时也核对当前 provider 的统计。并发安装相同 digest 时
@@ -297,25 +297,25 @@ relative path 和 size limits 约束。
 
 ## 当前实现与后续迁移
 
-| 项目 | 状态 |
-| --- | --- |
-| 远端 HTTPS/TUF catalog + verified download | ✅ |
-| Ash 本地 artifact/install/update/uninstall state | ✅ |
-| immutable installation、lease、deferred removal | ✅ |
-| App Server package RPC 与 connection cleanup | ✅ |
-| profile-scoped single writer、`marketplace/changed` fan-out 与重连 instance/generation 补读 | ✅ |
-| Desktop 无独立 Core Plugins binary / adapter | ✅ |
-| Marketplace Skill | ✅ 安装后进入共享 Skill catalog；完整内容仍按需加载 |
-| Marketplace MCP / Connector | ✅ HTTP/packaged stdio materialization、Connector credential binding、热重建与调用 lease |
-| Language、Executable activation spec | ✅ opaque manifest/entrypoint resource；本地 adapter 另用 verified host handle |
-| Marketplace Language editor assets | ✅ 进入共享 declarative Extension catalog，来源标记为 Marketplace |
-| Marketplace Language server | ✅ 按 signed language route 组合 `node`/`direct` provider，并在 install/update/uninstall 后热重建 |
-| Marketplace Theme | ✅ Theme activation spec + portable-to-host manifest normalization + 共享 declarative Extension catalog；来源标记为 Marketplace |
-| Marketplace Localization | ✅ 独立 `localization` package family、静态 catalog capability、安装生命周期通知、内置 en/zh-CN、核心 Workbench shell 与 Settings locale selector；领域文案仍按 bundle/key 增量迁移 |
-| Marketplace executable Editor Extension | ✅ 可选产品 sidecar、独立 admission + 目录执行 capability、PluginsManager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭 |
-| Plugin bundle 语义 | ✅ `ash-core-plugins` 聚合来源、统一安装与 activation，再按 capability 分解 |
-| 旧 Plugin distribution consumer 迁移 | ✅ 专用 catalog、install/update RPC 与远端 crate 已删除 |
-| 旧 Language distribution consumer 迁移 | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除 |
+| 项目                                                                                        | 状态                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 远端 HTTPS/TUF catalog + verified download                                                  | ✅                                                                                                                                                                                  |
+| Ash 本地 artifact/install/update/uninstall state                                            | ✅                                                                                                                                                                                  |
+| immutable installation、lease、deferred removal                                             | ✅                                                                                                                                                                                  |
+| App Server package RPC 与 connection cleanup                                                | ✅                                                                                                                                                                                  |
+| profile-scoped single writer、`marketplace/changed` fan-out 与重连 instance/generation 补读 | ✅                                                                                                                                                                                  |
+| Desktop 无独立 Core Plugins binary / adapter                                                | ✅                                                                                                                                                                                  |
+| Marketplace Skill                                                                           | ✅ 安装后进入共享 Skill catalog；完整内容仍按需加载                                                                                                                                 |
+| Marketplace MCP / Connector                                                                 | ✅ HTTP/packaged stdio materialization、Connector credential binding、热重建与调用 lease                                                                                            |
+| Language、Executable activation spec                                                        | ✅ opaque manifest/entrypoint resource；本地 adapter 另用 verified host handle                                                                                                      |
+| Marketplace Language editor assets                                                          | ✅ 进入共享 declarative Extension catalog，来源标记为 Marketplace                                                                                                                   |
+| Marketplace Language server                                                                 | ✅ 按 signed language route 组合 `node`/`direct` provider，并在 install/update/uninstall 后热重建                                                                                   |
+| Marketplace Theme                                                                           | ✅ Theme activation spec + portable-to-host manifest normalization + 共享 declarative Extension catalog；来源标记为 Marketplace                                                     |
+| Marketplace Localization                                                                    | ✅ 独立 `localization` package family、静态 catalog capability、安装生命周期通知、内置 en/zh-CN、核心 Workbench shell 与 Settings locale selector；领域文案仍按 bundle/key 增量迁移 |
+| Marketplace executable Editor Extension                                                     | ✅ 可选产品 sidecar、独立 admission + 目录执行 capability、PluginsManager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭                                       |
+| Plugin bundle 语义                                                                          | ✅ `ash-core-plugins` 聚合来源、统一安装与 activation，再按 capability 分解                                                                                                         |
+| 旧 Plugin distribution consumer 迁移                                                        | ✅ 专用 catalog、install/update RPC 与远端 crate 已删除                                                                                                                             |
+| 旧 Language distribution consumer 迁移                                                      | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除                                                                                                                     |
 
 如果未来 Marketplace 从静态 TUF 分发改成真正的 HTTPS business API，替换
 `PluginProvider` 的实现即可；PluginsManager、App Server RPC、Renderer service 和 capability
@@ -323,13 +323,13 @@ runtime contract 不应改变。
 
 ## 修改影响与验证
 
-| 修改 | 必须联动检查 |
-| --- | --- |
-| remote catalog/TUF contract | Marketplace build/verify、Ash client tests、trusted-root rollout |
+| 修改                              | 必须联动检查                                                       |
+| --------------------------------- | ------------------------------------------------------------------ |
+| remote catalog/TUF contract       | Marketplace build/verify、Ash client tests、trusted-root rollout   |
 | public Plugin package DTO/service | App Server protocol/schema、frontend service、PluginsManager tests |
-| artifact/install state | digest、atomic persistence、restart、update/uninstall tests |
-| ActivationSpec | 对应 runtime、permission/auth policy、无路径泄漏测试 |
-| Desktop product services | packaging tests、trusted-root resource、App Server startup |
+| artifact/install state            | digest、atomic persistence、restart、update/uninstall tests        |
+| ActivationSpec                    | 对应 runtime、permission/auth policy、无路径泄漏测试               |
+| Desktop product services          | packaging tests、trusted-root resource、App Server startup         |
 
 最低验证集：
 

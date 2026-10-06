@@ -26,7 +26,10 @@ struct State {
 }
 
 impl CancellationToken {
-    pub(crate) fn new(deadline_unix_millis: u64, context: extension_protocol::RequestContext) -> Self {
+    pub(crate) fn new(
+        deadline_unix_millis: u64,
+        context: extension_protocol::RequestContext,
+    ) -> Self {
         Self {
             context,
             state: Arc::new(State {

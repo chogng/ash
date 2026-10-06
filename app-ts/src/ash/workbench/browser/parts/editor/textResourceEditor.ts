@@ -50,7 +50,7 @@ import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
-	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
+	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidLayoutChange: Event<EditorLayoutInfo>;
 	readonly onDidChangeCursorSelection: Event<ICursorSelectionChangedEvent>;
@@ -70,7 +70,7 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	setScrollTop(scrollTop: number): void;
 	setScrollLeft(scrollLeft: number): void;
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
-	executeEdits(source: string, edits: { range: Range; text: string }[]): boolean;
+	executeEdits(source: string, edits: { range: Range; text: string; }[]): boolean;
 	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;
 	saveViewState?(): ICodeEditorViewState | null;

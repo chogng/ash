@@ -80,7 +80,7 @@ function assertSafeInteger(value: unknown, owner: string): asserts value is numb
 /** Only accepted syntax results may become the next incremental result baseline. */
 function createSyntaxResultStore(): WorkerTextModelResultStore<languages.SyntaxLane, languages.SyntaxResult> {
 	const confirmed = new Map<languages.SyntaxLane, WorkerTextModelResult<languages.SyntaxResult>>();
-	const staged = new Map<number, { lane: languages.SyntaxLane; state: WorkerTextModelResult<languages.SyntaxResult> }>();
+	const staged = new Map<number, { lane: languages.SyntaxLane; state: WorkerTextModelResult<languages.SyntaxResult>; }>();
 	return {
 		get: lane => confirmed.get(lane),
 		stage: (lane, state) => {
@@ -109,9 +109,11 @@ export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languag
 	encodePayload(lane: languages.SyntaxLane, request: languages.SyntaxRequest) {
 		languages.assertSyntaxRequest(request);
 		assertTokenizationLane(lane, request);
-		return Object.freeze({ languageId: request.languageId, ...(request.tokenize === undefined ? {} : {
-			tokenize: Object.freeze({ lineNumber: request.tokenize.lineNumber, lines: Object.freeze([...request.tokenize.lines]) }),
-		}) });
+		return Object.freeze({
+			languageId: request.languageId, ...(request.tokenize === undefined ? {} : {
+				tokenize: Object.freeze({ lineNumber: request.tokenize.lineNumber, lines: Object.freeze([...request.tokenize.lines]) }),
+			})
+		});
 	},
 	decodePayload(lane: languages.SyntaxLane, value: unknown, snapshot: TextSnapshot) {
 		assertRecord(value, "Syntax wire request");

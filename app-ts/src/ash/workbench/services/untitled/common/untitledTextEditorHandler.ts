@@ -4,7 +4,7 @@ import { UntitledTextEditorInput } from './untitledTextEditorInput.js';
 
 /** Maps text backups to the same untitled model used by New File and template commands. */
 export class UntitledTextEditorWorkingCopyEditorHandler {
-	constructor(@IUntitledTextEditorService private readonly untitled: IUntitledTextEditorService) {}
+	constructor(@IUntitledTextEditorService private readonly untitled: IUntitledTextEditorService) { }
 
 	public handles(workingCopy: WorkingCopyBackup): boolean {
 		return workingCopy.kind === 'text' && this.untitled.isUntitled(workingCopy.resource);

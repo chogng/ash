@@ -13,16 +13,16 @@
 
 ## 1. 边界与公共契约
 
-| Symbol | 当前职责 | 不承担 |
-| --- | --- | --- |
-| `ExtensionRoot` / `ExtensionRootKind` | 表达 host 已选择的 built-in/user root | 从 Renderer 接收路径、directory capability |
-| `DynamicExtensionSourceProvider` / `DynamicExtensionSourceSnapshot` | 按 authority generation 提供 exact immutable package 目录 | Marketplace/Plugin install、enable/grant、下载或签名验证 |
-| `DynamicExtensionPackageSource::marketplace_with_manifest` | 为 product-independent portable family 提供 host-normalized 声明式 manifest，同时保留 exact package bytes/digest | 添加虚拟资源、绕过 package snapshot/path validation |
-| `ExtensionCatalog::list` | cached query 或 refresh scan，并发布单调 generation | 解析 editor `contributes` |
-| `ExtensionCatalogSnapshot` | 固定一代 descriptor、diagnostic 和完整 package identity | 保留历史 generation |
-| `ExtensionDescriptor` | `publisher.name`、版本、manifest JSON/摘要和 package 摘要 | enablement、grant、signature |
-| `ExtensionCatalog::open_resource` | 校验 generation、ID 和包内相对路径后读取当前 frozen bytes | 从 live filesystem 回退 |
-| `ExtensionCatalogError` | generation conflict、缺失 ID/resource、非法路径、limit/IO failure | transport error code |
+| Symbol                                                              | 当前职责                                                                                                         | 不承担                                                   |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `ExtensionRoot` / `ExtensionRootKind`                               | 表达 host 已选择的 built-in/user root                                                                            | 从 Renderer 接收路径、directory capability               |
+| `DynamicExtensionSourceProvider` / `DynamicExtensionSourceSnapshot` | 按 authority generation 提供 exact immutable package 目录                                                        | Marketplace/Plugin install、enable/grant、下载或签名验证 |
+| `DynamicExtensionPackageSource::marketplace_with_manifest`          | 为 product-independent portable family 提供 host-normalized 声明式 manifest，同时保留 exact package bytes/digest | 添加虚拟资源、绕过 package snapshot/path validation      |
+| `ExtensionCatalog::list`                                            | cached query 或 refresh scan，并发布单调 generation                                                              | 解析 editor `contributes`                                |
+| `ExtensionCatalogSnapshot`                                          | 固定一代 descriptor、diagnostic 和完整 package identity                                                          | 保留历史 generation                                      |
+| `ExtensionDescriptor`                                               | `publisher.name`、版本、manifest JSON/摘要和 package 摘要                                                        | enablement、grant、signature                             |
+| `ExtensionCatalog::open_resource`                                   | 校验 generation、ID 和包内相对路径后读取当前 frozen bytes                                                        | 从 live filesystem 回退                                  |
+| `ExtensionCatalogError`                                             | generation conflict、缺失 ID/resource、非法路径、limit/IO failure                                                | transport error code                                     |
 
 固定 precedence 为 built-in roots → dynamic authority-selected exact packages → user roots；每个阶段中
 第一个有效 extension ID 获胜，后续重复项只产生 `DuplicateExtension` diagnostic。由此可变用户包不能
@@ -30,16 +30,16 @@
 
 ## 2. 内部接口地图
 
-| Private symbol | 精确职责 | 不能承担 | 修改时同步检查 |
-| --- | --- | --- | --- |
-| `scan_root` | 稳定排序 root 的 direct children 并应用 first-wins precedence | 递归 marketplace discovery | duplicate/root-order tests、系统文档 |
-| `scan_dynamic_packages` | 稳定扫描 authority 给出的 exact package set | 读取 Marketplace registry、决定 enable/grant | generation/precedence tests、App Server provider tests |
-| `discover_package` | 校验 package/manifest identity 并建立 frozen snapshot | 解释 `contributes` | manifest、digest、file-type/limit tests |
-| `ExtensionPackageSnapshot::load` / `read_bounded_file` | 枚举 regular files、绑定 file identity、拒绝 link/special file、累计 limits 和 package digest | 暴露 canonical host path | symlink/hard-link/special/TOCTOU/digest tests |
-| `CatalogBudget` | 约束跨 root 的候选数、frozen bytes、manifest response 与 diagnostics | 改变 root precedence | 边界值、截断标记和原子 claim tests |
-| `validate_relative_path` | 校验 portable package-relative request path | canonicalize Workspace path | traversal/device/path-limit tests |
-| `is_within` | 检查已解析路径 containment | 定义 extension precedence | platform containment tests |
-| `mime_type` | 对少量静态资源后缀给出 transport hint | 内容嗅探或 Editor 解析 | resource tests |
+| Private symbol                                         | 精确职责                                                                                      | 不能承担                                     | 修改时同步检查                                         |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
+| `scan_root`                                            | 稳定排序 root 的 direct children 并应用 first-wins precedence                                 | 递归 marketplace discovery                   | duplicate/root-order tests、系统文档                   |
+| `scan_dynamic_packages`                                | 稳定扫描 authority 给出的 exact package set                                                   | 读取 Marketplace registry、决定 enable/grant | generation/precedence tests、App Server provider tests |
+| `discover_package`                                     | 校验 package/manifest identity 并建立 frozen snapshot                                         | 解释 `contributes`                           | manifest、digest、file-type/limit tests                |
+| `ExtensionPackageSnapshot::load` / `read_bounded_file` | 枚举 regular files、绑定 file identity、拒绝 link/special file、累计 limits 和 package digest | 暴露 canonical host path                     | symlink/hard-link/special/TOCTOU/digest tests          |
+| `CatalogBudget`                                        | 约束跨 root 的候选数、frozen bytes、manifest response 与 diagnostics                          | 改变 root precedence                         | 边界值、截断标记和原子 claim tests                     |
+| `validate_relative_path`                               | 校验 portable package-relative request path                                                   | canonicalize Workspace path                  | traversal/device/path-limit tests                      |
+| `is_within`                                            | 检查已解析路径 containment                                                                    | 定义 extension precedence                    | platform containment tests                             |
+| `mime_type`                                            | 对少量静态资源后缀给出 transport hint                                                         | 内容嗅探或 Editor 解析                       | resource tests                                         |
 
 真实调用路径为：
 
@@ -73,19 +73,19 @@ normalized manifest 不能添加资源或改变 path containment。Descriptor �
 
 当前 ingestion limits：
 
-| Limit | Value |
-| --- | ---: |
-| manifest bytes | 4 MiB |
-| single regular file | 16 MiB |
-| total package bytes | 64 MiB |
-| regular files per package | 4,096 |
-| total filesystem entries per package | 8,192 |
-| resource request path | 1,024 bytes |
-| package candidates per catalog | 4,096 |
-| frozen regular-file bytes per catalog | 256 MiB |
-| canonical manifest JSON per catalog response | 64 MiB |
-| diagnostics per catalog | 4,096 |
-| diagnostic text per catalog | 1 MiB |
+| Limit                                        |       Value |
+| -------------------------------------------- | ----------: |
+| manifest bytes                               |       4 MiB |
+| single regular file                          |      16 MiB |
+| total package bytes                          |      64 MiB |
+| regular files per package                    |       4,096 |
+| total filesystem entries per package         |       8,192 |
+| resource request path                        | 1,024 bytes |
+| package candidates per catalog               |       4,096 |
+| frozen regular-file bytes per catalog        |     256 MiB |
+| canonical manifest JSON per catalog response |      64 MiB |
+| diagnostics per catalog                      |       4,096 |
+| diagnostic text per catalog                  |       1 MiB |
 
 Symlink、hard link、special file、越界路径、非法身份或超限 package 整体失败，不发布部分 package。
 Catalog 达到总量上限后以 `ResourceTooLarge` diagnostic 跳过候选或停止继续枚举；diagnostic 自身达到

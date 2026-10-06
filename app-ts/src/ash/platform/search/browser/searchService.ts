@@ -14,7 +14,7 @@ const IDLE_POLL_MILLIS = 20;
 
 /** Searches only resources granted to the browser file provider, without a process or a server path. */
 export class FileContentSearchService implements IContentSearchService {
-	constructor(private readonly files: Pick<IFileService, 'readDirectory' | 'readFileBytes'>, private readonly workspaceContext: Pick<IWorkspaceContextService, 'getWorkspace'>) {}
+	constructor(private readonly files: Pick<IFileService, 'readDirectory' | 'readFileBytes'>, private readonly workspaceContext: Pick<IWorkspaceContextService, 'getWorkspace'>) { }
 
 	async search(query: IContentSearchQuery, options: IContentSearchOptions = {}): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
@@ -47,7 +47,7 @@ export class FileContentSearchService implements IContentSearchService {
 					const lineStarts = [0];
 					for (let offset = content.indexOf('\n'); offset >= 0; offset = content.indexOf('\n', offset + 1)) { lineStarts.push(offset + 1); }
 					let lineIndex = 0;
-					const blocks = new Map<string, { lineNumber: number; preview: string; ranges: { start: number; end: number }[] }>();
+					const blocks = new Map<string, { lineNumber: number; preview: string; ranges: { start: number; end: number; }[]; }>();
 					for (const found of content.matchAll(expression)) {
 						throwIfAborted(options.signal);
 						if (!found[0].length) { continue; }

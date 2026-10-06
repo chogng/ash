@@ -2,8 +2,8 @@ import * as strings from '../../../base/common/strings.js';
 import type { IEditorWhitespace, ILineHeightChangeAccessor, IPartialViewLinesViewportData, IViewWhitespaceViewportData, IWhitespaceChangeAccessor } from '../viewModel.js';
 import { CustomLineHeightData, LineHeightsManager } from './lineHeights.js';
 
-interface IPendingChange { id: string; newAfterLineNumber: number; newHeight: number }
-interface IPendingRemove { id: string }
+interface IPendingChange { id: string; newAfterLineNumber: number; newHeight: number; }
+interface IPendingRemove { id: string; }
 
 class PendingChanges {
 	private hasPending = false;
@@ -36,7 +36,7 @@ export class EditorWhitespace implements IEditorWhitespace {
 		public ordinal: number,
 		public height: number,
 		public minWidth: number,
-	) {}
+	) { }
 }
 
 /** Owns the vertical layout of model lines and whitespace zones. */

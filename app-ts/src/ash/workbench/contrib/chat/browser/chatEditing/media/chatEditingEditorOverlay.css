@@ -12,7 +12,9 @@
 	font-size: var(--ash-font-size-label1);
 }
 
-.ash-chat-editing-overlay[hidden] { display: none; }
+.ash-chat-editing-overlay[hidden] {
+	display: none;
+}
 
 .ash-chat-editing-count,
 .ash-chat-editing-auto-accept {
@@ -20,8 +22,12 @@
 	font-variant-numeric: tabular-nums;
 }
 
-.ash-chat-editing-added { background-color: var(--ash-diff-editor-inserted-line-background); }
-.ash-chat-editing-gutter { border-left: 2px solid var(--ash-diff-editor-inserted-text-background); }
+.ash-chat-editing-added {
+	background-color: var(--ash-diff-editor-inserted-line-background);
+}
+.ash-chat-editing-gutter {
+	border-left: 2px solid var(--ash-diff-editor-inserted-text-background);
+}
 
 .ash-chat-editing-deleted {
 	box-sizing: border-box;
@@ -32,7 +38,11 @@
 }
 
 .hc-black .ash-chat-editing-overlay,
-.hc-light .ash-chat-editing-overlay { border-color: var(--ash-contrast-border); }
+.hc-light .ash-chat-editing-overlay {
+	border-color: var(--ash-contrast-border);
+}
 
 .hc-black .ash-chat-editing-gutter,
-.hc-light .ash-chat-editing-gutter { border-color: var(--ash-contrast-border); }
+.hc-light .ash-chat-editing-gutter {
+	border-color: var(--ash-contrast-border);
+}

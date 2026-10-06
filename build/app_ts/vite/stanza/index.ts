@@ -4,7 +4,7 @@ import * as stanzaApi from "../../../../app-ts/src/ash/editor/editor.main.js";
 import "./style.css";
 
 declare global {
-  var stanza: typeof stanzaApi;
+	var stanza: typeof stanzaApi;
 }
 
 globalThis.stanza = stanzaApi;
@@ -33,18 +33,18 @@ const resource = stanzaApi.URI.parse("inmemory://stanza/standalone.ts");
 const disposables = new DisposableStore();
 const model = disposables.add(stanzaApi.editor.createModel(initialText, "typescript", resource));
 const editor = disposables.add(stanzaApi.editor.create(container, {
-  model,
-  lineWrapping: stanzaApi.EditorLineWrapping.On,
-  lineNumbers: "on",
-  guides: { indentation: true },
-  bracketPairColorization: { enabled: true },
-  stickyScroll: { enabled: true },
-  suggestions: true,
-  inlineCompletions: true,
-  parameterHints: { enabled: true },
-  inlayHints: { enabled: "on" },
-  codeLens: true,
-  placeholder: "Start typing…",
+	model,
+	lineWrapping: stanzaApi.EditorLineWrapping.On,
+	lineNumbers: "on",
+	guides: { indentation: true },
+	bracketPairColorization: { enabled: true },
+	stickyScroll: { enabled: true },
+	suggestions: true,
+	inlineCompletions: true,
+	parameterHints: { enabled: true },
+	inlayHints: { enabled: "on" },
+	codeLens: true,
+	placeholder: "Start typing…",
 }));
 
 const resizeObserver = new ResizeObserver(() => layoutEditor());
@@ -52,20 +52,20 @@ resizeObserver.observe(container);
 disposables.add(toDisposable(() => resizeObserver.disconnect()));
 
 function layoutEditor(): void {
-  const bounds = container.getBoundingClientRect();
-  editor.layout({ width: bounds.width, height: bounds.height });
+	const bounds = container.getBoundingClientRect();
+	editor.layout({ width: bounds.width, height: bounds.height });
 }
 
 function createScrollSamples(count: number): string {
-  return Array.from({ length: count }, (_, index) => {
-    const ordinal = String(index + 1).padStart(3, "0");
-    return `
+	return Array.from({ length: count }, (_, index) => {
+		const ordinal = String(index + 1).padStart(3, "0");
+		return `
 export function scrollSample${ordinal}(value: number): string {
 \tconst adjusted = value + ${index + 1};
 \treturn "sample-${ordinal}: " + String(adjusted);
 }
 `;
-  }).join("");
+	}).join("");
 }
 
 layoutEditor();
@@ -74,7 +74,7 @@ editor.focus();
 disposables.add(addDisposableListener(window, "pagehide", () => disposables.dispose(), { once: true }));
 
 function requiredElement(id: string): HTMLElement {
-  const element = document.getElementById(id);
-  if (!(element instanceof HTMLElement)) throw new Error(`Missing Stanza debug element '#${id}'`);
-  return element;
+	const element = document.getElementById(id);
+	if (!(element instanceof HTMLElement)) throw new Error(`Missing Stanza debug element '#${id}'`);
+	return element;
 }

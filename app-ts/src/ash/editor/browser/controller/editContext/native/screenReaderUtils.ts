@@ -119,7 +119,7 @@ export function createScreenReaderWindow(
 	selectionStart: number,
 	selectionEnd: number,
 	activeOffset: number,
-): { readonly startOffset: number; readonly endOffset: number } {
+): { readonly startOffset: number; readonly endOffset: number; } {
 	return createBoundedScreenReaderWindow(
 		modelLength,
 		selectionStart,
@@ -192,7 +192,7 @@ export function screenReaderLineOffsetAtModelOffset(
 	return result;
 }
 
-export function domPointAtOffset(root: HTMLElement, offset: number): { readonly node: Text; readonly offset: number } | undefined {
+export function domPointAtOffset(root: HTMLElement, offset: number): { readonly node: Text; readonly offset: number; } | undefined {
 	const textNodes = collectTextNodes(root);
 	let remaining = clampScreenReaderOffset(offset, textLength(root));
 	for (const node of textNodes) {
@@ -271,7 +271,7 @@ function createScreenReaderPageWindows(
 	selectionEnd: number,
 	activeOffset: number,
 	pageSize: number,
-): readonly { readonly startOffset: number; readonly endOffset: number }[] {
+): readonly { readonly startOffset: number; readonly endOffset: number; }[] {
 	const startPage = Math.floor((model.positionAt(selectionStart).lineNumber - 1) / pageSize);
 	const endPage = Math.floor((model.positionAt(selectionEnd).lineNumber - 1) / pageSize);
 	const start = pageWindowForModel(model, startPage, pageSize);
@@ -306,7 +306,7 @@ function pageWindowForModel(
 	model: TextModel,
 	page: number,
 	pageSize: number,
-): { readonly startOffset: number; readonly endOffset: number } {
+): { readonly startOffset: number; readonly endOffset: number; } {
 	const startLineIndex = page * pageSize;
 	const endLineIndexExclusive = Math.min(model.lineCount, startLineIndex + pageSize);
 	const startOffset = model.offsetAt(new Position((startLineIndex) + 1, (0) + 1));
@@ -322,7 +322,7 @@ function createBoundedScreenReaderWindow(
 	selectionEnd: number,
 	activeOffset: number,
 	maximumLength: number,
-): { readonly startOffset: number; readonly endOffset: number } {
+): { readonly startOffset: number; readonly endOffset: number; } {
 	if (modelLength <= maximumLength) return { startOffset: 0, endOffset: modelLength };
 	const selectionLength = selectionEnd - selectionStart;
 	if (selectionLength <= maximumLength) {
@@ -346,8 +346,8 @@ function clampModelOffset(offset: number, startOffset: number, endOffset: number
 function avoidSurrogateSplit(
 	snapshot: ReturnType<TextModel['createVersionedSnapshot']>,
 	modelLength: number,
-	segment: { readonly startOffset: number; readonly endOffset: number },
-): { readonly startOffset: number; readonly endOffset: number } {
+	segment: { readonly startOffset: number; readonly endOffset: number; },
+): { readonly startOffset: number; readonly endOffset: number; } {
 	let startOffset = segment.startOffset;
 	let endOffset = segment.endOffset;
 	if (startOffset > 0) {

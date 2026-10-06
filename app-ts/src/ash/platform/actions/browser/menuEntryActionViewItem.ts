@@ -108,7 +108,7 @@ function fillInActions(
 ): void {
 	const primary = Array.isArray(target) ? target : target.primary;
 	const secondary = Array.isArray(target) ? target : target.secondary;
-	const submenus: Array<{ readonly group: string; readonly action: SubmenuAction; readonly index: number }> = [];
+	const submenus: Array<{ readonly group: string; readonly action: SubmenuAction; readonly index: number; }> = [];
 
 	for (const [group, groupActions] of groups) {
 		const isPrimary = isPrimaryGroup(group);

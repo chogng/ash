@@ -68,5 +68,5 @@ export class PeekViewWidget extends ZoneWidget {
 		container.append(header, this.body);
 	}
 
-	protected override _doLayout(_heightInPixels: number, _widthInPixels: number): void {}
+	protected override _doLayout(_heightInPixels: number, _widthInPixels: number): void { }
 }

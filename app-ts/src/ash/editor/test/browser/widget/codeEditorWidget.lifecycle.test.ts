@@ -46,9 +46,9 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
+	setAccessibilitySupport: () => { },
+	alert: () => { },
+	status: () => { },
 };
 
 function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Promise<void> {
@@ -504,7 +504,7 @@ test('content events follow the attached model and retain edit, undo, redo, and 
 	using first = new TextModel('alpha');
 	using second = new TextModel('beta');
 	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model: first });
-	const events: { text: string; undo: boolean; redo: boolean; flush: boolean; version: number }[] = [];
+	const events: { text: string; undo: boolean; redo: boolean; flush: boolean; version: number; }[] = [];
 	using listener = editor.onDidChangeModelContent(event => events.push({ text: event.changes.map(change => change.text).join(''), undo: event.isUndoing, redo: event.isRedoing, flush: event.isFlush, version: event.versionId }));
 	editor.pushUndoStop();
 	editor.executeEdits('test', [{ range: new Range(1, 1, 1, 6), text: 'one' }]);

@@ -39,7 +39,7 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 		await secondWorkbench.quickaccess.runCommand('workbench.action.toggleSideBar');
 		await expect(sidebar).toBeVisible({ visible: !sidebarWasVisible });
 		const workspaceId = await secondPage.evaluate(async () => {
-			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string }> } } }).ash;
+			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; }).ash;
 			return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
 		});
 
@@ -59,7 +59,7 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 		await expect.poll(() => application.windows().length).toBe(1);
 		await expect(workbench.element).toBeVisible();
 		const userData = await application.evaluate(({ app }) => app.getPath('userData'));
-		const durableState = JSON.parse(await readFile(join(userData, 'workbench-state.json'), 'utf8')) as { storages: { identity: { id: string; scope: string }; entries: Record<string, { value: string }> }[] };
+		const durableState = JSON.parse(await readFile(join(userData, 'workbench-state.json'), 'utf8')) as { storages: { identity: { id: string; scope: string; }; entries: Record<string, { value: string; }>; }[]; };
 		expect(durableState.storages.find(scope => scope.identity.scope === 'workspace' && scope.identity.id === workspaceId)?.entries['workbench.layout.sidebar.visible']?.value).toBe(String(!sidebarWasVisible));
 		const reopening = application.waitForEvent('window');
 		await emitSecondInstance(application, secondWorkspace.directory);
@@ -92,7 +92,7 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		const agentsPage = await agentsPagePromise;
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
 		const initialConnection = await agentsPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number; }>; }; }; }).ash.ipcRenderer;
 			return ipc.invoke('ash:remote:connection');
 		});
 		const agentsWindow = await application.browserWindow(agentsPage);
@@ -101,7 +101,7 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		await waitForElectronWindowState(application, agentsPage, { focused: true });
 		await expect.poll(() => readWindowLogs(application, agentsWindowId!)).toContainEqual(expect.objectContaining({ source: `window-${agentsWindowId}`, category: 'lifecycle', message: 'Agents restored' }));
 		await secondPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:native-host:open-agents-window');
 		});
 
@@ -112,7 +112,7 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
 		if (target.appServerMode === 'required') {
 			const reusedConnection = await agentsPage.evaluate(async () => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } } }).ash.ipcRenderer;
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number; }>; }; }; }).ash.ipcRenderer;
 				return ipc.invoke('ash:remote:connection');
 			});
 			expect(reusedConnection.generation).toBe(initialConnection.generation);
@@ -137,8 +137,8 @@ test('dirty editor content survives an immediate Electron window close', async (
 		await secondWorkbench.waitForReady();
 		await secondPage.bringToFront();
 		const windowId = await secondPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const windows = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { id: number; focused: boolean }[];
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const windows = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { id: number; focused: boolean; }[];
 			const focused = windows.find(window => window.focused);
 			if (!focused) throw new Error('Second Workbench is not focused');
 			return focused.id;
@@ -174,7 +174,7 @@ async function emitSecondInstance(application: ElectronApplication, workspaceDir
 
 async function canonicalWorkspacePath(page: Page): Promise<string> {
 	const value = await page.evaluate(async () => {
-		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown> } } }).ash?.ipcRenderer;
+		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown>; }; }; }).ash?.ipcRenderer;
 		if (!bridge) throw new Error("Ash renderer IPC bridge is unavailable");
 		return bridge.invoke("ash:workspace:context:read");
 	});

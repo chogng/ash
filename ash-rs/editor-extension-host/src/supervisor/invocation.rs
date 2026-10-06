@@ -177,12 +177,25 @@ impl ExtensionInvocationHandle {
     }
 
     pub fn wait(&self) -> Result<InvokeResult, ExtensionHostError> {
-        self.wait_with_client(|_, _, _| Err(crate::HostFailure { code: crate::HostErrorCode::OperationNotSupported, message: "this caller does not provide editor services".into() }))
+        self.wait_with_client(|_, _, _| {
+            Err(crate::HostFailure {
+                code: crate::HostErrorCode::OperationNotSupported,
+                message: "this caller does not provide editor services".into(),
+            })
+        })
     }
 
     /// Services child calls on the initiating owner's thread, within the parent deadline.
     /// The handler must observe both cancellation and the supplied remaining duration.
-    pub fn wait_with_client(&self, mut handler: impl FnMut(extension_protocol::ExtensionClientOperation, &ash_async_utils::CancellationToken, Duration) -> Result<extension_protocol::ExtensionClientResult, crate::HostFailure>) -> Result<InvokeResult, ExtensionHostError> {
+    pub fn wait_with_client(
+        &self,
+        mut handler: impl FnMut(
+            extension_protocol::ExtensionClientOperation,
+            &ash_async_utils::CancellationToken,
+            Duration,
+        )
+            -> Result<extension_protocol::ExtensionClientResult, crate::HostFailure>,
+    ) -> Result<InvokeResult, ExtensionHostError> {
         let pending = self
             .pending
             .lock()
@@ -203,10 +216,23 @@ impl ExtensionInvocationHandle {
             }
             let poll = WAIT_POLL_INTERVAL.min(self.wait_timeout.saturating_sub(elapsed));
             match pending.recv_next_timeout(poll) {
-                Ok(Some(crate::process::PendingMessage::Response(response))) => break Ok(Some(response)),
+                Ok(Some(crate::process::PendingMessage::Response(response))) => {
+                    break Ok(Some(response));
+                }
                 Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
-                    let outcome = handler(request.operation, &self.client_cancellation.token(), self.wait_timeout.saturating_sub(started.elapsed()));
-                    if let Err(error) = self.process.respond_client(extension_protocol::ExtensionClientResponse { context: request.context, call_id: request.call_id, outcome }) {
+                    let outcome = handler(
+                        request.operation,
+                        &self.client_cancellation.token(),
+                        self.wait_timeout.saturating_sub(started.elapsed()),
+                    );
+                    if let Err(error) =
+                        self.process
+                            .respond_client(extension_protocol::ExtensionClientResponse {
+                                context: request.context,
+                                call_id: request.call_id,
+                                outcome,
+                            })
+                    {
                         break Err(error);
                     }
                 }

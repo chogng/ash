@@ -8,7 +8,7 @@ export interface LanguageServerConfiguration {
 export interface LanguageServerSnapshot {
 	readonly revision: number;
 	readonly configurations: Readonly<Record<string, LanguageServerConfiguration>>;
-	readonly servers: readonly { readonly id: string; readonly languageIds: readonly string[] }[];
+	readonly servers: readonly { readonly id: string; readonly languageIds: readonly string[]; }[];
 }
 
 export interface ILanguageServerService {

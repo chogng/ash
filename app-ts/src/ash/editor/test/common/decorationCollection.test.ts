@@ -19,7 +19,7 @@ const range = (
 test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
 	using model = new TextModel("abcdef");
 	using decorations =
-		new TextDecorationCollection<{ readonly kind: string }>(model);
+		new TextDecorationCollection<{ readonly kind: string; }>(model);
 	const reasons: TextDecorationChangeReason[] = [];
 	using listener = decorations.onDidChange(
 		event => reasons.push(event.reason),
@@ -208,7 +208,7 @@ test("TextDecorationCollection applies a delta in one event and retains reusable
 test("Decoration owners remain independent over a shared model", () => {
 	using model = new TextModel("abc");
 	using diagnostics =
-		new TextDecorationCollection<{ readonly severity: number }>(model);
+		new TextDecorationCollection<{ readonly severity: number; }>(model);
 	using search = new TextDecorationCollection<string>(model);
 	const diagnosticId = diagnostics.add({
 		range: range(0, 1),

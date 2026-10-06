@@ -12,7 +12,7 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 
 	private readonly registrations = this._register(new DisposableMap<IWorkingCopy, DisposableStore>());
 	private readonly windowListeners = this._register(new DisposableMap<Window, DisposableStore>());
-	private readonly timers = new Map<IWorkingCopy, { readonly ownerWindow: Window; readonly handle: number }>();
+	private readonly timers = new Map<IWorkingCopy, { readonly ownerWindow: Window; readonly handle: number; }>();
 	private readonly saving = new Set<IWorkingCopy>();
 	private activeWorkingCopy: IWorkingCopy | undefined;
 

@@ -88,8 +88,8 @@ export class LibraryEditorPane extends Disposable implements IEditorPane {
 		}));
 	}
 
-	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> {}
-	public clearInput(): void {}
+	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	public clearInput(): void { }
 	public setVisible(visibility: EditorPaneVisibility): void {
 		this.visible = visibility === EditorPaneVisibility.Visible;
 		if (this.visible) { void this.library.reload(); }

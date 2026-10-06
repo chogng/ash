@@ -6,7 +6,7 @@ export class Point {
 	constructor(
 		readonly x: number,
 		readonly y: number,
-	) {}
+	) { }
 
 	add(other: Point): Point { return new Point(this.x + other.x, this.y + other.y); }
 	subtract(other: Point): Point { return new Point(this.x - other.x, this.y - other.y); }

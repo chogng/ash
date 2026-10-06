@@ -12,11 +12,11 @@
 工作模式、权限模式和访问范围分别设置。工作模式直接沿用 `Agent / Plan / Debug / Multitask / Ask`，
 不增加“执行”选项。`Plan` 和 `Ask` 用于调查和分析，其余模式按各自用途执行任务。
 
-| 选择 | 决定什么 | 不会改变什么 |
-| --- | --- | --- |
-| 工作模式 | 当前怎么完成任务；Plan/Ask 不修改项目或外部状态 | 审批方式、文件和网络范围 |
-| 权限模式 | 需要授权的动作由用户还是审核模型批准 | 当前工作模式、访问硬限制 |
-| 文件和网络范围 | 操作可以访问哪里、能否写入或联网 | 工作模式、审批方式 |
+| 选择           | 决定什么                                        | 不会改变什么             |
+| -------------- | ----------------------------------------------- | ------------------------ |
+| 工作模式       | 当前怎么完成任务；Plan/Ask 不修改项目或外部状态 | 审批方式、文件和网络范围 |
+| 权限模式       | 需要授权的动作由用户还是审核模型批准            | 当前工作模式、访问硬限制 |
+| 文件和网络范围 | 操作可以访问哪里、能否写入或联网                | 工作模式、审批方式       |
 
 Sessions 输入区显示现有模式选择器和独立权限选择器，例如 `Plan ｜ Permissions: Auto`。
 批准计划通过 `switch_mode` 切换到现有的非分析模式；权限选择和访问范围保持不变。
@@ -41,14 +41,14 @@ Manual 由用户处理需要批准的操作；Auto 使用自动审核；Bypass p
 Ash 使用分层权限系统来平衡功能和安全性：能在明确沙箱边界内完成的动作优先受限执行；需要越过
 边界的动作再结合用户意图、风险和已有授权决定是自动批准、询问用户还是阻止。
 
-| 工具类型 | 示例 | 需要批准 | 批准后的行为 |
-| --- | --- | --- | --- |
-| 目录只读 | 读取文件、搜索、`Grep` | 通常不需要；前提是路径在允许范围内并可使用只读沙箱 `ReadOnly` | 不适用 |
-| 目录文件修改 | `Edit`、`Write`、创建或移动文件 | 在目录可写沙箱 `DirectoryWrite` 和允许写入范围内通常不需要；越过范围时需要重新判断 | 如果询问，只批准当前调用 |
-| 本地命令 | `cargo test`、`git status`、Shell 执行 | 可在匹配的沙箱策略中运行时不需要；必须在沙箱外执行且无法自动授权时需要 | 只批准当前工具调用 |
-| 网络访问 | 下载依赖、HTTP 请求、访问远端 API | 需要显式网络能力 `Network`；当前意图或目标作用范围不足以授权时需要 | 只批准当前动作和网络作用范围 |
-| 凭证与外部修改 | 使用令牌（token）、`git push`、创建 PR、修改云资源 | 根据用户意图和风险判断；极高风险直接阻止，不向用户请求放行 | 只批准当前动作、凭证用途和目标资源 |
-| 系统与界面控制 | 修改系统配置、控制浏览器或桌面 UI | 沙箱无法覆盖且没有足够执行授权时需要 | 只批准当前动作和能力集合 |
+| 工具类型       | 示例                                               | 需要批准                                                                           | 批准后的行为                       |
+| -------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------- |
+| 目录只读       | 读取文件、搜索、`Grep`                             | 通常不需要；前提是路径在允许范围内并可使用只读沙箱 `ReadOnly`                      | 不适用                             |
+| 目录文件修改   | `Edit`、`Write`、创建或移动文件                    | 在目录可写沙箱 `DirectoryWrite` 和允许写入范围内通常不需要；越过范围时需要重新判断 | 如果询问，只批准当前调用           |
+| 本地命令       | `cargo test`、`git status`、Shell 执行             | 可在匹配的沙箱策略中运行时不需要；必须在沙箱外执行且无法自动授权时需要             | 只批准当前工具调用                 |
+| 网络访问       | 下载依赖、HTTP 请求、访问远端 API                  | 需要显式网络能力 `Network`；当前意图或目标作用范围不足以授权时需要                 | 只批准当前动作和网络作用范围       |
+| 凭证与外部修改 | 使用令牌（token）、`git push`、创建 PR、修改云资源 | 根据用户意图和风险判断；极高风险直接阻止，不向用户请求放行                         | 只批准当前动作、凭证用途和目标资源 |
+| 系统与界面控制 | 修改系统配置、控制浏览器或桌面 UI                  | 沙箱无法覆盖且没有足够执行授权时需要                                               | 只批准当前动作和能力集合           |
 
 批准交互当前仍只有一次性 `ApproveOnce`，不会因历史点击自动升级。长期规则是另一条显式配置
 路径：User Config 可以持久化 typed execution-policy rule；Directory 配置只能增加拒绝、强制沙箱
@@ -57,22 +57,22 @@ Ash 使用分层权限系统来平衡功能和安全性：能在明确沙箱边�
 
 ### 核心规则
 
-| 规则 | 含义 |
-| --- | --- |
-| 授权单位 | 对一次已经解析清楚的具体动作授权，不对整个工具全局放行 |
-| 判断输入 | 动作、来源、最小能力、作用范围、沙箱兼容性、用户意图和风险 |
-| 用户决定 | 一次性批准 `ApproveOnce`、拒绝 `Decline`，或通过配置保存精确 digest 规则 |
-| 一次性绑定 | 批准请求、工具调用、动作摘要、完整能力集合和策略版本 |
-| 安全原则 | 可以减少无效询问，但不能用模糊匹配、模型自信或历史点击替代精确授权 |
+| 规则       | 含义                                                                     |
+| ---------- | ------------------------------------------------------------------------ |
+| 授权单位   | 对一次已经解析清楚的具体动作授权，不对整个工具全局放行                   |
+| 判断输入   | 动作、来源、最小能力、作用范围、沙箱兼容性、用户意图和风险               |
+| 用户决定   | 一次性批准 `ApproveOnce`、拒绝 `Decline`，或通过配置保存精确 digest 规则 |
+| 一次性绑定 | 批准请求、工具调用、动作摘要、完整能力集合和策略版本                     |
+| 安全原则   | 可以减少无效询问，但不能用模糊匹配、模型自信或历史点击替代精确授权       |
 
 ### 四个不能混用的安全概念
 
-| 概念 | 回答的问题 | 生命周期 |
-| --- | --- | --- |
-| `Permission` | 哪一种目录动作可以被授予？ | 稳定的动作类别 |
-| `Grant` | 哪个主体在什么目录范围内获得了哪些 Permission？ | 可撤销，可来自用户、组织或主机配置 |
-| `ApprovalRequest` | 当前缺少授权时，需要向用户询问什么？ | 一次交互；批准后仍须建立精确 Grant 或一次性执行授权 |
-| `AuthorizationDecision` | 当前这个具体动作允许还是拒绝？ | 单次检查结果，不持久化 |
+| 概念                    | 回答的问题                                      | 生命周期                                            |
+| ----------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| `Permission`            | 哪一种目录动作可以被授予？                      | 稳定的动作类别                                      |
+| `Grant`                 | 哪个主体在什么目录范围内获得了哪些 Permission？ | 可撤销，可来自用户、组织或主机配置                  |
+| `ApprovalRequest`       | 当前缺少授权时，需要向用户询问什么？            | 一次交互；批准后仍须建立精确 Grant 或一次性执行授权 |
+| `AuthorizationDecision` | 当前这个具体动作允许还是拒绝？                  | 单次检查结果，不持久化                              |
 
 `Permit` 不作为领域对象。目录检查在 Rust 中返回
 `Result<Authorization, PermissionDenied>`；允许值只是从检查入口传给当前操作的临时证明，撤销
@@ -93,11 +93,11 @@ Sessions 也支持 `/permission` 和相同的行内参数。`/guardian setup` �
 `/init` 生成的 `ASH.md` 提供背景，不能替代权限规则。资料跟随及确认边界见
 [准备项目审核环境](guardian.md#准备项目审核环境)。旧 `/policy` 已退出命令目录。
 
-| Footer 文案 | 枚举 / 协议 ID | authoritative policy 返回 `AskUser` 时 |
-| --- | --- | --- |
-| `Manual` | `Manual` / `manual` | 创建 durable approval，由用户 approve once 或 decline |
-| `Auto` | `Auto` / `auto` | 调用配置的审查模型，再由 `ActionPolicyEngine` 应用风险与授权矩阵；模型不可用或失败时继续询问用户 |
-| `Bypass permissions` | `BypassPermissions` / `bypassPermissions` | 跳过这次交互并签发精确绑定的 bypass authority |
+| Footer 文案          | 枚举 / 协议 ID                            | authoritative policy 返回 `AskUser` 时                                                           |
+| -------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Manual`             | `Manual` / `manual`                       | 创建 durable approval，由用户 approve once 或 decline                                            |
+| `Auto`               | `Auto` / `auto`                           | 调用配置的审查模型，再由 `ActionPolicyEngine` 应用风险与授权矩阵；模型不可用或失败时继续询问用户 |
+| `Bypass permissions` | `BypassPermissions` / `bypassPermissions` | 跳过这次交互并签发精确绑定的 bypass authority                                                    |
 
 模式列表、显示顺序、名称、说明、翻译 key 和确认标记由
 `ash-rs/protocol/src/approval_mode.rs` 统一定义。TypeScript 通过现有协议生成流程获取静态定义，
@@ -119,16 +119,16 @@ durable 记录。
 
 上表描述用户行为；系统内部将每次判断表示为以下类型化结果：
 
-| 系统结果 | 用户含义 | 谁拥有最终决定 |
-| --- | --- | --- |
-| `RunSandboxed` | 在明确的文件系统和网络限制中执行 | 确定性策略 |
-| `RunExecPolicyGranted` | 命中显式 `AllowUnsandboxed` 规则；authority 精确绑定 rule、exec-policy revision、动作与能力 | `ash-execpolicy` 求值，`ActionPolicyEngine` 签发最终 grant |
-| `RunAutoReviewed` | 不适用沙箱或需要额外能力，但上下文风险满足自动授权条件 | 策略引擎 `ActionPolicyEngine`；风险审查器只提供建议 |
-| `RunUnsandboxed` | 使用已有的精确用户授权执行 | 用户授权 + `ActionPolicyEngine` 精确匹配 |
-| `RunWithPermissionBypass` | 当前 Turn 选择跳过本来需要的交互，但仍保留精确绑定与审计 | 可信产品 policy adapter；只能替换 `AskUser` |
-| `AskUser` | 缺少足够、明确的执行授权 | 用户 |
-| `ReviseAction` | 当前动作过宽，Agent 应提出更小、更安全的动作 | `ActionPolicyEngine` |
-| `Block` | 命中确定性禁令、极高风险、审查失败或沙箱硬约束 | 确定性策略 |
+| 系统结果                  | 用户含义                                                                                    | 谁拥有最终决定                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `RunSandboxed`            | 在明确的文件系统和网络限制中执行                                                            | 确定性策略                                                 |
+| `RunExecPolicyGranted`    | 命中显式 `AllowUnsandboxed` 规则；authority 精确绑定 rule、exec-policy revision、动作与能力 | `ash-execpolicy` 求值，`ActionPolicyEngine` 签发最终 grant |
+| `RunAutoReviewed`         | 不适用沙箱或需要额外能力，但上下文风险满足自动授权条件                                      | 策略引擎 `ActionPolicyEngine`；风险审查器只提供建议        |
+| `RunUnsandboxed`          | 使用已有的精确用户授权执行                                                                  | 用户授权 + `ActionPolicyEngine` 精确匹配                   |
+| `RunWithPermissionBypass` | 当前 Turn 选择跳过本来需要的交互，但仍保留精确绑定与审计                                    | 可信产品 policy adapter；只能替换 `AskUser`                |
+| `AskUser`                 | 缺少足够、明确的执行授权                                                                    | 用户                                                       |
+| `ReviseAction`            | 当前动作过宽，Agent 应提出更小、更安全的动作                                                | `ActionPolicyEngine`                                       |
+| `Block`                   | 命中确定性禁令、极高风险、审查失败或沙箱硬约束                                              | 确定性策略                                                 |
 
 `AskUser` 不是异常，也不等于系统“不够聪明”。它表示当前上下文不足以安全地替用户作决定。
 
@@ -136,14 +136,14 @@ durable 记录。
 
 权限系统由六层相互独立的约束组成：
 
-| 层 | 解决的问题 | 不负责什么 |
-| --- | --- | --- |
-| 动作解析 | 把工具参数、工作目录、解析后的路径、环境和来源变成精确动作 | 不批准执行 |
-| 能力模型 | 描述动作需要的最小能力与作用范围 | 不判断用户意图 |
-| 确定性规则 | `ash-execpolicy` 组合 Host / Organization / User / Directory layer 并返回纯 effect | 不签发 grant、不执行工具 |
+| 层                 | 解决的问题                                                                             | 不负责什么                     |
+| ------------------ | -------------------------------------------------------------------------------------- | ------------------------------ |
+| 动作解析           | 把工具参数、工作目录、解析后的路径、环境和来源变成精确动作                             | 不批准执行                     |
+| 能力模型           | 描述动作需要的最小能力与作用范围                                                       | 不判断用户意图                 |
+| 确定性规则         | `ash-execpolicy` 组合 Host / Organization / User / Directory layer 并返回纯 effect     | 不签发 grant、不执行工具       |
 | 最终 action policy | `ash-action-policy` 把 rule effect、exact grants、sandbox 与 reviewer 结果合成最终决定 | 不解析或持久化规则、不执行工具 |
-| Guardian | 根据标明信任来源的上下文给出风险建议 | 不能签发最终执行授权 |
-| 持久化批准与执行 | `ConfigStore` 保存精确用户规则；Core 保存一次性批准和副作用起点 | 不改变前面的安全判断 |
+| Guardian           | 根据标明信任来源的上下文给出风险建议                                                   | 不能签发最终执行授权           |
+| 持久化批准与执行   | `ConfigStore` 保存精确用户规则；Core 保存一次性批准和副作用起点                        | 不改变前面的安全判断           |
 
 因此：
 
@@ -159,16 +159,16 @@ durable 记录。
 当前能力类型 `CapabilityKind` 定义八类能力。真正参与授权匹配的是“类型 + 作用范围”，不只是
 下表中的名称。
 
-| 能力 | 典型动作 | 需要特别说明的作用范围 |
-| --- | --- | --- |
-| 文件读取 `FileRead` | 读取文件、搜索内容 | 目录、文件集合、是否越过授权目录 |
-| 文件写入 `FileWrite` | 创建、编辑、删除或移动文件 | 精确路径、可写根、破坏性范围 |
-| 启动进程 `ProcessSpawn` | 启动本地程序或 Shell 命令 | 可执行文件、参数、工作目录和环境变量 |
-| 网络访问 `Network` | HTTP、下载、远端连接 | 主机、协议、端口、请求范围 |
-| 使用凭证 `CredentialUse` | 使用令牌、账号或密钥 | 凭证标识、目标服务、用途 |
-| 外部修改 `ExternalMutation` | 修改 GitHub、Linear、云资源等外部状态 | 服务、资源标识、操作类型 |
-| 系统配置 `SystemConfiguration` | 修改系统级设置或安装环境 | 系统资源、变更范围、恢复方式 |
-| 用户界面 `UserInterface` | 控制浏览器或桌面界面 | 应用、页面、交互目标 |
+| 能力                           | 典型动作                              | 需要特别说明的作用范围               |
+| ------------------------------ | ------------------------------------- | ------------------------------------ |
+| 文件读取 `FileRead`            | 读取文件、搜索内容                    | 目录、文件集合、是否越过授权目录     |
+| 文件写入 `FileWrite`           | 创建、编辑、删除或移动文件            | 精确路径、可写根、破坏性范围         |
+| 启动进程 `ProcessSpawn`        | 启动本地程序或 Shell 命令             | 可执行文件、参数、工作目录和环境变量 |
+| 网络访问 `Network`             | HTTP、下载、远端连接                  | 主机、协议、端口、请求范围           |
+| 使用凭证 `CredentialUse`       | 使用令牌、账号或密钥                  | 凭证标识、目标服务、用途             |
+| 外部修改 `ExternalMutation`    | 修改 GitHub、Linear、云资源等外部状态 | 服务、资源标识、操作类型             |
+| 系统配置 `SystemConfiguration` | 修改系统级设置或安装环境              | 系统资源、变更范围、恢复方式         |
+| 用户界面 `UserInterface`       | 控制浏览器或桌面界面                  | 应用、页面、交互目标                 |
 
 能力集合必须是完成动作所需的最小集合。把多个未来可能需要的能力预先合并，会扩大授权范围，也会
 让批准说明失真。
@@ -205,10 +205,10 @@ Agent 提出工具调用
 
 当前协议的即时用户决定仍只有两种；持久化规则是独立的 Config authority，不会改变 `ApproveOnce`：
 
-| 决定 | 当前语义 |
-| --- | --- |
+| 决定                     | 当前语义                                   |
+| ------------------------ | ------------------------------------------ |
 | 一次性批准 `ApproveOnce` | 允许当前批准请求对应的当前工具调用执行一次 |
-| 拒绝 `Decline` | 拒绝当前请求；原工具调用以明确失败结束 |
+| 拒绝 `Decline`           | 拒绝当前请求；原工具调用以明确失败结束     |
 
 一次性授权绑定以下标识：
 
@@ -263,11 +263,11 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 
 本地执行的沙箱策略由文件授权、文件隔离模型和网络约束组成：
 
-| 文件系统 | 含义 |
-| --- | --- |
-| 只读 `ReadOnly` | 授权目录只读 |
+| 文件系统                  | 含义                           |
+| ------------------------- | ------------------------------ |
+| 只读 `ReadOnly`           | 授权目录只读                   |
 | 目录可写 `DirectoryWrite` | 授予经过解析和验证的目录写权限 |
-| 完全访问 `FullAccess` | 不以目录文件边界约束动作 |
+| 完全访问 `FullAccess`     | 不以目录文件边界约束动作       |
 
 `FileSystemIsolation::Strict` 另要求授权目录外不可写，是 `SandboxPolicy::new` 的默认值。
 Windows 本地工具显式选择 `WindowsAccount`：使用独立账户、限制令牌、目录 ACL 和有范围及预算限制的可写路径审计，不承诺整个宿主只读。调用方要求 `Strict` 时，账户后端在安装检查和命令启动前拒绝，不能自动降低隔离要求。
@@ -275,10 +275,10 @@ Windows 本地工具显式选择 `WindowsAccount`：使用独立账户、限制�
 
 Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 ACL 授权之外，允许必要祖先目录的非继承属性查询和遍历权限。祖先目录枚举、文件读取及设备权限不包含在这项授权中，安装账户和网络规则仍走独立清单。
 
-| 网络 | 含义 |
-| --- | --- |
-| 禁止 `Denied` | 平台后端必须实际阻止网络访问 |
-| 允许 `Allowed` | 动作可使用网络；仍不自动获得凭证使用或外部修改授权 |
+| 网络           | 含义                                                               |
+| -------------- | ------------------------------------------------------------------ |
+| 禁止 `Denied`  | 平台后端必须实际阻止网络访问                                       |
+| 允许 `Allowed` | 动作可使用网络；仍不自动获得凭证使用或外部修改授权                 |
 | 受管 `Managed` | 进程只能连接此次执行的代理端口，每个实际网络请求单独经过规则和审批 |
 
 本地 Shell 配置中出现网络目标、网络动作或 `network` capability selector 时启用受管网络；未配置时仍断网，
@@ -320,39 +320,39 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 
 ## 谁负责什么
 
-| 组件 | 当前责任 | 明确不拥有 |
-| --- | --- | --- |
-| 主机与工具适配器 | 解析精确动作、来源、最小能力和沙箱兼容性 | 最终批准 |
-| `ash-execpolicy` | typed selector、layer validation、effect precedence、semantic revision 与纯求值 | 最终 grant、Tool 执行、配置 I/O |
-| `ash-action-policy` | effect 映射、exact grant、sandbox、风险门槛和最终类型化结果 | 规则解析/持久化、工具执行、UI |
-| `ash-config` | User rule 的 typed TOML mutation/persistence；Directory restriction 的 strict-read intent | 规则求值、最终执行授权 |
-| `ash-guardian-reviewer` | 生成受 schema 约束的风险审查结论 | 覆盖策略、签发授权 |
-| Core 的 `ToolScheduler` | 持久化批准、一次性授权、执行生命周期和恢复语义 | 操作系统沙箱强制执行 |
-| `ash-exec` 与工具执行器 | 消费明确执行授权并返回类型化结果 | 自行提权 |
-| `ash-sandboxing` | 统一策略、目录验证与进程生命周期 | 批准、重试和持久化 |
-| `mxc-sandbox` | MXC 依赖、平台选择和强制执行 | 动作授权和审批 |
-| `ash-network-proxy` | 拦截真实网络请求、检查连接地址、管理执行独立的监听与连接 | 配置持久化、最终批准、文件权限 |
-| App Server、CLI 与 Desktop | 暴露权限 CRUD、展示动作、作用范围、风险和用户选择 | 改写权威策略 |
+| 组件                       | 当前责任                                                                                  | 明确不拥有                      |
+| -------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------- |
+| 主机与工具适配器           | 解析精确动作、来源、最小能力和沙箱兼容性                                                  | 最终批准                        |
+| `ash-execpolicy`           | typed selector、layer validation、effect precedence、semantic revision 与纯求值           | 最终 grant、Tool 执行、配置 I/O |
+| `ash-action-policy`        | effect 映射、exact grant、sandbox、风险门槛和最终类型化结果                               | 规则解析/持久化、工具执行、UI   |
+| `ash-config`               | User rule 的 typed TOML mutation/persistence；Directory restriction 的 strict-read intent | 规则求值、最终执行授权          |
+| `ash-guardian-reviewer`    | 生成受 schema 约束的风险审查结论                                                          | 覆盖策略、签发授权              |
+| Core 的 `ToolScheduler`    | 持久化批准、一次性授权、执行生命周期和恢复语义                                            | 操作系统沙箱强制执行            |
+| `ash-exec` 与工具执行器    | 消费明确执行授权并返回类型化结果                                                          | 自行提权                        |
+| `ash-sandboxing`           | 统一策略、目录验证与进程生命周期                                                          | 批准、重试和持久化              |
+| `mxc-sandbox`              | MXC 依赖、平台选择和强制执行                                                              | 动作授权和审批                  |
+| `ash-network-proxy`        | 拦截真实网络请求、检查连接地址、管理执行独立的监听与连接                                  | 配置持久化、最终批准、文件权限  |
+| App Server、CLI 与 Desktop | 暴露权限 CRUD、展示动作、作用范围、风险和用户选择                                         | 改写权威策略                    |
 
 任何一层同时承担“描述动作、判断风险、签发权限、执行副作用”中的多项职责，都会削弱审计边界。
 
 ## 当前实现状态
 
-| 能力 | 状态 | 边界 |
-| --- | --- | --- |
-| 精确绑定动作、能力集合和策略版本 | 当前已实现 | 规范字节的完整性仍依赖主机动作解析器 |
-| Host/Organization/User/Directory typed layer 与 semantic revision | 当前已实现 | Organization 的产品分发 adapter 尚未接入 |
-| source、command prefix、network、capability、action selector | 当前已实现 | selector 只消费 host-materialized typed fields |
-| User rule 持久化与 Directory 只收紧规则 | 当前已实现 | 统一规则编辑 UI、expiry 尚未实现 |
-| exec-policy exact durable execution authority | 当前已实现 | 绑定 rule ID、exec-policy revision、action、capabilities 与 Tool Call |
-| Guardian 类型化建议与风险门槛 | 当前已实现 | 当前是单次审查，没有分层审查或多审查器协作 |
-| 持久化批准请求与 `ApproveOnce` / `Decline` | 当前已实现 | 各客户端的呈现体验尚未完全统一 |
-| TUI 的逐轮权限模式 | 当前已实现 | 模式在提交时冻结；review model 当前在 App Server 启动时解析 |
-| 副作用前记录工具执行开始 | 当前已实现 | 崩溃后的未知结果不自动重放 |
-| 类型化沙箱拒绝再审查 | 当前已实现 | 最多一次；真实平台拒绝样本仍有限 |
-| macOS、Linux 和 Windows 平台沙箱 | 部分具备 | 具体支持和集成验收以沙箱文档为准 |
-| rule expiry | 尚未完成 | 需要独立时间与撤销语义 |
-| 面向用户的统一权限解释器与历史审计页 | 尚未完成 | 协议和 Core 契约可作为后续 UI 基础 |
+| 能力                                                              | 状态       | 边界                                                                  |
+| ----------------------------------------------------------------- | ---------- | --------------------------------------------------------------------- |
+| 精确绑定动作、能力集合和策略版本                                  | 当前已实现 | 规范字节的完整性仍依赖主机动作解析器                                  |
+| Host/Organization/User/Directory typed layer 与 semantic revision | 当前已实现 | Organization 的产品分发 adapter 尚未接入                              |
+| source、command prefix、network、capability、action selector      | 当前已实现 | selector 只消费 host-materialized typed fields                        |
+| User rule 持久化与 Directory 只收紧规则                           | 当前已实现 | 统一规则编辑 UI、expiry 尚未实现                                      |
+| exec-policy exact durable execution authority                     | 当前已实现 | 绑定 rule ID、exec-policy revision、action、capabilities 与 Tool Call |
+| Guardian 类型化建议与风险门槛                                     | 当前已实现 | 当前是单次审查，没有分层审查或多审查器协作                            |
+| 持久化批准请求与 `ApproveOnce` / `Decline`                        | 当前已实现 | 各客户端的呈现体验尚未完全统一                                        |
+| TUI 的逐轮权限模式                                                | 当前已实现 | 模式在提交时冻结；review model 当前在 App Server 启动时解析           |
+| 副作用前记录工具执行开始                                          | 当前已实现 | 崩溃后的未知结果不自动重放                                            |
+| 类型化沙箱拒绝再审查                                              | 当前已实现 | 最多一次；真实平台拒绝样本仍有限                                      |
+| macOS、Linux 和 Windows 平台沙箱                                  | 部分具备   | 具体支持和集成验收以沙箱文档为准                                      |
+| rule expiry                                                       | 尚未完成   | 需要独立时间与撤销语义                                                |
+| 面向用户的统一权限解释器与历史审计页                              | 尚未完成   | 协议和 Core 契约可作为后续 UI 基础                                    |
 
 ## 计划方向：让权限更容易理解，而不是更模糊
 

@@ -180,11 +180,11 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 			offset += 2;
 			continue;
 		}
-	 if (character !== "$") {
-		 text.append(character);
-		 offset += 1;
-		 continue;
-	 }
+		if (character !== "$") {
+			text.append(character);
+			offset += 1;
+			continue;
+		}
 		if (source[offset + 1] === "$") {
 			text.append("$$");
 			offset += 2;
@@ -324,7 +324,7 @@ interface SnippetVariableToken {
 
 type SnippetToken = SnippetTabstopToken | SnippetVariableToken;
 
-function readTransform(source: string, slashOffset: number): { readonly transform: SnippetTransform; readonly nextOffset: number } {
+function readTransform(source: string, slashOffset: number): { readonly transform: SnippetTransform; readonly nextOffset: number; } {
 	const pattern = readTransformPart(source, slashOffset + 1, false);
 	const format = readTransformPart(source, pattern.nextOffset, true);
 	let options = "";
@@ -342,7 +342,7 @@ function readTransform(source: string, slashOffset: number): { readonly transfor
 	});
 }
 
-function readTransformPart(source: string, startOffset: number, supportsBracedFormatExpressions: boolean): { readonly text: string; readonly nextOffset: number } {
+function readTransformPart(source: string, startOffset: number, supportsBracedFormatExpressions: boolean): { readonly text: string; readonly nextOffset: number; } {
 	let text = "";
 	let braceDepth = 0;
 	let offset = startOffset;
@@ -375,7 +375,7 @@ function readTransformPart(source: string, startOffset: number, supportsBracedFo
 	throw new SyntaxError("Unclosed language completion snippet transform");
 }
 
-function readChoice(source: string, startOffset: number): { readonly values: readonly string[]; readonly nextOffset: number } {
+function readChoice(source: string, startOffset: number): { readonly values: readonly string[]; readonly nextOffset: number; } {
 	const values: string[] = [];
 	let value = "";
 	let offset = startOffset;

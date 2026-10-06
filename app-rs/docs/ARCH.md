@@ -1,10 +1,10 @@
 actionlist > vertical actionbar > actionviewitem : icon | title | description/keybinding
-   
+
 toolbar > actionbar > actionviewitem
 actionbar 接 action, actionviewitem 渲染 action 为按钮, actionrunner 执行 action
 
 menu > action-menu-item : menu-item-check | action-label | keybinding
-                         // 左侧勾选图标    // 菜单文本     // 快捷键
+// 左侧勾选图标 // 菜单文本 // 快捷键
 
 radiogroup > radio > button
 mode switcher > radiogroup

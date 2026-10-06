@@ -32,7 +32,7 @@ export abstract class KeyboardMapper implements IKeyboardMapper {
 		protected readonly mapping: IKeyboardMapping,
 		protected readonly configuration: IKeyboardMapperConfiguration,
 		protected readonly operatingSystem: OperatingSystem,
-	) {}
+	) { }
 
 	public abstract dumpDebugInfo(): string;
 
@@ -90,8 +90,8 @@ export abstract class KeyboardMapper implements IKeyboardMapper {
 		const chord = isModifierKeyCode(event.keyCode)
 			? logicalKey(KeyCodeUtils.toString(event.keyCode!), {})
 			: this.configuration.dispatch === KeyboardDispatchMode.Code || event.key === 'Dead'
-			? physicalKey(event.code, modifiers)
-			: logicalKey(logicalKeyValue, modifiers);
+				? physicalKey(event.code, modifiers)
+				: logicalKey(logicalKeyValue, modifiers);
 		return this.resolveKeybinding(Keybinding.single(chord))[0] ??
 			resolveKeybinding(Keybinding.single(chord), this.operatingSystem);
 	}
@@ -217,7 +217,7 @@ function debugValue(value: string): string {
 export class CachedKeyboardMapper implements IKeyboardMapper {
 	private readonly cache = new WeakMap<Keybinding, readonly ResolvedKeybinding[]>();
 
-	constructor(private readonly actual: IKeyboardMapper) {}
+	constructor(private readonly actual: IKeyboardMapper) { }
 
 	public dumpDebugInfo(): string {
 		return this.actual.dumpDebugInfo();

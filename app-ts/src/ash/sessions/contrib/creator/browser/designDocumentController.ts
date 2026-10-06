@@ -30,7 +30,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	public get hasExternalChange(): boolean { return this.externalChange; }
 	private media = new Map<string, Uint8Array>();
 	public readonly model: DesignModel;
-	private readonly changeEmitter = this._register(new Emitter<{ readonly message?: string }>());
+	private readonly changeEmitter = this._register(new Emitter<{ readonly message?: string; }>());
 	public readonly onDidChange = this.changeEmitter.event;
 	private readonly labelChange = this._register(new Emitter<void>());
 	public readonly onDidChangeLabel = this.labelChange.event;
@@ -38,7 +38,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	private readonly contentChange = this._register(new Emitter<void>());
 	public readonly onDidChangeContent = this.contentChange.event;
 	public readonly onDidChangeDirty = this.dirtyChange.event;
-	private file: { resource: URI; revision: string } | undefined;
+	private file: { resource: URI; revision: string; } | undefined;
 	private savedContent: string;
 	private isFileOperationRunning = false;
 

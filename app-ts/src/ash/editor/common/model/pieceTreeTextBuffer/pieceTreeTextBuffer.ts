@@ -327,7 +327,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 			}
 		}
 
-		const reverseOffsets = new Map<PreparedBufferEdit, { readonly startOffset: number; readonly endOffset: number }>();
+		const reverseOffsets = new Map<PreparedBufferEdit, { readonly startOffset: number; readonly endOffset: number; }>();
 		let cumulativeDelta = 0;
 		for (const operation of operations) {
 			const startOffset = operation.rangeOffset + cumulativeDelta;
@@ -429,12 +429,12 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		const fragmented = statistics.pieceCount > MAXIMUM_PIECE_COUNT;
 		const disproportionatelyRetained =
 			statistics.reclaimableTextUnits >=
-				MINIMUM_RECLAIMABLE_TEXT_UNITS &&
+			MINIMUM_RECLAIMABLE_TEXT_UNITS &&
 			statistics.retainedTextUnits >=
-				statistics.liveTextUnits * 2;
+			statistics.liveTextUnits * 2;
 		const absolutelyRetained =
 			statistics.reclaimableTextUnits >=
-				MAXIMUM_RECLAIMABLE_TEXT_UNITS;
+			MAXIMUM_RECLAIMABLE_TEXT_UNITS;
 		return fragmented || disproportionatelyRetained || absolutelyRetained;
 	}
 

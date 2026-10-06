@@ -51,7 +51,7 @@ function createPortPair(): readonly [MemoryWirePort, MemoryWirePort] {
 
 interface WireMessage {
 	readonly kind: string;
-	readonly snapshot?: { readonly kind: string };
+	readonly snapshot?: { readonly kind: string; };
 }
 
 class MemoryWirePort extends Disposable implements WebWorkerClientPort {

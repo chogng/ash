@@ -1,20 +1,4 @@
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionClientOperation;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionClientResult;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionConfigurationTarget;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDocumentEdit;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDocumentSnapshot;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionMessageSeverity;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionTextEdit;
-#[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionTextPosition;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountCreditBalanceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountDto;
@@ -163,6 +147,22 @@ use crate::protocol::text_document::TextDocumentReleaseParams;
 use crate::protocol::text_document::TextDocumentTurnFinished;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentTurnOutcome;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionClientOperation;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionClientResult;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionConfigurationTarget;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDocumentEdit;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDocumentSnapshot;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionMessageSeverity;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionTextEdit;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionTextPosition;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::CommandEvidence;
 #[cfg(any(test, feature = "export"))]
@@ -711,8 +711,16 @@ use crate::protocol::error::AppServerErrorData;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::error::AppServerErrorName;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostActivateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostActivationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostActivationEventDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use crate::protocol::extension_host::ExtensionHostChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostCommandContributionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostExtensionDto;
 #[cfg(any(test, feature = "export"))]
@@ -751,14 +759,6 @@ use crate::protocol::extension_host::ExtensionHostOutputSeverityDto;
 use crate::protocol::extension_host::ExtensionHostReconcileModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostReconcileParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::extension_host::ExtensionHostActivateParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::extension_host::ExtensionHostActivationEventDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::extension_host::ExtensionHostActivationDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::extension_host::ExtensionHostCommandContributionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
 #[cfg(any(test, feature = "export"))]
@@ -1362,6 +1362,14 @@ use crate::protocol::marketplace::MarketplaceConnectorActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceDownloadParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyActionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceExecutableActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceExecutableRuntimeDto;
@@ -1377,14 +1385,6 @@ use crate::protocol::marketplace::MarketplaceInstalledPackageDto;
 use crate::protocol::marketplace::MarketplaceLanguageActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceListInstalledResult;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyActionDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyDto;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::marketplace::MarketplaceEditorExtensionsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceLocalizationActivationSpecDto;
 #[cfg(any(test, feature = "export"))]

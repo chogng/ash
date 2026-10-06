@@ -13,14 +13,14 @@ export function createConfigurationSchema(registry: IConfigurationRegistry = Reg
 		title: 'Ash User Settings',
 		type: 'object',
 		get properties() {
-	const properties: Record<string, JsonSchema> = {};
-	for (const configuration of registry.getRegisteredConfigurations()) {
-		const defaultValue = validateJsonValue(configuration.serialize(configuration.defaultValue), {
-			path: `configuration default ${configuration.key}`,
-		});
-		properties[configuration.key] = { ...configurationPropertySchema(defaultValue, configuration.setting), ...configuration.schema };
-	}
-		return Object.freeze(properties);
+			const properties: Record<string, JsonSchema> = {};
+			for (const configuration of registry.getRegisteredConfigurations()) {
+				const defaultValue = validateJsonValue(configuration.serialize(configuration.defaultValue), {
+					path: `configuration default ${configuration.key}`,
+				});
+				properties[configuration.key] = { ...configurationPropertySchema(defaultValue, configuration.setting), ...configuration.schema };
+			}
+			return Object.freeze(properties);
 		},
 		additionalProperties: true,
 	});

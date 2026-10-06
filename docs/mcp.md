@@ -28,18 +28,18 @@ MCP 客户端把外部 Server 的工具转换成 Ash 的工具目录。外部客
 
 大目录通过 `search_tools` 与 `call_mcp_tool` 发现和调用。两者的工具描述保持固定，目录与定义摘要通过搜索结果和调用参数传递；目录更新后，旧目录的绑定会被拒绝，调用方须重新搜索。目录身份不进入工具描述，避免目录更新改写模型的工具前缀。
 
-| 场景 | 使用的边界 | 当前状态 |
-| --- | --- | --- |
-| Ash 连接外部 MCP Server | `ash-rmcp-client` 建立单连接，`ash-mcp` 管理多 Server 和工具目录 | 工具纵向切片已实现 |
-| MCP 暴露工具 | 转成带来源、绑定和失效 generation 的统一工具 | 已实现基础目录与调用路由 |
-| MCP 暴露资源或提示词 | 进入各自的上下文和产品契约 | 仍属计划设计 |
-| Server 需要 bearer 或 OAuth | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
-| MCP 工具运行中请求表单输入 | 转成 Core durable 用户交互并唤醒同一次工具执行 | 基础类型已实现；URL、多选和跨重启恢复不支持 |
-| Marketplace 独立 MCP package | Manager 验证 HTTP 或 package-relative stdio transport；MCP consumer 持 lease 启动 | 安装不等于启动或授权 |
-| Marketplace Plugin bundle 携带 MCP/Connector | 同一次安装按 capability 分给 MCP 与 Connector consumer | 不进入第二套 Plugin runtime |
-| Legacy Plugin 独立声明 MCP Server | 兼容 authority 只贡献声明，经激活和策略解析后由 MCP runtime 启动 | Plugin 启用不等于连接或授权 |
-| Connector 需要外部账号 | Connector connected 后发布 ready MCP binding | Connector 不启动 MCP session |
-| 用户或 Directory 直接配置 MCP Server | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime | 不必须先安装 Plugin 或创建 Connector |
+| 场景                                         | 使用的边界                                                                        | 当前状态                                    |
+| -------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- |
+| Ash 连接外部 MCP Server                      | `ash-rmcp-client` 建立单连接，`ash-mcp` 管理多 Server 和工具目录                  | 工具纵向切片已实现                          |
+| MCP 暴露工具                                 | 转成带来源、绑定和失效 generation 的统一工具                                      | 已实现基础目录与调用路由                    |
+| MCP 暴露资源或提示词                         | 进入各自的上下文和产品契约                                                        | 仍属计划设计                                |
+| Server 需要 bearer 或 OAuth                  | 凭据保存在 SecretStore；具体 provider adapter 决定 discovery、scope 与 token wire | 独立 Config 与 Connector 路径均已具备窄实现 |
+| MCP 工具运行中请求表单输入                   | 转成 Core durable 用户交互并唤醒同一次工具执行                                    | 基础类型已实现；URL、多选和跨重启恢复不支持 |
+| Marketplace 独立 MCP package                 | Manager 验证 HTTP 或 package-relative stdio transport；MCP consumer 持 lease 启动 | 安装不等于启动或授权                        |
+| Marketplace Plugin bundle 携带 MCP/Connector | 同一次安装按 capability 分给 MCP 与 Connector consumer                            | 不进入第二套 Plugin runtime                 |
+| Legacy Plugin 独立声明 MCP Server            | 兼容 authority 只贡献声明，经激活和策略解析后由 MCP runtime 启动                  | Plugin 启用不等于连接或授权                 |
+| Connector 需要外部账号                       | Connector connected 后发布 ready MCP binding                                      | Connector 不启动 MCP session                |
+| 用户或 Directory 直接配置 MCP Server         | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime                            | 不必须先安装 Plugin 或创建 Connector        |
 
 ## 1. 结论
 
@@ -138,18 +138,18 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 
 支持矩阵明确区分低层代码与产品可用性：
 
-| MCP surface | Low-level client | Product runtime 策略 |
-| --- | --- | --- |
-| Base JSON-RPC lifecycle | Current | Current 多 session startup/shutdown；reconnect/health Proposed |
-| stdio | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed |
-| Streamable HTTP | Current unauthenticated/bearer transport | Current unauthenticated/SecretStore bearer；provider-injected OAuth lifecycle Current；自动 discovery/reconnect Proposed |
-| Tools | Current 原始 list/call | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current |
-| Resources | 尚未暴露 | 首发只做 list/read，显式进入 context |
-| Prompts | 尚未暴露 | 首发只做 list/get，不当作 Skill |
-| Roots | 尚未暴露 | 只暴露已授权目录，不能替代 OS sandbox |
-| Sampling | 尚未暴露 | 默认不声明；需独立预算、隐私和审批 |
-| Elicitation | Current host callback | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持 |
-| Tasks | 尚未暴露 | experimental，不等同 Ash Turn/Task |
+| MCP surface             | Low-level client                            | Product runtime 策略                                                                                                     |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Base JSON-RPC lifecycle | Current                                     | Current 多 session startup/shutdown；reconnect/health Proposed                                                           |
+| stdio                   | Current direct-local + injectable transport | Current absolute executable startup；sandboxed launcher Proposed                                                         |
+| Streamable HTTP         | Current unauthenticated/bearer transport    | Current unauthenticated/SecretStore bearer；provider-injected OAuth lifecycle Current；自动 discovery/reconnect Proposed |
+| Tools                   | Current 原始 list/call                      | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current                               |
+| Resources               | 尚未暴露                                    | 首发只做 list/read，显式进入 context                                                                                     |
+| Prompts                 | 尚未暴露                                    | 首发只做 list/get，不当作 Skill                                                                                          |
+| Roots                   | 尚未暴露                                    | 只暴露已授权目录，不能替代 OS sandbox                                                                                    |
+| Sampling                | 尚未暴露                                    | 默认不声明；需独立预算、隐私和审批                                                                                       |
+| Elicitation             | Current host callback                       | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持                             |
+| Tasks                   | 尚未暴露                                    | experimental，不等同 Ash Turn/Task                                                                                       |
 
 MCP 标准 transport 是
 [stdio 与 Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)。
@@ -609,13 +609,13 @@ OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先�
 
 当前与计划中的 App Server 接口面为：
 
-| 类别 | 方法示例 | 语义 |
-| --- | --- | --- |
-| Config | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set` | Current typed command 管理定义和 enablement；读取并入 `config/read` |
-| Runtime | `mcp/server/connect`、`mcp/server/disconnect` | process-local lifecycle intent，已接入 reconcile |
-| Catalog | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list` | Proposed 读取 snapshot |
-| Auth | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle |
-| Diagnostics | `mcp/server/status`、`mcp/server/log/read` | status 已实现；log/read 尚未实现 |
+| 类别        | 方法示例                                                                         | 语义                                                                |
+| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Config      | `mcp/server/upsert`、`mcp/server/remove`、`mcp/server/enablement/set`            | Current typed command 管理定义和 enablement；读取并入 `config/read` |
+| Runtime     | `mcp/server/connect`、`mcp/server/disconnect`                                    | process-local lifecycle intent，已接入 reconcile                    |
+| Catalog     | `mcp/tool/list`、`mcp/resource/list`、`mcp/prompt/list`                          | Proposed 读取 snapshot                                              |
+| Auth        | `mcp/oauth/start`、`mcp/oauth/complete`、`mcp/oauth/refresh`、`mcp/oauth/revoke` | Current process-local one-shot OAuth flow 与 credential lifecycle   |
+| Diagnostics | `mcp/server/status`、`mcp/server/log/read`                                       | status 已实现；log/read 尚未实现                                    |
 
 命名只是目标语义，实施时必须与 `ash-app-server-protocol` 同步生成 schema/TypeScript。配置修改
 继续使用 `CommandId` 和 exact typed payload replay；connect/disconnect 是 runtime intent，不占用

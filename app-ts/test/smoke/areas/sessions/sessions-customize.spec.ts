@@ -5,8 +5,8 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 
 async function useCustomMenus(page: Page): Promise<void> {
 	await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
 		const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 		settings['window.menuStyle'] = 'custom';
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });

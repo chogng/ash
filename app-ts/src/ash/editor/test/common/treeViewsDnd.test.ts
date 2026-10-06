@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { DraggedTreeItemsIdentifier, TreeViewsDnDService } from '../../common/services/treeViewsDnd.js';
 
 test('TreeViewsDnDService returns a drag operation exactly once', async () => {
-	const service = new TreeViewsDnDService<{ readonly text: string }>();
+	const service = new TreeViewsDnDService<{ readonly text: string; }>();
 	const transfer = Promise.resolve({ text: 'tree item' });
 	service.addDragOperationTransfer('drag-1', transfer);
 

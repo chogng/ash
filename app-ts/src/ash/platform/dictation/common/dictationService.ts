@@ -21,6 +21,6 @@ export interface IDictationService {
 }
 
 export interface IDictationOptions {
-	readonly inputDevices: readonly { readonly id: string; readonly label: string; readonly isDefault: boolean }[];
+	readonly inputDevices: readonly { readonly id: string; readonly label: string; readonly isDefault: boolean; }[];
 	readonly languages: readonly string[];
 }

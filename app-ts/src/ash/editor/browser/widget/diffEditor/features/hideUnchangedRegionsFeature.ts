@@ -14,8 +14,8 @@ import { type IViewZoneChangeAccessor } from '../../../editorBrowser.js';
 import { type CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
 
 export interface IDiffEditorBreadcrumbsSource extends IDisposable {
-	getBreadcrumbItems(startRange: LineRange, reader: IReader): { name: string; kind: LanguageSymbolKind; startLineNumber: number }[];
-	getAt(lineNumber: number, reader: IReader): { name: string; kind: LanguageSymbolKind; startLineNumber: number }[];
+	getBreadcrumbItems(startRange: LineRange, reader: IReader): { name: string; kind: LanguageSymbolKind; startLineNumber: number; }[];
+	getAt(lineNumber: number, reader: IReader): { name: string; kind: LanguageSymbolKind; startLineNumber: number; }[];
 }
 
 interface UnchangedRegion {

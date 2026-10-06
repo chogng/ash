@@ -88,7 +88,8 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 
 	private acceptEvent(event: BrowserViewEvent): void {
 		if (event.type === 'permissionRequested') {
-			const handle = this.dialogs.show({ kind: 'confirmation',
+			const handle = this.dialogs.show({
+				kind: 'confirmation',
 				title: localize({ bundle: 'ash.workbench', key: 'browser.permissionTitle' }, 'Website permission'),
 				message: localize({ bundle: 'ash.workbench', key: 'browser.permissionDescription' }, '{0} requests access to {1}.', event.origin, permissionLabel(event.permission)),
 				primaryButton: localize({ bundle: 'ash.workbench', key: 'browser.allow' }, 'Allow'),

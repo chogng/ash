@@ -25,6 +25,6 @@ test("bootstrap IPC can only read or cancel the active Main-owned operation", as
 	}
 });
 
-function route(routes: readonly { readonly channel: string; readonly validate: (value: unknown) => unknown; readonly invoke: (value: unknown) => unknown }[], channel: string) {
+function route(routes: readonly { readonly channel: string; readonly validate: (value: unknown) => unknown; readonly invoke: (value: unknown) => unknown; }[], channel: string) {
 	return routes.find(candidate => candidate.channel === channel)!;
 }

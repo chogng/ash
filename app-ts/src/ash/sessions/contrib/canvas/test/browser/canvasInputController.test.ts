@@ -29,7 +29,7 @@ function createInputFixture() {
 	const viewport = new CanvasViewport();
 	viewport.panBy(10, 20);
 	viewport.zoomAt({ x: 10, y: 20 }, 2);
-	const input = new CanvasInputController({ domNode, focus: () => domNode.focus(), applyTransform: () => {} }, viewport, participant);
+	const input = new CanvasInputController({ domNode, focus: () => domNode.focus(), applyTransform: () => { } }, viewport, participant);
 	return {
 		input, calls,
 		fire(type: string, pointerId = 1): void {

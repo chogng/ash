@@ -29,7 +29,7 @@ export interface IOpenConfiguration {
 }
 
 export interface IWindowsMainService {
-	open(configuration: IOpenConfiguration): Promise<{ readonly whenClosed: Promise<void>; readonly whenFilesClosed: Promise<void> }>;
+	open(configuration: IOpenConfiguration): Promise<{ readonly whenClosed: Promise<void>; readonly whenFilesClosed: Promise<void>; }>;
 }
 
 export const IWindowsMainService = createServiceIdentifier<IWindowsMainService>('windowsMainService');
@@ -122,7 +122,7 @@ export class WindowControlsOverlay {
 	private theme: INativeWindowTheme | undefined;
 	private dimmed = false;
 
-	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number }) => void) {}
+	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number; }) => void) { }
 
 	setTheme(theme: INativeWindowTheme): void {
 		this.theme = theme;
@@ -186,7 +186,7 @@ export function validateWindowState(
 
 	const usableDisplays = displays
 		.map((display) => ({ display, area: getWorkingArea(display) }))
-		.filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds } =>
+		.filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds; } =>
 			entry.area !== undefined
 		);
 	if (usableDisplays.length === 0) {

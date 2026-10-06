@@ -15,13 +15,13 @@
 秘密存储只安全保存不透明字节；“这个秘密是什么、何时刷新、谁可以使用”始终由对应业务领域
 负责。
 
-| 调用方需求 | 秘密存储负责 | 秘密存储不负责 |
-| --- | --- | --- |
-| 保存或读取一个敏感值 | 按不透明 `SecretKey` 执行 `load/store/delete` | 解释它是 API key、OAuth token 还是其他凭据 |
-| 在不同宿主持久化 | 使用 profile 私有文件或调用方注入的临时 backend | 替调用方选择账户、供应商或授权范围 |
-| 后端不可用 | 返回明确错误 | 静默降级到不安全文件或普通配置 |
-| 记录诊断信息 | 只记录脱敏错误和不敏感键 | 输出秘密字节、认证标头或完整命令 |
-| 删除秘密 | 返回已删除或不存在的明确结果 | 撤销远端 token 或完成供应商登出 |
+| 调用方需求           | 秘密存储负责                                    | 秘密存储不负责                             |
+| -------------------- | ----------------------------------------------- | ------------------------------------------ |
+| 保存或读取一个敏感值 | 按不透明 `SecretKey` 执行 `load/store/delete`   | 解释它是 API key、OAuth token 还是其他凭据 |
+| 在不同宿主持久化     | 使用 profile 私有文件或调用方注入的临时 backend | 替调用方选择账户、供应商或授权范围         |
+| 后端不可用           | 返回明确错误                                    | 静默降级到不安全文件或普通配置             |
+| 记录诊断信息         | 只记录脱敏错误和不敏感键                        | 输出秘密字节、认证标头或完整命令           |
+| 删除秘密             | 返回已删除或不存在的明确结果                    | 撤销远端 token 或完成供应商登出            |
 
 ## 1. 结论
 
@@ -124,13 +124,13 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 
 长期 backend：
 
-| Host | 默认 backend | 说明 |
-| --- | --- | --- |
-| Desktop | profile 私有文件 | `<profile>/secrets/values/`，hashed 文件名，不调用系统钥匙串 |
-| CLI/TUI interactive | profile 私有文件 | 与 Desktop 共用同一 profile authority |
-| CI/exec | ephemeral / injected | secret 由进程环境或调用方注入，不自动落盘 |
-| Standalone embedded host | injected | host 必须显式注入与自己 authority 一致的 backend |
-| Explicit keyring host | OS keyring | host 明确选择时注入 `KeyringSecretStore`，不是 daemon 默认 |
+| Host                     | 默认 backend         | 说明                                                         |
+| ------------------------ | -------------------- | ------------------------------------------------------------ |
+| Desktop                  | profile 私有文件     | `<profile>/secrets/values/`，hashed 文件名，不调用系统钥匙串 |
+| CLI/TUI interactive      | profile 私有文件     | 与 Desktop 共用同一 profile authority                        |
+| CI/exec                  | ephemeral / injected | secret 由进程环境或调用方注入，不自动落盘                    |
+| Standalone embedded host | injected             | host 必须显式注入与自己 authority 一致的 backend             |
+| Explicit keyring host    | OS keyring           | host 明确选择时注入 `KeyringSecretStore`，不是 daemon 默认   |
 
 生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `FileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 App Server connection、Connector、MCP 与 Provider credential adapter。
 
@@ -261,12 +261,12 @@ Desktop renderer ──▶ SecretStore
 
 产品模型的 API key 由受信任的 App Server 接收并管理。`provider/apiKey/set` 写入当前 profile 的 `SecretStore`；`provider/list` 只返回是否已配置，`provider/remove` 清理被删除连接的 key。`ash-model-provider` 在发起 HTTP、Responses WebSocket、Realtime 或 Live 请求时解析凭据并生成鉴权标头。CLI/TUI 通过同一 App Server 协议管理 key；Desktop 的 Chat Settings 可查看提供者的配置状态，并用遮蔽输入框录入或替换 key，不提供已存 key 的回读。
 
-| 能力 | 所有者 |
-| --- | --- |
-| Key 录入、状态和删除命令 | App Server 协议与 `ash-app-server` |
+| 能力                         | 所有者                                |
+| ---------------------------- | ------------------------------------- |
+| Key 录入、状态和删除命令     | App Server 协议与 `ash-app-server`    |
 | Key 校验、存储映射、请求鉴权 | `ash-model-provider` 与 `ash-secrets` |
-| 模型 HTTP/WebSocket 协议 | `ash-api`、`ash-websocket-client` |
-| 沙箱命令流量与审批 | `ash-network-proxy`、执行与策略领域 |
+| 模型 HTTP/WebSocket 协议     | `ash-api`、`ash-websocket-client`     |
+| 沙箱命令流量与审批           | `ash-network-proxy`、执行与策略领域   |
 
 这种边界允许 App Server 在录入和调用时接触明文 key；同用户且能访问 App Server 的客户端也可提交新 key 或使用已配置的模型。修改供应商的 `baseUrl` 后，下一次调用会把该供应商已存的 key 用于新目标，因此配置写入者与 key 录入者属于同一信任域。profile 文件权限保护落盘值，但不提供“App Server 不能读取 key”或“每次修改都由系统身份确认”的保证。无需安装独立模型服务，也不要求旧 profile key 重新录入；已有 key 沿用同一存储位置。不得把模型 key 自动交给沙箱命令或网络代理。
 

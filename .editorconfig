@@ -3,5 +3,23 @@ root = true
 [*]
 end_of_line = lf
 
+[{*.ts,*.tsx,*.mts,*.cts,*.js,*.jsx,*.mjs,*.cjs,*.css,*.html}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+[{*.rs,*.py}]
+indent_style = space
+indent_size = 4
+
+[{*.json,*.jsonc,*.yml,*.yaml}]
+indent_style = space
+indent_size = 2
+
+[{tsfmt.json,.vscode/*.json,.vscode/*.jsonc}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
 [{*.bat,*.cmd}]
 end_of_line = crlf

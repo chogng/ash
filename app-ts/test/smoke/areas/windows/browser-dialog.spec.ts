@@ -97,7 +97,7 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 			request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
 		});
 		try {
-			const records = await new Promise<Array<{ readonly content?: string }>>((resolve, reject) => {
+			const records = await new Promise<Array<{ readonly content?: string; }>>((resolve, reject) => {
 				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
 				request.onsuccess = () => resolve(request.result);
 				request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));

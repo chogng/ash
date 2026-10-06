@@ -35,7 +35,6 @@
   exists. Do not expand the base layer speculatively from anticipated feature
   requirements.
 
-
 # Code formatting
 
 - Prefer compact single-line formatting for short imports, function calls, parameter lists, conditions, and expressions.

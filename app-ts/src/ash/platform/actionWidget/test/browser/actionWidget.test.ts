@@ -42,7 +42,7 @@ test('action choices preserve icons, radio states and separators when dispatchin
 			{ kind: ActionListItemKind.Action, item: 1, label: 'Agent', checked: true, group: { title: '', icon: Lxicon.unlimited } },
 			{ kind: ActionListItemKind.Separator, label: '' },
 			{ kind: ActionListItemKind.Action, item: 2, label: 'Plan', checked: false, group: { title: '', icon: Lxicon.plan } },
-		], { onSelect: item => { selected.push(item); }, onHide: () => {} }, source);
+		], { onSelect: item => { selected.push(item); }, onHide: () => { } }, source);
 		const rows = Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
 		assert.deepEqual(rows.map(row => ({
 			label: row.getAttribute('aria-label'),
@@ -75,7 +75,7 @@ test('action lists focus the current choice, preserve navigation on refresh and 
 			{ kind: ActionListItemKind.Separator, label: '' },
 			{ kind: ActionListItemKind.Action, item: 2, label: 'Plan', checked: true },
 		];
-		using list = new ActionList('choices', items, { onSelect: () => {}, onHide: () => {} }, document.body, undefined, false, {});
+		using list = new ActionList('choices', items, { onSelect: () => { }, onHide: () => { } }, document.body, undefined, false, {});
 		list.focus();
 		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Plan');
 		list.domNode.querySelector<HTMLButtonElement>('[aria-label="Agent"]')!.focus();
@@ -130,7 +130,7 @@ test('an async action runs once and finishing a retired list leaves its replacem
 		const pending = new Promise<void>(resolve => { finish = resolve; });
 		let selected = 0;
 		service.show('first', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Run' }], {
-			onSelect: async () => { selected++; await pending; }, onHide: () => {},
+			onSelect: async () => { selected++; await pending; }, onHide: () => { },
 		}, source);
 		const button = dom.window.document.querySelector<HTMLButtonElement>('.ash-action-widget button')!;
 		button.click();
@@ -138,7 +138,7 @@ test('an async action runs once and finishing a retired list leaves its replacem
 		assert.equal(selected, 1);
 		assert.equal(dom.window.document.querySelector('.ash-action-widget')?.getAttribute('aria-busy'), 'true');
 		service.show('second', false, [{ kind: ActionListItemKind.Action, item: 2, label: 'Next' }], {
-			onSelect: () => {}, onHide: () => {},
+			onSelect: () => { }, onHide: () => { },
 		}, source);
 		finish();
 		await pending;
@@ -188,7 +188,7 @@ test('accessibility hint verbosity can be disabled without removing action label
 		const services = createServices(dom.window.document, resources);
 		await services.get(IConfigurationService).updateValue('accessibility.verbosity.actionWidget', false);
 		services.get(IActionWidgetService).show('muted', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Run' }], {
-			onSelect: () => {}, onHide: () => {},
+			onSelect: () => { }, onHide: () => { },
 		}, dom.window.document.querySelector<HTMLButtonElement>('#source')!);
 		const menu = dom.window.document.querySelector('.ash-action-widget')!;
 		assert.deepEqual({ label: menu.getAttribute('aria-label'), hint: menu.getAttribute('aria-description') }, { label: 'Actions', hint: null });
@@ -207,7 +207,7 @@ test('accessibility help is available to the workbench only while the action men
 		assert.equal(services.invokeFunction(accessor => implementation.getProvider(accessor)), undefined);
 		const service = services.get(IActionWidgetService);
 		service.show('help', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Run' }], {
-			onSelect: () => {}, onHide: () => {},
+			onSelect: () => { }, onHide: () => { },
 		}, dom.window.document.querySelector<HTMLButtonElement>('#source')!);
 		const focusedAction = dom.window.document.activeElement;
 		using provider = services.invokeFunction(accessor => implementation.getProvider(accessor))!;
@@ -235,7 +235,7 @@ test('filtering removes empty groups and keeps the typed action associated with 
 			{ kind: ActionListItemKind.Action, item: 1, label: 'Fix Alpha', group: { title: 'Fixes' } },
 			{ kind: ActionListItemKind.Header, label: 'Refactors' },
 			{ kind: ActionListItemKind.Action, item: 2, label: 'Extract Beta', group: { title: 'Refactors' } },
-		], { onSelect: item => { selected.push(item); }, onHide: () => {} }, dom.window.document.querySelector<HTMLButtonElement>('#source')!, { showFilter: true });
+		], { onSelect: item => { selected.push(item); }, onHide: () => { } }, dom.window.document.querySelector<HTMLButtonElement>('#source')!, { showFilter: true });
 		const root = dom.window.document.querySelector('.ash-action-widget')!;
 		const filter = root.querySelector<HTMLInputElement>('input')!;
 		filter.focus();
@@ -262,11 +262,11 @@ test('preview requires an eligible focused action and shares the activation gate
 		const service = createServices(dom.window.document, resources).get(IActionWidgetService);
 		let release!: () => void;
 		const pending = new Promise<void>(resolve => { release = resolve; });
-		const selected: { item: number; preview: boolean | undefined }[] = [];
+		const selected: { item: number; preview: boolean | undefined; }[] = [];
 		service.show('preview', true, [
 			{ kind: ActionListItemKind.Action, item: 1, label: 'No preview' },
 			{ kind: ActionListItemKind.Action, item: 2, label: 'Preview edit', canPreview: true },
-		], { onSelect: async (item, preview) => { selected.push({ item, preview }); await pending; }, onHide: () => {} }, dom.window.document.querySelector<HTMLButtonElement>('#source')!);
+		], { onSelect: async (item, preview) => { selected.push({ item, preview }); await pending; }, onHide: () => { } }, dom.window.document.querySelector<HTMLButtonElement>('#source')!);
 		const root = dom.window.document.querySelector('.ash-action-widget')!;
 		const preview = root.querySelector<HTMLButtonElement>('.ash-action-widget-preview button')!;
 		assert.equal(preview.disabled, true);
@@ -347,7 +347,7 @@ test('a dropdown opens typed actions and disposal cannot close a replacement men
 		assert.deepEqual(selected, ['edit']);
 		assert.equal(dropdown.element.getAttribute('aria-expanded'), 'false');
 		dropdown.show();
-		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => {}, onHide: () => {} }, dropdown.element);
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => { }, onHide: () => { } }, dropdown.element);
 		dropdown.dispose();
 		assert.equal(service.isVisible, true);
 		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');

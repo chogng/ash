@@ -66,7 +66,7 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 		if (classificationRevision !== classifications.revision) { styleCache.clear(); classificationRevision = classifications.revision; }
 		const key = JSON.stringify([type, modifiers, language]);
 		if (styleCache.has(key)) { return styleCache.get(key); }
-		const style: { foreground?: string; bold?: boolean; italic?: boolean; underline?: boolean; strikethrough?: boolean } = {};
+		const style: { foreground?: string; bold?: boolean; italic?: boolean; underline?: boolean; strikethrough?: boolean; } = {};
 		const scores = new Map<string, number>();
 		const apply = (candidate: TokenStyleData, score: number): void => {
 			for (const property of ['foreground', 'bold', 'italic', 'underline', 'strikethrough'] as const) {

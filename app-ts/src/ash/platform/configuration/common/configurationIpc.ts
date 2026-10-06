@@ -67,7 +67,7 @@ export function configurationOverrideValues(document: IConfigurationDocument): r
 	return validateConfigurationValues(parsed).overrides;
 }
 
-function validateConfigurationValues(value: unknown): { readonly values: Readonly<Record<string, ConfigurationValue>>; readonly overrides: readonly IConfigurationOverrideValues[] } {
+function validateConfigurationValues(value: unknown): { readonly values: Readonly<Record<string, ConfigurationValue>>; readonly overrides: readonly IConfigurationOverrideValues[]; } {
 	const values = record(value, 'configuration source');
 	const validated: Record<string, ConfigurationValue> = {};
 	const overrides: IConfigurationOverrideValues[] = [];

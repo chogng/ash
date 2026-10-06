@@ -93,10 +93,10 @@ test('minimap configuration follows visible lines through folding, wrapping, tab
 		() => Disposable.None,
 		languages,
 		theme,
-		{ setVisibleLines: () => {} },
+		{ setVisibleLines: () => { } },
 		{ batchChanges: callback => callback() },
 	);
-	const states: Array<{ lines: number; height: number; sampling: boolean }> = [];
+	const states: Array<{ lines: number; height: number; sampling: boolean; }> = [];
 	const read = (): void => {
 		const minimap = configuration.options.get(EditorOption.layoutInfo).minimap;
 		states.push({ lines: viewModel.getLineCount(), height: minimap.minimapLineHeight, sampling: minimap.minimapIsSampling });
@@ -141,7 +141,7 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	using model = new TextModel('one\ntwo\nthree', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	const visible: Array<{ startLineNumber: number; endLineNumber: number }> = [];
+	const visible: Array<{ startLineNumber: number; endLineNumber: number; }> = [];
 	using viewModel = new ViewModel(
 		1,
 		configuration,
@@ -239,7 +239,7 @@ test('ViewModel resets cursor markers through CursorsController after model flus
 		() => Disposable.None,
 		languages,
 		theme,
-		{ setVisibleLines: () => {} },
+		{ setVisibleLines: () => { } },
 		{ batchChanges: callback => callback() },
 	);
 	using captured = new CapturedViewEvents();

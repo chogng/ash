@@ -17,15 +17,15 @@ test("editor contributions retain bundle registration order and stable identity"
 	assert.ok(contribution && !('ctor' in contribution));
 	assert.doesNotThrow(() => contribution.install?.({ kind: "document" } as never));
 
-	assert.throws(() => registerEditorContribution({ id: "editor.contrib.findController", install() {} }), /Duplicate editor contribution/);
+	assert.throws(() => registerEditorContribution({ id: "editor.contrib.findController", install() { } }), /Duplicate editor contribution/);
 	assert.deepEqual(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id), after);
 });
 
 test('Constructor and hook contributions reject duplicate IDs in either registration order', () => {
-	class Contribution extends Disposable {}
+	class Contribution extends Disposable { }
 	registerEditorContribution('test.registry.constructor', Contribution, EditorContributionInstantiation.Lazy);
-	assert.throws(() => registerEditorContribution({ id: 'test.registry.constructor', install() {} }), /Duplicate editor contribution/);
-	registerEditorContribution({ id: 'test.registry.hook', install() {} });
+	assert.throws(() => registerEditorContribution({ id: 'test.registry.constructor', install() { } }), /Duplicate editor contribution/);
+	registerEditorContribution({ id: 'test.registry.hook', install() { } });
 	assert.throws(() => registerEditorContribution('test.registry.hook', Contribution, EditorContributionInstantiation.Eager), /Duplicate editor contribution/);
 	const snapshot = EditorExtensionsRegistry.getEditorContributions();
 	snapshot.length = 0;

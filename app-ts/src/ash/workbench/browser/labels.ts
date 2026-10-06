@@ -21,16 +21,16 @@ import { IUntitledTextEditorService } from '../services/untitled/common/untitled
 import { IDecorationsService, type IDecoration, type IResourceDecorationChangeEvent } from '../services/decorations/common/decorations.js';
 
 export interface IResourceLabelProps {
-	readonly resource?: URI | { readonly primary?: URI; readonly secondary?: URI };
+	readonly resource?: URI | { readonly primary?: URI; readonly secondary?: URI; };
 	readonly name?: string | readonly string[];
 	readonly description?: string;
-	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number };
+	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number; };
 }
 
 export interface IResourceLabelOptions extends Omit<IconLabelValueOptions, 'icon' | 'iconPath'> {
 	readonly icon?: ThemeIcon | URI;
 	readonly fileKind?: FileKind;
-	readonly fileDecorations?: { readonly colors: boolean; readonly badges: boolean };
+	readonly fileDecorations?: { readonly colors: boolean; readonly badges: boolean; };
 	readonly forceLabel?: boolean;
 	readonly namePrefix?: string;
 	readonly nameSuffix?: string;
@@ -39,7 +39,7 @@ export interface IResourceLabelOptions extends Omit<IconLabelValueOptions, 'icon
 export interface IFileLabelOptions extends IResourceLabelOptions {
 	readonly hideLabel?: boolean;
 	readonly hidePath?: boolean;
-	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number };
+	readonly range?: { readonly startLineNumber: number; readonly endLineNumber?: number; };
 }
 
 export interface IResourceLabel extends IDisposable {
@@ -119,7 +119,7 @@ export class ResourceLabels extends Disposable {
 		if (services.decorationsService) this._register(services.decorationsService.onDidChangeDecorations(event => this.onDecorationChange(event)));
 	}
 
-	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
+	create(container: HTMLElement, options?: { readonly supportIcons?: boolean; }): IResourceLabel {
 		const widget = new ResourceLabelWidget(container, this.services, options);
 		widget.setIconVisibility(this.iconsVisible);
 		this.widgets.add(widget);
@@ -201,7 +201,7 @@ export class ResourceLabelService implements IResourceLabelService {
 		@ILabelService private readonly labelService: ILabelService,
 		@IFileTextModelService private readonly fileModels: IFileTextModelService,
 		@ILanguageService private readonly languageService: ILanguageService,
-	) {}
+	) { }
 
 	createGroup(): ResourceLabels {
 		return new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
@@ -227,7 +227,7 @@ export class ResourceLabel extends Disposable implements IResourceLabel {
 	constructor(
 		container: HTMLElement,
 		services: ResourceLabelServices,
-		options?: { readonly supportIcons?: boolean },
+		options?: { readonly supportIcons?: boolean; },
 	) {
 		super();
 		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
@@ -275,7 +275,7 @@ class ResourceLabelWidget extends Disposable {
 		return resourceOf(this.current);
 	}
 
-	constructor(container: HTMLElement, services: ResourceLabelServices, options: { readonly supportIcons?: boolean } | undefined) {
+	constructor(container: HTMLElement, services: ResourceLabelServices, options: { readonly supportIcons?: boolean; } | undefined) {
 		super();
 		this.services = services;
 		this.supportIcons = options?.supportIcons === true;
@@ -406,8 +406,8 @@ class ResourceLabelWidget extends Disposable {
 		const renderIcon = customIcon && customIconColor
 			? (container: HTMLSpanElement) => { appendIcon(customIcon, container).style.color = `var(${colorCssVariable(customIconColor.id)})`; }
 			: options.renderIcon ?? (resource && !hideIcon && !options.icon && hasFileIcons && fileKind !== FileKind.Directory
-			? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container, iconClasses)
-			: undefined);
+				? (container: HTMLSpanElement) => this.services.resourceIconRenderer.renderFileIcon(resource, container, iconClasses)
+				: undefined);
 		const iconOptions: IconLabelValueOptions = {
 			...options,
 			ariaLabel: decoration?.tooltip ? localize('workbench.explorerDecoratedFile', '{0}, {1}', options.ariaLabel ?? (typeof displayName === 'string' ? displayName : displayName?.join('/')), decoration.tooltip) : options.ariaLabel,

@@ -18,7 +18,7 @@ import { CustomTextEditorModel } from '../../customEditor/common/customTextEdito
 export interface CustomTextEditorProvider {
 	readonly viewType: string;
 	readonly displayName: string;
-	render(document: { readonly uri: string; readonly text: string; readonly languageId: string }, signal: AbortSignal): Promise<string>;
+	render(document: { readonly uri: string; readonly text: string; readonly languageId: string; }, signal: AbortSignal): Promise<string>;
 }
 
 /** Generic text-backed webview host. Extension code owns the document's HTML. */

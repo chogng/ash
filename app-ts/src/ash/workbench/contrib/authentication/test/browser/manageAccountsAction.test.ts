@@ -163,7 +163,7 @@ function accountFixture(state: AccountState, operations: string[]): IAccountServ
 		onDidCompleteLogin: Event.None,
 		read: async () => { operations.push('read'); return state; },
 		startLogin: async method => { operations.push(`login:${method.type}`); return { type: 'connected', loginId: 'login' }; },
-		cancelLogin: async () => {},
+		cancelLogin: async () => { },
 		logout: async provider => { operations.push(`logout:${provider}`); },
 	};
 }
@@ -171,7 +171,7 @@ function accountFixture(state: AccountState, operations: string[]): IAccountServ
 class AccountActionEnvironment extends Disposable {
 	public readonly errors: string[] = [];
 	public readonly commands: CommandService;
-	public readonly github: { isConnecting: boolean; connect(): Promise<void>; cancel(): Promise<void> };
+	public readonly github: { isConnecting: boolean; connect(): Promise<void>; cancel(): Promise<void>; };
 
 	constructor(accounts: IAccountService, quickInput: IQuickInputService, operations: string[]) {
 		super();
@@ -185,7 +185,7 @@ class AccountActionEnvironment extends Disposable {
 		};
 		services.registerInstance(IGitHubConnectionService, this.github);
 		services.registerInstance(INotificationService, {
-			error: (message: string) => { this.errors.push(message); return { close() {} }; },
+			error: (message: string) => { this.errors.push(message); return { close() { } }; },
 		} as INotificationService);
 		this.commands = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, this.commands);
@@ -220,6 +220,6 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	public filterValue = (value: string): string => value;
 
 	public accept(item: TItem): void { this.accepted.fire(item); }
-	public show(): void {}
+	public show(): void { }
 	public hide(): void { this.hidden.fire(); }
 }

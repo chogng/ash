@@ -15,7 +15,7 @@ test('DebugEditContext delegates browser state and clears its diagnostic markers
 		public characterBoundsRangeStart = 0;
 		private bounds: DOMRect[] = [];
 
-		constructor(options: { readonly text?: string; readonly selectionStart?: number; readonly selectionEnd?: number } = {}) {
+		constructor(options: { readonly text?: string; readonly selectionStart?: number; readonly selectionEnd?: number; } = {}) {
 			super();
 			this.text = options.text ?? '';
 			this.selectionStart = options.selectionStart ?? 0;
@@ -32,8 +32,8 @@ test('DebugEditContext delegates browser state and clears its diagnostic markers
 			this.selectionEnd = end;
 		}
 
-		public updateControlBounds(_bounds: DOMRect): void {}
-		public updateSelectionBounds(_bounds: DOMRect): void {}
+		public updateControlBounds(_bounds: DOMRect): void { }
+		public updateSelectionBounds(_bounds: DOMRect): void { }
 
 		public updateCharacterBounds(rangeStart: number, bounds: DOMRect[]): void {
 			this.characterBoundsRangeStart = rangeStart;
@@ -54,7 +54,7 @@ test('DebugEditContext delegates browser state and clears its diagnostic markers
 	let updates = 0;
 	const listener = () => updates += 1;
 	const originalDebug = console.debug;
-	console.debug = () => {};
+	console.debug = () => { };
 	try {
 		debug.addEventListener('textupdate', listener);
 		browserContext.dispatchEvent(new dom.window.Event('textupdate'));

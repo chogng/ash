@@ -6,13 +6,13 @@
 
 Terminal 是外部 AI CLI 和其他交互式进程的通用运行与显示容器。Ash 是产品内唯一称为 Agent 的能力；Codex、Claude Code、Gemini CLI 等外部工具作为独立 CLI 进程运行，不进入 Ash 的 Agent、Thread、Tool 或 Approval 状态。
 
-| 用户操作 | Terminal 行为 | Terminal 不做什么 |
-| --- | --- | --- |
-| 打开一个 AI CLI | 使用对应启动适配生成可执行文件、参数、工作目录和环境，再创建 PTY | 不通过 shell 字符串拼接命令 |
-| 与 CLI 交互 | 把键盘、IME、粘贴、鼠标和窗口尺寸转换为终端输入 | 不把输入改写成 Ash 消息 |
-| CLI 输出内容 | 按终端协议更新 grid、光标、样式、标题和滚动历史 | 不解析屏幕文字来猜 ToolCall、状态或权限 |
-| CLI 进入 TUI | 在同一个 Terminal Pane 中继续处理 alternate screen 和 mouse mode | 不创建另一套窗口 Surface |
-| CLI 退出 | 显示真实退出状态，由产品决定关闭、保留或重新启动 Pane | 不伪造外部 CLI 的会话恢复能力 |
+| 用户操作        | Terminal 行为                                                    | Terminal 不做什么                       |
+| --------------- | ---------------------------------------------------------------- | --------------------------------------- |
+| 打开一个 AI CLI | 使用对应启动适配生成可执行文件、参数、工作目录和环境，再创建 PTY | 不通过 shell 字符串拼接命令             |
+| 与 CLI 交互     | 把键盘、IME、粘贴、鼠标和窗口尺寸转换为终端输入                  | 不把输入改写成 Ash 消息                 |
+| CLI 输出内容    | 按终端协议更新 grid、光标、样式、标题和滚动历史                  | 不解析屏幕文字来猜 ToolCall、状态或权限 |
+| CLI 进入 TUI    | 在同一个 Terminal Pane 中继续处理 alternate screen 和 mouse mode | 不创建另一套窗口 Surface                |
+| CLI 退出        | 显示真实退出状态，由产品决定关闭、保留或重新启动 Pane            | 不伪造外部 CLI 的会话恢复能力           |
 
 ## 调用关系
 
@@ -30,15 +30,15 @@ Terminal 是外部 AI CLI 和其他交互式进程的通用运行与显示容器
 
 ## 所有权
 
-| 能力 | 负责人 | 边界 |
-| --- | --- | --- |
-| Ash Agent、Thread、Tool、Approval | Ash Core / App Server | 不读取 Terminal grid 推断状态，不拥有外部 CLI 进程 |
-| AI CLI 发现和启动适配 | 每个 AI CLI 的独立 adapter crate | 隔离 SDK/CLI 依赖，确定 executable、argv、cwd、environment 和恢复参数；不实现终端协议 |
-| CLI 认证、配置和历史 | 外部 CLI | 产品只使用 CLI 明确提供的入口，不读取或复制私有凭据和内部历史 |
-| Terminal session 与 Pane binding | Terminal host / `ash-terminal-runtime` | 管理启动、退出、活动 Pane、resize 和 runtime binding；不解释 AI 语义 |
-| PTY process 与字节传输 | `ash-utils-pty` | 创建进程、读写字节和调整窗口尺寸；不拥有 Pane 或 CLI catalog |
-| ANSI/VT、screen、grid 和输入编码 | `ash-terminal` | 维护终端状态和有界回滚；不识别 Codex、Claude、Gemini 或 Ash |
-| Terminal Pane 绘制和输入路由 | `app` host + `zui` | 把 Terminal session 挂入当前 PaneGroup；不保存第二份终端状态 |
+| 能力                              | 负责人                                 | 边界                                                                                  |
+| --------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------- |
+| Ash Agent、Thread、Tool、Approval | Ash Core / App Server                  | 不读取 Terminal grid 推断状态，不拥有外部 CLI 进程                                    |
+| AI CLI 发现和启动适配             | 每个 AI CLI 的独立 adapter crate       | 隔离 SDK/CLI 依赖，确定 executable、argv、cwd、environment 和恢复参数；不实现终端协议 |
+| CLI 认证、配置和历史              | 外部 CLI                               | 产品只使用 CLI 明确提供的入口，不读取或复制私有凭据和内部历史                         |
+| Terminal session 与 Pane binding  | Terminal host / `ash-terminal-runtime` | 管理启动、退出、活动 Pane、resize 和 runtime binding；不解释 AI 语义                  |
+| PTY process 与字节传输            | `ash-utils-pty`                        | 创建进程、读写字节和调整窗口尺寸；不拥有 Pane 或 CLI catalog                          |
+| ANSI/VT、screen、grid 和输入编码  | `ash-terminal`                         | 维护终端状态和有界回滚；不识别 Codex、Claude、Gemini 或 Ash                           |
+| Terminal Pane 绘制和输入路由      | `app` host + `zui`                     | 把 Terminal session 挂入当前 PaneGroup；不保存第二份终端状态                          |
 
 `app-rs/workbench/application` 只做应用接线。CLI 的 executable discovery、启动参数、环境策略、认证检查和恢复规则必须留在对应 adapter crate，不能堆进 Workbench 组合层或 `ash-terminal`。
 
@@ -59,10 +59,10 @@ Terminal 是外部 AI CLI 和其他交互式进程的通用运行与显示容器
 
 目标 `PaneInput` 保持 `Agent` 与 `Terminal` 分离：
 
-| `PaneInput` | 内容 |
-| --- | --- |
-| `Agent` | 只表示 Ash Agent 的 Session + Thread |
-| `Terminal` | 一个外部 AI CLI、shell 或其他交互式进程 |
+| `PaneInput` | 内容                                    |
+| ----------- | --------------------------------------- |
+| `Agent`     | 只表示 Ash Agent 的 Session + Thread    |
+| `Terminal`  | 一个外部 AI CLI、shell 或其他交互式进程 |
 
 同一 PaneGroup 可以打开多个 Terminal 输入并通过组内 Tab 切换；需要同时查看时由 `PanePart` 拆分 PaneGroup。Terminal 不拥有顶层 Tab、Pane 拓扑或窗口响应式策略。
 

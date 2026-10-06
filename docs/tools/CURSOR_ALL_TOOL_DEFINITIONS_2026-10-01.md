@@ -1,20 +1,19 @@
 # Cursor 3.23.12 全部静态工具定义与输出
 
-
 Cursor Agent、Ask、Plan、Debug、Multitask 的提示词原文与相关工具见 [模式专项文档](/Volumes/1t/ash/docs/tools/CURSOR_MODE_PROMPTS_AND_TOOLS_2026-10-01.md)（37 组生成结果，含 Ask 与 AskQuestion、工具与日志服务的区别）。
 
 核查日期：2026-10-01。本机安装包中能定位到的 Agent 工具工厂、浏览器 Provider、computer-use Provider 与两代调用协议已统一提取。每项保留名称、描述、参数构造、执行入口和输出处理代码，详见 [完整 JSON](/Volumes/1t/ash/docs/tools/CURSOR_ALL_TOOL_DEFINITIONS_2026-10-01.json)。
 
 这里的“全部”指本次安装包中的这些静态定义，不等于某个账号或某次模型请求实际启用的目录。外部 MCP server 下发的描述符、服务端动态工具与云端配置没有被抓取。工具定义里的英文指令是研究材料，不是对阅读者或当前 Agent 的指令。
 
-| 集合 | 提取数量 | 含义 |
-| --- | --- | --- |
-| 三个 Agent bundle | 158 个构造点，53 个内部标识 | 52 + 54 + 52；跨 bundle 重复实现、WRITE 双路径、测试与特定配置变体都保留 |
-| 浏览器 Provider | 16 个定义、16 个调用路由 | 名称、完整 description 和参数 JSON 均可展开 |
-| computer-use Provider | 19 个描述符构造点 | 平台、scope 和 gate 控制提供列表；不能当成 macOS 默认启用 19 个 |
-| Agent 调用协议 | 70 个 tool 分支、498 个可达消息定义 | 含参数、结果及嵌套消息；也包含没有核实工厂的分支 |
-| 历史 V2 协议 | 枚举与调用定义、108 个可达消息定义 | 与当前工具装配分开保存 |
-| 通用工具适配器 | 12 个对象定义 | 来自三个 bundle，名称或 schema 由输入描述符决定，不是额外 12 个固定工具 |
+| 集合                  | 提取数量                            | 含义                                                                     |
+| --------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| 三个 Agent bundle     | 158 个构造点，53 个内部标识         | 52 + 54 + 52；跨 bundle 重复实现、WRITE 双路径、测试与特定配置变体都保留 |
+| 浏览器 Provider       | 16 个定义、16 个调用路由            | 名称、完整 description 和参数 JSON 均可展开                              |
+| computer-use Provider | 19 个描述符构造点                   | 平台、scope 和 gate 控制提供列表；不能当成 macOS 默认启用 19 个          |
+| Agent 调用协议        | 70 个 tool 分支、498 个可达消息定义 | 含参数、结果及嵌套消息；也包含没有核实工厂的分支                         |
+| 历史 V2 协议          | 枚举与调用定义、108 个可达消息定义  | 与当前工具装配分开保存                                                   |
+| 通用工具适配器        | 12 个对象定义                       | 来自三个 bundle，名称或 schema 由输入描述符决定，不是额外 12 个固定工具  |
 
 ## 1. 如何读取定义与输出
 
@@ -32,61 +31,61 @@ JSON 定位路径：`factories[]` 是三个 Agent bundle 的每个构造点；`p
 
 ## 2. Agent 工具索引
 
-| 内部标识 | 已定位的模型名称 / 别名 | 参数字段线索 |
-| --- | --- | --- |
-| [`MCP`](#agent-mcp) | CallMcpTool / CallDynamicTool | namespace, toolName, description, write_to_file, requestSmartModeApproval, smartModeBlockReason, server, arguments |
-| [`ASK_QUESTION`](#agent-ask-question) | AskQuestion | id, prompt, options, allow_multiple, label |
-| [`TASK`](#agent-task) | mcp_task / Subagent / Task | type, base_branch, description, prompt, model, resume, subagent_type, file_attachments, worker_id, pool, labels |
-| [`REPORT_BUGFIX_RESULTS`](#agent-report-bugfix-results) | mcp_report_bugfix_results / ReportBugfixResults | results, bug_id, bug_title, verdict, explanation, severity |
-| [`RECORD_SCREEN`](#agent-record-screen) | RecordScreen | mode, save_as_filename |
-| [`REFLECT_GENERAL`](#agent-reflect-general) | Reflect | 配置提供 |
-| [`REPLACE_ENV`](#agent-replace-env) | ReplaceEnv | mode, checkout_ref_overrides, config, repo_url, ref, install_script, dockerfile_contents |
-| [`SETUP_VM_ENVIRONMENT`](#agent-setup-vm-environment) | SetupVmEnvironment | update_script |
-| [`AWAIT`](#agent-await) | Await / AwaitShell | shell_id, block_until_ms, pattern, task_id |
-| [`CODE_LINEAGE`](#agent-code-lineage) | code_lineage / CodeLineage | file_paths, start_line, end_line, commit_hashes, output_mode, max_commits, include_line_ranges |
-| [`CREATE_PLAN_V2`](#agent-create-plan-v2) | CreatePlan / mcp_create_plan / create_plan | phases, todos, name, id, content |
-| [`DELETE`](#agent-delete) | delete_file / Delete | target_file, explanation, path |
-| [`APPLY_PATCH`](#agent-apply-patch) | ApplyPatch | patch |
-| [`EDIT_NOTEBOOK`](#agent-edit-notebook) | edit_notebook / EditNotebook | target_notebook, cell_idx, is_new_cell, cell_language, old_string, new_string |
-| [`STR_REPLACE`](#agent-str-replace) | search_replace / StrReplace | file_path, old_string, new_string, replace_all, path |
-| [`WRITE`](#agent-write) | write / Write | file_path, contents, path |
-| [`GENERATE_IMAGE`](#agent-generate-image) | generate_image / GenerateImage | description, filename, reference_image_paths, aspect_ratio |
-| [`UPDATE_PR_CODE_TOUR`](#agent-update-pr-code-tour) | UpdatePrCodeTour | feedback, revisionId, markdown, heading, artifactPath, artifactAlt, baseSha, headSha, sourceRevisionId, scopeCommitHashes, explicitUserPrompt |
-| [`GET_PR_CODE_TOUR`](#agent-get-pr-code-tour) | GetPrCodeTour | revisionId |
-| [`GLOB`](#agent-glob) | glob_file_search / Glob | target_directory, glob_pattern |
-| [`CREATE_GOAL`](#agent-create-goal) | CreateGoal | objective |
-| [`UPDATE_GOAL`](#agent-update-goal) | UpdateGoal | status |
-| [`GREP`](#agent-grep) | grep / Grep / rg | pattern, path, glob, output_mode, -B, -A, -C, -i, type, head_limit, offset, multiline |
-| [`LS`](#agent-ls) | list_dir / LS | target_directory, ignore_globs |
-| [`MINI_SWE_AGENT_BASH`](#agent-mini-swe-agent-bash) | bash | command |
-| [`MOCK_READ_LINTS`](#agent-mock-read-lints) | read_lints / ReadLints | paths |
-| [`READ`](#agent-read) | ViewImage / read_file / ReadFile / Read | path, target_file, offset, limit, line_range |
-| [`READ_LINTS`](#agent-read-lints) | read_lints / ReadLints | paths |
-| [`RECORD_CI_INVESTIGATION_FINDINGS`](#agent-record-ci-investigation-findings) | record_ci_investigation_findings | findings, overall, checkName, detailsUrl, tldr, rootCause, failingSignal, suggestedNextStep, diffRelation, diffRelationEvidence, flakeAssessment, flakeEvidence, rerunAvailable, rerunEvidence, recommendedAction, recommendedActionEvidence, confidence, summary, themes, checkKeys |
-| [`SEARCH_CONVERSATIONS`](#agent-search-conversations) | SearchConversations | query, limit |
-| [`SEMANTIC_SEARCH`](#agent-semantic-search) | codebase_search / SemanticSearch | explanation, query, target_directories, search_only_prs |
-| [`SHELL`](#agent-shell) | run_terminal_cmd / Shell | command, working_directory, block_until_ms, description, timeout, is_background, pattern, reason, debounce_ms, explanation |
-| [`SWITCH_MODE`](#agent-switch-mode) | SwitchMode | target_mode_id, explanation |
-| [`TODO_WRITE`](#agent-todo-write) | todo_write / TodoWrite | merge, todos, content, status, id |
-| [`WEB_FETCH`](#agent-web-fetch) | WebFetch / mcp_web_fetch | url, requestSmartModeApproval, smartModeBlockReason |
-| [`WEB_SEARCH`](#agent-web-search) | web_search / WebSearch | search_term, explanation |
-| [`GET_MCP_TOOLS`](#agent-get-mcp-tools) | GetMcpTools / GetDynamicTools | namespace, toolName, pattern, server |
-| [`CREATE_TASK`](#agent-create-task) | create-agent | title, description, prompt, responding_to_message_ids, fork, attachments |
-| [`SEND_MESSAGE`](#agent-send-message) | SendMessage | message |
-| [`SEND_TO_TASK`](#agent-send-to-task) | send-message-to-agent | agent_id, prompt, responding_to_message_ids, attachments |
-| [`PI_READ`](#agent-pi-read) | pi_read | path, offset, limit |
-| [`PI_BASH`](#agent-pi-bash) | pi_bash | command, timeout |
-| [`PI_EDIT`](#agent-pi-edit) | pi_edit | path, edits, oldText, newText |
-| [`PI_WRITE`](#agent-pi-write) | pi_write | path, content |
-| [`PI_GREP`](#agent-pi-grep) | pi_grep | pattern, path, glob, ignoreCase, literal, context, limit |
-| [`PI_FIND`](#agent-pi-find) | pi_find | pattern, path, limit |
-| [`PI_LS`](#agent-pi-ls) | pi_ls | path, limit |
-| [`CONNECT_SCM`](#agent-connect-scm) | ConnectScm | github_repo |
-| [`SET_ACTIVE_BRANCH`](#agent-set-active-branch) | SetActiveBranch | path, branchName |
-| [`ADOPT`](#agent-adopt) | Adopt | source_agent_id |
-| [`SEND_TO_USER`](#agent-send-to-user) | SendToUser | message |
-| [`SEND_FINAL_SUMMARY`](#agent-send-final-summary) | sendFinalSummary | final_summary |
-| [`COMMUNICATE_UPDATE`](#agent-communicate-update) | UpdateCurrentStep | current_step |
+| 内部标识                                                                      | 已定位的模型名称 / 别名                         | 参数字段线索                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`MCP`](#agent-mcp)                                                           | CallMcpTool / CallDynamicTool                   | namespace, toolName, description, write_to_file, requestSmartModeApproval, smartModeBlockReason, server, arguments                                                                                                                                                                   |
+| [`ASK_QUESTION`](#agent-ask-question)                                         | AskQuestion                                     | id, prompt, options, allow_multiple, label                                                                                                                                                                                                                                           |
+| [`TASK`](#agent-task)                                                         | mcp_task / Subagent / Task                      | type, base_branch, description, prompt, model, resume, subagent_type, file_attachments, worker_id, pool, labels                                                                                                                                                                      |
+| [`REPORT_BUGFIX_RESULTS`](#agent-report-bugfix-results)                       | mcp_report_bugfix_results / ReportBugfixResults | results, bug_id, bug_title, verdict, explanation, severity                                                                                                                                                                                                                           |
+| [`RECORD_SCREEN`](#agent-record-screen)                                       | RecordScreen                                    | mode, save_as_filename                                                                                                                                                                                                                                                               |
+| [`REFLECT_GENERAL`](#agent-reflect-general)                                   | Reflect                                         | 配置提供                                                                                                                                                                                                                                                                             |
+| [`REPLACE_ENV`](#agent-replace-env)                                           | ReplaceEnv                                      | mode, checkout_ref_overrides, config, repo_url, ref, install_script, dockerfile_contents                                                                                                                                                                                             |
+| [`SETUP_VM_ENVIRONMENT`](#agent-setup-vm-environment)                         | SetupVmEnvironment                              | update_script                                                                                                                                                                                                                                                                        |
+| [`AWAIT`](#agent-await)                                                       | Await / AwaitShell                              | shell_id, block_until_ms, pattern, task_id                                                                                                                                                                                                                                           |
+| [`CODE_LINEAGE`](#agent-code-lineage)                                         | code_lineage / CodeLineage                      | file_paths, start_line, end_line, commit_hashes, output_mode, max_commits, include_line_ranges                                                                                                                                                                                       |
+| [`CREATE_PLAN_V2`](#agent-create-plan-v2)                                     | CreatePlan / mcp_create_plan / create_plan      | phases, todos, name, id, content                                                                                                                                                                                                                                                     |
+| [`DELETE`](#agent-delete)                                                     | delete_file / Delete                            | target_file, explanation, path                                                                                                                                                                                                                                                       |
+| [`APPLY_PATCH`](#agent-apply-patch)                                           | ApplyPatch                                      | patch                                                                                                                                                                                                                                                                                |
+| [`EDIT_NOTEBOOK`](#agent-edit-notebook)                                       | edit_notebook / EditNotebook                    | target_notebook, cell_idx, is_new_cell, cell_language, old_string, new_string                                                                                                                                                                                                        |
+| [`STR_REPLACE`](#agent-str-replace)                                           | search_replace / StrReplace                     | file_path, old_string, new_string, replace_all, path                                                                                                                                                                                                                                 |
+| [`WRITE`](#agent-write)                                                       | write / Write                                   | file_path, contents, path                                                                                                                                                                                                                                                            |
+| [`GENERATE_IMAGE`](#agent-generate-image)                                     | generate_image / GenerateImage                  | description, filename, reference_image_paths, aspect_ratio                                                                                                                                                                                                                           |
+| [`UPDATE_PR_CODE_TOUR`](#agent-update-pr-code-tour)                           | UpdatePrCodeTour                                | feedback, revisionId, markdown, heading, artifactPath, artifactAlt, baseSha, headSha, sourceRevisionId, scopeCommitHashes, explicitUserPrompt                                                                                                                                        |
+| [`GET_PR_CODE_TOUR`](#agent-get-pr-code-tour)                                 | GetPrCodeTour                                   | revisionId                                                                                                                                                                                                                                                                           |
+| [`GLOB`](#agent-glob)                                                         | glob_file_search / Glob                         | target_directory, glob_pattern                                                                                                                                                                                                                                                       |
+| [`CREATE_GOAL`](#agent-create-goal)                                           | CreateGoal                                      | objective                                                                                                                                                                                                                                                                            |
+| [`UPDATE_GOAL`](#agent-update-goal)                                           | UpdateGoal                                      | status                                                                                                                                                                                                                                                                               |
+| [`GREP`](#agent-grep)                                                         | grep / Grep / rg                                | pattern, path, glob, output_mode, -B, -A, -C, -i, type, head_limit, offset, multiline                                                                                                                                                                                                |
+| [`LS`](#agent-ls)                                                             | list_dir / LS                                   | target_directory, ignore_globs                                                                                                                                                                                                                                                       |
+| [`MINI_SWE_AGENT_BASH`](#agent-mini-swe-agent-bash)                           | bash                                            | command                                                                                                                                                                                                                                                                              |
+| [`MOCK_READ_LINTS`](#agent-mock-read-lints)                                   | read_lints / ReadLints                          | paths                                                                                                                                                                                                                                                                                |
+| [`READ`](#agent-read)                                                         | ViewImage / read_file / ReadFile / Read         | path, target_file, offset, limit, line_range                                                                                                                                                                                                                                         |
+| [`READ_LINTS`](#agent-read-lints)                                             | read_lints / ReadLints                          | paths                                                                                                                                                                                                                                                                                |
+| [`RECORD_CI_INVESTIGATION_FINDINGS`](#agent-record-ci-investigation-findings) | record_ci_investigation_findings                | findings, overall, checkName, detailsUrl, tldr, rootCause, failingSignal, suggestedNextStep, diffRelation, diffRelationEvidence, flakeAssessment, flakeEvidence, rerunAvailable, rerunEvidence, recommendedAction, recommendedActionEvidence, confidence, summary, themes, checkKeys |
+| [`SEARCH_CONVERSATIONS`](#agent-search-conversations)                         | SearchConversations                             | query, limit                                                                                                                                                                                                                                                                         |
+| [`SEMANTIC_SEARCH`](#agent-semantic-search)                                   | codebase_search / SemanticSearch                | explanation, query, target_directories, search_only_prs                                                                                                                                                                                                                              |
+| [`SHELL`](#agent-shell)                                                       | run_terminal_cmd / Shell                        | command, working_directory, block_until_ms, description, timeout, is_background, pattern, reason, debounce_ms, explanation                                                                                                                                                           |
+| [`SWITCH_MODE`](#agent-switch-mode)                                           | SwitchMode                                      | target_mode_id, explanation                                                                                                                                                                                                                                                          |
+| [`TODO_WRITE`](#agent-todo-write)                                             | todo_write / TodoWrite                          | merge, todos, content, status, id                                                                                                                                                                                                                                                    |
+| [`WEB_FETCH`](#agent-web-fetch)                                               | WebFetch / mcp_web_fetch                        | url, requestSmartModeApproval, smartModeBlockReason                                                                                                                                                                                                                                  |
+| [`WEB_SEARCH`](#agent-web-search)                                             | web_search / WebSearch                          | search_term, explanation                                                                                                                                                                                                                                                             |
+| [`GET_MCP_TOOLS`](#agent-get-mcp-tools)                                       | GetMcpTools / GetDynamicTools                   | namespace, toolName, pattern, server                                                                                                                                                                                                                                                 |
+| [`CREATE_TASK`](#agent-create-task)                                           | create-agent                                    | title, description, prompt, responding_to_message_ids, fork, attachments                                                                                                                                                                                                             |
+| [`SEND_MESSAGE`](#agent-send-message)                                         | SendMessage                                     | message                                                                                                                                                                                                                                                                              |
+| [`SEND_TO_TASK`](#agent-send-to-task)                                         | send-message-to-agent                           | agent_id, prompt, responding_to_message_ids, attachments                                                                                                                                                                                                                             |
+| [`PI_READ`](#agent-pi-read)                                                   | pi_read                                         | path, offset, limit                                                                                                                                                                                                                                                                  |
+| [`PI_BASH`](#agent-pi-bash)                                                   | pi_bash                                         | command, timeout                                                                                                                                                                                                                                                                     |
+| [`PI_EDIT`](#agent-pi-edit)                                                   | pi_edit                                         | path, edits, oldText, newText                                                                                                                                                                                                                                                        |
+| [`PI_WRITE`](#agent-pi-write)                                                 | pi_write                                        | path, content                                                                                                                                                                                                                                                                        |
+| [`PI_GREP`](#agent-pi-grep)                                                   | pi_grep                                         | pattern, path, glob, ignoreCase, literal, context, limit                                                                                                                                                                                                                             |
+| [`PI_FIND`](#agent-pi-find)                                                   | pi_find                                         | pattern, path, limit                                                                                                                                                                                                                                                                 |
+| [`PI_LS`](#agent-pi-ls)                                                       | pi_ls                                           | path, limit                                                                                                                                                                                                                                                                          |
+| [`CONNECT_SCM`](#agent-connect-scm)                                           | ConnectScm                                      | github_repo                                                                                                                                                                                                                                                                          |
+| [`SET_ACTIVE_BRANCH`](#agent-set-active-branch)                               | SetActiveBranch                                 | path, branchName                                                                                                                                                                                                                                                                     |
+| [`ADOPT`](#agent-adopt)                                                       | Adopt                                           | source_agent_id                                                                                                                                                                                                                                                                      |
+| [`SEND_TO_USER`](#agent-send-to-user)                                         | SendToUser                                      | message                                                                                                                                                                                                                                                                              |
+| [`SEND_FINAL_SUMMARY`](#agent-send-final-summary)                             | sendFinalSummary                                | final_summary                                                                                                                                                                                                                                                                        |
+| [`COMMUNICATE_UPDATE`](#agent-communicate-update)                             | UpdateCurrentStep                               | current_step                                                                                                                                                                                                                                                                         |
 
 `MOCK_READ_LINTS` 是测试用途；`MINI_SWE_AGENT_BASH` 与 `PI_*` 是特定配置的工具变体。`SEND_FINAL_SUMMARY` 和 `COMMUNICATE_UPDATE` 在 Agent Host 中另有定义，本次已补入。内部标识、模型名称和跨 bundle 的重复构造不能相加当作默认工具数。
 
@@ -98,7 +97,6 @@ JSON 定位路径：`factories[]` 是三个 Agent bundle 的每个构造点；`p
 
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
-
 
 ```javascript
 {
@@ -120,24 +118,23 @@ JSON 定位路径：`factories[]` 是三个 Agent bundle 的每个构造点；`p
 <details>
 <summary>参数字段与约束（10 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `namespace` | `ar.Yj().describe("Dynamic namespace hosting the tool, e.g. an MCP server.")` |
-| `toolName` | `ar.Yj().describe("Name of the tool to invoke.")` |
-| `description` | `H` |
-| `write_to_file` | `ar.zM().optional().describe("When true, the tool's result is written to a file under agent-tools/ in the workspace instead of being returned inline, regardless of its size; the result then reports the file path, size, and line count. Use it when you expect a large result that you want to read selectively or pass on to another tool by path. System reminders attached to the call are still returned inline.")` |
-| `description` | `H.optional()` |
-| `requestSmartModeApproval` | `ar.zM().optional().describe("Set to true when immediately retrying the exact same MCP call after Auto-review blocks it and you decide the user should approve it through the native approval card.")` |
-| `smartModeBlockReason` | `ar.Yj().optional().describe("Provide the exact block reason returned by Auto-review in the prior rejection. Required when requestSmartModeApproval is true so the approval card shows the original classifier reason without re-running the classifier.")` |
-| `server` | `ar.Yj().describe("Identifier of the MCP server hosting the tool.")` |
-| `toolName` | `ar.Yj().describe("Name of the MCP tool to invoke.")` |
-| `arguments` | `j` |
+| 字段（含嵌套与变体）       | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `namespace`                | `ar.Yj().describe("Dynamic namespace hosting the tool, e.g. an MCP server.")`                                                                                                                                                                                                                                                                                                                                              |
+| `toolName`                 | `ar.Yj().describe("Name of the tool to invoke.")`                                                                                                                                                                                                                                                                                                                                                                          |
+| `description`              | `H`                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `write_to_file`            | `ar.zM().optional().describe("When true, the tool's result is written to a file under agent-tools/ in the workspace instead of being returned inline, regardless of its size; the result then reports the file path, size, and line count. Use it when you expect a large result that you want to read selectively or pass on to another tool by path. System reminders attached to the call are still returned inline.")` |
+| `description`              | `H.optional()`                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `requestSmartModeApproval` | `ar.zM().optional().describe("Set to true when immediately retrying the exact same MCP call after Auto-review blocks it and you decide the user should approve it through the native approval card.")`                                                                                                                                                                                                                     |
+| `smartModeBlockReason`     | `ar.Yj().optional().describe("Provide the exact block reason returned by Auto-review in the prior rejection. Required when requestSmartModeApproval is true so the approval card shows the original classifier reason without re-running the classifier.")`                                                                                                                                                                |
+| `server`                   | `ar.Yj().describe("Identifier of the MCP server hosting the tool.")`                                                                                                                                                                                                                                                                                                                                                       |
+| `toolName`                 | `ar.Yj().describe("Name of the MCP tool to invoke.")`                                                                                                                                                                                                                                                                                                                                                                      |
+| `arguments`                | `j`                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (re=O?z.extend({
@@ -154,7 +151,6 @@ JSON 定位路径：`factories[]` 是三个 Agent bundle 的每个构造点；`p
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 tQ
 ```
@@ -163,7 +159,6 @@ tQ
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -247,7 +242,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -263,20 +257,19 @@ e=>{
 <details>
 <summary>参数字段与约束（6 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `id` | `ar.Yj().describe("Unique identifier for this question")` |
-| `prompt` | `ar.Yj().describe("The question text to display to the user, without the options.")` |
-| `options` | `ar.YO(ar.Ik({id:ar.Yj().describe("Unique identifier for this option"),label:ar.Yj().describe("Display text for this option")})).min(2).describe("Array of answer options (minimum 2 required)")` |
-| `allow_multiple` | `ar.zM().optional().describe("If true, user can select multiple options. Defaults to false.")` |
-| `id` | `ar.Yj().describe("Unique identifier for this option")` |
-| `label` | `ar.Yj().describe("Display text for this option")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | `ar.Yj().describe("Unique identifier for this question")`                                                                                                                                         |
+| `prompt`             | `ar.Yj().describe("The question text to display to the user, without the options.")`                                                                                                              |
+| `options`            | `ar.YO(ar.Ik({id:ar.Yj().describe("Unique identifier for this option"),label:ar.Yj().describe("Display text for this option")})).min(2).describe("Array of answer options (minimum 2 required)")` |
+| `allow_multiple`     | `ar.zM().optional().describe("If true, user can select multiple options. Defaults to false.")`                                                                                                    |
+| `id`                 | `ar.Yj().describe("Unique identifier for this option")`                                                                                                                                           |
+| `label`              | `ar.Yj().describe("Display text for this option")`                                                                                                                                                |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (s=function(){
@@ -294,7 +287,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>Go(Zre(t,n))
 ```
@@ -303,7 +295,6 @@ async(e,t,r)=>Go(Zre(t,n))
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -333,7 +324,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -349,28 +339,27 @@ e=>{
 <details>
 <summary>参数字段与约束（14 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `type` | `ar.eu("new_cloud_vm")` |
-| `base_branch` | `ar.vk(Tae,ar.Yj().optional().describe("Branch the subagent's own generated branch starts from. Defaults to the current branch. Uses the remote version, so uncommitted or unpushed work is not visible."))` |
-| `description` | `e` |
-| `prompt` | `p` |
-| `model` | `m` |
-| `resume` | `g` |
-| `subagent_type` | `r` |
-| `file_attachments` | `C` |
-| `type` | `ar.eu("same_machine")` |
-| `type` | `ar.eu("self_hosted_worker")` |
-| `worker_id` | `ar.Yj().min(1).describe("Worker to run on, from cursor-cloud-list-self-hosted-workers. Only your own machines can be targeted this way; use self_hosted_pool for a team pool worker. Check that tool's sharedAssignmentAllowed first: a shared worker runs this subagent alongside others, otherwise the subagent waits for the worker to free up.")` |
-| `type` | `ar.eu("self_hosted_pool")` |
-| `pool` | `ar.Yj().optional().describe("Pool to draw a worker from. Defaults to the team's default pool.")` |
-| `labels` | `ar.g1(ar.Yj()).optional().describe("Key/value labels a candidate worker must all match.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`               | `ar.eu("new_cloud_vm")`                                                                                                                                                                                                                                                                                                                                |
+| `base_branch`        | `ar.vk(Tae,ar.Yj().optional().describe("Branch the subagent's own generated branch starts from. Defaults to the current branch. Uses the remote version, so uncommitted or unpushed work is not visible."))`                                                                                                                                           |
+| `description`        | `e`                                                                                                                                                                                                                                                                                                                                                    |
+| `prompt`             | `p`                                                                                                                                                                                                                                                                                                                                                    |
+| `model`              | `m`                                                                                                                                                                                                                                                                                                                                                    |
+| `resume`             | `g`                                                                                                                                                                                                                                                                                                                                                    |
+| `subagent_type`      | `r`                                                                                                                                                                                                                                                                                                                                                    |
+| `file_attachments`   | `C`                                                                                                                                                                                                                                                                                                                                                    |
+| `type`               | `ar.eu("same_machine")`                                                                                                                                                                                                                                                                                                                                |
+| `type`               | `ar.eu("self_hosted_worker")`                                                                                                                                                                                                                                                                                                                          |
+| `worker_id`          | `ar.Yj().min(1).describe("Worker to run on, from cursor-cloud-list-self-hosted-workers. Only your own machines can be targeted this way; use self_hosted_pool for a team pool worker. Check that tool's sharedAssignmentAllowed first: a shared worker runs this subagent alongside others, otherwise the subagent waits for the worker to free up.")` |
+| `type`               | `ar.eu("self_hosted_pool")`                                                                                                                                                                                                                                                                                                                            |
+| `pool`               | `ar.Yj().optional().describe("Pool to draw a worker from. Defaults to the team's default pool.")`                                                                                                                                                                                                                                                      |
+| `labels`             | `ar.g1(ar.Yj()).optional().describe("Key/value labels a candidate worker must all match.")`                                                                                                                                                                                                                                                            |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 ({
@@ -382,7 +371,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -400,7 +388,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -430,7 +417,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -452,20 +438,19 @@ e=>{
 <details>
 <summary>参数字段与约束（6 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `results` | `ar.YO(ar.Ik({bug_id:ar.Yj().describe("The bug ID as provided in the bug list"),bug_title:ar.Yj().describe("The exact bug title as provided in the bug list"),verdict:ar.k5(["fixed","false_positive","could_not_fix","resolved_by_other_fix"]).describe("The verdict for this bug"),explanation:ar.Yj().describe("A single concise sentence explaining the resolution or why it wasn't resolved"),severity:ar.k5(["high","medium","low"]).optional().describe("The severity of the bug as provided in the bug list (high, medium, or low)")})).describe("Results for each bug, in the same order as in the bug list")` |
-| `bug_id` | `ar.Yj().describe("The bug ID as provided in the bug list")` |
-| `bug_title` | `ar.Yj().describe("The exact bug title as provided in the bug list")` |
-| `verdict` | `ar.k5(["fixed","false_positive","could_not_fix","resolved_by_other_fix"]).describe("The verdict for this bug")` |
-| `explanation` | `ar.Yj().describe("A single concise sentence explaining the resolution or why it wasn't resolved")` |
-| `severity` | `ar.k5(["high","medium","low"]).optional().describe("The severity of the bug as provided in the bug list (high, medium, or low)")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `results`            | `ar.YO(ar.Ik({bug_id:ar.Yj().describe("The bug ID as provided in the bug list"),bug_title:ar.Yj().describe("The exact bug title as provided in the bug list"),verdict:ar.k5(["fixed","false_positive","could_not_fix","resolved_by_other_fix"]).describe("The verdict for this bug"),explanation:ar.Yj().describe("A single concise sentence explaining the resolution or why it wasn't resolved"),severity:ar.k5(["high","medium","low"]).optional().describe("The severity of the bug as provided in the bug list (high, medium, or low)")})).describe("Results for each bug, in the same order as in the bug list")` |
+| `bug_id`             | `ar.Yj().describe("The bug ID as provided in the bug list")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `bug_title`          | `ar.Yj().describe("The exact bug title as provided in the bug list")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `verdict`            | `ar.k5(["fixed","false_positive","could_not_fix","resolved_by_other_fix"]).describe("The verdict for this bug")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `explanation`        | `ar.Yj().describe("A single concise sentence explaining the resolution or why it wasn't resolved")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `severity`           | `ar.k5(["high","medium","low"]).optional().describe("The severity of the bug as provided in the bug list (high, medium, or low)")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -532,7 +517,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (qce=ar.Ik({
   results:ar.YO(ar.Ik({
@@ -545,7 +529,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -568,7 +551,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -598,7 +580,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -614,16 +595,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `mode` | `ar.k5(["START_RECORDING","SAVE_RECORDING","DISCARD_RECORDING"]).describe("Recording mode: START_RECORDING to begin, SAVE_RECORDING to stop and save, DISCARD_RECORDING to discard")` |
-| `save_as_filename` | `ar.Yj().optional().describe("Custom filename for the saved recording. Only use when mode=SAVE_RECORDING (ignored for other modes). Use to specify a human readable name describing the contents of the screen recording. Do not include slashes or file extension (absolute path and correct extension are automatically added).")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`               | `ar.k5(["START_RECORDING","SAVE_RECORDING","DISCARD_RECORDING"]).describe("Recording mode: START_RECORDING to begin, SAVE_RECORDING to stop and save, DISCARD_RECORDING to discard")`                                                                                                                                                |
+| `save_as_filename`   | `ar.Yj().optional().describe("Custom filename for the saved recording. Only use when mode=SAVE_RECORDING (ignored for other modes). Use to specify a human readable name describing the contents of the screen recording. Do not include slashes or file extension (absolute path and correct extension are automatically added).")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -656,7 +636,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Gce=ar.Ik({
   mode:ar.k5(["START_RECORDING","SAVE_RECORDING","DISCARD_RECORDING"]).describe("Recording mode: START_RECORDING to begin, SAVE_RECORDING to stop and save, DISCARD_RECORDING to discard"),save_as_filename:ar.Yj().optional().describe("Custom filename for the saved recording. Only use when mode=SAVE_RECORDING (ignored for other modes). Use to specify a human readable name describing the contents of the screen recording. Do not include slashes or file extension (absolute path and correct extension are automatically added).")}
@@ -667,7 +646,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -697,7 +675,6 @@ async(e,t,r)=>{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -726,7 +703,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -748,7 +724,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (t=function(e){
   const t={
@@ -765,7 +740,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e,t){
@@ -786,7 +760,6 @@ async(e,t,r)=>Go(function(e,t){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -816,7 +789,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -832,21 +804,20 @@ e=>{
 <details>
 <summary>参数字段与约束（7 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `mode` | `ar.k5(["custom","clean_slate","default"]).optional().describe("How to configure the replacement environment. Use \`custom\` (default) to provide a new install script and optional Dockerfile, \`clean_slate\` for the default base image with no install script or existing environment config, or \`default\` to re-read the repo/saved environment config without applying an override.")` |
+| 字段（含嵌套与变体）     | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`                   | `ar.k5(["custom","clean_slate","default"]).optional().describe("How to configure the replacement environment. Use \`custom\` (default) to provide a new install script and optional Dockerfile, \`clean_slate\` for the default base image with no install script or existing environment config, or \`default\` to re-read the repo/saved environment config without applying an override.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `checkout_ref_overrides` | `ar.YO(ar.Ik({repo_url:ar.Yj().describe("Repo to override. Any common form works (https/ssh/scp-style URL, \`host/owner/repo\`, or bare \`owner/repo\`); it is canonicalized before matching against the agent's repos."),ref:ar.Yj().describe("Branch, tag, or commit SHA to check out for this repo. A SHA results in a detached HEAD. It must already exist on the remote (commit and push first).")})).optional().describe("Optional, applies to all modes. Per-repo overrides for the git ref the replacement environment is rebuilt from, replacing whatever was pinned in the original start request. The ref determines where \`.cursor/environment.json\` is read from and the commit the new pod is built at. Only list the repos you want to override; unlisted repos keep their original ref. Commit and push your changes to the target ref first, since it is resolved from the remote. The tool call fails fast if a \`repo_url\` matches no known repo (or matches ambiguously) or if a \`ref\` is malformed; a ref that does not exist on the remote is not pre-checked and instead fails later while rebuilding the pod.")` |
-| `config` | `ar.Ik({install_script:ar.Yj().optional().describe("Required when mode is \`custom\`. Shell script to run while preparing the replacement environment. Use a single command for simple setups or a multiline script with one command per line for more complex installs. Leave unset for \`clean_slate\` and \`default\`."),dockerfile_contents:ar.Yj().optional().describe("Optional only when mode is \`custom\`. Inline Dockerfile contents used to build the replacement pod's base image before the install script runs. Leave unset to use the default base image. Ignored for \`clean_slate\` and \`default\`.")}).optional().describe("Environment configuration for \`custom\` mode: an install script and optional inline Dockerfile. Omit for \`clean_slate\` and \`default\`.")` |
-| `repo_url` | `ar.Yj().describe("Repo to override. Any common form works (https/ssh/scp-style URL, \`host/owner/repo\`, or bare \`owner/repo\`); it is canonicalized before matching against the agent's repos.")` |
-| `ref` | `ar.Yj().describe("Branch, tag, or commit SHA to check out for this repo. A SHA results in a detached HEAD. It must already exist on the remote (commit and push first).")` |
-| `install_script` | `ar.Yj().optional().describe("Required when mode is \`custom\`. Shell script to run while preparing the replacement environment. Use a single command for simple setups or a multiline script with one command per line for more complex installs. Leave unset for \`clean_slate\` and \`default\`.")` |
-| `dockerfile_contents` | `ar.Yj().optional().describe("Optional only when mode is \`custom\`. Inline Dockerfile contents used to build the replacement pod's base image before the install script runs. Leave unset to use the default base image. Ignored for \`clean_slate\` and \`default\`.")` |
+| `config`                 | `ar.Ik({install_script:ar.Yj().optional().describe("Required when mode is \`custom\`. Shell script to run while preparing the replacement environment. Use a single command for simple setups or a multiline script with one command per line for more complex installs. Leave unset for \`clean_slate\` and \`default\`."),dockerfile_contents:ar.Yj().optional().describe("Optional only when mode is \`custom\`. Inline Dockerfile contents used to build the replacement pod's base image before the install script runs. Leave unset to use the default base image. Ignored for \`clean_slate\` and \`default\`.")}).optional().describe("Environment configuration for \`custom\` mode: an install script and optional inline Dockerfile. Omit for \`clean_slate\` and \`default\`.")`                                                                                                                                                                                                                                                                                                                                                  |
+| `repo_url`               | `ar.Yj().describe("Repo to override. Any common form works (https/ssh/scp-style URL, \`host/owner/repo\`, or bare \`owner/repo\`); it is canonicalized before matching against the agent's repos.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ref`                    | `ar.Yj().describe("Branch, tag, or commit SHA to check out for this repo. A SHA results in a detached HEAD. It must already exist on the remote (commit and push first).")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `install_script`         | `ar.Yj().optional().describe("Required when mode is \`custom\`. Shell script to run while preparing the replacement environment. Use a single command for simple setups or a multiline script with one command per line for more complex installs. Leave unset for \`clean_slate\` and \`default\`.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `dockerfile_contents`    | `ar.Yj().optional().describe("Optional only when mode is \`custom\`. Inline Dockerfile contents used to build the replacement pod's base image before the install script runs. Leave unset to use the default base image. Ignored for \`clean_slate\` and \`default\`.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -910,7 +881,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (nle=ar.Ik({
   mode:ar.k5(["custom","clean_slate","default"]).optional().describe("How to configure the replacement environment. Use `custom` (default) to provide a new install script and optional Dockerfile, `clean_slate` for the default base image with no install script or existing environment config, or `default` to re-read the repo/saved environment config without applying an override."),checkout_ref_overrides:ar.YO(ar.Ik({
@@ -939,7 +909,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>Go(function(e){
   switch(e.result.case){
@@ -959,7 +928,6 @@ async(e,t,r)=>Go(function(e){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -989,7 +957,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1005,15 +972,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `update_script` | `ar.Yj().describe("The update script that will be run on VM startup (after pulling the latest changes from the repository) before every cloud agent session to keep the development environment up to date. This is a command string, NOT a bash script file. Treat this as reliability-critical infrastructure: if this script breaks, future cloud agent pods may fail to start. Keep it super minimal and low-risk. For many simple codebases, the update script will simply be something like \`npm install\`, \`pip install -r requirements.txt\`, \`uv sync\`, etc. For more complex cases requiring multiple steps, use a multiline script with each command on its own line (do NOT use && to chain commands - use newlines instead). This should not include system dependencies that aren't part of the codebase, and it should NOT include service startup logic, migrations, test commands, build commands, or other brittle steps. Examples that MUST NOT be in the update script include \`docker compose up\`, \`docker-compose up\`, \`pnpm dev\`, \`npm run dev\`, and \`python manage.py runserver\`. Avoid shell-profile edits and ad-hoc environment-variable setup in the update script (for example \`echo ... >> ~/.bashrc\`, \`source ~/.bashrc\`, or \`export FOO=bar\`). If persistent shell customization is truly required, do it once during setup outside the update script (for example in the agent's \`~/.bashrc\`) and document it in AGENTS.md. If unsure, prefer fewer commands. Treat this as the \"automatic startup layer\" only; AGENTS.md is the place for durable human/agent operating guidance. The update script MUST be idempotent. It MUST also be robust when users do not merge your previous code changes. Do not assume files introduced only in your unmerged PR will exist on future runs (for example a newly added \`package.json\`); choose commands that are valid for the repository's current state or guard file-dependent commands accordingly. It will be executed from the /workspace directory (the root of the repository), so you should not need to specify the full path to the commands. Example multiline format:\nnpm install\npnpm run build:deps\npip install -r requirements.txt")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_script`      | `ar.Yj().describe("The update script that will be run on VM startup (after pulling the latest changes from the repository) before every cloud agent session to keep the development environment up to date. This is a command string, NOT a bash script file. Treat this as reliability-critical infrastructure: if this script breaks, future cloud agent pods may fail to start. Keep it super minimal and low-risk. For many simple codebases, the update script will simply be something like \`npm install\`, \`pip install -r requirements.txt\`, \`uv sync\`, etc. For more complex cases requiring multiple steps, use a multiline script with each command on its own line (do NOT use && to chain commands - use newlines instead). This should not include system dependencies that aren't part of the codebase, and it should NOT include service startup logic, migrations, test commands, build commands, or other brittle steps. Examples that MUST NOT be in the update script include \`docker compose up\`, \`docker-compose up\`, \`pnpm dev\`, \`npm run dev\`, and \`python manage.py runserver\`. Avoid shell-profile edits and ad-hoc environment-variable setup in the update script (for example \`echo ... >> ~/.bashrc\`, \`source ~/.bashrc\`, or \`export FOO=bar\`). If persistent shell customization is truly required, do it once during setup outside the update script (for example in the agent's \`~/.bashrc\`) and document it in AGENTS.md. If unsure, prefer fewer commands. Treat this as the \"automatic startup layer\" only; AGENTS.md is the place for durable human/agent operating guidance. The update script MUST be idempotent. It MUST also be robust when users do not merge your previous code changes. Do not assume files introduced only in your unmerged PR will exist on future runs (for example a newly added \`package.json\`); choose commands that are valid for the repository's current state or guard file-dependent commands accordingly. It will be executed from the /workspace directory (the root of the repository), so you should not need to specify the full path to the commands. Example multiline format:\nnpm install\npnpm run build:deps\npip install -r requirements.txt")` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (s=function(e){
@@ -1031,7 +997,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>Go("Environment setup commands suggested successfully. The user will review them.")
 ```
@@ -1040,7 +1005,6 @@ async(e,t,r)=>Go("Environment setup commands suggested successfully. The user wi
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>lle(new nR.MU({
@@ -1066,7 +1030,6 @@ e=>lle(new nR.MU({
 
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
-
 
 ```javascript
 {
@@ -1107,17 +1070,16 @@ e=>lle(new nR.MU({
 <summary>参数字段与约束（4 条表达式）</summary>
 
 | 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `shell_id` | `u` |
-| `block_until_ms` | `l` |
-| `pattern` | `d` |
-| `task_id` | `u` |
+| -------------------- | --------------- |
+| `shell_id`           | `u`             |
+| `block_until_ms`     | `l`             |
+| `pattern`            | `d`             |
+| `task_id`            | `u`             |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (f=function(e){
@@ -1155,7 +1117,6 @@ e=>lle(new nR.MU({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -1219,7 +1180,6 @@ async(e,t,r)=>{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -1248,7 +1208,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1264,21 +1223,20 @@ e=>{
 <details>
 <summary>参数字段与约束（7 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `file_paths` | `ar.YO(ar.Yj()).min(1).optional().describe("File paths to get AI attribution for. Use repository-relative git paths (for example: backend/server/src/app.ts), not absolute workspace paths.")` |
-| `start_line` | `ar.ai().int().positive().optional().describe("Optional start line (1-indexed). If not provided, gets AI attribution for entire file. Applies to all files.")` |
-| `end_line` | `ar.ai().int().positive().optional().describe("Optional end line (1-indexed). If not provided, gets AI attribution to end of file. Applies to all files.")` |
-| `commit_hashes` | `ar.YO(ar.Yj()).min(1).optional().describe("Commit hashes to get AI attribution for. Returns AI conversation summaries for each commit.")` |
-| `output_mode` | `ar.k5(["summary","detailed"]).optional().describe('Controls output shape and verbosity. Use "summary" for conversation-level rollups and "detailed" for per-commit/per-range output.')` |
-| `max_commits` | `ar.ai().int().positive().max(200).optional().describe("Optional cap on commits returned after filtering/de-duplication. Must be between 1 and 200.")` |
-| `include_line_ranges` | `ar.zM().optional().describe("When false, omit detailed line ranges from attribution output.")` |
+| 字段（含嵌套与变体）  | 类型 / 约束原式                                                                                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file_paths`          | `ar.YO(ar.Yj()).min(1).optional().describe("File paths to get AI attribution for. Use repository-relative git paths (for example: backend/server/src/app.ts), not absolute workspace paths.")` |
+| `start_line`          | `ar.ai().int().positive().optional().describe("Optional start line (1-indexed). If not provided, gets AI attribution for entire file. Applies to all files.")`                                 |
+| `end_line`            | `ar.ai().int().positive().optional().describe("Optional end line (1-indexed). If not provided, gets AI attribution to end of file. Applies to all files.")`                                    |
+| `commit_hashes`       | `ar.YO(ar.Yj()).min(1).optional().describe("Commit hashes to get AI attribution for. Returns AI conversation summaries for each commit.")`                                                     |
+| `output_mode`         | `ar.k5(["summary","detailed"]).optional().describe('Controls output shape and verbosity. Use "summary" for conversation-level rollups and "detailed" for per-commit/per-range output.')`       |
+| `max_commits`         | `ar.ai().int().positive().max(200).optional().describe("Optional cap on commits returned after filtering/de-duplication. Must be between 1 and 200.")`                                         |
+| `include_line_ranges` | `ar.zM().optional().describe("When false, omit detailed line ranges from attribution output.")`                                                                                                |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (Gle=ar.Ik({
@@ -1295,7 +1253,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -1318,7 +1275,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>jle(new Pu.ex({
@@ -1345,7 +1301,6 @@ e=>jle(new Pu.ex({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1363,20 +1318,19 @@ e=>jle(new Pu.ex({
 <details>
 <summary>参数字段与约束（6 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `phases` | `Pde` |
-| `todos` | `Tde.optional()` |
-| `name` | `ar.Yj().describe("Name of the implementation phase")` |
-| `todos` | `ar.YO(Ide).describe("Todos within this phase")` |
-| `id` | `ar.Yj().describe("Unique identifier for the todo")` |
-| `content` | `ar.Yj().describe("Description of the todo task")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                        |
+| -------------------- | ------------------------------------------------------ |
+| `phases`             | `Pde`                                                  |
+| `todos`              | `Tde.optional()`                                       |
+| `name`               | `ar.Yj().describe("Name of the implementation phase")` |
+| `todos`              | `ar.YO(Ide).describe("Todos within this phase")`       |
+| `id`                 | `ar.Yj().describe("Unique identifier for the todo")`   |
+| `content`            | `ar.Yj().describe("Description of the todo task")`     |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (w=!0===i?g.superRefine((e,t)=>{
@@ -1390,7 +1344,6 @@ e=>jle(new Pu.ex({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -1421,7 +1374,6 @@ async(e,t,r)=>{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -1450,7 +1402,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1466,17 +1417,16 @@ e=>{
 <details>
 <summary>参数字段与约束（3 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `target_file` | `ar.Yj().describe("The path of the file to delete, relative to the workspace root.")` |
-| `explanation` | `ar.Yj().optional().describe("One sentence explanation as to why this tool is being used, and how it contributes to the goal.")` |
-| `path` | `ar.Yj().describe("The absolute path of the file to delete")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `target_file`        | `ar.Yj().describe("The path of the file to delete, relative to the workspace root.")`                                            |
+| `explanation`        | `ar.Yj().optional().describe("One sentence explanation as to why this tool is being used, and how it contributes to the goal.")` |
+| `path`               | `ar.Yj().describe("The absolute path of the file to delete")`                                                                    |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (o=function(e){
@@ -1491,7 +1441,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,{
@@ -1515,7 +1464,6 @@ async(e,{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -1563,7 +1511,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1579,15 +1526,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `patch` | `ar.Yj().describe("The patch to apply to the file")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                      |
+| -------------------- | ---------------------------------------------------- |
+| `patch`              | `ar.Yj().describe("The patch to apply to the file")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -1611,7 +1557,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (epe=ar.Ik({
   patch:ar.Yj().describe("The patch to apply to the file")}
@@ -1623,7 +1568,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 Wue
 ```
@@ -1632,7 +1576,6 @@ Wue
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -1662,7 +1605,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1684,20 +1626,19 @@ e=>{
 <details>
 <summary>参数字段与约束（6 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `target_notebook` | `ar.Yj().describe("The path to the notebook file you want to edit. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.")` |
-| `cell_idx` | `mle().describe("The index of the cell to edit (0-based)")` |
-| `is_new_cell` | `vie().describe("If true, a new cell will be created at the specified cell index. If false, the cell at the specified cell index will be edited.")` |
-| `cell_language` | `ar.Yj().describe("The language of the cell to edit. Should be STRICTLY one of these: 'python', 'markdown', 'javascript', 'typescript', 'r', 'sql', 'shell', 'raw' or 'other'.")` |
-| `old_string` | `ar.Yj().describe("The text to replace (must be unique within the cell, and must match the cell contents exactly, including all whitespace and indentation).")` |
-| `new_string` | `ar.Yj().describe("The edited text to replace the old_string or the content for the new cell.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                             |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_notebook`    | `ar.Yj().describe("The path to the notebook file you want to edit. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.")` |
+| `cell_idx`           | `mle().describe("The index of the cell to edit (0-based)")`                                                                                                                                                 |
+| `is_new_cell`        | `vie().describe("If true, a new cell will be created at the specified cell index. If false, the cell at the specified cell index will be edited.")`                                                         |
+| `cell_language`      | `ar.Yj().describe("The language of the cell to edit. Should be STRICTLY one of these: 'python', 'markdown', 'javascript', 'typescript', 'r', 'sql', 'shell', 'raw' or 'other'.")`                           |
+| `old_string`         | `ar.Yj().describe("The text to replace (must be unique within the cell, and must match the cell contents exactly, including all whitespace and indentation).")`                                             |
+| `new_string`         | `ar.Yj().describe("The edited text to replace the old_string or the content for the new cell.")`                                                                                                            |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -1746,7 +1687,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (dpe=ar.Ik({
   target_notebook:ar.Yj().describe("The path to the notebook file you want to edit. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is."),cell_idx:mle().describe("The index of the cell to edit (0-based)"),is_new_cell:vie().describe("If true, a new cell will be created at the specified cell index. If false, the cell at the specified cell index will be edited."),cell_language:ar.Yj().describe("The language of the cell to edit. Should be STRICTLY one of these: 'python', 'markdown', 'javascript', 'typescript', 'r', 'sql', 'shell', 'raw' or 'other'."),old_string:ar.Yj().describe("The text to replace (must be unique within the cell, and must match the cell contents exactly, including all whitespace and indentation)."),new_string:ar.Yj().describe("The edited text to replace the old_string or the content for the new cell.")}
@@ -1758,7 +1698,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 a
 ```
@@ -1767,7 +1706,6 @@ a
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 Gue
@@ -1785,7 +1723,6 @@ Gue
 
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
-
 
 ```javascript
 {
@@ -1811,20 +1748,19 @@ Gue
 <details>
 <summary>参数字段与约束（6 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `file_path` | `ar.Yj().describe("The path to the file to modify. Always specify the target file as the first argument. You can use either a relative path in the workspace or an absolute path.")` |
-| `old_string` | `ar.Yj().describe("The text to replace")` |
-| `new_string` | `ar.Yj().describe("The text to replace it with (must be different from old_string)")` |
-| `replace_all` | `ar.zM().optional().describe("Replace all occurences of old_string (default false)").default(!1)` |
-| `path` | `ar.Yj().describe("The absolute path to the file to modify")` |
-| `replace_all` | `ar.zM().optional().describe("Replace all occurrences of old_string (default false)")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file_path`          | `ar.Yj().describe("The path to the file to modify. Always specify the target file as the first argument. You can use either a relative path in the workspace or an absolute path.")` |
+| `old_string`         | `ar.Yj().describe("The text to replace")`                                                                                                                                            |
+| `new_string`         | `ar.Yj().describe("The text to replace it with (must be different from old_string)")`                                                                                                |
+| `replace_all`        | `ar.zM().optional().describe("Replace all occurences of old_string (default false)").default(!1)`                                                                                    |
+| `path`               | `ar.Yj().describe("The absolute path to the file to modify")`                                                                                                                        |
+| `replace_all`        | `ar.zM().optional().describe("Replace all occurrences of old_string (default false)")`                                                                                               |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (l="dsv3-1018"===s?kpe:Spe)
@@ -1835,7 +1771,6 @@ Gue
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 a
 ```
@@ -1844,7 +1779,6 @@ a
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 Gue
@@ -1865,7 +1799,6 @@ Gue
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -1881,16 +1814,15 @@ Gue
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `file_path` | `ar.Yj().describe("The path to the file to modify. Always specify the target file as the first argument. You can use either a relative path in the workspace or an absolute path.")` |
-| `contents` | `ar.Yj().describe("The contents of the file to write")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file_path`          | `ar.Yj().describe("The path to the file to modify. Always specify the target file as the first argument. You can use either a relative path in the workspace or an absolute path.")` |
+| `contents`           | `ar.Yj().describe("The contents of the file to write")`                                                                                                                              |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (Ape=ar.Ik({
@@ -1903,7 +1835,6 @@ Gue
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 c
 ```
@@ -1912,7 +1843,6 @@ c
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 Gue
@@ -1926,7 +1856,6 @@ Gue
 
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
-
 
 ```javascript
 {
@@ -1943,16 +1872,15 @@ Gue
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().describe("The absolute path to the file to modify")` |
-| `contents` | `ar.Yj().describe("The contents to write to the file")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                               |
+| -------------------- | ------------------------------------------------------------- |
+| `path`               | `ar.Yj().describe("The absolute path to the file to modify")` |
+| `contents`           | `ar.Yj().describe("The contents to write to the file")`       |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (Ppe=ar.Ik({
@@ -1965,7 +1893,6 @@ Gue
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 c
 ```
@@ -1974,7 +1901,6 @@ c
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 Gue
@@ -1993,7 +1919,6 @@ Gue
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2009,18 +1934,17 @@ Gue
 <details>
 <summary>参数字段与约束（4 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `description` | `ar.Yj().describe("A detailed description of the image.")` |
-| `filename` | `ar.Yj().optional().describe("Optional filename for the generated image (e.g., 'diagram.png'). Do not include a directory path - the tool automatically handles where to save and how to display the image. If not provided, a timestamped filename will be generated.")` |
-| `reference_image_paths` | `ar.YO(ar.Yj()).optional().describe("Optional array of file paths to reference images as additional inputs.")` |
-| `aspect_ratio` | `ar.k5(["1:1","4:3","3:4","16:9","9:16"]).optional().describe('Optional aspect ratio for the generated image. Supported values are "1:1", "4:3", "3:4", "16:9", and "9:16".')` |
+| 字段（含嵌套与变体）    | 类型 / 约束原式                                                                                                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description`           | `ar.Yj().describe("A detailed description of the image.")`                                                                                                                                                                                                                |
+| `filename`              | `ar.Yj().optional().describe("Optional filename for the generated image (e.g., 'diagram.png'). Do not include a directory path - the tool automatically handles where to save and how to display the image. If not provided, a timestamped filename will be generated.")` |
+| `reference_image_paths` | `ar.YO(ar.Yj()).optional().describe("Optional array of file paths to reference images as additional inputs.")`                                                                                                                                                            |
+| `aspect_ratio`          | `ar.k5(["1:1","4:3","3:4","16:9","9:16"]).optional().describe('Optional aspect ratio for the generated image. Supported values are "1:1", "4:3", "3:4", "16:9", and "9:16".')`                                                                                            |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (Vpe=ar.Ik({
@@ -2032,7 +1956,6 @@ Gue
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,s)=>{
@@ -2087,7 +2010,6 @@ async(e,t,s)=>{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof c$?e.clientVisibleErrorMessage:sme(e);
@@ -2116,7 +2038,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2132,25 +2053,24 @@ e=>{
 <details>
 <summary>参数字段与约束（11 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `feedback` | `ar.Yj().optional().describe("Natural-language instructions for regenerating the PR code tour, such as 'make it shorter' or 'focus on review risks'. Do not combine with markdown or artifactPath.")` |
-| `revisionId` | `ar.Yj().optional().describe("COMPLETE revision id to edit in place. Required for replace, section patch, and attach. From <pr_code_tour_context> or GetPrCodeTour.")` |
-| `markdown` | `ar.Yj().optional().describe("Replacement markdown for the whole tour, or the new section body when heading is also set.")` |
-| `heading` | `ar.Yj().optional().describe("ATX heading text or slug of the target section. With markdown: replace that section only. With artifactPath: attach the media into that file-anchored section (defaults to the last file-anchored section).")` |
-| `artifactPath` | `ar.Yj().optional().describe("Media artifact to attach to the revision as visible, playable step media: an image (png/jpeg/gif/webp) or a recording (.mp4/.webm), given as a workspace artifact path (e.g. /opt/cursor/artifacts/demo.mp4) or an artifact URL this agent owns. Images must already be uploaded (walkthrough artifacts upload when referenced in a response or PR body). Recordings upload from the VM on attach, so a recording saved under the artifacts directory can be attached right after it is captured. Provide with revisionId. The attach fails with an actionable error rather than storing media a reader cannot see.")` |
-| `artifactAlt` | `ar.Yj().optional().describe("Optional alt text for an attached artifact; rendered as the media's caption.")` |
-| `baseSha` | `ar.Yj().optional().describe("Optional commit-subset base SHA. Provide together with headSha to generate the tour from the baseSha..headSha range instead of the full PR diff.")` |
-| `headSha` | `ar.Yj().optional().describe("Optional commit-subset head SHA. Provide together with baseSha to generate the tour from the baseSha..headSha range instead of the full PR diff.")` |
-| `sourceRevisionId` | `ar.Yj().optional().describe("Revision id to seed regeneration from (see <pr_code_tour_context>). Ignored for in-place edits.")` |
-| `scopeCommitHashes` | `ar.YO(ar.Yj()).optional().describe("Commit SHAs selecting a subset of the pull request's commits. When set, the subset selection takes effect for tour regeneration; omit or pass an empty list for the full diff.")` |
-| `explicitUserPrompt` | `ar.Yj().optional().describe("Verbatim user prompt that takes effect for tour regeneration, kept distinct from agent-authored feedback.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feedback`           | `ar.Yj().optional().describe("Natural-language instructions for regenerating the PR code tour, such as 'make it shorter' or 'focus on review risks'. Do not combine with markdown or artifactPath.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `revisionId`         | `ar.Yj().optional().describe("COMPLETE revision id to edit in place. Required for replace, section patch, and attach. From <pr_code_tour_context> or GetPrCodeTour.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `markdown`           | `ar.Yj().optional().describe("Replacement markdown for the whole tour, or the new section body when heading is also set.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `heading`            | `ar.Yj().optional().describe("ATX heading text or slug of the target section. With markdown: replace that section only. With artifactPath: attach the media into that file-anchored section (defaults to the last file-anchored section).")`                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `artifactPath`       | `ar.Yj().optional().describe("Media artifact to attach to the revision as visible, playable step media: an image (png/jpeg/gif/webp) or a recording (.mp4/.webm), given as a workspace artifact path (e.g. /opt/cursor/artifacts/demo.mp4) or an artifact URL this agent owns. Images must already be uploaded (walkthrough artifacts upload when referenced in a response or PR body). Recordings upload from the VM on attach, so a recording saved under the artifacts directory can be attached right after it is captured. Provide with revisionId. The attach fails with an actionable error rather than storing media a reader cannot see.")` |
+| `artifactAlt`        | `ar.Yj().optional().describe("Optional alt text for an attached artifact; rendered as the media's caption.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `baseSha`            | `ar.Yj().optional().describe("Optional commit-subset base SHA. Provide together with headSha to generate the tour from the baseSha..headSha range instead of the full PR diff.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `headSha`            | `ar.Yj().optional().describe("Optional commit-subset head SHA. Provide together with baseSha to generate the tour from the baseSha..headSha range instead of the full PR diff.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `sourceRevisionId`   | `ar.Yj().optional().describe("Revision id to seed regeneration from (see <pr_code_tour_context>). Ignored for in-place edits.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `scopeCommitHashes`  | `ar.YO(ar.Yj()).optional().describe("Commit SHAs selecting a subset of the pull request's commits. When set, the subset selection takes effect for tour regeneration; omit or pass an empty list for the full diff.")`                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `explicitUserPrompt` | `ar.Yj().optional().describe("Verbatim user prompt that takes effect for tour regeneration, kept distinct from agent-authored feedback.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -2214,7 +2134,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Lme=ar.Ik({
   feedback:ar.Yj().optional().describe("Natural-language instructions for regenerating the PR code tour, such as 'make it shorter' or 'focus on review risks'. Do not combine with markdown or artifactPath."),revisionId:ar.Yj().optional().describe("COMPLETE revision id to edit in place. Required for replace, section patch, and attach. From <pr_code_tour_context> or GetPrCodeTour."),markdown:ar.Yj().optional().describe("Replacement markdown for the whole tour, or the new section body when heading is also set."),heading:ar.Yj().optional().describe("ATX heading text or slug of the target section. With markdown: replace that section only. With artifactPath: attach the media into that file-anchored section (defaults to the last file-anchored section)."),artifactPath:ar.Yj().optional().describe("Media artifact to attach to the revision as visible, playable step media: an image (png/jpeg/gif/webp) or a recording (.mp4/.webm), given as a workspace artifact path (e.g. /opt/cursor/artifacts/demo.mp4) or an artifact URL this agent owns. Images must already be uploaded (walkthrough artifacts upload when referenced in a response or PR body). Recordings upload from the VM on attach, so a recording saved under the artifacts directory can be attached right after it is captured. Provide with revisionId. The attach fails with an actionable error rather than storing media a reader cannot see."),artifactAlt:ar.Yj().optional().describe("Optional alt text for an attached artifact; rendered as the media's caption."),baseSha:ar.Yj().optional().describe("Optional commit-subset base SHA. Provide together with headSha to generate the tour from the baseSha..headSha range instead of the full PR diff."),headSha:ar.Yj().optional().describe("Optional commit-subset head SHA. Provide together with baseSha to generate the tour from the baseSha..headSha range instead of the full PR diff."),sourceRevisionId:ar.Yj().optional().describe("Revision id to seed regeneration from (see <pr_code_tour_context>). Ignored for in-place edits."),scopeCommitHashes:ar.YO(ar.Yj()).optional().describe("Commit SHAs selecting a subset of the pull request's commits. When set, the subset selection takes effect for tour regeneration; omit or pass an empty list for the full diff."),explicitUserPrompt:ar.Yj().optional().describe("Verbatim user prompt that takes effect for tour regeneration, kept distinct from agent-authored feedback.")}
@@ -2225,7 +2144,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e){
@@ -2245,7 +2163,6 @@ async(e,t,r)=>Go(function(e){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -2275,7 +2192,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2291,15 +2207,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `revisionId` | `ar.Yj().optional().describe("Revision id from <pr_code_tour_context> or a previous GetPrCodeTour call. Omit to list all revisions for the active PR.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `revisionId`         | `ar.Yj().optional().describe("Revision id from <pr_code_tour_context> or a previous GetPrCodeTour call. Omit to list all revisions for the active PR.")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -2320,7 +2235,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Wme=ar.Ik({
   revisionId:ar.Yj().optional().describe("Revision id from <pr_code_tour_context> or a previous GetPrCodeTour call. Omit to list all revisions for the active PR.")}
@@ -2331,7 +2245,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e){
@@ -2358,7 +2271,6 @@ async(e,t,r)=>Go(function(e){
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -2381,7 +2293,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2397,18 +2308,17 @@ e=>{
 <details>
 <summary>参数字段与约束（4 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `target_directory` | `ar.Yj().optional().describe("Path to directory to search for files in. If not provided, defaults to Cursor workspace roots.")` |
-| `glob_pattern` | `ar.Yj().describe('The glob pattern to match files against.\nPatterns not starting with "**/" are automatically prepended with "**/" to enable recursive searching.\n\nExamples:\n\t- "*.js" (becomes "**/*.js") - find all .js files\n\t- "**/node_modules/**" - find all node_modules directories\n\t- "**/test/**/test_*.ts" - find all test_*.ts files in any test directory\n')` |
-| `target_directory` | `ar.Yj().optional().describe("Absolute path to directory to search for files in. If not provided, defaults to Cursor workspace root.")` |
-| `glob_pattern` | `ar.Yj().describe('The glob pattern to match files against.\nPatterns not starting with "**/" are automatically prepended with "**/" to enable recursive searching.\n\nExamples:\n\t- "*.js" (becomes "**/*.js") - find all .js files\n\t- "**/node_modules/**" - find all node_modules directories\n\t- "**/test/**/test_*.ts" - find all test_*.ts files in any test directory')` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_directory`   | `ar.Yj().optional().describe("Path to directory to search for files in. If not provided, defaults to Cursor workspace roots.")`                                                                                                                                                                                                                                                       |
+| `glob_pattern`       | `ar.Yj().describe('The glob pattern to match files against.\nPatterns not starting with "**/" are automatically prepended with "**/" to enable recursive searching.\n\nExamples:\n\t- "*.js" (becomes "**/*.js") - find all .js files\n\t- "**/node_modules/**" - find all node_modules directories\n\t- "**/test/**/test_*.ts" - find all test_*.ts files in any test directory\n')` |
+| `target_directory`   | `ar.Yj().optional().describe("Absolute path to directory to search for files in. If not provided, defaults to Cursor workspace root.")`                                                                                                                                                                                                                                               |
+| `glob_pattern`       | `ar.Yj().describe('The glob pattern to match files against.\nPatterns not starting with "**/" are automatically prepended with "**/" to enable recursive searching.\n\nExamples:\n\t- "*.js" (becomes "**/*.js") - find all .js files\n\t- "**/node_modules/**" - find all node_modules directories\n\t- "**/test/**/test_*.ts" - find all test_*.ts files in any test directory')`   |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (s=function(e){
@@ -2424,7 +2334,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e,t){
@@ -2460,7 +2369,6 @@ async(e,t,r)=>Go(function(e,t){
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=s$(e instanceof Error?e.message:String(e),che,!0).output;
@@ -2489,7 +2397,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2505,15 +2412,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `objective` | `ar.Yj().trim().min(1)` |
+| 字段（含嵌套与变体） | 类型 / 约束原式         |
+| -------------------- | ----------------------- |
+| `objective`          | `ar.Yj().trim().min(1)` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -2537,7 +2443,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (hhe=ar.Ik({
   objective:ar.Yj().trim().min(1)}
@@ -2548,7 +2453,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -2568,7 +2472,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>whe(new Xw.GS({
@@ -2595,7 +2498,6 @@ e=>whe(new Xw.GS({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2612,14 +2514,13 @@ e=>whe(new Xw.GS({
 <summary>参数字段与约束（1 条表达式）</summary>
 
 | 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `status` | `ar.k5(dhe)` |
+| -------------------- | --------------- |
+| `status`             | `ar.k5(dhe)`    |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -2646,7 +2547,6 @@ e=>whe(new Xw.GS({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (fhe=ar.Ik({
   status:ar.k5(dhe)}
@@ -2657,7 +2557,6 @@ e=>whe(new Xw.GS({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(t,r,n)=>{
@@ -2677,7 +2576,6 @@ async(t,r,n)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>vhe(new Xw.Ll({
@@ -2704,7 +2602,6 @@ e=>vhe(new Xw.Ll({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2720,30 +2617,29 @@ e=>vhe(new Xw.Ll({
 <details>
 <summary>参数字段与约束（16 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `pattern` | `ar.Yj().describe("The regular expression pattern to search for in file contents (rg --regexp)")` |
-| `path` | `ar.Yj().optional().describe("File or directory to search in (rg pattern -- PATH). Defaults to Cursor workspace roots.")` |
-| `glob` | `ar.Yj().optional().describe('Glob pattern (rg --glob GLOB -- PATH) to filter files (e.g. "*.js", "*.{ts,tsx}").')` |
-| `output_mode` | `ar.k5(["content","files_with_matches","count"]).describe('Output mode: "content" shows matching lines (supports -A/-B/-C context, -n line numbers, head_limit), "files_with_matches" shows file paths (supports head_limit), "count" shows match counts (supports head_limit). Defaults to "content".').default("content").optional()` |
-| `-B` | `mle().optional().describe('Number of lines to show before each match (rg -B). Requires output_mode: "content", ignored otherwise.')` |
-| `-A` | `mle().optional().describe('Number of lines to show after each match (rg -A). Requires output_mode: "content", ignored otherwise.')` |
-| `-C` | `mle().optional().describe('Number of lines to show before and after each match (rg -C). Requires output_mode: "content", ignored otherwise.')` |
-| `-i` | `ar.vk(Nhe,ar.zM().optional().describe("Case insensitive search (rg -i) Defaults to false").default(!1))` |
-| `type` | `ar.Yj().optional().describe("File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than glob for standard file types.")` |
-| `head_limit` | `mle(ar.ai().min(0)).optional().describe('Limit output size. For "content" mode: limits total matches shown. For "files_with_matches" and "count" modes: limits number of files.')` |
-| `offset` | `mle(ar.ai().min(0)).optional().describe('Skip first N entries. For "content" mode: skips first N matches. For "files_with_matches" and "count" modes: skips first N files. Use with head_limit for pagination.')` |
-| `multiline` | `ar.vk(Nhe,ar.zM().optional().describe("Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.").default(!1))` |
-| `pattern` | `ar.Yj().describe("The regular expression pattern to search for in file contents")` |
-| `path` | `ar.Yj().optional().describe("File or directory to search in (rg pattern -- PATH). Defaults to Cursor workspace root.")` |
-| `glob` | `ar.Yj().optional().describe('Glob pattern to filter files (e.g. "*.js", "*.{ts,tsx}") - maps to rg --glob')` |
-| `type` | `ar.Yj().optional().describe("File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than include for standard file types.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pattern`            | `ar.Yj().describe("The regular expression pattern to search for in file contents (rg --regexp)")`                                                                                                                                                                                                                                       |
+| `path`               | `ar.Yj().optional().describe("File or directory to search in (rg pattern -- PATH). Defaults to Cursor workspace roots.")`                                                                                                                                                                                                               |
+| `glob`               | `ar.Yj().optional().describe('Glob pattern (rg --glob GLOB -- PATH) to filter files (e.g. "*.js", "*.{ts,tsx}").')`                                                                                                                                                                                                                     |
+| `output_mode`        | `ar.k5(["content","files_with_matches","count"]).describe('Output mode: "content" shows matching lines (supports -A/-B/-C context, -n line numbers, head_limit), "files_with_matches" shows file paths (supports head_limit), "count" shows match counts (supports head_limit). Defaults to "content".').default("content").optional()` |
+| `-B`                 | `mle().optional().describe('Number of lines to show before each match (rg -B). Requires output_mode: "content", ignored otherwise.')`                                                                                                                                                                                                   |
+| `-A`                 | `mle().optional().describe('Number of lines to show after each match (rg -A). Requires output_mode: "content", ignored otherwise.')`                                                                                                                                                                                                    |
+| `-C`                 | `mle().optional().describe('Number of lines to show before and after each match (rg -C). Requires output_mode: "content", ignored otherwise.')`                                                                                                                                                                                         |
+| `-i`                 | `ar.vk(Nhe,ar.zM().optional().describe("Case insensitive search (rg -i) Defaults to false").default(!1))`                                                                                                                                                                                                                               |
+| `type`               | `ar.Yj().optional().describe("File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than glob for standard file types.")`                                                                                                                                                                          |
+| `head_limit`         | `mle(ar.ai().min(0)).optional().describe('Limit output size. For "content" mode: limits total matches shown. For "files_with_matches" and "count" modes: limits number of files.')`                                                                                                                                                     |
+| `offset`             | `mle(ar.ai().min(0)).optional().describe('Skip first N entries. For "content" mode: skips first N matches. For "files_with_matches" and "count" modes: skips first N files. Use with head_limit for pagination.')`                                                                                                                      |
+| `multiline`          | `ar.vk(Nhe,ar.zM().optional().describe("Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.").default(!1))`                                                                                                                                                          |
+| `pattern`            | `ar.Yj().describe("The regular expression pattern to search for in file contents")`                                                                                                                                                                                                                                                     |
+| `path`               | `ar.Yj().optional().describe("File or directory to search in (rg pattern -- PATH). Defaults to Cursor workspace root.")`                                                                                                                                                                                                                |
+| `glob`               | `ar.Yj().optional().describe('Glob pattern to filter files (e.g. "*.js", "*.{ts,tsx}") - maps to rg --glob')`                                                                                                                                                                                                                           |
+| `type`               | `ar.Yj().optional().describe("File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than include for standard file types.")`                                                                                                                                                                       |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (u="dsv3-1018"===t?Uhe:Fhe)
@@ -2753,7 +2649,6 @@ e=>vhe(new Xw.Ll({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,n)=>{
@@ -2774,7 +2669,6 @@ async(e,t,n)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -2804,7 +2698,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2820,16 +2713,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `target_directory` | `ar.Yj().describe("Path to directory to list contents of.")` |
-| `ignore_globs` | `ar.YO(ar.Yj()).optional().describe('Optional array of glob patterns to ignore.\nAll patterns match anywhere in the target directory. Patterns not starting with "**/" are automatically prepended with "**/".\n\nExamples:\n\t- "*.js" (becomes "**/*.js") - ignore all .js files\n\t- "**/node_modules/**" - ignore all node_modules directories\n\t- "**/test/**/test_*.ts" - ignore all test_*.ts files in any test directory')` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `target_directory`   | `ar.Yj().describe("Path to directory to list contents of.")`                                                                                                                                                                                                                                                                                                                                                                         |
+| `ignore_globs`       | `ar.YO(ar.Yj()).optional().describe('Optional array of glob patterns to ignore.\nAll patterns match anywhere in the target directory. Patterns not starting with "**/" are automatically prepended with "**/".\n\nExamples:\n\t- "*.js" (becomes "**/*.js") - ignore all .js files\n\t- "**/node_modules/**" - ignore all node_modules directories\n\t- "**/test/**/test_*.ts" - ignore all test_*.ts files in any test directory')` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (Whe=ar.Ik({
@@ -2841,7 +2733,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -2881,7 +2772,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -2927,7 +2817,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -2943,15 +2832,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `command` | `ar.Yj().describe("The bash command to execute")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                   |
+| -------------------- | ------------------------------------------------- |
+| `command`            | `ar.Yj().describe("The bash command to execute")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -2975,7 +2863,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Zhe=ar.Ik({
   command:ar.Yj().describe("The bash command to execute")}
@@ -2987,7 +2874,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>Go(tfe(t))
 ```
@@ -2996,7 +2882,6 @@ async(e,t,r)=>Go(tfe(t))
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -3026,7 +2911,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3042,15 +2926,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `paths` | `Nre(ar.YO(ar.Yj()),{field:"paths",primitiveItems:!0}).optional().describe("Optional. An array of paths to files or directories to read linter errors for. You can use either relative paths in the workspace or absolute paths. If provided, returns diagnostics for the specified files/directories only. If not provided, returns diagnostics for all files in the workspace.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paths`              | `Nre(ar.YO(ar.Yj()),{field:"paths",primitiveItems:!0}).optional().describe("Optional. An array of paths to files or directories to read linter errors for. You can use either relative paths in the workspace or absolute paths. If provided, returns diagnostics for the specified files/directories only. If not provided, returns diagnostics for all files in the workspace.")` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (ife=ar.Ik({
@@ -3064,7 +2947,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,{
@@ -3083,7 +2965,6 @@ async(e,{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -3113,7 +2994,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3129,21 +3009,20 @@ e=>{
 <details>
 <summary>参数字段与约束（7 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().describe("The absolute path of the image to view.")` |
-| `target_file` | `ar.Yj().describe("The path of the file to read. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.")` |
-| `offset` | `$fe({requireInt:!0})` |
-| `limit` | `jfe({requireInt:!0})` |
-| `path` | `ar.Yj().describe("The absolute path of the file to read.")` |
-| `line_range` | `ar.YO(ar.ai().int()).min(2).max(2).optional().describe("Optional. A two-element array [start_line, end_line] specifying the range of lines to read (1-indexed, inclusive). Example: [100, 150] reads lines 100 through 150.")` |
-| `offset` | `$fe({requireInt:!0,includeNegativeOffset:t})` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`               | `ar.Yj().describe("The absolute path of the image to view.")`                                                                                                                                                                   |
+| `target_file`        | `ar.Yj().describe("The path of the file to read. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.")`                                       |
+| `offset`             | `$fe({requireInt:!0})`                                                                                                                                                                                                          |
+| `limit`              | `jfe({requireInt:!0})`                                                                                                                                                                                                          |
+| `path`               | `ar.Yj().describe("The absolute path of the file to read.")`                                                                                                                                                                    |
+| `line_range`         | `ar.YO(ar.ai().int()).min(2).max(2).optional().describe("Optional. A two-element array [start_line, end_line] specifying the range of lines to read (1-indexed, inclusive). Example: [100, 150] reads lines 100 through 150.")` |
+| `offset`             | `$fe({requireInt:!0,includeNegativeOffset:t})`                                                                                                                                                                                  |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (w=x$(a?ar.Ik({
@@ -3157,7 +3036,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,{
@@ -3236,7 +3114,6 @@ async(e,{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -3265,7 +3142,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3281,15 +3157,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `paths` | `Nre(ar.YO(ar.Yj()),{field:"paths",primitiveItems:!0}).optional().describe("Optional. An array of paths to files or directories to read linter errors for. You can use either relative paths in the workspace or absolute paths. If provided, returns diagnostics for the specified files/directories only. If not provided, returns diagnostics for all files in the workspace.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paths`              | `Nre(ar.YO(ar.Yj()),{field:"paths",primitiveItems:!0}).optional().describe("Optional. An array of paths to files or directories to read linter errors for. You can use either relative paths in the workspace or absolute paths. If provided, returns diagnostics for the specified files/directories only. If not provided, returns diagnostics for all files in the workspace.")` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (ege=ar.Ik({
@@ -3303,7 +3178,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,{
@@ -3336,7 +3210,6 @@ async(e,{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -3359,7 +3232,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3375,34 +3247,33 @@ e=>{
 <details>
 <summary>参数字段与约束（20 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `findings` | `ar.YO(sge).min(1).describe("One entry per failing CI check investigated. checkName and detailsUrl must match the check identity from the prompt verbatim.")` |
-| `overall` | `oge.optional().describe("Optional cross-check summary when multiple checks were investigated in one turn.")` |
-| `checkName` | `ar.Yj().min(1)` |
-| `detailsUrl` | `ar.Yj().optional()` |
-| `tldr` | `ar.Yj().min(1)` |
-| `rootCause` | `ar.Yj().optional()` |
-| `failingSignal` | `ar.Yj().optional()` |
-| `suggestedNextStep` | `ar.Yj().optional()` |
-| `diffRelation` | `ar.k5(["related","unrelated","unknown"]).optional()` |
-| `diffRelationEvidence` | `ar.Yj().optional()` |
-| `flakeAssessment` | `ar.k5(["likely","unlikely","unknown"]).optional()` |
-| `flakeEvidence` | `ar.Yj().optional()` |
-| `rerunAvailable` | `ar.zM().optional()` |
-| `rerunEvidence` | `ar.Yj().optional()` |
-| `recommendedAction` | `ar.k5(["fix","rerun","wait","ignore","ask","investigate"]).optional()` |
-| `recommendedActionEvidence` | `ar.Yj().optional()` |
-| `confidence` | `ar.k5(["high","medium","low"]).optional()` |
-| `summary` | `ar.Yj().min(1)` |
-| `themes` | `ar.YO(ar.Yj()).optional()` |
-| `checkKeys` | `ar.YO(ar.Yj()).optional()` |
+| 字段（含嵌套与变体）        | 类型 / 约束原式                                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `findings`                  | `ar.YO(sge).min(1).describe("One entry per failing CI check investigated. checkName and detailsUrl must match the check identity from the prompt verbatim.")` |
+| `overall`                   | `oge.optional().describe("Optional cross-check summary when multiple checks were investigated in one turn.")`                                                 |
+| `checkName`                 | `ar.Yj().min(1)`                                                                                                                                              |
+| `detailsUrl`                | `ar.Yj().optional()`                                                                                                                                          |
+| `tldr`                      | `ar.Yj().min(1)`                                                                                                                                              |
+| `rootCause`                 | `ar.Yj().optional()`                                                                                                                                          |
+| `failingSignal`             | `ar.Yj().optional()`                                                                                                                                          |
+| `suggestedNextStep`         | `ar.Yj().optional()`                                                                                                                                          |
+| `diffRelation`              | `ar.k5(["related","unrelated","unknown"]).optional()`                                                                                                         |
+| `diffRelationEvidence`      | `ar.Yj().optional()`                                                                                                                                          |
+| `flakeAssessment`           | `ar.k5(["likely","unlikely","unknown"]).optional()`                                                                                                           |
+| `flakeEvidence`             | `ar.Yj().optional()`                                                                                                                                          |
+| `rerunAvailable`            | `ar.zM().optional()`                                                                                                                                          |
+| `rerunEvidence`             | `ar.Yj().optional()`                                                                                                                                          |
+| `recommendedAction`         | `ar.k5(["fix","rerun","wait","ignore","ask","investigate"]).optional()`                                                                                       |
+| `recommendedActionEvidence` | `ar.Yj().optional()`                                                                                                                                          |
+| `confidence`                | `ar.k5(["high","medium","low"]).optional()`                                                                                                                   |
+| `summary`                   | `ar.Yj().min(1)`                                                                                                                                              |
+| `themes`                    | `ar.YO(ar.Yj()).optional()`                                                                                                                                   |
+| `checkKeys`                 | `ar.YO(ar.Yj()).optional()`                                                                                                                                   |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -3547,7 +3418,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (ige=ar.Ik({
   findings:ar.YO(sge).min(1).describe("One entry per failing CI check investigated. checkName and detailsUrl must match the check identity from the prompt verbatim."),overall:oge.optional().describe("Optional cross-check summary when multiple checks were investigated in one turn.")}
@@ -3558,7 +3428,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e){
@@ -3578,7 +3447,6 @@ async(e,t,r)=>Go(function(e){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -3608,7 +3476,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3624,16 +3491,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `query` | `ar.Yj().min(1).describe("One or two keywords, or a short exact phrase in quotes, to search for in conversation titles and visible user/assistant message text. Every unquoted keyword must match the same conversation; use separate searches for additional keywords.")` |
-| `limit` | `ar.ai().int().min(1).max(100).optional().describe("Maximum number of conversation results to return (1-100). Defaults to 20.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`              | `ar.Yj().min(1).describe("One or two keywords, or a short exact phrase in quotes, to search for in conversation titles and visible user/assistant message text. Every unquoted keyword must match the same conversation; use separate searches for additional keywords.")` |
+| `limit`              | `ar.ai().int().min(1).max(100).optional().describe("Maximum number of conversation results to return (1-100). Defaults to 20.")`                                                                                                                                           |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -3664,7 +3530,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (mge=ar.Ik({
   query:ar.Yj().min(1).describe("One or two keywords, or a short exact phrase in quotes, to search for in conversation titles and visible user/assistant message text. Every unquoted keyword must match the same conversation; use separate searches for additional keywords."),limit:ar.ai().int().min(1).max(100).optional().describe("Maximum number of conversation results to return (1-100). Defaults to 20.")}
@@ -3675,7 +3540,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e){
@@ -3695,7 +3559,6 @@ async(e,t,r)=>Go(function(e){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -3725,7 +3588,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3741,18 +3603,17 @@ e=>{
 <details>
 <summary>参数字段与约束（4 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `explanation` | `e.explanationRequired?ar.Yj().describe(Age):ar.Yj().optional().describe(Age)` |
-| `query` | `ar.Yj().describe("A complete question about what you want to understand. Ask as if talking to a colleague: 'How does X work?', 'What happens when Y?', 'Where is Z handled?'")` |
-| `target_directories` | `ar.YO(ar.Yj()).describe("Prefix directory paths to limit search scope (single directory only, no glob patterns)")` |
-| `search_only_prs` | `ar.zM().optional().describe("If true, only search pull requests and return no code results.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `explanation`        | `e.explanationRequired?ar.Yj().describe(Age):ar.Yj().optional().describe(Age)`                                                                                                   |
+| `query`              | `ar.Yj().describe("A complete question about what you want to understand. Ask as if talking to a colleague: 'How does X work?', 'What happens when Y?', 'Where is Z handled?'")` |
+| `target_directories` | `ar.YO(ar.Yj()).describe("Prefix directory paths to limit search scope (single directory only, no glob patterns)")`                                                              |
+| `search_only_prs`    | `ar.zM().optional().describe("If true, only search pull requests and return no code results.")`                                                                                  |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (u="dsv3-1018"===r?Mge(s):l)
@@ -3762,7 +3623,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,{
@@ -3780,7 +3640,6 @@ async(e,{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -3809,7 +3668,6 @@ e=>{
 
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
-
 
 ```javascript
 {
@@ -3840,31 +3698,30 @@ e=>{
 <details>
 <summary>参数字段与约束（17 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `command` | `Yge` |
-| `working_directory` | `Qge` |
-| `block_until_ms` | `Zge(e)` |
-| `description` | `eye` |
-| `timeout` | `sye=!1,mle().optional().describe(sye?"Hard timeout in milliseconds. The command will be killed after this time, even if running in background (defaults to 600000ms/10 minutes).":"Timeout in milliseconds (defaults to 30000ms/30s)")` |
-| `is_background` | `tye` |
-| `pattern` | `ar.Yj().describe("Regex pattern matched against stdout/stderr output. Output redirected only to a file will not trigger it. Do not match all outputs.")` |
-| `reason` | `ar.Yj().describe("5 or less words describing why you are watching for this output. The UI (only visible to user) will prefix it as 'Monitored \`reason\`'.")` |
-| `debounce_ms` | `ar.ai().optional().describe("Milliseconds that must elapse between notifications. The harness enforces a minimum of 5000ms.")` |
-| `command` | `ar.Yj().describe("The command to execute")` |
-| `working_directory` | `ar.Yj().optional().describe("The absolute path to the working directory to execute the command in (defaults to current directory)")` |
-| `description` | `ar.Yj().optional().describe("Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'")` |
-| `timeout` | `mle().optional().describe("Timeout in milliseconds (defaults to 30000ms/30s)")` |
-| `is_background` | `ar.zM().optional().describe("Whether the command should be run in the background")` |
-| `command` | `ar.Yj().describe("The terminal command to execute")` |
-| `is_background` | `ar.zM().describe("Whether the command should be run in the background")` |
-| `explanation` | `ar.Yj().optional().describe("One sentence explanation as to why this command needs to be run and how it contributes to the goal.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `command`            | `Yge`                                                                                                                                                                                                                                                                                                                                         |
+| `working_directory`  | `Qge`                                                                                                                                                                                                                                                                                                                                         |
+| `block_until_ms`     | `Zge(e)`                                                                                                                                                                                                                                                                                                                                      |
+| `description`        | `eye`                                                                                                                                                                                                                                                                                                                                         |
+| `timeout`            | `sye=!1,mle().optional().describe(sye?"Hard timeout in milliseconds. The command will be killed after this time, even if running in background (defaults to 600000ms/10 minutes).":"Timeout in milliseconds (defaults to 30000ms/30s)")`                                                                                                      |
+| `is_background`      | `tye`                                                                                                                                                                                                                                                                                                                                         |
+| `pattern`            | `ar.Yj().describe("Regex pattern matched against stdout/stderr output. Output redirected only to a file will not trigger it. Do not match all outputs.")`                                                                                                                                                                                     |
+| `reason`             | `ar.Yj().describe("5 or less words describing why you are watching for this output. The UI (only visible to user) will prefix it as 'Monitored \`reason\`'.")`                                                                                                                                                                                |
+| `debounce_ms`        | `ar.ai().optional().describe("Milliseconds that must elapse between notifications. The harness enforces a minimum of 5000ms.")`                                                                                                                                                                                                               |
+| `command`            | `ar.Yj().describe("The command to execute")`                                                                                                                                                                                                                                                                                                  |
+| `working_directory`  | `ar.Yj().optional().describe("The absolute path to the working directory to execute the command in (defaults to current directory)")`                                                                                                                                                                                                         |
+| `description`        | `ar.Yj().optional().describe("Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'")` |
+| `timeout`            | `mle().optional().describe("Timeout in milliseconds (defaults to 30000ms/30s)")`                                                                                                                                                                                                                                                              |
+| `is_background`      | `ar.zM().optional().describe("Whether the command should be run in the background")`                                                                                                                                                                                                                                                          |
+| `command`            | `ar.Yj().describe("The terminal command to execute")`                                                                                                                                                                                                                                                                                         |
+| `is_background`      | `ar.zM().describe("Whether the command should be run in the background")`                                                                                                                                                                                                                                                                     |
+| `explanation`        | `ar.Yj().optional().describe("One sentence explanation as to why this command needs to be run and how it contributes to the goal.")`                                                                                                                                                                                                          |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (d=x$(lwe(t?.parametersSchema??fye({
@@ -3877,7 +3734,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,n)=>Go(Oz(t,{
   discourageAwait:void 0!==n.allTools.AWAIT,promptVersion:r,sandboxPromptEnabled:i,useMinimalHarness:l}
@@ -3888,7 +3744,6 @@ async(e,t,n)=>Go(Oz(t,{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -3957,7 +3812,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -3973,16 +3827,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `target_mode_id` | `ar.Yj().describe(\`The mode to switch to. Allowed values: ${t}.\`).transform(e=>e.trim().toLowerCase()).refine(t=>e.some(e=>e.toLowerCase()===t),{message:\`target_mode_id must be one of: ${e.join(", ")}\`})` |
-| `explanation` | `ar.Yj().optional().describe("Optional explanation for why the mode switch is requested. This helps the user understand why you're switching modes.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_mode_id`     | `ar.Yj().describe(\`The mode to switch to. Allowed values: ${t}.\`).transform(e=>e.trim().toLowerCase()).refine(t=>e.some(e=>e.toLowerCase()===t),{message:\`target_mode_id must be one of: ${e.join(", ")}\`})` |
+| `explanation`        | `ar.Yj().optional().describe("Optional explanation for why the mode switch is requested. This helps the user understand why you're switching modes.")`                                                           |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (r=function(e){
@@ -4011,7 +3864,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>Go(function(e){
   switch(e.result.case){
@@ -4030,7 +3882,6 @@ async(e,t,r)=>Go(function(e){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -4069,7 +3920,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4087,27 +3937,26 @@ e=>{
 <details>
 <summary>参数字段与约束（13 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `merge` | `ar.zM().describe("Whether to merge the todos with the existing todos. If true, the todos will be merged into the existing todos based on the id field. You can leave unchanged properties undefined. If false, the new todos will replace the existing todos.")` |
-| `todos` | `ar.YO(Swe).describe("Array of todo items to write to the workspace")` |
-| `todos` | `ar.YO(xwe).describe("Array of TODO items to update or create")` |
-| `todos` | `r` |
-| `merge` | `s` |
-| `todos` | `n` |
-| `content` | `ar.Yj().optional().describe("The description/content of the todo item")` |
-| `status` | `Kee.describe("The current status of the todo item")` |
-| `id` | `ar.Yj().describe("Unique identifier for the todo item")` |
-| `id` | `ar.Yj().describe("Unique identifier for the TODO item")` |
-| `content` | `ar.Yj().describe("The description/content of the TODO item")` |
-| `status` | `Kee.describe("The current status of the TODO item")` |
-| `content` | `ar.Yj().describe("The description/content of the todo item")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge`              | `ar.zM().describe("Whether to merge the todos with the existing todos. If true, the todos will be merged into the existing todos based on the id field. You can leave unchanged properties undefined. If false, the new todos will replace the existing todos.")` |
+| `todos`              | `ar.YO(Swe).describe("Array of todo items to write to the workspace")`                                                                                                                                                                                            |
+| `todos`              | `ar.YO(xwe).describe("Array of TODO items to update or create")`                                                                                                                                                                                                  |
+| `todos`              | `r`                                                                                                                                                                                                                                                               |
+| `merge`              | `s`                                                                                                                                                                                                                                                               |
+| `todos`              | `n`                                                                                                                                                                                                                                                               |
+| `content`            | `ar.Yj().optional().describe("The description/content of the todo item")`                                                                                                                                                                                         |
+| `status`             | `Kee.describe("The current status of the todo item")`                                                                                                                                                                                                             |
+| `id`                 | `ar.Yj().describe("Unique identifier for the todo item")`                                                                                                                                                                                                         |
+| `id`                 | `ar.Yj().describe("Unique identifier for the TODO item")`                                                                                                                                                                                                         |
+| `content`            | `ar.Yj().describe("The description/content of the TODO item")`                                                                                                                                                                                                    |
+| `status`             | `Kee.describe("The current status of the TODO item")`                                                                                                                                                                                                             |
+| `content`            | `ar.Yj().describe("The description/content of the todo item")`                                                                                                                                                                                                    |
 
 </details>
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,n)=>{
@@ -4141,7 +3990,6 @@ async(e,t,n)=>{
 <details>
 <summary>错误序列化代码</summary>
 
-
 ```javascript
 e=>{
   const t=e instanceof Error?e.message:String(e);
@@ -4169,7 +4017,6 @@ e=>{
 
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
-
 
 ```javascript
 {
@@ -4203,17 +4050,16 @@ e=>{
 <details>
 <summary>参数字段与约束（3 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `url` | `ar.Yj().describe("The URL to fetch. The content will be converted to a readable markdown format.")` |
-| `requestSmartModeApproval` | `ar.zM().optional().describe("Set to true when immediately retrying the exact same fetch after Auto-review blocks it and you decide the user should approve it through the native approval card.")` |
-| `smartModeBlockReason` | `ar.Yj().optional().describe("Provide the exact block reason returned by Auto-review in the prior rejection. Required when requestSmartModeApproval is true so the approval card shows the original classifier reason without re-running the classifier.")` |
+| 字段（含嵌套与变体）       | 类型 / 约束原式                                                                                                                                                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`                      | `ar.Yj().describe("The URL to fetch. The content will be converted to a readable markdown format.")`                                                                                                                                                        |
+| `requestSmartModeApproval` | `ar.zM().optional().describe("Set to true when immediately retrying the exact same fetch after Auto-review blocks it and you decide the user should approve it through the native approval card.")`                                                         |
+| `smartModeBlockReason`     | `ar.Yj().optional().describe("Provide the exact block reason returned by Auto-review in the prior rejection. Required when requestSmartModeApproval is true so the approval card shows the original classifier reason without re-running the classifier.")` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (i=r?.agentType!==wW.BACKGROUND&&!0===r?.smartModeClassifierMode?$we.extend(jwe.shape):$we)
@@ -4223,7 +4069,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -4250,7 +4095,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -4295,7 +4139,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4320,16 +4163,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `search_term` | `ar.Yj().describe("The search term to look up on the web. Be specific and include relevant keywords for better results. For technical queries, include version numbers or dates if relevant.")` |
-| `explanation` | `ar.Yj().optional().describe("One sentence explanation as to why this tool is being used, and how it contributes to the goal.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_term`        | `ar.Yj().describe("The search term to look up on the web. Be specific and include relevant keywords for better results. For technical queries, include version numbers or dates if relevant.")` |
+| `explanation`        | `ar.Yj().optional().describe("One sentence explanation as to why this tool is being used, and how it contributes to the goal.")`                                                                |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (n=function(e){
@@ -4342,7 +4184,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e){
@@ -4366,7 +4207,6 @@ async(e,t,r)=>Go(function(e){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -4405,7 +4245,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4428,19 +4267,18 @@ e=>{
 <summary>参数字段与约束（6 条表达式）</summary>
 
 | 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `namespace` | `p` |
-| `toolName` | `h` |
-| `pattern` | `g` |
-| `server` | `d` |
-| `toolName` | `m` |
-| `pattern` | `f` |
+| -------------------- | --------------- |
+| `namespace`          | `p`             |
+| `toolName`           | `h`             |
+| `pattern`            | `g`             |
+| `server`             | `d`             |
+| `toolName`           | `m`             |
+| `pattern`            | `f`             |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (v=s?w:y)
@@ -4451,7 +4289,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 Yve
 ```
@@ -4460,7 +4297,6 @@ Yve
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -4484,7 +4320,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4500,20 +4335,19 @@ e=>{
 <details>
 <summary>参数字段与约束（6 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `title` | `ar.Yj().min(1,"title is required").describe("A short, user-friendly title for the agent to create. This appears in the UI as the agent's name. Make it concrete and distinct, consider recent titles to avoid reuse, and vary the first word across agent titles.")` |
-| `description` | `ar.Yj().min(1,"description is required").describe("A brief description of this agent's scope of work. 10 words or less.")` |
-| `prompt` | `ar.Yj().min(1,"prompt is required").describe("The prompt for the new asynchronous agent. DO NOT tell the agent that you are a meta-agent. Your prompt should be presented as just a normal user prompt.")` |
-| `responding_to_message_ids` | `ar.YO(ar.Yj()).min(1,"responding_to_message_ids must contain at least one message id").describe("Array of user message IDs this tool call is responding to. Usually this is the latest user message ID, but include older IDs for delayed actions or when a later message clarifies an earlier one. List multiple IDs when replying to multiple user messages.")` |
-| `fork` | `ar.Yj().min(1,"fork must be a non-empty agent_id").optional().describe("Optional agent_id of a direct child agent to fork from. Use when you wish to start a new agent with the history of an existing agent. Common cases: parallel work that does not depend on the child's in-flight output, status check or question for a running child without interrupting its work, or multiple independent follow-ups from a completed child (e.g. splitting independent TODOs). Explicitly instruct new agent to fully shift its focus to the new task rather than continuing work on the prior task. Do not stop the work of the agent you are forking from (if you are doing this, resume that agent with \`interrupt=true\` instead). New agent must be given its own unique title.")` |
-| `attachments` | `dbe("new agent")` |
+| 字段（含嵌套与变体）        | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`                     | `ar.Yj().min(1,"title is required").describe("A short, user-friendly title for the agent to create. This appears in the UI as the agent's name. Make it concrete and distinct, consider recent titles to avoid reuse, and vary the first word across agent titles.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `description`               | `ar.Yj().min(1,"description is required").describe("A brief description of this agent's scope of work. 10 words or less.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `prompt`                    | `ar.Yj().min(1,"prompt is required").describe("The prompt for the new asynchronous agent. DO NOT tell the agent that you are a meta-agent. Your prompt should be presented as just a normal user prompt.")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `responding_to_message_ids` | `ar.YO(ar.Yj()).min(1,"responding_to_message_ids must contain at least one message id").describe("Array of user message IDs this tool call is responding to. Usually this is the latest user message ID, but include older IDs for delayed actions or when a later message clarifies an earlier one. List multiple IDs when replying to multiple user messages.")`                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `fork`                      | `ar.Yj().min(1,"fork must be a non-empty agent_id").optional().describe("Optional agent_id of a direct child agent to fork from. Use when you wish to start a new agent with the history of an existing agent. Common cases: parallel work that does not depend on the child's in-flight output, status check or question for a running child without interrupting its work, or multiple independent follow-ups from a completed child (e.g. splitting independent TODOs). Explicitly instruct new agent to fully shift its focus to the new task rather than continuing work on the prior task. Do not stop the work of the agent you are forking from (if you are doing this, resume that agent with \`interrupt=true\` instead). New agent must be given its own unique title.")` |
+| `attachments`               | `dbe("new agent")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -4571,7 +4405,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (n=ar.Ik({
   title:ar.Yj().min(1,"title is required").describe("A short, user-friendly title for the agent to create. This appears in the UI as the agent's name. Make it concrete and distinct, consider recent titles to avoid reuse, and vary the first word across agent titles."),description:ar.Yj().min(1,"description is required").describe("A brief description of this agent's scope of work. 10 words or less."),prompt:ar.Yj().min(1,"prompt is required").describe("The prompt for the new asynchronous agent. DO NOT tell the agent that you are a meta-agent. Your prompt should be presented as just a normal user prompt."),responding_to_message_ids:ar.YO(ar.Yj()).min(1,"responding_to_message_ids must contain at least one message id").describe("Array of user message IDs this tool call is responding to. Usually this is the latest user message ID, but include older IDs for delayed actions or when a later message clarifies an earlier one. List multiple IDs when replying to multiple user messages."),fork:ar.Yj().min(1,"fork must be a non-empty agent_id").optional().describe("Optional agent_id of a direct child agent to fork from. Use when you wish to start a new agent with the history of an existing agent. Common cases: parallel work that does not depend on the child's in-flight output, status check or question for a running child without interrupting its work, or multiple independent follow-ups from a completed child (e.g. splitting independent TODOs). Explicitly instruct new agent to fully shift its focus to the new task rather than continuing work on the prior task. Do not stop the work of the agent you are forking from (if you are doing this, resume that agent with `interrupt=true` instead). New agent must be given its own unique title."),attachments:dbe("new agent")}
@@ -4583,7 +4416,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t)=>mbe({
   taskResult:t,action:"create"}
@@ -4594,7 +4426,6 @@ async(e,t)=>mbe({
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>pbe(new U.U4S({
@@ -4621,7 +4452,6 @@ e=>pbe(new U.U4S({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4637,15 +4467,14 @@ e=>pbe(new U.U4S({
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `message` | `ar.Yj().trim().min(1,"Message must be non-empty").max(1e5,"Message must be at most 100000 characters").superRefine((e,t)=>{const r=e.replace(Mbe," ");for(const[,e=""]of r.matchAll(Jbe)){if(!e.startsWith("bc-")\|\|void 0!==Pbe(e))continue;const r=e.split(/[#/?]/,1)[0]??e;return void t.addIssue({code:die.eq.custom,message:Ebe(r)?\`\\`${e}\\` is not an agent link. Use \\`${r}\\`, \\`${r}#changes\\`, or \\`${r}#desktop\\`.\`:\`\\`${e}\\` is not an agent ID. A new agent's ID exists only in its CreateAgent result: link it after that result arrives, or name it without a link.\`})}}).describe("User-visible message to send.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `message`            | `ar.Yj().trim().min(1,"Message must be non-empty").max(1e5,"Message must be at most 100000 characters").superRefine((e,t)=>{const r=e.replace(Mbe," ");for(const[,e=""]of r.matchAll(Jbe)){if(!e.startsWith("bc-")\|\|void 0!==Pbe(e))continue;const r=e.split(/[#/?]/,1)[0]??e;return void t.addIssue({code:die.eq.custom,message:Ebe(r)?\`\\`${e}\\` is not an agent link. Use \\`${r}\\`, \\`${r}#changes\\`, or \\`${r}#desktop\\`.\`:\`\\`${e}\\` is not an agent ID. A new agent's ID exists only in its CreateAgent result: link it after that result arrives, or name it without a link.\`})}}).describe("User-visible message to send.")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -4671,7 +4500,6 @@ e=>pbe(new U.U4S({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Obe=ar.Ik({
   message:ar.Yj().trim().min(1,"Message must be non-empty").max(1e5,"Message must be at most 100000 characters").superRefine((e,t)=>{
@@ -4692,7 +4520,6 @@ e=>pbe(new U.U4S({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>{
   switch(t.result.case){
@@ -4710,7 +4537,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>Bbe(new TA.wl({
@@ -4737,7 +4563,6 @@ e=>Bbe(new TA.wl({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4753,18 +4578,17 @@ e=>Bbe(new TA.wl({
 <details>
 <summary>参数字段与约束（4 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `agent_id` | `ar.Yj().min(1,"agent_id is required").describe("The agent_id returned by create-agent for the agent you want to message.")` |
-| `prompt` | `ar.Yj().min(1,"prompt is required").describe("The follow-up prompt to send to the agent")` |
+| 字段（含嵌套与变体）        | 类型 / 约束原式                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent_id`                  | `ar.Yj().min(1,"agent_id is required").describe("The agent_id returned by create-agent for the agent you want to message.")`                                                                                                                                                                                                                                       |
+| `prompt`                    | `ar.Yj().min(1,"prompt is required").describe("The follow-up prompt to send to the agent")`                                                                                                                                                                                                                                                                        |
 | `responding_to_message_ids` | `ar.YO(ar.Yj()).min(1,"responding_to_message_ids must contain at least one message id").describe("Array of user message IDs this tool call is responding to. Usually this is the latest user message ID, but include older IDs for delayed actions or when a later message clarifies an earlier one. List multiple IDs when replying to multiple user messages.")` |
-| `attachments` | `dbe("agent")` |
+| `attachments`               | `dbe("agent")`                                                                                                                                                                                                                                                                                                                                                     |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -4811,7 +4635,6 @@ e=>Bbe(new TA.wl({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (n=ar.Ik({
   agent_id:ar.Yj().min(1,"agent_id is required").describe("The agent_id returned by create-agent for the agent you want to message."),prompt:ar.Yj().min(1,"prompt is required").describe("The follow-up prompt to send to the agent"),responding_to_message_ids:ar.YO(ar.Yj()).min(1,"responding_to_message_ids must contain at least one message id").describe("Array of user message IDs this tool call is responding to. Usually this is the latest user message ID, but include older IDs for delayed actions or when a later message clarifies an earlier one. List multiple IDs when replying to multiple user messages."),attachments:dbe("agent")}
@@ -4823,7 +4646,6 @@ e=>Bbe(new TA.wl({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t)=>mbe({
   taskResult:t,action:"send"}
@@ -4834,7 +4656,6 @@ async(e,t)=>mbe({
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>pbe(new U.U4S({
@@ -4861,7 +4682,6 @@ e=>pbe(new U.U4S({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4877,17 +4697,16 @@ e=>pbe(new U.U4S({
 <details>
 <summary>参数字段与约束（3 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().describe("Path to the file to read (relative or absolute)")` |
-| `offset` | `ar.ai().optional().describe("Line number to start reading from (1-indexed)")` |
-| `limit` | `ar.ai().optional().describe("Maximum number of lines to read")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `path`               | `ar.Yj().describe("Path to the file to read (relative or absolute)")`          |
+| `offset`             | `ar.ai().optional().describe("Line number to start reading from (1-indexed)")` |
+| `limit`              | `ar.ai().optional().describe("Maximum number of lines to read")`               |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -4919,7 +4738,6 @@ e=>pbe(new U.U4S({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Zbe=ar.Ik({
   path:ar.Yj().describe("Path to the file to read (relative or absolute)"),offset:ar.ai().optional().describe("Line number to start reading from (1-indexed)"),limit:ar.ai().optional().describe("Maximum number of lines to read")}
@@ -4931,7 +4749,6 @@ e=>pbe(new U.U4S({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 a_e
 ```
@@ -4940,7 +4757,6 @@ a_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piReadToolCall",new kk.oT({
@@ -4967,7 +4783,6 @@ e=>f_e("piReadToolCall",new kk.oT({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -4983,16 +4798,15 @@ e=>f_e("piReadToolCall",new kk.oT({
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `command` | `ar.Yj().describe("Bash command to execute")` |
-| `timeout` | `ar.ai().optional().describe("Timeout in seconds (optional, no default timeout)")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `command`            | `ar.Yj().describe("Bash command to execute")`                                      |
+| `timeout`            | `ar.ai().optional().describe("Timeout in seconds (optional, no default timeout)")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5020,7 +4834,6 @@ e=>f_e("piReadToolCall",new kk.oT({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (e_e=ar.Ik({
   command:ar.Yj().describe("Bash command to execute"),timeout:ar.ai().optional().describe("Timeout in seconds (optional, no default timeout)")}
@@ -5032,7 +4845,6 @@ e=>f_e("piReadToolCall",new kk.oT({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 c_e
 ```
@@ -5041,7 +4853,6 @@ c_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piBashToolCall",new aS.WJ({
@@ -5068,7 +4879,6 @@ e=>f_e("piBashToolCall",new aS.WJ({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5084,18 +4894,17 @@ e=>f_e("piBashToolCall",new aS.WJ({
 <details>
 <summary>参数字段与约束（4 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().describe("Path to the file to edit (relative or absolute)")` |
-| `edits` | `ar.YO(Xbe).describe("One or more targeted replacements.")` |
-| `oldText` | `ar.Yj().describe("Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.")` |
-| `newText` | `ar.Yj().describe("Replacement text for this targeted edit.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`               | `ar.Yj().describe("Path to the file to edit (relative or absolute)")`                                                                                                       |
+| `edits`              | `ar.YO(Xbe).describe("One or more targeted replacements.")`                                                                                                                 |
+| `oldText`            | `ar.Yj().describe("Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.")` |
+| `newText`            | `ar.Yj().describe("Replacement text for this targeted edit.")`                                                                                                              |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5142,7 +4951,6 @@ e=>f_e("piBashToolCall",new aS.WJ({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (t_e=ar.Ik({
   path:ar.Yj().describe("Path to the file to edit (relative or absolute)"),edits:ar.YO(Xbe).describe("One or more targeted replacements.")}
@@ -5154,7 +4962,6 @@ e=>f_e("piBashToolCall",new aS.WJ({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 l_e
 ```
@@ -5163,7 +4970,6 @@ l_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piEditToolCall",new kS.EN({
@@ -5190,7 +4996,6 @@ e=>f_e("piEditToolCall",new kS.EN({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5206,16 +5011,15 @@ e=>f_e("piEditToolCall",new kS.EN({
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().describe("Path to the file to write (relative or absolute)")` |
-| `content` | `ar.Yj().describe("Content to write to the file")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                        |
+| -------------------- | ---------------------------------------------------------------------- |
+| `path`               | `ar.Yj().describe("Path to the file to write (relative or absolute)")` |
+| `content`            | `ar.Yj().describe("Content to write to the file")`                     |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5244,7 +5048,6 @@ e=>f_e("piEditToolCall",new kS.EN({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (r_e=ar.Ik({
   path:ar.Yj().describe("Path to the file to write (relative or absolute)"),content:ar.Yj().describe("Content to write to the file")}
@@ -5256,7 +5059,6 @@ e=>f_e("piEditToolCall",new kS.EN({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 u_e
 ```
@@ -5265,7 +5067,6 @@ u_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piWriteToolCall",new Dk.xP({
@@ -5292,7 +5093,6 @@ e=>f_e("piWriteToolCall",new Dk.xP({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5308,21 +5108,20 @@ e=>f_e("piWriteToolCall",new Dk.xP({
 <details>
 <summary>参数字段与约束（7 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `pattern` | `ar.Yj().describe("Search pattern (regex or literal string)")` |
-| `path` | `ar.Yj().optional().describe("Directory or file to search (default: current directory)")` |
-| `glob` | `ar.Yj().optional().describe("Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'")` |
-| `ignoreCase` | `ar.zM().optional().describe("Case-insensitive search (default: false)")` |
-| `literal` | `ar.zM().optional().describe("Treat pattern as literal string instead of regex (default: false)")` |
-| `context` | `ar.ai().optional().describe("Number of lines to show before and after each match (default: 0)")` |
-| `limit` | `ar.ai().optional().describe("Maximum number of matches to return (default: 100)")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `pattern`            | `ar.Yj().describe("Search pattern (regex or literal string)")`                                     |
+| `path`               | `ar.Yj().optional().describe("Directory or file to search (default: current directory)")`          |
+| `glob`               | `ar.Yj().optional().describe("Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'")`       |
+| `ignoreCase`         | `ar.zM().optional().describe("Case-insensitive search (default: false)")`                          |
+| `literal`            | `ar.zM().optional().describe("Treat pattern as literal string instead of regex (default: false)")` |
+| `context`            | `ar.ai().optional().describe("Number of lines to show before and after each match (default: 0)")`  |
+| `limit`              | `ar.ai().optional().describe("Maximum number of matches to return (default: 100)")`                |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5370,7 +5169,6 @@ e=>f_e("piWriteToolCall",new Dk.xP({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (n_e=ar.Ik({
   pattern:ar.Yj().describe("Search pattern (regex or literal string)"),path:ar.Yj().optional().describe("Directory or file to search (default: current directory)"),glob:ar.Yj().optional().describe("Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'"),ignoreCase:ar.zM().optional().describe("Case-insensitive search (default: false)"),literal:ar.zM().optional().describe("Treat pattern as literal string instead of regex (default: false)"),context:ar.ai().optional().describe("Number of lines to show before and after each match (default: 0)"),limit:ar.ai().optional().describe("Maximum number of matches to return (default: 100)")}
@@ -5382,7 +5180,6 @@ e=>f_e("piWriteToolCall",new Dk.xP({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 d_e
 ```
@@ -5391,7 +5188,6 @@ d_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piGrepToolCall",new QS.Os({
@@ -5418,7 +5214,6 @@ e=>f_e("piGrepToolCall",new QS.Os({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5434,17 +5229,16 @@ e=>f_e("piGrepToolCall",new QS.Os({
 <details>
 <summary>参数字段与约束（3 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `pattern` | `ar.Yj().describe("Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'")` |
-| `path` | `ar.Yj().optional().describe("Directory to search in (default: current directory)")` |
-| `limit` | `ar.ai().optional().describe("Maximum number of results (default: 1000)")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `pattern`            | `ar.Yj().describe("Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'")` |
+| `path`               | `ar.Yj().optional().describe("Directory to search in (default: current directory)")`               |
+| `limit`              | `ar.ai().optional().describe("Maximum number of results (default: 1000)")`                         |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5476,7 +5270,6 @@ e=>f_e("piGrepToolCall",new QS.Os({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (s_e=ar.Ik({
   pattern:ar.Yj().describe("Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'"),path:ar.Yj().optional().describe("Directory to search in (default: current directory)"),limit:ar.ai().optional().describe("Maximum number of results (default: 1000)")}
@@ -5488,7 +5281,6 @@ e=>f_e("piGrepToolCall",new QS.Os({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 p_e
 ```
@@ -5497,7 +5289,6 @@ p_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piFindToolCall",new NS.h1({
@@ -5524,7 +5315,6 @@ e=>f_e("piFindToolCall",new NS.h1({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5540,16 +5330,15 @@ e=>f_e("piFindToolCall",new NS.h1({
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().optional().describe("Directory to list (default: current directory)")` |
-| `limit` | `ar.ai().optional().describe("Maximum number of entries to return (default: 500)")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `path`               | `ar.Yj().optional().describe("Directory to list (default: current directory)")`     |
+| `limit`              | `ar.ai().optional().describe("Maximum number of entries to return (default: 500)")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5574,7 +5363,6 @@ e=>f_e("piFindToolCall",new NS.h1({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (o_e=ar.Ik({
   path:ar.Yj().optional().describe("Directory to list (default: current directory)"),limit:ar.ai().optional().describe("Maximum number of entries to return (default: 500)")}
@@ -5586,7 +5374,6 @@ e=>f_e("piFindToolCall",new NS.h1({
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 m_e
 ```
@@ -5595,7 +5382,6 @@ m_e
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>f_e("piLsToolCall",new uk.Tf({
@@ -5622,7 +5408,6 @@ e=>f_e("piLsToolCall",new uk.Tf({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5638,15 +5423,14 @@ e=>f_e("piLsToolCall",new uk.Tf({
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `github_repo` | `ar.Yj().regex(/^[^\s/]+\/[^\s/]+$/,"Expected repository in 'owner/name' form").optional().describe("Optional repository in 'owner/name' form that the user wants connected. Provide it when the user named a specific repo so the connect flow can also prompt to install the app there.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github_repo`        | `ar.Yj().regex(/^[^\s/]+\/[^\s/]+$/,"Expected repository in 'owner/name' form").optional().describe("Optional repository in 'owner/name' form that the user wants connected. Provide it when the user named a specific repo so the connect flow can also prompt to install the app there.")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5668,7 +5452,6 @@ e=>f_e("piLsToolCall",new uk.Tf({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (I_e=ar.Ik({
   github_repo:ar.Yj().regex(/^[^\s/]+\/[^\s/]+$/,"Expected repository in 'owner/name' form").optional().describe("Optional repository in 'owner/name' form that the user wants connected. Provide it when the user named a specific repo so the connect flow can also prompt to install the app there.")}
@@ -5679,7 +5462,6 @@ e=>f_e("piLsToolCall",new uk.Tf({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>Go(function(e,t){
@@ -5702,7 +5484,6 @@ async(e,t,r)=>Go(function(e,t){
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -5741,7 +5522,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5757,16 +5537,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `path` | `ar.Yj().describe("Absolute repository path for this branch update.")` |
-| `branchName` | `ar.Yj().describe("New active branch name.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                        |
+| -------------------- | ---------------------------------------------------------------------- |
+| `path`               | `ar.Yj().describe("Absolute repository path for this branch update.")` |
+| `branchName`         | `ar.Yj().describe("New active branch name.")`                          |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5795,7 +5574,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (M_e=ar.Ik({
   path:ar.Yj().describe("Absolute repository path for this branch update."),branchName:ar.Yj().describe("New active branch name.")}
@@ -5806,7 +5584,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -5826,7 +5603,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -5856,7 +5632,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5872,15 +5647,14 @@ e=>{
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `source_agent_id` | `ar.Yj().min(1).describe("ID of the existing agent to adopt into this Project.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                   |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `source_agent_id`    | `ar.Yj().min(1).describe("ID of the existing agent to adopt into this Project.")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -5905,7 +5679,6 @@ e=>{
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (q_e=ar.Ik({
   source_agent_id:ar.Yj().min(1).describe("ID of the existing agent to adopt into this Project.")}
@@ -5916,7 +5689,6 @@ e=>{
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -5933,7 +5705,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>N_e(new du.P({
@@ -5958,7 +5729,6 @@ e=>N_e(new du.P({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -5974,15 +5744,14 @@ e=>N_e(new du.P({
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `message` | `ar.Yj().describe("The content to display to the user, exactly as written.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                               |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `message`            | `ar.Yj().describe("The content to display to the user, exactly as written.")` |
 
 </details>
 
 <details>
 <summary>JSON Schema（不包含所有自定义校验与转换）</summary>
-
 
 ```json
 {
@@ -6006,7 +5775,6 @@ e=>N_e(new du.P({
 <details>
 <summary>参数入口的原始构造代码</summary>
 
-
 ```javascript
 (Lbe=ar.Ik({
   message:ar.Yj().describe("The content to display to the user, exactly as written.")}
@@ -6017,7 +5785,6 @@ e=>N_e(new du.P({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -6036,7 +5803,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>$be(new zA.fC({
@@ -6063,7 +5829,6 @@ e=>$be(new zA.fC({
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -6082,15 +5847,14 @@ e=>$be(new zA.fC({
 <details>
 <summary>参数字段与约束（1 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `final_summary` | `Ie.Yj().trim().min(1).describe("Brief final summary of the work you have performed. When helpful, include illustrative examples of completed work.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `final_summary`      | `Ie.Yj().trim().min(1).describe("Brief final summary of the work you have performed. When helpful, include illustrative examples of completed work.")` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (ZR=Ie.Ik({
@@ -6102,7 +5866,6 @@ e=>$be(new zA.fC({
 
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
-
 
 ```javascript
 async(e,t,r)=>{
@@ -6122,7 +5885,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -6152,7 +5914,6 @@ e=>{
 <details>
 <summary>名称、完整描述生成表达式与参数入口</summary>
 
-
 ```javascript
 {
 
@@ -6168,16 +5929,15 @@ e=>{
 <details>
 <summary>参数字段与约束（2 条表达式）</summary>
 
-| 字段（含嵌套与变体） | 类型 / 约束原式 |
-| --- | --- |
-| `current_step` | `aP` |
-| `current_step` | `iP.describe("Major step or phase you are on. Update when the subtask changes. Keep the text concise, high-level, and user-friendly.")` |
+| 字段（含嵌套与变体） | 类型 / 约束原式                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `current_step`       | `aP`                                                                                                                                    |
+| `current_step`       | `iP.describe("Major step or phase you are on. Update when the subtask changes. Keep the text concise, high-level, and user-friendly.")` |
 
 </details>
 
 <details>
 <summary>参数入口的原始构造代码</summary>
-
 
 ```javascript
 (n=r?cP.extend({
@@ -6199,7 +5959,6 @@ e=>{
 <details>
 <summary>返回模型的输出代码（完整 render）</summary>
 
-
 ```javascript
 async(e,t,r)=>{
   switch(t.result.case){
@@ -6218,7 +5977,6 @@ async(e,t,r)=>{
 
 <details>
 <summary>错误序列化代码</summary>
-
 
 ```javascript
 e=>{
@@ -6287,7 +6045,6 @@ e=>{
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_navigate":{const t=e;r=await Et.navigate(t,o);break}
 ```
@@ -6339,7 +6096,6 @@ case"browser_navigate":{const t=e;r=await Et.navigate(t,o);break}
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_snapshot":r=await Et.snapshot(e,o);break;
@@ -6422,7 +6178,6 @@ case"browser_snapshot":r=await Et.snapshot(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_click":r=await Et.click(e,o);break;
 ```
@@ -6474,7 +6229,6 @@ case"browser_click":r=await Et.click(e,o);break;
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_mouse_click_xy":r=await Et.mouseClickXY(e,o);break;
@@ -6535,7 +6289,6 @@ case"browser_mouse_click_xy":r=await Et.mouseClickXY(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_type":r=await Et.type(e,o);break;
 ```
@@ -6582,7 +6335,6 @@ case"browser_type":r=await Et.type(e,o);break;
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_fill":r=await Et.fill(e,o);break;
@@ -6634,7 +6386,6 @@ case"browser_fill":r=await Et.fill(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_select_option":r=await Et.selectOption(e,o);break;
 ```
@@ -6672,7 +6423,6 @@ case"browser_select_option":r=await Et.selectOption(e,o);break;
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_press_key":r=await Et.pressKey(e,o);break;
@@ -6736,7 +6486,6 @@ case"browser_press_key":r=await Et.pressKey(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_scroll":r=await Et.scroll(e,o);break;
 ```
@@ -6787,7 +6536,6 @@ case"browser_scroll":r=await Et.scroll(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_drag":r=await Et.drag(e,o);break;
 ```
@@ -6825,7 +6573,6 @@ case"browser_drag":r=await Et.drag(e,o);break;
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_get_bounding_box":r=await Et.getBoundingBox(e,o);break;
@@ -6868,7 +6615,6 @@ case"browser_get_bounding_box":r=await Et.getBoundingBox(e,o);break;
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_highlight":r=await Et.highlight(e,o);break;
@@ -6918,7 +6664,6 @@ case"browser_highlight":r=await Et.highlight(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_tabs":{const t=e;r=await Et.tabs(t,o);break}
 ```
@@ -6960,7 +6705,6 @@ case"browser_tabs":{const t=e;r=await Et.tabs(t,o);break}
 
 <details>
 <summary>调用与输出处理代码</summary>
-
 
 ```javascript
 case"browser_cdp":{r=await Et.cdp(e,o);const t=function(t){return t?.conversationId??t?.composerId}(n),s=function(t){for(const e of t.content)if("metadata"===e.type)return e.viewId}(r);void 0!==t&&void 0!==s&&this.cdpTurnTracker.record(t,{viewId:s,ownerAgentId:o.ownerAgentId});break}
@@ -7010,7 +6754,6 @@ case"browser_cdp":{r=await Et.cdp(e,o);const t=function(t){return t?.conversatio
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_take_screenshot":r=await Et.takeScreenshot(e,o);break;
 ```
@@ -7049,7 +6792,6 @@ case"browser_take_screenshot":r=await Et.takeScreenshot(e,o);break;
 <details>
 <summary>调用与输出处理代码</summary>
 
-
 ```javascript
 case"browser_lock":r=await Et.lock(e,o);break;
 ```
@@ -7066,7 +6808,6 @@ case"browser_lock":r=await Et.lock(e,o);break;
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7124,7 +6865,6 @@ case"browser_lock":r=await Et.lock(e,o);break;
 
 <details>
 <summary>执行与输出代码（run）</summary>
-
 
 ```javascript
 async(n,t,{
@@ -7211,7 +6951,6 @@ async(n,t,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 tl
 ```
@@ -7222,7 +6961,6 @@ tl
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7240,7 +6978,6 @@ tl
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t}
@@ -7254,7 +6991,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 ln({target:Mc})
 ```
@@ -7265,7 +7001,6 @@ ln({target:Mc})
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7315,7 +7050,6 @@ ln({target:Mc})
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t,zoom_id:a,...s}
@@ -7336,7 +7070,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Yc
 ```
@@ -7347,7 +7080,6 @@ Yc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7382,7 +7114,6 @@ Yc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t,zoom_id:a,...s}
@@ -7402,7 +7133,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Jc
 ```
@@ -7413,7 +7143,6 @@ Jc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7485,7 +7214,6 @@ Jc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,t)=>{
   const a=Wc(t);
@@ -7502,7 +7230,6 @@ async(e,n,t)=>{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Hc
 ```
@@ -7513,7 +7240,6 @@ Hc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7551,7 +7277,6 @@ Hc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t,text:a,...s}
@@ -7569,7 +7294,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Kc
 ```
@@ -7580,7 +7304,6 @@ Kc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7607,7 +7330,6 @@ Kc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t,...a}
@@ -7619,7 +7341,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 $c
 ```
@@ -7630,7 +7351,6 @@ $c
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7681,7 +7401,6 @@ $c
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t,zoom_id:a,...s}
@@ -7699,7 +7418,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Xc
 ```
@@ -7710,7 +7428,6 @@ Xc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7735,7 +7452,6 @@ Xc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(n,t,a,s)=>{
   const o=a.ms??1e3;
@@ -7759,7 +7475,6 @@ async(n,t,a,s)=>{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Zc
 ```
@@ -7770,7 +7485,6 @@ Zc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7853,7 +7567,6 @@ Zc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n,{
   target:t,...a}
@@ -7896,7 +7609,6 @@ async(e,n,{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Kl
 ```
@@ -7907,7 +7619,6 @@ Kl
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7925,7 +7636,6 @@ Kl
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n)=>Nl(await n.checkPermissions(e),"Reported permission state.")
 ```
@@ -7934,7 +7644,6 @@ async(e,n)=>Nl(await n.checkPermissions(e),"Reported permission state.")
 
 <details>
 <summary>额外输入校验入口</summary>
-
 
 ```javascript
 Qc
@@ -7946,7 +7655,6 @@ Qc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -7964,7 +7672,6 @@ Qc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n)=>(await n.startControl(e),{
   content:[{
@@ -7978,7 +7685,6 @@ async(e,n)=>(await n.startControl(e),{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Qc
 ```
@@ -7989,7 +7695,6 @@ Qc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8007,7 +7712,6 @@ Qc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 async(e,n)=>(await n.releaseControl(e),{
   content:[{
@@ -8021,7 +7725,6 @@ async(e,n)=>(await n.releaseControl(e),{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Qc
 ```
@@ -8032,7 +7735,6 @@ Qc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8076,7 +7778,6 @@ Qc
 
 <details>
 <summary>执行与输出代码（run）</summary>
-
 
 ```javascript
 async(e,n,t)=>{
@@ -8122,7 +7823,6 @@ async(e,n,t)=>{
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Pc
 ```
@@ -8133,7 +7833,6 @@ Pc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8151,7 +7850,6 @@ Pc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 (e,n)=>Ul(e,n,"computer_use_apps_list",void 0,{
   }
@@ -8163,7 +7861,6 @@ Pc
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Qc
 ```
@@ -8174,7 +7871,6 @@ Qc
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8231,7 +7927,6 @@ Qc
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 (e,n,t)=>Ul(e,n,"computer_use_select_app",void 0,t,"Resolved the app.")
 ```
@@ -8240,7 +7935,6 @@ Qc
 
 <details>
 <summary>额外输入校验入口</summary>
-
 
 ```javascript
 sl
@@ -8252,7 +7946,6 @@ sl
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8309,7 +8002,6 @@ sl
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 (e,n,{
   target:t,...a}
@@ -8321,7 +8013,6 @@ sl
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 ol
 ```
@@ -8332,7 +8023,6 @@ ol
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8396,7 +8086,6 @@ ol
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 (e,n,{
   target:t,...a}
@@ -8408,7 +8097,6 @@ ol
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 il
 ```
@@ -8419,7 +8107,6 @@ il
 
 <details>
 <summary>完整定义：macOS app scope 构造条件</summary>
-
 
 ```json
 {
@@ -8483,7 +8170,6 @@ il
 <details>
 <summary>执行与输出代码（run）</summary>
 
-
 ```javascript
 (e,n,{
   target:t,...a}
@@ -8495,7 +8181,6 @@ il
 <details>
 <summary>额外输入校验入口</summary>
 
-
 ```javascript
 Al
 ```
@@ -8506,7 +8191,6 @@ Al
 
 <details>
 <summary>Nl 原始实现</summary>
-
 
 ```javascript
 async function Nl(e,n){
@@ -8552,7 +8236,6 @@ async function Nl(e,n){
 <details>
 <summary>Ul 原始实现</summary>
 
-
 ```javascript
 async function Ul(e,n,t,a,s,o){
   if(void 0===n.callCompanion)throw new Error("App targets need the macOS computer-use helper. Use the screen target.");
@@ -8574,7 +8257,6 @@ async function Ul(e,n,t,a,s,o){
 
 <details>
 <summary>xl 原始实现</summary>
-
 
 ```javascript
 function xl(e){
@@ -8603,7 +8285,6 @@ function xl(e){
 
 <details>
 <summary>Jl 原始实现</summary>
-
 
 ```javascript
 function Jl({
@@ -8845,7 +8526,6 @@ function Jl({
 <details>
 <summary>$l 原始实现</summary>
 
-
 ```javascript
 function $l(e){
   return Jl({
@@ -8860,78 +8540,78 @@ function $l(e){
 
 以下仅表示协议可以携带这些调用，不等于已启用，也不等于每项都有本地执行实现。完整 args、result、success、error 及嵌套消息在 JSON 的 498 个可达消息中。协议引用 Google protobuf `Struct` 的两处保留为外部标准类型，没有伪造本地定义。
 
-| 分支 | 调用消息 | 参数类型 | 结果类型 |
-| --- | --- | --- | --- |
-| `shell_tool_call` | `ShellToolCall` | `ShellArgs` | `ShellResult` |
-| `delete_tool_call` | `DeleteToolCall` | `DeleteArgs` | `DeleteResult` |
-| `glob_tool_call` | `GlobToolCall` | `GlobToolArgs` | `GlobToolResult` |
-| `grep_tool_call` | `GrepToolCall` | `GrepArgs` | `GrepResult` |
-| `read_tool_call` | `ReadToolCall` | `ReadToolArgs` | `ReadToolResult` |
-| `update_todos_tool_call` | `UpdateTodosToolCall` | `UpdateTodosArgs` | `UpdateTodosResult` |
-| `read_todos_tool_call` | `ReadTodosToolCall` | `ReadTodosArgs` | `ReadTodosResult` |
-| `edit_tool_call` | `EditToolCall` | `EditArgs` | `EditResult` |
-| `ls_tool_call` | `LsToolCall` | `LsArgs` | `LsResult` |
-| `read_lints_tool_call` | `ReadLintsToolCall` | `ReadLintsToolArgs` | `ReadLintsToolResult` |
-| `mcp_tool_call` | `McpToolCall` | `McpArgs` | `McpToolResult` |
-| `sem_search_tool_call` | `SemSearchToolCall` | `SemSearchToolArgs` | `SemSearchToolResult` |
-| `create_plan_tool_call` | `CreatePlanToolCall` | `CreatePlanArgs` | `CreatePlanResult` |
-| `web_search_tool_call` | `WebSearchToolCall` | `WebSearchArgs` | `WebSearchResult` |
-| `task_tool_call` | `TaskToolCall` | `TaskArgs` | `TaskResult` |
-| `list_mcp_resources_tool_call` | `ListMcpResourcesToolCall` | `ListMcpResourcesExecArgs` | `ListMcpResourcesExecResult` |
-| `read_mcp_resource_tool_call` | `ReadMcpResourceToolCall` | `ReadMcpResourceExecArgs` | `ReadMcpResourceExecResult` |
-| `apply_agent_diff_tool_call` | `ApplyAgentDiffToolCall` | `ApplyAgentDiffArgs` | `ApplyAgentDiffResult` |
-| `ask_question_tool_call` | `AskQuestionToolCall` | `AskQuestionArgs` | `AskQuestionResult` |
-| `fetch_tool_call` | `FetchToolCall` | `FetchArgs` | `FetchResult` |
-| `switch_mode_tool_call` | `SwitchModeToolCall` | `SwitchModeArgs` | `SwitchModeResult` |
-| `generate_image_tool_call` | `GenerateImageToolCall` | `GenerateImageArgs` | `GenerateImageResult` |
-| `record_screen_tool_call` | `RecordScreenToolCall` | `RecordScreenArgs` | `RecordScreenResult` |
-| `computer_use_tool_call` | `ComputerUseToolCall` | `ComputerUseArgs` | `ComputerUseResult` |
-| `write_shell_stdin_tool_call` | `WriteShellStdinToolCall` | `WriteShellStdinArgs` | `WriteShellStdinResult` |
-| `reflect_tool_call` | `ReflectToolCall` | `ReflectArgs` | `ReflectResult` |
-| `setup_vm_environment_tool_call` | `SetupVmEnvironmentToolCall` | `SetupVmEnvironmentArgs` | `SetupVmEnvironmentResult` |
-| `truncated_tool_call` | `TruncatedToolCall` | `TruncatedToolCallArgs` | `TruncatedToolCallResult` |
-| `start_grind_execution_tool_call` | `StartGrindExecutionToolCall` | `StartGrindExecutionArgs` | `StartGrindExecutionResult` |
-| `start_grind_planning_tool_call` | `StartGrindPlanningToolCall` | `StartGrindPlanningArgs` | `StartGrindPlanningResult` |
-| `web_fetch_tool_call` | `WebFetchToolCall` | `WebFetchArgs` | `WebFetchResult` |
-| `report_bugfix_results_tool_call` | `ReportBugfixResultsToolCall` | `ReportBugfixResultsArgs` | `ReportBugfixResultsResult` |
-| `ai_attribution_tool_call` | `AiAttributionToolCall` | `AiAttributionArgs` | `AiAttributionResult` |
-| `pr_management_tool_call` | `PrManagementToolCall` | `PrManagementArgs` | `PrManagementResult` |
-| `mcp_auth_tool_call` | `McpAuthToolCall` | `McpAuthArgs` | `McpAuthResult` |
-| `await_tool_call` | `AwaitToolCall` | `AwaitArgs` | `AwaitResult` |
-| `blame_by_file_path_tool_call` | `BlameByFilePathToolCall` | `BlameByFilePathArgs` | `BlameByFilePathResult` |
-| `get_mcp_tools_tool_call` | `GetMcpToolsToolCall` | `GetMcpToolsArgs` | `GetMcpToolsAgentResult` |
-| `report_bug_tool_call` | `ReportBugToolCall` | `ReportBugArgs` | `ReportBugResult` |
-| `set_active_branch_tool_call` | `SetActiveBranchToolCall` | `SetActiveBranchArgs` | `SetActiveBranchResult` |
-| `communicate_update_tool_call` | `CommunicateUpdateToolCall` | `CommunicateUpdateArgs` | `CommunicateUpdateResult` |
-| `send_final_summary_tool_call` | `SendFinalSummaryToolCall` | `SendFinalSummaryArgs` | `SendFinalSummaryResult` |
-| `update_pr_code_tour_tool_call` | `UpdatePrCodeTourToolCall` | `UpdatePrCodeTourArgs` | `UpdatePrCodeTourResult` |
-| `replace_env_tool_call` | `ReplaceEnvToolCall` | `ReplaceEnvArgs` | `ReplaceEnvResult` |
-| `edit_pr_labels_tool_call` | `EditPrLabelsToolCall` | `EditPrLabelsArgs` | `EditPrLabelsResult` |
+| 分支                                         | 调用消息                                | 参数类型                            | 结果类型                              |
+| -------------------------------------------- | --------------------------------------- | ----------------------------------- | ------------------------------------- |
+| `shell_tool_call`                            | `ShellToolCall`                         | `ShellArgs`                         | `ShellResult`                         |
+| `delete_tool_call`                           | `DeleteToolCall`                        | `DeleteArgs`                        | `DeleteResult`                        |
+| `glob_tool_call`                             | `GlobToolCall`                          | `GlobToolArgs`                      | `GlobToolResult`                      |
+| `grep_tool_call`                             | `GrepToolCall`                          | `GrepArgs`                          | `GrepResult`                          |
+| `read_tool_call`                             | `ReadToolCall`                          | `ReadToolArgs`                      | `ReadToolResult`                      |
+| `update_todos_tool_call`                     | `UpdateTodosToolCall`                   | `UpdateTodosArgs`                   | `UpdateTodosResult`                   |
+| `read_todos_tool_call`                       | `ReadTodosToolCall`                     | `ReadTodosArgs`                     | `ReadTodosResult`                     |
+| `edit_tool_call`                             | `EditToolCall`                          | `EditArgs`                          | `EditResult`                          |
+| `ls_tool_call`                               | `LsToolCall`                            | `LsArgs`                            | `LsResult`                            |
+| `read_lints_tool_call`                       | `ReadLintsToolCall`                     | `ReadLintsToolArgs`                 | `ReadLintsToolResult`                 |
+| `mcp_tool_call`                              | `McpToolCall`                           | `McpArgs`                           | `McpToolResult`                       |
+| `sem_search_tool_call`                       | `SemSearchToolCall`                     | `SemSearchToolArgs`                 | `SemSearchToolResult`                 |
+| `create_plan_tool_call`                      | `CreatePlanToolCall`                    | `CreatePlanArgs`                    | `CreatePlanResult`                    |
+| `web_search_tool_call`                       | `WebSearchToolCall`                     | `WebSearchArgs`                     | `WebSearchResult`                     |
+| `task_tool_call`                             | `TaskToolCall`                          | `TaskArgs`                          | `TaskResult`                          |
+| `list_mcp_resources_tool_call`               | `ListMcpResourcesToolCall`              | `ListMcpResourcesExecArgs`          | `ListMcpResourcesExecResult`          |
+| `read_mcp_resource_tool_call`                | `ReadMcpResourceToolCall`               | `ReadMcpResourceExecArgs`           | `ReadMcpResourceExecResult`           |
+| `apply_agent_diff_tool_call`                 | `ApplyAgentDiffToolCall`                | `ApplyAgentDiffArgs`                | `ApplyAgentDiffResult`                |
+| `ask_question_tool_call`                     | `AskQuestionToolCall`                   | `AskQuestionArgs`                   | `AskQuestionResult`                   |
+| `fetch_tool_call`                            | `FetchToolCall`                         | `FetchArgs`                         | `FetchResult`                         |
+| `switch_mode_tool_call`                      | `SwitchModeToolCall`                    | `SwitchModeArgs`                    | `SwitchModeResult`                    |
+| `generate_image_tool_call`                   | `GenerateImageToolCall`                 | `GenerateImageArgs`                 | `GenerateImageResult`                 |
+| `record_screen_tool_call`                    | `RecordScreenToolCall`                  | `RecordScreenArgs`                  | `RecordScreenResult`                  |
+| `computer_use_tool_call`                     | `ComputerUseToolCall`                   | `ComputerUseArgs`                   | `ComputerUseResult`                   |
+| `write_shell_stdin_tool_call`                | `WriteShellStdinToolCall`               | `WriteShellStdinArgs`               | `WriteShellStdinResult`               |
+| `reflect_tool_call`                          | `ReflectToolCall`                       | `ReflectArgs`                       | `ReflectResult`                       |
+| `setup_vm_environment_tool_call`             | `SetupVmEnvironmentToolCall`            | `SetupVmEnvironmentArgs`            | `SetupVmEnvironmentResult`            |
+| `truncated_tool_call`                        | `TruncatedToolCall`                     | `TruncatedToolCallArgs`             | `TruncatedToolCallResult`             |
+| `start_grind_execution_tool_call`            | `StartGrindExecutionToolCall`           | `StartGrindExecutionArgs`           | `StartGrindExecutionResult`           |
+| `start_grind_planning_tool_call`             | `StartGrindPlanningToolCall`            | `StartGrindPlanningArgs`            | `StartGrindPlanningResult`            |
+| `web_fetch_tool_call`                        | `WebFetchToolCall`                      | `WebFetchArgs`                      | `WebFetchResult`                      |
+| `report_bugfix_results_tool_call`            | `ReportBugfixResultsToolCall`           | `ReportBugfixResultsArgs`           | `ReportBugfixResultsResult`           |
+| `ai_attribution_tool_call`                   | `AiAttributionToolCall`                 | `AiAttributionArgs`                 | `AiAttributionResult`                 |
+| `pr_management_tool_call`                    | `PrManagementToolCall`                  | `PrManagementArgs`                  | `PrManagementResult`                  |
+| `mcp_auth_tool_call`                         | `McpAuthToolCall`                       | `McpAuthArgs`                       | `McpAuthResult`                       |
+| `await_tool_call`                            | `AwaitToolCall`                         | `AwaitArgs`                         | `AwaitResult`                         |
+| `blame_by_file_path_tool_call`               | `BlameByFilePathToolCall`               | `BlameByFilePathArgs`               | `BlameByFilePathResult`               |
+| `get_mcp_tools_tool_call`                    | `GetMcpToolsToolCall`                   | `GetMcpToolsArgs`                   | `GetMcpToolsAgentResult`              |
+| `report_bug_tool_call`                       | `ReportBugToolCall`                     | `ReportBugArgs`                     | `ReportBugResult`                     |
+| `set_active_branch_tool_call`                | `SetActiveBranchToolCall`               | `SetActiveBranchArgs`               | `SetActiveBranchResult`               |
+| `communicate_update_tool_call`               | `CommunicateUpdateToolCall`             | `CommunicateUpdateArgs`             | `CommunicateUpdateResult`             |
+| `send_final_summary_tool_call`               | `SendFinalSummaryToolCall`              | `SendFinalSummaryArgs`              | `SendFinalSummaryResult`              |
+| `update_pr_code_tour_tool_call`              | `UpdatePrCodeTourToolCall`              | `UpdatePrCodeTourArgs`              | `UpdatePrCodeTourResult`              |
+| `replace_env_tool_call`                      | `ReplaceEnvToolCall`                    | `ReplaceEnvArgs`                    | `ReplaceEnvResult`                    |
+| `edit_pr_labels_tool_call`                   | `EditPrLabelsToolCall`                  | `EditPrLabelsArgs`                  | `EditPrLabelsResult`                  |
 | `record_ci_investigation_findings_tool_call` | `RecordCiInvestigationFindingsToolCall` | `RecordCiInvestigationFindingsArgs` | `RecordCiInvestigationFindingsResult` |
-| `send_message_tool_call` | `SendMessageToolCall` | `SendMessageArgs` | `SendMessageResult` |
-| `fetch_cloud_agent_data_tool_call` | `FetchCloudAgentDataToolCall` | `FetchCloudAgentDataArgs` | `FetchCloudAgentDataResult` |
-| `send_to_user_tool_call` | `SendToUserToolCall` | `SendToUserArgs` | `SendToUserResult` |
-| `pi_read_tool_call` | `PiReadToolCall` | `PiReadToolArgs` | `PiReadToolResult` |
-| `pi_bash_tool_call` | `PiBashToolCall` | `PiBashToolArgs` | `PiBashToolResult` |
-| `pi_edit_tool_call` | `PiEditToolCall` | `PiEditToolArgs` | `PiEditToolResult` |
-| `pi_write_tool_call` | `PiWriteToolCall` | `PiWriteToolArgs` | `PiWriteToolResult` |
-| `pi_grep_tool_call` | `PiGrepToolCall` | `PiGrepToolArgs` | `PiGrepToolResult` |
-| `pi_find_tool_call` | `PiFindToolCall` | `PiFindToolArgs` | `PiFindToolResult` |
-| `pi_ls_tool_call` | `PiLsToolCall` | `PiLsToolArgs` | `PiLsToolResult` |
-| `connect_scm_tool_call` | `ConnectScmToolCall` | `ConnectScmArgs` | `ConnectScmResult` |
-| `search_conversations_tool_call` | `SearchConversationsToolCall` | `ConversationSearchArgs` | `ConversationSearchResult` |
-| `create_goal_tool_call` | `CreateGoalToolCall` | `CreateGoalArgs` | `CreateGoalResult` |
-| `update_goal_tool_call` | `UpdateGoalToolCall` | `UpdateGoalArgs` | `UpdateGoalResult` |
-| `adopt_tool_call` | `AdoptToolCall` | `AdoptArgs` | `AdoptResult` |
-| `get_agent_status_tool_call` | `GetAgentStatusToolCall` | `GetAgentStatusArgs` | `GetAgentStatusResult` |
-| `send_to_agent_tool_call` | `SendToAgentToolCall` | `SendToAgentArgs` | `SendToAgentResult` |
-| `read_agent_transcript_tool_call` | `ReadAgentTranscriptToolCall` | `ReadAgentTranscriptArgs` | `ReadAgentTranscriptResult` |
-| `create_agent_tool_call` | `CreateAgentToolCall` | `CreateAgentArgs` | `CreateAgentResult` |
-| `stop_agent_tool_call` | `StopAgentToolCall` | `StopAgentArgs` | `StopAgentResult` |
-| `get_pr_code_tour_tool_call` | `GetPrCodeTourToolCall` | `GetPrCodeTourArgs` | `GetPrCodeTourResult` |
-| `write_canvas_tool_call` | `WriteCanvasToolCall` | `WriteCanvasArgs` | `WriteCanvasResult` |
-| `read_canvas_tool_call` | `ReadCanvasToolCall` | `ReadCanvasArgs` | `ReadCanvasResult` |
-| `generate_video_tool_call` | `GenerateVideoToolCall` | `GenerateVideoArgs` | `GenerateVideoResult` |
+| `send_message_tool_call`                     | `SendMessageToolCall`                   | `SendMessageArgs`                   | `SendMessageResult`                   |
+| `fetch_cloud_agent_data_tool_call`           | `FetchCloudAgentDataToolCall`           | `FetchCloudAgentDataArgs`           | `FetchCloudAgentDataResult`           |
+| `send_to_user_tool_call`                     | `SendToUserToolCall`                    | `SendToUserArgs`                    | `SendToUserResult`                    |
+| `pi_read_tool_call`                          | `PiReadToolCall`                        | `PiReadToolArgs`                    | `PiReadToolResult`                    |
+| `pi_bash_tool_call`                          | `PiBashToolCall`                        | `PiBashToolArgs`                    | `PiBashToolResult`                    |
+| `pi_edit_tool_call`                          | `PiEditToolCall`                        | `PiEditToolArgs`                    | `PiEditToolResult`                    |
+| `pi_write_tool_call`                         | `PiWriteToolCall`                       | `PiWriteToolArgs`                   | `PiWriteToolResult`                   |
+| `pi_grep_tool_call`                          | `PiGrepToolCall`                        | `PiGrepToolArgs`                    | `PiGrepToolResult`                    |
+| `pi_find_tool_call`                          | `PiFindToolCall`                        | `PiFindToolArgs`                    | `PiFindToolResult`                    |
+| `pi_ls_tool_call`                            | `PiLsToolCall`                          | `PiLsToolArgs`                      | `PiLsToolResult`                      |
+| `connect_scm_tool_call`                      | `ConnectScmToolCall`                    | `ConnectScmArgs`                    | `ConnectScmResult`                    |
+| `search_conversations_tool_call`             | `SearchConversationsToolCall`           | `ConversationSearchArgs`            | `ConversationSearchResult`            |
+| `create_goal_tool_call`                      | `CreateGoalToolCall`                    | `CreateGoalArgs`                    | `CreateGoalResult`                    |
+| `update_goal_tool_call`                      | `UpdateGoalToolCall`                    | `UpdateGoalArgs`                    | `UpdateGoalResult`                    |
+| `adopt_tool_call`                            | `AdoptToolCall`                         | `AdoptArgs`                         | `AdoptResult`                         |
+| `get_agent_status_tool_call`                 | `GetAgentStatusToolCall`                | `GetAgentStatusArgs`                | `GetAgentStatusResult`                |
+| `send_to_agent_tool_call`                    | `SendToAgentToolCall`                   | `SendToAgentArgs`                   | `SendToAgentResult`                   |
+| `read_agent_transcript_tool_call`            | `ReadAgentTranscriptToolCall`           | `ReadAgentTranscriptArgs`           | `ReadAgentTranscriptResult`           |
+| `create_agent_tool_call`                     | `CreateAgentToolCall`                   | `CreateAgentArgs`                   | `CreateAgentResult`                   |
+| `stop_agent_tool_call`                       | `StopAgentToolCall`                     | `StopAgentArgs`                     | `StopAgentResult`                     |
+| `get_pr_code_tour_tool_call`                 | `GetPrCodeTourToolCall`                 | `GetPrCodeTourArgs`                 | `GetPrCodeTourResult`                 |
+| `write_canvas_tool_call`                     | `WriteCanvasToolCall`                   | `WriteCanvasArgs`                   | `WriteCanvasResult`                   |
+| `read_canvas_tool_call`                      | `ReadCanvasToolCall`                    | `ReadCanvasArgs`                    | `ReadCanvasResult`                    |
+| `generate_video_tool_call`                   | `GenerateVideoToolCall`                 | `GenerateVideoArgs`                 | `GenerateVideoResult`                 |
 
 ## 6. 历史协议、通用适配器与验证
 

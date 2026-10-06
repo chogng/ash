@@ -127,11 +127,13 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 				},
 			};
 		};
-		const children: SettingsTreeNode<ISetting | SettingsContentItem>[] = [settingNode(DictationConfiguration.backend), { element: {
-			kind: 'item', id: 'dictation.inputOptions', keywords: [DictationConfiguration.inputDevice, DictationConfiguration.language], title: localize({ bundle: 'ash', key: 'dictation.inputOptions' }, 'Microphone and language'),
-			description: localize({ bundle: 'ash', key: 'dictation.inputOptionsDescription' }, 'Select the microphone for dictation. Language hints are available for supported cloud services; local models use their own languages.'),
-			value: { domNode: this.inputOptions },
-		} }];
+		const children: SettingsTreeNode<ISetting | SettingsContentItem>[] = [settingNode(DictationConfiguration.backend), {
+			element: {
+				kind: 'item', id: 'dictation.inputOptions', keywords: [DictationConfiguration.inputDevice, DictationConfiguration.language], title: localize({ bundle: 'ash', key: 'dictation.inputOptions' }, 'Microphone and language'),
+				description: localize({ bundle: 'ash', key: 'dictation.inputOptionsDescription' }, 'Select the microphone for dictation. Language hints are available for supported cloud services; local models use their own languages.'),
+				value: { domNode: this.inputOptions },
+			}
+		}];
 		if (this.configuration.getValue(DictationConfiguration.backend) === 'cloud') {
 			children.push(settingNode(DictationConfiguration.cloudProvider), {
 				element: {

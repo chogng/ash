@@ -11,7 +11,7 @@ test('replacement parser keeps literal escapes and captures distinct', () => {
 });
 
 test('replacement parser expands named captures, case operations, and preserved case', () => {
-	const captures: string[] & { groups?: Record<string, string | undefined> } = ['name: ash', 'name', 'ash'];
+	const captures: string[] & { groups?: Record<string, string | undefined>; } = ['name: ash', 'name', 'ash'];
 	captures.groups = { key: 'name' };
 	assert.equal(parseReplaceString('$<key>=\\U$2 $$ $&').buildReplaceString(captures), 'name=ASH $ name: ash');
 	assert.equal(parseReplaceString('\\u$2').buildReplaceString(captures), 'Ash');

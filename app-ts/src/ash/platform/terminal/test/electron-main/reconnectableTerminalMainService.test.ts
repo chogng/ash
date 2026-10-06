@@ -15,7 +15,7 @@ test("Remote terminal leases stay in the renderer and rotate across connection g
 	const supervisor = new TestSupervisor();
 	const failures: unknown[] = [];
 	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, {
-		wait: async () => {},
+		wait: async () => { },
 		reportError: (_message, error) => failures.push(error),
 	});
 
@@ -190,7 +190,7 @@ class TestSupervisor {
 		for (const listener of this.listeners) listener(state);
 	}
 
-	async request(definition: { method: string }, params: unknown): Promise<any> {
+	async request(definition: { method: string; }, params: unknown): Promise<any> {
 		this.requests.push({ method: definition.method, params });
 		switch (definition.method) {
 			case APP_SERVER_METHODS["terminal/profile/list"].method:

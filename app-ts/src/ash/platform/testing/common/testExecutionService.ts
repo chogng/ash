@@ -10,7 +10,7 @@ export interface TestItem {
 	readonly target: string;
 	readonly targetKind: 'library' | 'binary' | 'integration' | 'documentation';
 	readonly name: string;
-	readonly source: { readonly path: string; readonly line: number } | null;
+	readonly source: { readonly path: string; readonly line: number; } | null;
 	readonly debuggable: boolean;
 }
 

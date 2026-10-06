@@ -22,20 +22,20 @@ export interface IExternalUriOpener {
 	readonly id: string;
 	readonly label: string;
 	canOpen(uri: URI, token: CancellationToken): Promise<ExternalUriOpenerPriority>;
-	openExternalUri(uri: URI, ctx: { sourceUri: URI }, token: CancellationToken): Promise<boolean>;
+	openExternalUri(uri: URI, ctx: { sourceUri: URI; }, token: CancellationToken): Promise<boolean>;
 }
 
 export interface IExternalUriOpenerService {
 	readonly _serviceBrand: undefined;
 	registerExternalOpenerProvider(provider: IExternalOpenerProvider): IDisposable;
 	/** Returns a handler without prompting, including handlers offered only as an option. */
-	getOpener(uri: URI, ctx: { sourceUri: URI; preferredOpenerId?: string }, token: CancellationToken): Promise<IExternalUriOpener | undefined>;
+	getOpener(uri: URI, ctx: { sourceUri: URI; preferredOpenerId?: string; }, token: CancellationToken): Promise<IExternalUriOpener | undefined>;
 }
 
 export const IExternalUriOpenerService = createServiceIdentifier<IExternalUriOpenerService>('externalUriOpenerService');
 
-type OpenerContext = { sourceUri: URI; preferredOpenerId?: string };
-type OpenerPick = IQuickPickItem & { opener: IExternalUriOpener | 'default' | 'configure' };
+type OpenerContext = { sourceUri: URI; preferredOpenerId?: string; };
+type OpenerPick = IQuickPickItem & { opener: IExternalUriOpener | 'default' | 'configure'; };
 
 /** Owns provider selection; the platform opener retains validation, resolution and host execution. */
 export class ExternalUriOpenerService extends Disposable implements IExternalUriOpenerService, IExternalOpener {
@@ -127,7 +127,7 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 				}
 			}
 		}
-		const choices: { opener: IExternalUriOpener; priority: ExternalUriOpenerPriority }[] = [];
+		const choices: { opener: IExternalUriOpener; priority: ExternalUriOpenerPriority; }[] = [];
 		for (const opener of candidates.values()) {
 			try {
 				const priority = await opener.canOpen(ctx.sourceUri, token);

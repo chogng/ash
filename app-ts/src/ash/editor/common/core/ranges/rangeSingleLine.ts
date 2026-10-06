@@ -7,7 +7,7 @@ export class RangeSingleLine {
 		return new RangeSingleLine(range.startLineNumber, new ColumnRange(range.startColumn, range.endColumn));
 	}
 
-	constructor(readonly lineNumber: number, readonly columnRange: ColumnRange) {}
+	constructor(readonly lineNumber: number, readonly columnRange: ColumnRange) { }
 
 	toRange(): Range {
 		return new Range(this.lineNumber, this.columnRange.startColumn, this.lineNumber, this.columnRange.endColumnExclusive);

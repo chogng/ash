@@ -13,8 +13,8 @@ interface Page {
 export class BrowserSessionPermissions {
 	private readonly pages = new Map<WebContents, Page>();
 	private readonly grants = new Map<string, boolean>();
-	private readonly pending = new Map<string, { page: Page; settle: (value: boolean | undefined) => void }>();
-	private readonly downloads = new Map<string, { page: Page; item: DownloadItem; cleanup: () => void }>();
+	private readonly pending = new Map<string, { page: Page; settle: (value: boolean | undefined) => void; }>();
+	private readonly downloads = new Map<string, { page: Page; item: DownloadItem; cleanup: () => void; }>();
 
 	constructor(session: Session) {
 		session.setPermissionCheckHandler((contents, permission, origin, details) => {

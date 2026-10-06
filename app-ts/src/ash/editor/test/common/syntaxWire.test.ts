@@ -26,7 +26,7 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 		new SyntaxProviderWorker(remoteRegistry),
 	);
 	using coordinator = new LanguageRequestCoordinator(model, () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec));
-	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
+	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE; }> | undefined;
 	const requestTokens = () => coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: "typescript" }, result => {
 		if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error("Wrong lane");
 		tokens = result.value;
@@ -112,15 +112,15 @@ test("Syntax service replaces a failed wire Worker on the next request", async (
 	using workerResources = new DisposableStore();
 	let workerCount = 0;
 	using coordinator = new LanguageRequestCoordinator(model, () => {
-			workerCount += 1;
-			const [clientPort, serverPort] = createPortPair();
-			const worker: SyntaxWorker = workerCount === 1
-				? new FailingSyntaxWorker()
-				: new SyntaxProviderWorker(remoteRegistry);
-			workerResources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, worker));
-			return new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
+		workerCount += 1;
+		const [clientPort, serverPort] = createPortPair();
+		const worker: SyntaxWorker = workerCount === 1
+			? new FailingSyntaxWorker()
+			: new SyntaxProviderWorker(remoteRegistry);
+		workerResources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, worker));
+		return new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
 	});
-	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
+	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE; }> | undefined;
 	const requestTokens = () => coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: "typescript" }, result => {
 		if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error("Wrong lane");
 		tokens = result.value;
@@ -274,15 +274,20 @@ function turn(): Promise<void> {
 test('hypothetical syntax travels across the wire without changing the shared snapshot or delta baseline', async () => {
 	using registry = new SyntaxProviderRegistry();
 	const observed: string[] = [];
-	using registration = registry.register({ id: 'test.preview', languageIds: ['demo'],
+	using registration = registry.register({
+		id: 'test.preview', languageIds: ['demo'],
 		provideTokens: request => { observed.push(request.snapshot.getText()); return { tokens: [] }; },
 		provideTokensForLines: request => ({ tokens: request.tokenize.lines.map((line, index) => ({ range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [] })) }),
 	});
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
-	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxService: {
-		workerFactory: () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec),
-	} } });
+	using model = new TextModel('x', {
+		languageId: 'demo', tokenization: {
+			syntaxService: {
+				workerFactory: () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec),
+			}
+		}
+	});
 	const signal = new AbortController().signal;
 	const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['longer than x', 'second line'], signal);
 	assert.deepEqual(tokens!.map(line => line.getLineContent()), ['longer than x', 'second line']);

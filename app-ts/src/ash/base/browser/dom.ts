@@ -30,7 +30,7 @@ export class Dimension implements IDimension {
 	static readonly Zero = new Dimension(0, 0);
 	static readonly None = Dimension.Zero;
 
-	constructor(readonly width: number, readonly height: number) {}
+	constructor(readonly width: number, readonly height: number) { }
 
 	with(width = this.width, height = this.height): Dimension {
 		return width === this.width && height === this.height ? this : new Dimension(width, height);
@@ -224,7 +224,7 @@ export function windowOpenNoOpener(url: string): void {
 	getWindow().open(url, '_blank', 'noopener,noreferrer');
 }
 
-export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any }, ...children: Array<Node | string>): T {
+export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any; }, ...children: Array<Node | string>): T {
 	const match = /^([a-zA-Z][\w-]*)?(?:#([\w-]+))?((?:\.[\w-]+)*)$/.exec(description);
 	if (!match) throw new Error(`Invalid DOM description '${description}'`);
 	const result = mainWindow.document.createElement(match[1] || 'div') as T;
@@ -414,7 +414,7 @@ export function isEditableElement(element: Element): boolean {
 	return tagName === 'input' || tagName === 'textarea' || isHTMLElement(element) && (
 		element.isContentEditable ||
 		element.hasAttribute('contenteditable') && element.getAttribute('contenteditable') !== 'false' ||
-		(element as HTMLElement & { readonly editContext?: unknown }).editContext != null
+		(element as HTMLElement & { readonly editContext?: unknown; }).editContext != null
 	);
 }
 
@@ -440,9 +440,9 @@ type PrimitiveDomProperty = string | number | boolean | null | undefined;
 
 type SafeDomPropertyName<TElement> = {
 	[TKey in keyof TElement]-?: TKey extends "innerHTML" | "outerHTML"
-		? never
-		: TElement[TKey] extends PrimitiveDomProperty ? TKey
-		: never;
+	? never
+	: TElement[TKey] extends PrimitiveDomProperty ? TKey
+	: never;
 }[keyof TElement];
 
 export type DomElementProperties<TElement> = Partial<
@@ -464,7 +464,7 @@ interface DomElementOptions<TElement extends HTMLElement | SVGElement> {
 
 type HtmlElementForTag<TTag extends string> =
 	TTag extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[TTag]
-		: HTMLElement;
+	: HTMLElement;
 
 /** Creates elements in the main realm when hosted by another registered window. */
 export function h<TTag extends string>(

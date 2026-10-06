@@ -8,7 +8,7 @@ export class Size2D {
 	constructor(
 		readonly width: number,
 		readonly height: number,
-	) {}
+	) { }
 
 	add(other: Size2D): Size2D { return new Size2D(this.width + other.width, this.height + other.height); }
 	subtract(other: Size2D): Size2D { return new Size2D(this.width - other.width, this.height - other.height); }

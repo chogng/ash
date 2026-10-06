@@ -7,7 +7,5 @@
     "rootDir": ".",
     "types": ["node", "electron"]
   },
-  "include": [
-    "src/ash/base/parts/sandbox/electron-browser/preload.cts"
-  ]
+  "include": ["src/ash/base/parts/sandbox/electron-browser/preload.cts"]
 }

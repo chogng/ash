@@ -82,9 +82,9 @@ test('window restoration selection respects the setting, explicit target, and up
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public readonly calls: string[] = [];
-	public readonly messages: { readonly channel: string; readonly level: unknown }[] = [];
+	public readonly messages: { readonly channel: string; readonly level: unknown; }[] = [];
 	private readonly zoomListeners = new Set<() => void>();
-	private readonly closeListeners = new Set<(event: { preventDefault(): void }) => void>();
+	private readonly closeListeners = new Set<(event: { preventDefault(): void; }) => void>();
 	private readonly fullscreenListeners = new Map<string, Set<() => void>>();
 	private readonly rendererListeners = new Map<string, Set<() => void>>();
 	private readonly onceListeners = new Map<string, Set<() => void>>();
@@ -110,7 +110,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public bounds: IWindowBounds = { x: 0, y: 0, width: 800, height: 600 };
 	public deferClose = false;
 
-	constructor(public readonly id: number, private readonly title: string) {}
+	constructor(public readonly id: number, private readonly title: string) { }
 	public once(event: 'ready-to-show' | 'closed', listener: () => void): this {
 		const listeners = this.onceListeners.get(event) ?? new Set<() => void>();
 		listeners.add(listener);
@@ -123,16 +123,16 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		for (const listener of listeners ?? []) listener();
 		for (const listener of this.fullscreenListeners.get(event) ?? []) listener();
 	}
-	public on(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
+	public on(event: 'close', listener: (event: { preventDefault(): void; }) => void): void;
 	public on(event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
-	public on(event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
-		if (event === 'close') this.closeListeners.add(listener as (event: { preventDefault(): void }) => void);
+	public on(event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void; }) => void) | (() => void)): void {
+		if (event === 'close') this.closeListeners.add(listener as (event: { preventDefault(): void; }) => void);
 		else { const listeners = this.fullscreenListeners.get(event) ?? new Set<() => void>(); listeners.add(listener as () => void); this.fullscreenListeners.set(event, listeners); }
 	}
-	public off(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
+	public off(event: 'close', listener: (event: { preventDefault(): void; }) => void): void;
 	public off(event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): void;
-	public off(event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void }) => void) | (() => void)): void {
-		if (event === 'close') this.closeListeners.delete(listener as (event: { preventDefault(): void }) => void);
+	public off(event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: ((event: { preventDefault(): void; }) => void) | (() => void)): void {
+		if (event === 'close') this.closeListeners.delete(listener as (event: { preventDefault(): void; }) => void);
 		else this.fullscreenListeners.get(event)?.delete(listener as () => void);
 	}
 
@@ -418,7 +418,7 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 	let created = 0;
 	let released = 0;
 	let closed = 0;
-	const create = (options: { readonly title: string }): TestWindow => { created++; return new TestWindow(created + 1, options.title); };
+	const create = (options: { readonly title: string; }): TestWindow => { created++; return new TestWindow(created + 1, options.title); };
 	const options = {
 		title: 'Agents',
 		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
@@ -445,7 +445,7 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 test('WindowsMainService waits for a managed window to close before reopening it', async () => {
 	using service = createWindowsService(() => [], async () => undefined);
 	const windows: TestWindow[] = [];
-	const create = (options: { readonly title: string }): TestWindow => {
+	const create = (options: { readonly title: string; }): TestWindow => {
 		const window = new TestWindow(windows.length + 1, options.title);
 		windows.push(window);
 		return window;
@@ -454,13 +454,13 @@ test('WindowsMainService waits for a managed window to close before reopening it
 		title: 'Agents',
 		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		initialize: async () => {},
+		initialize: async () => { },
 	};
-	await service.openManagedWindow('workspace', create, options, () => {});
+	await service.openManagedWindow('workspace', create, options, () => { });
 	const first = windows[0]!;
 	first.deferClose = true;
 	const closing = service.closeManagedWindow('workspace');
-	const reopening = service.openManagedWindow('workspace', create, options, () => {});
+	const reopening = service.openManagedWindow('workspace', create, options, () => { });
 	assert.deepEqual({ windows: windows.length, closeRequests: first.calls.filter(call => call === 'close').length }, { windows: 1, closeRequests: 1 });
 	first.destroy();
 	await closing;
@@ -472,18 +472,18 @@ test('WindowsMainService keeps a managed window open after a failed close and pe
 	using service = createWindowsService(() => [], async () => undefined);
 	using lifecycle = new LifecycleMainService<TestWindow>((window, message) => service.failManagedWindowClose(window, message), window => service.failManagedWindowClose(window, 'Window close was vetoed'), {
 		getItem: () => undefined,
-		setItem: () => {},
-		removeItem: () => {},
-		flush: async () => {},
-		close: async () => {},
+		setItem: () => { },
+		removeItem: () => { },
+		flush: async () => { },
+		close: async () => { },
 	}, '1.0.0');
 	let window: TestWindow | undefined;
 	await service.openManagedWindow('workspace', options => window = new TestWindow(1, options.title), {
 		title: 'Agents',
 		state: { mode: WindowMode.Normal, width: 1180, height: 780 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		initialize: async () => {},
-	}, () => {});
+		initialize: async () => { },
+	}, () => { });
 	const sessions = window!;
 	using tracking = lifecycle.registerWindow(sessions);
 	lifecycle.respondToClose(sessions, { kind: 'ready' });
@@ -504,7 +504,7 @@ test('WindowsMainService releases a failed or crashed managed window', async () 
 	const windows: TestWindow[] = [];
 	let released = 0;
 	let closed = 0;
-	const create = (options: { readonly title: string }): TestWindow => {
+	const create = (options: { readonly title: string; }): TestWindow => {
 		const window = new TestWindow(windows.length + 1, options.title);
 		windows.push(window);
 		return window;
@@ -678,8 +678,8 @@ test('managed windows share activation, sizing and last-closed placement without
 	await service.openManagedWindow('agents', () => agents, {
 		title: 'Agents', state: { ...agents.bounds, mode: WindowMode.Normal },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		initialize: async () => {},
-	}, () => {});
+		initialize: async () => { },
+	}, () => { });
 	assert.equal(service.getLastActiveWindow(), agents);
 	workbench.emitFocus();
 	assert.equal(service.getLastActiveWindow(), workbench);
@@ -688,7 +688,7 @@ test('managed windows share activation, sizing and last-closed placement without
 	const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
 	const handler = new WindowsStateHandler({
 		workspace: createEmptyWorkspaceIdentifier(),
-		stateService: { getItem: () => undefined, setItem: () => {}, removeItem: () => {}, flush: async () => {}, close: async () => {} },
+		stateService: { getItem: () => undefined, setItem: () => { }, removeItem: () => { }, flush: async () => { }, close: async () => { } },
 		displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
 	});
 	assert.deepEqual(service.getNewWindowState(handler, { 'window.newWindowDimensions': 'offset' }, false), {

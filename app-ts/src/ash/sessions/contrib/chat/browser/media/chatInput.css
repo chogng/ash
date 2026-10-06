@@ -1,174 +1,175 @@
 .ash-chat > .ash-chat-input-part {
-  box-sizing: border-box;
-  min-height: 0;
-  flex: 0 0 auto;
+	box-sizing: border-box;
+	min-height: 0;
+	flex: 0 0 auto;
 }
 
 .ash-sessions-chat-input[hidden] {
-  display: none;
+	display: none;
 }
 
 /* One composer is retained while navigation changes the surrounding Parts. */
 .ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
-  --ash-chat-input-min-height: 112px;
-  --ash-chat-input-padding: var(--ash-spacing-size160);
-  --ash-chat-input-border: var(--ash-border);
-  --ash-chat-input-focus-border: var(--ash-border);
-  --ash-chat-input-shadow: var(--ash-sessions-input-shadow);
-  --ash-chat-input-radius: var(--ash-corner-radius-x-large);
-  --ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
-  --ash-toolbar-action-size: 28px;
-  width: 100%;
-  max-width: 728px;
-  align-self: center;
-  margin-block: auto;
-  padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
+	--ash-chat-input-min-height: 112px;
+	--ash-chat-input-padding: var(--ash-spacing-size160);
+	--ash-chat-input-border: var(--ash-border);
+	--ash-chat-input-focus-border: var(--ash-border);
+	--ash-chat-input-shadow: var(--ash-sessions-input-shadow);
+	--ash-chat-input-radius: var(--ash-corner-radius-x-large);
+	--ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
+	--ash-toolbar-action-size: 28px;
+	width: 100%;
+	max-width: 728px;
+	align-self: center;
+	margin-block: auto;
+	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
 }
 
-.ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer.has-conversation {
-  margin-bottom: 0;
+.ash-chat
+	> .ash-chat-input-part.ash-sessions-chat-input.chat-composer.has-conversation {
+	margin-bottom: 0;
 }
 
 .chat-composer .ash-sessions-chat-welcome-heading {
-  flex: 0 0 auto;
-  margin: 0 0 var(--ash-spacing-size240);
-  color: var(--ash-foreground);
-  font-size: var(--ash-font-size-heading1);
-  font-weight: var(--ash-font-weight-semi-bold);
-  line-height: 1.4;
-  text-align: center;
+	flex: 0 0 auto;
+	margin: 0 0 var(--ash-spacing-size240);
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-heading1);
+	font-weight: var(--ash-font-weight-semi-bold);
+	line-height: 1.4;
+	text-align: center;
 }
 
 .chat-composer .ash-sessions-chat-input-footer > button {
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-  background: transparent;
-  color: var(--ash-description-foreground);
-  font: inherit;
-  font-size: var(--ash-font-size-label1);
-  cursor: pointer;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	background: transparent;
+	color: var(--ash-description-foreground);
+	font: inherit;
+	font-size: var(--ash-font-size-label1);
+	cursor: pointer;
 }
 
 /* Shared operational elements: visibility, file-drop positioning, and keyboard focus. */
 .ash-sessions-chat-input .ash-sessions-chat-welcome-heading[hidden] {
-  display: none;
+	display: none;
 }
 
 .ash-sessions-chat-input .ash-chat-input-container {
-  position: relative;
+	position: relative;
 }
 
 .ash-sessions-chat-input .ash-chat-drop-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  border: 2px dashed var(--ash-focus-border);
-  border-radius: inherit;
-  background: var(--ash-editor-background);
-  color: var(--ash-foreground);
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+	border: 2px dashed var(--ash-focus-border);
+	border-radius: inherit;
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
 }
 
 .ash-sessions-chat-input .ash-chat-drop-overlay[hidden] {
-  display: none;
+	display: none;
 }
 
 .ash-sessions-chat-input-footer {
-  display: flex;
-  padding-top: var(--ash-spacing-size80);
+	display: flex;
+	padding-top: var(--ash-spacing-size80);
 }
 
 .ash-sessions-chat-input-footer > button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: 2px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: 2px;
 }
 
 .ash-sessions-chat-input-footer > button:hover {
-  background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-sessions-permission-menu {
-  box-sizing: border-box;
-  width: 360px;
-  max-width: calc(100vw - 32px);
-  padding: var(--ash-spacing-size80);
-  color: var(--ash-foreground);
-  background: var(--ash-menu-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-x-large);
+	box-sizing: border-box;
+	width: 360px;
+	max-width: calc(100vw - 32px);
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-foreground);
+	background: var(--ash-menu-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-x-large);
 }
 
 .ash-sessions-permission-heading {
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-sessions-permission-item,
 .ash-sessions-permission-settings {
-  display: flex;
-  align-items: center;
-  gap: var(--ash-spacing-size80);
-  width: 100%;
-  padding: var(--ash-spacing-size80);
-  border: 0;
-  border-radius: var(--ash-corner-radius-large);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	width: 100%;
+	padding: var(--ash-spacing-size80);
+	border: 0;
+	border-radius: var(--ash-corner-radius-large);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
 }
 
 .ash-sessions-permission-item:hover,
 .ash-sessions-permission-settings:hover {
-  background: var(--ash-list-hover-background);
+	background: var(--ash-list-hover-background);
 }
 
 .ash-sessions-permission-item:focus-visible,
 .ash-sessions-permission-settings:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-sessions-permission-text {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--ash-spacing-size20);
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size20);
 }
 
 .ash-sessions-permission-description {
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
 }
 
 .ash-sessions-permission-check {
-  flex: 0 0 auto;
-  visibility: hidden;
-  color: var(--ash-accent-foreground);
+	flex: 0 0 auto;
+	visibility: hidden;
+	color: var(--ash-accent-foreground);
 }
 
 .ash-sessions-permission-item.checked .ash-sessions-permission-check {
-  visibility: visible;
+	visibility: visible;
 }
 
 .ash-sessions-permission-shortcut {
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-sessions-permission-settings {
-  margin-top: var(--ash-spacing-size40);
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	margin-top: var(--ash-spacing-size40);
+	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-high-contrast .ash-sessions-permission-menu {
-  border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrast-border);
 }

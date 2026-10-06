@@ -9,15 +9,15 @@ Cross-crate placement and product composition are documented in
 
 ## Ownership
 
-| Concern | Owner | Status |
-| --- | --- | --- |
-| Saved text baseline, disk version and read-only state | `TextFileLifecycle` | ✅ |
-| Dirty/reload/conflict classification | `TextFileLifecycle::status` | ✅ |
-| Optimistic save and explicit conflict-overwrite payloads | `TextFileLifecycle::save_request` / `overwrite_request` | ✅ |
-| Pending external snapshot reconciliation | `TextFileLifecycle::observe_external` | ✅ |
-| Mutable document, caret, selection, syntax and folding | Editor implementation | 委托 |
-| Filesystem reads, metadata validation and writes | Host filesystem adapter | 委托 |
-| Tabs, active document, close confirmation and rendering | Product host | 委托 |
+| Concern                                                  | Owner                                                   | Status |
+| -------------------------------------------------------- | ------------------------------------------------------- | ------ |
+| Saved text baseline, disk version and read-only state    | `TextFileLifecycle`                                     | ✅     |
+| Dirty/reload/conflict classification                     | `TextFileLifecycle::status`                             | ✅     |
+| Optimistic save and explicit conflict-overwrite payloads | `TextFileLifecycle::save_request` / `overwrite_request` | ✅     |
+| Pending external snapshot reconciliation                 | `TextFileLifecycle::observe_external`                   | ✅     |
+| Mutable document, caret, selection, syntax and folding   | Editor implementation                                   | 委托   |
+| Filesystem reads, metadata validation and writes         | Host filesystem adapter                                 | 委托   |
+| Tabs, active document, close confirmation and rendering  | Product host                                            | 委托   |
 
 The crate has no dependency on `ash-editor`, Native, App Server, or a filesystem executor. Adding
 one of those dependencies would be architectural drift.

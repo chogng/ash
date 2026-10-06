@@ -166,7 +166,7 @@ test('decoration types expose distinct line, inline, content, and injected-text 
 	});
 });
 
-function codeEditor(id: string, focus: { text: boolean; widget: boolean }, removedDecorations: string[] = []): ICodeEditor {
+function codeEditor(id: string, focus: { text: boolean; widget: boolean; }, removedDecorations: string[] = []): ICodeEditor {
 	return {
 		getId: () => id,
 		hasTextFocus: () => focus.text,

@@ -42,8 +42,8 @@ export function validateColorScheme(value: unknown): IColorScheme {
 }
 
 export type NativeDialogOperation =
-	| { readonly kind: 'show'; readonly id: number; readonly request: DialogRequest }
-	| { readonly kind: 'cancel'; readonly id: number };
+	| { readonly kind: 'show'; readonly id: number; readonly request: DialogRequest; }
+	| { readonly kind: 'cancel'; readonly id: number; };
 
 export function validateNativeDialogOperation(value: unknown): NativeDialogOperation {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid dialog operation');
@@ -144,11 +144,11 @@ export interface INativeOpenDialogOptions {
 }
 
 export interface IOpenAgentsWindowOptions {
-	readonly conversation?: { readonly sessionId: string; readonly threadId: string };
+	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
 	readonly draft?: {
 		readonly mode: SessionMode;
 		readonly text: string;
-		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string }[];
+		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; }[];
 	};
 }
 

@@ -13,12 +13,12 @@ Ash 采用与 VS Code 相同的两层 DOM 思路，但所有创建、观察和�
 结构使用 `createReactiveDom()` 返回的 `n.div()`、`n.elem()`、`n.svg()` 和
 `n.svgElem()`。
 
-| 场景 | 当前入口 | 生命周期 | 是否应该直接调用原生创建 API |
-| --- | --- | --- | --- |
-| 一次性静态结构 | `h()`、`svg()` 或 `createDom()` | DOM owner 管理节点 | ❌ |
-| 可观察状态驱动的 class、属性、样式或 children | `n.div()`、`n.elem()` | `LiveElement` 或 owner 的 `DisposableStore` | ❌ |
-| DOM 基座实现自身 | `dom.ts`、`reactiveDom.ts` | 基座实现负责 | ✅ |
-| 不可信 HTML | `domSanitize.ts` | 调用方拥有返回的 fragment | ❌，必须先清洗 |
+| 场景                                          | 当前入口                        | 生命周期                                    | 是否应该直接调用原生创建 API |
+| --------------------------------------------- | ------------------------------- | ------------------------------------------- | ---------------------------- |
+| 一次性静态结构                                | `h()`、`svg()` 或 `createDom()` | DOM owner 管理节点                          | ❌                           |
+| 可观察状态驱动的 class、属性、样式或 children | `n.div()`、`n.elem()`           | `LiveElement` 或 owner 的 `DisposableStore` | ❌                           |
+| DOM 基座实现自身                              | `dom.ts`、`reactiveDom.ts`      | 基座实现负责                                | ✅                           |
+| 不可信 HTML                                   | `domSanitize.ts`                | 调用方拥有返回的 fragment                   | ❌，必须先清洗               |
 
 ## Dependency direction
 
@@ -44,38 +44,38 @@ the owner retains both explicit and `using` disposal semantics.
 
 ## Modules
 
-| Module | Responsibility |
-| --- | --- |
-| `dom.ts` | Disposable listeners, cross-realm guards, static HTML/SVG construction, text, and fragments |
-| `../common/observable.ts` | Transactions, settable/derived/event-backed observables, and owned reactions |
-| `window.ts` | Main/auxiliary window identity, registration, and lookup |
-| `focus.ts` | Active-element lookup, tracking, restoration, Tab order, and focus containment |
-| `geometry.ts` | DOM dimensions and viewport/page coordinate measurement |
-| `../common/layout.ts` | Pure, DOM-independent anchored layout calculation |
-| `observer.ts` | Disposable, owner-window-aware Resize, Mutation, and Intersection observers |
-| `scheduler.ts` | Window-scoped timeouts/intervals, idle work, animation-frame coalescing, and measure/modify order |
-| `keyboardEvent.ts` | Stable keyboard-event representation |
-| `../common/keybindings.ts` | Logical/physical chords, sequences, and OS resolution |
-| `../common/keybindingParser.ts` | External keybinding string parsing |
-| `../common/keybindingLabels.ts` | UI, ARIA, and user-settings labels |
-| `../common/ime.ts` | IME enablement coordination during chord dispatch |
-| `mouseEvent.ts` | Stable mouse and pointer coordinates across windows |
-| `dnd.ts` | Drag depth and DataTransfer helpers |
-| `fileAccess.ts` | Browser file picking, object URLs, and downloads |
-| `fullscreen.ts` | Fullscreen state and lifecycle |
-| `reactiveDom.ts` | Document-bound `n.*` projection over the canonical observable graph |
-| `domStylesheets.ts` | Disposable and multi-window dynamic stylesheets |
-| `aria.ts` | Per-document ARIA live announcements |
+| Module                          | Responsibility                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `dom.ts`                        | Disposable listeners, cross-realm guards, static HTML/SVG construction, text, and fragments       |
+| `../common/observable.ts`       | Transactions, settable/derived/event-backed observables, and owned reactions                      |
+| `window.ts`                     | Main/auxiliary window identity, registration, and lookup                                          |
+| `focus.ts`                      | Active-element lookup, tracking, restoration, Tab order, and focus containment                    |
+| `geometry.ts`                   | DOM dimensions and viewport/page coordinate measurement                                           |
+| `../common/layout.ts`           | Pure, DOM-independent anchored layout calculation                                                 |
+| `observer.ts`                   | Disposable, owner-window-aware Resize, Mutation, and Intersection observers                       |
+| `scheduler.ts`                  | Window-scoped timeouts/intervals, idle work, animation-frame coalescing, and measure/modify order |
+| `keyboardEvent.ts`              | Stable keyboard-event representation                                                              |
+| `../common/keybindings.ts`      | Logical/physical chords, sequences, and OS resolution                                             |
+| `../common/keybindingParser.ts` | External keybinding string parsing                                                                |
+| `../common/keybindingLabels.ts` | UI, ARIA, and user-settings labels                                                                |
+| `../common/ime.ts`              | IME enablement coordination during chord dispatch                                                 |
+| `mouseEvent.ts`                 | Stable mouse and pointer coordinates across windows                                               |
+| `dnd.ts`                        | Drag depth and DataTransfer helpers                                                               |
+| `fileAccess.ts`                 | Browser file picking, object URLs, and downloads                                                  |
+| `fullscreen.ts`                 | Fullscreen state and lifecycle                                                                    |
+| `reactiveDom.ts`                | Document-bound `n.*` projection over the canonical observable graph                               |
+| `domStylesheets.ts`             | Disposable and multi-window dynamic stylesheets                                                   |
+| `aria.ts`                       | Per-document ARIA live announcements                                                              |
 
 ## DOM construction model
 
 `h()` and `n.*` are both long-term APIs; neither is a compatibility stage for the other.
 
-| API | Use when | Returns | Update model |
-| --- | --- | --- | --- |
-| `h(ownerDocument, tag, ...)` | Structure is created once and later changes are imperative component behavior | The typed native element | No reaction |
-| `createDom(ownerDocument)` | One construction scope creates many nodes in the same document | A document-bound callable factory | No reaction |
-| `createReactiveDom(ownerDocument)` | Class, attributes, primitive properties, dataset, style, or children are `IObservable` values | A lazy `ReactiveElement` | One owned reaction for the tree |
+| API                                | Use when                                                                                      | Returns                           | Update model                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------- |
+| `h(ownerDocument, tag, ...)`       | Structure is created once and later changes are imperative component behavior                 | The typed native element          | No reaction                     |
+| `createDom(ownerDocument)`         | One construction scope creates many nodes in the same document                                | A document-bound callable factory | No reaction                     |
+| `createReactiveDom(ownerDocument)` | Class, attributes, primitive properties, dataset, style, or children are `IObservable` values | A lazy `ReactiveElement`          | One owned reaction for the tree |
 
 Static `h()` returns the element directly and uses a typed `ref` callback when a nested element must be
 captured. Ash deliberately does not copy VS Code's string selector plus `@name` result-map protocol:

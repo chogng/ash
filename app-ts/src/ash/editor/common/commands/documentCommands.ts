@@ -532,7 +532,7 @@ export function createReplaceTextCommand(schema: DocumentSchema, document: Docum
 	return { transaction, focus: { blockId, ...(point ? { point } : {}) } };
 }
 
-function createReplaceCrossBlockTextCommand(schema: DocumentSchema, document: DocumentNode, selection: Extract<DocumentSelection, { kind: "text" }>, replacement: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
+function createReplaceCrossBlockTextCommand(schema: DocumentSchema, document: DocumentNode, selection: Extract<DocumentSelection, { kind: "text"; }>, replacement: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	const range = resolveCrossBlockTextRange(document, selection);
 	if (!range) return undefined;
 	const normalizedReplacement = normalizeInlineText(replacement);
@@ -617,7 +617,7 @@ export function createPasteTextCommand(schema: DocumentSchema, document: Documen
 	return { transaction, focus: { blockId: focusBlockId, ...(point ? { point } : {}) } };
 }
 
-function createPasteCrossBlockTextCommand(schema: DocumentSchema, document: DocumentNode, selection: Extract<DocumentSelection, { kind: "text" }>, normalizedText: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
+function createPasteCrossBlockTextCommand(schema: DocumentSchema, document: DocumentNode, selection: Extract<DocumentSelection, { kind: "text"; }>, normalizedText: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	const range = resolveCrossBlockTextRange(document, selection);
 	if (!range) return undefined;
 	const startContent = range.start.block.content;
@@ -894,7 +894,7 @@ function findTableCellContextInNode(node: DocumentNode, descendantId: DocumentNo
 	return undefined;
 }
 
-function createTableRow(schema: DocumentSchema, columns: number): { readonly row: DocumentNode; readonly firstBlockId: DocumentNodeId } {
+function createTableRow(schema: DocumentSchema, columns: number): { readonly row: DocumentNode; readonly firstBlockId: DocumentNodeId; } {
 	const cells: DocumentNode[] = [];
 	let firstBlockId: DocumentNodeId | undefined;
 	for (let index = 0; index < columns; index += 1) {
@@ -905,7 +905,7 @@ function createTableRow(schema: DocumentSchema, columns: number): { readonly row
 	return { row: schema.createNode("tableRow", { content: cells }), firstBlockId: firstBlockId! };
 }
 
-function createTableCell(schema: DocumentSchema): { readonly node: DocumentNode; readonly firstBlockId: DocumentNodeId } {
+function createTableCell(schema: DocumentSchema): { readonly node: DocumentNode; readonly firstBlockId: DocumentNodeId; } {
 	const paragraph = schema.createNode("paragraph");
 	return { node: schema.createNode("tableCell", { content: [paragraph] }), firstBlockId: paragraph.id };
 }
@@ -977,7 +977,7 @@ interface InlineRange {
 	readonly start: DocumentPoint;
 	readonly end: DocumentPoint;
 	readonly forward: boolean;
-	readonly selected: readonly { node: DocumentNode; from: number; to: number }[];
+	readonly selected: readonly { node: DocumentNode; from: number; to: number; }[];
 }
 
 interface TextBearingBlockLocation {
@@ -987,8 +987,8 @@ interface TextBearingBlockLocation {
 }
 
 interface CrossBlockTextRange {
-	readonly start: TextBearingBlockLocation & { readonly index: number; readonly offset: number };
-	readonly end: TextBearingBlockLocation & { readonly index: number; readonly offset: number };
+	readonly start: TextBearingBlockLocation & { readonly index: number; readonly offset: number; };
+	readonly end: TextBearingBlockLocation & { readonly index: number; readonly offset: number; };
 }
 
 interface TextSegment {
@@ -1045,7 +1045,7 @@ function findInlineSelectionFallbackPoint(content: readonly DocumentNode[], star
 	return undefined;
 }
 
-function resolveInlineNodeRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: "text" }>): InlineNodeRange | undefined {
+function resolveInlineNodeRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: "text"; }>): InlineNodeRange | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -1062,7 +1062,7 @@ function resolveInlineNodeRange(block: DocumentNode, selection: Extract<Document
 	};
 }
 
-function resolveCrossBlockTextRange(document: DocumentNode, selection: Extract<DocumentSelection, { kind: "text" }>): CrossBlockTextRange | undefined {
+function resolveCrossBlockTextRange(document: DocumentNode, selection: Extract<DocumentSelection, { kind: "text"; }>): CrossBlockTextRange | undefined {
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head || anchor.block.id === head.block.id || anchor.parent.id !== head.parent.id) return undefined;
@@ -1093,7 +1093,7 @@ function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNo
 	return { block, parent: blockLocation.parent, parentIndex: blockLocation.index };
 }
 
-function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: "text" }>): InlineRange | undefined {
+function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: "text"; }>): InlineRange | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -1105,7 +1105,7 @@ function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSele
 	const endIndex = forward ? headIndex : anchorIndex;
 	const start = forward ? selection.anchor : selection.head;
 	const end = forward ? selection.head : selection.anchor;
-	const selected: { node: DocumentNode; from: number; to: number }[] = [];
+	const selected: { node: DocumentNode; from: number; to: number; }[] = [];
 	for (let index = startIndex; index <= endIndex; index += 1) {
 		const node = block.content[index]!;
 		if (node.text === undefined) return undefined;
@@ -1119,7 +1119,7 @@ function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSele
 
 function createMarkedTextSegments(schema: DocumentSchema, node: DocumentNode, from: number, to: number, markType: string, attrs: DocumentAttributes, removeMark: boolean, replaceExisting: boolean, mergeExisting = false): readonly TextSegment[] {
 	if (from === to) return [{ from: 0, to: node.text!.length, node }];
-	const parts: Array<{ from: number; to: number; marks: DocumentNode["marks"] }> = [];
+	const parts: Array<{ from: number; to: number; marks: DocumentNode["marks"]; }> = [];
 	if (from > 0) parts.push({ from: 0, to: from, marks: node.marks });
 	if (to > from) {
 		const marks = removeMark

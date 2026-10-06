@@ -83,14 +83,14 @@ application running so the Dock and menu bar icon can reopen a Workbench window.
 Run the commands below from the repository root. The Dock, menu bar, and other
 platforms use separate artwork; changing one file does not update the others.
 
-| Where it appears | Edit | Update alongside it |
-| --- | --- | --- |
-| macOS Dock and Finder | `darwin/ash.icon/Assets/ash-white.svg` in Icon Composer; adjust `darwin/ash.icon/icon.json` there if the layer name, background, or scale changes | `darwin/ash.png` for the development Dock and `darwin/ash.icns` for older macOS releases |
-| macOS menu bar | `tray/ash-black.svg` | `tray/ash-black-{18,27,36}.png` |
-| Windows notification area | `tray/ash-black.svg` and `tray/ash-white.svg` | Both colors at 16, 24, and 32 pixels |
-| Windows application and Rust window | `win32/ash.svg` | Run `pnpm app-icon:generate` to update `ash.ico` and `ash-512.png` |
-| Linux and Web | The chosen application artwork | `linux/ash.png`, `server/favicon.ico`, `server/ash-192.png`, and `server/ash-512.png` |
-| Workbench titlebar and welcome page | `app-ts/src/ash/workbench/browser/media/ash-mark.svg` | Check its appearance in each theme |
+| Where it appears                    | Edit                                                                                                                                              | Update alongside it                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| macOS Dock and Finder               | `darwin/ash.icon/Assets/ash-white.svg` in Icon Composer; adjust `darwin/ash.icon/icon.json` there if the layer name, background, or scale changes | `darwin/ash.png` for the development Dock and `darwin/ash.icns` for older macOS releases |
+| macOS menu bar                      | `tray/ash-black.svg`                                                                                                                              | `tray/ash-black-{18,27,36}.png`                                                          |
+| Windows notification area           | `tray/ash-black.svg` and `tray/ash-white.svg`                                                                                                     | Both colors at 16, 24, and 32 pixels                                                     |
+| Windows application and Rust window | `win32/ash.svg`                                                                                                                                   | Run `pnpm app-icon:generate` to update `ash.ico` and `ash-512.png`                       |
+| Linux and Web                       | The chosen application artwork                                                                                                                    | `linux/ash.png`, `server/favicon.ico`, `server/ash-192.png`, and `server/ash-512.png`    |
+| Workbench titlebar and welcome page | `app-ts/src/ash/workbench/browser/media/ash-mark.svg`                                                                                             | Check its appearance in each theme                                                       |
 
 For the macOS Dock, open `darwin/ash.icon` in Xcode's Icon Composer, replace the
 layer artwork, preview the icon at small Dock sizes, and save the `.icon` file.

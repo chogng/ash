@@ -19,7 +19,7 @@ interface AppServerDaemonConnectionOptions {
 }
 
 /** Creates a connection carrier; stopping it leaves the profile's shared backend running. */
-export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined } {
+export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined; } {
 	const { packageLocation, sourceEnvironment } = options;
 	const generationFile = !packageLocation.isPackaged && sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1'
 		? sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath)

@@ -40,7 +40,7 @@ export function createChatSkillCompletionProvider(catalog: SkillSelectorCatalog)
 	});
 }
 
-function activeSkillToken(line: string, cursorColumn: number): { readonly query: string; readonly startColumn: number; readonly endColumn: number } | undefined {
+function activeSkillToken(line: string, cursorColumn: number): { readonly query: string; readonly startColumn: number; readonly endColumn: number; } | undefined {
 	if (cursorColumn > line.length) {
 		return undefined;
 	}

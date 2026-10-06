@@ -95,7 +95,7 @@ test("ActionBar enables native drag sources only when its view item opts in", ()
 
 test("ActionBar reports drop targets without enabling ordinary toolbars", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const dropped: Array<{ target: string | undefined; position: string }> = [];
+	const dropped: Array<{ target: string | undefined; position: string; }> = [];
 	let dragging = false;
 	using actionBar = new ActionBar(dom.window.document.body, {
 		actions: [action("first"), action("second")],
@@ -281,12 +281,12 @@ function action(
 		label: id,
 		tooltip: id,
 		enabled,
-		run() {},
+		run() { },
 	};
 }
 
 function keyboardEvent(
-	targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent },
+	targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent; },
 	key: string,
 ): KeyboardEvent {
 	return new targetWindow.KeyboardEvent("keydown", {
@@ -296,7 +296,7 @@ function keyboardEvent(
 	});
 }
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0, dataTransfer?: DataTransfer): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0, dataTransfer?: DataTransfer): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, "clientX", { value: clientX });
 	if (dataTransfer) Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
@@ -304,16 +304,16 @@ function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string,
 }
 
 function testDataTransfer(): DataTransfer {
-	return { dropEffect: "none", effectAllowed: "none", setData() {} } as unknown as DataTransfer;
+	return { dropEffect: "none", effectAllowed: "none", setData() { } } as unknown as DataTransfer;
 }
 
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }

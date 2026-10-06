@@ -16,7 +16,7 @@ export function lengthDiff(startLineCount: number, startColumnCount: number, end
  * Represents a non-negative length in terms of line and column count.
  * Does not allocate.
 */
-export type Length = { _brand: 'Length' };
+export type Length = { _brand: 'Length'; };
 
 // eslint-disable-next-line local/code-no-any-casts, @typescript-eslint/no-explicit-any
 export const lengthZero = 0 as any as Length;

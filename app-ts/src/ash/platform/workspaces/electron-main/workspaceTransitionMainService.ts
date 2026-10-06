@@ -72,7 +72,7 @@ export interface IWorkspaceTransitionRecoveryRouter {
 }
 
 export type WorkspaceTransitionState =
-	| { readonly phase: WorkspaceTransitionPhase.Idle }
+	| { readonly phase: WorkspaceTransitionPhase.Idle; }
 	| {
 		readonly phase: WorkspaceTransitionPhase.Resolving;
 		readonly transitionId: number;

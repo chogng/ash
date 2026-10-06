@@ -430,9 +430,9 @@ class TestTextFileService implements ITextFileService {
 	private revision = 1;
 	readonly onDidChangeFiles = this.fileChanges.event;
 
-	constructor(private text: string) {}
+	constructor(private text: string) { }
 
-	async resolve(request: { resource: URI; bootstrapText?: string }) {
+	async resolve(request: { resource: URI; bootstrapText?: string; }) {
 		this.resolveCount += 1;
 		return {
 			resource: request.resource,
@@ -443,7 +443,7 @@ class TestTextFileService implements ITextFileService {
 		};
 	}
 
-	async save(request: TextFileSaveRequest): Promise<{ readonly revision: string | undefined }> {
+	async save(request: TextFileSaveRequest): Promise<{ readonly revision: string | undefined; }> {
 		if (request.expectedRevision !== undefined && request.expectedRevision !== this.currentRevision()) {
 			throw new TextFileSaveConflictError(request.resource);
 		}
@@ -469,8 +469,8 @@ class TestTextFileService implements ITextFileService {
 
 function inertFileChanges() {
 	return {
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
@@ -482,7 +482,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	assert.fail("Timed out waiting for Stanza external file synchronization");
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(resolver => {
 		resolve = resolver;

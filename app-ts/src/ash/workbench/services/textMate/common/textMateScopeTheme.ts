@@ -81,7 +81,7 @@ export function createTextMateScopeThemeResolver(theme: TextMateScopeTheme): Tex
 	});
 	return scopes => {
 		const base = defaultTextMateScopeResolver(scopes);
-		const result: { tokenType: string; modifiers: readonly string[]; foreground?: string; background?: string; fontStyle?: readonly TextMateTokenFontStyle[] } = {
+		const result: { tokenType: string; modifiers: readonly string[]; foreground?: string; background?: string; fontStyle?: readonly TextMateTokenFontStyle[]; } = {
 			tokenType: base?.tokenType ?? 'source', modifiers: base?.modifiers ?? EMPTY_MODIFIERS,
 		};
 		const scores = new Map<string, number>();

@@ -14,7 +14,7 @@ export interface ScenarioContext {
 	readonly code: PlaywrightDriver;
 	readonly workbench: Workbench;
 	readonly page: Page;
-	skip(reason: string, options?: { readonly needs?: StepBlocker }): never;
+	skip(reason: string, options?: { readonly needs?: StepBlocker; }): never;
 }
 
 export interface ScenarioStep {
@@ -50,7 +50,7 @@ const defaultStepPauseMs = 1_000;
 const commandLine = process.argv.slice(2);
 const options = parseRunnerOptions(commandLine);
 
-export async function runScenario(scenario: Scenario): Promise<{ readonly runPath: string; readonly outcome: 'passed' | 'failed' | 'aborted'; readonly blockers: readonly ScenarioBlocker[] }> {
+export async function runScenario(scenario: Scenario): Promise<{ readonly runPath: string; readonly outcome: 'passed' | 'failed' | 'aborted'; readonly blockers: readonly ScenarioBlocker[]; }> {
 	checkVideoTooling();
 	validateScenario(scenario);
 	const applications = new ApplicationService(options);
@@ -124,7 +124,7 @@ function validateScenario(scenario: Scenario): void {
 }
 
 async function loadScenario(path: string): Promise<Scenario> {
-	const loaded = await import(pathToFileURL(path).href) as { default?: Scenario } & Partial<Scenario>;
+	const loaded = await import(pathToFileURL(path).href) as { default?: Scenario; } & Partial<Scenario>;
 	return (loaded.default ?? loaded) as Scenario;
 }
 

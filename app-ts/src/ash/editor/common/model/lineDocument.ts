@@ -11,7 +11,7 @@ export type LineSemanticValue =
 	| boolean
 	| null
 	| readonly LineSemanticValue[]
-	| { readonly [key: string]: LineSemanticValue };
+	| { readonly [key: string]: LineSemanticValue; };
 export type LineSemanticAttributes = Readonly<Record<string, LineSemanticValue>>;
 
 export interface ModelLine {
@@ -57,10 +57,10 @@ export interface LineRegion {
 }
 
 export type LineRelationTarget =
-	| { readonly kind: 'line'; readonly lineId: LineId }
-	| { readonly kind: 'atom'; readonly atomId: AtomId }
-	| { readonly kind: 'region'; readonly regionId: RegionId }
-	| { readonly kind: 'external'; readonly targetId: string };
+	| { readonly kind: 'line'; readonly lineId: LineId; }
+	| { readonly kind: 'atom'; readonly atomId: AtomId; }
+	| { readonly kind: 'region'; readonly regionId: RegionId; }
+	| { readonly kind: 'external'; readonly targetId: string; };
 
 export interface LineRelation {
 	readonly id: RelationId;
@@ -440,7 +440,7 @@ function validateFacets(lines: LineSequence, facets: LineFacetStore): void {
 }
 
 function validateRegions(lines: LineSequence, regions: RegionStore): void {
-	const intervals = new Map<RegionId, { readonly start: number; readonly end: number }>();
+	const intervals = new Map<RegionId, { readonly start: number; readonly end: number; }>();
 	for (const region of regions.values) {
 		const start = lines.indexOf(region.startLineId);
 		const end = lines.indexOf(region.endLineId);
@@ -548,7 +548,7 @@ function pointsEqual(left: LinePoint, right: LinePoint): boolean {
 	return left.lineId === right.lineId && left.offset === right.offset;
 }
 
-function indexIdentities<T extends { readonly id: string }>(values: readonly T[], kind: string): ReadonlyMap<string, T> {
+function indexIdentities<T extends { readonly id: string; }>(values: readonly T[], kind: string): ReadonlyMap<string, T> {
 	const valuesById = new Map<string, T>();
 	for (const value of values) {
 		if (valuesById.has(value.id)) throw new TypeError(`Duplicate ${kind} id '${value.id}'`);

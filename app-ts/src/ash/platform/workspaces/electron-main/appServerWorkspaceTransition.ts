@@ -18,7 +18,7 @@ export interface IAppServerWorkspaceTransitionHost {
  * rejection remain visible transition failures.
  */
 export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
-	constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
+	constructor(private readonly host: IAppServerWorkspaceTransitionHost) { }
 
 	switchWorkspace({ root, grant, workspace, previous }: IWorkspaceTransitionContext): Promise<void> {
 		return this.host.switchWorkspace(root, grant, workspace.id, previous.id);

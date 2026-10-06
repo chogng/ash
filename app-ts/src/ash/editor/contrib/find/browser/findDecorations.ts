@@ -74,7 +74,7 @@ export class FindDecorations extends Disposable {
 		return nextIndex + 1;
 	}
 
-	public set(findMatches: readonly { readonly range: Range }[], findScopes: Range[] | null): void {
+	public set(findMatches: readonly { readonly range: Range; }[], findScopes: Range[] | null): void {
 		this.matches.replaceAll(findMatches.map(match => ({
 			range: match.range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,

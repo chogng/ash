@@ -163,7 +163,7 @@ function isEditorResourceLink(target: string): boolean {
 		|| scheme === Schemas.vscodeNotebookCell;
 }
 
-function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[] } | undefined {
+function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[]; } | undefined {
 	const match = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?$/i.exec(target);
 	if (!match) return undefined;
 	let id: string;

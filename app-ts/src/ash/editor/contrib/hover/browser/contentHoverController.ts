@@ -92,9 +92,11 @@ export class ContentHoverController extends Disposable implements IContentWidget
 	public getPosition(): IContentWidgetPosition | null {
 		if (this.element.hidden || !this.hoverPosition) { return null; }
 		const above = this.editor.getOption(EditorOption.hover).above;
-		return { position: this.hoverPosition, preference: above
-			? [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW]
-			: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE] };
+		return {
+			position: this.hoverPosition, preference: above
+				? [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW]
+				: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE]
+		};
 	}
 
 	public showContentHover(position: Position, target?: HTMLElement): void {

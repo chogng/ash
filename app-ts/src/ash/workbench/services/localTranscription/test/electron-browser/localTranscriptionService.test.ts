@@ -13,7 +13,7 @@ type ConnectionState = Parameters<Parameters<AppServerProtocolClient['onStateCha
 
 class Client {
 	public state: ConnectionState = 'ready';
-	public readonly requests: { readonly method: string; readonly resourceId: string; readonly backend?: unknown }[] = [];
+	public readonly requests: { readonly method: string; readonly resourceId: string; readonly backend?: unknown; }[] = [];
 	public readonly accepted = new DeferredPromise<void>();
 	public readonly stopped = new DeferredPromise<void>();
 	public startBarrier?: DeferredPromise<void>;
@@ -33,7 +33,7 @@ class Client {
 		return toDisposable(() => this.states.delete(listener));
 	}
 
-	public async request(method: { readonly method: string }, params: { readonly resourceId: string; readonly backend?: unknown }): Promise<unknown> {
+	public async request(method: { readonly method: string; }, params: { readonly resourceId: string; readonly backend?: unknown; }): Promise<unknown> {
 		this.requests.push({ method: method.method, ...params });
 		if (method.method === 'dictation/start' || method.method === 'dictation/model/start') {
 			await this.accepted.complete();
@@ -74,7 +74,7 @@ class Fixture extends Disposable {
 		this.client.emit({ method: 'dictation/transcript', params: { resourceId, text, isFinal } });
 	}
 
-	public modelProgress(stage: { type: 'checking' | 'loading' | 'ready' | 'cancelled' } | { type: 'failed'; error: string }, resourceId = this.resourceId): void {
+	public modelProgress(stage: { type: 'checking' | 'loading' | 'ready' | 'cancelled'; } | { type: 'failed'; error: string; }, resourceId = this.resourceId): void {
 		this.client.emit({ method: 'dictation/model/progress', params: { resourceId, modelId: 'selected-model', stage } });
 	}
 }
@@ -82,7 +82,7 @@ class Fixture extends Disposable {
 suite('LocalTranscriptionService', () => {
 	test('window disposal detaches preparation without sending a backend cancel', async () => {
 		using fixture = new Fixture();
-		const operation = fixture.service.prepareModel('selected-model', () => {});
+		const operation = fixture.service.prepareModel('selected-model', () => { });
 		await fixture.client.accepted.p;
 		const completion = assert.rejects(operation.completed, /connection lost/);
 		fixture.service.dispose();
@@ -114,7 +114,7 @@ suite('LocalTranscriptionService', () => {
 	test('model cancellation during acceptance waits and sends one backend stop', async () => {
 		using fixture = new Fixture();
 		fixture.client.startBarrier = new DeferredPromise<void>();
-		const operation = fixture.service.prepareModel('selected-model', () => {});
+		const operation = fixture.service.prepareModel('selected-model', () => { });
 		await fixture.client.accepted.p;
 		const cancelled = operation.cancel();
 		const repeated = operation.cancel();
@@ -127,12 +127,12 @@ suite('LocalTranscriptionService', () => {
 	test('model failure and connection loss reject completion and remove operation listeners', async () => {
 		using fixture = new Fixture();
 		const baseline = fixture.client.notifications.size + fixture.client.states.size;
-		const failed = fixture.service.prepareModel('selected-model', () => {});
+		const failed = fixture.service.prepareModel('selected-model', () => { });
 		await fixture.client.accepted.p;
 		fixture.modelProgress({ type: 'failed', error: 'Invalid model format' });
 		await assert.rejects(failed.completed, /Invalid model format/);
 		assert.equal(fixture.client.notifications.size + fixture.client.states.size, baseline);
-		const disconnected = fixture.service.prepareModel('selected-model', () => {});
+		const disconnected = fixture.service.prepareModel('selected-model', () => { });
 		fixture.client.disconnect();
 		await assert.rejects(disconnected.completed, /connection lost/);
 		assert.equal(fixture.client.notifications.size + fixture.client.states.size, baseline);
@@ -215,7 +215,7 @@ suite('LocalTranscriptionService', () => {
 
 	test('backend preparation failure ends the input and releases its resource', async () => {
 		using fixture = new Fixture();
-		const completed = new DeferredPromise<{ readonly error?: string }>();
+		const completed = new DeferredPromise<{ readonly error?: string; }>();
 		using listener = fixture.service.onDidEnd(result => { void completed.complete(result); });
 		await fixture.service.start({ model: 'missing-model' });
 		fixture.client.emit({ method: 'dictation/ended', params: { resourceId: fixture.resourceId, error: 'Model preparation failed' } });
@@ -227,7 +227,7 @@ suite('LocalTranscriptionService', () => {
 		using fixture = new Fixture();
 		fixture.client.stopBarrier = new DeferredPromise<void>();
 		const results: ILocalTranscriptionResult[] = [];
-		const endings: { readonly error?: string }[] = [];
+		const endings: { readonly error?: string; }[] = [];
 		using transcript = fixture.service.onDidTranscribe(result => results.push(result));
 		using ended = fixture.service.onDidEnd(result => endings.push(result));
 		await fixture.service.start({ model: 'model' });

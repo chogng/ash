@@ -52,8 +52,8 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 	const contextMenu: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 	};
 	const configuration = new WorkbenchConfigurationService();
 	using contextViews = new BrowserContextViewService(ownerDocument.body);
@@ -125,7 +125,7 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) { shownActions = delegate.getActions?.() ?? []; },
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	const configuration = new WorkbenchConfigurationService();
 	using contextViews = new BrowserContextViewService(ownerDocument.body);
@@ -137,7 +137,7 @@ test('Sessions Activity Bar context menu changes its own position and size setti
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
-	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, { async showAccountMenu() {} });
+	const bar = services.createInstance(ActivityBarPart, ownerDocument.body, { async showAccountMenu() { } });
 	try {
 		bar.domNode.querySelector('.ash-sessions-activity-content')?.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, button: 2 }));
 		assert.deepEqual(shownActions.map(action => action.label), ['Activity Bar Position', 'Activity Bar Size']);
@@ -169,11 +169,11 @@ test('Sessions Activity Bar requires its window Hover service during creation', 
 	services.registerInstance(IContextMenuService, {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 	});
 	assert.throws(() => services.createInstance(ActivityBarPart, browser.window.document.body, {
-		showAccountMenu() {},
+		showAccountMenu() { },
 	}), /hoverService/);
 });
 
@@ -181,7 +181,7 @@ test('navigation order survives a new window and includes new menu contributions
 	using configuration = new WorkbenchConfigurationService();
 	using contextViews = new BrowserContextViewService(document.body);
 	let shownActions: readonly IAction[] = [];
-	const contextMenu: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shownActions = delegate.getActions!(); }, hideContextMenu() {} };
+	const contextMenu: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shownActions = delegate.getActions!(); }, hideContextMenu() { } };
 	using hovers = new HoverService(configuration, contextViews, contextMenu);
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
@@ -191,7 +191,7 @@ test('navigation order survives a new window and includes new menu contributions
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.design']), StorageScope.PROFILE, StorageTarget.USER);
-	using bar = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
+	using bar = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() { } });
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.creator']));
 	setARIAContainer(document.body);
 	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
@@ -199,7 +199,7 @@ test('navigation order survives a new window and includes new menu contributions
 	await shownActions[0]!.run();
 	assert.equal(bar.domNode.querySelectorAll('button')[3], buttons[4]);
 	await storage.flush();
-	using restored = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() {} });
+	using restored = services.createInstance(ActivityBarPart, document.body, { showAccountMenu() { } });
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code', 'Test action', 'Accounts']);
@@ -217,7 +217,7 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 		using configuration = new WorkbenchConfigurationService();
 		using contextViews = new BrowserContextViewService(ownerDocument.body);
 		let actions: readonly IAction[] = [];
-		const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { actions = delegate.getActions!(); }, hideContextMenu() {} };
+		const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { actions = delegate.getActions!(); }, hideContextMenu() { } };
 		using hovers = new HoverService(configuration, contextViews, menus);
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
@@ -226,7 +226,7 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		services.registerInstance(IStorageService, storage);
 		using menuServices = registerMenus(services);
-		using bar = services.createInstance(ActivityBarPart, ownerDocument.body, { showAccountMenu() {} });
+		using bar = services.createInstance(ActivityBarPart, ownerDocument.body, { showAccountMenu() { } });
 		const buttons = [...bar.domNode.querySelectorAll('button')];
 		buttons[1]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 		assert.deepEqual({ navigation: bar.domNode.querySelector('.ash-sessions-navigation')!.getAttribute('aria-label'), moves: actions.slice(0, 2).map(action => action.label) }, {
@@ -248,7 +248,7 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { for (const [candidate, key] of keys) { key.set(candidate === id); } });
 	for (const id of ['chat', 'teams', 'code']) { resources.add(CommandsRegistry.register(`sessions.open.${id}`, () => select(id))); }
 	for (const id of ['library', 'creator']) { resources.add(CommandsRegistry.register(`sessions.show.${id}`, () => select(id))); }
-	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string } }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
+	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/creator/browser/designEditorService.js').IDesignEditorService);
 	return resources;
 }

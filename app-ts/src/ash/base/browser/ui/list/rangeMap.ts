@@ -18,7 +18,7 @@ export interface IRangeMap {
 export class RangeMap implements IRangeMap {
 	private offsets: number[] = [0];
 
-	constructor(public paddingTop = 0) {}
+	constructor(public paddingTop = 0) { }
 
 	get count(): number {
 		return this.offsets.length - 1;

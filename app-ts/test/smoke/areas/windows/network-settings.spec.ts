@@ -44,7 +44,7 @@ test('Network Settings supports search, keyboard help and Chinese labels while d
 
 test('Network Settings persists HTTP mode, copies configured domains and reports real HTTP reachability', async ({ target, workbench, application }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses the real backend transport and isolated provider configuration.');
-	const requests: { url: string; authorization: string | undefined; version: string }[] = [];
+	const requests: { url: string; authorization: string | undefined; version: string; }[] = [];
 	const server = createServer((request, response) => {
 		requests.push({ url: request.url!, authorization: request.headers.authorization, version: request.httpVersion });
 		response.writeHead(request.url === '/' ? 401 : 200, { 'content-type': 'application/json' });

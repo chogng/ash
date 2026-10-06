@@ -14,19 +14,19 @@
 接线放在共享 Rust workspace 中，边界已经不再清晰。本计划先把宿主整体迁到 `app-rs/`，再把只服务
 Native UI 的 crate 从共享 workspace 中分离。
 
-| 读者关心的对象 | 当前路径 | 目标 owner | 迁移状态 |
-| --- | --- | --- | --- |
-| `app` binary 与产品事件语义 | `ash-rs/native` | `app-rs/` | 已实现 `zui::App` |
-| 通用 application/window runtime | `ash-rs/native` 的历史宿主 glue | public `app-rs/zui` | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 `app/window/input/render` 能力目录隔离 |
-| `app` Root/Shell/Workspace 产品布局 | `ash-rs/native/src` | `ash-workbench` + `ash-session` | Workbench 管完整产品组合与窗口场景，Session Pane 的 Thread/Composer state、input、interaction、layout 由 `ash-session` 拥有 |
-| 通用 icon asset contract | 旧 Native icon types | `app-rs/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `app-rs/icons` |
-| Element、Scene、Interaction、Animation、Retained Runtime | `app-rs/zui` | app-owned crates in root workspace | 已迁入 app |
-| Button、Tree、List、Editor/Environment pane presentation | `app-rs/ui-components`、`editor`、`workbench/environment` | app-owned modules and crates in root workspace | 已迁入 app |
-| Renderer、wgpu、winit | 历史 `app-rs/renderer`、`wgpu`、`winit` | private `app-rs/zui` modules | 已收入单一 `zui` crate |
-| App Server、Core、Protocol、Session、File/Git、后台 Diff | `ash-rs/*` | `ash-rs` | 保留 |
-| 编辑事务、文件编辑生命周期、终端模型 | `app-rs/editor-core`、`app-rs/text-file`、`app-rs/terminal` | `app` | 路径已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md) |
-| Composer 输入分类、Shell 补全 | `app-rs/input-classifier`、`app-rs/shell-completion` | `app` | 模型、词典和算法已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md) |
-| 共享解析算法、LSP manager | `ash-rs/syntax`、`ash-rs/lsp-manager` | 共享能力库 | 编辑器实例与交互状态由前端持有 |
+| 读者关心的对象                                           | 当前路径                                                    | 目标 owner                                     | 迁移状态                                                                                                                    |
+| -------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `app` binary 与产品事件语义                              | `ash-rs/native`                                             | `app-rs/`                                      | 已实现 `zui::App`                                                                                                           |
+| 通用 application/window runtime                          | `ash-rs/native` 的历史宿主 glue                             | public `app-rs/zui`                            | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 `app/window/input/render` 能力目录隔离      |
+| `app` Root/Shell/Workspace 产品布局                      | `ash-rs/native/src`                                         | `ash-workbench` + `ash-session`                | Workbench 管完整产品组合与窗口场景，Session Pane 的 Thread/Composer state、input、interaction、layout 由 `ash-session` 拥有 |
+| 通用 icon asset contract                                 | 旧 Native icon types                                        | `app-rs/zui::ui`                               | 已收入单一 `zui` crate；产品 catalog 保留在 `app-rs/icons`                                                                  |
+| Element、Scene、Interaction、Animation、Retained Runtime | `app-rs/zui`                                                | app-owned crates in root workspace             | 已迁入 app                                                                                                                  |
+| Button、Tree、List、Editor/Environment pane presentation | `app-rs/ui-components`、`editor`、`workbench/environment`   | app-owned modules and crates in root workspace | 已迁入 app                                                                                                                  |
+| Renderer、wgpu、winit                                    | 历史 `app-rs/renderer`、`wgpu`、`winit`                     | private `app-rs/zui` modules                   | 已收入单一 `zui` crate                                                                                                      |
+| App Server、Core、Protocol、Session、File/Git、后台 Diff | `ash-rs/*`                                                  | `ash-rs`                                       | 保留                                                                                                                        |
+| 编辑事务、文件编辑生命周期、终端模型                     | `app-rs/editor-core`、`app-rs/text-file`、`app-rs/terminal` | `app`                                          | 路径已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md)                                                        |
+| Composer 输入分类、Shell 补全                            | `app-rs/input-classifier`、`app-rs/shell-completion`        | `app`                                          | 模型、词典和算法已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md)                                            |
+| 共享解析算法、LSP manager                                | `ash-rs/syntax`、`ash-rs/lsp-manager`                       | 共享能力库                                     | 编辑器实例与交互状态由前端持有                                                                                              |
 
 `ash-rs` 的“共享”按宿主无关的 Rust 语义和 backend contract 判断，不要求 Electron TypeScript 直接
 链接 Rust crate；Electron 通过 App Server protocol 使用业务能力。编辑器文本、文件编辑生命周期、
@@ -157,15 +157,15 @@ App Server Session 的连接 worker、订阅、命令队列和重连策略已经
 
 新增的 app-side crate 如下：
 
-| crate | 进入的职责 | Workbench 组合职责 |
-| --- | --- | --- |
-| `ash-session` | App Server Session client、worker、订阅、命令/事件队列和重连策略；单个 Session Pane 的 Thread metadata、后端 transcript 条目、时间线、滚动、Composer 状态、输入、交互、布局和绘制 | Local/Remote 连接目标、文件/Git/配置请求、提交 effect 和平台事件接线 |
-| `ash-terminal-runtime` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态 | 平台事件转发和终端进程适配 |
-| `ash-files` | Files Pane、目录树、文件搜索状态、滚动、布局、Toolbar 和交互 | 目录 DTO 转换以及打开文件、加载目录副作用 |
-| `ash-scm` | Changes Pane、变更文件状态、多文件 Diff、折叠、滚动、布局和交互 | 仓库快照转换以及 Git 请求 |
-| `ash-editor-host` | Editor Tab、文档/视口、保存冲突、查找替换、诊断、补全和自动滚动 | 文件与 LSP 请求、平台输入转发 |
-| `ash-settings` | `SettingsState`、页面与 section UI、快捷键录制、feature 展示快照和交互 action；连接列表、picker、连接管理和 Tunnel 状态/视图 | 配置与快捷键持久化和平台事件转发；SSH/runtime/子进程启动、profile 和窗口事件 |
-| `ash-ui-theme` | Rust GUI 自有主题目录、格式、加载、解析，以及快照到 UI 颜色、尺寸和基础控件样式的转换 | 业务组件样式、主题选择配置、组件状态、布局和产品 action |
+| crate                  | 进入的职责                                                                                                                                                                        | Workbench 组合职责                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `ash-session`          | App Server Session client、worker、订阅、命令/事件队列和重连策略；单个 Session Pane 的 Thread metadata、后端 transcript 条目、时间线、滚动、Composer 状态、输入、交互、布局和绘制 | Local/Remote 连接目标、文件/Git/配置请求、提交 effect 和平台事件接线         |
+| `ash-terminal-runtime` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态                                                                                                           | 平台事件转发和终端进程适配                                                   |
+| `ash-files`            | Files Pane、目录树、文件搜索状态、滚动、布局、Toolbar 和交互                                                                                                                      | 目录 DTO 转换以及打开文件、加载目录副作用                                    |
+| `ash-scm`              | Changes Pane、变更文件状态、多文件 Diff、折叠、滚动、布局和交互                                                                                                                   | 仓库快照转换以及 Git 请求                                                    |
+| `ash-editor-host`      | Editor Tab、文档/视口、保存冲突、查找替换、诊断、补全和自动滚动                                                                                                                   | 文件与 LSP 请求、平台输入转发                                                |
+| `ash-settings`         | `SettingsState`、页面与 section UI、快捷键录制、feature 展示快照和交互 action；连接列表、picker、连接管理和 Tunnel 状态/视图                                                      | 配置与快捷键持久化和平台事件转发；SSH/runtime/子进程启动、profile 和窗口事件 |
+| `ash-ui-theme`         | Rust GUI 自有主题目录、格式、加载、解析，以及快照到 UI 颜色、尺寸和基础控件样式的转换                                                                                             | 业务组件样式、主题选择配置、组件状态、布局和产品 action                      |
 
 所有新 crate 都在 `app-rs/`，不进入 `ash-rs`，也不依赖 `app` package。UI 能力通过宿主输入快照返回 typed action；`ash-session` 直接持有 Session/Thread 的 App Server 请求和 worker。`ash-ui-theme` 统一解析 UI 语义颜色，各能力 crate 把它转换成自己拥有的样式；Files、SCM 与 Workbench 分别拥有自身交互 ID，避免能力 crate 反向依赖组合根。
 

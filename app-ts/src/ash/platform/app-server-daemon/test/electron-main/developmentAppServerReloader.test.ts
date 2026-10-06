@@ -26,7 +26,7 @@ function connection(resources: DisposableStore, name: string, events: string[], 
 }
 
 function coordinator(resources: DisposableStore, restartDaemon: (launcher: AppServerDaemonLauncher) => Promise<void>, readGeneration: () => Promise<string | undefined> = async () => newRuntime) {
-	return resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => {}), readGeneration, acquireGeneration: async () => Object.assign(toDisposable(() => {}), { runtime: (await readGeneration())!, assertActive: () => {} }), restartDaemon, log: () => {} }));
+	return resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => { }), readGeneration, acquireGeneration: async () => Object.assign(toDisposable(() => { }), { runtime: (await readGeneration())!, assertActive: () => { } }), restartDaemon, log: () => { } }));
 }
 
 test('development change notifications validate pointers without opening collected runtime files', async () => {
@@ -80,7 +80,7 @@ test('a pending runtime remains leased while old connections stop and releases a
 	window.supervisor.stop = async () => { stopped(); await new Promise<void>(resolvePromise => { finishStop = resolvePromise; }); };
 	let released = false;
 	const lease: IDevelopmentAppServerRuntime = Object.assign(toDisposable(() => { released = true; }), { runtime: newRuntime, assertActive: () => { assert.equal(released, false); } });
-	const reloader = resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => {}), readGeneration: async () => newRuntime, acquireGeneration: async () => lease, restartDaemon: async launcher => { assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime); assert.equal(released, false); }, log: () => {} }));
+	const reloader = resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => { }), readGeneration: async () => newRuntime, acquireGeneration: async () => lease, restartDaemon: async launcher => { assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime); assert.equal(released, false); }, log: () => { } }));
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	const reload = reloader.reloadNow();
 	await stopping;
@@ -98,8 +98,8 @@ test('closing the runtime owner during startup releases a lease that arrives aft
 	let finishSelection!: (lease: IDevelopmentAppServerRuntime) => void;
 	const selected = new Promise<IDevelopmentAppServerRuntime>(resolvePromise => { finishSelection = resolvePromise; });
 	let released = false;
-	const lease = Object.assign(toDisposable(() => { released = true; }), { runtime: oldRuntime, assertActive: () => {} });
-	const reloader = resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => {}), acquireGeneration: async () => selected, log: () => {} }));
+	const lease = Object.assign(toDisposable(() => { released = true; }), { runtime: oldRuntime, assertActive: () => { } });
+	const reloader = resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => { }), acquireGeneration: async () => selected, log: () => { } }));
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	const startup = window.launcher.validate();
 	await new Promise<void>(resolvePromise => setImmediate(resolvePromise));

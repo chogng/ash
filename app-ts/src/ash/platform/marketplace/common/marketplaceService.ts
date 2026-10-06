@@ -33,7 +33,7 @@ export interface MarketplacePackageSummary {
 }
 
 export interface MarketplaceCapabilityDescriptor {
-	readonly reference: { readonly id: string };
+	readonly reference: { readonly id: string; };
 	readonly kind: MarketplaceCapabilityKind;
 	readonly id: string;
 	readonly contractVersion: string;
@@ -100,16 +100,16 @@ export interface MarketplaceBrowseSnapshot {
 }
 
 export type MarketplaceActivationSpec =
-	| { readonly kind: "skill"; readonly contractVersion: string; readonly resource: { readonly id: string } }
-	| { readonly kind: "mcp"; readonly contractVersion: string; readonly transport: { readonly type: "stdio"; readonly executable: { readonly id: string }; readonly args: readonly string[] } | { readonly type: "streamableHttp"; readonly url: string }; readonly networkHosts: readonly string[] }
-	| { readonly kind: "connector"; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string } | null }
-	| { readonly kind: "theme"; readonly contractVersion: string; readonly manifest: { readonly id: string } }
-	| { readonly kind: "language"; readonly contractVersion: string; readonly manifest: { readonly id: string } }
-	| { readonly kind: "localization"; readonly contractVersion: string; readonly catalog: { readonly id: string } }
-	| { readonly kind: "executable"; readonly contractVersion: string; readonly runtime: "direct" | "node"; readonly entrypoint: { readonly id: string } };
+	| { readonly kind: "skill"; readonly contractVersion: string; readonly resource: { readonly id: string; }; }
+	| { readonly kind: "mcp"; readonly contractVersion: string; readonly transport: { readonly type: "stdio"; readonly executable: { readonly id: string; }; readonly args: readonly string[]; } | { readonly type: "streamableHttp"; readonly url: string; }; readonly networkHosts: readonly string[]; }
+	| { readonly kind: "connector"; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string; } | null; }
+	| { readonly kind: "theme"; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
+	| { readonly kind: "language"; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
+	| { readonly kind: "localization"; readonly contractVersion: string; readonly catalog: { readonly id: string; }; }
+	| { readonly kind: "executable"; readonly contractVersion: string; readonly runtime: "direct" | "node"; readonly entrypoint: { readonly id: string; }; };
 
 export interface MarketplaceAcquiredCapability {
-	readonly lease: { readonly id: string; readonly capability: { readonly id: string }; readonly installationId: string };
+	readonly lease: { readonly id: string; readonly capability: { readonly id: string; }; readonly installationId: string; };
 	readonly spec: MarketplaceActivationSpec;
 }
 
@@ -121,7 +121,7 @@ export interface IMarketplaceService {
 	refreshBrowse(query: string, options?: MarketplaceSearchOptions): Promise<MarketplaceBrowseSnapshot>;
 	search(query: string, options?: MarketplaceSearchOptions): Promise<readonly MarketplacePackageSummary[]>;
 	get(packageId: string, version?: string): Promise<MarketplacePackageDetails>;
-	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: MarketplacePackageRef }>;
+	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: MarketplacePackageRef; }>;
 	install(packageId: string, version?: string): Promise<MarketplaceInstalledPackage>;
 	update(installationId: string, version?: string): Promise<MarketplaceInstalledPackage>;
 	uninstall(installationId: string, mode?: "ifUnused" | "whenUnused"): Promise<void>;
@@ -130,7 +130,7 @@ export interface IMarketplaceService {
 	setEditorExtensionPolicy(extension: MarketplaceEditorExtensionPolicy, action: MarketplaceEditorExtensionPolicyAction, expectedRevision: number): Promise<MarketplaceEditorExtensions>;
 	acquireCapability(capabilityId: string): Promise<MarketplaceAcquiredCapability>;
 	releaseCapability(leaseId: string): Promise<void>;
-	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string }>;
+	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string; }>;
 }
 
 export const IMarketplaceService = createServiceIdentifier<IMarketplaceService>("marketplaceService");

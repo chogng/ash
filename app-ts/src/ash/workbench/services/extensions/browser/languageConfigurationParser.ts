@@ -84,7 +84,7 @@ function parseEnterAction(value: unknown, owner: string): EnterAction {
 	});
 }
 
-function optionalRegularExpressionProperty(value: unknown, owner: string, key: "afterText" | "previousLineText"): { readonly afterText?: RegExp } | { readonly previousLineText?: RegExp } | Record<never, never> {
+function optionalRegularExpressionProperty(value: unknown, owner: string, key: "afterText" | "previousLineText"): { readonly afterText?: RegExp; } | { readonly previousLineText?: RegExp; } | Record<never, never> {
 	if (value === undefined || value === null) return {};
 	const expression = regularExpression(value, owner);
 	return key === "afterText" ? { afterText: expression } : { previousLineText: expression };
@@ -148,7 +148,7 @@ function regularExpression(value: unknown, owner: string): RegExp {
 	}
 }
 
-function parseRegularExpressionObject(value: unknown, owner: string): { readonly source: string; readonly flags: string } {
+function parseRegularExpressionObject(value: unknown, owner: string): { readonly source: string; readonly flags: string; } {
 	const expression = record(value, owner);
 	const keys = Object.keys(expression);
 	if (keys.some(key => key !== "pattern" && key !== "flags") || expression.pattern === undefined) {

@@ -47,9 +47,9 @@ type EditorService = object;
 interface IKeybindings {
 	readonly primary?: number;
 	readonly secondary?: readonly number[];
-	readonly win?: { readonly primary: number; readonly secondary?: readonly number[] };
-	readonly linux?: { readonly primary: number; readonly secondary?: readonly number[] };
-	readonly mac?: { readonly primary: number; readonly secondary?: readonly number[] };
+	readonly win?: { readonly primary: number; readonly secondary?: readonly number[]; };
+	readonly linux?: { readonly primary: number; readonly secondary?: readonly number[]; };
+	readonly mac?: { readonly primary: number; readonly secondary?: readonly number[]; };
 }
 
 export const enum EditorContributionInstantiation {
@@ -236,12 +236,12 @@ export class MultiCommand extends Command {
 		this._implementations.push({ priority, name, implementation, when });
 		this._implementations.sort((a, b) => b.priority - a.priority);
 		return toDisposable(() => {
-				for (let i = 0; i < this._implementations.length; i++) {
-					if (this._implementations[i].implementation === implementation) {
-						this._implementations.splice(i, 1);
-						return;
-					}
+			for (let i = 0; i < this._implementations.length; i++) {
+				if (this._implementations[i].implementation === implementation) {
+					this._implementations.splice(i, 1);
+					return;
 				}
+			}
 		});
 	}
 
@@ -448,12 +448,12 @@ export class MultiEditorAction extends EditorAction {
 		this._implementations.push([priority, implementation]);
 		this._implementations.sort((a, b) => b[0] - a[0]);
 		return toDisposable(() => {
-				for (let i = 0; i < this._implementations.length; i++) {
-					if (this._implementations[i][1] === implementation) {
-						this._implementations.splice(i, 1);
-						return;
-					}
+			for (let i = 0; i < this._implementations.length; i++) {
+				if (this._implementations[i][1] === implementation) {
+					this._implementations.splice(i, 1);
+					return;
 				}
+			}
 		});
 	}
 
@@ -599,7 +599,7 @@ export interface DocumentFormattingContribution extends IDisposable {
 export interface DocumentEditorContributionContext {
 	readonly kind: 'document';
 	readonly container: HTMLElement;
-	readonly documentActions: readonly { readonly id: string; readonly label: string }[];
+	readonly documentActions: readonly { readonly id: string; readonly label: string; }[];
 	readonly onToggleMark: (markType: 'strong' | 'em') => void;
 	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
 	readonly onClearTextStyle: () => void;
@@ -659,7 +659,7 @@ export function registerEditorCommand<T extends EditorCommand>(editorCommand: T)
 	return editorCommand;
 }
 
-export function registerEditorAction<T extends EditorAction>(ctor: { new(): T }): T {
+export function registerEditorAction<T extends EditorAction>(ctor: { new(): T; }): T {
 	const action = new ctor();
 	EditorContributionRegistry.INSTANCE.registerEditorAction(action);
 	return action;
@@ -679,7 +679,7 @@ export function registerInstantiatedEditorAction(editorAction: EditorAction): vo
  * to a specific code editor instance.
  */
 export function registerEditorContribution(contribution: EditorContributionHooks): void;
-export function registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void;
+export function registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution; }, instantiation: EditorContributionInstantiation): void;
 export function registerEditorContribution(idOrContribution: string | EditorContributionHooks, ctor?: EditorContributionCtor, instantiation?: EditorContributionInstantiation): void {
 	const contribution = typeof idOrContribution === 'string'
 		? { id: idOrContribution, ctor: ctor!, instantiation: instantiation! }
@@ -691,7 +691,7 @@ export function registerEditorContribution(idOrContribution: string | EditorCont
  * Registers a diff editor contribution. Diff editor contributions have a lifecycle which
  * is bound to a specific diff editor instance.
  */
-export function registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution }): void {
+export function registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution; }): void {
 	EditorContributionRegistry.INSTANCE.registerDiffEditorContribution(id, ctor);
 }
 
@@ -733,7 +733,7 @@ class EditorContributionRegistry {
 	private readonly editorContributions: EditorContributionRegistration[] = [];
 	private readonly diffEditorContributions: IDiffEditorContributionDescription[] = [];
 	private readonly editorActions: EditorAction[] = [];
-	private readonly editorCommands: { [commandId: string]: EditorCommand } = Object.create(null);
+	private readonly editorCommands: { [commandId: string]: EditorCommand; } = Object.create(null);
 
 	constructor() {
 	}
@@ -760,7 +760,7 @@ class EditorContributionRegistry {
 		return this.editorContributions.slice(0);
 	}
 
-	public registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution }): void {
+	public registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution; }): void {
 		this.diffEditorContributions.push({ id, ctor: ctor as DiffEditorContributionCtor });
 	}
 
@@ -826,7 +826,7 @@ export const UndoCommand = registerCommand(new MultiCommand({
 		title: nls.localize('undo', "Undo"),
 		order: 1
 	}, {
-			menuId: MenuId.for('SimpleEditorContext'),
+		menuId: MenuId.for('SimpleEditorContext'),
 		group: '1_do',
 		title: nls.localize('undo', "Undo"),
 		order: 1
@@ -855,7 +855,7 @@ export const RedoCommand = registerCommand(new MultiCommand({
 		title: nls.localize('redo', "Redo"),
 		order: 1
 	}, {
-			menuId: MenuId.for('SimpleEditorContext'),
+		menuId: MenuId.for('SimpleEditorContext'),
 		group: '1_do',
 		title: nls.localize('redo', "Redo"),
 		order: 2
@@ -883,7 +883,7 @@ export const SelectAllCommand = registerCommand(new MultiCommand({
 		title: nls.localize('selectAll', "Select All"),
 		order: 1
 	}, {
-			menuId: MenuId.for('SimpleEditorContext'),
+		menuId: MenuId.for('SimpleEditorContext'),
 		group: '9_select',
 		title: nls.localize('selectAll', "Select All"),
 		order: 1

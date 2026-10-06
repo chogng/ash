@@ -74,11 +74,11 @@ interface PendingCall {
 }
 
 type Packet =
-	| { type: 'call' | 'listen'; id: number; channel: string; name: string; arg?: unknown }
-	| { type: 'result' | 'event'; id: number; data?: unknown }
-	| { type: 'error'; id: number; error: { name: string; message: string } }
-	| { type: 'cancel' | 'unsubscribe'; id: number }
-	| { type: 'closed' };
+	| { type: 'call' | 'listen'; id: number; channel: string; name: string; arg?: unknown; }
+	| { type: 'result' | 'event'; id: number; data?: unknown; }
+	| { type: 'error'; id: number; error: { name: string; message: string; }; }
+	| { type: 'cancel' | 'unsubscribe'; id: number; }
+	| { type: 'closed'; };
 
 function decode(buffer: VSBuffer): Packet {
 	const value: unknown = JSON.parse(buffer.toString());
@@ -109,7 +109,7 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 	private closeError = new Error('IPC connection closed');
 	private readonly channels = new Map<string, IServerChannel<TContext>>();
 	private readonly pending = new Map<number, PendingCall>();
-	private readonly listeners = new Map<number, { deliver(value: unknown): void; dispose(): void }>();
+	private readonly listeners = new Map<number, { deliver(value: unknown): void; dispose(): void; }>();
 	private readonly calls = new Map<number, CancellationTokenSource>();
 	private readonly subscriptions = new Map<number, IDisposable>();
 
@@ -207,7 +207,7 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 		}
 	}
 
-	private acceptCall(packet: Extract<Packet, { type: 'call' | 'listen' }>): void {
+	private acceptCall(packet: Extract<Packet, { type: 'call' | 'listen'; }>): void {
 		this.assertRequestAvailable(packet.id);
 		const source = new CancellationTokenSource();
 		this.calls.set(packet.id, source);
@@ -223,7 +223,7 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 		})();
 	}
 
-	private acceptSubscription(packet: Extract<Packet, { type: 'call' | 'listen' }>): void {
+	private acceptSubscription(packet: Extract<Packet, { type: 'call' | 'listen'; }>): void {
 		this.assertRequestAvailable(packet.id);
 		try {
 			const channel = this.channels.get(packet.channel);
@@ -270,7 +270,7 @@ export interface ClientConnectionEvent<TContext = string> extends Client<TContex
 /** Shared channel registrations survive individual renderer connections. */
 export class IPCServer<TContext = string> extends Disposable implements IChannelServer<TContext> {
 	private readonly channels = new Map<string, IServerChannel<TContext>>();
-	private readonly clients = new Map<ClientConnectionEvent<TContext>, { peer: IPCClient<TContext>; resources: DisposableStore }>();
+	private readonly clients = new Map<ClientConnectionEvent<TContext>, { peer: IPCClient<TContext>; resources: DisposableStore; }>();
 	private readonly connectionsChanged = this._register(new Emitter<void>());
 
 	constructor(onDidClientConnect: Event<ClientConnectionEvent<TContext>>) {

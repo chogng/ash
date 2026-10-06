@@ -24,13 +24,13 @@
 请求交给协议、重试和网络层。配置在调用开始时冻结，因此一次调用不会在执行途中悄悄换模型或
 凭据。
 
-| 常见问题 | 系统行为 | 深入阅读 |
-| --- | --- | --- |
-| 本次到底使用哪个模型？ | 根据供应商定义、用户选择和本次调用覆盖生成不可变绑定 | [一次调用如何形成](#1-一次调用如何形成) |
-| 自定义服务地址会影响什么？ | 只在供应商配置明确允许时生效，不会把一个服务偷偷当成另一个协议 | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
-| 凭据由这里保存吗？ | App Server 接收新 key，本 crate 校验并映射到 `ash-secrets`；订阅登录由各自领域处理 | [供应商凭据](#6-供应商凭据边界) |
-| 失败后会自动重试吗？ | 只有调用类型明确允许安全重试时才会重试；模型推理默认不能仅凭“没收到输出”重跑 | [重试分工](#8-重试分工) |
-| 当前已经能做什么？ | 已具备 HTTP completion、embedding/rerank，以及显式 Responses WebSocket／Realtime GA 会话 | [当前实现审计](#3-当前实现审计) |
+| 常见问题                   | 系统行为                                                                                 | 深入阅读                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 本次到底使用哪个模型？     | 根据供应商定义、用户选择和本次调用覆盖生成不可变绑定                                     | [一次调用如何形成](#1-一次调用如何形成)         |
+| 自定义服务地址会影响什么？ | 只在供应商配置明确允许时生效，不会把一个服务偷偷当成另一个协议                           | [供应商与 API 端点](#5-供应商与-api-端点的联动) |
+| 凭据由这里保存吗？         | App Server 接收新 key，本 crate 校验并映射到 `ash-secrets`；订阅登录由各自领域处理       | [供应商凭据](#6-供应商凭据边界)                 |
+| 失败后会自动重试吗？       | 只有调用类型明确允许安全重试时才会重试；模型推理默认不能仅凭“没收到输出”重跑             | [重试分工](#8-重试分工)                         |
+| 当前已经能做什么？         | 已具备 HTTP completion、embedding/rerank，以及显式 Responses WebSocket／Realtime GA 会话 | [当前实现审计](#3-当前实现审计)                 |
 
 ## 1. 一次调用如何形成
 
@@ -63,15 +63,15 @@ ChatGPT、Kimi 与 Super Grok 订阅在这里都只是一次模型调用：各�
 
 ## 2. 谁负责什么
 
-| 责任 | 最终所有者 | 模型调用系统在其中做什么 |
-| --- | --- | --- |
-| 供应商和模型选择 | 模型调用系统 | 解析选择并生成不可变调用绑定 |
-| 合法配置形态 | 模型供应商配置 | 提供定义，模型调用系统只消费 |
-| 凭据保存和登录 | 凭据与登录系统 | 请求本次需要的敏感材料，不自行持久化 |
-| API 请求和响应含义 | 模型 API 协议层 | 选择明确的协议配置档案 |
-| 重试、截止时间和流式分帧 | 操作客户端 | 选择重试策略，不执行重试循环 |
-| HTTP、WebSocket、代理和 TLS | 网络层 | 提供解析后的目标和标头 |
-| 模型目录刷新 | 模型目录系统 | 提供目录访问适配器，不保存第二份缓存 |
+| 责任                        | 最终所有者      | 模型调用系统在其中做什么             |
+| --------------------------- | --------------- | ------------------------------------ |
+| 供应商和模型选择            | 模型调用系统    | 解析选择并生成不可变调用绑定         |
+| 合法配置形态                | 模型供应商配置  | 提供定义，模型调用系统只消费         |
+| 凭据保存和登录              | 凭据与登录系统  | 请求本次需要的敏感材料，不自行持久化 |
+| API 请求和响应含义          | 模型 API 协议层 | 选择明确的协议配置档案               |
+| 重试、截止时间和流式分帧    | 操作客户端      | 选择重试策略，不执行重试循环         |
+| HTTP、WebSocket、代理和 TLS | 网络层          | 提供解析后的目标和标头               |
+| 模型目录刷新                | 模型目录系统    | 提供目录访问适配器，不保存第二份缓存 |
 
 ### 2.1 本系统拥有
 
@@ -163,19 +163,19 @@ Arc<dyn ModelInvoker>
 
 Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个正式 endpoint：
 
-| Provider | 可选 API profile 示例 |
-| --- | --- |
-| OpenAI Platform | Responses |
-| Meta Model API | Muse Spark 1.3，Responses + Bearer API Key；[官方协议](https://dev.meta.ai/docs/overview) |
-| ChatGPT 订阅 | OpenAI Responses codec + `ash-chatgpt` native OAuth target |
-| Kimi Platform | OpenAI-compatible Chat Completions + API key |
-| Kimi Code 订阅 | Kimi Coding OpenAI-compatible Chat Completions + Ash OAuth 凭据 |
-| Kimi Desktop | Kimi Code Chat Completions + 桌面端当前网关凭据 |
-| Kimi Code CLI | Kimi Code Chat Completions + CLI 当前 OAuth 文件凭据 |
-| xAI | Responses、Chat Completions |
-| Google | Gemini Interactions、GenerateContent、OpenAI-compatible Chat |
-| Ollama | native Chat NDJSON、OpenAI-compatible Chat |
-| DeepSeek | OpenAI Chat、Anthropic-compatible endpoint |
+| Provider        | 可选 API profile 示例                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| OpenAI Platform | Responses                                                                                 |
+| Meta Model API  | Muse Spark 1.3，Responses + Bearer API Key；[官方协议](https://dev.meta.ai/docs/overview) |
+| ChatGPT 订阅    | OpenAI Responses codec + `ash-chatgpt` native OAuth target                                |
+| Kimi Platform   | OpenAI-compatible Chat Completions + API key                                              |
+| Kimi Code 订阅  | Kimi Coding OpenAI-compatible Chat Completions + Ash OAuth 凭据                           |
+| Kimi Desktop    | Kimi Code Chat Completions + 桌面端当前网关凭据                                           |
+| Kimi Code CLI   | Kimi Code Chat Completions + CLI 当前 OAuth 文件凭据                                      |
+| xAI             | Responses、Chat Completions                                                               |
+| Google          | Gemini Interactions、GenerateContent、OpenAI-compatible Chat                              |
+| Ollama          | native Chat NDJSON、OpenAI-compatible Chat                                                |
+| DeepSeek        | OpenAI Chat、Anthropic-compatible endpoint                                                |
 
 ### 5.1 WebSocket 支持矩阵
 
@@ -183,16 +183,16 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 WebSocket contract；某个供应商在语音、实时音视频或另一套模型 API 中使用 WebSocket，并不代表
 Ash 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credential，不会自动改变 transport。
 
-| Provider / runtime | 官方公开能力 | 与当前 Ash invocation profile 的关系 | 当前 Ash 状态 |
-| --- | --- | --- | --- |
-| OpenAI Platform | [Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode) | 独立 Responses 会话 | 显式 `connect_responses` 已实现；本地握手验证已存 API key，轮换后重连，删除后终止会话；默认模型调用仍用 HTTP |
-| ChatGPT 订阅 | 本地 Codex 实现及 Luna／low 实连 | 专用认证 target 和握手 beta 头 | 两轮同连接调用与增量发送已实测 |
-| OpenAI Realtime GA | [Realtime GA](https://developers.openai.com/api/docs/guides/realtime) | 独立 `realtimeApiProfile` 和模型 ID，不由 Luna 订阅授权 | `connect_realtime` 已实现；本地握手验证已存 API key，不再要求模型出现在文本目录；未实连语音模型 |
-| xAI | [Responses WebSocket mode](https://docs.x.ai/developers/advanced-api-usage/websocket-mode) 明确使用 `wss://api.x.ai/v1/responses` | Ash 当前 xAI definition 使用 Responses HTTP，尚未声明 WebSocket capability | `Unavailable`；独立验证 WebSocket 端点与凭据后再启用 |
-| Google Gemini | [Live API](https://ai.google.dev/api/live) 是 stateful WebSocket | 独立 `BidiGenerateContent`/Live 模型协议，不是当前 OpenAI-compatible Chat route | `Unavailable` |
-| Anthropic | [Messages streaming](https://platform.claude.com/docs/en/build-with-claude/streaming) 使用 SSE | 当前 Messages route 没有已核实的官方 WebSocket contract | `Unavailable` |
-| DeepSeek | [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion) 的 streaming 为 data-only SSE | 当前 Chat route 不支持已核实的 WebSocket mode | `Unavailable` |
-| Kimi | [Chat API](https://platform.kimi.ai/docs/api/chat) 的 streaming 为 SSE | Kimi OAuth 不改变该 wire contract | `Unavailable` |
+| Provider / runtime | 官方公开能力                                                                                                                      | 与当前 Ash invocation profile 的关系                                            | 当前 Ash 状态                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| OpenAI Platform    | [Responses WebSocket](https://developers.openai.com/api/docs/guides/websocket-mode)                                               | 独立 Responses 会话                                                             | 显式 `connect_responses` 已实现；本地握手验证已存 API key，轮换后重连，删除后终止会话；默认模型调用仍用 HTTP |
+| ChatGPT 订阅       | 本地 Codex 实现及 Luna／low 实连                                                                                                  | 专用认证 target 和握手 beta 头                                                  | 两轮同连接调用与增量发送已实测                                                                               |
+| OpenAI Realtime GA | [Realtime GA](https://developers.openai.com/api/docs/guides/realtime)                                                             | 独立 `realtimeApiProfile` 和模型 ID，不由 Luna 订阅授权                         | `connect_realtime` 已实现；本地握手验证已存 API key，不再要求模型出现在文本目录；未实连语音模型              |
+| xAI                | [Responses WebSocket mode](https://docs.x.ai/developers/advanced-api-usage/websocket-mode) 明确使用 `wss://api.x.ai/v1/responses` | Ash 当前 xAI definition 使用 Responses HTTP，尚未声明 WebSocket capability      | `Unavailable`；独立验证 WebSocket 端点与凭据后再启用                                                         |
+| Google Gemini      | [Live API](https://ai.google.dev/api/live) 是 stateful WebSocket                                                                  | 独立 `BidiGenerateContent`/Live 模型协议，不是当前 OpenAI-compatible Chat route | `Unavailable`                                                                                                |
+| Anthropic          | [Messages streaming](https://platform.claude.com/docs/en/build-with-claude/streaming) 使用 SSE                                    | 当前 Messages route 没有已核实的官方 WebSocket contract                         | `Unavailable`                                                                                                |
+| DeepSeek           | [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion) 的 streaming 为 data-only SSE                        | 当前 Chat route 不支持已核实的 WebSocket mode                                   | `Unavailable`                                                                                                |
+| Kimi               | [Chat API](https://platform.kimi.ai/docs/api/chat) 的 streaming 为 SSE                                                            | Kimi OAuth 不改变该 wire contract                                               | `Unavailable`                                                                                                |
 
 听写使用独立于文本调用的 `transcriptionApiProfile`：OpenAI 的 `gpt-live-transcribe` 走 Realtime 转写协议，xAI 的 `grok-voice-transcribe-2.0` 走 STT WebSocket。两者分别要求对应供应商的直接 API 凭据；上表中的 xAI 文本 Responses WebSocket 状态不影响 STT 能力。
 | Ollama | [Streaming responses](https://docs.ollama.com/api/streaming) 使用 NDJSON | 当前 native/compatible route 不是 WebSocket | `Unavailable` |
@@ -209,29 +209,29 @@ session lifecycle 同时匹配；显式请求不受支持的 WebSocket 服务会
 binding 都由 `ProviderDefinition.input_token_count` 明确声明 profile、target 和 model policy；未声明
 时 fail closed，不能因为 Chat Completions 外形兼容就推断存在 count endpoint。
 
-| Provider | 官方计量面 | 当前 Ash 状态 | 边界 |
-| --- | --- | --- | --- |
-| OpenAI | [`POST /responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) | ✅ exact remote | 与 Responses request 同 codec；直接读取 `input_tokens` |
-| Anthropic | [`POST /v1/messages/count_tokens`](https://docs.anthropic.com/en/api/messages-count-tokens) | 部分具备：estimated remote | provider preflight 后按 1%/至少 32 tokens 保守记账 |
-| Google | [`models.countTokens`](https://ai.google.dev/api/tokens) | 部分具备：estimated remote | native `generateContentRequest`；当前 invocation 是 OpenAI-compatible，且仅声明 model 可用 |
-| Kimi | [`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate) | 部分具备：estimated remote | 文档 schema 只有 model/messages；带 tools/reasoning 的当前请求退回 unavailable |
-| Z.AI | [`POST /tokenizer`](https://docs.z.ai/api-reference/tools/tokenizer) | 部分具备：estimated remote | 使用 `usage.total_tokens`，支持 tools；带 Tool Call/Result 历史暂退 unavailable |
-| xAI | [`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other) | ❌ full-request preflight unavailable | 只 tokenize 裸文本；[billing FAQ](https://docs.x.ai/developers/faq/billing) 说明 inference 还会加入预定义 tokens |
-| DeepSeek | [token usage / offline tokenizer](https://api-docs.deepseek.com/quick_start/token_usage) | 部分具备：local/estimated | 已接入完整 `ModelRef` binding、请求级模板渲染与 tokenizer runtime；当前仍需宿主提供固定资产清单 |
-| Ollama | [API usage fields](https://github.com/ollama/ollama/blob/main/docs/api.md) | ❌ preflight unavailable | `prompt_eval_count` 是调用完成后的 usage |
-| Generic OpenAI-compatible | 无统一标准 | ❌ unavailable | 必须由具体 provider definition 显式增加 count profile |
+| Provider                  | 官方计量面                                                                                                                  | 当前 Ash 状态                         | 边界                                                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| OpenAI                    | [`POST /responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) | ✅ exact remote                       | 与 Responses request 同 codec；直接读取 `input_tokens`                                                           |
+| Anthropic                 | [`POST /v1/messages/count_tokens`](https://docs.anthropic.com/en/api/messages-count-tokens)                                 | 部分具备：estimated remote            | provider preflight 后按 1%/至少 32 tokens 保守记账                                                               |
+| Google                    | [`models.countTokens`](https://ai.google.dev/api/tokens)                                                                    | 部分具备：estimated remote            | native `generateContentRequest`；当前 invocation 是 OpenAI-compatible，且仅声明 model 可用                       |
+| Kimi                      | [`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate)                                                        | 部分具备：estimated remote            | 文档 schema 只有 model/messages；带 tools/reasoning 的当前请求退回 unavailable                                   |
+| Z.AI                      | [`POST /tokenizer`](https://docs.z.ai/api-reference/tools/tokenizer)                                                        | 部分具备：estimated remote            | 使用 `usage.total_tokens`，支持 tools；带 Tool Call/Result 历史暂退 unavailable                                  |
+| xAI                       | [`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other)                                          | ❌ full-request preflight unavailable | 只 tokenize 裸文本；[billing FAQ](https://docs.x.ai/developers/faq/billing) 说明 inference 还会加入预定义 tokens |
+| DeepSeek                  | [token usage / offline tokenizer](https://api-docs.deepseek.com/quick_start/token_usage)                                    | 部分具备：local/estimated             | 已接入完整 `ModelRef` binding、请求级模板渲染与 tokenizer runtime；当前仍需宿主提供固定资产清单                  |
+| Ollama                    | [API usage fields](https://github.com/ollama/ollama/blob/main/docs/api.md)                                                  | ❌ preflight unavailable              | `prompt_eval_count` 是调用完成后的 usage                                                                         |
+| Generic OpenAI-compatible | 无统一标准                                                                                                                  | ❌ unavailable                        | 必须由具体 provider definition 显式增加 count profile                                                            |
 
 #### 订阅网关的服务端计量覆盖
 
 订阅网关与标准 API 网关是两套路由：标准 API 声明了 count endpoint 不代表订阅网关也能调用。
 四个订阅的结论（2026-09 核实）：
 
-| 订阅 | 订阅网关 | 服务端计量 | 依据 |
-| --- | --- | --- | --- |
-| Z.AI GLM Coding Plan | `https://api.z.ai/api/coding/paas/v4` | 部分具备：estimated remote，路由与标准端点同为 `POST /tokenizer` | 同一网关家族探测该路由返回 401（路由存在、缺鉴权），标准端点 `/tokenizer` 见 [Z.AI API reference](https://docs.z.ai/api-reference/tools/tokenizer)；最终边界以真实登录账户实连为准 |
-| Kimi Code | `https://api.kimi.com/coding/v1` | ❌ preflight unavailable，退回本地 tokenizer | 官方 [Kimi Code 文档](https://www.kimi.com/code/docs/en)只声明 chat/completions；[`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate) 仅存在于平台 API（`api.moonshot.ai/v1`），coding 网关探测该路由返回 404 |
-| ChatGPT 订阅（Codex 后端） | `https://chatgpt.com/backend-api/codex` | ❌ preflight unavailable，退回本地 tokenizer | Codex 后端没有公开 contract；[`/responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) 属于 Platform API，Codex 生态（CLI `/status`、社区监控工具）均按本地或调用完成后的 usage 统计 |
-| xAI 订阅（Grok CLI 代理） | `https://cli-chat-proxy.grok.com/v1` | ❌ preflight unavailable，退回本地 tokenizer | 订阅代理探测 tokenize 路由返回 404；[`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other) 只在 Platform API（`api.x.ai`）且只接受裸文本，无法表达完整请求 |
+| 订阅                       | 订阅网关                                | 服务端计量                                                       | 依据                                                                                                                                                                                                                                              |
+| -------------------------- | --------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Z.AI GLM Coding Plan       | `https://api.z.ai/api/coding/paas/v4`   | 部分具备：estimated remote，路由与标准端点同为 `POST /tokenizer` | 同一网关家族探测该路由返回 401（路由存在、缺鉴权），标准端点 `/tokenizer` 见 [Z.AI API reference](https://docs.z.ai/api-reference/tools/tokenizer)；最终边界以真实登录账户实连为准                                                                |
+| Kimi Code                  | `https://api.kimi.com/coding/v1`        | ❌ preflight unavailable，退回本地 tokenizer                     | 官方 [Kimi Code 文档](https://www.kimi.com/code/docs/en)只声明 chat/completions；[`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate) 仅存在于平台 API（`api.moonshot.ai/v1`），coding 网关探测该路由返回 404                     |
+| ChatGPT 订阅（Codex 后端） | `https://chatgpt.com/backend-api/codex` | ❌ preflight unavailable，退回本地 tokenizer                     | Codex 后端没有公开 contract；[`/responses/input_tokens`](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens) 属于 Platform API，Codex 生态（CLI `/status`、社区监控工具）均按本地或调用完成后的 usage 统计 |
+| xAI 订阅（Grok CLI 代理）  | `https://cli-chat-proxy.grok.com/v1`    | ❌ preflight unavailable，退回本地 tokenizer                     | 订阅代理探测 tokenize 路由返回 404；[`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other) 只在 Platform API（`api.x.ai`）且只接受裸文本，无法表达完整请求                                                            |
 
 本地回退由 `LocalInputTokenCounter` 承担：remote 计量不可用的连接自动尝试本地 tokenizer
 binding（`ManagedLocalTokenizerService` 按 `ModelRef` 按需下载并缓存 tokenizer 资产），仍不可用
@@ -243,13 +243,13 @@ count 路由时，先复核官方文档再更新对应的 subscription definitio
 调用完成后的统计统一进入 `ModelUsage`，但字段必须先按模型商官方定义换算，不能直接照搬同名
 JSON 字段：
 
-| 统一字段 | 含义 | 当前来源 |
-| --- | --- | --- |
-| `input_tokens` | 总输入，包含未缓存输入、缓存读取和缓存写入 | OpenAI 直接读取总输入；Anthropic 将三部分相加；DeepSeek 读取 `prompt_tokens` |
-| `cached_input_tokens` | 从缓存读取的输入 token | OpenAI `cached_tokens`；Anthropic `cache_read_input_tokens`；DeepSeek `prompt_cache_hit_tokens` |
-| `cache_write_input_tokens` | 写入缓存的输入 token | OpenAI `cache_write_tokens`；Anthropic `cache_creation_input_tokens`；DeepSeek 未报告时保持未知 |
-| `output_tokens` | 总输出 | 各模型商的总输出字段 |
-| `reasoning_tokens` | 总输出中的推理/思考明细 | 只在响应明确提供明细时记录 |
+| 统一字段                   | 含义                                       | 当前来源                                                                                        |
+| -------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `input_tokens`             | 总输入，包含未缓存输入、缓存读取和缓存写入 | OpenAI 直接读取总输入；Anthropic 将三部分相加；DeepSeek 读取 `prompt_tokens`                    |
+| `cached_input_tokens`      | 从缓存读取的输入 token                     | OpenAI `cached_tokens`；Anthropic `cache_read_input_tokens`；DeepSeek `prompt_cache_hit_tokens` |
+| `cache_write_input_tokens` | 写入缓存的输入 token                       | OpenAI `cache_write_tokens`；Anthropic `cache_creation_input_tokens`；DeepSeek 未报告时保持未知 |
+| `output_tokens`            | 总输出                                     | 各模型商的总输出字段                                                                            |
+| `reasoning_tokens`         | 总输出中的推理/思考明细                    | 只在响应明确提供明细时记录                                                                      |
 
 缓存占比定义为 `cached_input_tokens / input_tokens`，表示 token 维度的缓存读取占比，不表示“多少次
 请求命中了缓存”。只有分子和分母都完整、且总输入大于 0 时才能给出精确百分比；否则显示未知。
@@ -329,18 +329,18 @@ BigModel Coding Plan、Z.AI Coding Plan、BigModel Start Plan、Z.AI Start Plan�
 
 ## 7. 标头和目标
 
-| 内容 | Owner |
-| --- | --- |
-| Platform/default provider base URL | `model-provider-info` |
-| 用户 base URL override | 仅 Platform/custom-compatible provider；由 `model-provider-info` 声明、runtime 解析 |
-| ChatGPT 订阅服务目标 | `ash-chatgpt` 固定 target；不接受 Ash generic user override |
-| Kimi Code 订阅服务目标 | `ash-kimi` 固定为 `https://api.kimi.com/coding/v1`；不接受 generic base URL override |
-| resolved absolute target | `model-provider` |
-| API key/cloud identity/tenant header | `model-provider` + direct-provider credential layer |
-| relative path、method、content type | `ash-api::endpoint` |
-| API version、协议 beta header | `ash-api::endpoint/requests` |
-| trace propagation、user agent | `ash-http-client` |
-| operation attempt header | `ash-client` |
+| 内容                                 | Owner                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------ |
+| Platform/default provider base URL   | `model-provider-info`                                                                |
+| 用户 base URL override               | 仅 Platform/custom-compatible provider；由 `model-provider-info` 声明、runtime 解析  |
+| ChatGPT 订阅服务目标                 | `ash-chatgpt` 固定 target；不接受 Ash generic user override                          |
+| Kimi Code 订阅服务目标               | `ash-kimi` 固定为 `https://api.kimi.com/coding/v1`；不接受 generic base URL override |
+| resolved absolute target             | `model-provider`                                                                     |
+| API key/cloud identity/tenant header | `model-provider` + direct-provider credential layer                                  |
+| relative path、method、content type  | `ash-api::endpoint`                                                                  |
+| API version、协议 beta header        | `ash-api::endpoint/requests`                                                         |
+| trace propagation、user agent        | `ash-http-client`                                                                    |
+| operation attempt header             | `ash-client`                                                                         |
 
 Runtime 合并 headers 时必须使用 typed origin 和冲突规则。认证 header 不得被协议层覆盖，协议
 必需 header 不得被用户任意删除；所有 secret header 的 `Debug` 必须脱敏。

@@ -4,15 +4,15 @@ Desktop、Rust GUI 与 Ash Code TUI 分别拥有主题实现。配色理念与�
 
 ## 所有权
 
-| 内容 | Desktop TypeScript | Rust GUI |
-| --- | --- | --- |
-| 颜色与尺寸声明 | [平台颜色注册表](../app-ts/src/ash/platform/theme/common/colorRegistry.ts) 与 [工作台颜色定义](../app-ts/src/ash/workbench/common/theme.ts)；尺寸由平台注册 | [catalog.json](../app-rs/theme/resources/catalog.json) |
-| 内置主题 | TypeScript 注册表默认值与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json) | [entries.json](../app-rs/theme/resources/entries.json) 和 Rust 解析器 |
-| 用户主题校验 | [colorThemeData.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeData.ts) | [document.rs](../app-rs/theme/src/document.rs) 与 [catalog.rs](../app-rs/theme/src/catalog.rs) |
-| 用户主题 Schema 与模板 | [colorThemeSchema.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeSchema.ts) | [app-rs/theme/resources](../app-rs/theme/resources/color-theme.schema.json) |
-| 用户主题目录 | profile root 的 `themes/*.json` | profile root 的 `app/themes/*.json` |
-| 主题选择 | `workbench.colorTheme`，由 Desktop 配置服务保存 | `config.toml` 的 `[gui].theme`，由 GUI 解释 |
-| 组件消费 | CSS 变量与编辑器、终端颜色表 | `ThemeSnapshot → UiTheme` 与各组件的类型化样式 |
+| 内容                   | Desktop TypeScript                                                                                                                                          | Rust GUI                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 颜色与尺寸声明         | [平台颜色注册表](../app-ts/src/ash/platform/theme/common/colorRegistry.ts) 与 [工作台颜色定义](../app-ts/src/ash/workbench/common/theme.ts)；尺寸由平台注册 | [catalog.json](../app-rs/theme/resources/catalog.json)                                         |
+| 内置主题               | TypeScript 注册表默认值与根部 [extensions/theme-defaults](../extensions/theme-defaults/package.json)                                                        | [entries.json](../app-rs/theme/resources/entries.json) 和 Rust 解析器                          |
+| 用户主题校验           | [colorThemeData.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeData.ts)                                                                   | [document.rs](../app-rs/theme/src/document.rs) 与 [catalog.rs](../app-rs/theme/src/catalog.rs) |
+| 用户主题 Schema 与模板 | [colorThemeSchema.ts](../app-ts/src/ash/workbench/services/themes/common/colorThemeSchema.ts)                                                               | [app-rs/theme/resources](../app-rs/theme/resources/color-theme.schema.json)                    |
+| 用户主题目录           | profile root 的 `themes/*.json`                                                                                                                             | profile root 的 `app/themes/*.json`                                                            |
+| 主题选择               | `workbench.colorTheme`，由 Desktop 配置服务保存                                                                                                             | `config.toml` 的 `[gui].theme`，由 GUI 解释                                                    |
+| 组件消费               | CSS 变量与编辑器、终端颜色表                                                                                                                                | `ThemeSnapshot → UiTheme` 与各组件的类型化样式                                                 |
 
 Desktop 的 [IThemeService](../app-ts/src/ash/platform/theme/common/themeService.ts) 只提供当前颜色主题和变化通知。工作台的 [WorkbenchThemeService](../app-ts/src/ash/workbench/services/themes/browser/workbenchThemeService.ts) 负责配置选择、系统配色、主题注册变化、CSS 绑定与文件图标资源的生命周期；同 ID 主题被替换时立即通知现有消费者。用户文件的读写与迁移由该模块内部资源对象负责，独立编辑器自行拥有主题选择状态。
 

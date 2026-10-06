@@ -101,7 +101,7 @@ export interface ISettingsEditorModel extends IDisposable {
 /** Options for opening the current user's JSONC settings resource. */
 export interface IOpenSettingsOptions {
 	readonly target?: ConfigurationTarget;
-	readonly revealSetting?: { readonly key: string; readonly edit?: boolean };
+	readonly revealSetting?: { readonly key: string; readonly edit?: boolean; };
 }
 
 /** Workbench-level entry point for opening Preferences surfaces. */

@@ -8,9 +8,9 @@ import { type IDebugAdapterProcessService } from "../../../../platform/debug/com
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { type DebugBreakpoint, type DebugEvaluateContext, type DebugSessionState, type DebugSteppingGranularity, type IDisassembledInstruction, type IBaseBreakpoint, type IDataBreakpointInfoResponse, type DataBreakpointAccessType, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugExceptionBreakpointFilter, type IDebugScope, type IDebugSession, type IDebugSessionCapabilities, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../common/debugService.js";
 
-interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown }
-interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown }
-interface DapEvent { readonly seq: number; readonly type: "event"; readonly event: string; readonly body?: unknown }
+interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown; }
+interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
+interface DapEvent { readonly seq: number; readonly type: "event"; readonly event: string; readonly body?: unknown; }
 
 const POLL_DELAY_MS = 40;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -22,7 +22,7 @@ export interface DebugAdapterSessionStartOptions {
 	readonly additionalBreakpoints?: () => readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[];
 	readonly workspace: URI;
 	readonly runInTerminal?: (argumentsValue: unknown) => Promise<Readonly<Record<string, unknown>>>;
-	readonly updateBreakpoints?: (updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[]) => void;
+	readonly updateBreakpoints?: (updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[]) => void;
 	readonly exceptionBreakpoints?: () => readonly string[];
 }
 
@@ -31,7 +31,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
 	private readonly outputEmitter = this._register(new Emitter<string>());
 	private retainedOutput = "";
-	private readonly pending = new Map<number, { readonly resolve: (response: DapResponse) => void; readonly reject: (error: Error) => void; readonly timeout: ReturnType<typeof setTimeout> }>();
+	private readonly pending = new Map<number, { readonly resolve: (response: DapResponse) => void; readonly reject: (error: Error) => void; readonly timeout: ReturnType<typeof setTimeout>; }>();
 	private readonly sessionId: string;
 	private requestSequence = 1;
 	private readSequence = 0;
@@ -249,12 +249,14 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		const sources = new Set([...this.syncedBreakpointSources, ...groups.keys()]);
 		for (const path of sources) {
 			const breakpoints = groups.get(path) ?? [];
-			const response = await this.request("setBreakpoints", { source: { path }, breakpoints: breakpoints.map(breakpoint => ({
-				line: breakpoint.lineNumber,
-				...(breakpoint.condition === undefined ? {} : { condition: breakpoint.condition }),
-				...(breakpoint.hitCondition === undefined ? {} : { hitCondition: breakpoint.hitCondition }),
-				...(breakpoint.logMessage === undefined ? {} : { logMessage: breakpoint.logMessage }),
-			})) });
+			const response = await this.request("setBreakpoints", {
+				source: { path }, breakpoints: breakpoints.map(breakpoint => ({
+					line: breakpoint.lineNumber,
+					...(breakpoint.condition === undefined ? {} : { condition: breakpoint.condition }),
+					...(breakpoint.hitCondition === undefined ? {} : { hitCondition: breakpoint.hitCondition }),
+					...(breakpoint.logMessage === undefined ? {} : { logMessage: breakpoint.logMessage }),
+				}))
+			});
 			const current = new Map(this.breakpoints().map(breakpoint => [breakpoint.id, breakpoint]));
 			// Verification changes from another session do not change the request.
 			// Only apply a reply while the user's breakpoint configuration matches.
@@ -520,10 +522,12 @@ function variable(value: unknown, index: number): IDebugVariable {
 		value: string(input.value, `variables[${index}].value`),
 		variablesReference: positiveInteger(input.variablesReference, `variables[${index}].variablesReference`, true),
 		...(typeof input.type === "string" ? { type: input.type } : {}),
-		...(hint ? { presentationHint: {
-			...(hint.attributes === undefined ? {} : { attributes: array(hint.attributes, "presentationHint.attributes").map(attribute => string(attribute, "presentationHint attribute")) }),
-			...(hint.lazy === undefined ? {} : { lazy: boolean(hint.lazy, "presentationHint.lazy") }),
-		} } : {}),
+		...(hint ? {
+			presentationHint: {
+				...(hint.attributes === undefined ? {} : { attributes: array(hint.attributes, "presentationHint.attributes").map(attribute => string(attribute, "presentationHint attribute")) }),
+				...(hint.lazy === undefined ? {} : { lazy: boolean(hint.lazy, "presentationHint.lazy") }),
+			}
+		} : {}),
 	};
 }
 
@@ -550,7 +554,7 @@ function additionalBreakpointArguments(point: Exclude<DebugBreakpoint, IDebugBre
 	return argumentsValue;
 }
 
-function breakpointUpdates(value: unknown, requested: readonly IBaseBreakpoint[]): readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[] {
+function breakpointUpdates(value: unknown, requested: readonly IBaseBreakpoint[]): readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[] {
 	if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray((value as Record<string, unknown>).breakpoints)) return [];
 	const received = (value as Record<string, unknown>).breakpoints as readonly unknown[];
 	return Object.freeze(requested.flatMap((breakpoint, index) => {

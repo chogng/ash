@@ -13,11 +13,11 @@ export function parseJsonc(source: string, owner = 'JSONC source'): unknown {
 export function stripComments(content: string): string {
 	if (typeof content !== 'string') throw new TypeError('JSONC source must be text');
 	const scanner = createScanner(content);
-	const tokens: Array<{ readonly kind: SyntaxKind; readonly offset: number; readonly length: number }> = [];
+	const tokens: Array<{ readonly kind: SyntaxKind; readonly offset: number; readonly length: number; }> = [];
 	while (scanner.scan() !== SyntaxKind.EOF) {
 		tokens.push({ kind: scanner.getToken(), offset: scanner.getTokenOffset(), length: scanner.getTokenLength() });
 	}
-	const removals: Array<{ readonly offset: number; readonly length: number; readonly replacement: string }> = [];
+	const removals: Array<{ readonly offset: number; readonly length: number; readonly replacement: string; }> = [];
 	for (const token of tokens) {
 		if (token.kind !== SyntaxKind.LineCommentTrivia && token.kind !== SyntaxKind.BlockCommentTrivia) continue;
 		const raw = content.slice(token.offset, token.offset + token.length);

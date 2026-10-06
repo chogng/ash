@@ -83,10 +83,12 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 		control.domNode.querySelectorAll<HTMLButtonElement>('.ash-editor-breadcrumbs button')[1]!.click();
 		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
 
-		workspace.updateWorkspace({ id: 'multi', configuration: URI.file('/workspace.ash-workspace'), folders: [
-			{ id: 'ash', uri: URI.file('/Users/lx/Desktop/ash'), name: 'Ash', index: 0 },
-			{ id: 'source', uri: URI.file('/Users/lx/Desktop/ash/源 码/'), name: 'Source', index: 1 },
-		] });
+		workspace.updateWorkspace({
+			id: 'multi', configuration: URI.file('/workspace.ash-workspace'), folders: [
+				{ id: 'ash', uri: URI.file('/Users/lx/Desktop/ash'), name: 'Ash', index: 0 },
+				{ id: 'source', uri: URI.file('/Users/lx/Desktop/ash/源 码/'), name: 'Source', index: 1 },
+			]
+		});
 		assert.deepEqual(labels(), ['Source', 'engine #1.ts']);
 		control.domNode.querySelector<HTMLButtonElement>('.ash-editor-breadcrumbs button')!.click();
 		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
@@ -162,12 +164,12 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 
 test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion point", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
+	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after"; }> = [];
 	const previews: EditorInput[] = [];
 	const keptEditors: EditorInput[] = [];
 	let dragging = false;
 	using services = createTestEditorServices();
-	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
+	const control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 		activate: () => undefined,
 		preview: (input) => previews.push(input),
 		close: () => undefined,
@@ -217,9 +219,9 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 
 test("MultiEditorTabsControl forwards external resource drops to the target tab", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
+	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after"; }> = [];
 	using services = createTestEditorServices();
-	const control = services.createInstance(MultiEditorTabsControl,dom.window.document.body, {
+	const control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 		activate: () => undefined,
 		preview: () => undefined,
 		close: () => undefined,
@@ -540,11 +542,11 @@ function input(name: string): EditorInput {
 	return { resource: URI.parse(`untitled:/${name}`), label: name };
 }
 
-function descriptor(input: EditorInput): { readonly instanceId: string; readonly input: EditorInput; readonly panelId: string; readonly tabId: string } {
+function descriptor(input: EditorInput): { readonly instanceId: string; readonly input: EditorInput; readonly panelId: string; readonly tabId: string; } {
 	return { instanceId: `${input.label}-instance`, input, panelId: `${input.label}-panel`, tabId: `${input.label}-tab` };
 }
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0, timeStamp?: number, dataTransfer?: DataTransfer): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0, timeStamp?: number, dataTransfer?: DataTransfer): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, "clientX", { value: clientX });
 	if (timeStamp !== undefined) Object.defineProperty(event, "timeStamp", { value: timeStamp });

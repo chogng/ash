@@ -282,7 +282,7 @@ function updateHiddenSet<T>(set: Set<T>, value: T, visible: boolean): boolean {
 	return true;
 }
 
-function parseFilterTerms(value: string): { readonly includes: readonly string[]; readonly excludes: readonly string[] } {
+function parseFilterTerms(value: string): { readonly includes: readonly string[]; readonly excludes: readonly string[]; } {
 	const includes: string[] = [];
 	const excludes: string[] = [];
 	for (const match of value.matchAll(/(?:"([^"]+)"|(\S+))/g)) {

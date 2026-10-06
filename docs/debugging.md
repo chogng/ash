@@ -6,18 +6,18 @@
 
 Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并同时运行多个 DAP 会话。用户可以设置持久化行断点、选择线程和栈帧、递归展开和修改变量、维护 Watch、在调试控制台求值、启用异常断点、读取适配器提供的虚拟源码，以及启动 compound 配置。调试前后的 Tasks 由 Workbench 编排；后端只负责受信任的适配器进程和 DAP framing。
 
-| 使用场景 | 当前结果 | 关键边界 |
-| --- | --- | --- |
-| 启动或附加 | ✅ `launch`、`attach`、重启、停止和 `runInTerminal` | Workbench 解释配置；后端启动适配器 |
-| 断点 | 行断点、函数断点、变量数据断点、指令地址断点、条件和命中次数、日志消息、单独或批量启用/禁用、适配器确认状态、异常断点 | 条件和日志能力取决于适配器；不支持时显示未验证原因，不下发普通断点 |
-| 停住后检查 | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号时定位源码，正在查看反汇编时保留反汇编编辑器；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改 |
-| 反汇编 | 中央编辑器展示地址、机器码、指令与符号；地址跳转、分页、当前指令、F9 指令断点、源代码导航与指令单步 | 需要适配器声明反汇编能力；指令单步另需粒度能力；恢复执行后清空旧指令 |
-| Watch 与控制台 | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate` | Watch 持久；每窗口控制台历史有界且不进通用 Output |
-| 多目标调试 | ✅ 多会话、会话切换、compound 和 `stopAll` | 后端会话仍按连接隔离 |
-| SSH Remote 调试 | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现 |
-| 调试任务 | ✅ `preLaunchTask`、`postDebugTask` | Tasks 负责执行和退出状态 |
-| 适配器发现 | ✅ 声明式 `contributes.debuggers`，仍可显式写 `debugAdapter` | 不执行扩展 JavaScript |
-| 完整 VS Code Debug 扩展 API | 非目标 | Ash Host RPC v1 不是 VS Code/Node Extension API；兼容层需独立立项 |
+| 使用场景                    | 当前结果                                                                                                                                                                                | 关键边界                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 启动或附加                  | ✅ `launch`、`attach`、重启、停止和 `runInTerminal`                                                                                                                                     | Workbench 解释配置；后端启动适配器                                   |
+| 断点                        | 行断点、函数断点、变量数据断点、指令地址断点、条件和命中次数、日志消息、单独或批量启用/禁用、适配器确认状态、异常断点                                                                   | 条件和日志能力取决于适配器；不支持时显示未验证原因，不下发普通断点   |
+| 停住后检查                  | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号时定位源码，正在查看反汇编时保留反汇编编辑器；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改           |
+| 反汇编                      | 中央编辑器展示地址、机器码、指令与符号；地址跳转、分页、当前指令、F9 指令断点、源代码导航与指令单步                                                                                     | 需要适配器声明反汇编能力；指令单步另需粒度能力；恢复执行后清空旧指令 |
+| Watch 与控制台              | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate`                                                                                                        | Watch 持久；每窗口控制台历史有界且不进通用 Output                    |
+| 多目标调试                  | ✅ 多会话、会话切换、compound 和 `stopAll`                                                                                                                                              | 后端会话仍按连接隔离                                                 |
+| SSH Remote 调试             | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal                                                                       | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现              |
+| 调试任务                    | ✅ `preLaunchTask`、`postDebugTask`                                                                                                                                                     | Tasks 负责执行和退出状态                                             |
+| 适配器发现                  | ✅ 声明式 `contributes.debuggers`，仍可显式写 `debugAdapter`                                                                                                                            | 不执行扩展 JavaScript                                                |
+| 完整 VS Code Debug 扩展 API | 非目标                                                                                                                                                                                  | Ash Host RPC v1 不是 VS Code/Node Extension API；兼容层需独立立项    |
 
 ## 一次调试如何执行
 
@@ -45,14 +45,14 @@ flowchart LR
 
 ## 所有权边界
 
-| 能力 | Editor | Workbench Debug | Platform / App Server | `ash-debug-adapter` |
-| --- | --- | --- | --- | --- |
-| 通用 gutter 槽位 | ✅ 拥有 | 投影断点 | ❌ | ❌ |
-| 断点、Watch、会话和 DAP 客户端语义 | ❌ | ✅ 拥有 | 传输 | ❌ |
-| launch、compound 与 Tasks 编排 | ❌ | ✅ 拥有 | ❌ | ❌ |
-| `runInTerminal` 产品组合 | ❌ | ✅ 委托 Terminal | 终端传输 | ❌ |
-| Environment 与目录 Grant | ❌ | 请求 | ✅ 拥有 | 消费能力 |
-| 进程、framing、缓冲与回收 | ❌ | 消费 | 连接包装 | ✅ 拥有 |
+| 能力                               | Editor  | Workbench Debug  | Platform / App Server | `ash-debug-adapter` |
+| ---------------------------------- | ------- | ---------------- | --------------------- | ------------------- |
+| 通用 gutter 槽位                   | ✅ 拥有 | 投影断点         | ❌                    | ❌                  |
+| 断点、Watch、会话和 DAP 客户端语义 | ❌      | ✅ 拥有          | 传输                  | ❌                  |
+| launch、compound 与 Tasks 编排     | ❌      | ✅ 拥有          | ❌                    | ❌                  |
+| `runInTerminal` 产品组合           | ❌      | ✅ 委托 Terminal | 终端传输              | ❌                  |
+| Environment 与目录 Grant           | ❌      | 请求             | ✅ 拥有               | 消费能力            |
+| 进程、framing、缓冲与回收          | ❌      | 消费             | 连接包装              | ✅ 拥有             |
 
 Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。后端 runtime 不得解析 launch 配置、持久化断点、决定当前线程或拥有 Workbench 会话选择。声明式扩展服务只贡献经过验证的适配器命令元数据；Ash executable Host v1 是另一条逐扩展进程、Plugin + Environment/Grant 与 brokered provider 边界，当前产品接入状态见 [`editor-extensions.md`](editor-extensions.md)。
 

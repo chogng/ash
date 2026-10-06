@@ -25,19 +25,19 @@ subscription broker、resource store 与 local composition 见
 App Server API 是 Desktop、CLI、TUI 和外部客户端访问 Ash 产品能力的唯一版本化接口；它暴露
 Session、Thread、Turn 和更新流，不建立第二套领域模型。
 
-| 客户端需求 | 使用方式 | 关键保证 |
-| --- | --- | --- |
-| 创建一次工作 | `session/create` 创建根 Thread 并返回按 `session_id` 聚合的 Session 视图，随后在该 Thread 上启动 Turn | 持久化身份与顺序始终属于 Thread |
-| 组织长期多根工作 | 受信产品 host 使用 `project/*` 保存根目录表并弱关联 Session | Project 不授予目录权限，也不改变 Thread 身份 |
-| 管理长期 Memory | 受信产品 host 使用 `memory/*` 在 Profile、Project 或 Dir 作用域显式读写 | 后端持久化正文；普通连接不可读取，删除后 live store 与命令回执不保留正文 |
-| 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
-| 持续显示执行进度 | 读取 Thread 正文快照并订阅语义条目更新 | 后端整理条目内容和顺序；客户端决定排版，发现缺口时重新读取快照 |
-| 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
-| 同步 Marketplace 安装状态 | 同一 profile daemon 写入，收到 generation 失效提示后重新 list | Desktop、Ash Code 与 app 不建立第二份安装 authority |
-| 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
-| 让 Agent 操作 Desktop 浏览器 | Desktop 初始化时声明 browser host | Rust 保留批准和目标 owner，Electron Main 只执行语义动作 |
-| 连接本地 App Server | 先初始化并校验能力和模式哈希 | 初始化前不能调用产品方法 |
-| 协议发生不兼容变化 | 同步修改 Rust 类型、生成物和调用方 | 开发期不保留隐藏的旧 DTO 入口 |
+| 客户端需求                   | 使用方式                                                                                              | 关键保证                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 创建一次工作                 | `session/create` 创建根 Thread 并返回按 `session_id` 聚合的 Session 视图，随后在该 Thread 上启动 Turn | 持久化身份与顺序始终属于 Thread                                                                 |
+| 组织长期多根工作             | 受信产品 host 使用 `project/*` 保存根目录表并弱关联 Session                                           | Project 不授予目录权限，也不改变 Thread 身份                                                    |
+| 管理长期 Memory              | 受信产品 host 使用 `memory/*` 在 Profile、Project 或 Dir 作用域显式读写                               | 后端持久化正文；普通连接不可读取，删除后 live store 与命令回执不保留正文                        |
+| 关闭一个 Session Tab         | 前端通过 `session/request` 提交 `request.type = stop`                                                 | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
+| 持续显示执行进度             | 读取 Thread 正文快照并订阅语义条目更新                                                                | 后端整理条目内容和顺序；客户端决定排版，发现缺口时重新读取快照                                  |
+| 修改配置或资源               | 调用类型化方法并携带命令身份                                                                          | 重复命令可重放结果，冲突载荷会被拒绝                                                            |
+| 同步 Marketplace 安装状态    | 同一 profile daemon 写入，收到 generation 失效提示后重新 list                                         | Desktop、Ash Code 与 app 不建立第二份安装 authority                                             |
+| 响应批准或用户输入           | 回复等待中的类型化请求                                                                                | 回复绑定精确请求和当前 Thread                                                                   |
+| 让 Agent 操作 Desktop 浏览器 | Desktop 初始化时声明 browser host                                                                     | Rust 保留批准和目标 owner，Electron Main 只执行语义动作                                         |
+| 连接本地 App Server          | 先初始化并校验能力和模式哈希                                                                          | 初始化前不能调用产品方法                                                                        |
+| 协议发生不兼容变化           | 同步修改 Rust 类型、生成物和调用方                                                                    | 开发期不保留隐藏的旧 DTO 入口                                                                   |
 
 ### 上下文用量
 
@@ -72,12 +72,12 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 这条规则适用于所有 `Session`、`Thread`、`Turn`、`ThreadItem` 产品能力：App Server 同时是
 客户端请求进入 Core 的唯一入口，也是 Core 更新离开系统的唯一出口。
 
-| 参与者 | 允许路径 | 禁止路径 |
-| --- | --- | --- |
-| Desktop、CLI、TUI 和其他客户端 | 版本化 App Server 协议 → 分发器 | 直接链接 Core、Store、Provider 或读取私有运行时接口 |
-| 进程内宿主 | 类型化客户端 → 同一个 App Server 分发器 | 为性能增加隐藏的进程内业务方法 |
-| App Server | 校验、路由、订阅、DTO 编解码和事件投影 → Core | 复制领域归约器（reducer）、直接写 Store 或消费 Provider 内部流 |
-| Core | 持有 Thread/Turn/Item 的权威状态，按 `session_id` 得出 Session 树视图，并调用内部端口 | 依赖 App Server wire、客户端状态或 UI 生命周期 |
+| 参与者                         | 允许路径                                                                              | 禁止路径                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Desktop、CLI、TUI 和其他客户端 | 版本化 App Server 协议 → 分发器                                                       | 直接链接 Core、Store、Provider 或读取私有运行时接口            |
+| 进程内宿主                     | 类型化客户端 → 同一个 App Server 分发器                                               | 为性能增加隐藏的进程内业务方法                                 |
+| App Server                     | 校验、路由、订阅、DTO 编解码和事件投影 → Core                                         | 复制领域归约器（reducer）、直接写 Store 或消费 Provider 内部流 |
+| Core                           | 持有 Thread/Turn/Item 的权威状态，按 `session_id` 得出 Session 树视图，并调用内部端口 | 依赖 App Server wire、客户端状态或 UI 生命周期                 |
 
 ```mermaid
 flowchart LR
@@ -223,13 +223,13 @@ Browser 是当前 Server → Client request capability。只有在 `initialize` 
 capability 的连接才能成为宿主；`observe` 与 `input` 分别声明页面观察和语义输入支持。该声明是
 短暂的 connection routing authority，不进入 Session、Thread 或持久化配置。
 
-| Host method | Params | Result | 当前语义 |
-| --- | --- | --- | --- |
-| `browser/create` | `{ url }` | `{ targetId }` | 创建一个隔离、默认隐藏的新目标 |
-| `browser/observe` | exact target + 三个 include flag | 页面状态 + 可选 AX/DOM/PNG | 不执行脚本，不返回 Electron 对象 |
-| `browser/perform` | tagged semantic action | `{ targetId }` | 导航、node click/type、滚动、后退或刷新 |
-| `browser/close` | `{ targetId }` | `null` | 关闭精确目标 |
-| `browser/sharing/set` | `{ targetId, threadIds }` | `null` | 更新用户页面的授权受众，空数组撤销 |
+| Host method           | Params                           | Result                     | 当前语义                                |
+| --------------------- | -------------------------------- | -------------------------- | --------------------------------------- |
+| `browser/create`      | `{ url }`                        | `{ targetId }`             | 创建一个隔离、默认隐藏的新目标          |
+| `browser/observe`     | exact target + 三个 include flag | 页面状态 + 可选 AX/DOM/PNG | 不执行脚本，不返回 Electron 对象        |
+| `browser/perform`     | tagged semantic action           | `{ targetId }`             | 导航、node click/type、滚动、后退或刷新 |
+| `browser/close`       | `{ targetId }`                   | `null`                     | 关闭精确目标                            |
+| `browser/sharing/set` | `{ targetId, threadIds }`        | `null`                     | 更新用户页面的授权受众，空数组撤销      |
 
 `browser/sharing/set` 是桌面用户的 Client → Server 请求，也是 Rust → Main 的同名宿主请求。调用连接必须具有桌面授权宿主与浏览器能力，Web 连接被拒绝。Main 确认目标为本窗口用户页面后，Rust 将页面绑定到同一连接的指定 Thread（最多 32 个）；Agent 页面不能由该方法扩大受众。撤销取消在途操作并解绑 CDP；关闭页面或连接释放记录。该授权不持久化，也不替代任务动作批准。
 
@@ -278,126 +278,126 @@ Desktop 当前实现和 Playwright 后续边界见
 
 ## 5. 方法清单
 
-| Method | Aggregate | Effect |
-| --- | --- | --- |
-| `agent/read` | Agent identity | 按 agentId 读取身份与全部执行分支，不加载历史 |
-| `agent/roles/list` | authorized environment Agent catalog | 刷新并列出可作为根 Agent 启动的目录定义；不返回定义正文 |
-| `agent/capabilities/read` | 当前 Tool generation 与本地执行配置 | 只读工具目录、来源、模型暴露方式、可申请的权限类别，以及已配置的进程沙箱候选后端 |
-| `session/create` | new root Thread | 创建根 Thread，返回由其 `session_id` 得出的 Session 视图 |
-| `session/read` | session tree view | 按 `session_id` 读取当前树视图 |
-| `session/list` | global | 列出按 `session_id` 聚合的 Session 视图 |
-| `session/subscribe` | connection + session tree | Session 视图 + 每个 child Thread 的 snapshot 和 durable gap；Session 没有 `afterSequence` |
-| `session/request` | `session_id` grouping boundary | tagged request；树级动作枚举 Thread，Thread/Turn 写入绑定具体 Thread |
-| `session/unsubscribe` | connection | 删除订阅 |
-| `model/preferences/update` | model preferences | 更新当前接入的 Fast 或上下文档位；带配置版本校验，后端验证模型能力及可选档位 |
-| `model/list` | model catalog | 参数 `{}`；各端使用固定内置目录，登录和接入切换不改变模型身份集合；目录不证明请求成功 |
-| `session/thread/read` | Session + Thread | 读取 Thread 及其正文快照 |
-| `session/thread/subscribe` | Session + Thread + connection | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap |
-| `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
-| `config/read` | config | 读取配置 |
-| `approval/environment/read` | Guardian Environment + State | 按实际 Thread 或已授权目录读取，刷新已选来源，返回实际根目录、用户描述 `entries` 和未确认当前观察 `observations`；实际变化递增资料 revision |
-| `approval/environment/scan` | Guardian Environment | 按范围生成待确认草稿；`operationId` 绑定取消；可使用当前任务模型整理，模型没有工具 |
-| `approval/environment/save` | Guardian Environment + State | 带 `commandId`、`expectedRevision` 和可选 `draftId` 保存用户选中的条目；版本冲突不覆盖 |
-| `approval/environment/cancel` | 当前 connection | 取消所属 `operationId` 的扫描；断开 connection 同样取消 |
-| `network/read` | configured network dependencies | 返回配置 revision、HTTP 兼容模式，以及服务域名、用途、端口和实际代理路线；不发送网络请求 |
-| `network/http/configure` | User Config + shared HTTP transport | 带 revision 保存 HTTP 兼容模式，后续请求使用所选协议 |
-| `network/diagnostics/run` | configured network dependencies + Account | 使用共享 HTTP 客户端检查连通性，并单独查询已就绪账号额度；只返回安全的状态与错误分类 |
-| `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
-| `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
-| `connector/connect/oauth/start` / `complete` / `cancel` | Connector OAuth owner | 启动 exact PKCE flow，一次性消费 callback state/code，或显式结束 abandoned flow |
-| `connector/disconnect` | Connector authority + secret store | 先撤销 runtime readiness，再报告 credential cleanup 状态 |
-| `connector/credential/cleanup` | Connector credential owner | 重试 durable post-disconnect secret 删除义务 |
-| `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
-| `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
-| `marketplace/search` / `get` / `install` / `update` / `uninstall` | Marketplace Manager | 通用 package discovery 与唯一安装状态；不自动授权或激活 capability |
-| `marketplace/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Marketplace Manager | 返回当前 profile generation 与唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer |
-| `config/update` | config | typed command 更新配置 |
-| `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
-| `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
-| `session/dirs/list` / `add` / `remove` / `permissions/set` | Session directory access | 管理当前 Session 的目录与完整能力集合；权限替换使用目录访问 revision，不改变 `cwd` |
-| `project/list` / `read` | Project | 读取长期多根目录表以及 Session 弱关联 |
-| `project/create` / `project/details/update` / `project/archive` / `project/restore` | Project | 使用 Project revision 和命令回执修改元数据与生命周期 |
-| `project/root/add` / `project/root/update` / `project/root/remove` | Project + Session directory access | `add` 只接受 Session 已有的精确 `DirId`，Environment 和路径由 host 重建；操作不创建 Grant |
-| `project/session/link` / `project/session/unlink` | Project | 只建立或删除组织关系；目标 Session 必须真实存在 |
-| `memory/add` / `memory/update` / `memory/delete` | Memory | 产品 host 使用 commandId、精确作用域和 record revision 显式修改；删除后的 live row、命令回执和 tombstone 不保留正文 |
-| `memory/scopes` | Memory + 当前任务 | 返回 Profile、当前关联 Project 和已授权 Dir 的标签与 policy |
-| `memory/list` / `memory/read` / `memory/search` / `memory/citation/read` | Memory | 有界摘要、正文、命中摘录与版本引用；cursor 绑定 catalog revision、作用域和查询 |
-| `memory/policy/read` / `memory/policy/update` | Memory | 按作用域分别管理自动读取与模型保存授权；默认关闭，使用独立 policy revision |
-| `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
-| `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
-| `provider/configure` / `provider/remove` | config | 按 connection ID 保存或移除配置；后续请求按已就绪凭据重新选择连接。 |
-| `provider/apiKey/set` / `provider/list` | model connection | 按 connection ID 保存独立凭据；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。`active` 表示当前自动选中的连接。 |
-| `provider/probe` | model provider | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
-| `provider/models/list` | model observations | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。订阅账户的后台观察在模型变化时另发 `provider/models/updated`。 |
-| `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
-| `mcp/server/connect` / `mcp/server/disconnect` | runtime | 设置 process-local lifecycle intent，不改变 Config revision |
-| `mcp/server/status` | read | 读取 active Config/Plugin/Connector MCP runtime 的 redacted lifecycle 与 generation projection |
-| `mcp/oauth/start` / `mcp/oauth/complete` | MCP OAuth owner | 为 exact standalone Config server 启动和一次性完成 PKCE flow |
-| `mcp/oauth/refresh` / `mcp/oauth/revoke` | MCP OAuth owner + secret store | 轮换 runtime/lifecycle credential；或先断开 runtime、远端 revoke 后删除本地 secret |
-| `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set` | config | 修改 User Skill source |
-| `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set` | config | 修改 exact Plugin request；不安装或激活 |
-| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config + `ash-hooks` runtime | 修改 declarative Hook；App Server 取得目录执行 Authorization 后组合 runtime，后续 safe point 按 immutable snapshot 执行匹配的 sandbox process |
-| `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
-| `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
-| `skill/resource/open` | Skill runtime + Resource | 将 digest-pinned package resource materialize 为 connection-owned resource |
-| `resource/metadata` | Resource | 读取元数据 |
-| `resource/read` | Resource | 分块读取 |
-| `resource/release` | Resource | 释放 connection-owned resource |
-| `fs/getMetadata` | directory | 读取根相对路径的 metadata |
-| `fs/readDirectory` | directory | 枚举根相对目录的直接子项 |
-| `fs/readFile` | directory | 读取不超过 10 MiB 的 UTF-8 文件 |
-| `fs/writeFile` | directory | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
-| `syntax/analyze` | stateless syntax | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts |
-| `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
-| `git/init` | authorized dir | 以 `dirId` 选择已授权工作区文件夹并创建仓库；返回重新发现的仓库清单 |
-| `git/catalog` | repository | 返回标签、储藏提交 ID、远端名称和进行中的整合状态；不返回远端 URL |
-| `git/command` | repository | 封闭 intent：分支改名、远端分支删除、merge/rebase/cherry-pick、继续/中止、stash、tag、remote、amend/undo；返回实际状态、完成或冲突结果和当前整合状态 |
-| `git/indexDiff` | repository/path/comparison | 返回当前 index 对比文本和可选的更改块 |
-| `git/indexEdit` | repository/path/comparison | 比较两侧预期文本，按选中的块或行更新 index；过期时返回 `GitIndexChanged`，不重试旧选择 |
-| `git/repositories` | authorized dirs | 列出从已授权 `Dir` 中发现的稳定 repository identity |
-| `git/checkIgnore` | repository | 携带连接内唯一的 `operationId`，批量查询 1–5000 个仓库相对路径，返回被忽略的路径；遵循嵌套规则、排除规则与 tracked 状态，不递归列出忽略目录，也不进入待提交列表 |
-| `git/checkIgnore/cancel` | connection/operation | 按 `operationId` 取消同一连接的忽略查询，包括排队和执行中的查询；返回 `requested`、`alreadyRequested` 或 `completed`，原查询仍返回终态响应 |
-| `git/status` | repository | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot |
-| `git/textDiff` | repository | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
-| `git/graph` | repository | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
-| `git/commitDetails` | repository | 按完整 commit ID 读取作者、时间、完整提交说明及第一父提交的变更统计，供悬停卡片按需使用 |
-| `git/branch/list` | repository | 列出现有本地分支及 current/upstream 信息 |
-| `git/branch/switch` | repository | 切换到 host 重新解析确认存在的本地分支 |
-| `git/branch/create` | repository | 基于 HEAD 新建本地分支，不切换目录 |
-| `git/branch/delete` | repository | 只删除已合并且未被检出的本地分支 |
-| `git/worktree/create` | repository | 在 HEAD 建立独立的 detached 工作树，不创建 Session |
-| `git/worktree/delete` | repository | 按明确的 `mode` 删除干净的独立工作树，或删除受管工作树所属 Session 及其工作目录 |
-| `git/worktree/list` | repository | 列出同仓库工作树、对应目录及可打开状态 |
-| `git/worktree/resolve` | repository | 按 checkout root 重新确认工作树可打开，返回对应目录 |
-| `git/stage` | repository | stage 一组 repository-relative path |
-| `git/unstage` | repository | 从 index 移除一组 repository-relative path 的 staged change |
-| `git/discardWorktree` | repository | 恢复 tracked working-tree change，不删除 untracked 文件 |
-| `git/commit` | repository | 使用有界非空 message 创建 commit |
-| `git/fetch` | repository、可选 `mode: "default" | "all"` | non-interactive fetch 并 prune；省略 mode 时获取全部 remotes |
-| `git/pull` | repository | non-interactive fast-forward-only pull |
-| `git/push` | repository | 按当前 Git upstream/default 配置 push |
-| `grep/search/start` | connection + directory | 启动有界内容搜索 |
-| `grep/search/read` | connection + search job | 按游标读取最多 200 条结果 |
-| `grep/search/cancel` | connection + search job | 取消并释放搜索 |
-| `codebase/status` | directory | 读取本地 index lifecycle 与 generation counters |
-| `codebase/search` | directory | 返回有界、revision-bound 的本地 lexical chunks |
-| `codebase/symbols/status` / `search` | directory | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
-| `codeIntelligence/document/synchronize` / `close` | directory + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
-| `codebase/retrieve` | directory | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
-| `codebase/rebuild` | directory | 同步执行一次 full reconcile |
-| `grep/index/status` / `rebuild` | directory | 查询公共 grep 索引状态或同步重建；ready 表示索引覆盖完整，不保证最新编辑已被监听处理 |
-| `grep/index/disableAndDelete` | directory + config revision | 显式切回 ripgrep，停止索引服务并删除公共 grep 索引 |
-| `codebase/cloud/status` | directory | 读取 selected deployment、grant 与 local/remote generation state |
-| `codebase/cloud/preview` | directory | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
-| `codebase/cloud/authorize` | directory | 持久化 root-bound destination/scope/byte grant |
-| `codebase/cloud/sync` | directory | 按 grant 复核 source revision 后调用 provider publication |
-| `codebase/cloud/revoke` | directory | 先持久化 Revoking，再请求 provider 幂等删除 |
-| `terminal/profile/list` | directory | 列出 App Server 冻结的可信 Shell Profile |
-| `terminal/create` | connection + directory | 取得 `ExecuteCommands` Authorization 后在选定 `Dir` 内启动 PTY |
-| `terminal/write` | connection + Terminal | 写入有界 UTF-8 输入 batch |
-| `terminal/resize` | connection + Terminal | 修改 PTY rows/cols |
-| `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
-| `terminal/close` | connection + Terminal | 终止并释放 PTY |
+| Method                                                                                   | Aggregate                                 | Effect                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent/read`                                                                             | Agent identity                            | 按 agentId 读取身份与全部执行分支，不加载历史                                                                                                                                                                               |
+| `agent/roles/list`                                                                       | authorized environment Agent catalog      | 刷新并列出可作为根 Agent 启动的目录定义；不返回定义正文                                                                                                                                                                     |
+| `agent/capabilities/read`                                                                | 当前 Tool generation 与本地执行配置       | 只读工具目录、来源、模型暴露方式、可申请的权限类别，以及已配置的进程沙箱候选后端                                                                                                                                            |
+| `session/create`                                                                         | new root Thread                           | 创建根 Thread，返回由其 `session_id` 得出的 Session 视图                                                                                                                                                                    |
+| `session/read`                                                                           | session tree view                         | 按 `session_id` 读取当前树视图                                                                                                                                                                                              |
+| `session/list`                                                                           | global                                    | 列出按 `session_id` 聚合的 Session 视图                                                                                                                                                                                     |
+| `session/subscribe`                                                                      | connection + session tree                 | Session 视图 + 每个 child Thread 的 snapshot 和 durable gap；Session 没有 `afterSequence`                                                                                                                                   |
+| `session/request`                                                                        | `session_id` grouping boundary            | tagged request；树级动作枚举 Thread，Thread/Turn 写入绑定具体 Thread                                                                                                                                                        |
+| `session/unsubscribe`                                                                    | connection                                | 删除订阅                                                                                                                                                                                                                    |
+| `model/preferences/update`                                                               | model preferences                         | 更新当前接入的 Fast 或上下文档位；带配置版本校验，后端验证模型能力及可选档位                                                                                                                                                |
+| `model/list`                                                                             | model catalog                             | 参数 `{}`；各端使用固定内置目录，登录和接入切换不改变模型身份集合；目录不证明请求成功                                                                                                                                       |
+| `session/thread/read`                                                                    | Session + Thread                          | 读取 Thread 及其正文快照                                                                                                                                                                                                    |
+| `session/thread/subscribe`                                                               | Session + Thread + connection             | Thread 与正文快照，加上 `afterSequence` 之后的 durable gap                                                                                                                                                                  |
+| `session/thread/unsubscribe`                                                             | Session + Thread + connection             | 删除 child Thread 订阅                                                                                                                                                                                                      |
+| `config/read`                                                                            | config                                    | 读取配置                                                                                                                                                                                                                    |
+| `approval/environment/read`                                                              | Guardian Environment + State              | 按实际 Thread 或已授权目录读取，刷新已选来源，返回实际根目录、用户描述 `entries` 和未确认当前观察 `observations`；实际变化递增资料 revision                                                                                 |
+| `approval/environment/scan`                                                              | Guardian Environment                      | 按范围生成待确认草稿；`operationId` 绑定取消；可使用当前任务模型整理，模型没有工具                                                                                                                                          |
+| `approval/environment/save`                                                              | Guardian Environment + State              | 带 `commandId`、`expectedRevision` 和可选 `draftId` 保存用户选中的条目；版本冲突不覆盖                                                                                                                                      |
+| `approval/environment/cancel`                                                            | 当前 connection                           | 取消所属 `operationId` 的扫描；断开 connection 同样取消                                                                                                                                                                     |
+| `network/read`                                                                           | configured network dependencies           | 返回配置 revision、HTTP 兼容模式，以及服务域名、用途、端口和实际代理路线；不发送网络请求                                                                                                                                    |
+| `network/http/configure`                                                                 | User Config + shared HTTP transport       | 带 revision 保存 HTTP 兼容模式，后续请求使用所选协议                                                                                                                                                                        |
+| `network/diagnostics/run`                                                                | configured network dependencies + Account | 使用共享 HTTP 客户端检查连通性，并单独查询已就绪账号额度；只返回安全的状态与错误分类                                                                                                                                        |
+| `connector/list`                                                                         | Connector authority                       | 读取不含 secret/reference 的外部账号连接投影                                                                                                                                                                                |
+| `connector/connect/apiToken`                                                             | Connector authority + secret store        | retry-safe 保存 API token 并发布 connected account                                                                                                                                                                          |
+| `connector/connect/oauth/start` / `complete` / `cancel`                                  | Connector OAuth owner                     | 启动 exact PKCE flow，一次性消费 callback state/code，或显式结束 abandoned flow                                                                                                                                             |
+| `connector/disconnect`                                                                   | Connector authority + secret store        | 先撤销 runtime readiness，再报告 credential cleanup 状态                                                                                                                                                                    |
+| `connector/credential/cleanup`                                                           | Connector credential owner                | 重试 durable post-disconnect secret 删除义务                                                                                                                                                                                |
+| `plugin/list`                                                                            | Plugin authority                          | 分别投影 installed/enabled/granted/effective package 状态                                                                                                                                                                   |
+| `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall`                      | Plugin authority                          | exact-package CAS lifecycle mutation                                                                                                                                                                                        |
+| `marketplace/search` / `get` / `install` / `update` / `uninstall`                        | Marketplace Manager                       | 通用 package discovery 与唯一安装状态；不自动授权或激活 capability                                                                                                                                                          |
+| `marketplace/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Marketplace Manager                       | 返回当前 profile generation 与唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer                                                                      |
+| `config/update`                                                                          | config                                    | typed command 更新配置                                                                                                                                                                                                      |
+| `execPolicy/rule/upsert` / `execPolicy/rule/remove`                                      | config + local policy runtime             | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot                                                                                                                                         |
+| `toolSearch/configure`                                                                   | config + semantic model runtime           | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search                                                                                                                                                             |
+| `session/dirs/list` / `add` / `remove` / `permissions/set`                               | Session directory access                  | 管理当前 Session 的目录与完整能力集合；权限替换使用目录访问 revision，不改变 `cwd`                                                                                                                                          |
+| `project/list` / `read`                                                                  | Project                                   | 读取长期多根目录表以及 Session 弱关联                                                                                                                                                                                       |
+| `project/create` / `project/details/update` / `project/archive` / `project/restore`      | Project                                   | 使用 Project revision 和命令回执修改元数据与生命周期                                                                                                                                                                        |
+| `project/root/add` / `project/root/update` / `project/root/remove`                       | Project + Session directory access        | `add` 只接受 Session 已有的精确 `DirId`，Environment 和路径由 host 重建；操作不创建 Grant                                                                                                                                   |
+| `project/session/link` / `project/session/unlink`                                        | Project                                   | 只建立或删除组织关系；目标 Session 必须真实存在                                                                                                                                                                             |
+| `memory/add` / `memory/update` / `memory/delete`                                         | Memory                                    | 产品 host 使用 commandId、精确作用域和 record revision 显式修改；删除后的 live row、命令回执和 tombstone 不保留正文                                                                                                         |
+| `memory/scopes`                                                                          | Memory + 当前任务                         | 返回 Profile、当前关联 Project 和已授权 Dir 的标签与 policy                                                                                                                                                                 |
+| `memory/list` / `memory/read` / `memory/search` / `memory/citation/read`                 | Memory                                    | 有界摘要、正文、命中摘录与版本引用；cursor 绑定 catalog revision、作用域和查询                                                                                                                                              |
+| `memory/policy/read` / `memory/policy/update`                                            | Memory                                    | 按作用域分别管理自动读取与模型保存授权；默认关闭，使用独立 policy revision                                                                                                                                                  |
+| `codebase/configure`                                                                     | config + Directory                        | 配置可选设备内模型与自动上下文行为；不保存索引数据                                                                                                                                                                          |
+| `languageServer/configure` / `languageServer/remove`                                     | config                                    | revision-safe 修改或恢复 language-server mode/path preference                                                                                                                                                               |
+| `provider/configure` / `provider/remove`                                                 | config                                    | 按 connection ID 保存或移除配置；后续请求按已就绪凭据重新选择连接。                                                                                                                                                         |
+| `provider/apiKey/set` / `provider/list`                                                  | model connection                          | 按 connection ID 保存独立凭据；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。`active` 表示当前自动选中的连接。                                                                                       |
+| `provider/probe`                                                                         | model provider                            | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
+| `provider/models/list`                                                                   | model observations                        | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。订阅账户的后台观察在模型变化时另发 `provider/models/updated`。                                      |
+| `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set`                  | config                                    | 修改 standalone MCP desired config                                                                                                                                                                                          |
+| `mcp/server/connect` / `mcp/server/disconnect`                                           | runtime                                   | 设置 process-local lifecycle intent，不改变 Config revision                                                                                                                                                                 |
+| `mcp/server/status`                                                                      | read                                      | 读取 active Config/Plugin/Connector MCP runtime 的 redacted lifecycle 与 generation projection                                                                                                                              |
+| `mcp/oauth/start` / `mcp/oauth/complete`                                                 | MCP OAuth owner                           | 为 exact standalone Config server 启动和一次性完成 PKCE flow                                                                                                                                                                |
+| `mcp/oauth/refresh` / `mcp/oauth/revoke`                                                 | MCP OAuth owner + secret store            | 轮换 runtime/lifecycle credential；或先断开 runtime、远端 revoke 后删除本地 secret                                                                                                                                          |
+| `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set`               | config                                    | 修改 User Skill source                                                                                                                                                                                                      |
+| `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set`      | config                                    | 修改 exact Plugin request；不安装或激活                                                                                                                                                                                     |
+| `hook/upsert` / `hook/remove` / `hook/enablement/set`                                    | config + `ash-hooks` runtime              | 修改 declarative Hook；App Server 取得目录执行 Authorization 后组合 runtime，后续 safe point 按 immutable snapshot 执行匹配的 sandbox process                                                                               |
+| `skills/list`                                                                            | global Skill catalog                      | 读取 cached projection 或请求完整 refresh                                                                                                                                                                                   |
+| `skill/enablement/set`                                                                   | config + Skill catalog                    | revision-checked 启用/禁用 exact `SkillId`                                                                                                                                                                                  |
+| `skill/resource/open`                                                                    | Skill runtime + Resource                  | 将 digest-pinned package resource materialize 为 connection-owned resource                                                                                                                                                  |
+| `resource/metadata`                                                                      | Resource                                  | 读取元数据                                                                                                                                                                                                                  |
+| `resource/read`                                                                          | Resource                                  | 分块读取                                                                                                                                                                                                                    |
+| `resource/release`                                                                       | Resource                                  | 释放 connection-owned resource                                                                                                                                                                                              |
+| `fs/getMetadata`                                                                         | directory                                 | 读取根相对路径的 metadata                                                                                                                                                                                                   |
+| `fs/readDirectory`                                                                       | directory                                 | 枚举根相对目录的直接子项                                                                                                                                                                                                    |
+| `fs/readFile`                                                                            | directory                                 | 读取不超过 10 MiB 的 UTF-8 文件                                                                                                                                                                                             |
+| `fs/writeFile`                                                                           | directory                                 | 原子替换或新建不超过 10 MiB 的 UTF-8 文件                                                                                                                                                                                   |
+| `syntax/analyze`                                                                         | stateless syntax                          | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts                                                                                                                                                             |
+| `syntax/selectionRanges`                                                                 | stateless syntax                          | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes                                                                                                                                                              |
+| `git/init`                                                                               | authorized dir                            | 以 `dirId` 选择已授权工作区文件夹并创建仓库；返回重新发现的仓库清单                                                                                                                                                         |
+| `git/catalog`                                                                            | repository                                | 返回标签、储藏提交 ID、远端名称和进行中的整合状态；不返回远端 URL                                                                                                                                                           |
+| `git/command`                                                                            | repository                                | 封闭 intent：分支改名、远端分支删除、merge/rebase/cherry-pick、继续/中止、stash、tag、remote、amend/undo；返回实际状态、完成或冲突结果和当前整合状态                                                                        |
+| `git/indexDiff`                                                                          | repository/path/comparison                | 返回当前 index 对比文本和可选的更改块                                                                                                                                                                                       |
+| `git/indexEdit`                                                                          | repository/path/comparison                | 比较两侧预期文本，按选中的块或行更新 index；过期时返回 `GitIndexChanged`，不重试旧选择                                                                                                                                      |
+| `git/repositories`                                                                       | authorized dirs                           | 列出从已授权 `Dir` 中发现的稳定 repository identity                                                                                                                                                                         |
+| `git/checkIgnore`                                                                        | repository                                | 携带连接内唯一的 `operationId`，批量查询 1–5000 个仓库相对路径，返回被忽略的路径；遵循嵌套规则、排除规则与 tracked 状态，不递归列出忽略目录，也不进入待提交列表                                                             |
+| `git/checkIgnore/cancel`                                                                 | connection/operation                      | 按 `operationId` 取消同一连接的忽略查询，包括排队和执行中的查询；返回 `requested`、`alreadyRequested` 或 `completed`，原查询仍返回终态响应                                                                                  |
+| `git/status`                                                                             | repository                                | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot                                                                                                                                                 |
+| `git/textDiff`                                                                           | repository                                | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection                                                                                                                                                                 |
+| `git/graph`                                                                              | repository                                | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor`                                                                                          |
+| `git/commitDetails`                                                                      | repository                                | 按完整 commit ID 读取作者、时间、完整提交说明及第一父提交的变更统计，供悬停卡片按需使用                                                                                                                                     |
+| `git/branch/list`                                                                        | repository                                | 列出现有本地分支及 current/upstream 信息                                                                                                                                                                                    |
+| `git/branch/switch`                                                                      | repository                                | 切换到 host 重新解析确认存在的本地分支                                                                                                                                                                                      |
+| `git/branch/create`                                                                      | repository                                | 基于 HEAD 新建本地分支，不切换目录                                                                                                                                                                                          |
+| `git/branch/delete`                                                                      | repository                                | 只删除已合并且未被检出的本地分支                                                                                                                                                                                            |
+| `git/worktree/create`                                                                    | repository                                | 在 HEAD 建立独立的 detached 工作树，不创建 Session                                                                                                                                                                          |
+| `git/worktree/delete`                                                                    | repository                                | 按明确的 `mode` 删除干净的独立工作树，或删除受管工作树所属 Session 及其工作目录                                                                                                                                             |
+| `git/worktree/list`                                                                      | repository                                | 列出同仓库工作树、对应目录及可打开状态                                                                                                                                                                                      |
+| `git/worktree/resolve`                                                                   | repository                                | 按 checkout root 重新确认工作树可打开，返回对应目录                                                                                                                                                                         |
+| `git/stage`                                                                              | repository                                | stage 一组 repository-relative path                                                                                                                                                                                         |
+| `git/unstage`                                                                            | repository                                | 从 index 移除一组 repository-relative path 的 staged change                                                                                                                                                                 |
+| `git/discardWorktree`                                                                    | repository                                | 恢复 tracked working-tree change，不删除 untracked 文件                                                                                                                                                                     |
+| `git/commit`                                                                             | repository                                | 使用有界非空 message 创建 commit                                                                                                                                                                                            |
+| `git/fetch`                                                                              | repository、可选 `mode: "default"         | "all"`                                                                                                                                                                                                                      | non-interactive fetch 并 prune；省略 mode 时获取全部 remotes |
+| `git/pull`                                                                               | repository                                | non-interactive fast-forward-only pull                                                                                                                                                                                      |
+| `git/push`                                                                               | repository                                | 按当前 Git upstream/default 配置 push                                                                                                                                                                                       |
+| `grep/search/start`                                                                      | connection + directory                    | 启动有界内容搜索                                                                                                                                                                                                            |
+| `grep/search/read`                                                                       | connection + search job                   | 按游标读取最多 200 条结果                                                                                                                                                                                                   |
+| `grep/search/cancel`                                                                     | connection + search job                   | 取消并释放搜索                                                                                                                                                                                                              |
+| `codebase/status`                                                                        | directory                                 | 读取本地 index lifecycle 与 generation counters                                                                                                                                                                             |
+| `codebase/search`                                                                        | directory                                 | 返回有界、revision-bound 的本地 lexical chunks                                                                                                                                                                              |
+| `codebase/symbols/status` / `search`                                                     | directory                                 | 读取 declaration projection 状态并执行有界 local fuzzy symbol query                                                                                                                                                         |
+| `codeIntelligence/document/synchronize` / `close`                                        | directory + editor document               | 发布或释放 ephemeral dirty snapshot；不持久化 overlay                                                                                                                                                                       |
+| `codebase/retrieve`                                                                      | directory                                 | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts                                                                                                                                                                     |
+| `codebase/rebuild`                                                                       | directory                                 | 同步执行一次 full reconcile                                                                                                                                                                                                 |
+| `grep/index/status` / `rebuild`                                                          | directory                                 | 查询公共 grep 索引状态或同步重建；ready 表示索引覆盖完整，不保证最新编辑已被监听处理                                                                                                                                        |
+| `grep/index/disableAndDelete`                                                            | directory + config revision               | 显式切回 ripgrep，停止索引服务并删除公共 grep 索引                                                                                                                                                                          |
+| `codebase/cloud/status`                                                                  | directory                                 | 读取 selected deployment、grant 与 local/remote generation state                                                                                                                                                            |
+| `codebase/cloud/preview`                                                                 | directory                                 | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网                                                                                                                                                           |
+| `codebase/cloud/authorize`                                                               | directory                                 | 持久化 root-bound destination/scope/byte grant                                                                                                                                                                              |
+| `codebase/cloud/sync`                                                                    | directory                                 | 按 grant 复核 source revision 后调用 provider publication                                                                                                                                                                   |
+| `codebase/cloud/revoke`                                                                  | directory                                 | 先持久化 Revoking，再请求 provider 幂等删除                                                                                                                                                                                 |
+| `terminal/profile/list`                                                                  | directory                                 | 列出 App Server 冻结的可信 Shell Profile                                                                                                                                                                                    |
+| `terminal/create`                                                                        | connection + directory                    | 取得 `ExecuteCommands` Authorization 后在选定 `Dir` 内启动 PTY                                                                                                                                                              |
+| `terminal/write`                                                                         | connection + Terminal                     | 写入有界 UTF-8 输入 batch                                                                                                                                                                                                   |
+| `terminal/resize`                                                                        | connection + Terminal                     | 修改 PTY rows/cols                                                                                                                                                                                                          |
+| `terminal/read`                                                                          | connection + Terminal                     | 按 sequence 拉取有界 Base64 输出                                                                                                                                                                                            |
+| `terminal/close`                                                                         | connection + Terminal                     | 终止并释放 PTY                                                                                                                                                                                                              |
 
 `marketplace/search` 的可选 `capabilityKind` 按包携带的能力筛选，跨 package family 包含 Plugin bundle；
 可选 `languageId` 要求已验证 catalog 声明该语言到 executable 的明确路由。它与 `query`、
@@ -434,12 +434,12 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 返回命中位置附近最多 1024 UTF-8 字节的摘录及 citation，read 返回完整的最多 16 KiB 正文。
 
-| Method | 输入 | 结果与行为 |
-| --- | --- | --- |
-| `memory/scopes` | 可选 `threadId` | 返回 scope 标签和当前 policy；无 Thread 时返回 Profile，有 Thread 时包含当前关联 Project 与已授权 Dir |
-| `memory/update` | `commandId`、`memoryId`、`scope`、`expectedRevision`、`title`、`body` | 更新精确版本并推进 revision，来源转为 user；保留创建时间，旧引用失效 |
-| `memory/citation/read` | `citation` | 返回相同引用、title、source、body；引用包含 `memoryId`、`scope`、`revision`、`startByte`、`endByte` |
-| `memory/policy/read` | `scope` | 返回 `scope`、`revision`、`automaticRead`、`modelWrite`；未配置时 revision 为 0，读取和模型保存均关闭 |
+| Method                 | 输入                                                                    | 结果与行为                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `memory/scopes`        | 可选 `threadId`                                                         | 返回 scope 标签和当前 policy；无 Thread 时返回 Profile，有 Thread 时包含当前关联 Project 与已授权 Dir               |
+| `memory/update`        | `commandId`、`memoryId`、`scope`、`expectedRevision`、`title`、`body`   | 更新精确版本并推进 revision，来源转为 user；保留创建时间，旧引用失效                                                |
+| `memory/citation/read` | `citation`                                                              | 返回相同引用、title、source、body；引用包含 `memoryId`、`scope`、`revision`、`startByte`、`endByte`                 |
+| `memory/policy/read`   | `scope`                                                                 | 返回 `scope`、`revision`、`automaticRead`、`modelWrite`；未配置时 revision 为 0，读取和模型保存均关闭               |
 | `memory/policy/update` | `commandId`、`scope`、`expectedRevision`、`automaticRead`、`modelWrite` | 返回 disposition、catalogRevision、policy；读取为 `disabled` / `firstInvocation`，模型保存为 `disabled` / `enabled` |
 
 引用范围是半开 UTF-8 字节区间，不能切开字符；`memory:` 引用文本是相同 citation JSON 的 URL-safe Base64 编码。引用不授予读取权限。已删除引用返回 `MemoryNotFound`，版本不符返回 `MemoryConflict`，无效范围返回 `InvalidParams`。
@@ -453,12 +453,12 @@ list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision
 
 当前任务存在已开启模型保存的作用域时，ext 通过 `TurnInputContributor` 提供固定的自动整理说明，指导模型保存长期有用的偏好并遵守用户不保存具体信息的要求。每次准备模型输入重新检查授权；说明不包含记忆正文或作用域名称。
 
-| 模型工具 | 参数 | 结果与边界 |
-| --- | --- | --- |
-| `memories-scopes` | 无 | 返回当前任务的 scope 标识和 policy，不读取正文 |
-| `memories-save` | `scope`、`title`、`body`、`expected_revision` | 保存或合并模型记忆；scope 必须属于当前任务并开启模型保存；新增用 revision 0，更新用已读取版本 |
-| `memories-search` | `query`，1–512 个字符 | 返回 `trust: untrusted-data` 与 `matches`；每条包含可直接读取的 `reference` 和 `memory` 引用摘录；沿用自动检索的条数和正文预算 |
-| `memories-read` | `reference`，完整 `memory:` 引用 | 返回 `trust: untrusted-data` 与 `memory`；重新核对当前范围、授权、revision 和 UTF-8 范围，返回该版本完整正文及覆盖全文的 citation |
+| 模型工具          | 参数                                          | 结果与边界                                                                                                                        |
+| ----------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `memories-scopes` | 无                                            | 返回当前任务的 scope 标识和 policy，不读取正文                                                                                    |
+| `memories-save`   | `scope`、`title`、`body`、`expected_revision` | 保存或合并模型记忆；scope 必须属于当前任务并开启模型保存；新增用 revision 0，更新用已读取版本                                     |
+| `memories-search` | `query`，1–512 个字符                         | 返回 `trust: untrusted-data` 与 `matches`；每条包含可直接读取的 `reference` 和 `memory` 引用摘录；沿用自动检索的条数和正文预算    |
+| `memories-read`   | `reference`，完整 `memory:` 引用              | 返回 `trust: untrusted-data` 与 `memory`；重新核对当前范围、授权、revision 和 UTF-8 范围，返回该版本完整正文及覆盖全文的 citation |
 
 模型不能修改授权或删除记忆。保存使用独立状态写入契约；参数错误和缺少宿主身份会阻止执行；未授权、版本冲突或已删除引用返回明确的工具错误。
 
@@ -800,7 +800,6 @@ Session planned/attached saga。
 
 `request.type = forkSession` 接受相同的 `parentThreadId` 和 `title`，将该 Thread 的当前历史复制到独立 Session 的根 Thread，返回目标 Session 和 Thread ID。保留 Agent 身份、配置和来源记录，目标 Session ID 等于新根 Thread ID；只有这种根 Thread 复制允许 Fork 来源跨 Session。命令重试返回同一副本。此请求不订阅目标 Thread，也不启动 Turn；调用方可用目标身份提交 `StartTurn` 在后台执行，并通过 `/resume` 打开，结果不自动写回来源会话。
 
-
 ### 消息恢复点
 
 `session/thread/checkpoints` 接受 `{ "sessionId": "...", "threadId": "..." }`，按可见消息顺序返回 `{ "checkpoints": [...] }`。每项含 `itemId`、`turnId`、原始 `sourceThreadId`、`sourceSequence`、`afterSequence` 和 `workspace`。继承的消息仍指向其原始位置；`workspace.type = unavailable` 时同时给出原因。
@@ -862,25 +861,24 @@ Thread {
 
 当前的分工是：后端确定一段内容属于什么、在哪个 Turn、按什么顺序出现；客户端决定宽度、换行、间距、折叠、滚动和交互。`session/thread/read` 与 `session/thread/subscribe` 均返回 `thread` 和 `transcript`。`transcript` 是 `ThreadTranscriptSnapshot`，含稳定 `entryId`、当前 `revision` 和按序排列的完整条目。定义以 [`ash-thread-transcript`](../ash-rs/thread-transcript/src/model.rs) 与 [`ThreadItem`](../ash-rs/protocol/src/item.rs) 为准。
 
-| 正文条目 | 后端给出的含义 |
-| --- | --- |
-| `item` | 带类型的 `ThreadItem`：用户和 Agent 消息、思考、计划文本、工具调用与结果、附件及上下文；同时标明是否为临时内容 |
-| `turnPlan` | 当前 Turn 的结构化计划 |
-| `turnError` | 当前 Turn 的稳定错误 |
-| `toolOutput` | 绑定 `toolCallId` 的临时 stdout 或 stderr 内容 |
+| 正文条目     | 后端给出的含义                                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `item`       | 带类型的 `ThreadItem`：用户和 Agent 消息、思考、计划文本、工具调用与结果、附件及上下文；同时标明是否为临时内容 |
+| `turnPlan`   | 当前 Turn 的结构化计划                                                                                         |
+| `turnError`  | 当前 Turn 的稳定错误                                                                                           |
+| `toolOutput` | 绑定 `toolCallId` 的临时 stdout 或 stderr 内容                                                                 |
 
 App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumulator.rs) 汇集内部增量，向客户端发送完整条目的 `upsert`、按 ID `remove` 或 `clearTransient`，而不是让各端自行拼接零散文字。`session/thread/transcript/update` 带 `sessionId`、`threadId`、`durableSequence` 和递增的 `revision`；`streamCursor` 只用于临时流的连续性。客户端按条目身份应用更新；修订号不连续时重新读取正文快照，不从可见文字推断消息、工具或执行状态。`Thread` 仍是已提交事实的权威来源，正文快照负责显示顺序和临时内容。
 
-| 客户端 | 当前显示职责 |
-| --- | --- |
-| Ash Code TUI | 将条目组织成可绘制的消息和工具单元，布局、滚动与终端输出由客户端拥有；fullscreen 与 inline 的行为见 [LAYOUT.md](../code/LAYOUT.md)。 |
-| Rust 桌面界面 | 保存正文快照及更新，将条目排成会话时间线；见 [正文状态](../app-rs/session/src/pane/transcript.rs)和[时间线](../app-rs/session/src/pane/timeline.rs)。 |
+| 客户端              | 当前显示职责                                                                                                                                                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ash Code TUI        | 将条目组织成可绘制的消息和工具单元，布局、滚动与终端输出由客户端拥有；fullscreen 与 inline 的行为见 [LAYOUT.md](../code/LAYOUT.md)。                                                                                         |
+| Rust 桌面界面       | 保存正文快照及更新，将条目排成会话时间线；见 [正文状态](../app-rs/session/src/pane/transcript.rs)和[时间线](../app-rs/session/src/pane/timeline.rs)。                                                                        |
 | TypeScript 桌面界面 | 通过 Chat 服务保留后端条目字段，再映射为聊天列表单元；见 [服务接口](../app-ts/src/ash/workbench/services/chat/common/chatService.ts)和[列表映射](../app-ts/src/ash/workbench/contrib/chat/browser/widget/chatListItems.ts)。 |
 
 工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。
 
 `ToolCall.binding.activity` 由工具 owner 提供操作事实。文件操作携带实际路径、搜索模式或请求读取范围；命令携带原始 program、arguments 与 workingDirectory。客户端只负责本地化标签和排版，不按工具名解释参数。命令结果的 JSON（直接对象或 `result` 对象）中的 `exit_code`、`stdout`、`stderr` 是进程证据；工具成功返回并不意味着进程退出码为零，更不代表测试或任务已经通过。没有公开文本的 Reasoning 条目仍可保存并接收后续更新，客户端无需显示空的思考记录。
-
 
 `session/request` 的 `StartTurn` 参数：
 
@@ -1032,14 +1030,14 @@ TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知�
 
 BigModel 与 Z.AI 的六条连接使用精确 ID 隔离配置、凭据和请求地址，模型引用统一使用 `glm`。Coding Plan 登录走 Account RPC；开发者 API 密钥走 Provider RPC：
 
-| 连接 | Provider ID | 默认或连接地址 | 退出登录 |
-| --- | --- | --- | --- |
-| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` | `account/logout` 删除该账户凭据 |
-| Z.AI Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` | `account/logout` 删除该账户凭据 |
-| BigModel Start Plan | `bigmodel-start-plan` | `https://zcode.z.ai/api/v1/zcode-plan/anthropic` | `account/logout` 删除 Ash 管理的账户凭据 |
-| Z.AI Start Plan | `zai-start-plan` | 同一 Start Plan 服务 | 同上 |
-| BigModel API | `bigmodel` | `https://open.bigmodel.cn/api/paas/v4` | 无订阅登录 |
-| Z.ai API | `zai` | `https://api.z.ai/api/paas/v4` | 无订阅登录 |
+| 连接                 | Provider ID            | 默认或连接地址                                   | 退出登录                                 |
+| -------------------- | ---------------------- | ------------------------------------------------ | ---------------------------------------- |
+| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4`    | `account/logout` 删除该账户凭据          |
+| Z.AI Coding Plan     | `zai-coding-plan`      | `https://api.z.ai/api/coding/paas/v4`            | `account/logout` 删除该账户凭据          |
+| BigModel Start Plan  | `bigmodel-start-plan`  | `https://zcode.z.ai/api/v1/zcode-plan/anthropic` | `account/logout` 删除 Ash 管理的账户凭据 |
+| Z.AI Start Plan      | `zai-start-plan`       | 同一 Start Plan 服务                             | 同上                                     |
+| BigModel API         | `bigmodel`             | `https://open.bigmodel.cn/api/paas/v4`           | 无订阅登录                               |
+| Z.ai API             | `zai`                  | `https://api.z.ai/api/paas/v4`                   | 无订阅登录                               |
 
 四种地址对应 [ZCode 官方连接说明](https://zcode.z.ai/cn/docs/configuration)中的 Coding Plan 与通用 API 端点。
 
@@ -1300,10 +1298,10 @@ Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 G
 
 Issue 浏览接口由 [`issues.rs`](../ash-rs/app-server-protocol/src/protocol/issues.rs) 定义。
 
-| 方法 | 契约 |
-| --- | --- |
-| `issue/list` | 按 state、page、query、mode 读取当前仓库，返回摘要、分页、缓存时间和刷新提示 |
-| `issue/read` | 校验仓库身份，读取所选 Issue 正文和评论 |
+| 方法              | 契约                                                                              |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `issue/list`      | 按 state、page、query、mode 读取当前仓库，返回摘要、分页、缓存时间和刷新提示      |
+| `issue/read`      | 校验仓库身份，读取所选 Issue 正文和评论                                           |
 | `issue/configure` | 按 commandId/expectedRevision 保存 autoRefreshMinutes，允许 0/5/10/30/60，默认 10 |
 
 `issue/list` 与 `issue/read` 使用连接内唯一的 `operationId`，可通过 `github/cancel` 取消。
@@ -1368,10 +1366,10 @@ PR 文件最多 3000 个，达到上限的结果设置 `limitReached`，不能�
 
 `session/request` 提供两种顾问操作：
 
-| request.type | 参数 | 结果 |
-| --- | --- | --- |
+| request.type       | 参数                                        | 结果                                                 |
+| ------------------ | ------------------------------------------- | ---------------------------------------------------- |
 | `configureAdvisor` | `threadId`, `expectedSequence`, `selection` | `{ type: "advisorConfigured", value: { sequence } }` |
-| `consultAdvisor` | `threadId`, `expectedSequence`, `question` | 既有 `{ type: "turn", value: TurnStartResult }` |
+| `consultAdvisor`   | `threadId`, `expectedSequence`, `question`  | 既有 `{ type: "turn", value: TurnStartResult }`      |
 
 未配置顾问的显式咨询返回 `AdvisorDisabled`。两种操作都使用外层 `sessionId` 和 `commandId`，遵循序列冲突与相同命令重放规则。`selection` 为 `{type:"default"}`、`{type:"off"}` 或 `{type:"model",config:AdvisorConfig}`。显式选择须存在于模型目录。问题长度为 1–8000 字节，不能全为空白。
 
@@ -1400,13 +1398,13 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 `ash-rs/testing` 持有测试目录、执行进程和结果。Renderer 负责测试树、编辑器入口、保存脏文件与显示输出；Electron Main 仅转发现有 App Server 消息。
 
-| 归属 | 实现入口 |
-| --- | --- |
-| Rust 测试领域 | `ash-rs/testing/src/lib.rs`，App Server 在 `ash-rs/app-server/src/server/testing_operations.rs` 分发并转换类型 |
+| 归属                         | 实现入口                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rust 测试领域                | `ash-rs/testing/src/lib.rs`，App Server 在 `ash-rs/app-server/src/server/testing_operations.rs` 分发并转换类型                                                           |
 | 前端公共契约与工作区生命周期 | `app-ts/src/ash/platform/testing/common/testExecutionService.ts`、`app-ts/src/ash/workbench/services/testing/common/testingService.ts`、同级 `browser/testingService.ts` |
-| 协议适配 | `app-ts/src/ash/platform/testing/browser/appServerTestExecutionService.ts` |
-| 测试树与编辑器按钮 | `app-ts/src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts` |
-| 协议与生成物 | `ash-rs/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 绑定由生成任务同步 |
+| 协议适配                     | `app-ts/src/ash/platform/testing/browser/appServerTestExecutionService.ts`                                                                                               |
+| 测试树与编辑器按钮           | `app-ts/src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts`                                                                    |
+| 协议与生成物                 | `ash-rs/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 绑定由生成任务同步                |
 
 桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `app-ts/src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
 
@@ -1419,7 +1417,6 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 `testing/prepareDebug` 使用相同的 `catalogId` 和一个 `testId`，异步准备包含调试信息的测试程序，通过 `testing/updated.launch` 和 `testing/read.launch` 返回 `program`、`arguments`、`directory`、`adapterProgram`。Renderer 将其交给已有 DebugService 启动 DAP 会话；断点、调用栈、继续、重启及停止归 DebugService。编辑器按 F9 设置断点，测试树选择“调试所选测试”，或按住 Alt 点击测试边栏图标启动。该操作不会写入 `launch.json`，也不会先运行所选测试。macOS 通过 `xcrun --find lldb-dap` 找到适配器，其他平台使用 PATH 中的 `lldb-dap`。文档测试的 `debuggable` 为 `false`，不提供调试按钮。
 
 `testing/read` 读取已有操作的完整快照，不重新执行。`testing/cancel` 等待进程终止与最终更新；`testing/release` 还删除操作状态。连接关闭取消并回收该连接的所有操作。操作最多保留 10,000 个测试，单条结果输出最多 16 KiB，每次运行保留的总输出最多 2 MiB；超出部分明确标记 `outputTruncated`。`TestingNotFound` 表示当前连接没有对应操作，`TestingBusy` 表示操作数量达到上限，`TestingOperationFailed` 表示后端无法完成操作。
-
 
 ## 素材入库与确切版本读取
 

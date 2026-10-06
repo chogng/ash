@@ -13,7 +13,7 @@ export class ElectronRendererClipboardService implements IClipboardService {
 	}
 
 	public async readResources(): Promise<IClipboardResources> {
-		const { resources, operation } = await invoke<{ resources: string[]; operation: 'copy' | 'move' }>('ash:host:readClipboardResources');
+		const { resources, operation } = await invoke<{ resources: string[]; operation: 'copy' | 'move'; }>('ash:host:readClipboardResources');
 		return { resources: resources.map(value => URI.parse(value)), operation };
 	}
 

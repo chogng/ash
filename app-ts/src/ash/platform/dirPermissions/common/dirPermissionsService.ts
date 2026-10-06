@@ -10,9 +10,9 @@ export type DirPermission =
 
 /** Authorization selected by the host before entering a directory. */
 export type DirGrant =
-	| { readonly type: "config" }
-	| { readonly type: "host"; readonly permissions: readonly DirPermission[] }
-	| { readonly type: "user"; readonly commandId: string; readonly expectedRevision: number; readonly permissions: readonly DirPermission[] };
+	| { readonly type: "config"; }
+	| { readonly type: "host"; readonly permissions: readonly DirPermission[]; }
+	| { readonly type: "user"; readonly commandId: string; readonly expectedRevision: number; readonly permissions: readonly DirPermission[]; };
 
 export interface DirPermissionsEntry {
 	readonly dir: string;

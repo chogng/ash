@@ -35,9 +35,9 @@ import { type ITextModelResourceService, type TextModelInput, type TextModelRefe
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -64,10 +64,10 @@ function registerDialogs(services: InstantiationService, sourceResolver?: IMulti
 		onWillShowDialog: Event.None,
 		onDidShowDialog: Event.None,
 		about: async () => { throw new Error('Unexpected about dialog'); },
-		showMessage: async () => {},
-		info: async () => {},
-		warn: async () => {},
-		error: async () => {},
+		showMessage: async () => { },
+		info: async () => { },
+		warn: async () => { },
+		error: async () => { },
 		confirm: async () => ({ confirmed: true }),
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => ({ confirmed: false }),
@@ -126,7 +126,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		resolveDiffSource: async () => { throw new Error('Unexpected external multi-diff source'); },
 		sourceActions: () => [
 			...['Current Turn', 'Current Turn and Earlier', 'Previous Turn'].map((label, index) => ({
-				id: `external.${index}`, label, tooltip: label, enabled: true, run: () => {},
+				id: `external.${index}`, label, tooltip: label, enabled: true, run: () => { },
 			})),
 		],
 		primaryRepositoryAction: input => input.source?.kind === 'external' ? ({
@@ -316,7 +316,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 	await new Promise<void>(resolve => {
 		const ready = (): boolean => [...editor.querySelectorAll('.stanza-multi-diff-editor-section')].some(section =>
 			section.querySelector('.stanza-multi-diff-editor-title')?.textContent === 'file-99.ts'
-				&& section.querySelector('.stanza-diff-editor') !== null);
+			&& section.querySelector('.stanza-diff-editor') !== null);
 		if (ready()) return resolve();
 		const observer = new dom.window.MutationObserver(() => {
 			if (!ready()) return;
@@ -460,7 +460,7 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 });
 
 class BootstrapTextFiles implements ITextFileService {
-	readonly onDidChangeFiles = () => ({ dispose() {}, [Symbol.dispose]() {} });
+	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
 		return {
@@ -472,14 +472,14 @@ class BootstrapTextFiles implements ITextFileService {
 		};
 	}
 
-	async save(): Promise<{ readonly revision: string | undefined }> {
+	async save(): Promise<{ readonly revision: string | undefined; }> {
 		return { revision: undefined };
 	}
 }
 
 class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
-	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) {}
+	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) { }
 
 	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
@@ -488,7 +488,7 @@ class PaneTestDiffComputationService implements IDocumentDiffProvider {
 		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

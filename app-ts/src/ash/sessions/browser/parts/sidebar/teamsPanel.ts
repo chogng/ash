@@ -227,7 +227,7 @@ export class TeamsPanel extends Disposable {
 
 	private async pickRole(): Promise<TeamRole | undefined> {
 		const options = [{ name: localize('sessions.teams.defaultRole', 'Default Agent'), description: '', role: { type: 'default' } as TeamRole }, ...await this.listRoles()];
-		interface RoleItem extends IQuickPickItem { readonly role: TeamRole }
+		interface RoleItem extends IQuickPickItem { readonly role: TeamRole; }
 		const picker = this.quickInput.createQuickPick<RoleItem>();
 		picker.placeholder = localize('sessions.teams.chooseRole', 'Choose Agent role');
 		picker.ariaLabel = picker.placeholder;

@@ -39,6 +39,6 @@ test("DragAndDropObserver normalizes nested targets and enables the native drop"
 	dom.window.close();
 });
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string): DragEvent {
 	return new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 }

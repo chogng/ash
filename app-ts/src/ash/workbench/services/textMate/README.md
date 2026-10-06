@@ -11,22 +11,22 @@ belong to the extension resource layer.
 
 ## Ownership
 
-| Capability | Owner | Status |
-| --- | --- | --- |
-| Grammar contribution identity and revision snapshots | `TextMateGrammarRegistry` | ✅ |
-| Transferable grammar catalogs and materialization | `TextMateGrammarCatalogModel` / `materializeTextMateGrammarCatalog` | ✅ |
-| Atomic Worker catalog state and side-channel transport | `TextMateGrammarCatalogStore` / catalog wire | ✅ |
-| Shared TextMate grammar runtime | `TextMateTokenizationService` | ✅ |
-| Editor document line tokens and states | `TokenizerSyntaxTokenBackend` | ✅ |
-| Scope-to-Stanza token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
-| Revisioned selector rules and Worker theme transport | `TextMateScopeThemeModel` / scope-theme wire | ✅ |
-| Stanza Syntax provider adaptation | `createTextMateSyntaxProvider` | ✅ |
-| Catalog-gated Syntax Worker composition | `TextMateSyntaxWorkerClient` / `browser/textMateSyntaxWorkerMain.ts` | ✅ |
-| Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
-| Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
-| Workbench service composition and lifecycle | `ITextMateService` / `BrowserTextMateService` | ✅ |
-| Declarative language, configuration, snippet, grammar, and theme resources | `extensions` / `AppServerExtensionService` | ✅ manifest projection and active-theme token-color projection |
-| External extension-manifest loading | `AppServerExtensionService` | Static declarative contributions only; extension JavaScript is never executed |
+| Capability                                                                 | Owner                                                                | Status                                                                        |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Grammar contribution identity and revision snapshots                       | `TextMateGrammarRegistry`                                            | ✅                                                                            |
+| Transferable grammar catalogs and materialization                          | `TextMateGrammarCatalogModel` / `materializeTextMateGrammarCatalog`  | ✅                                                                            |
+| Atomic Worker catalog state and side-channel transport                     | `TextMateGrammarCatalogStore` / catalog wire                         | ✅                                                                            |
+| Shared TextMate grammar runtime                                            | `TextMateTokenizationService`                                        | ✅                                                                            |
+| Editor document line tokens and states                                     | `TokenizerSyntaxTokenBackend`                                        | ✅                                                                            |
+| Scope-to-Stanza token vocabulary mapping                                   | `TextMateScopeResolver`                                              | ✅, replaceable                                                               |
+| Revisioned selector rules and Worker theme transport                       | `TextMateScopeThemeModel` / scope-theme wire                         | ✅                                                                            |
+| Stanza Syntax provider adaptation                                          | `createTextMateSyntaxProvider`                                       | ✅                                                                            |
+| Catalog-gated Syntax Worker composition                                    | `TextMateSyntaxWorkerClient` / `browser/textMateSyntaxWorkerMain.ts` | ✅                                                                            |
+| Browser Worker Oniguruma WASM loading                                      | `browser/textMateOniguruma.ts`                                       | ✅                                                                            |
+| Grammar contribution-to-catalog lifecycle                                  | `TextMateGrammarService`                                             | ✅                                                                            |
+| Workbench service composition and lifecycle                                | `ITextMateService` / `BrowserTextMateService`                        | ✅                                                                            |
+| Declarative language, configuration, snippet, grammar, and theme resources | `extensions` / `AppServerExtensionService`                           | ✅ manifest projection and active-theme token-color projection                |
+| External extension-manifest loading                                        | `AppServerExtensionService`                                          | Static declarative contributions only; extension JavaScript is never executed |
 
 `workbench/services/textMate/common` may depend on Stanza's public Syntax and text
 contracts because it adapts into that domain. Stanza and `base` must not import

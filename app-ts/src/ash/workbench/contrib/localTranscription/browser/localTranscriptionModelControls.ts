@@ -63,7 +63,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 				const uninstall = resources.add(new Button(actions, { label: localize('dictation.model.uninstall', 'Uninstall'), presentation: 'secondary' }));
 				const template: CellTemplate = { resources, use, install, cancel, uninstall, model: undefined };
 				resources.add(use.onDidClick(() => { void this.perform(template.model!.model, () => this.configurationService.updateValue(DictationConfiguration.localModel, template.model!.model)); }));
-				resources.add(install.onDidClick(() => { void this.perform(template.model!.model, () => this.localTranscription.prepareModel(template.model!.model, () => {}).completed); }));
+				resources.add(install.onDidClick(() => { void this.perform(template.model!.model, () => this.localTranscription.prepareModel(template.model!.model, () => { }).completed); }));
 				resources.add(cancel.onDidClick(() => {
 					void this.localTranscription.cancelModel(template.model!.model).catch(error => {
 						if (!this.isDisposed) { this.status.setMessage(String(error)); }
@@ -97,7 +97,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 				return text;
 			},
 			renderElement: (cell, _index, text) => { text.textContent = this.cellText(cell); text.title = text.textContent; },
-			disposeTemplate: () => {},
+			disposeTemplate: () => { },
 		};
 		const labels = [
 			{ column: 'name', label: localize('dictation.model.column.name', 'Model'), weight: 3, minimumWidth: 180 },
@@ -137,7 +137,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 		this._register(this.modelSource.onDidChange(() => this.updateImport()));
 		this._register(this.importModelButton.onDidClick(() => {
 			const model = this.model;
-			void this.perform(model, () => this.localTranscription.importModel({ model, sourcePath: this.modelSource.value.trim() }, () => {}).completed);
+			void this.perform(model, () => this.localTranscription.importModel({ model, sourcePath: this.modelSource.value.trim() }, () => { }).completed);
 		}));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(DictationConfiguration.localModel) && this.visible) {

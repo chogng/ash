@@ -106,7 +106,8 @@ export const ThemeConfigurationSettings = Object.freeze({
 });
 
 function registerBoolean(key: string, defaultValue: boolean, title: string, description: string): string {
-	return configurationRegistry.registerConfiguration({ key, defaultValue, scope: ConfigurationScope.APPLICATION, schema: { type: 'boolean' },
+	return configurationRegistry.registerConfiguration({
+		key, defaultValue, scope: ConfigurationScope.APPLICATION, schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
 			if (typeof value !== 'boolean') { throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', key)); }
 			return value;
@@ -115,20 +116,24 @@ function registerBoolean(key: string, defaultValue: boolean, title: string, desc
 }
 
 function registerPreferred(key: string, defaultValue: string, title: string): string {
-	return configurationRegistry.registerConfiguration({ key, defaultValue, scope: ConfigurationScope.WINDOW, schema: { type: 'string' },
+	return configurationRegistry.registerConfiguration({
+		key, defaultValue, scope: ConfigurationScope.WINDOW, schema: { type: 'string' },
 		parse(value: unknown): string {
 			if (typeof value !== 'string' || !/^[a-zA-Z0-9._-]{1,256}$/u.test(value)) { throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', key)); }
 			return value;
-		}, setting: { valueType: 'select', get title() { return localize(`theme.${key}.title`, title); }, get description() { return localize('theme.preferredDescription', 'Choose the theme used for this system appearance.'); },
+		}, setting: {
+			valueType: 'select', get title() { return localize(`theme.${key}.title`, title); }, get description() { return localize('theme.preferredDescription', 'Choose the theme used for this system appearance.'); },
 			get options() { return WorkbenchThemesRegistry.getColorThemes().map(theme => ({ value: theme.id, label: theme.label })); },
 		},
 	});
 }
 
 function registerRuleSetting(key: string, title: string, description: string, parse: (value: unknown) => Record<string, unknown>, schema: JsonSchema): string {
-	return configurationRegistry.registerConfiguration<Record<string, unknown>>({ key, defaultValue: {}, scope: ConfigurationScope.WINDOW, schema: { ...schema, patternProperties: { '^(?:\\[[^\\[\\]]+\\])+$': schema } },
+	return configurationRegistry.registerConfiguration<Record<string, unknown>>({
+		key, defaultValue: {}, scope: ConfigurationScope.WINDOW, schema: { ...schema, patternProperties: { '^(?:\\[[^\\[\\]]+\\])+$': schema } },
 		parse: value => parseScopedCustomizations(value, parse),
-		setting: { valueType: 'stringMap', structuredValues: true,
+		setting: {
+			valueType: 'stringMap', structuredValues: true,
 			get title() { return localize(`theme.${key}.title`, title); }, get description() { return localize(`theme.${key}.description`, description); },
 			get keyLabel() { return localize('theme.ruleName', 'Rule'); }, get valueLabel() { return localize('theme.ruleValue', 'Color or JSON Style'); },
 			get addLabel() { return localize('theme.addRule', 'Add Rule'); }, get removeLabel() { return localize('theme.removeRule', 'Remove Rule'); },
@@ -198,7 +203,8 @@ function themeSpecificValues(theme: IColorTheme, value: Record<string, unknown>)
 		if (names.some(name => {
 			const pattern = '^' + name.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('.*') + '$';
 			return new RegExp(pattern, 'u').test(theme.label) || new RegExp(pattern, 'u').test(theme.id);
-		})) { for (const [property, value] of Object.entries(entry as Record<string, unknown>)) {
+		})) {
+			for (const [property, value] of Object.entries(entry as Record<string, unknown>)) {
 				if (groups[property] && (typeof value === 'object' || typeof result[property] === 'object')) {
 					const previous = typeof result[property] === 'string' ? { foreground: result[property] } : result[property] as Record<string, unknown>;
 					const next = typeof value === 'string' ? { foreground: value } : value as Record<string, unknown>;
@@ -243,7 +249,8 @@ export function applyThemeCustomizations(theme: IColorTheme, configuration: ICon
 			tokenColors.push({ scopes: (typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? []).map(scope => scope.trim()), settings: rule.settings });
 		}
 	}
-	return createColorTheme({ ...theme, baseTheme: theme, colorOverrides: overrides, resetColorOverrides: reset, tokenColors,
+	return createColorTheme({
+		...theme, baseTheme: theme, colorOverrides: overrides, resetColorOverrides: reset, tokenColors,
 		allowUnregisteredColorOverrides: true,
 		semanticHighlighting: (semantic.enabled as boolean | undefined) ?? (tokens.semanticHighlighting as boolean | undefined) ?? theme.semanticHighlighting,
 		semanticTokenRules: [...theme.semanticTokenRules ?? [], ...parseSemanticTokenRules(semantic.rules as Parameters<typeof parseSemanticTokenRules>[0])],
@@ -257,15 +264,19 @@ function isColorThemePreference(value: string): boolean {
 function tokenCustomizationSchema(): JsonSchema {
 	const tokenArray = colorThemeSchema.properties!.tokenColors!.anyOf![1]!;
 	const style = (tokenArray.items as JsonSchema).properties!.settings!;
-	return { type: 'object', additionalProperties: false, properties: {
-		...Object.fromEntries(Object.keys(groups).map(group => [group, { anyOf: [colorThemeSchema.properties!.colors!.additionalProperties as JsonSchema, style] }])),
-		textMateRules: tokenArray,
-		semanticHighlighting: { type: 'boolean' },
-	} };
+	return {
+		type: 'object', additionalProperties: false, properties: {
+			...Object.fromEntries(Object.keys(groups).map(group => [group, { anyOf: [colorThemeSchema.properties!.colors!.additionalProperties as JsonSchema, style] }])),
+			textMateRules: tokenArray,
+			semanticHighlighting: { type: 'boolean' },
+		}
+	};
 }
 
 function semanticCustomizationSchema(): JsonSchema {
-	return { type: 'object', additionalProperties: false, properties: {
-		enabled: { type: 'boolean' }, rules: colorThemeSchema.properties!.semanticTokenColors!,
-	} };
+	return {
+		type: 'object', additionalProperties: false, properties: {
+			enabled: { type: 'boolean' }, rules: colorThemeSchema.properties!.semanticTokenColors!,
+		}
+	};
 }

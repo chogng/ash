@@ -12,5 +12,5 @@ export class WebAppServerUnavailableError extends Error {
 export const unavailableOperation: UnavailableOperation = <T>(operation: string): Promise<T> => Promise.reject(new WebAppServerUnavailableError(operation));
 
 export function inertSubscription(): DisposableHandle {
-	return { dispose(): void {} };
+	return { dispose(): void { } };
 }

@@ -51,7 +51,7 @@ test("IndexTreeModel reports the changed visible range and keeps unrelated branc
 		{ element: { id: "right", label: "Right", expanded: false }, children: [{ element: { id: "stable", label: "Stable", expanded: false } }] },
 	]);
 	const stable = model.getNodeById("stable");
-	const changes: Array<{ start: number; deleteCount: number; ids: string[] }> = [];
+	const changes: Array<{ start: number; deleteCount: number; ids: string[]; }> = [];
 	model.onDidChange(({ visibleSplice }) => {
 		if (visibleSplice) changes.push({ start: visibleSplice.start, deleteCount: visibleSplice.deleteCount, ids: visibleSplice.elements.map(node => node.id) });
 	});
@@ -777,9 +777,11 @@ test("ObjectTree releases hidden rows when its hierarchy is replaced", () => {
 			return label;
 		},
 	});
-	tree.setChildren([{ element: { id: "folder", label: "Folder", expanded: false }, children: [
-		{ element: { id: "child", label: "Child", expanded: false } },
-	] }]);
+	tree.setChildren([{
+		element: { id: "folder", label: "Folder", expanded: false }, children: [
+			{ element: { id: "child", label: "Child", expanded: false } },
+		]
+	}]);
 	tree.collapse("folder");
 	assert.deepEqual(removed, []);
 	tree.setChildren([{ element: { id: "replacement", label: "Replacement", expanded: false } }]);
@@ -969,7 +971,7 @@ test("ObjectTree preserves cross-tree drag origin while projecting domain elemen
 	};
 	const source = new ObjectTree<TestNode>(dom.window.document.body, {
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
-		dnd: { getDragURI: (element) => `ash://${element.id}`, onDragOver: () => false, drop: () => {} },
+		dnd: { getDragURI: (element) => `ash://${element.id}`, onDragOver: () => false, drop: () => { } },
 		renderElement,
 	});
 	const target = new ObjectTree<TestNode>(dom.window.document.body, {

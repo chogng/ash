@@ -102,7 +102,7 @@ export class SessionsChatView extends Disposable {
 		this.activePane.appendToDraft(text);
 	}
 
-	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
 
@@ -208,7 +208,7 @@ class SessionsChatEmptyView implements IView {
 		this.update("ready", undefined);
 	}
 
-	layout(_bounds: IPositionedRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void { }
 
 	update(state: ISessionsManagementService["state"], error: string | undefined): void {
 		if (state === "loading") {
@@ -292,7 +292,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	layout(_bounds: IPositionedRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void { }
 
 	update(selection: SessionsViewSelection, active: boolean): void {
 		this.selection = selection;

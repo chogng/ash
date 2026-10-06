@@ -1,7 +1,8 @@
 .stanza-editor .stanza-editor-line-decoration.ash-icon-folding-expanded,
 .stanza-editor .stanza-editor-line-decoration.ash-icon-folding-collapsed,
 .stanza-editor .stanza-editor-line-decoration.ash-icon-folding-manual-expanded,
-.stanza-editor .stanza-editor-line-decoration.ash-icon-folding-manual-collapsed {
+.stanza-editor
+	.stanza-editor-line-decoration.ash-icon-folding-manual-collapsed {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -12,7 +13,9 @@
 	transition: opacity 120ms ease-out;
 }
 
-.stanza-editor .margin-view-overlays:hover .stanza-editor-line-decoration.ash-icon,
+.stanza-editor
+	.margin-view-overlays:hover
+	.stanza-editor-line-decoration.ash-icon,
 .stanza-editor .stanza-editor-line-decoration.ash-icon-folding-collapsed,
 .stanza-editor .stanza-editor-line-decoration.ash-icon-folding-manual-collapsed,
 .stanza-editor .stanza-editor-line-decoration.alwaysShowFoldIcons {

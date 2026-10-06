@@ -9,7 +9,7 @@ const MAX_RESULTS = 100;
 
 /** App Server transport adapter for the frontend codebase-symbols contract. */
 export class AppServerCodebaseSymbolsService implements ICodebaseSymbolsService {
-	constructor(private readonly api: ICodebaseSymbolsApi) {}
+	constructor(private readonly api: ICodebaseSymbolsApi) { }
 
 	async status(signal: AbortSignal = new AbortController().signal): Promise<CodebaseSymbolsStatus> {
 		return status(await raceCancellationError(this.api.status(), signal, "Symbol-index status was cancelled"));

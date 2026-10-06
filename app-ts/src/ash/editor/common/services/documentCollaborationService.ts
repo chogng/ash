@@ -19,9 +19,9 @@ export interface DocumentCollaborationPresence {
 }
 
 export type DocumentCollaborationSubmitOutcome =
-	| { readonly kind: "accepted"; readonly update: DocumentCollaborationRemoteEnvelope }
-	| { readonly kind: "conflict"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[] }
-	| { readonly kind: "resync"; readonly snapshot: DocumentCollaborationSnapshot };
+	| { readonly kind: "accepted"; readonly update: DocumentCollaborationRemoteEnvelope; }
+	| { readonly kind: "conflict"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[]; }
+	| { readonly kind: "resync"; readonly snapshot: DocumentCollaborationSnapshot; };
 
 /** One lifetime-bound room connection independent of its host transport. */
 export interface DocumentCollaborationConnection extends IDisposable {

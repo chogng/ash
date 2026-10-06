@@ -2,12 +2,7 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2024",
-    "lib": [
-      "ES2024",
-      "DOM",
-      "DOM.Iterable",
-      "ESNext.Disposable"
-    ],
+    "lib": ["ES2024", "DOM", "DOM.Iterable", "ESNext.Disposable"],
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
@@ -17,15 +12,8 @@
     "noUnusedParameters": true,
     "useUnknownInCatchVariables": false,
     "verbatimModuleSyntax": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "**/*.ts"
-  ],
-  "exclude": [
-    "node_modules/**",
-    "app_ts/vite/stanza/**/*.ts"
-  ]
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules/**", "app_ts/vite/stanza/**/*.ts"]
 }

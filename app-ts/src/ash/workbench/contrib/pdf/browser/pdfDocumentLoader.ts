@@ -9,7 +9,7 @@ export interface IPdfDocumentLoader {
 
 /** Reads PDF bytes through the workspace-confined file service. */
 export class WorkspacePdfDocumentLoader implements IPdfDocumentLoader {
-	constructor(private readonly fileService: IFileService) {}
+	constructor(private readonly fileService: IFileService) { }
 
 	async load(input: EditorInput, signal: AbortSignal): Promise<Uint8Array> {
 		const content = await raceCancellationError(

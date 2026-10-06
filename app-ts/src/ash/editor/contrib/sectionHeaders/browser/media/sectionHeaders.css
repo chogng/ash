@@ -1,11 +1,12 @@
 .view-line.section-header .stanza-editor-line-text {
-  font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .view-line.section-header {
-  border-top: var(--ash-stroke-thickness) solid color-mix(in srgb, var(--ash-widget-border) 45%, transparent);
+	border-top: var(--ash-stroke-thickness) solid
+		color-mix(in srgb, var(--ash-widget-border) 45%, transparent);
 }
 
 .view-line.section-header-separator {
-  border-top-style: double;
+	border-top-style: double;
 }

@@ -31,28 +31,30 @@ export const colorThemeSchema: JsonSchema = {
 			},
 			additionalProperties: color,
 		},
-		tokenColors: { anyOf: [{ type: 'string', minLength: 1, maxLength: 1024 }, {
-			type: 'array',
-			maxItems: 1024,
-			items: {
-				type: 'object',
-				required: ['settings'],
-				additionalProperties: false,
-				properties: {
-					name: { type: 'string' },
-					scope: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
-					settings: {
-						type: 'object',
-						additionalProperties: false,
-						properties: {
-							foreground: color,
-							background: color,
-							fontStyle: { type: 'string', pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$' },
+		tokenColors: {
+			anyOf: [{ type: 'string', minLength: 1, maxLength: 1024 }, {
+				type: 'array',
+				maxItems: 1024,
+				items: {
+					type: 'object',
+					required: ['settings'],
+					additionalProperties: false,
+					properties: {
+						name: { type: 'string' },
+						scope: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+						settings: {
+							type: 'object',
+							additionalProperties: false,
+							properties: {
+								foreground: color,
+								background: color,
+								fontStyle: { type: 'string', pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$' },
+							},
 						},
 					},
 				},
-			},
-		}] },
+			}]
+		},
 		semanticHighlighting: { type: 'boolean' },
 		semanticTokenColors: {
 			type: 'object',

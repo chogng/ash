@@ -367,7 +367,7 @@ function decodeStringToken(raw: string): string {
 	}
 }
 
-function keywordKind(source: string, offset: number): { readonly kind: JsonTokenKind; readonly length: number } | undefined {
+function keywordKind(source: string, offset: number): { readonly kind: JsonTokenKind; readonly length: number; } | undefined {
 	for (const [word, kind] of [['true', JsonTokenKind.True], ['false', JsonTokenKind.False], ['null', JsonTokenKind.Null]] as const) {
 		if (source.startsWith(word, offset) && isTokenBoundary(source[offset + word.length] ?? '')) return { kind, length: word.length };
 	}

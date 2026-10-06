@@ -76,7 +76,7 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 	private readonly hookResources = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly hookRows = new Map<string, HookRow>();
 	private sources: readonly HookSource[] | undefined;
-	private statusMessage: { readonly key: string; readonly text: string; readonly parameters?: readonly (string | number)[] } | undefined;
+	private statusMessage: { readonly key: string; readonly text: string; readonly parameters?: readonly (string | number)[]; } | undefined;
 	private visible = false;
 	private loadVersion = 0;
 	private readonly instanceId = ++nextHooksSettingsId;

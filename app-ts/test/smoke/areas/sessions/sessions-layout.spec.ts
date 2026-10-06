@@ -169,7 +169,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 		await page.mouse.move(sash.x + sash.width / 2 + delta, sash.y + sash.height / 2, { steps: 5 });
 		await page.mouse.up();
 	};
-	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number }[]> => panes.evaluateAll(elements => elements.map(element => {
+	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number; }[]> => panes.evaluateAll(elements => elements.map(element => {
 		const chat = element.querySelector<HTMLElement>('.ash-chat')!;
 		return {
 			identity: chat.dataset.untitledSessionId ?? chat.dataset.sessionId,
@@ -178,7 +178,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 			width: element.getBoundingClientRect().width,
 		};
 	}));
-	const draftReference = async (): Promise<{ kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current' } } }> => ({
+	const draftReference = async (): Promise<{ kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }> => ({
 		kind: 'untitled',
 		session: { untitledSessionId: (await panes.locator('.ash-chat').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
 	});

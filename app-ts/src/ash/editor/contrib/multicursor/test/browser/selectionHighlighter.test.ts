@@ -81,7 +81,7 @@ class SelectionHarness implements Disposable {
 		readonly decorations: TextDecorationCollection<boolean>,
 		readonly controller: InstanceType<typeof SelectionHighlighter>,
 		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
-	) {}
+	) { }
 
 	dispose(): void {
 		this.textualProvider.dispose();

@@ -1,158 +1,158 @@
 .ash-tree {
-  position: relative;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  outline: none;
+	position: relative;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+	outline: none;
 }
 
 .ash-tree:focus-visible:not(.has-focused-item) {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-tree-row.find-match .ash-tree-contents {
-  text-decoration: underline;
-  text-decoration-color: var(--ash-focus-border);
-  text-underline-offset: 2px;
+	text-decoration: underline;
+	text-decoration-color: var(--ash-focus-border);
+	text-underline-offset: 2px;
 }
 
 .ash-tree-row.drag-over {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-tree-sticky-container {
-  display: flex;
-  position: absolute;
-  z-index: 5;
-  top: 0;
-  right: 0;
-  left: 0;
-  flex-direction: column;
-  background: inherit;
-  box-shadow: 0 1px 0 var(--ash-tree-indent-guides-stroke);
+	display: flex;
+	position: absolute;
+	z-index: 5;
+	top: 0;
+	right: 0;
+	left: 0;
+	flex-direction: column;
+	background: inherit;
+	box-shadow: 0 1px 0 var(--ash-tree-indent-guides-stroke);
 }
 
 .ash-tree-sticky-container.empty {
-  display: none;
+	display: none;
 }
 
 .ash-tree-sticky-row {
-  flex: 0 0 auto;
+	flex: 0 0 auto;
 }
 
 .ash-tree-row {
-  display: flex;
-  position: relative;
-  width: 100%;
-  box-sizing: border-box;
-  align-items: center;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  background: transparent;
-  color: inherit;
-  cursor: default;
-  font: inherit;
-  line-height: 22px;
-  padding: 0 8px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	display: flex;
+	position: relative;
+	width: 100%;
+	box-sizing: border-box;
+	align-items: center;
+	overflow: hidden;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	background: transparent;
+	color: inherit;
+	cursor: default;
+	font: inherit;
+	line-height: 22px;
+	padding: 0 8px;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-tree-row-inner {
-  display: contents;
+	display: contents;
 }
 
 .ash-tree-indent {
-  display: flex;
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  bottom: 0;
-  /* The guide continues through the center of its ancestor's 16px twistie. */
-  left: 16px;
-  pointer-events: none;
+	display: flex;
+	position: absolute;
+	z-index: 1;
+	top: 0;
+	bottom: 0;
+	/* The guide continues through the center of its ancestor's 16px twistie. */
+	left: 16px;
+	pointer-events: none;
 }
 
 .ash-tree-indent-guide {
-  width: var(--ash-tree-indent, 8px);
-  box-sizing: border-box;
-  flex: 0 0 var(--ash-tree-indent, 8px);
-  border-left: var(--ash-stroke-thickness) solid transparent;
+	width: var(--ash-tree-indent, 8px);
+	box-sizing: border-box;
+	flex: 0 0 var(--ash-tree-indent, 8px);
+	border-left: var(--ash-stroke-thickness) solid transparent;
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide,
 .ash-tree-indent-guides-onHover:hover .ash-tree-indent-guide {
-  border-left-color: var(--ash-tree-inactive-indent-guides-stroke);
+	border-left-color: var(--ash-tree-inactive-indent-guides-stroke);
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide.active,
 .ash-tree-indent-guides-onHover .ash-tree-indent-guide.active {
-  border-left-color: var(--ash-tree-indent-guides-stroke);
+	border-left-color: var(--ash-tree-indent-guides-stroke);
 }
 
 .ash-tree-row:hover {
-  background: var(--ash-list-hover-background);
+	background: var(--ash-list-hover-background);
 }
 
 .ash-tree-row.focused {
-  background: transparent;
+	background: transparent;
 }
 
 .ash-tree-selection-subtle .ash-tree-row.selected {
-  background: var(--ash-list-hover-background);
+	background: var(--ash-list-hover-background);
 }
 
 .ash-tree-selection-active .ash-tree-row.selected {
-  background: var(--ash-list-inactive-selection-background);
+	background: var(--ash-list-inactive-selection-background);
 }
 
 .ash-tree-selection-active:focus .ash-tree-row.selected {
-  --ash-description-foreground: var(--ash-list-active-selection-foreground);
-  color: var(--ash-list-active-selection-foreground);
-  background: var(--ash-list-active-selection-background);
+	--ash-description-foreground: var(--ash-list-active-selection-foreground);
+	color: var(--ash-list-active-selection-foreground);
+	background: var(--ash-list-active-selection-background);
 }
 
 .ash-tree:focus-visible .ash-tree-row.focused {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-tree-twistie {
-  display: inline-flex;
-  position: relative;
-  z-index: 2;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  align-items: center;
-  justify-content: center;
+	display: inline-flex;
+	position: relative;
+	z-index: 2;
+	width: 16px;
+	height: 16px;
+	flex: 0 0 16px;
+	align-items: center;
+	justify-content: center;
 }
 
 .ash-tree-twistie.ash-tree-twistie-with-icon-gap {
-  /* Match an icon label's gap while keeping the arrow on the guide axis. */
-  margin-right: var(--ash-spacing-size60);
+	/* Match an icon label's gap while keeping the arrow on the guide axis. */
+	margin-right: var(--ash-spacing-size60);
 }
 
 .ash-tree-twistie.ash-tree-twistie-hidden {
-  width: 0;
-  flex-basis: 0;
-  visibility: hidden;
+	width: 0;
+	flex-basis: 0;
+	visibility: hidden;
 }
 
 .ash-tree-twistie .ash-icon {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
+	width: 16px;
+	height: 16px;
+	stroke: currentColor;
 }
 
 .ash-tree-contents {
-  display: inline-flex;
-  position: relative;
-  z-index: 2;
-  min-width: 0;
-  flex: 1 1 auto;
+	display: inline-flex;
+	position: relative;
+	z-index: 2;
+	min-width: 0;
+	flex: 1 1 auto;
 }

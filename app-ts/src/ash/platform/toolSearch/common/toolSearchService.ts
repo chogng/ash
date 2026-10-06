@@ -6,9 +6,9 @@ export interface ToolSearchModelReference {
 }
 
 export type ToolSearchEmbeddingStatus =
-	| { readonly type: "disabled" }
-	| { readonly type: "ready"; readonly model: ToolSearchModelReference }
-	| { readonly type: "unavailable"; readonly model?: ToolSearchModelReference; readonly reason: string };
+	| { readonly type: "disabled"; }
+	| { readonly type: "ready"; readonly model: ToolSearchModelReference; }
+	| { readonly type: "unavailable"; readonly model?: ToolSearchModelReference; readonly reason: string; };
 
 export interface ToolSearchSettings {
 	readonly revision: number;

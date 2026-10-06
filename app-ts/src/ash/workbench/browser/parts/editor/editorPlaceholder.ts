@@ -70,8 +70,8 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 		this.input = undefined;
 	}
 
-	layout(_dimension: IDimension): void {}
-	setVisible(_visibility: EditorPaneVisibility): void {}
+	layout(_dimension: IDimension): void { }
+	setVisible(_visibility: EditorPaneVisibility): void { }
 
 	focus(): void {
 		this.firstButton?.focus();

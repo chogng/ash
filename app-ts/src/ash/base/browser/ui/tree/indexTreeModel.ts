@@ -299,7 +299,7 @@ export class IndexTreeModel<T> extends Disposable {
 		for (const child of node.children) this.markSubtreeVisible(child);
 	}
 
-	private visibleDescendantRange(parent: MutableIndexTreeNode<T>): { readonly start: number; readonly deleteCount: number } | undefined {
+	private visibleDescendantRange(parent: MutableIndexTreeNode<T>): { readonly start: number; readonly deleteCount: number; } | undefined {
 		const parentIndex = parent === this.root ? -1 : this.visible.indexOf(parent);
 		if (parent !== this.root && parentIndex < 0) return undefined;
 		const start = parentIndex + 1;

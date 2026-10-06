@@ -1,29 +1,29 @@
 .ash-debug-breakpoint-gutter {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-debug-breakpoint-gutter::before {
-  display: block;
-  width: 0.65em;
-  height: 0.65em;
-  margin: 0.175em auto;
-  background: currentColor;
-  border-radius: 50%;
-  content: '';
+	display: block;
+	width: 0.65em;
+	height: 0.65em;
+	margin: 0.175em auto;
+	background: currentColor;
+	border-radius: 50%;
+	content: "";
 }
 
 .ash-debug-breakpoint-gutter.unverified,
 .ash-debug-breakpoint-gutter.disabled {
-  opacity: 0.55;
+	opacity: 0.55;
 }
 
 .ash-debug-breakpoint-gutter.logpoint::before {
-  border-radius: 0;
-  transform: rotate(45deg);
+	border-radius: 0;
+	transform: rotate(45deg);
 }
 
 .ash-debug-breakpoint-gutter.conditional::before {
-  box-sizing: border-box;
-  border: var(--ash-stroke-thickness) solid currentColor;
-  background: transparent;
+	box-sizing: border-box;
+	border: var(--ash-stroke-thickness) solid currentColor;
+	background: transparent;
 }

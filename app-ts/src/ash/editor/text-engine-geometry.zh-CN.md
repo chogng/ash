@@ -8,13 +8,13 @@
 
 通用浏览器编辑器应当使用一套逻辑到视觉的布局模型，对浏览器当前必须交互的可见文本提供精确几何，对尚未渲染的文本使用惰性估算。DOM、Canvas 和 GPU 都是渲染后端或测量工具，任何一个都不能成为第二套文本模型，也不能触发无界的同步扫描。
 
-| 问题 | 长期权威 | 默认策略 | 可观察结果 |
-| --- | --- | --- | --- |
-| 逻辑位置和视觉行 | Common model 与视觉布局 | DOM-free 投影 | 命令和导航不依赖 DOM 节点 |
+| 问题                                       | 长期权威                   | 默认策略                                              | 可观察结果                     |
+| ------------------------------------------ | -------------------------- | ----------------------------------------------------- | ------------------------------ |
+| 逻辑位置和视觉行                           | Common model 与视觉布局    | DOM-free 投影                                         | 命令和导航不依赖 DOM 节点      |
 | 可见光标、选区、composition 和命中测试几何 | 与渲染后端对应的几何提供者 | DOM 渲染使用浏览器几何，GPU 渲染使用共享 shaping 几何 | 面向浏览器的矩形与实际文本一致 |
-| 非可见行宽度和滚动范围 | 版本绑定的宽度索引 | 惰性分析估算，再逐步修正 | 构造时不会同步测量整个文档 |
-| 字体、缩放、设备像素比和样式变化 | 字体环境版本 | 带显式失效的指标缓存 | 不会跨字体环境静默复用坐标 |
-| 编辑、IME 和无障碍 | 输入/无障碍适配器 | 优先原生 EditContext，否则 textarea 或等效 fallback | 输入表面不会成为文档权威 |
+| 非可见行宽度和滚动范围                     | 版本绑定的宽度索引         | 惰性分析估算，再逐步修正                              | 构造时不会同步测量整个文档     |
+| 字体、缩放、设备像素比和样式变化           | 字体环境版本               | 带显式失效的指标缓存                                  | 不会跨字体环境静默复用坐标     |
+| 编辑、IME 和无障碍                         | 输入/无障碍适配器          | 优先原生 EditContext，否则 textarea 或等效 fallback   | 输入表面不会成为文档权威       |
 
 修改测量或渲染模块前，应先阅读决策、所有权、测量、当前状态和演进章节。
 
@@ -37,16 +37,16 @@
 
 ## 所有权与依赖边界
 
-| 组件 | 拥有 | 不得拥有 |
-| --- | --- | --- |
-| 文本模型 | 文本、版本、事务、历史、snapshot 和稳定逻辑位置 | DOM、CSS、浏览器输入或渲染宽度 |
-| 视觉布局 | 逻辑到视觉行映射、折行、折叠投影、视觉列和 viewport 范围 | DOM 读取、浏览器事件或模型变更 |
-| 几何提供者 | 视觉位置/范围到物理坐标的转换，以及与渲染后端对应的精确和 fallback 路径 | 文本事务、selection 状态或 feature policy |
-| 字体环境 | 字体/样式 identity、代表性指标、shaping 输入和失效版本 | 行所有权、滚动或输入状态 |
-| 宽度索引 | 每行宽度观测、最大宽度聚合、完整性/边界状态和增量失效 | 文本模型、浏览器 DOM 生命周期或精确光标策略 |
-| 渲染器 | 虚拟行、文本展示、retained visual parts 和后端绘制 | 模型变更、selection 权威或全局滚动权威 |
+| 组件               | 拥有                                                                             | 不得拥有                                        |
+| ------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 文本模型           | 文本、版本、事务、历史、snapshot 和稳定逻辑位置                                  | DOM、CSS、浏览器输入或渲染宽度                  |
+| 视觉布局           | 逻辑到视觉行映射、折行、折叠投影、视觉列和 viewport 范围                         | DOM 读取、浏览器事件或模型变更                  |
+| 几何提供者         | 视觉位置/范围到物理坐标的转换，以及与渲染后端对应的精确和 fallback 路径          | 文本事务、selection 状态或 feature policy       |
+| 字体环境           | 字体/样式 identity、代表性指标、shaping 输入和失效版本                           | 行所有权、滚动或输入状态                        |
+| 宽度索引           | 每行宽度观测、最大宽度聚合、完整性/边界状态和增量失效                            | 文本模型、浏览器 DOM 生命周期或精确光标策略     |
+| 渲染器             | 虚拟行、文本展示、retained visual parts 和后端绘制                               | 模型变更、selection 权威或全局滚动权威          |
 | 输入与无障碍适配器 | Native/textarea/EditContext 事件、浏览器 focus、composition 传输和屏幕阅读器投影 | 第二套文档模型、history stack 或 selection 权威 |
-| 宿主 | 挂载、外部尺寸、产品组合和宿主服务 | 内部行、编辑事务或渲染器几何 |
+| 宿主               | 挂载、外部尺寸、产品组合和宿主服务                                               | 内部行、编辑事务或渲染器几何                    |
 
 依赖方向是 `model → visual layout → geometry → renderer/input adapters`。低层可以向高层提供契约，但不能反向发现 feature 或 product state。
 
@@ -108,33 +108,33 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 
 ## 取舍与拒绝的替代方案
 
-| 方案 | 优势 | 不作为长期默认方案的边界 |
-| --- | --- | --- |
-| 完整 DOM 渲染和测量 | 浏览器原生文本精度最高 | 文档规模会放大内存和 layout 成本；输入正确性不要求整个文档拥有 DOM |
-| 纯 Canvas/GPU 渲染和测量 | 吞吐高，绘制自由 | 原生选区、无障碍、bidi cluster、连字和 IME 几何需要额外权威机制 |
-| 复制 VS Code 当前结构 | 行为成熟，参考点熟悉 | 其中包含历史约束，不能定义本编辑器的所有权边界 |
-| 同步测量整个文档 | 最大宽度语义简单 | 大文件启动和输入会被阻塞，字体变化成本高 |
-| 可见精确 + 非可见惰性混合几何 | 平衡精度、规模和后端选择 | 需要明确质量、失效和 fallback 契约；这种复杂度是有意的 |
+| 方案                          | 优势                     | 不作为长期默认方案的边界                                           |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------ |
+| 完整 DOM 渲染和测量           | 浏览器原生文本精度最高   | 文档规模会放大内存和 layout 成本；输入正确性不要求整个文档拥有 DOM |
+| 纯 Canvas/GPU 渲染和测量      | 吞吐高，绘制自由         | 原生选区、无障碍、bidi cluster、连字和 IME 几何需要额外权威机制    |
+| 复制 VS Code 当前结构         | 行为成熟，参考点熟悉     | 其中包含历史约束，不能定义本编辑器的所有权边界                     |
+| 同步测量整个文档              | 最大宽度语义简单         | 大文件启动和输入会被阻塞，字体变化成本高                           |
+| 可见精确 + 非可见惰性混合几何 | 平衡精度、规模和后端选择 | 需要明确质量、失效和 fallback 契约；这种复杂度是有意的             |
 
 ## 当前实现状态
 
 以下事实描述当前 Ash 实现，不重新定义目标契约。
 
-| 领域 | 状态 | 当前证据与边界 |
-| --- | --- | --- |
-| Common 测量契约 | Current / 已实现 | `common/viewModel.ts` 提供文本宽度和 padding 输入，不导入浏览器 API |
-| 浏览器编辑器几何配置 | Current / 已实现 | `browser/config/editorConfiguration.ts` 解析字体、行高和容器尺寸；通过构造注入读取窗口无障碍服务，统一计算每个编辑器的 `auto`/`on`/`off` 策略，读屏内容消费同一结果 |
-| 模型相关几何配置 | Current / 已实现 | `CodeEditorWidget` 提供所挂载模型的长行特征；`ViewModel` 在编辑、折叠、换行和 tabSize 变化后更新模型与显示行数，配置据此计算行号栏宽度和缩略图 fit/fill 几何。布局通知通过调度等待光标与行事件发布完成后绘制 |
-| 浏览器元素尺寸观察 | Current / 已实现 | `browser/config/elementSizeObserver.ts` 将 ResizeObserver 和初始 client-area 读取统一为 viewport 使用的合并尺寸事件 |
-| DOM 字体应用 | Current / 已实现 | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效 |
-| Tab-focus 状态 | Current / 已实现 | `browser/config/tabFocus.ts` 拥有可由 host 注入的状态和变更事件；`toggleTabFocusMode` contribution 拥有快捷键、DOM 状态和播报 |
-| 浏览器字体测量 | Current / 已实现 | `browser/config/fontMeasurements.ts` 按窗口测量、缓存、序列化 `FontInfo`，并独立清理各窗口中到期的不可靠测量；窗口关闭时取消任务。`browser/config/charWidthReader.ts` 使用布局像素批量测量字符宽度，不受祖先元素 transform 影响 |
-| 字体缓存持久化 | Current / 已实现 | `workbench/browser/workbench.ts` 在创建编辑器前恢复并预热字体，保存状态及直接释放时将 `editorFontInfo` 写入 application/machine 存储。恢复读数经过校验，仍属不可靠数据；本窗口尚未重新测量时序列化返回 `undefined`，到期后也保留原存储。关闭流程完成保存后，释放阶段不再重复保存 |
-| 惰性行宽聚合 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 提供有界初始工作、可取消分片、编辑增量更新和 lower-bound 最大值 |
-| 可见行虚拟化 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
-| 浏览器 shaping 后的可见几何 | Current / 部分具备 | `viewLine.ts` 负责单行读取，`CharacterMapping` 把 UTF-16 列映射到子 span，`rangeUtil.ts` 读取并整理浏览器范围，`domReadingContext.ts` 缓存布局基准 |
-| 统一的渲染器感知几何契约 | Proposed / 计划设计 | 光标、选区、composition、pointer、decoration 和输入消费者应使用一个显式提供者，并携带精确/fallback 状态 |
-| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性 | `browser/gpu` 拥有 device、DPR、glyph rasterization、分页 atlas 分配、矩形缓冲区，以及有界的整文件/可见区域策略；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewParts/viewLinesGpu` 协调上传与绘制。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
+| 领域                           | 状态                | 当前证据与边界                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Common 测量契约                | Current / 已实现    | `common/viewModel.ts` 提供文本宽度和 padding 输入，不导入浏览器 API                                                                                                                                                                                                              |
+| 浏览器编辑器几何配置           | Current / 已实现    | `browser/config/editorConfiguration.ts` 解析字体、行高和容器尺寸；通过构造注入读取窗口无障碍服务，统一计算每个编辑器的 `auto`/`on`/`off` 策略，读屏内容消费同一结果                                                                                                              |
+| 模型相关几何配置               | Current / 已实现    | `CodeEditorWidget` 提供所挂载模型的长行特征；`ViewModel` 在编辑、折叠、换行和 tabSize 变化后更新模型与显示行数，配置据此计算行号栏宽度和缩略图 fit/fill 几何。布局通知通过调度等待光标与行事件发布完成后绘制                                                                     |
+| 浏览器元素尺寸观察             | Current / 已实现    | `browser/config/elementSizeObserver.ts` 将 ResizeObserver 和初始 client-area 读取统一为 viewport 使用的合并尺寸事件                                                                                                                                                              |
+| DOM 字体应用                   | Current / 已实现    | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效                                                                                                                                               |
+| Tab-focus 状态                 | Current / 已实现    | `browser/config/tabFocus.ts` 拥有可由 host 注入的状态和变更事件；`toggleTabFocusMode` contribution 拥有快捷键、DOM 状态和播报                                                                                                                                                    |
+| 浏览器字体测量                 | Current / 已实现    | `browser/config/fontMeasurements.ts` 按窗口测量、缓存、序列化 `FontInfo`，并独立清理各窗口中到期的不可靠测量；窗口关闭时取消任务。`browser/config/charWidthReader.ts` 使用布局像素批量测量字符宽度，不受祖先元素 transform 影响                                                  |
+| 字体缓存持久化                 | Current / 已实现    | `workbench/browser/workbench.ts` 在创建编辑器前恢复并预热字体，保存状态及直接释放时将 `editorFontInfo` 写入 application/machine 存储。恢复读数经过校验，仍属不可靠数据；本窗口尚未重新测量时序列化返回 `undefined`，到期后也保留原存储。关闭流程完成保存后，释放阶段不再重复保存 |
+| 惰性行宽聚合                   | Current / 已实现    | `browser/viewParts/viewLines/viewLines.ts` 提供有界初始工作、可取消分片、编辑增量更新和 lower-bound 最大值                                                                                                                                                                       |
+| 可见行虚拟化                   | Current / 已实现    | `browser/viewParts/viewLines/viewLines.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层                                                                                                                           |
+| 浏览器 shaping 后的可见几何    | Current / 部分具备  | `viewLine.ts` 负责单行读取，`CharacterMapping` 把 UTF-16 列映射到子 span，`rangeUtil.ts` 读取并整理浏览器范围，`domReadingContext.ts` 缓存布局基准                                                                                                                               |
+| 统一的渲染器感知几何契约       | Proposed / 计划设计 | 光标、选区、composition、pointer、decoration 和输入消费者应使用一个显式提供者，并携带精确/fallback 状态                                                                                                                                                                          |
+| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性    | `browser/gpu` 拥有 device、DPR、glyph rasterization、分页 atlas 分配、矩形缓冲区，以及有界的整文件/可见区域策略；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewParts/viewLinesGpu` 协调上传与绘制。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
 
 不能因为存在 fallback 就把当前行为描述为完整。只有当 fallback 的精度、失效和降级行为明确时，它才是有效契约。
 
@@ -156,21 +156,21 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 
 以下 VS Code 模块可用于调查行为，是参考证据，不是 Ash 所有权、API 或文件布局的规范。
 
-| 参考模块 | 可借鉴的职责 | 不应推导出的结论 |
-| --- | --- | --- |
-| `vs/editor/browser/config/fontMeasurements.ts` | 字体环境缓存和代表性宽度 | 代表性宽度足以处理所有光标几何 |
-| `vs/editor/browser/config/charWidthReader.ts` | 浏览器支持的字符宽度读取 | 所有场景都必须使用相同的 DOM 探测策略 |
-| `vs/editor/browser/config/editorConfiguration.ts` | 面向浏览器的选项解析和失效接线 | Ash 应复制 VS Code 的重服务选项聚合器或历史兼容关系图 |
-| `vs/editor/browser/config/domFontInfo.ts` | 将解析后的字体值应用到 DOM 根节点 | 每个 widget 都应该独立重复字体 CSS 应用 |
-| `vs/editor/browser/config/elementSizeObserver.ts` | 为编辑器布局合并元素尺寸状态 | ResizeObserver 应成为布局权威，或泄漏到 common 几何层 |
-| `vs/editor/browser/config/tabFocus.ts` 与 `vs/editor/contrib/toggleTabFocusMode/browser/toggleTabFocusMode.ts` | 将共享 Tab-focus 状态与切换动作分离 | 状态、快捷键和 DOM 状态必须使用同一个 owner |
-| `vs/editor/browser/config/migrateOptions.ts` | VS Code 旧选项迁移 | 没有 Ash 旧选项契约时也需要迁移层 |
-| `vs/editor/browser/config/tabFocus.ts` | 全局 Tab-focus 模式服务 | 当 Ash 已由 `ToggleTabFocusModeController` 拥有 Tab-focus 策略时，还需要第二个 config 服务 |
-| `vs/editor/browser/viewParts/viewLines/viewLine.ts` | 已渲染行宽度和可见范围几何 | 虚拟化编辑器需要为每个模型行保留全局 DOM 行 |
-| `vs/editor/browser/viewParts/viewLines/viewLines.ts` | 可见行宽度聚合和延迟工作 | 它的历史 scheduler 和缓存失效规则普遍适用 |
-| `vs/editor/browser/view.ts` 与 `vs/editor/common/viewLayout/viewLayout.ts` | View facade 和 content-width 传递 | View host 和 common layout 必须拥有相同的类边界 |
-| `vs/editor/browser/gpu/*` 与 `vs/editor/browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | device/DPR/atlas 所有权、glyph rasterization、行适用性和 GPU 绘制调度 | Ash 应复制 VS Code 的 service 依赖，或默认启用实验性后端 |
-| `vs/editor/browser/controller/editContext/*` | 输入表面与可见范围集成 | 浏览器输入类型应该泄漏到 common model 契约 |
+| 参考模块                                                                                                       | 可借鉴的职责                                                          | 不应推导出的结论                                                                           |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `vs/editor/browser/config/fontMeasurements.ts`                                                                 | 字体环境缓存和代表性宽度                                              | 代表性宽度足以处理所有光标几何                                                             |
+| `vs/editor/browser/config/charWidthReader.ts`                                                                  | 浏览器支持的字符宽度读取                                              | 所有场景都必须使用相同的 DOM 探测策略                                                      |
+| `vs/editor/browser/config/editorConfiguration.ts`                                                              | 面向浏览器的选项解析和失效接线                                        | Ash 应复制 VS Code 的重服务选项聚合器或历史兼容关系图                                      |
+| `vs/editor/browser/config/domFontInfo.ts`                                                                      | 将解析后的字体值应用到 DOM 根节点                                     | 每个 widget 都应该独立重复字体 CSS 应用                                                    |
+| `vs/editor/browser/config/elementSizeObserver.ts`                                                              | 为编辑器布局合并元素尺寸状态                                          | ResizeObserver 应成为布局权威，或泄漏到 common 几何层                                      |
+| `vs/editor/browser/config/tabFocus.ts` 与 `vs/editor/contrib/toggleTabFocusMode/browser/toggleTabFocusMode.ts` | 将共享 Tab-focus 状态与切换动作分离                                   | 状态、快捷键和 DOM 状态必须使用同一个 owner                                                |
+| `vs/editor/browser/config/migrateOptions.ts`                                                                   | VS Code 旧选项迁移                                                    | 没有 Ash 旧选项契约时也需要迁移层                                                          |
+| `vs/editor/browser/config/tabFocus.ts`                                                                         | 全局 Tab-focus 模式服务                                               | 当 Ash 已由 `ToggleTabFocusModeController` 拥有 Tab-focus 策略时，还需要第二个 config 服务 |
+| `vs/editor/browser/viewParts/viewLines/viewLine.ts`                                                            | 已渲染行宽度和可见范围几何                                            | 虚拟化编辑器需要为每个模型行保留全局 DOM 行                                                |
+| `vs/editor/browser/viewParts/viewLines/viewLines.ts`                                                           | 可见行宽度聚合和延迟工作                                              | 它的历史 scheduler 和缓存失效规则普遍适用                                                  |
+| `vs/editor/browser/view.ts` 与 `vs/editor/common/viewLayout/viewLayout.ts`                                     | View facade 和 content-width 传递                                     | View host 和 common layout 必须拥有相同的类边界                                            |
+| `vs/editor/browser/gpu/*` 与 `vs/editor/browser/viewParts/viewLinesGpu/viewLinesGpu.ts`                        | device/DPR/atlas 所有权、glyph rasterization、行适用性和 GPU 绘制调度 | Ash 应复制 VS Code 的 service 依赖，或默认启用实验性后端                                   |
+| `vs/editor/browser/controller/editContext/*`                                                                   | 输入表面与可见范围集成                                                | 浏览器输入类型应该泄漏到 common model 契约                                                 |
 
 ## 长期不变量
 

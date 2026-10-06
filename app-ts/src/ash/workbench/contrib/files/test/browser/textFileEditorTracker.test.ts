@@ -30,8 +30,8 @@ test('File editor tracker reloads clean visible files after window focus and kee
 	const editorService = {
 		...emptyEditorServiceState,
 		visibleEditors: [{ resource }],
-		openEditor: async () => {},
-		focusActiveEditor: () => {},
+		openEditor: async () => { },
+		focusActiveEditor: () => { },
 	};
 	using tracker = new TextFileEditorTracker(browser.window as unknown as Window, editorService, models);
 

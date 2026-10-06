@@ -1,99 +1,101 @@
 .ash-context-view-menu {
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-large);
-  box-shadow: 0 2px 8px var(--ash-widget-shadow);
-  overflow: auto;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
+	overflow: auto;
 }
 
 .ash-menu {
-  display: grid;
-  min-width: 180px;
-  padding: 4px;
+	display: grid;
+	min-width: 180px;
+	padding: 4px;
 }
-.ash-menu .ash-action-view-item { display: block; }
+.ash-menu .ash-action-view-item {
+	display: block;
+}
 .ash-menu .ash-button {
-  width: 100%;
-  min-height: var(--ash-spacing-size280);
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  background: transparent;
-  text-align: left;
-  justify-content: flex-start;
-  cursor: default;
+	width: 100%;
+	min-height: var(--ash-spacing-size280);
+	padding: 4px 8px;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	background: transparent;
+	text-align: left;
+	justify-content: flex-start;
+	cursor: default;
 }
 .ash-menu .ash-action-view-item.focused > .ash-button {
-  color: var(--ash-menu-selection-foreground);
-  background: var(--ash-menu-selection-background);
+	color: var(--ash-menu-selection-foreground);
+	background: var(--ash-menu-selection-background);
 }
 .ash-menu-leading-slot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex: 0 0 16px;
 }
 /* A hidden check must not reserve space beside the action icon. */
 .ash-menu-leading-check > .ash-icon {
-  display: none;
+	display: none;
 }
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon {
-  display: block;
+	display: block;
 }
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
-  display: none;
+	display: none;
 }
 /* Override ActionBar's dimmed separator so the theme border stays visible in high contrast. */
 .ash-menu .ash-action-view-item-separator {
-  width: auto;
-  height: 1px;
-  margin: 4px 8px;
-  background: var(--ash-border);
-  opacity: 1;
+	width: auto;
+	height: 1px;
+	margin: 4px 8px;
+	background: var(--ash-border);
+	opacity: 1;
 }
 .ash-menu .ash-submenu-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex: 0 0 16px;
+	margin-left: auto;
 }
 .ash-menu .ash-submenu-indicator > .ash-icon {
-  width: 12px;
-  height: 12px;
+	width: 12px;
+	height: 12px;
 }
 .ash-menu .ash-submenu-indicator > .ash-icon [stroke] {
-  stroke-width: 1.5;
+	stroke-width: 1.5;
 }
 .ash-menu .ash-menu-keybinding {
-  margin-left: auto;
-  padding-left: 24px;
-  color: var(--ash-muted-foreground);
+	margin-left: auto;
+	padding-left: 24px;
+	color: var(--ash-muted-foreground);
 }
 /* Selected rows need their own foreground to keep the shortcut readable. */
 .ash-menu .ash-action-view-item.focused > .ash-button .ash-menu-keybinding {
-  color: var(--ash-menu-selection-foreground);
+	color: var(--ash-menu-selection-foreground);
 }
 /* User-agent kbd styling otherwise switches menu shortcuts to monospace. */
 .ash-menu .ash-menu-keybinding kbd {
-  font: inherit;
+	font: inherit;
 }
 .ash-menu .ash-menu-badge {
-  margin-left: auto;
-  padding: 2px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  border-radius: var(--ash-corner-radius-circle);
-  color: var(--ash-description-foreground);
-  font-size: 10px;
-  font-weight: var(--ash-font-weight-semi-bold);
-  line-height: 16px;
+	margin-left: auto;
+	padding: 2px 6px;
+	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-corner-radius-circle);
+	color: var(--ash-description-foreground);
+	font-size: 10px;
+	font-weight: var(--ash-font-weight-semi-bold);
+	line-height: 16px;
 }
 .ash-menu .ash-menu-badge + .ash-menu-keybinding {
-  margin-left: 8px;
-  padding-left: 0;
+	margin-left: 8px;
+	padding-left: 0;
 }

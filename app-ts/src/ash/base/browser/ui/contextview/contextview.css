@@ -1,97 +1,100 @@
 .ash-context-view {
-  position: fixed;
-  box-sizing: border-box;
-  z-index: calc(
-    var(--ash-z-index-context-view, 2500) +
-    var(--ash-context-view-layer, 0)
-  );
-  max-width: calc(100vw - 8px);
-  max-height: calc(100vh - 8px);
+	position: fixed;
+	box-sizing: border-box;
+	z-index: calc(
+		var(--ash-z-index-context-view, 2500) + var(--ash-context-view-layer, 0)
+	);
+	max-width: calc(100vw - 8px);
+	max-height: calc(100vh - 8px);
 }
 
 .ash-context-view-default {
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-medium);
-  box-shadow: 0 2px 8px var(--ash-widget-shadow);
-  overflow: auto;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-medium);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
+	overflow: auto;
 }
 
 .ash-context-view-dialog {
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-x-large);
-  box-shadow: 0 4px 16px var(--ash-widget-shadow);
-  overflow: auto;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-x-large);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+	overflow: auto;
 }
 
 [data-color-scheme="high-contrast-dark"] .ash-context-view-dialog,
 [data-color-scheme="high-contrast-light"] .ash-context-view-dialog {
-  border-color: var(--ash-contrast-border);
-  box-shadow: none;
+	border-color: var(--ash-contrast-border);
+	box-shadow: none;
 }
 
 .ash-context-view-hover {
-  color: var(--ash-hover-foreground);
-  background: var(--ash-hover-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-  border-radius: var(--ash-corner-radius-medium);
-  box-shadow: 0 4px 16px var(--ash-hover-shadow);
-  overflow: visible;
+	color: var(--ash-hover-foreground);
+	background: var(--ash-hover-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-radius: var(--ash-corner-radius-medium);
+	box-shadow: 0 4px 16px var(--ash-hover-shadow);
+	overflow: visible;
 }
 
 .ash-context-view-hover::before {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  box-sizing: border-box;
-  background: var(--ash-hover-background);
-  content: "";
-  transform: rotate(45deg);
+	position: absolute;
+	width: 8px;
+	height: 8px;
+	box-sizing: border-box;
+	background: var(--ash-hover-background);
+	content: "";
+	transform: rotate(45deg);
 }
 
 .ash-context-view-hover.ash-context-view-above::before {
-  bottom: -5px;
-  border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	bottom: -5px;
+	border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-below::before {
-  top: -5px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-  border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	top: -5px;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-align-left::before {
-  left: 14px;
+	left: 14px;
 }
 
 .ash-context-view-hover.ash-context-view-align-right::before {
-  right: 14px;
+	right: 14px;
 }
 
 .ash-context-view-hover.ash-context-view-align-center::before {
-  left: clamp(4px, calc(var(--ash-context-view-anchor-offset) - 4px), calc(100% - 12px));
+	left: clamp(
+		4px,
+		calc(var(--ash-context-view-anchor-offset) - 4px),
+		calc(100% - 12px)
+	);
 }
 
 .ash-context-view-hover.ash-context-view-axis-horizontal.ash-context-view-below::before {
-  top: 14px;
-  right: auto;
-  bottom: auto;
-  left: -5px;
-  border: 0;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-  border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	top: 14px;
+	right: auto;
+	bottom: auto;
+	left: -5px;
+	border: 0;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-axis-horizontal.ash-context-view-above::before {
-  top: 14px;
-  right: -5px;
-  bottom: auto;
-  left: auto;
-  border: 0;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-  border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	top: 14px;
+	right: -5px;
+	bottom: auto;
+	left: auto;
+	border: 0;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
 }

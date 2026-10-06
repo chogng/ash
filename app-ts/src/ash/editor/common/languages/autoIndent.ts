@@ -73,7 +73,7 @@ export function getInheritIndentForLine(
 	lineNumber: number,
 	honorIntentialIndent: boolean = true,
 	languageConfigurationService: ILanguageConfigurationService
-): { indentation: string; action: IndentAction | null; line?: number } | null {
+): { indentation: string; action: IndentAction | null; line?: number; } | null {
 	if (autoIndent < EditorAutoIndentStrategy.Full) {
 		return null;
 	}
@@ -302,7 +302,7 @@ export function getIndentForEnter(
 	range: Range,
 	indentConverter: IIndentConverter,
 	languageConfigurationService: ILanguageConfigurationService
-): { beforeEnter: string; afterEnter: string } | null {
+): { beforeEnter: string; afterEnter: string; } | null {
 	if (autoIndent < EditorAutoIndentStrategy.Full) {
 		return null;
 	}

@@ -355,7 +355,7 @@ export class ViewLayout extends Disposable {
 		return this.scrollable.hasPendingScrollAnimation();
 	}
 
-	public saveState(): { scrollTop: number; scrollTopWithoutViewZones: number; scrollLeft: number } {
+	public saveState(): { scrollTop: number; scrollTopWithoutViewZones: number; scrollLeft: number; } {
 		const { left, top } = this.currentLayout.scrollPosition;
 		return { scrollTop: top, scrollTopWithoutViewZones: top, scrollLeft: left };
 	}
@@ -563,7 +563,7 @@ export class ViewLayout extends Disposable {
 		}));
 	}
 
-	private readScrollDimensions(): { width: number; scrollWidth: number; height: number; scrollHeight: number } {
+	private readScrollDimensions(): { width: number; scrollWidth: number; height: number; scrollHeight: number; } {
 		const contentWidth = Math.max(this.viewportSize.width, this.maxLineWidth, this.overlayWidgetsMinWidth, this.linesLayout.getWhitespaceMinWidth());
 		const contentHeight = Math.max(this.viewportSize.height, this.linesLayout.getLinesTotalHeight());
 		// Public layout coordinates include the fixed gutter; scrollbar dimensions

@@ -123,11 +123,11 @@ class TestFileService implements IFileService {
 	readonly writes: IFileWriteRequest[] = [];
 	rejectWritesWithRevisionConflict = false;
 	readonly onDidChangeFiles = () => ({
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	});
 
-	constructor(private readonly content: string | Uint8Array | Promise<string>) {}
+	constructor(private readonly content: string | Uint8Array | Promise<string>) { }
 
 	async stat(resource: URI) {
 		return {
@@ -178,7 +178,7 @@ class TestFileService implements IFileService {
 	async delete(): Promise<never> { throw new Error("Text file tests do not delete files"); }
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(resolver => {
 		resolve = resolver;

@@ -18,7 +18,11 @@
 }
 
 .stanza-editor.input-focused .selection-highlight {
-	background: color-mix(in srgb, var(--ash-selection-background) 50%, transparent);
+	background: color-mix(
+		in srgb,
+		var(--ash-selection-background) 50%,
+		transparent
+	);
 }
 
 @media (forced-colors: active) {

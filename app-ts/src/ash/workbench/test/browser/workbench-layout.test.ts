@@ -100,7 +100,7 @@ const { CommandService } = await import(
 );
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 const { SyncDescriptor } = await import('../../../platform/instantiation/common/descriptors.js');
-const {  } = await import(
+const { } = await import(
 	"../../../platform/instantiation/common/instantiation.js"
 );
 type WorkbenchPartId =
@@ -131,8 +131,8 @@ class TestPart extends WorkbenchPart {
 		return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
 			? 180
 			: this.id === "editor"
-			? 120
-			: 0;
+				? 120
+				: 0;
 	}
 
 	override get maximumWidth(): number {
@@ -208,8 +208,8 @@ function createLayoutHarness(
 		const part = partId === "editor"
 			? services.createInstance(EditorPart, container, {})
 			: partId === "sidebar" && sidebarPart
-			? sidebarPart
-			: new TestPart(partId, container);
+				? sidebarPart
+				: new TestPart(partId, container);
 		disposables.add(part);
 		parts.set(partId, part);
 		if (part instanceof EditorPart) editor = part;
@@ -496,7 +496,7 @@ test("platform and Workbench dependencies resolve one owner and publish complete
 	const harness = createLayoutHarness(dom.window.document);
 	class LayoutConsumer {
 		constructor(@ILayoutService readonly platform: import('../../../platform/layout/browser/layoutService.js').ILayoutService,
-			@IWorkbenchLayoutService readonly workbench: import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService) {}
+			@IWorkbenchLayoutService readonly workbench: import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService) { }
 	}
 	const consumer = harness.services.createInstance(LayoutConsumer);
 	assert.equal(consumer.platform, harness.layout);
@@ -1103,7 +1103,7 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	const compositeBar = sidebar.compositeBar;
 	const globalActions = dom.window.document.createElement('div');
 	const configuration = disposables.add(new InMemoryConfigurationService());
-	const globalBar = { domNode: globalActions, setOrientation() {}, getContextMenuActions: () => [] };
+	const globalBar = { domNode: globalActions, setOrientation() { }, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
 	const activitybar = disposables.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
 	assert.equal(activitybar.minimumWidth, 44);
@@ -1431,7 +1431,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const menuService = new MenuService(commands, contextKeys);
-	const contextMenuProvider: IContextMenuProvider = { showContextMenu() {} };
+	const contextMenuProvider: IContextMenuProvider = { showContextMenu() { } };
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
 		registry,
 	}, contextKeys));
@@ -1619,7 +1619,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		storageService: storage,
 	}));
 	const configuration = firstBar.add(new InMemoryConfigurationService());
-	const globalBar = { domNode: dom.window.document.createElement('div'), setOrientation() {}, getContextMenuActions: () => [] };
+	const globalBar = { domNode: dom.window.document.createElement('div'), setOrientation() { }, getContextMenuActions: () => [] };
 	const localization = { translate: (_bundle: string, _key: string, fallback: string) => fallback } as ILocalizationService;
 	const activitybar = firstBar.add(new ActivitybarPart(dom.window.document.body, compositeBar, globalBar, configuration, localization));
 	activitybar.domNode.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
@@ -1989,7 +1989,7 @@ function resetWorkbenchSash(
 	sash.dispatchEvent(new targetWindow.MouseEvent("dblclick", { bubbles: true, detail: 2 }));
 }
 
-function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, "clientX", { value: clientX });
 	return event;

@@ -5,7 +5,7 @@ export type JsonValue =
 	| number
 	| string
 	| readonly JsonValue[]
-	| Readonly<{ [key: string]: JsonValue }>;
+	| Readonly<{ [key: string]: JsonValue; }>;
 
 export interface JsonValueValidationOptions {
 	readonly path?: string;

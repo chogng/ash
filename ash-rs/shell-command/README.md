@@ -11,12 +11,12 @@ materialization。安装布局与候选位置由 [`ash-install-context`](../inst
 
 ## 文件与职责
 
-| 文件 | 职责 |
-| --- | --- |
-| `src/lib.rs` | `ShellCommandTool`、`ShellCommandRequest`、definition 与 executor bridge |
-| `src/ripgrep.rs` | `RipgrepExecutable` candidate validation/identity freeze 与 `BuiltInRipgrepPolicy` 参数约束 |
-| `src/shell_command_tests.rs` | binding、authority、sandbox denial、session 工作目录与 validation |
-| `src/ripgrep_tests.rs` | executable discovery 和 unsafe flag rejection |
+| 文件                         | 职责                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `src/lib.rs`                 | `ShellCommandTool`、`ShellCommandRequest`、definition 与 executor bridge                    |
+| `src/ripgrep.rs`             | `RipgrepExecutable` candidate validation/identity freeze 与 `BuiltInRipgrepPolicy` 参数约束 |
+| `src/shell_command_tests.rs` | binding、authority、sandbox denial、session 工作目录与 validation                           |
+| `src/ripgrep_tests.rs`       | executable discovery 和 unsafe flag rejection                                               |
 
 ## 公共契约与调用路径
 

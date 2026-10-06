@@ -8,13 +8,13 @@ declare global {
 			reconnect(): void;
 			send(frame: string): void;
 			dispose(): void;
-			messages: Array<{ event: string; payload: unknown }>;
+			messages: Array<{ event: string; payload: unknown; }>;
 		};
 	}
 }
 
 let transport: AppServerWebSocketTransport | undefined;
-const messages: Array<{ event: string; payload: unknown }> = [];
+const messages: Array<{ event: string; payload: unknown; }> = [];
 window.ashWebTransportIntegration = {
 	start() {
 		transport = new AppServerWebSocketTransport(new URL(location.origin), { token: 'a'.repeat(64), workspaceId: 'test', workspaceRoot: '/test' });

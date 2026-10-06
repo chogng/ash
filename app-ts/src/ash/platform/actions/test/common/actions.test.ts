@@ -130,7 +130,7 @@ test("registerAction2 publishes all menu placements as one change", () => {
 			});
 		}
 
-		override run(): void {}
+		override run(): void { }
 	}));
 	assert.deepEqual(snapshots, [["First", "Second"]]);
 	assert.deepEqual(changedMenus, [[true, true, true]]);
@@ -179,7 +179,7 @@ test("registerAction2 accepts independently conditioned keybinding contributions
 			});
 		}
 
-		override run(): void {}
+		override run(): void { }
 	});
 
 	const rules = KeybindingsRegistry.getKeybindings().flatMap((rule) => rule.kind === KeybindingRuleKind.Command && rule.command === commandId ? [rule] : []);
@@ -202,7 +202,7 @@ test("registerAction2 routes VS Code numeric keybindings through the canonical r
 			});
 		}
 
-		override run(): void {}
+		override run(): void { }
 	});
 
 	const rule = KeybindingsRegistry.getKeybindings().find(candidate => candidate.kind === KeybindingRuleKind.Command && candidate.command === commandId);

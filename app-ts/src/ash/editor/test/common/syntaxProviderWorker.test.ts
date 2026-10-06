@@ -67,7 +67,7 @@ test('Syntax worker retains the last successful token state when tokenization fa
 });
 
 class TokenState implements IState {
-	constructor(public inComment = false) {}
+	constructor(public inComment = false) { }
 
 	public clone(): TokenState {
 		return new TokenState(this.inComment);
@@ -123,7 +123,7 @@ test("Syntax worker selects one token provider and merges diagnostic providers",
 test("Syntax provider failures are isolated by lane and provider", async () => {
 	using model = new TextModel("value");
 	using registry = new SyntaxProviderRegistry();
-	const errors: Array<{ readonly providerId: string; readonly lane: string; readonly error: unknown }> = [];
+	const errors: Array<{ readonly providerId: string; readonly lane: string; readonly error: unknown; }> = [];
 	using broken = registry.register(provider("broken", {
 		tokens: () => {
 			throw new Error("token failed");
@@ -151,7 +151,7 @@ test("Syntax provider failures are isolated by lane and provider", async () => {
 test("Syntax provider synchronization failures do not block healthy request lanes", async () => {
 	using model = new TextModel("value");
 	using registry = new SyntaxProviderRegistry();
-	const errors: Array<{ readonly providerId: string; readonly operation: string }> = [];
+	const errors: Array<{ readonly providerId: string; readonly operation: string; }> = [];
 	using registration = registry.register({
 		id: "sync-failure",
 		languageIds: ["typescript"],
@@ -236,24 +236,30 @@ test("Token providers fall through undefined and isolated failures by priority",
 	const errors: string[] = [];
 	using registrations = new DisposableStore();
 	registrations.add(registry.register({
-		...provider("baseline", { tokens: () => {
-			calls.push("baseline");
-			return tokenResult("variable");
-		} }),
+		...provider("baseline", {
+			tokens: () => {
+				calls.push("baseline");
+				return tokenResult("variable");
+			}
+		}),
 		tokenPriority: 0,
 	}));
 	registrations.add(registry.register({
-		...provider("missing", { tokens: () => {
-			calls.push("missing");
-			return undefined;
-		} }),
+		...provider("missing", {
+			tokens: () => {
+				calls.push("missing");
+				return undefined;
+			}
+		}),
 		tokenPriority: 100,
 	}));
 	registrations.add(registry.register({
-		...provider("broken", { tokens: () => {
-			calls.push("broken");
-			throw new Error("broken tokens");
-		} }),
+		...provider("broken", {
+			tokens: () => {
+				calls.push("broken");
+				throw new Error("broken tokens");
+			}
+		}),
 		tokenPriority: 50,
 	}));
 	using worker = new SyntaxProviderWorker(registry, providerId => errors.push(providerId));
@@ -300,10 +306,10 @@ function diagnosticResult(message: string): LanguageDiagnosticResult {
 	};
 }
 
-async function runLane<T extends typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE>(worker: SyntaxProviderWorker, model: TextModel, lane: T): Promise<Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>> {
+async function runLane<T extends typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE>(worker: SyntaxProviderWorker, model: TextModel, lane: T): Promise<Extract<import('../../common/languages.js').SyntaxResult, { lane: T; }>> {
 	const result = await worker.run({ requestId: 1, lane, payload: { languageId: 'typescript' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	assert.equal(result.lane, lane);
-	return result as Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>;
+	return result as Extract<import('../../common/languages.js').SyntaxResult, { lane: T; }>;
 }
 
 
@@ -315,9 +321,11 @@ test('hypothetical tokenization borrows incoming state and cannot replace real c
 	using registration = TokenizationRegistry.register('typescript', statefulSupport(calls));
 	const before = await runLane(worker, model, SYNTAX_TOKEN_LANE);
 	calls.length = 0;
-	const result = await worker.run({ requestId: 2, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
-		languageId: 'typescript', tokenize: { lineNumber: 2, lines: ['preview', 'close', 'after'] },
-	} }, new AbortController().signal);
+	const result = await worker.run({
+		requestId: 2, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
+			languageId: 'typescript', tokenize: { lineNumber: 2, lines: ['preview', 'close', 'after'] },
+		}
+	}, new AbortController().signal);
 	assert.equal(result.lane, SYNTAX_TOKENIZE_LANE);
 	if (result.lane !== SYNTAX_TOKENIZE_LANE) throw new Error('Wrong lane');
 	assert.deepEqual(result.value!.tokens.map(token => [token.range.startLineNumber, token.tokenType]), [[1, 'comment'], [2, 'word'], [3, 'word']]);
@@ -333,9 +341,11 @@ test('a selected provider without hypothetical tokenization does not borrow anot
 	using tokenizer = TokenizationRegistry.register('typescript', statefulSupport([]));
 	using registration = registry.register({ id: 'preferred', languageIds: ['typescript'], tokenPriority: 100, provideTokens: () => ({ tokens: [] }) });
 	using worker = new SyntaxProviderWorker(registry);
-	const result = await worker.run({ requestId: 1, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
-		languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['open'] },
-	} }, new AbortController().signal);
+	const result = await worker.run({
+		requestId: 1, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
+			languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['open'] },
+		}
+	}, new AbortController().signal);
 	assert.deepEqual(result, { lane: SYNTAX_TOKENIZE_LANE, value: null });
 });
 
@@ -347,8 +357,10 @@ test('hypothetical tokens retain an embedded language even when it has no stylin
 		tokenize: (_line, _hasEOL, state) => ({ tokens: [{ offset: 0, type: '', language: 'embedded' }], endState: state }),
 	});
 	using worker = new SyntaxProviderWorker(registry);
-	const result = await worker.run({ requestId: 1, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
-		languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['begin'] },
-	} }, new AbortController().signal);
+	const result = await worker.run({
+		requestId: 1, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
+			languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['begin'] },
+		}
+	}, new AbortController().signal);
 	assert.deepEqual(result, { lane: SYNTAX_TOKENIZE_LANE, value: { tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'other', modifiers: [], languageId: 'embedded' }] } });
 });

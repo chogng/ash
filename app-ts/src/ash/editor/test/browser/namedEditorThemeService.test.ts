@@ -26,7 +26,7 @@ class TestMediaQueryList extends EventTarget {
 	}
 }
 
-function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: StandaloneThemeService } {
+function createThemeService(): { readonly mediaQuery: TestMediaQueryList; readonly service: StandaloneThemeService; } {
 	const mediaQuery = new TestMediaQueryList();
 	const ownerWindow = {
 		document: browserEnvironment.window.document,

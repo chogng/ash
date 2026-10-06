@@ -7,7 +7,7 @@ test('PointerHandler retains precise pointer coordinates and mouse click count',
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const element = dom.window.document.querySelector<HTMLElement>('main')!;
 	using handler = new PointerHandler(element);
-	const downs: Array<{ readonly pointerId: number; readonly count: number; readonly x: number; readonly y: number }> = [];
+	const downs: Array<{ readonly pointerId: number; readonly count: number; readonly x: number; readonly y: number; }> = [];
 	using listener = handler.onDidPointerDown(({ event, pointerId }) => {
 		downs.push({ pointerId, count: event.detail, x: event.pos.x, y: event.pos.y });
 		event.preventDefault();

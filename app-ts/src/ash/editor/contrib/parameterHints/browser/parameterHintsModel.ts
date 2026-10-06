@@ -17,7 +17,7 @@ export class ParameterHintsModel extends Disposable {
 	private readonly scheduler: RunOnceScheduler;
 	private currentHints: LanguageParameterHints | undefined;
 	private pending: LanguageParameterHintsContext | undefined;
-	private request: { controller: AbortController; activeSignatureHelp: LanguageParameterHints | undefined } | undefined;
+	private request: { controller: AbortController; activeSignatureHelp: LanguageParameterHints | undefined; } | undefined;
 
 	constructor(
 		private readonly input: HTMLElement,

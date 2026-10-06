@@ -45,7 +45,7 @@ import { InstantiationService } from '../../instantiation/common/instantiationSe
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	let connecting: Promise<void> = Promise.resolve();

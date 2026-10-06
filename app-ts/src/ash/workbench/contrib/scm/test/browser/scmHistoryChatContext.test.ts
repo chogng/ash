@@ -148,6 +148,6 @@ function testProvider(id: string, providerId: string, label: string, historyProv
 		groups: [], onDidChangeResources: Event.None,
 		input: { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined },
 		activeRepositoryName: undefined, statusBarCommands: [], statusMessage: '', isBusy: false,
-		refresh: async () => {}, activate: async () => {},
+		refresh: async () => { }, activate: async () => { },
 	};
 }

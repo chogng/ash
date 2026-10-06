@@ -46,7 +46,7 @@ test("provisioner probes the Remote target and installs only its packaged artifa
 
 		assert.equal(await provisioner.install("Build-Linux", { signal: cancellation.signal }), "/srv/ash/remote/runtime/bin/ash-remote-server");
 		assert.deepEqual(invocations[0], ["probe", "--host", "build-linux", "--ssh", "/usr/bin/ssh"]);
-		assert.deepEqual(invocations[1], [ "install",
+		assert.deepEqual(invocations[1], ["install",
 			"--host", "build-linux",
 			"--archive", archivePath,
 			"--version", "0.1.0",

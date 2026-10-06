@@ -345,7 +345,7 @@ function languageIdsForSelector(selector: LanguageSelector): readonly string[] {
 	return Object.freeze([...result]);
 }
 
-function withLanguageSelector<TProvider extends object>(selector: LanguageSelector, provider: TProvider): TProvider & { readonly languageIds: readonly string[] } {
+function withLanguageSelector<TProvider extends object>(selector: LanguageSelector, provider: TProvider): TProvider & { readonly languageIds: readonly string[]; } {
 	if (!provider || typeof provider !== 'object') throw new TypeError('Language feature provider must be an object');
 	return Object.freeze({ ...provider, languageIds: languageIdsForSelector(selector) });
 }

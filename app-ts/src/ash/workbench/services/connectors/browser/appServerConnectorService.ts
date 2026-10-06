@@ -22,7 +22,7 @@ export class AppServerConnectorService extends Disposable implements IConnectorS
 		return { generation: result.generation, connectors: result.connectors.map(connectorView) };
 	}
 
-	async connectApiToken(connector: ConnectorView, catalogGeneration: number, input: { readonly accountId: string; readonly accountDisplayName: string; readonly token: string }): Promise<void> {
+	async connectApiToken(connector: ConnectorView, catalogGeneration: number, input: { readonly accountId: string; readonly accountDisplayName: string; readonly token: string; }): Promise<void> {
 		await this.api.connectApiToken({
 			commandId: `desktop-connector-connect-${crypto.randomUUID()}`,
 			expectedGeneration: catalogGeneration,

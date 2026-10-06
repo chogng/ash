@@ -30,7 +30,7 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 	public static async load(id: string, label: string, value: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<FileIconThemeData> {
 		const document = record(value);
 		if (document.hidesExplorerArrows !== undefined && typeof document.hidesExplorerArrows !== 'boolean') { throw new Error('hidesExplorerArrows must be a boolean'); }
-		const fonts = new Map<string, { family: string; size: string; weight: string; style: string }>();
+		const fonts = new Map<string, { family: string; size: string; weight: string; style: string; }>();
 		const styles: string[] = [];
 		if (document.fonts !== undefined && !Array.isArray(document.fonts)) { throw new Error('Icon fonts must be an array'); }
 		for (const [index, candidate] of ((document.fonts ?? []) as unknown[]).entries()) {
@@ -94,7 +94,7 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		};
 		const fallback = (associations: Associations): string | undefined =>
 			classes.includes('rootfolder-icon') ? associations.rootFolder ?? associations.folder :
-			classes.includes('folder-icon') ? associations.folder : associations.file;
+				classes.includes('folder-icon') ? associations.folder : associations.file;
 		const dark = isDarkColorScheme(colorScheme);
 		const contrast = colorScheme === ColorScheme.HighContrastDark || colorScheme === ColorScheme.HighContrastLight;
 		const ordinary = dark ? specific(this.normal) ?? fallback(this.normal) : specific(this.light) ?? specific(this.normal) ?? fallback(this.light) ?? fallback(this.normal);

@@ -96,7 +96,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		const choice = <K extends 'size' | 'showSlider' | 'side'>(
 			key: K,
 			label: string,
-			options: readonly { label: string; value: NonNullable<IEditorMinimapOptions[K]> }[],
+			options: readonly { label: string; value: NonNullable<IEditorMinimapOptions[K]>; }[],
 		): IAction => {
 			if (!minimap.enabled) {
 				return {
@@ -104,7 +104,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 					label,
 					tooltip: '',
 					enabled: false,
-					run() {},
+					run() { },
 				};
 			}
 			return new SubmenuAction(

@@ -10,7 +10,7 @@ export class SessionFileService extends BrowserFileService {
 		host: IRendererHost,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
-		const target = <T extends { readonly dirId?: string }>(params: T): Omit<T, 'dirId'> & { dirId?: string; sessionDirectory?: { sessionId: string; path: string } } => {
+		const target = <T extends { readonly dirId?: string; }>(params: T): Omit<T, 'dirId'> & { dirId?: string; sessionDirectory?: { sessionId: string; path: string; }; } => {
 			if (!params.dirId?.startsWith('session:')) { return params; }
 			const [sessionId, path] = params.dirId.slice('session:'.length).split(':').map(decodeURIComponent);
 			const { dirId, ...rest } = params;

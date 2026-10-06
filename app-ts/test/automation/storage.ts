@@ -8,7 +8,7 @@ import type { PlaywrightApplication } from './playwrightDriver.js';
 export async function readStorageEntries(application: PlaywrightApplication, page: Page, identity: IStorageIdentity): Promise<Readonly<Record<string, IStorageEntry>>> {
 	if ('windows' in application) {
 		const directory = await application.evaluate(({ app }) => app.getPath('userData'));
-		const document = JSON.parse(await readFile(join(directory, 'workbench-state.json'), 'utf8')) as { storages: IStorageSnapshot[] };
+		const document = JSON.parse(await readFile(join(directory, 'workbench-state.json'), 'utf8')) as { storages: IStorageSnapshot[]; };
 		return document.storages.find(snapshot => snapshot.identity.scope === identity.scope && snapshot.identity.id === identity.id)?.entries ?? {};
 	}
 	return page.evaluate(identity => {
@@ -26,7 +26,7 @@ export async function seedStorageOnNextLoad(application: PlaywrightApplication, 
 			const require = process.getBuiltinModule('module').createRequire(modulePath);
 			const { StorageMainService } = require(modulePath);
 			const original = StorageMainService.prototype.getItems;
-			StorageMainService.prototype.getItems = async function(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>) {
+			StorageMainService.prototype.getItems = async function (identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>) {
 				if (identity.scope !== target.scope || identity.id !== target.id) {
 					return original.call(this, identity, legacy);
 				}

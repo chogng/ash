@@ -230,7 +230,7 @@ test('browser range replacement restores its text and selection through undo and
 	await editor.input.press('ControlOrMeta+Home');
 	await editor.input.press('End');
 	await editor.input.evaluate(element => {
-		const context = (element as HTMLElement & { editContext?: EventTarget }).editContext;
+		const context = (element as HTMLElement & { editContext?: EventTarget; }).editContext;
 		if (!context) throw new Error('Browser EditContext is unavailable');
 		context.dispatchEvent(Object.assign(new Event('textupdate'), {
 			text: 'hi', updateRangeStart: 0, updateRangeEnd: 5, selectionStart: 0, selectionEnd: 2,

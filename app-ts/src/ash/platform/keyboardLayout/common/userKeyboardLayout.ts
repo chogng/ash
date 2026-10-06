@@ -28,7 +28,7 @@ export interface IUserKeyboardLayoutService extends IKeyboardLayoutProvider {
 	openResource(): Promise<void>;
 }
 
-export interface IUserKeyboardLayoutApi extends IUserKeyboardLayoutService {}
+export interface IUserKeyboardLayoutApi extends IUserKeyboardLayoutService { }
 
 export const IUserKeyboardLayoutService = createServiceIdentifier<IUserKeyboardLayoutService>('userKeyboardLayoutService');
 

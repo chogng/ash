@@ -16,51 +16,51 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 
 ## 所有权与接口
 
-| Symbol | 可见性 | 精确职责 |
-| --- | --- | --- |
-| `CodeEditor` | public | 绘制可见代码行、caret/selection、preedit、syntax token、gutter 与 fold control；拥有 fold-control geometry 和 hit test，`within_viewport` 限制嵌入式宿主实际投影的行 |
-| `CodeEditorPresentation` | public | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器 |
-| `CodeEditorLineWrapping` / `CodeEditorNavigation` | public | 选择不换行或 viewport soft wrap，并把 presentation 解析出的显示列宽和可见行容量交给 document 的上下键与翻页导航 |
-| `CodeEditorDocument` | public | 拥有 Native 的语言、行 range、composition、syntax snapshot、fold/visible-row projection；committed text、selection、revision 与 undo/redo 委托 persistent `ash-editor-core`，同步 text projection 仅供 Native 计算/绘制 |
-| `CodeEditorRevision` | public | `ash-editor-core::EditorCoreRevision` 的 Native 名称；为宿主提供与文本 mutation 绑定的单调 revision，navigation 不推进，insert/replace/undo/redo 推进 |
-| `CodeEditorFoldingRange` / `CodeEditorFoldState` | public | 表达零基 source-row 结构范围及每个 document 实例独立的展开状态；start row 保留可见 |
-| `CodeEditorFoldControl` | public | 发布当前帧可见 gutter control 的 editor-owned range、state 与命中 bounds |
-| `CodeEditorCommand` | public | 表达插入、自动缩进换行、indent/outdent、语言声明的行注释、行复制/移动/删除空行/合并/插入/行尾空白清理/排序/反转/去重、Unicode navigation、选择、删除与 undo/redo |
-| `CodeEditorIndentation` | public | 以显式 tabs/spaces 与 tab width policy 驱动换行、Tab 与 Shift+Tab、leading-whitespace close delimiter auto-outdent；Enter 保留 document line ending，不把缩进策略放进 Native |
-| `CodeEditorSearchQuery` / `CodeEditorSearchMatch` | public | 表达大小写策略、byte range 与 editor position；前后循环查找、单次/全部替换由 document 执行 |
-| `CodeEditorDiagnostic` / `CodeEditorDiagnosticSeverity` | public | 表达 UTF-8 document byte range、severity、message/source/code；不暴露 LSP 类型 |
-| `CodeEditorDiagnosticPalette` | public | 由宿主把 error/warning/information/hint theme token 映射为编辑器语义颜色 |
-| `CodeEditorLanguage` | public | 让宿主选择 PlainText、Shell、JSON、JSONC 或 Rust；parser、tree、revision 与 token projection 保持私有 |
-| `CodeEditorPalette` / `CodeEditorSyntaxPalette` | public | 由宿主把 resolved theme token 映射为组件命名输入；换主题只重建 style，不重新分析文本 |
-| `CodeEditorRowSource` | public trait | 惰性提供稳定 visual row；普通文档和 diff projection 共用 |
-| `CodeEditorRow` | public | 表达真实代码行、对齐 placeholder 或无行号 annotation，以及本帧 decoration |
-| `CodeEditorViewport` | public | 保存首个可见行和横向显示列，并执行有界滚动或 reveal-row |
-| `CodeEditorStyle` | public | 拥有代码 surface、header、gutter、文本与 syntax role 的 resolved presentation style；`light()` 只是安全 fallback |
-| `DiffEditor` | public | 按 presentation 组合双列或单列 `CodeEditor`，同步纵向 viewport 并绘制 diff decoration |
-| `DiffEditorDocument` | public | 接收已计算 `DiffDocument` 与 language，内部持有 original/modified 两个 language-aware `CodeEditorDocument`；不向宿主暴露 parser/revision/token |
-| `DiffEditorPresentation` | public | 显式选择 `SideBySide` 或适合窄嵌入 surface 的 `Unified` geometry |
-| `DiffEditorState` | public | 保存共享首行、两侧独立横向显示列和 Unified 未修改区间的展开状态 |
-| `DiffEditorFoldControl` | public | 向产品宿主发布可见未修改区间的行数、状态与命中 bounds |
-| `MultiDiffEditor` | public | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface |
-| `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffEditorDocument`、两侧标签和该文件的 `DiffEditorState`；产品 host 应通过 `with_identity` 提供稳定 changed-file identity |
-| `MultiDiffEditorItemIdentity` | public | 从 host-owned stable slot 派生 section/header/diff/fold `ElementId`，并提供折叠 section 的 `AnimationProperty::Height` key |
-| `MultiDiffEditorLayout` | public | 用 `ash-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、平衡分块高度索引与总内容高度，并允许宿主更新一个 section measurement 或 splice changed-file 区间 |
-| `ash-ui-components::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
-| `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
-| `DiffEditorPalette` / `MultiDiffEditorPalette` | public | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉 |
-| `DiffSideRows` | private | 把 `DiffEditorDocument` 的一侧惰性转换为带 editor-owned syntax token 的 `CodeEditorRow` |
-| `UnifiedDiffRows` | private | 用 hunk source-range、修改行索引和 fold segment 紧凑表达单列 diff；按可见 visual index 随机映射代码行，不按文件总行数分配 row 数组 |
-| `UnifiedDiffMetrics` | private | 随 `DiffEditorDocument` 缓存折叠基线行数和各未修改区间展开增量，让离屏文件高度计算不构造完整 row projection |
-| `MultiDiffSection` / `MultiDiffFileHeader` | private | 在共享 `ComponentContext` 中拥有每个 changed file 的 card/header geometry，并把同一 section 的 `DiffEditor` 放入 inspection ancestry |
-| `MultiDiffFoldControl` / `MultiDiffScrollbar` | private | 将 editor-owned fold geometry 和 ScrollView scrollbar geometry 投影为真实组件及 interaction semantics；产品 host 不再手工注册这些节点 |
-| `code_editor::layout::build_layout` | private | 从组件 bounds 计算 header/body/gutter/content |
-| `code_editor::text_metrics::display_columns_until` | private | 把 UTF-8 byte offset 映射到 Tab/Unicode 等宽显示列 |
-| `code_editor::wrapping::CodeEditorVisualProjection` | private | 未换行时保存 O(1) 恒等行映射；软换行时才按 grapheme/Tab display column 建立 visual line 索引，并执行 caret/pointer 映射 |
-| `code_editor::editing` | private module | 执行 grapheme-safe mutation、跨行导航、selection 与有界 history |
-| `code_editor::folding` | private module | 规范化 syntax fold、保留 collapsed identity，并执行 source-row / visual-row 双向投影 |
-| `code_editor::decorations` | private module | 绘制 selection、syntax、composition、caret 并计算 IME caret bounds |
-| `code_editor::diagnostics` | private module | 把 document byte range 投影到 source row 与 soft-wrapped visual line，绘制波浪线并执行文本命中 |
-| `diff_editor::layout::build_layout` | private | 计算两个 pane 与中央 divider |
+| Symbol                                                  | 可见性         | 精确职责                                                                                                                                                                                                                |
+| ------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CodeEditor`                                            | public         | 绘制可见代码行、caret/selection、preedit、syntax token、gutter 与 fold control；拥有 fold-control geometry 和 hit test，`within_viewport` 限制嵌入式宿主实际投影的行                                                    |
+| `CodeEditorPresentation`                                | public         | 选择带 document chrome 的普通编辑器或隐藏 gutter 的 compact 嵌入式编辑器                                                                                                                                                |
+| `CodeEditorLineWrapping` / `CodeEditorNavigation`       | public         | 选择不换行或 viewport soft wrap，并把 presentation 解析出的显示列宽和可见行容量交给 document 的上下键与翻页导航                                                                                                         |
+| `CodeEditorDocument`                                    | public         | 拥有 Native 的语言、行 range、composition、syntax snapshot、fold/visible-row projection；committed text、selection、revision 与 undo/redo 委托 persistent `ash-editor-core`，同步 text projection 仅供 Native 计算/绘制 |
+| `CodeEditorRevision`                                    | public         | `ash-editor-core::EditorCoreRevision` 的 Native 名称；为宿主提供与文本 mutation 绑定的单调 revision，navigation 不推进，insert/replace/undo/redo 推进                                                                   |
+| `CodeEditorFoldingRange` / `CodeEditorFoldState`        | public         | 表达零基 source-row 结构范围及每个 document 实例独立的展开状态；start row 保留可见                                                                                                                                      |
+| `CodeEditorFoldControl`                                 | public         | 发布当前帧可见 gutter control 的 editor-owned range、state 与命中 bounds                                                                                                                                                |
+| `CodeEditorCommand`                                     | public         | 表达插入、自动缩进换行、indent/outdent、语言声明的行注释、行复制/移动/删除空行/合并/插入/行尾空白清理/排序/反转/去重、Unicode navigation、选择、删除与 undo/redo                                                        |
+| `CodeEditorIndentation`                                 | public         | 以显式 tabs/spaces 与 tab width policy 驱动换行、Tab 与 Shift+Tab、leading-whitespace close delimiter auto-outdent；Enter 保留 document line ending，不把缩进策略放进 Native                                            |
+| `CodeEditorSearchQuery` / `CodeEditorSearchMatch`       | public         | 表达大小写策略、byte range 与 editor position；前后循环查找、单次/全部替换由 document 执行                                                                                                                              |
+| `CodeEditorDiagnostic` / `CodeEditorDiagnosticSeverity` | public         | 表达 UTF-8 document byte range、severity、message/source/code；不暴露 LSP 类型                                                                                                                                          |
+| `CodeEditorDiagnosticPalette`                           | public         | 由宿主把 error/warning/information/hint theme token 映射为编辑器语义颜色                                                                                                                                                |
+| `CodeEditorLanguage`                                    | public         | 让宿主选择 PlainText、Shell、JSON、JSONC 或 Rust；parser、tree、revision 与 token projection 保持私有                                                                                                                   |
+| `CodeEditorPalette` / `CodeEditorSyntaxPalette`         | public         | 由宿主把 resolved theme token 映射为组件命名输入；换主题只重建 style，不重新分析文本                                                                                                                                    |
+| `CodeEditorRowSource`                                   | public trait   | 惰性提供稳定 visual row；普通文档和 diff projection 共用                                                                                                                                                                |
+| `CodeEditorRow`                                         | public         | 表达真实代码行、对齐 placeholder 或无行号 annotation，以及本帧 decoration                                                                                                                                               |
+| `CodeEditorViewport`                                    | public         | 保存首个可见行和横向显示列，并执行有界滚动或 reveal-row                                                                                                                                                                 |
+| `CodeEditorStyle`                                       | public         | 拥有代码 surface、header、gutter、文本与 syntax role 的 resolved presentation style；`light()` 只是安全 fallback                                                                                                        |
+| `DiffEditor`                                            | public         | 按 presentation 组合双列或单列 `CodeEditor`，同步纵向 viewport 并绘制 diff decoration                                                                                                                                   |
+| `DiffEditorDocument`                                    | public         | 接收已计算 `DiffDocument` 与 language，内部持有 original/modified 两个 language-aware `CodeEditorDocument`；不向宿主暴露 parser/revision/token                                                                          |
+| `DiffEditorPresentation`                                | public         | 显式选择 `SideBySide` 或适合窄嵌入 surface 的 `Unified` geometry                                                                                                                                                        |
+| `DiffEditorState`                                       | public         | 保存共享首行、两侧独立横向显示列和 Unified 未修改区间的展开状态                                                                                                                                                         |
+| `DiffEditorFoldControl`                                 | public         | 向产品宿主发布可见未修改区间的行数、状态与命中 bounds                                                                                                                                                                   |
+| `MultiDiffEditor`                                       | public         | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface                                                                                                                                                        |
+| `MultiDiffEditorItem`                                   | public         | 为一帧借用文件名、`DiffEditorDocument`、两侧标签和该文件的 `DiffEditorState`；产品 host 应通过 `with_identity` 提供稳定 changed-file identity                                                                           |
+| `MultiDiffEditorItemIdentity`                           | public         | 从 host-owned stable slot 派生 section/header/diff/fold `ElementId`，并提供折叠 section 的 `AnimationProperty::Height` key                                                                                              |
+| `MultiDiffEditorLayout`                                 | public         | 用 `ash-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、平衡分块高度索引与总内容高度，并允许宿主更新一个 section measurement 或 splice changed-file 区间            |
+| `ash-ui-components::ScrollState`                        | delegated      | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行                                                                                                                                  |
+| `MultiDiffEditorStyle`                                  | public         | 拥有文件 header、section 间距与嵌套 DiffEditor 样式                                                                                                                                                                     |
+| `DiffEditorPalette` / `MultiDiffEditorPalette`          | public         | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉                                                                                                                                         |
+| `DiffSideRows`                                          | private        | 把 `DiffEditorDocument` 的一侧惰性转换为带 editor-owned syntax token 的 `CodeEditorRow`                                                                                                                                 |
+| `UnifiedDiffRows`                                       | private        | 用 hunk source-range、修改行索引和 fold segment 紧凑表达单列 diff；按可见 visual index 随机映射代码行，不按文件总行数分配 row 数组                                                                                      |
+| `UnifiedDiffMetrics`                                    | private        | 随 `DiffEditorDocument` 缓存折叠基线行数和各未修改区间展开增量，让离屏文件高度计算不构造完整 row projection                                                                                                             |
+| `MultiDiffSection` / `MultiDiffFileHeader`              | private        | 在共享 `ComponentContext` 中拥有每个 changed file 的 card/header geometry，并把同一 section 的 `DiffEditor` 放入 inspection ancestry                                                                                    |
+| `MultiDiffFoldControl` / `MultiDiffScrollbar`           | private        | 将 editor-owned fold geometry 和 ScrollView scrollbar geometry 投影为真实组件及 interaction semantics；产品 host 不再手工注册这些节点                                                                                   |
+| `code_editor::layout::build_layout`                     | private        | 从组件 bounds 计算 header/body/gutter/content                                                                                                                                                                           |
+| `code_editor::text_metrics::display_columns_until`      | private        | 把 UTF-8 byte offset 映射到 Tab/Unicode 等宽显示列                                                                                                                                                                      |
+| `code_editor::wrapping::CodeEditorVisualProjection`     | private        | 未换行时保存 O(1) 恒等行映射；软换行时才按 grapheme/Tab display column 建立 visual line 索引，并执行 caret/pointer 映射                                                                                                 |
+| `code_editor::editing`                                  | private module | 执行 grapheme-safe mutation、跨行导航、selection 与有界 history                                                                                                                                                         |
+| `code_editor::folding`                                  | private module | 规范化 syntax fold、保留 collapsed identity，并执行 source-row / visual-row 双向投影                                                                                                                                    |
+| `code_editor::decorations`                              | private module | 绘制 selection、syntax、composition、caret 并计算 IME caret bounds                                                                                                                                                      |
+| `code_editor::diagnostics`                              | private module | 把 document byte range 投影到 source row 与 soft-wrapped visual line，绘制波浪线并执行文本命中                                                                                                                          |
+| `diff_editor::layout::build_layout`                     | private        | 计算两个 pane 与中央 divider                                                                                                                                                                                            |
 
 ```text
 CodeEditorDocument ─┐

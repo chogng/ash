@@ -25,12 +25,13 @@
 }
 
 .ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action::before {
-	content: '●';
+	content: "●";
 	font-size: var(--ash-font-size-body2);
 }
 
 .ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action:hover::before,
-.ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action:focus-visible::before {
-	content: '×';
+.ash-editor-quick-pick-item.dirty
+	.ash-quick-pick-row-action:focus-visible::before {
+	content: "×";
 	font-size: var(--ash-lxicon-font-size);
 }

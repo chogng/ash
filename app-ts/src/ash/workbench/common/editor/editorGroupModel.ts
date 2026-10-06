@@ -168,7 +168,7 @@ export class EditorGroupModel {
 		return changed;
 	}
 
-	public setSelection(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): void {
+	public setSelection(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): void {
 		const editor = this.requireEditor(input);
 		if (modifiers.range) {
 			const anchor = this.editors.findIndex(candidate => candidate.instanceId === this.selectionAnchor);

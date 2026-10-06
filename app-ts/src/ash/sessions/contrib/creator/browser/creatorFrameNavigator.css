@@ -20,7 +20,9 @@
 	flex-direction: column;
 	background: var(--ash-editor-background);
 }
-.ash-creator-frame-preview[hidden] { display: none; }
+.ash-creator-frame-preview[hidden] {
+	display: none;
+}
 .ash-creator-preview-controls {
 	display: flex;
 	flex-wrap: wrap;
@@ -34,4 +36,7 @@
 	min-height: 0;
 }
 .ash-creator-frame-selector > select:focus-visible,
-.ash-creator-frame-preview:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: -1px; }
+.ash-creator-frame-preview:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}

@@ -5,7 +5,7 @@ import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/rem
 import type { IWorkspace } from '../../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../../browser/workspaceSelection.js';
 
-function workspace(...folders: readonly { name: string; uri: URI }[]): IWorkspace {
+function workspace(...folders: readonly { name: string; uri: URI; }[]): IWorkspace {
 	return { id: 'workspace', folders: folders.map((folder, index) => ({ ...folder, id: String(index), index })) };
 }
 

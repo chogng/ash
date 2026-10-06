@@ -24,10 +24,12 @@ suite('Desktop URL service', () => {
 		services.registerInstance(IOpenerService, opener);
 		const calls: unknown[] = [];
 		let rendererChannel!: IServerChannel;
-		const mainChannel = new URLHandlerChannel({ handleURL: async (uri, options) => {
-			calls.push(['main', uri.toString(), options]);
-			return rendererChannel.call<boolean>('main', 'handleURL', [uri.toString(), options]);
-		} });
+		const mainChannel = new URLHandlerChannel({
+			handleURL: async (uri, options) => {
+				calls.push(['main', uri.toString(), options]);
+				return rendererChannel.call<boolean>('main', 'handleURL', [uri.toString(), options]);
+			}
+		});
 		services.registerInstance(IMainProcessService, {
 			_serviceBrand: undefined,
 			getChannel: name => { assert.equal(name, 'url'); return { call: (command, arg) => mainChannel.call('window:7', command, arg), listen: () => Event.None }; },

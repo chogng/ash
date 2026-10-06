@@ -22,10 +22,10 @@ export interface IEditorResourceAccessorOptions {
 }
 
 class EditorResourceAccessorImpl {
-	public getOriginalUri(editor: EditorInput | undefined | null, options?: IEditorResourceAccessorOptions & { supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY }): URI | undefined;
-	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH }): URI | { primary?: URI; secondary?: URI } | undefined;
-	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI } | undefined;
-	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI } | undefined {
+	public getOriginalUri(editor: EditorInput | undefined | null, options?: IEditorResourceAccessorOptions & { supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY; }): URI | undefined;
+	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH; }): URI | { primary?: URI; secondary?: URI; } | undefined;
+	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI; } | undefined;
+	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI; } | undefined {
 		if (!editor) {
 			return undefined;
 		}

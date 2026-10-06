@@ -19,7 +19,7 @@ export class StickyScrollWidgetState {
 		public readonly endLineNumbers: number[],
 		public readonly lastLineRelativePosition: number,
 		public readonly showEndForLine: number | null = null,
-	) {}
+	) { }
 
 	public static get Empty(): StickyScrollWidgetState {
 		return new StickyScrollWidgetState([], [], 0);

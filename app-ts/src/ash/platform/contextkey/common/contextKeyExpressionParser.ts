@@ -174,7 +174,7 @@ function tokenize(source: string): readonly Token[] {
 function readOperator(
 	source: string,
 	offset: number,
-): { readonly token: Token; readonly nextOffset: number } | undefined {
+): { readonly token: Token; readonly nextOffset: number; } | undefined {
 	const operators: readonly [string, TokenKind][] = [
 		["!==", "notEquals"],
 		["===", "equals"],
@@ -201,7 +201,7 @@ function readQuotedString(
 	source: string,
 	offset: number,
 	quote: string,
-): { readonly token: Token; readonly nextOffset: number } {
+): { readonly token: Token; readonly nextOffset: number; } {
 	let current = offset + 1;
 	let value = "";
 	while (current < source.length) {

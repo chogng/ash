@@ -86,7 +86,7 @@ export function isUserEdit(source: TextModelEditSource): boolean {
 }
 
 export const EditSources = {
-	unknown(data: { name?: string | null }) {
+	unknown(data: { name?: string | null; }) {
 		return createEditSource({
 			source: 'unknown',
 			name: data.name,
@@ -143,7 +143,7 @@ export const EditSources = {
 	chatUndoEdits: () => createEditSource({ source: 'Chat.undoEdits' } as const),
 	chatReset: () => createEditSource({ source: 'Chat.reset' } as const),
 
-	inlineCompletionAccept(data: { nes: boolean; requestUuid: string; languageId: string; providerId?: ProviderId; correlationId: string | undefined }) {
+	inlineCompletionAccept(data: { nes: boolean; requestUuid: string; languageId: string; providerId?: ProviderId; correlationId: string | undefined; }) {
 		return createEditSource({
 			source: 'inlineCompletionAccept',
 			$nes: data.nes,
@@ -154,7 +154,7 @@ export const EditSources = {
 		} as const);
 	},
 
-	inlineCompletionPartialAccept(data: { nes: boolean; requestUuid: string; languageId: string; providerId?: ProviderId; correlationId: string | undefined; type: 'word' | 'line' }) {
+	inlineCompletionPartialAccept(data: { nes: boolean; requestUuid: string; languageId: string; providerId?: ProviderId; correlationId: string | undefined; type: 'word' | 'line'; }) {
 		return createEditSource({
 			source: 'inlineCompletionPartialAccept',
 			type: data.type,
@@ -166,7 +166,7 @@ export const EditSources = {
 		} as const);
 	},
 
-	inlineChatApplyEdit(data: { modelId: string | undefined; requestId: string | undefined; sessionId: string | undefined; languageId: string; extensionId: VersionedExtensionId | undefined }) {
+	inlineChatApplyEdit(data: { modelId: string | undefined; requestId: string | undefined; sessionId: string | undefined; languageId: string; extensionId: VersionedExtensionId | undefined; }) {
 		return createEditSource({
 			source: 'inlineChat.applyEdits',
 			$modelId: avoidPathRedaction(data.modelId),
@@ -180,7 +180,7 @@ export const EditSources = {
 
 	reloadFromDisk: () => createEditSource({ source: 'reloadFromDisk' } as const),
 
-	cursor(data: { kind: 'compositionType' | 'compositionEnd' | 'type' | 'paste' | 'cut' | 'executeCommands' | 'executeCommand'; detailedSource?: string | null }) {
+	cursor(data: { kind: 'compositionType' | 'compositionEnd' | 'type' | 'paste' | 'cut' | 'executeCommands' | 'executeCommand'; detailedSource?: string | null; }) {
 		return createEditSource({
 			source: 'cursor',
 			kind: data.kind,
@@ -192,9 +192,9 @@ export const EditSources = {
 	eolChange: () => createEditSource({ source: 'eolChange' } as const),
 	applyEdits: () => createEditSource({ source: 'applyEdits' } as const),
 	snippet: () => createEditSource({ source: 'snippet' } as const),
-	suggest: (data: { providerId: ProviderId | undefined }) => createEditSource({ source: 'suggest', ...toProperties(data.providerId) } as const),
+	suggest: (data: { providerId: ProviderId | undefined; }) => createEditSource({ source: 'suggest', ...toProperties(data.providerId) } as const),
 
-	codeAction: (data: { kind: string | undefined; providerId: ProviderId | undefined }) => createEditSource({ source: 'codeAction', $kind: data.kind, ...toProperties(data.providerId) } as const)
+	codeAction: (data: { kind: string | undefined; providerId: ProviderId | undefined; }) => createEditSource({ source: 'codeAction', $kind: data.kind, ...toProperties(data.providerId) } as const)
 };
 
 function toProperties(version: ProviderId | undefined) {

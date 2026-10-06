@@ -99,7 +99,7 @@ export class CollaborationContribution extends Disposable {
 		this.render();
 	}
 
-	setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean } = {}): void {
+	setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean; } = {}): void {
 		this.startGeneration += 1;
 		this._state = state;
 		this.roomId = options.roomId;

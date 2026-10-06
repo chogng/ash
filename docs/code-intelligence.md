@@ -15,15 +15,15 @@ Ash 不用一个巨型数据库同时冒充语法树、语言服务器、搜索�
 失败与排序语义。跨语言代码图和 navigation cache 仍未建立：前者缺少 compiler/SCIP/resolver
 事实来源，后者要先由已安装的请求指标证明收益。
 
-| 用户场景 | 当前行为 | 目标行为 | 状态 |
-| --- | --- | --- | --- |
-| 在工作区按名称找符号 | 本地索引先返回；Language Server 并发补充；结果分阶段、确定性融合 | 维持并测量现有行为 | Current |
-| Language Server 未启动时找符号 | 支持 grammar 的语言仍可搜索语法声明 | 扩展语言只需增加可信 syntax facts | Current |
-| AI 搜索相关代码 | 本地 symbol + FTS + 可选 vector/remote，融合后由绑定该 `Dir` 的 Codebase 重新读取并复核正文 | 有强证据图来源后再增加有界 graph expansion | Current + gated |
-| 搜索未保存代码 | 同一路径的磁盘 symbol、lexical、semantic、cloud 候选被 overlay 抑制 | 维持 save handoff 与 current-text invariant | Current |
-| 查定义、引用和层级 | revision-bound LSP 请求，记录冷暖延迟、结果数、取消与 stale outcome | 指标证明重复成本后才评审会话缓存 | Current + gated |
-| 跨语言导航 | 没有统一语义图或 resolver | 先接入有精确证据的 schema/generated-code 边，再评审启发式边 | Potential |
-| 结构化编辑 | Smart Select 按当前 revision/selection 请求有限 parser scopes，并保留 lexical fallback/shrink history | 继续增加 select declaration，之后才评审原子 mutation plan | 部分 Current |
+| 用户场景                       | 当前行为                                                                                              | 目标行为                                                    | 状态            |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------- |
+| 在工作区按名称找符号           | 本地索引先返回；Language Server 并发补充；结果分阶段、确定性融合                                      | 维持并测量现有行为                                          | Current         |
+| Language Server 未启动时找符号 | 支持 grammar 的语言仍可搜索语法声明                                                                   | 扩展语言只需增加可信 syntax facts                           | Current         |
+| AI 搜索相关代码                | 本地 symbol + FTS + 可选 vector/remote，融合后由绑定该 `Dir` 的 Codebase 重新读取并复核正文           | 有强证据图来源后再增加有界 graph expansion                  | Current + gated |
+| 搜索未保存代码                 | 同一路径的磁盘 symbol、lexical、semantic、cloud 候选被 overlay 抑制                                   | 维持 save handoff 与 current-text invariant                 | Current         |
+| 查定义、引用和层级             | revision-bound LSP 请求，记录冷暖延迟、结果数、取消与 stale outcome                                   | 指标证明重复成本后才评审会话缓存                            | Current + gated |
+| 跨语言导航                     | 没有统一语义图或 resolver                                                                             | 先接入有精确证据的 schema/generated-code 边，再评审启发式边 | Potential       |
+| 结构化编辑                     | Smart Select 按当前 revision/selection 请求有限 parser scopes，并保留 lexical fallback/shrink history | 继续增加 select declaration，之后才评审原子 mutation plan   | 部分 Current    |
 
 继续阅读：[当前基线](#1-当前基线)、[目标架构](#2-目标架构)、[数据与失效](#4-数据身份与失效)、
 [阶段计划](#8-阶段计划)、[验收门](#9-测试性能与验收门)。
@@ -32,22 +32,22 @@ Ash 不用一个巨型数据库同时冒充语法树、语言服务器、搜索�
 
 截至本文建立时，仓库中的真实能力如下。未来阶段不得写成当前事实。
 
-| 能力 | 当前 owner | 当前状态 |
-| --- | --- | --- |
-| 单文档增量 parse、token、fold、document symbol、parse diagnostic | `ash-syntax` | Current |
-| 打开文档的文本、selection、undo/redo 与 Editor revision | Stanza / `ash-editor` | Current |
-| completion、definition、references、hierarchy、workspace symbol 等精确语义 | `ash-lsp-manager` + `ash-lsp` | Current |
-| `Dir` scan、ignore、结构辅助切块、source/chunk identity、SQLite FTS | `ash-codebase` | Current |
-| embedding cache、vector recall、optional rerank | `ash-codebase` | Current |
-| lexical/semantic/optional remote 融合、源码复核与 byte budget | `ash-codebase` | Current |
-| `search_code` 与可选 first-invocation evidence | App Server + Core | Current |
-| 持久化本地 symbol projection、overlay symbol 与 fuzzy matcher | `ash-codebase` | Current |
-| Codebase 未保存 Buffer overlay、dirty suppression 与 save handoff | `ash-codebase` + App Server | Current |
-| Workspace Symbol staged aggregation、取消、dedupe 与 accept-time hash verification | Desktop | Current |
-| 语言请求取消与隐私安全指标 | `ash-lsp-manager` + App Server sink | Current |
-| references/navigation semantic cache | 无 | 未安装；等待指标门禁 |
-| SCIP、occurrence/edge graph 与跨语言 resolver | 无 | 尚未完成 |
-| revision-bound structural selection scopes + Smart Select | `ash-syntax` + Stanza | Current；mutation 尚未完成 |
+| 能力                                                                               | 当前 owner                          | 当前状态                   |
+| ---------------------------------------------------------------------------------- | ----------------------------------- | -------------------------- |
+| 单文档增量 parse、token、fold、document symbol、parse diagnostic                   | `ash-syntax`                        | Current                    |
+| 打开文档的文本、selection、undo/redo 与 Editor revision                            | Stanza / `ash-editor`               | Current                    |
+| completion、definition、references、hierarchy、workspace symbol 等精确语义         | `ash-lsp-manager` + `ash-lsp`       | Current                    |
+| `Dir` scan、ignore、结构辅助切块、source/chunk identity、SQLite FTS                | `ash-codebase`                      | Current                    |
+| embedding cache、vector recall、optional rerank                                    | `ash-codebase`                      | Current                    |
+| lexical/semantic/optional remote 融合、源码复核与 byte budget                      | `ash-codebase`                      | Current                    |
+| `search_code` 与可选 first-invocation evidence                                     | App Server + Core                   | Current                    |
+| 持久化本地 symbol projection、overlay symbol 与 fuzzy matcher                      | `ash-codebase`                      | Current                    |
+| Codebase 未保存 Buffer overlay、dirty suppression 与 save handoff                  | `ash-codebase` + App Server         | Current                    |
+| Workspace Symbol staged aggregation、取消、dedupe 与 accept-time hash verification | Desktop                             | Current                    |
+| 语言请求取消与隐私安全指标                                                         | `ash-lsp-manager` + App Server sink | Current                    |
+| references/navigation semantic cache                                               | 无                                  | 未安装；等待指标门禁       |
+| SCIP、occurrence/edge graph 与跨语言 resolver                                      | 无                                  | 尚未完成                   |
+| revision-bound structural selection scopes + Smart Select                          | `ash-syntax` + Stanza               | Current；mutation 尚未完成 |
 
 当前 `ash-codebase` 的 `ChunkReference` 仍只表达 root、path、source revision、chunk key、content
 hash 和范围；`ash-codebase` 单独保存 name、kind 与声明/选择范围。两者通过 source identity 与
@@ -59,17 +59,17 @@ verified excerpt 交汇，而不是共享存储。当前系统仍不保存 occur
 外部方案对能力分类是对的，但其“一份 `FileShard` 写入一个 Store，再由所有功能读取”的实现不适合
 当前 Ash。这里采用共享 authority/identity、分离 projection/runtime：
 
-| 设计点 | 统一 Store / FileShard 方案 | Ash 当前选择 | 结论 |
-| --- | --- | --- | --- |
-| 持久化 | files/symbols/occurrences/edges/chunks/cache 共用一个 SQLite | lexical、symbol、semantic、cloud control 各自持有可删除 projection | failure、schema、retention 与权限不同，不合库 |
-| 文件事实 | parser/LSP/SCIP 合成一个 immutable shard | `CodebaseManifest` 只发布绑定 `Dir` 内的 sources/chunks；LSP 结果仍由 service incarnation 管理 | 不把不同 freshness 压成一个 revision |
-| dirty Buffer | overlay 覆盖单一 persistent shard | Codebase 拥有 canonical text/chunks；SymbolIndex 投影 declarations；retrieval 统一抑制同路径持久候选 | 共享当前文本 authority，不共享存储 |
-| symbol identity | structural fingerprint 尝试跨 edit 稳定 | `SymbolReference` 明确绑定 source revision；暂无 stable semantic `SymbolId` | 没有 compiler identity 时不作虚假稳定承诺 |
-| occurrence/edge | Tree-sitter 先写 unresolved occurrences，后由 LSP/SCIP 增强 | 当前不持久化 occurrence/edge；只有真实 compiler/SCIP/resolver consumer 后才建 graph | syntax-only 同名关系不能成为精确导航 |
-| references/navigation cache | 作为第一阶段热点能力 | 先安装 content-free cold/warm/cancel/stale metrics；收益显著后才设计 session cache | 避免复制 LSP 内部索引和 stale complexity |
-| 结构化编辑 API | 暴露 node/parent/sibling/field primitives 与长期 anchor | 按真实 command 暴露 revision-bound ranges/plans；第一条为按需 selection scopes | 不把 Tree-sitter node model 泄漏给 Editor |
-| 坐标转换 | 全系统共用一个 LineIndex | 每个 authority 内部使用 canonical coordinate，协议边界显式转换并验证 Unicode | 避免把 Editor/LSP/source revision 生命周期绑成共享 mutable service |
-| AI retrieval | graph/semantic/context store 统一读取 | retrieval 独立融合 symbol/FTS/vector/cloud，并在发给模型前由 Codebase 复核 exact excerpt | candidate provider 不拥有最终上下文 |
+| 设计点                      | 统一 Store / FileShard 方案                                  | Ash 当前选择                                                                                         | 结论                                                               |
+| --------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 持久化                      | files/symbols/occurrences/edges/chunks/cache 共用一个 SQLite | lexical、symbol、semantic、cloud control 各自持有可删除 projection                                   | failure、schema、retention 与权限不同，不合库                      |
+| 文件事实                    | parser/LSP/SCIP 合成一个 immutable shard                     | `CodebaseManifest` 只发布绑定 `Dir` 内的 sources/chunks；LSP 结果仍由 service incarnation 管理       | 不把不同 freshness 压成一个 revision                               |
+| dirty Buffer                | overlay 覆盖单一 persistent shard                            | Codebase 拥有 canonical text/chunks；SymbolIndex 投影 declarations；retrieval 统一抑制同路径持久候选 | 共享当前文本 authority，不共享存储                                 |
+| symbol identity             | structural fingerprint 尝试跨 edit 稳定                      | `SymbolReference` 明确绑定 source revision；暂无 stable semantic `SymbolId`                          | 没有 compiler identity 时不作虚假稳定承诺                          |
+| occurrence/edge             | Tree-sitter 先写 unresolved occurrences，后由 LSP/SCIP 增强  | 当前不持久化 occurrence/edge；只有真实 compiler/SCIP/resolver consumer 后才建 graph                  | syntax-only 同名关系不能成为精确导航                               |
+| references/navigation cache | 作为第一阶段热点能力                                         | 先安装 content-free cold/warm/cancel/stale metrics；收益显著后才设计 session cache                   | 避免复制 LSP 内部索引和 stale complexity                           |
+| 结构化编辑 API              | 暴露 node/parent/sibling/field primitives 与长期 anchor      | 按真实 command 暴露 revision-bound ranges/plans；第一条为按需 selection scopes                       | 不把 Tree-sitter node model 泄漏给 Editor                          |
+| 坐标转换                    | 全系统共用一个 LineIndex                                     | 每个 authority 内部使用 canonical coordinate，协议边界显式转换并验证 Unicode                         | 避免把 Editor/LSP/source revision 生命周期绑成共享 mutable service |
+| AI retrieval                | graph/semantic/context store 统一读取                        | retrieval 独立融合 symbol/FTS/vector/cloud，并在发给模型前由 Codebase 复核 exact excerpt             | candidate provider 不拥有最终上下文                                |
 
 实现顺序也不同。Ash 在本计划前已经具备 LSP、SQLite lexical、semantic vector/rerank 和 Agent
 retrieval，因此没有按“先 FileShard、再 LSP、最后 semantic search”重建已有系统；本轮补的是实际缺口：
@@ -111,17 +111,17 @@ flowchart TD
 
 ## 3. 所有权与依赖方向
 
-| 组件 | 拥有 | 明确不拥有 |
-| --- | --- | --- |
-| `ash-syntax` | grammar/query、增量 tree、revision-bound syntax facts | 文件扫描、SQLite、LSP semantic identity |
-| `ash-codebase` | `Dir` scan、ignore、读取、source/chunk identity、磁盘与未来 overlay chunk authority | symbol graph、模型选择、最终 AI 排名 |
-| `ash-codebase` | verified source 与 dirty overlay 的声明 projection、持久化复用、本地 exact/fuzzy symbol search | 自主扫描文件、LSP request、跨语言猜测 |
-| `ash-lsp-manager` | server route/incarnation、document freshness、精确 LSP 请求 | 本地 symbol database、AI retrieval |
-| `ash-codebase` | 模型输入、embedding persistence、vector recall、rerank 与来源内排序 | scan、chunk、跨来源融合 |
-| `ash-codebase` | 多来源候选融合、identity dedupe、current-source verification 与内容预算 | 模型 transport、目录 Grant、Editor state |
-| Potential `ash-code-graph` | semantic symbol、occurrence、typed edge、evidence/confidence | filesystem authority、UI、模型调用 |
-| App Server | 目录 Grant 校验、watcher、projection 调度、ephemeral overlay、RPC、metrics sink 与 fallback composition | parser、fuzzy 算法、Renderer 展示 |
-| Desktop | frontend service、provider 聚合、取消、渐进结果和导航展示 | 索引存储、semantic cache authority |
+| 组件                       | 拥有                                                                                                    | 明确不拥有                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `ash-syntax`               | grammar/query、增量 tree、revision-bound syntax facts                                                   | 文件扫描、SQLite、LSP semantic identity  |
+| `ash-codebase`             | `Dir` scan、ignore、读取、source/chunk identity、磁盘与未来 overlay chunk authority                     | symbol graph、模型选择、最终 AI 排名     |
+| `ash-codebase`             | verified source 与 dirty overlay 的声明 projection、持久化复用、本地 exact/fuzzy symbol search          | 自主扫描文件、LSP request、跨语言猜测    |
+| `ash-lsp-manager`          | server route/incarnation、document freshness、精确 LSP 请求                                             | 本地 symbol database、AI retrieval       |
+| `ash-codebase`             | 模型输入、embedding persistence、vector recall、rerank 与来源内排序                                     | scan、chunk、跨来源融合                  |
+| `ash-codebase`             | 多来源候选融合、identity dedupe、current-source verification 与内容预算                                 | 模型 transport、目录 Grant、Editor state |
+| Potential `ash-code-graph` | semantic symbol、occurrence、typed edge、evidence/confidence                                            | filesystem authority、UI、模型调用       |
+| App Server                 | 目录 Grant 校验、watcher、projection 调度、ephemeral overlay、RPC、metrics sink 与 fallback composition | parser、fuzzy 算法、Renderer 展示        |
+| Desktop                    | frontend service、provider 聚合、取消、渐进结果和导航展示                                               | 索引存储、semantic cache authority       |
 
 固定依赖方向：
 
@@ -200,14 +200,14 @@ identity 不变会静默复用不兼容 projection，属于 correctness bug。
 
 ### 4.3 不同 revision 不得混用
 
-| 事实 | freshness identity |
-| --- | --- |
-| Editor syntax | document identity + Editor revision |
-| 磁盘 symbol/chunk | root + path + source revision + projection generation |
-| LSP result | service generation + server incarnation + Editor revision |
-| semantic vector | source/chunk identity + chunker identity + model identity |
-| remote candidate | durable grant + published chunk identity + provider generation |
-| future graph edge | source fact identities + resolver/indexer identity |
+| 事实              | freshness identity                                             |
+| ----------------- | -------------------------------------------------------------- |
+| Editor syntax     | document identity + Editor revision                            |
+| 磁盘 symbol/chunk | root + path + source revision + projection generation          |
+| LSP result        | service generation + server incarnation + Editor revision      |
+| semantic vector   | source/chunk identity + chunker identity + model identity      |
+| remote candidate  | durable grant + published chunk identity + provider generation |
+| future graph edge | source fact identities + resolver/indexer identity             |
 
 静态优先级如“SCIP > LSP > Tree-sitter”不是正确合并规则。来源、事实种类和 freshness 必须一起判断；
 例如 Language Server 对未保存 Buffer 的结果通常比磁盘 SCIP index 更新。
@@ -216,11 +216,11 @@ identity 不变会静默复用不兼容 projection，属于 correctness bug。
 
 本地 symbol provider 与 Language Server provider 是互补关系：
 
-| 来源 | 优势 | 限制 | UI 语义 |
-| --- | --- | --- | --- |
-| 本地 syntax symbol index | 启动快、无需 server、跨已支持 grammar 统一搜索 | 只有声明与语法 container，没有类型解析 | 可直接打开声明位置，不宣称 semantic reference |
-| Language Server `workspace/symbol` | 语言/项目语义精确，可包含 server 独有符号 | 受启动、索引、配置和语言覆盖影响 | 异步补充或替换相同 location |
-| Future extension provider | 扩展语言或专用来源 | 受 extension trust/lifecycle 约束 | 通过统一 provider contract 合并 |
+| 来源                               | 优势                                           | 限制                                   | UI 语义                                       |
+| ---------------------------------- | ---------------------------------------------- | -------------------------------------- | --------------------------------------------- |
+| 本地 syntax symbol index           | 启动快、无需 server、跨已支持 grammar 统一搜索 | 只有声明与语法 container，没有类型解析 | 可直接打开声明位置，不宣称 semantic reference |
+| Language Server `workspace/symbol` | 语言/项目语义精确，可包含 server 独有符号      | 受启动、索引、配置和语言覆盖影响       | 异步补充或替换相同 location                   |
+| Future extension provider          | 扩展语言或专用来源                             | 受 extension trust/lifecycle 约束      | 通过统一 provider contract 合并               |
 
 一次 `Ctrl/Cmd+T` 查询应执行：
 
@@ -264,17 +264,17 @@ range 用到新 Buffer 上。
 
 ## 7. 可靠性、安全与隐私
 
-| 条件 | 必须发生的结果 |
-| --- | --- |
-| 本地 symbol index 未 ready/失败 | LSP workspace symbol 保持可用；状态不伪装 ready |
-| Language Server 未安装或 crash | 本地 syntax symbol search 保持可用 |
-| watcher event 合并或 overflow | Codebase 先发布 canonical generation，再调度下游 reconcile |
-| symbol projection schema/query identity 变化 | 丢弃可重建 projection，不静默复用 |
-| query 被取消 | worker 在可用 checkpoint 停止；旧 query revision 不发布 UI |
-| unsupported language | Codebase 仍可按 plaintext chunk；symbol projection 跳过该文件 |
-| syntax 含 recoverable error | 返回有界可证明的 partial declarations，不提升为 semantic fact |
-| 目录 Grant 只有读权限 | 本地只读 projection 可用；不启动 executable，不增加网络外发 |
-| remote model configured | 沿用 Codebase 明示 consent；symbol index 本身不获得网络能力 |
+| 条件                                         | 必须发生的结果                                                |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| 本地 symbol index 未 ready/失败              | LSP workspace symbol 保持可用；状态不伪装 ready               |
+| Language Server 未安装或 crash               | 本地 syntax symbol search 保持可用                            |
+| watcher event 合并或 overflow                | Codebase 先发布 canonical generation，再调度下游 reconcile    |
+| symbol projection schema/query identity 变化 | 丢弃可重建 projection，不静默复用                             |
+| query 被取消                                 | worker 在可用 checkpoint 停止；旧 query revision 不发布 UI    |
+| unsupported language                         | Codebase 仍可按 plaintext chunk；symbol projection 跳过该文件 |
+| syntax 含 recoverable error                  | 返回有界可证明的 partial declarations，不提升为 semantic fact |
+| 目录 Grant 只有读权限                        | 本地只读 projection 可用；不启动 executable，不增加网络外发   |
+| remote model configured                      | 沿用 Codebase 明示 consent；symbol index 本身不获得网络能力   |
 
 本地 symbol database 与 lexical/semantic Codebase 一样只是可重建 projection，不提升为源码 authority。
 Unix persistent file 使用普通文件和 `0600`。路径、错误和日志不得输出源码正文或 embedding payload。
@@ -427,16 +427,16 @@ comment，public module 保持 private implementation + named exports。
 
 ## 10. 实现落点与修改影响
 
-| 变更 | 主要落点 | 必须同步检查 |
-| --- | --- | --- |
-| 新 symbol kind/language | `ash-syntax` + `ash-codebase` mapping | extractor identity、fixtures、DTO mapping |
-| symbol identity/range | `ash-codebase` | SQLite schema、dedupe、accept-time validation、AI excerpt |
-| Codebase generation/materialization | `ash-codebase` | semantic、symbol、cloud consumers 与 stale tests |
-| watcher scheduling | App Server refresh worker | semantic/symbol jobs、coalescing、shutdown |
-| Workspace Symbol aggregation | Desktop language service | extension/LSP/local providers、query cancellation、Quick Pick |
-| overlay lifecycle | Editor host + App Server + Codebase/SymbolIndex | save、close、host teardown、Editor Workspace replacement |
-| new retrieval source | `ash-codebase` | RRF、origin/degradation、materialization、Core evidence |
-| semantic edge | future graph owner | source freshness、resolver identity、navigation/AI consumers |
+| 变更                                | 主要落点                                        | 必须同步检查                                                  |
+| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| 新 symbol kind/language             | `ash-syntax` + `ash-codebase` mapping           | extractor identity、fixtures、DTO mapping                     |
+| symbol identity/range               | `ash-codebase`                                  | SQLite schema、dedupe、accept-time validation、AI excerpt     |
+| Codebase generation/materialization | `ash-codebase`                                  | semantic、symbol、cloud consumers 与 stale tests              |
+| watcher scheduling                  | App Server refresh worker                       | semantic/symbol jobs、coalescing、shutdown                    |
+| Workspace Symbol aggregation        | Desktop language service                        | extension/LSP/local providers、query cancellation、Quick Pick |
+| overlay lifecycle                   | Editor host + App Server + Codebase/SymbolIndex | save、close、host teardown、Editor Workspace replacement      |
+| new retrieval source                | `ash-codebase`                                  | RRF、origin/degradation、materialization、Core evidence       |
+| semantic edge                       | future graph owner                              | source freshness、resolver identity、navigation/AI consumers  |
 
 `app-ts/src/ash/code/*/workbench/workbench.ts` 初始化本地化、加载运行环境入口与 Sessions 贡献，并选择宿主 adapter；
 共同贡献及符号服务注册由 `workbench.common.main.ts` 装载，运行环境实现由 Web、Desktop 入口选择；
@@ -446,16 +446,16 @@ symbol index。`ash-tools` 保持通用 Tool contract，不拥有 `search_code` 
 
 ## 11. 拒绝的替代方案
 
-| 方案 | 判断 | 原因 |
-| --- | --- | --- |
-| 把 symbol、occurrence、edge、vector 和 LSP cache 全放入现有 Codebase SQLite | ❌ | authority、freshness、失败和资源生命周期不同 |
-| Symbol Index 再做一遍 filesystem scan/ignore | ❌ | 复制 Codebase 对绑定 `Dir` 的扫描与读取责任，产生隐私和 stale 分叉 |
-| 每次 fuzzy query 调用全部 Language Server 后才展示 | ❌ | 本地低延迟能力无法改善首批结果 |
-| Tree-sitter 同名 reference 作为精确 references | ❌ | 无法可靠解析 import、overload、scope 和类型 |
-| 第一版就设计跨 edit 稳定 SymbolId | ❌ | 没有 compiler/indexer identity，稳定性是虚假承诺 |
-| 每次 dirty buffer 变化都远程 embedding | ❌ | 延迟、成本和源码外发面不可接受 |
-| 先实现持久化 navigation cache | ❌ | LSP 已有内部索引，缺乏稳定 key 和收益证据 |
-| 在 Native 或 Workbench bootstrap 中实现索引 | ❌ | 违反 backend-neutral owner 与产品组合边界 |
+| 方案                                                                        | 判断 | 原因                                                               |
+| --------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------ |
+| 把 symbol、occurrence、edge、vector 和 LSP cache 全放入现有 Codebase SQLite | ❌   | authority、freshness、失败和资源生命周期不同                       |
+| Symbol Index 再做一遍 filesystem scan/ignore                                | ❌   | 复制 Codebase 对绑定 `Dir` 的扫描与读取责任，产生隐私和 stale 分叉 |
+| 每次 fuzzy query 调用全部 Language Server 后才展示                          | ❌   | 本地低延迟能力无法改善首批结果                                     |
+| Tree-sitter 同名 reference 作为精确 references                              | ❌   | 无法可靠解析 import、overload、scope 和类型                        |
+| 第一版就设计跨 edit 稳定 SymbolId                                           | ❌   | 没有 compiler/indexer identity，稳定性是虚假承诺                   |
+| 每次 dirty buffer 变化都远程 embedding                                      | ❌   | 延迟、成本和源码外发面不可接受                                     |
+| 先实现持久化 navigation cache                                               | ❌   | LSP 已有内部索引，缺乏稳定 key 和收益证据                          |
+| 在 Native 或 Workbench bootstrap 中实现索引                                 | ❌   | 违反 backend-neutral owner 与产品组合边界                          |
 
 ## 12. 长期不变量
 

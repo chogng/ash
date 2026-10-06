@@ -4,22 +4,22 @@
 
 **Preferences 是入口范围，Settings 是其中一种内容。** Workbench 的偏好入口负责让用户打开设置、直接编辑用户设置 JSON，以及编辑键盘快捷键。图形设置页、JSON 编辑器和快捷键编辑器各自处理自己的内容；它们不需要共同的 `PreferencesEditor` 页面容器。
 
-| 职责 | 当前做法 | 不负责 |
-| --- | --- | --- |
-| 偏好入口 | [`IPreferencesService`](../src/ash/workbench/services/preferences/common/preferences.ts) / [`PreferencesService`](../src/ash/workbench/services/preferences/browser/preferencesService.ts) 根据调用的方法打开对应资源 | 绘制设置项或保存配置值 |
-| 图形设置页 | [`SettingsEditor`](../src/ash/workbench/contrib/preferences/browser/settingsEditor.ts) 显示搜索、分类和设置控件；[`settingsLayout.ts`](../src/ash/workbench/contrib/preferences/browser/settingsLayout.ts) 决定已注册设置放在哪个分类 | 保存配置源或管理普通文本模型 |
-| 用户设置 JSON | 普通文本编辑器打开 `ash-settings:/user/settings.json`；[`SettingsFileSystemProvider`](../src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts) 读写当前用户设置源 | 在图形设置页内部维护另一份配置 |
-| 键盘快捷键 | [`KeyboardShortcutsEditor`](../src/ash/workbench/contrib/preferences/browser/keyboardShortcutsEditor.ts) 使用自己的输入和模型；快捷键资源独立于普通配置键值 | 充当设置页的子页面 |
+| 职责          | 当前做法                                                                                                                                                                                                                              | 不负责                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| 偏好入口      | [`IPreferencesService`](../src/ash/workbench/services/preferences/common/preferences.ts) / [`PreferencesService`](../src/ash/workbench/services/preferences/browser/preferencesService.ts) 根据调用的方法打开对应资源                 | 绘制设置项或保存配置值         |
+| 图形设置页    | [`SettingsEditor`](../src/ash/workbench/contrib/preferences/browser/settingsEditor.ts) 显示搜索、分类和设置控件；[`settingsLayout.ts`](../src/ash/workbench/contrib/preferences/browser/settingsLayout.ts) 决定已注册设置放在哪个分类 | 保存配置源或管理普通文本模型   |
+| 用户设置 JSON | 普通文本编辑器打开 `ash-settings:/user/settings.json`；[`SettingsFileSystemProvider`](../src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts) 读写当前用户设置源                                               | 在图形设置页内部维护另一份配置 |
+| 键盘快捷键    | [`KeyboardShortcutsEditor`](../src/ash/workbench/contrib/preferences/browser/keyboardShortcutsEditor.ts) 使用自己的输入和模型；快捷键资源独立于普通配置键值                                                                           | 充当设置页的子页面             |
 
 ## 打开路径
 
 `preferencesActions.ts` 注册三个命令。调用方通过 `IPreferencesService` 选择要打开的内容，服务再把相应的 `EditorInput` 交给 Workbench `EditorService`：
 
-| 调用 | 打开的内容 | 呈现位置 |
-| --- | --- | --- |
-| `openSettings()` | `SettingsEditor`，由 `preferences.contribution.ts` 直接注册 | 模态编辑器组 |
-| `openUserSettings()` | 当前用户设置的 JSONC 资源，由普通文本编辑器处理 | 普通编辑器组 |
-| `openKeybindings()` | `KeyboardShortcutsEditor`，独立注册 | 普通编辑器组 |
+| 调用                 | 打开的内容                                                  | 呈现位置     |
+| -------------------- | ----------------------------------------------------------- | ------------ |
+| `openSettings()`     | `SettingsEditor`，由 `preferences.contribution.ts` 直接注册 | 模态编辑器组 |
+| `openUserSettings()` | 当前用户设置的 JSONC 资源，由普通文本编辑器处理             | 普通编辑器组 |
+| `openKeybindings()`  | `KeyboardShortcutsEditor`，独立注册                         | 普通编辑器组 |
 
 图形设置页从 Configuration Registry 取得可编辑设置，经 `SettingsEditorModel` 和 `settingsLayout.ts` 组成页面，再由设置控件读写配置服务。JSON 路径经 `SettingsFileSystemProvider` 读写同一份用户设置源。两种设置入口共享配置数据，不共享页面容器。
 
@@ -43,14 +43,14 @@ Workbench 和 Sessions 共用 `ModelSettingsContent`。模型目录按供应商�
 
 模型管理文件参考 VS Code 的职责分工：
 
-| 文件 | 职责 |
-| --- | --- |
-| `workbench/contrib/chat/common/languageModels.ts` | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例 |
-| `workbench/contrib/chat/common/languageModelsConfiguration.ts` | JSONC 设置声明、六个默认开启模型、模型开关数据格式 |
-| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts` | 模型开关、默认模型及上一次选择的保存与事件 |
-| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts` | 当前供应商的发现列表、手动声明、批量测试进度 |
-| `workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts` | 供应商表单、模型表格、键盘操作与行内编辑 |
-| `workbench/contrib/chat/browser/modelSettingsContent.ts` | 将模型管理接入两个窗口的设置树 |
+| 文件                                                                   | 职责                                                                   |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `workbench/contrib/chat/common/languageModels.ts`                      | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例 |
+| `workbench/contrib/chat/common/languageModelsConfiguration.ts`         | JSONC 设置声明、六个默认开启模型、模型开关数据格式                     |
+| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts` | 模型开关、默认模型及上一次选择的保存与事件                             |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts` | 当前供应商的发现列表、手动声明、批量测试进度                           |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts`    | 供应商表单、模型表格、键盘操作与行内编辑                               |
+| `workbench/contrib/chat/browser/modelSettingsContent.ts`               | 将模型管理接入两个窗口的设置树                                         |
 
 API key 输入框失焦即保存，清空即移除；成功保存不弹通知，失败显示输入框错误并进入通知服务。密钥由后端 secret store 保存，界面只用掩码表示已配置状态。
 

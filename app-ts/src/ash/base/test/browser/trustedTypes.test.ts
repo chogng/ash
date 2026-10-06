@@ -4,10 +4,10 @@ import { createTrustedTypesPolicy } from '../../browser/trustedTypes.js';
 
 interface TestGlobals {
 	MonacoEnvironment?: {
-		createTrustedTypesPolicy?(name: string, options?: { readonly createHTML?: (value: string) => string }): { readonly name: string; readonly createHTML?: (value: string) => string };
+		createTrustedTypesPolicy?(name: string, options?: { readonly createHTML?: (value: string) => string; }): { readonly name: string; readonly createHTML?: (value: string) => string; };
 	};
 	trustedTypes?: {
-		createPolicy(name: string, options?: { readonly createHTML?: (value: string) => string }): { readonly name: string; readonly createHTML?: (value: string) => string };
+		createPolicy(name: string, options?: { readonly createHTML?: (value: string) => string; }): { readonly name: string; readonly createHTML?: (value: string) => string; };
 	};
 }
 
@@ -17,7 +17,7 @@ test('createTrustedTypesPolicy prefers the embedding environment and preserves i
 	const previousFactory = globals.trustedTypes;
 	const environment = {
 		prefix: 'host',
-		createTrustedTypesPolicy(this: { prefix: string }, name: string, options?: { readonly createHTML?: (value: string) => string }) {
+		createTrustedTypesPolicy(this: { prefix: string; }, name: string, options?: { readonly createHTML?: (value: string) => string; }) {
 			return { name: `${this.prefix}:${name}`, createHTML: options?.createHTML };
 		},
 	};

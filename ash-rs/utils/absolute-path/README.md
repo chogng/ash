@@ -15,17 +15,17 @@
 
 ## 公共契约
 
-| API | 当前职责 | Failure semantics |
-| --- | --- | --- |
-| `AbsolutePathBuf::from_absolute` | 接受已经绝对的路径，先展开 `~` | 其余写法返回 `io::ErrorKind::InvalidInput`，不访问文件系统 |
-| `resolve_against_base` | 把任意写法锚定到 `base_directory` | 不会失败：base 已由类型保证绝对 |
-| `resolve_against_current_dir` | 把任意写法锚定到进程工作目录 | 只有真正需要工作目录时才读取它，绝对路径在工作目录被删除后仍然成功 |
-| `current_dir` | 返回进程工作目录 | 工作目录不可用时返回 `io::Error` |
-| `join` | 以自身为 base 锚定；`path` 绝对时整体替换 | 不会失败 |
-| `canonicalize` | 在文件系统上解析 symlink 与平台别名 | 路径不存在返回 `io::Error`；Windows 返回普通 drive/UNC 写法而不是 `\\?\` |
-| `parent` / `ancestors` | 词法向上遍历，元素仍然绝对 | 根目录的 `parent` 是 `None` |
-| `with_base_directory` | 在 `operation` 期间为反序列化提供 base | 线程内生效，`operation` 必须在调用线程上完成 |
-| `with_home_directory` | 在 `operation` 期间用显式 home 覆盖操作系统 home | 同上 |
+| API                              | 当前职责                                         | Failure semantics                                                        |
+| -------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
+| `AbsolutePathBuf::from_absolute` | 接受已经绝对的路径，先展开 `~`                   | 其余写法返回 `io::ErrorKind::InvalidInput`，不访问文件系统               |
+| `resolve_against_base`           | 把任意写法锚定到 `base_directory`                | 不会失败：base 已由类型保证绝对                                          |
+| `resolve_against_current_dir`    | 把任意写法锚定到进程工作目录                     | 只有真正需要工作目录时才读取它，绝对路径在工作目录被删除后仍然成功       |
+| `current_dir`                    | 返回进程工作目录                                 | 工作目录不可用时返回 `io::Error`                                         |
+| `join`                           | 以自身为 base 锚定；`path` 绝对时整体替换        | 不会失败                                                                 |
+| `canonicalize`                   | 在文件系统上解析 symlink 与平台别名              | 路径不存在返回 `io::Error`；Windows 返回普通 drive/UNC 写法而不是 `\\?\` |
+| `parent` / `ancestors`           | 词法向上遍历，元素仍然绝对                       | 根目录的 `parent` 是 `None`                                              |
+| `with_base_directory`            | 在 `operation` 期间为反序列化提供 base           | 线程内生效，`operation` 必须在调用线程上完成                             |
+| `with_home_directory`            | 在 `operation` 期间用显式 home 覆盖操作系统 home | 同上                                                                     |
 
 `Deref<Target = Path>` 暴露 `file_name`、`extension`、`starts_with`、`to_string_lossy` 等只读查询，因此这里不重复定义。`Ord` 与 `Hash` 比较规范化后的写法，不比较文件系统对象；两个指向同一 inode 的路径不相等。
 
@@ -45,13 +45,13 @@ config 文件里的相对路径应当在 `with_base_directory(&config_directory,
 
 ## 文件与内部所有权
 
-| 文件 / private symbol | Ownership |
-| --- | --- |
-| `absolutize.rs::normalize` | `.` / `..` 折叠，只对已绝对的路径调用 |
-| `absolutize.rs::path_with_base` | POSIX 与 Windows 的 base 锚定规则，包含 Windows root-relative 与 drive-relative 写法 |
-| `resolution.rs::expand_home_directory` | `~` 与 `~/rest` 的展开边界 |
-| `resolution.rs::Restore` | 嵌套作用域退出时恢复外层 base/home，而不是清空 |
-| `lib.rs::prepare` | 构造前的写法规范化，绝对性判断之前执行 |
+| 文件 / private symbol                  | Ownership                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------ |
+| `absolutize.rs::normalize`             | `.` / `..` 折叠，只对已绝对的路径调用                                                |
+| `absolutize.rs::path_with_base`        | POSIX 与 Windows 的 base 锚定规则，包含 Windows root-relative 与 drive-relative 写法 |
+| `resolution.rs::expand_home_directory` | `~` 与 `~/rest` 的展开边界                                                           |
+| `resolution.rs::Restore`               | 嵌套作用域退出时恢复外层 base/home，而不是清空                                       |
+| `lib.rs::prepare`                      | 构造前的写法规范化，绝对性判断之前执行                                               |
 
 ```text
 from_absolute

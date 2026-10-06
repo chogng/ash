@@ -108,7 +108,7 @@ function lifecycleState(server: string, dto: LanguageServerStateDto): LanguageSe
 	}
 }
 
-function lifecyclePresentation(state: LanguageServerLifecycleState): { readonly severity: "information" | "warning" | "error" | "log"; readonly text: string } {
+function lifecyclePresentation(state: LanguageServerLifecycleState): { readonly severity: "information" | "warning" | "error" | "log"; readonly text: string; } {
 	switch (state.state) {
 		case "starting": return { severity: "information", text: "Starting language server…" };
 		case "ready": return { severity: "information", text: "Language server is ready." };

@@ -17,7 +17,7 @@ import { getWorkbenchColorTheme } from '../../../../common/theme.js';
 import { createTextMateScopeThemeResolver } from '../../common/textMateScopeTheme.js';
 import { projectColorThemeTokens } from '../../common/textMateThemeProjection.js';
 
-const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
+const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace; }).default ?? onigurumaNamespace;
 const { createOnigScanner, createOnigString, loadWASM } = onigurumaRuntime;
 const onigLib = initializeOnigLib();
 
@@ -138,7 +138,7 @@ test('raw tokenizer exposes Markdown scopes and reflects replaced grammars', asy
 test('bundled Git grammars preserve pattern boundaries and colors in every Ash theme', async () => {
 	using registry = new TextMateGrammarRegistry();
 	for (const directory of ['git-base', 'ini', 'diff', 'shellscript']) {
-		const manifest = JSON.parse(await readFile(resolve(`../extensions/${directory}/package.json`), 'utf8')) as { contributes: { grammars: { language: string; scopeName: string; path: string }[] } };
+		const manifest = JSON.parse(await readFile(resolve(`../extensions/${directory}/package.json`), 'utf8')) as { contributes: { grammars: { language: string; scopeName: string; path: string; }[]; }; };
 		for (const grammar of manifest.contributes.grammars) {
 			const content = await readFile(resolve(`../extensions/${directory}`, grammar.path), 'utf8');
 			registry.register({ languageId: grammar.language, scopeName: grammar.scopeName, loadGrammar: () => content });
@@ -285,11 +285,13 @@ test("TextMate Syntax provider overrides lexical fallback by explicit priority",
 	using fallback = providers.register({
 		id: "fallback.lexical",
 		languageIds: ["demo"],
-		provideTokens: () => ({ tokens: [{
-			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
-			tokenType: "variable",
-			modifiers: [],
-		}] }),
+		provideTokens: () => ({
+			tokens: [{
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
+				tokenType: "variable",
+				modifiers: [],
+			}]
+		}),
 	});
 	using textmate = providers.register(createTextMateSyntaxProvider(tokenization));
 	using model = new TextModel("if");

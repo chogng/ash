@@ -123,9 +123,11 @@ test('GPU strategies send semantic colors and font styles to the glyph atlas', a
 	const { ViewportRenderStrategy } = await import('../../browser/gpu/renderStrategy/viewportRenderStrategy.js');
 	const { FullFileRenderStrategy } = await import('../../browser/gpu/renderStrategy/fullFileRenderStrategy.js');
 	const { ViewGpuContext } = await import('../../browser/gpu/viewGpuContext.js');
-	const theme = createColorTheme({ id: 'gpu-semantic-test', label: 'GPU semantic test', colorScheme: ColorScheme.Dark, semanticTokenRules: [
-		{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#123456', fontStyle: 'italic underline' },
-	] });
+	const theme = createColorTheme({
+		id: 'gpu-semantic-test', label: 'GPU semantic test', colorScheme: ColorScheme.Dark, semanticTokenRules: [
+			{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#123456', fontStyle: 'italic underline' },
+		]
+	});
 	const resolver = new SemanticTokenStyleResolver(theme, true);
 	withGpuBufferUsage(() => {
 		for (const Strategy of [ViewportRenderStrategy, FullFileRenderStrategy]) {
@@ -145,11 +147,13 @@ test('GPU strategies send semantic colors and font styles to the glyph atlas', a
 });
 
 test('semantic GPU rules follow type, modifier, language, and highlighting preference', () => {
-	const theme = createColorTheme({ id: 'gpu-semantic-specificity', label: 'GPU semantic specificity', colorScheme: ColorScheme.Dark, semanticTokenRules: [
-		{ selector: '*.declaration', type: '*', modifiers: ['declaration'], foreground: '#112233' },
-		{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#445566' },
-		{ selector: 'variable.declaration:typescript', type: 'variable', modifiers: ['declaration'], language: 'typescript', foreground: '#778899', fontStyle: 'bold' },
-	] });
+	const theme = createColorTheme({
+		id: 'gpu-semantic-specificity', label: 'GPU semantic specificity', colorScheme: ColorScheme.Dark, semanticTokenRules: [
+			{ selector: '*.declaration', type: '*', modifiers: ['declaration'], foreground: '#112233' },
+			{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#445566' },
+			{ selector: 'variable.declaration:typescript', type: 'variable', modifiers: ['declaration'], language: 'typescript', foreground: '#778899', fontStyle: 'bold' },
+		]
+	});
 	const token = { startColumn: 0, endColumn: 1, semanticType: 'variable', semanticModifiers: ['declaration'], semanticLanguage: 'typescript' };
 	const enabled = new SemanticTokenStyleResolver(theme, true).resolve(token, 0);
 	const disabled = new SemanticTokenStyleResolver(theme, false).resolve(token, 0);
@@ -161,54 +165,54 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 	const installedUsage = installEditorTestGlobals({ GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 } });
 	const passes: GPURenderPassDescriptor[] = [];
 	let ended = false;
-		const device = {
-			queue: {
-				writeBuffer: () => undefined,
-				submit: () => undefined,
-			},
-			createBuffer: () => ({ destroy: () => undefined }),
-			createShaderModule: () => ({}),
-			createRenderPipeline: () => ({ getBindGroupLayout: () => ({}) }),
-			createBindGroup: () => ({}),
-			createCommandEncoder: () => encoder,
-		} as unknown as GPUDevice;
-		const encoder = {
-				beginRenderPass: (descriptor: GPURenderPassDescriptor) => {
-					passes.push(descriptor);
-					return { end: () => { ended = true; } };
-				},
-				finish: () => ({}),
-			} as unknown as GPUCommandEncoder;
-		const view = {} as GPUTextureView;
-		let eventHandlerCount = 0;
-		const context = {
-			addEventHandler: () => { eventHandlerCount++; },
-			removeEventHandler: () => { eventHandlerCount--; },
-			viewLayout: {
-				getCurrentScrollLeft: () => 10,
-				getCurrentScrollTop: () => 20,
-			},
-		} as unknown as ViewContext;
-		const canvas = h(browserEnvironment.window.document, 'canvas');
-		canvas.width = 800;
-		canvas.height = 600;
-		Object.defineProperty(canvas.ownerDocument.defaultView!.navigator, 'gpu', {
-			configurable: true,
-			value: { getPreferredCanvasFormat: () => 'bgra8unorm' },
-		});
-		let configured = false;
-		const canvasContext = {
-			configure: () => { configured = true; },
-			getCurrentTexture: () => ({ createView: () => view }),
-		} as unknown as GPUCanvasContext;
+	const device = {
+		queue: {
+			writeBuffer: () => undefined,
+			submit: () => undefined,
+		},
+		createBuffer: () => ({ destroy: () => undefined }),
+		createShaderModule: () => ({}),
+		createRenderPipeline: () => ({ getBindGroupLayout: () => ({}) }),
+		createBindGroup: () => ({}),
+		createCommandEncoder: () => encoder,
+	} as unknown as GPUDevice;
+	const encoder = {
+		beginRenderPass: (descriptor: GPURenderPassDescriptor) => {
+			passes.push(descriptor);
+			return { end: () => { ended = true; } };
+		},
+		finish: () => ({}),
+	} as unknown as GPUCommandEncoder;
+	const view = {} as GPUTextureView;
+	let eventHandlerCount = 0;
+	const context = {
+		addEventHandler: () => { eventHandlerCount++; },
+		removeEventHandler: () => { eventHandlerCount--; },
+		viewLayout: {
+			getCurrentScrollLeft: () => 10,
+			getCurrentScrollTop: () => 20,
+		},
+	} as unknown as ViewContext;
+	const canvas = h(browserEnvironment.window.document, 'canvas');
+	canvas.width = 800;
+	canvas.height = 600;
+	Object.defineProperty(canvas.ownerDocument.defaultView!.navigator, 'gpu', {
+		configurable: true,
+		value: { getPreferredCanvasFormat: () => 'bgra8unorm' },
+	});
+	let configured = false;
+	const canvasContext = {
+		configure: () => { configured = true; },
+		getCurrentTexture: () => ({ createView: () => view }),
+	} as unknown as GPUCanvasContext;
 
-		try {
-			const renderer = new RectangleRenderer(context, observableValue('contentLeft', 0), observableValue('devicePixelRatio', 1), canvas, canvasContext, Promise.resolve(device));
-			await Promise.resolve();
-			assert.equal(eventHandlerCount, 1);
-			assert.equal(configured, true);
-			renderer.draw({ bigNumbersDelta: 0 } as ViewportData);
-			const attachment = [...(passes[0]?.colorAttachments ?? [])][0] as GPURenderPassColorAttachment | undefined;
+	try {
+		const renderer = new RectangleRenderer(context, observableValue('contentLeft', 0), observableValue('devicePixelRatio', 1), canvas, canvasContext, Promise.resolve(device));
+		await Promise.resolve();
+		assert.equal(eventHandlerCount, 1);
+		assert.equal(configured, true);
+		renderer.draw({ bigNumbersDelta: 0 } as ViewportData);
+		const attachment = [...(passes[0]?.colorAttachments ?? [])][0] as GPURenderPassColorAttachment | undefined;
 		assert.deepEqual({
 			passCount: passes.length,
 			view: attachment?.view,
@@ -222,11 +226,11 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 			loadOp: 'clear',
 			storeOp: 'store',
 			clearValue: { r: 0, g: 0, b: 0, a: 0 },
-				ended: true,
-			});
-			renderer.dispose();
-			assert.equal(eventHandlerCount, 0);
-		} finally {
+			ended: true,
+		});
+		renderer.dispose();
+		assert.equal(eventHandlerCount, 0);
+	} finally {
 		installedUsage.dispose();
 	}
 });
@@ -292,8 +296,8 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 	let disconnected = false;
 	class TestResizeObserver implements ResizeObserver {
 		constructor(callback: ResizeObserverCallback) { resizeCallbacks.push(callback); }
-		public observe(): void {}
-		public unobserve(): void {}
+		public observe(): void { }
+		public unobserve(): void { }
 		public disconnect(): void { disconnected = true; }
 		public takeRecords(): ResizeObserverEntry[] { return []; }
 	}
@@ -311,10 +315,10 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 		configurable: true,
 		value: {
 			getPreferredCanvasFormat: () => 'bgra8unorm',
-			requestAdapter: () => new Promise<GPUAdapter | null>(() => {}),
+			requestAdapter: () => new Promise<GPUAdapter | null>(() => { }),
 		},
 	});
-	const configurationEmitter = new Emitter<{ hasChanged(option: EditorOption): boolean }>();
+	const configurationEmitter = new Emitter<{ hasChanged(option: EditorOption): boolean; }>();
 	const state = { contentLeft: 24, verticalScrollbarSize: 12 };
 	const handlers = new Set<object>();
 	const context = {
@@ -391,7 +395,7 @@ function fixedGlyphAtlas(): TextureAtlas {
 	return {
 		getGlyph: () => ({
 			pageIndex: 0,
-				glyphIndex: 1,
+			glyphIndex: 1,
 			x: 0,
 			y: 0,
 			w: 8,
@@ -416,10 +420,10 @@ function createStrategyHarness(): {
 	readonly device: GPUDevice;
 	readonly rasterizer: GlyphRasterizer;
 	readonly writes: BufferWrite[];
-	readonly glyphs: { readonly chars: string; readonly metadata: number; readonly styleSetId: number }[];
+	readonly glyphs: { readonly chars: string; readonly metadata: number; readonly styleSetId: number; }[];
 } {
 	const writes: BufferWrite[] = [];
-	const glyphs: { chars: string; metadata: number; styleSetId: number }[] = [];
+	const glyphs: { chars: string; metadata: number; styleSetId: number; }[] = [];
 	const labels = new WeakMap<object, string>();
 	const device = {
 		queue: {
@@ -452,10 +456,12 @@ function createStrategyHarness(): {
 	} as unknown as ViewContext;
 	const gpuContext = {
 		devicePixelRatio: observableValue('devicePixelRatio', 1),
-		atlas: { getGlyph: (_rasterizer: GlyphRasterizer, chars: string, metadata: number, styleSetId: number) => {
-			glyphs.push({ chars, metadata, styleSetId });
-			return fixedGlyphAtlas().getGlyph(_rasterizer, chars, metadata, styleSetId, 0);
-		} },
+		atlas: {
+			getGlyph: (_rasterizer: GlyphRasterizer, chars: string, metadata: number, styleSetId: number) => {
+				glyphs.push({ chars, metadata, styleSetId });
+				return fixedGlyphAtlas().getGlyph(_rasterizer, chars, metadata, styleSetId, 0);
+			}
+		},
 		decorationStyleCache: new DecorationStyleCache(),
 		decorationCssRuleExtractor: { getStyleRules: () => [] },
 		canvas: {},

@@ -36,7 +36,7 @@ export interface ExtensionApiIssue {
 }
 
 interface ContributionSet {
-	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem }[];
+	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem; }[];
 	readonly commands: readonly CommandDefinition[];
 	readonly languages: Required<LanguageProviderBatch>;
 	readonly tasks: readonly TaskProvider[];
@@ -162,7 +162,7 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private showQuickPick(items: readonly string[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
-		const pick = this.quickInput.createQuickPick<{ label: string; index: number }>();
+		const pick = this.quickInput.createQuickPick<{ label: string; index: number; }>();
 		const listeners = new DisposableStore();
 		return new Promise<ExtensionClientResult>((resolve, reject) => {
 			const finish = (index: number | null): void => resolve({ result: 'selection', index });
@@ -207,7 +207,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private buildContributions(snapshot: ExtensionHostFleetSnapshot): ContributionSet {
 		const controller = new AbortController();
 		const commands: CommandDefinition[] = [];
-		const menus: { id: MenuId; item: IMenuItem }[] = [];
+		const menus: { id: MenuId; item: IMenuItem; }[] = [];
 		const languages = mutableLanguageBatch();
 		const tasks: TaskProvider[] = [];
 		const tests: TestProfileProvider[] = [];
@@ -222,17 +222,19 @@ export class MainThreadExtensionApi extends Disposable {
 			if (runtime.lifecycle === 'dormant') {
 				const signal = this.activationController.signal;
 				for (const command of runtime.activation!.commands) {
-					commands.push({ id: command.command, metadata: { description: command.title }, handler: async (_accessor, ...args) => {
-						signal.throwIfAborted();
-						const activated = await this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event: { type: 'command', command: command.command } });
-						signal.throwIfAborted();
-						const current = activated.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration && candidate.lifecycle === 'ready');
-						const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
-						if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
-						// Activating replaces process registrations. This command retains the connection
-						// lifetime signal and uses the new process fence, rather than the retired batch.
-						return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: args }), signal);
-					} });
+					commands.push({
+						id: command.command, metadata: { description: command.title }, handler: async (_accessor, ...args) => {
+							signal.throwIfAborted();
+							const activated = await this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event: { type: 'command', command: command.command } });
+							signal.throwIfAborted();
+							const current = activated.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration && candidate.lifecycle === 'ready');
+							const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
+							if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
+							// Activating replaces process registrations. This command retains the connection
+							// lifetime signal and uses the new process fence, rather than the retired batch.
+							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: args }), signal);
+						}
+					});
 				}
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
@@ -242,16 +244,18 @@ export class MainThreadExtensionApi extends Disposable {
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
 				if (registration.kind === "command") {
-					commands.push(Object.freeze({ id: registration.command, metadata: { description: registration.title }, handler: (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
-						if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
-							return invoke('execute', normalizeExtensionHostPayload({ arguments: args }), controller.signal);
+					commands.push(Object.freeze({
+						id: registration.command, metadata: { description: registration.title }, handler: (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
+							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
+								return invoke('execute', normalizeExtensionHostPayload({ arguments: args }), controller.signal);
+							}
+							const part = accessor.get(IEditorPart);
+							const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
+							const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
+							const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
+							return invoke('execute', normalizeExtensionHostPayload({ arguments: args, activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
 						}
-						const part = accessor.get(IEditorPart);
-						const context = args[0] as { groupId?: string; editorIndex?: number } | undefined;
-						const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
-						const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-						return invoke('execute', normalizeExtensionHostPayload({ arguments: args, activeEditor: input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null }), controller.signal);
-					} }));
+					}));
 					for (const placement of registration.menus ?? []) {
 						const [group, orderText] = (placement.group ?? '').split('@');
 						const order = orderText === undefined ? undefined : Number(orderText);
@@ -265,13 +269,15 @@ export class MainThreadExtensionApi extends Disposable {
 						} else if (placement.menu === 'editor/title/context') {
 							id = MenuId.EditorTitleContext;
 						}
-						menus.push({ id, item: {
-							command: { id: registration.command, title: registration.title, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
-							alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
-							when: placement.when ? parseContextKeyExpression(placement.when) : undefined,
-							group,
-							order,
-						} });
+						menus.push({
+							id, item: {
+								command: { id: registration.command, title: registration.title, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
+								alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
+								when: placement.when ? parseContextKeyExpression(placement.when) : undefined,
+								group,
+								order,
+							}
+						});
 					}
 					continue;
 				}
@@ -464,7 +470,7 @@ function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: E
 	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(", ")} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
 }
 
-function mutableLanguageBatch(): { completions: NonNullable<LanguageProviderBatch["completions"]>[number][]; hovers: NonNullable<LanguageProviderBatch["hovers"]>[number][]; formatting: NonNullable<LanguageProviderBatch["formatting"]>[number][]; inlayHints: NonNullable<LanguageProviderBatch["inlayHints"]>[number][]; linkedEditing: NonNullable<LanguageProviderBatch["linkedEditing"]>[number][]; parameterHints: NonNullable<LanguageProviderBatch["parameterHints"]>[number][] } {
+function mutableLanguageBatch(): { completions: NonNullable<LanguageProviderBatch["completions"]>[number][]; hovers: NonNullable<LanguageProviderBatch["hovers"]>[number][]; formatting: NonNullable<LanguageProviderBatch["formatting"]>[number][]; inlayHints: NonNullable<LanguageProviderBatch["inlayHints"]>[number][]; linkedEditing: NonNullable<LanguageProviderBatch["linkedEditing"]>[number][]; parameterHints: NonNullable<LanguageProviderBatch["parameterHints"]>[number][]; } {
 	return { completions: [], hovers: [], formatting: [], inlayHints: [], linkedEditing: [], parameterHints: [] };
 }
 
@@ -481,7 +487,7 @@ function freezeLanguageBatch(value: ReturnType<typeof mutableLanguageBatch>): Re
 	return Object.freeze({ completions: Object.freeze(value.completions), hovers: Object.freeze(value.hovers), formatting: Object.freeze(value.formatting), inlayHints: Object.freeze(value.inlayHints), linkedEditing: Object.freeze(value.linkedEditing), parameterHints: Object.freeze(value.parameterHints) });
 }
 
-function combineSignals(first: AbortSignal, second: AbortSignal): { readonly signal: AbortSignal; dispose(): void } {
+function combineSignals(first: AbortSignal, second: AbortSignal): { readonly signal: AbortSignal; dispose(): void; } {
 	const controller = new AbortController();
 	const abortFirst = (): void => controller.abort(first.reason);
 	const abortSecond = (): void => controller.abort(second.reason);
@@ -499,5 +505,5 @@ function combineSignals(first: AbortSignal, second: AbortSignal): { readonly sig
 }
 
 function extensionDocumentSnapshot(model: ITextModel): ExtensionDocumentSnapshot {
-    return { uri: model.uri.toString(), version: model.getVersionId(), languageId: model.getLanguageId(), text: model.getValue() };
+	return { uri: model.uri.toString(), version: model.getVersionId(), languageId: model.getLanguageId(), text: model.getValue() };
 }

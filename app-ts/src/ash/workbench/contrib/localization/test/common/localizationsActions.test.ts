@@ -83,7 +83,7 @@ class LanguageActionEnvironment extends Disposable {
 		services.registerInstance(INotificationService, {
 			error: (message: string) => {
 				this.errors.push(message);
-				return { close() {} };
+				return { close() { } };
 			},
 		} as INotificationService);
 		this.commands = new CommandService(services);
@@ -131,7 +131,7 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 		this.changed.fire();
 	}
 
-	public async refresh(): Promise<void> {}
+	public async refresh(): Promise<void> { }
 }
 
 class TestQuickInputService implements IQuickInputService {
@@ -199,7 +199,7 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 		this.changed.fire(value);
 	}
 
-	public show(): void {}
+	public show(): void { }
 	public hide(): void { this.hidden.fire(); }
 }
 

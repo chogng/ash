@@ -8,13 +8,13 @@
 
 ## 当前所有权
 
-| 能力 | Stanza（Ash TS Renderer） | App（Native Rust） |
-| --- | --- | --- |
-| 文本存储、transaction、version | `TextModel` / `TextBuffer` | `EditorCoreDocument` / `CodeEditorDocument` |
-| undo/redo 与 typing grouping | `TextModelHistory` | `EditorCoreDocument` + Native command policy |
-| selection、tracked range、IME | Stanza common/browser | `ash-editor` |
-| layout 与 presentation | DOM、CSS、virtual viewport | `ash-ui-components`、`zui`、GPU scene |
-| 文件、LSP、workspace search | 异步调用 Rust App Server service | Native product adapter 按需组合 Rust crate |
+| 能力                           | Stanza（Ash TS Renderer）        | App（Native Rust）                           |
+| ------------------------------ | -------------------------------- | -------------------------------------------- |
+| 文本存储、transaction、version | `TextModel` / `TextBuffer`       | `EditorCoreDocument` / `CodeEditorDocument`  |
+| undo/redo 与 typing grouping   | `TextModelHistory`               | `EditorCoreDocument` + Native command policy |
+| selection、tracked range、IME  | Stanza common/browser            | `ash-editor`                                 |
+| layout 与 presentation         | DOM、CSS、virtual viewport       | `ash-ui-components`、`zui`、GPU scene        |
+| 文件、LSP、workspace search    | 异步调用 Rust App Server service | Native product adapter 按需组合 Rust crate   |
 
 两套 editor 共享产品语义和 conformance 目标，但不共享同步运行时状态。Stanza 的输入必须在 Renderer 当前事件
 循环内完成；逐键 IPC、WASM 双写或远端 undo authority 都会破坏 IME、selection 和渲染一致性。App 则直接链接

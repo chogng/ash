@@ -7,9 +7,9 @@ export const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 
 class TestResizeObserver implements ResizeObserver {
-	public observe(): void {}
-	public unobserve(): void {}
-	public disconnect(): void {}
+	public observe(): void { }
+	public unobserve(): void { }
+	public disconnect(): void { }
 }
 
 const installedGlobals = installEditorTestDom(browserEnvironment, [

@@ -9,7 +9,7 @@ export class SessionsChatAccessibilityHelp implements IAccessibleViewImplementat
 	public readonly priority = 90;
 	public readonly name = `sessionsChat-${createUuid()}`;
 
-	constructor(private readonly container: HTMLElement, private readonly focusInput: () => void) {}
+	constructor(private readonly container: HTMLElement, private readonly focusInput: () => void) { }
 
 	public getProvider(): AccessibleContentProvider | undefined {
 		if (!this.container.contains(this.container.ownerDocument.activeElement)) return undefined;

@@ -17,9 +17,9 @@ export class ReplaceService implements IReplaceService {
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
-	) {}
+	) { }
 
-	public async replace(matches: readonly SearchMatch[], query: IContentSearchQuery, replacement: string, options: { readonly preview: boolean; readonly preserveCase: boolean; readonly signal: AbortSignal }): Promise<SearchReplaceResult> {
+	public async replace(matches: readonly SearchMatch[], query: IContentSearchQuery, replacement: string, options: { readonly preview: boolean; readonly preserveCase: boolean; readonly signal: AbortSignal; }): Promise<SearchReplaceResult> {
 		using references = new DisposableStore();
 		const grouped = new Map<string, SearchMatch[]>();
 		for (const match of matches) {

@@ -224,7 +224,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		this.renderSidebar();
 	}
 
-	layout(_dimension: IDimension): void {}
+	layout(_dimension: IDimension): void { }
 
 	setVisible(visibility: EditorPaneVisibility): void {
 		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;

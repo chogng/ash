@@ -41,14 +41,14 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 				super({
 					modelService: {
 						acquire: async () => { throw new Error('Not used'); },
-						dispose() {},
-						[Symbol.dispose]() {},
+						dispose() { },
+						[Symbol.dispose]() { },
 					},
 					createComputationService: () => ({
 						computeDiff: async () => { throw new Error('Not used'); },
 						onDidChange: Event.None,
-						dispose() {},
-						[Symbol.dispose]() {},
+						dispose() { },
+						[Symbol.dispose]() { },
 					}),
 				}, instantiationService);
 			}
@@ -86,7 +86,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		services.registerInstance(IEditorService, {
 			...emptyEditorServiceState,
 			async openEditor(input) { openedInputs.push(input); },
-			focusActiveEditor() {},
+			focusActiveEditor() { },
 		});
 		using commands = new CommandService(services);
 		using contexts = new ContextKeyService();

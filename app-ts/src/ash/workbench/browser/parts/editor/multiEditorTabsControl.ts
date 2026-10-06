@@ -42,7 +42,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private activeInput: EditorInput | undefined;
 	private selectedIds: ReadonlySet<string> | undefined;
 	private readonly tabContext: IScopedContextKeyService;
-	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined }>();
+	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined; }>();
 	private readonly unpinActions = new Map<string, IAction>();
 	private readonly protectedCloseActions = new Map<string, IAction>();
 
@@ -339,7 +339,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	}
 }
 
-function editorInputLabel(input: EditorInput, labelService: ILabelService): { readonly input: EditorInput; readonly name: string; description: string | undefined } {
+function editorInputLabel(input: EditorInput, labelService: ILabelService): { readonly input: EditorInput; readonly name: string; description: string | undefined; } {
 	const explicitLabel = input.label?.trim();
 	const name = explicitLabel || labelService.getUriBasenameLabel(input.resource);
 	const parent = dirname(input.resource);

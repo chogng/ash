@@ -13,11 +13,11 @@ test("SelectBox uses the default chevron trigger and trailing selected check ins
 	});
 	Object.defineProperty(dom.window.Element.prototype, "scrollIntoView", {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(dom.window.HTMLElement.prototype, "scrollTo", {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	const [{ ContextView }, { appendIcon }, { SelectBox }, { Lxicon }] = await Promise.all([
 		import("../../browser/ui/contextview/contextview.js"),

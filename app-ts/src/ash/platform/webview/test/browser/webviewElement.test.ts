@@ -45,7 +45,7 @@ class FakeIframe extends EventTarget {
 	}
 }
 
-class FakeWindow extends EventTarget {}
+class FakeWindow extends EventTarget { }
 
 class FakeDocument {
 	readonly defaultView = new FakeWindow();

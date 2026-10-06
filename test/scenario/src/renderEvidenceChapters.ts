@@ -4,17 +4,17 @@ import { tmpdir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-interface Capture { readonly status?: string; readonly timestamp?: string; readonly details?: string; readonly blockedOn?: string }
-interface Step { readonly id?: string; readonly title?: string; readonly captures?: Capture[] }
+interface Capture { readonly status?: string; readonly timestamp?: string; readonly details?: string; readonly blockedOn?: string; }
+interface Step { readonly id?: string; readonly title?: string; readonly captures?: Capture[]; }
 interface Manifest {
 	readonly scenarioId?: string;
 	readonly title?: string;
 	readonly outcome?: string;
 	readonly videoStartedAt?: string;
 	readonly steps?: Step[];
-	artifacts?: { videos?: string[] };
+	artifacts?: { videos?: string[]; };
 }
-interface Caption { readonly from: number; readonly to: number; readonly eyebrow: string; readonly title: string[]; readonly details: string[]; readonly accent: string }
+interface Caption { readonly from: number; readonly to: number; readonly eyebrow: string; readonly title: string[]; readonly details: string[]; readonly accent: string; }
 
 const fontCandidates = process.env.CHAPTER_FONT ? [process.env.CHAPTER_FONT] : [
 	'/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
@@ -32,7 +32,7 @@ export function resolveVideoTool(tool: 'ffmpeg' | 'ffprobe'): string | undefined
 			execFileSync(candidate, ['-version'], { stdio: 'ignore' });
 			if (tool === 'ffmpeg' && !execFileSync(candidate, ['-hide_banner', '-h', 'filter=drawtext'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes('Filter drawtext')) continue;
 			return candidate;
-		} catch {}
+		} catch { }
 	}
 	return undefined;
 }
@@ -87,7 +87,7 @@ export function renderChapters(runRoot: string): void {
 		writeFileSync(fontCopy, readFileSync(font));
 		const probe = JSON.parse(execFileSync(ffprobe, [
 			'-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-show_entries', 'format=duration', '-of', 'json', inputPath,
-		], { encoding: 'utf8' })) as { streams?: { width?: number; height?: number }[]; format?: { duration?: string } };
+		], { encoding: 'utf8' })) as { streams?: { width?: number; height?: number; }[]; format?: { duration?: string; }; };
 		const width = Number(probe.streams?.[0]?.width);
 		const height = Number(probe.streams?.[0]?.height);
 		const duration = Number(probe.format?.duration);
@@ -99,7 +99,7 @@ export function renderChapters(runRoot: string): void {
 		const detailSize = Math.max(11, Math.round(height * 0.018));
 		const lineHeight = (size: number): number => Math.round(size * 1.35);
 		const columnsFor = (size: number): number => Math.max(16, Math.floor((width - margin * 3) / (size * 0.52)));
-		const boundaries: { readonly step: Step; readonly at: number }[] = [];
+		const boundaries: { readonly step: Step; readonly at: number; }[] = [];
 		let previous = 0;
 		for (const step of manifest.steps ?? []) {
 			const started = step.captures?.find(capture => capture.status === 'started') ?? step.captures?.[0];

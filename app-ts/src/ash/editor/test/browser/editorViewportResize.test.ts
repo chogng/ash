@@ -215,9 +215,9 @@ test("Stanza viewport automatic layout uses the observed content box", () => {
 			resizeListener = listener;
 		}
 
-		observe(): void {}
-		unobserve(): void {}
-		disconnect(): void {}
+		observe(): void { }
+		unobserve(): void { }
+		disconnect(): void { }
 	}
 	Object.defineProperty(dom.window, "ResizeObserver", { configurable: true, value: TestResizeObserver });
 	using installedObserver = installEditorTestGlobals({ ResizeObserver: TestResizeObserver });

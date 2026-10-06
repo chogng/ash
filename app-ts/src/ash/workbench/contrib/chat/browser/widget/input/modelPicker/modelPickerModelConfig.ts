@@ -2,7 +2,7 @@ import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
 /** Both configuration surfaces write undefined when the configured default is chosen. */
-export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; isDefault: boolean }[] {
+export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; isDefault: boolean; }[] {
 	const defaultEffort = entry.modelReasoningEffort;
 	const efforts = defaultEffort === undefined
 		? [{ effort: undefined, description: undefined }, ...(entry.supportedReasoningEfforts ?? [])]

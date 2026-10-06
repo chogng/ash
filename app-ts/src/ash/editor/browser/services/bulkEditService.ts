@@ -36,7 +36,7 @@ interface ResourceFileEditLike {
 }
 
 export abstract class ResourceEdit {
-	protected constructor(readonly metadata?: WorkspaceEditMetadata) {}
+	protected constructor(readonly metadata?: WorkspaceEditMetadata) { }
 
 	static convert(edit: LanguageWorkspaceEdit | WorkspaceEdit): ResourceEdit[] {
 		if ('edits' in edit) {
@@ -103,7 +103,7 @@ export class ResourceFileEdit extends ResourceEdit {
 
 export interface IBulkEditOptions {
 	readonly editor?: ICodeEditor;
-	readonly progress?: { report(value: unknown): void };
+	readonly progress?: { report(value: unknown): void; };
 	readonly token?: AbortSignal;
 	readonly showPreview?: boolean;
 	readonly label?: string;
@@ -159,4 +159,4 @@ function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
 }
 
 /** A captured document version or content no longer matches the shared model. */
-export class WorkspaceEditConflictError extends Error {}
+export class WorkspaceEditConflictError extends Error { }

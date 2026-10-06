@@ -62,10 +62,14 @@ test('lexical readiness rejects worker failures and model disposal', async () =>
 	const started = new DeferredPromise<void>();
 	const result = new DeferredPromise<SyntaxResult>();
 	using model = new TextModel('text', {
-		languageId: 'demo', tokenization: { syntaxService: { workerFactory: () => ({
-			run: () => { void started.complete(); return result.p; },
-			dispose() {}, [Symbol.dispose]() {},
-		}) } },
+		languageId: 'demo', tokenization: {
+			syntaxService: {
+				workerFactory: () => ({
+					run: () => { void started.complete(); return result.p; },
+					dispose() { }, [Symbol.dispose]() { },
+				})
+			}
+		},
 	});
 	const failed = model.tokenization.whenReady(new AbortController().signal);
 	await started.p;
@@ -96,10 +100,16 @@ test('plaintext and models above the tokenization limit are immediately ready', 
 	using plain = new TextModel('text');
 	await plain.tokenization.whenReady(new AbortController().signal);
 	let workers = 0;
-	using large = new TextModel('\n'.repeat(300_000), { tokenization: { syntaxService: { workerFactory: () => {
-		workers++;
-		throw new Error('Large files must not start syntax analysis');
-	} } } });
+	using large = new TextModel('\n'.repeat(300_000), {
+		tokenization: {
+			syntaxService: {
+				workerFactory: () => {
+					workers++;
+					throw new Error('Large files must not start syntax analysis');
+				}
+			}
+		}
+	});
 	await large.tokenization.whenReady(new AbortController().signal);
 	assert.equal(workers, 0);
 });
@@ -128,11 +138,13 @@ test("TextModel publishes current provider tokens through the standard and rende
 		languageIds: ['typescript'],
 		provideTokens: request => {
 			requests += 1;
-			return { tokens: [{
-				range: new Range(1, 1, 1, 8),
-				tokenType: 'comment',
-				modifiers: [],
-			}] };
+			return {
+				tokens: [{
+					range: new Range(1, 1, 1, 8),
+					tokenType: 'comment',
+					modifiers: [],
+				}]
+			};
 		},
 	});
 	using model = new TextModel("comment value", {
@@ -159,11 +171,13 @@ test("model edits invalidate accuracy until the new provider result is accepted"
 	using registration = registry.register({
 		id: 'test.tokens',
 		languageIds: ['typescript'],
-		provideTokens: request => ({ tokens: [{
-			range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
-			tokenType: request.snapshot.getText().startsWith('//') ? 'comment' : 'string',
-			modifiers: [],
-		}] }),
+		provideTokens: request => ({
+			tokens: [{
+				range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
+				tokenType: request.snapshot.getText().startsWith('//') ? 'comment' : 'string',
+				modifiers: [],
+			}]
+		}),
 	});
 	using model = new TextModel('"value"', {
 		languageId: 'typescript',
@@ -233,11 +247,15 @@ test('TextModel owns the syntax worker lifecycle and reanalyzes language-support
 			async run(request: LanguageWorkerRequest<SyntaxLane, SyntaxRequest>): Promise<SyntaxResult> {
 				if (request.lane === SYNTAX_TOKEN_LANE) {
 					tokenRequestCount += 1;
-					return { lane: SYNTAX_TOKEN_LANE, value: { tokens: [{
-						range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
-						tokenType: tokenRequestCount === 1 ? 'string' : 'comment',
-						modifiers: [],
-					}] } };
+					return {
+						lane: SYNTAX_TOKEN_LANE, value: {
+							tokens: [{
+								range: new Range(1, 1, 1, request.snapshot.getText().length + 1),
+								tokenType: tokenRequestCount === 1 ? 'string' : 'comment',
+								modifiers: [],
+							}]
+						}
+					};
 				}
 				return { lane: SYNTAX_DIAGNOSTIC_LANE, value: { diagnostics: [] } };
 			},
@@ -379,9 +397,11 @@ test('async hypothetical tokens are bounded by proposed text and never change li
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register({
 		id: 'test.preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
-		provideTokensForLines: request => ({ tokens: request.tokenize.lines.map((line, index) => ({
-			range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [],
-		})) }),
+		provideTokensForLines: request => ({
+			tokens: request.tokenize.lines.map((line, index) => ({
+				range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [],
+			}))
+		}),
 	});
 	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
@@ -422,7 +442,8 @@ test('hypothetical tokenization reports unavailable lexers and rejects malformed
 	const signal = new AbortController().signal;
 	assert.equal(await plain.tokenization.tokenizeLinesAtAsync(1, ['('], signal), null);
 	using registry = new SyntaxProviderRegistry();
-	using registration = registry.register({ id: 'test.invalid-preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
+	using registration = registry.register({
+		id: 'test.invalid-preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
 		provideTokensForLines: () => ({ tokens: [{ range: new Range(1, 1, 1, 100), tokenType: 'string', modifiers: [] }] }),
 	});
 	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
@@ -464,7 +485,7 @@ test('idle tokenization publishes bounded batches and stops when the last view d
 		tokenize: () => { scanned++; return { tokens: [{ offset: 0, type: 'keyword', language: 'idle-test' }], endState: state }; },
 	});
 	using model = new TextModel(Array.from({ length: 350 }, () => 'keyword').join('\n'), { languageId: 'idle-test' });
-	const ranges: { readonly fromLineNumber: number; readonly toLineNumber: number }[][] = [];
+	const ranges: { readonly fromLineNumber: number; readonly toLineNumber: number; }[][] = [];
 	using listener = model.onDidChangeTokens(event => ranges.push(event.ranges));
 	const view = model.onBeforeAttached();
 	try {
@@ -474,7 +495,7 @@ test('idle tokenization publishes bounded batches and stops when the last view d
 	model.applyEdits([{ range: new Range(1, 1, 1, 8), text: 'changed' }]);
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	assert.deepEqual([scanned, model.tokenization.hasAccurateTokensForLine(1)], [350, false]);
-	const changed: { fromLineNumber: number; toLineNumber: number }[] = [];
+	const changed: { fromLineNumber: number; toLineNumber: number; }[] = [];
 	using changes = model.onDidChangeTokens(event => changed.push(...event.ranges));
 	model.tokenization.forceTokenization(350);
 	assert.deepEqual([scanned, changed], [351, [{ fromLineNumber: 1, toLineNumber: 1 }]]);

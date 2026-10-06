@@ -54,9 +54,25 @@
 	border-radius: var(--ash-corner-radius-small);
 }
 
-.ash-automation textarea { resize: vertical; }
-.ash-automation button { cursor: pointer; }
-.ash-automation button.selected { border-color: var(--ash-focus-border); }
-.ash-automation :focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: 2px; }
-.ash-automation fieldset { display: flex; flex-wrap: wrap; gap: 8px; border: var(--ash-stroke-thickness) solid var(--ash-input-border); }
-.ash-automation [hidden] { display: none; }
+.ash-automation textarea {
+	resize: vertical;
+}
+.ash-automation button {
+	cursor: pointer;
+}
+.ash-automation button.selected {
+	border-color: var(--ash-focus-border);
+}
+.ash-automation :focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: 2px;
+}
+.ash-automation fieldset {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+}
+.ash-automation [hidden] {
+	display: none;
+}

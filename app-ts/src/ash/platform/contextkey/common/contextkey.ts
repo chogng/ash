@@ -74,7 +74,7 @@ class Expression implements ContextKeyExpression {
 	constructor(
 		readonly evaluate: (context: Context) => boolean,
 		readonly keys: () => ReadonlySet<string>,
-	) {}
+	) { }
 }
 
 /** Factory functions for context expressions used by contributions. */

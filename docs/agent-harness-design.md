@@ -13,35 +13,35 @@
 
 ## 快速理解
 
-| 问题 | 结论 | 深入阅读 |
-| --- | --- | --- |
-| 模型调用失败怎么办？ | 运行时按错误类别重试、压缩或稳定失败；终态错误在对话内提供重试、换模型、新对话或改方案动作 | [§7](#7-turn-内循环与失败策略) |
-| Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，再从最新 snapshot 重规划 | [§8](#8-引导与并发输入) |
-| 提示词怎么做？ | 分域拥有：模型基础 instructions 归 models-manager，工具描述归工具 owner，Directory/Goal/Skill 各自贡献 fragment，Core 统一组装 | [§4](#4-提示词) |
-| 工具选哪些？ | 统一八件套；`apply_patch` 是默认代码变更协议，`edit` 是唯一字符串微编辑和降级工具；逐工具规格见 tools-spec | [§5](#5-工具集) |
-| 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
-| 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
-| 缓存怎么搞？ | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入 | [§11](#11-prompt-缓存) |
-| 怎么知道 harness 变好了？ | 普通行为用 Rust/TS 回归；多 Agent 安全边界已有版本化模型在环评测；真实任务质量仍需单 Agent 对照 | [§14](#14-评测) |
+| 问题                           | 结论                                                                                                                           | 深入阅读                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| 模型调用失败怎么办？           | 运行时按错误类别重试、压缩或稳定失败；终态错误在对话内提供重试、换模型、新对话或改方案动作                                     | [§7](#7-turn-内循环与失败策略)       |
+| Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，再从最新 snapshot 重规划                                       | [§8](#8-引导与并发输入)              |
+| 提示词怎么做？                 | 分域拥有：模型基础 instructions 归 models-manager，工具描述归工具 owner，Directory/Goal/Skill 各自贡献 fragment，Core 统一组装 | [§4](#4-提示词)                      |
+| 工具选哪些？                   | 统一八件套；`apply_patch` 是默认代码变更协议，`edit` 是唯一字符串微编辑和降级工具；逐工具规格见 tools-spec                     | [§5](#5-工具集)                      |
+| 工具什么时候注册？             | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删                                                          | [§6](#6-工具注册时机)                |
+| 上下文怎么裁剪/压缩？          | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit`                                        | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
+| 缓存怎么搞？                   | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入                                                          | [§11](#11-prompt-缓存)               |
+| 怎么知道 harness 变好了？      | 普通行为用 Rust/TS 回归；多 Agent 安全边界已有版本化模型在环评测；真实任务质量仍需单 Agent 对照                                | [§14](#14-评测)                      |
 
 ## 1. 现状差距
 
 一个可用的 coding agent harness 需要的每个环节，对照 Ash 当前实现：
 
-| 环节 | 可用 harness 需要 | Ash 现状 |
-| --- | --- | --- |
-| Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `ash-prompts::AGENT_INSTRUCTIONS` 与所选模型指导在 Turn 创建前冻结，Core 通过 `ContextPlan` 与当前 Role 组合 |
-| 环境上下文 | cwd、平台、日期、git 状态、目录指令 | ✅ Local Environment host 在 model safe point 提供环境与 `.ash/instructions` snapshot |
-| 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
-| 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
-| Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通 |
-| 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
-| 上下文预算 | 窗口估算、溢出显式处理 | ✅ 静态、发现和配置容量共用预算；未知窗口以配置错误阻止调用 |
-| 压缩 | 阈值触发、durable checkpoint | ✅ `ash-prompts` 共享 compaction 提示词、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
-| Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
-| 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
-| 计划工具 | 长任务显式计划状态 | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致 |
-| 评测 | 任务集 + 指标回路 | Core、App Server 和 Desktop 覆盖确定性行为；真实任务 baseline 与 production telemetry 尚未接入 |
+| 环节               | 可用 harness 需要                          | Ash 现状                                                                                                                                            |
+| ------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model instructions | 每次调用注入身份、策略和通用工作行为       | ✅ `ash-prompts::AGENT_INSTRUCTIONS` 与所选模型指导在 Turn 创建前冻结，Core 通过 `ContextPlan` 与当前 Role 组合                                     |
+| 环境上下文         | cwd、平台、日期、git 状态、目录指令        | ✅ Local Environment host 在 model safe point 提供环境与 `.ash/instructions` snapshot                                                               |
+| 工具面             | 读/搜/改/执行闭环                          | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
+| 模型失败弹性       | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通                                                               |
+| Steering           | 运行中排队注入用户消息                     | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通                                                                  |
+| 工具结果限幅       | 模型侧截断 + 保留头尾                      | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写                                            |
+| 上下文预算         | 窗口估算、溢出显式处理                     | ✅ 静态、发现和配置容量共用预算；未知窗口以配置错误阻止调用                                                                                         |
+| 压缩               | 阈值触发、durable checkpoint               | ✅ `ash-prompts` 共享 compaction 提示词、source digest、原子 commit、恢复校验与 commit 后重规划已接通                                               |
+| Prompt cache       | 前缀稳定 + 断点标注                        | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通                                                                   |
+| 多 Tool Call/响应  | 模型一次响应多个调用                       | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用                                                                 |
+| 计划工具           | 长任务显式计划状态                         | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致                                        |
+| 评测               | 任务集 + 指标回路                          | Core、App Server 和 Desktop 覆盖确定性行为；真实任务 baseline 与 production telemetry 尚未接入                                                      |
 
 ## 2. 一次模型调用的目标形态
 
@@ -92,12 +92,12 @@ loop:
 
 ### 4.1 四层结构
 
-| 层 | 内容 | 变化频率 | 存放位置 |
-| --- | --- | --- | --- |
-| 模型基础 instructions | 身份、指令优先级、注入防护、通用工作行为和输出风格 | 新 Turn 创建时冻结；已开始 Turn 永不变化 | `ash-models-manager` 拥有资产；App Server 冻结到 durable `TurnInstructions` |
-| 工具契约 | exact schema、描述、使用边界和错误语义 | 随 tool profile | 各工具 owner；随冻结的 `ToolDefinition` 进入请求，不复制进基础 instructions |
-| 环境快照 | 见 §4.2 | 环境连接时采集静态字段；accessible dirs 在每次模型调用时读取 | `ash-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
-| 目录与功能指令 | Global `.ash/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
+| 层                    | 内容                                                        | 变化频率                                                     | 存放位置                                                                    |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| 模型基础 instructions | 身份、指令优先级、注入防护、通用工作行为和输出风格          | 新 Turn 创建时冻结；已开始 Turn 永不变化                     | `ash-models-manager` 拥有资产；App Server 冻结到 durable `TurnInstructions` |
+| 工具契约              | exact schema、描述、使用边界和错误语义                      | 随 tool profile                                              | 各工具 owner；随冻结的 `ToolDefinition` 进入请求，不复制进基础 instructions |
+| 环境快照              | 见 §4.2                                                     | 环境连接时采集静态字段；accessible dirs 在每次模型调用时读取 | `ash-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部    |
+| 目录与功能指令        | Global `.ash/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用            | 各功能 owner 提供，Core 按 layer 和 provenance 组装                         |
 
 `ash-prompts` 只拥有公共设施和共享产品提示词。context compaction、审查目标与续接模板在这里；代码审查与 Advisor 的角色正文统一归 `ash-agent-roles`；模型基础 instructions 留在 `ash-models-manager`，Goal 提示归 `ext/goal`，Core 负责最终组装，动作授权审查提示词留在 `ash-guardian-reviewer`。
 
@@ -198,11 +198,11 @@ Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile�
 
 ## 6. 工具注册时机
 
-| 方案 | 结论 |
-| --- | --- |
-| 全量平铺（Codex 式） | ✅ 内置工具 + 小规模 MCP 采用 |
-| 检索式（Claude ToolSearch 式） | ✅ MCP 超阈值采用 |
-| 运行时动态增删 | ❌ 不采纳：打破 Turn 冻结、每次变化击穿缓存、审批/恢复无法绑定稳定工具面 |
+| 方案                           | 结论                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| 全量平铺（Codex 式）           | ✅ 内置工具 + 小规模 MCP 采用                                            |
+| 检索式（Claude ToolSearch 式） | ✅ MCP 超阈值采用                                                        |
+| 运行时动态增删                 | ❌ 不采纳：打破 Turn 冻结、每次变化击穿缓存、审批/恢复无法绑定稳定工具面 |
 
 规则：
 
@@ -217,18 +217,18 @@ Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile�
 
 ### 7.1 模型调用错误分类与处理
 
-| 错误 | 判定依据 | 处理 |
-| --- | --- | --- |
-| 限流 | HTTP 429 | 退避重试；优先遵循 `Retry-After`（上限 60s） |
-| 过载/服务端错误 | HTTP 5xx、529 | 退避重试 |
-| 传输失败 | `ApiError::Transport`（超时/断连） | 退避重试 |
-| 上下文溢出 | 供应商错误体解析 | 完整旧历史前缀持久化压缩后，以新快照重试一次；再次溢出以 `contextOverflow` 稳定失败 |
-| 认证失败 | HTTP 401/403 | 不重试；Turn fail（stable error `providerAuth`），提示用户检查凭据 |
-| 无效请求 | HTTP 400 / `InvalidRequest` | 不重试；Turn fail（stable error `invalidRequest`）；有界原始详情只进入受控日志 |
-| 无效响应 | `InvalidResponse` | 重试 1 次（可能是瞬时截断）→ `invalidResponse` |
-| 空响应 | 无文本、无 Tool Call、无 Refusal | 重试 1 次（同一请求）→ 仍空则 Turn fail（stable error `model_empty_response`） |
-| Refusal | `ResponseItem::Refusal` | **不是错误**：作为最终消息提交，Turn Completed |
-| 取消 | token 触发 | 传播；Turn → Interrupted |
+| 错误            | 判定依据                           | 处理                                                                                |
+| --------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| 限流            | HTTP 429                           | 退避重试；优先遵循 `Retry-After`（上限 60s）                                        |
+| 过载/服务端错误 | HTTP 5xx、529                      | 退避重试                                                                            |
+| 传输失败        | `ApiError::Transport`（超时/断连） | 退避重试                                                                            |
+| 上下文溢出      | 供应商错误体解析                   | 完整旧历史前缀持久化压缩后，以新快照重试一次；再次溢出以 `contextOverflow` 稳定失败 |
+| 认证失败        | HTTP 401/403                       | 不重试；Turn fail（stable error `providerAuth`），提示用户检查凭据                  |
+| 无效请求        | HTTP 400 / `InvalidRequest`        | 不重试；Turn fail（stable error `invalidRequest`）；有界原始详情只进入受控日志      |
+| 无效响应        | `InvalidResponse`                  | 重试 1 次（可能是瞬时截断）→ `invalidResponse`                                      |
+| 空响应          | 无文本、无 Tool Call、无 Refusal   | 重试 1 次（同一请求）→ 仍空则 Turn fail（stable error `model_empty_response`）      |
+| Refusal         | `ResponseItem::Refusal`            | **不是错误**：作为最终消息提交，Turn Completed                                      |
+| 取消            | token 触发                         | 传播；Turn → Interrupted                                                            |
 
 退避参数：基数 1s、倍率 2、上限 30s、抖动 ±25%、**最多 4 次尝试**（1 次初始 + 3 次重
 试）。退避等待期间以 ≤100ms 粒度轮询 cancellation token（或用带超时的 condvar），interrupt
@@ -284,13 +284,13 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 进入模型的每条内容在**选入时**限幅（执行侧上限保护进程与存储，模型侧限幅保护窗口预算，
 两者分开；数值是起点参考值，由 §14 评测调）：
 
-| 内容 | 限幅 | 方式 |
-| --- | --- | --- |
-| shell 结果 | 30 KiB | 头尾各半，中间标注截断字节数 |
-| read_file | 2000 行 / 行内 2000 字符 | 尾部提示用 offset 继续 |
-| grep / glob | 100 条 | 标注总命中数 |
-| MCP 工具结果 | 25 KiB | 同 shell |
-| 图片 | durable 附件保持原图；调用前按所选模型与供应商上限生成受控 clone | attachment authority + provider adapter |
+| 内容         | 限幅                                                             | 方式                                    |
+| ------------ | ---------------------------------------------------------------- | --------------------------------------- |
+| shell 结果   | 30 KiB                                                           | 头尾各半，中间标注截断字节数            |
+| read_file    | 2000 行 / 行内 2000 字符                                         | 尾部提示用 offset 继续                  |
+| grep / glob  | 100 条                                                           | 标注总命中数                            |
+| MCP 工具结果 | 25 KiB                                                           | 同 shell                                |
+| 图片         | durable 附件保持原图；调用前按所选模型与供应商上限生成受控 clone | attachment authority + provider adapter |
 
 ### 9.2 历史选择：不做静默滑窗
 
@@ -370,11 +370,11 @@ instructions（下一个 model safe point 重新冻结）
 
 ### 11.1 三家机制
 
-| Provider | 机制 | 要求 |
-| --- | --- | --- |
+| Provider  | 机制                                                                   | 要求                                              |
+| --------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
 | Anthropic | 显式 `cache_control` 断点（≤4），默认 5 分钟 TTL，读 ≈0.1× / 写 ≈1.25× | 前缀逐字节一致；断点前 ≥ 最小 token 数（约 1024） |
-| OpenAI | 自动前缀缓存（≥1024 tokens） | 无需标注，前缀逐字节一致 |
-| Google | 隐式（2.5+）+ 显式 cache API | 同上 |
+| OpenAI    | 自动前缀缓存（≥1024 tokens）                                           | 无需标注，前缀逐字节一致                          |
+| Google    | 隐式（2.5+）+ 显式 cache API                                           | 同上                                              |
 
 ### 11.2 组装硬约束
 
@@ -409,20 +409,20 @@ instructions（下一个 model safe point 重新冻结）
 canonical 层（`ModelRequest`）保持 provider 中立，差异全部压进 `ash-api` 的 endpoint 请求构造器。
 authoring 规则以最严格交集为准：
 
-| 维度 | Anthropic Messages | OpenAI Responses | canonical 规则 |
-| --- | --- | --- | --- |
-| instructions | `system` 字段 | `instructions` 字段 | 单值 `instructions`，adapter 映射 |
-| 角色 | user/assistant | + developer | v1 canonical 只产生 System/User/Assistant；`Developer` 保留给 OpenAI 路径未来用 |
-| 工具 schema | `input_schema`，无 strict | strict 模式：`additionalProperties:false` + 全字段 `required` | **按通用子集 authoring**（[`agent-tools-spec.md` §1](agent-tools-spec.md#1-模式约定)）：顶层 object、全 required、可选性用 `["T","null"]`，两边同一份 schema 直接可用 |
-| tool_choice | auto/any/tool | auto/required/function/none | 现有 `ToolChoice` 已覆盖 |
-| 并行 Tool Call | 支持（`disable_parallel_tool_use`） | 支持（`parallel_tool_calls`） | profile 属性透传 |
-| Tool result | user 消息内 `tool_result` block | `function_call_output` item | assembler 已配对，adapter 负责 wire 形态 |
-| Tool call id | `tool_use.id` 回传 | `call_id` 回传 | `ToolCallId` 原样往返，adapter 不改写 |
-| 图片 | base64/URL source block | data URI / URL | durable `ImageAttachmentRef` 先经 authority 校验和降采样，再以 ephemeral `ContentPart::ImageUrl` 交给 adapter（已实现） |
-| 缓存 | 显式断点（§11.3） | 自动 | adapter 差异，canonical 无感 |
-| reasoning | thinking content block | `reasoning.effort` | Anthropic 原生 stream 会归一化上游 thinking delta；canonical `ReasoningConfig` 到新旧 Anthropic thinking 配置尚未建立可靠映射，当前显式拒绝而不猜测 budget；历史 assembler 不回灌 reasoning |
-| 空响应/拒绝 | `stop_reason` + 空 content | `refusal` item | 统一映射 `ResponseItem::Refusal` / 空响应走 §7.1 |
-| 错误分类 | `overloaded_error` 等错误体 | `context_length_exceeded` 等 code | 映射进 §7.4 的 `ApiError` 新分类 |
+| 维度           | Anthropic Messages                  | OpenAI Responses                                              | canonical 规则                                                                                                                                                                              |
+| -------------- | ----------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| instructions   | `system` 字段                       | `instructions` 字段                                           | 单值 `instructions`，adapter 映射                                                                                                                                                           |
+| 角色           | user/assistant                      | + developer                                                   | v1 canonical 只产生 System/User/Assistant；`Developer` 保留给 OpenAI 路径未来用                                                                                                             |
+| 工具 schema    | `input_schema`，无 strict           | strict 模式：`additionalProperties:false` + 全字段 `required` | **按通用子集 authoring**（[`agent-tools-spec.md` §1](agent-tools-spec.md#1-模式约定)）：顶层 object、全 required、可选性用 `["T","null"]`，两边同一份 schema 直接可用                       |
+| tool_choice    | auto/any/tool                       | auto/required/function/none                                   | 现有 `ToolChoice` 已覆盖                                                                                                                                                                    |
+| 并行 Tool Call | 支持（`disable_parallel_tool_use`） | 支持（`parallel_tool_calls`）                                 | profile 属性透传                                                                                                                                                                            |
+| Tool result    | user 消息内 `tool_result` block     | `function_call_output` item                                   | assembler 已配对，adapter 负责 wire 形态                                                                                                                                                    |
+| Tool call id   | `tool_use.id` 回传                  | `call_id` 回传                                                | `ToolCallId` 原样往返，adapter 不改写                                                                                                                                                       |
+| 图片           | base64/URL source block             | data URI / URL                                                | durable `ImageAttachmentRef` 先经 authority 校验和降采样，再以 ephemeral `ContentPart::ImageUrl` 交给 adapter（已实现）                                                                     |
+| 缓存           | 显式断点（§11.3）                   | 自动                                                          | adapter 差异，canonical 无感                                                                                                                                                                |
+| reasoning      | thinking content block              | `reasoning.effort`                                            | Anthropic 原生 stream 会归一化上游 thinking delta；canonical `ReasoningConfig` 到新旧 Anthropic thinking 配置尚未建立可靠映射，当前显式拒绝而不猜测 budget；历史 assembler 不回灌 reasoning |
+| 空响应/拒绝    | `stop_reason` + 空 content          | `refusal` item                                                | 统一映射 `ResponseItem::Refusal` / 空响应走 §7.1                                                                                                                                            |
+| 错误分类       | `overloaded_error` 等错误体         | `context_length_exceeded` 等 code                             | 映射进 §7.4 的 `ApiError` 新分类                                                                                                                                                            |
 
 ## 14. 评测
 
@@ -432,12 +432,12 @@ authoring 规则以最严格交集为准：
 
 真实模型行为对比应按下列层次建立独立 benchmark。它们是模型/profile 质量声明和多 Agent 收益声明的前置证据，不是机械执行边界的替代品：
 
-| 层 | 数量 | 内容 | 考察 |
-| --- | --- | --- | --- |
-| T1 | 10 | 单文件 bug 修复 | 工具基本功、编辑正确率 |
-| T2 | 5 | 跨文件小功能 | 搜索/多文件编辑/验证纪律 |
-| T3 | 2 | 长会话（>30 次工具调用） | 计划工具、失控防护 |
-| T4 | 2 | 强制压缩任务（低阈值配置） | 压缩后连贯性（约束保留、不重做已完成工作） |
+| 层  | 数量 | 内容                       | 考察                                       |
+| --- | ---- | -------------------------- | ------------------------------------------ |
+| T1  | 10   | 单文件 bug 修复            | 工具基本功、编辑正确率                     |
+| T2  | 5    | 跨文件小功能               | 搜索/多文件编辑/验证纪律                   |
+| T3  | 2    | 长会话（>30 次工具调用）   | 计划工具、失控防护                         |
+| T4  | 2    | 强制压缩任务（低阈值配置） | 压缩后连贯性（约束保留、不重做已完成工作） |
 
 ### 14.2 指标
 
@@ -465,15 +465,15 @@ authoring 规则以最严格交集为准：
 
 M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [ChatGPT 当前状态与待完成项](models/chatgpt.md#chatgpt-当前状态与待完成项) 维护；内置与自定义 Agent 的统一定义由 [`agents.md`](agents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
 
-| 里程碑 | 内容 | 关键改动点 | 前置接线 |
-| --- | --- | --- | --- |
-| M0（完成）提示词接线 | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.ash/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入 | `ash-models-manager`、`ash-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`DirContributions` | 无 |
-| M1（实现完成）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖 | 本地工具组合、executor contributions、profile 声明层 | 现有行为测试 |
-| M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
-| M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化 | 现有行为测试 |
-| M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
-| M5（完成）MCP 策略 | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现 | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
-| M6（完成）Skills/commands | `$name` 显式 SkillRef、slash commands、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
+| 里程碑                        | 内容                                                                                                                                                                           | 关键改动点                                                                                                     | 前置接线                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| M0（完成）提示词接线          | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.ash/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入      | `ash-models-manager`、`ash-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`DirContributions` | 无                               |
+| M1（实现完成）工具最小闭环    | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖                         | 本地工具组合、executor contributions、profile 声明层                                                           | 现有行为测试                     |
+| M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现                                                                      | executor 重试层、Thread command、App Server protocol                                                           | protocol/schema/Desktop 同批同步 |
+| M3（实现完成）限幅/预算/压缩  | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化                                                         | 现有行为测试                     |
+| M4（完成）缓存                | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通                                                             | `anthropic_messages` adapter、conformance fixture                                                              | 无                               |
+| M5（完成）MCP 策略            | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现                                                     | MCP registry 之上的冻结暴露策略                                                                                | ToolProfile contract             |
+| M6（完成）Skills/commands     | `$name` 显式 SkillRef、slash commands、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通                             | App Server 展开、Skill metadata selector、ActivatedSkill layer                                                 | 评测与信任策略                   |
 
 当前已经具备“接入已配置模型即可 coding”的最小闭环；真实模型 benchmark 属于有明确产品目标、版本化任务集和受控预算后才启动的产品度量，不阻塞本地闭环。后续实现直接更新上述长期 owner 的状态和完成门，不再维护一份重复的总计划。
 

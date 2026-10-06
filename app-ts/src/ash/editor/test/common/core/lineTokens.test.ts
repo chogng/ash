@@ -47,7 +47,7 @@ function renderLineTokens(tokens: LineTokens): string {
 	return result;
 }
 
-function viewTokenSummary(tokens: IViewLineTokens): readonly { readonly endIndex: number; readonly foreground: number; readonly text: string }[] {
+function viewTokenSummary(tokens: IViewLineTokens): readonly { readonly endIndex: number; readonly foreground: number; readonly text: string; }[] {
 	return Array.from({ length: tokens.getCount() }, (_, index) => ({
 		endIndex: tokens.getEndOffset(index),
 		foreground: tokens.getForeground(index),

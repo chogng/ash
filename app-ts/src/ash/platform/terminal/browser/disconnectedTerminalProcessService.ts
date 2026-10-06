@@ -5,7 +5,7 @@ import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerm
 
 /** Terminal process service used when no browser App Server host is available. */
 export class DisconnectedTerminalProcessService implements ITerminalProcessService {
-	constructor(private readonly unavailable: UnavailableOperation, private readonly appServerApi: IAppServerApi) {}
+	constructor(private readonly unavailable: UnavailableOperation, private readonly appServerApi: IAppServerApi) { }
 
 	listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
 		return this.unavailable("terminal.listProfiles");

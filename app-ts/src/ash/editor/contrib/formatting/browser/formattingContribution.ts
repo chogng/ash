@@ -135,7 +135,7 @@ function createAction(id: string, label: string, tooltip: string, icon: IAction[
 	return { id, label, tooltip, icon, enabled, checked, run };
 }
 
-function createSelectControl(ownerDocument: Document, label: string, ariaLabel: string, options: readonly { readonly value: string; readonly label: string }[]): { readonly element: HTMLLabelElement; readonly select: HTMLSelectElement } {
+function createSelectControl(ownerDocument: Document, label: string, ariaLabel: string, options: readonly { readonly value: string; readonly label: string; }[]): { readonly element: HTMLLabelElement; readonly select: HTMLSelectElement; } {
 	const element = h(ownerDocument, "label");
 	element.className = "stanza-structured-format-select-control";
 	const text = h(ownerDocument, "span");

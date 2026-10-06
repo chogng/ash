@@ -14,7 +14,7 @@ export function registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures:
 }
 
 class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {
-	constructor(private readonly symbols: ICodebaseSymbolsService, private readonly workspace: IWorkspaceContextService) {}
+	constructor(private readonly symbols: ICodebaseSymbolsService, private readonly workspace: IWorkspaceContextService) { }
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly LanguageWorkspaceSymbol[]> {
 		const root = singleWorkspaceRoot(this.workspace);

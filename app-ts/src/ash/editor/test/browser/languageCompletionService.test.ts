@@ -76,7 +76,7 @@ test("Completion service runs providers concurrently and merges deterministicall
 
 test("Trigger characters filter providers while invoke and refresh call all", async () => {
 	using registry = new LanguageCompletionProviderRegistry();
-	const calls: Array<{ id: string; context: LanguageCompletionContext }> = [];
+	const calls: Array<{ id: string; context: LanguageCompletionContext; }> = [];
 	using dotRegistration = registry.register(provider("dot", request => {
 		calls.push({ id: "dot", context: request.context });
 		return result("dot");
@@ -120,7 +120,7 @@ test("Provider failures and invalid snapshots are isolated from healthy results"
 	})));
 	using healthyRegistration = registry.register(provider("healthy", () => result("healthy")));
 	using model = new TextModel("con");
-	const errors: Array<{ providerId: string; error: unknown }> = [];
+	const errors: Array<{ providerId: string; error: unknown; }> = [];
 	using service = new LanguageCompletionService(model, registry, {
 		onProviderError: (providerId, error) => errors.push({ providerId, error }),
 	});

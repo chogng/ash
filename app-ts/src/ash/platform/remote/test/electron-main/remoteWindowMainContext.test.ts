@@ -47,7 +47,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 		save: async connection => connection,
 		update: async (_originalName, connection) => connection,
 		remove: async () => undefined,
-		connect: async () => {},
+		connect: async () => { },
 	};
 	const tunnelListeners = new Set<(change: RemoteTunnelChange) => void>();
 	let tunnelCloseAllCalls = 0;
@@ -55,7 +55,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 	const tunnels: IRemoteTunnelService & IDisposable = {
 		list: async () => [],
 		open: async () => { throw new Error("not used"); },
-		close: async () => {},
+		close: async () => { },
 		closeAll: async () => { tunnelCloseAllCalls += 1; },
 		onDidChange: listener => {
 			tunnelListeners.add(listener);
@@ -64,7 +64,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 		dispose: () => { tunnelsDisposed = true; },
 		[Symbol.dispose]: () => { tunnelsDisposed = true; },
 	};
-	const events: Array<{ readonly channel: string; readonly payload: unknown }> = [];
+	const events: Array<{ readonly channel: string; readonly payload: unknown; }> = [];
 	const context = new RemoteWindowMainContext({
 		supervisor,
 		workspaceContext,
@@ -73,7 +73,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 		host: {
 			send: (channel, payload) => events.push({ channel, payload }),
 			confirmRuntimeRollback: async () => "cancelled",
-			reportRuntimeRollbackFailure: async () => {},
+			reportRuntimeRollbackFailure: async () => { },
 		},
 	});
 	try {
@@ -145,11 +145,11 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 	const tunnels: IRemoteTunnelService & IDisposable = {
 		list: async () => [],
 		open: async () => { throw new Error("not used"); },
-		close: async () => {},
-		closeAll: async () => {},
-		onDidChange: () => toDisposable(() => {}),
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		close: async () => { },
+		closeAll: async () => { },
+		onDidChange: () => toDisposable(() => { }),
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 	const context = new RemoteWindowMainContext({
 		supervisor,
@@ -160,11 +160,11 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 			save: async connection => connection,
 			update: async (_originalName, connection) => connection,
 			remove: async () => undefined,
-			connect: async () => {},
+			connect: async () => { },
 		},
 		tunnels,
 		host: {
-			send: () => {},
+			send: () => { },
 			confirmRuntimeRollback: async () => {
 				calls.push("confirm");
 				return "confirmed";

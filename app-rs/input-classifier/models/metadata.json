@@ -6020,7 +6020,7 @@
     "best_epoch": 5,
     "early_stopping_patience": 2,
     "stopped_early": true,
-    "learning_rate": 5e-05,
+    "learning_rate": 5e-5,
     "supervised_weight": 0.5,
     "distillation_temperature": 2.0,
     "teacher": "multilingual_bert_base_shell_ai_classifier",
@@ -6439,7 +6439,7 @@
     "bytes": 17607832,
     "sha256": "60ac9b2db07da97af0d9c6e59dd560b07284f61f8425adba85a9fed040311ed2",
     "opset": 17,
-    "maximum_absolute_difference": 4.76837158203125e-07,
+    "maximum_absolute_difference": 4.76837158203125e-7,
     "inputs": {
       "input_ids": "int64[batch,sequence]",
       "attention_mask": "int64[batch,sequence]"
@@ -6601,9 +6601,7 @@
           "profile": "embedding_only",
           "per_channel": true,
           "weight_type": "QInt8",
-          "operators": [
-            "Gather"
-          ],
+          "operators": ["Gather"],
           "source_variant": "fp32",
           "batch_shape_invariant_probabilities": true
         }
@@ -6666,7 +6664,7 @@
           "status": "passed",
           "input_text": "git status",
           "graph_requires_custom_operators": false,
-          "maximum_absolute_logit_difference_vs_onnxruntime": 9.5367431640625e-07
+          "maximum_absolute_logit_difference_vs_onnxruntime": 9.5367431640625e-7
         }
       }
     }

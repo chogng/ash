@@ -15,8 +15,8 @@ export class ViewsService extends Disposable implements IViewsService {
 	private readonly visibleViews = new Set<string>();
 	private focusedViewId: string | undefined;
 	private readonly focusedViewContext: IContextKey<string>;
-	private readonly containerVisibility = this._register(new Emitter<{ id: string; visible: boolean; location: ViewContainerLocation }>());
-	private readonly viewVisibility = this._register(new Emitter<{ id: string; visible: boolean }>());
+	private readonly containerVisibility = this._register(new Emitter<{ id: string; visible: boolean; location: ViewContainerLocation; }>());
+	private readonly viewVisibility = this._register(new Emitter<{ id: string; visible: boolean; }>());
 	private readonly focusedView = this._register(new Emitter<void>());
 	public readonly onDidChangeViewContainerVisibility = this.containerVisibility.event;
 	public readonly onDidChangeViewVisibility = this.viewVisibility.event;

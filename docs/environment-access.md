@@ -5,14 +5,14 @@
 
 ## 快速理解
 
-| 问题 | 使用的概念 | 不使用 |
-| --- | --- | --- |
-| 在哪里执行？ | `Environment` / `Env` | Workspace、Project |
-| 相对路径从哪里解析？ | `cwd` | 主工作区 |
-| 目录属于哪个运行位置？ | `Dir = EnvId + canonical path + 目录对象身份` | 裸路径身份 |
-| 主体可以对目录做什么？ | `Permission + Grant` | Trusted / Untrusted |
-| 当前动作是否允许？ | `AuthorizationDecision` | 持久 Permit |
-| 缺少授权时怎么办？ | `ApprovalRequest` | 自动把目录设为 trusted |
+| 问题                   | 使用的概念                                    | 不使用                 |
+| ---------------------- | --------------------------------------------- | ---------------------- |
+| 在哪里执行？           | `Environment` / `Env`                         | Workspace、Project     |
+| 相对路径从哪里解析？   | `cwd`                                         | 主工作区               |
+| 目录属于哪个运行位置？ | `Dir = EnvId + canonical path + 目录对象身份` | 裸路径身份             |
+| 主体可以对目录做什么？ | `Permission + Grant`                          | Trusted / Untrusted    |
+| 当前动作是否允许？     | `AuthorizationDecision`                       | 持久 Permit            |
+| 缺少授权时怎么办？     | `ApprovalRequest`                             | 自动把目录设为 trusted |
 
 Workspace 可以继续表示编辑器窗口、多根 folder 集合或 workspace 配置作用域，但不是 Agent 执行、
 Session 身份或目录安全边界。
@@ -130,14 +130,14 @@ flowchart TD
 
 目录能否贡献行为，由明确 Permission 决定：
 
-| 行为 | Permission | 含义 |
-| --- | --- | --- |
-| 读取项目指令 | `LoadInstructions` | 允许读取并加入当前 Turn 上下文 |
-| 读取配置 | `LoadConfig` | 允许读取该目录的配置贡献 |
-| 发现 Hook | `DiscoverHooks` | 只允许发现；运行还需执行授权 |
-| 发现 Skill | `DiscoverSkills` | 允许发现并按 Skill 生命周期加载 |
-| 发现 MCP | `DiscoverMcp` | 只允许发现声明，不自动连接 |
-| 发现 Plugin | `DiscoverPlugins` | 只允许发现声明，不自动安装或激活 |
+| 行为         | Permission         | 含义                             |
+| ------------ | ------------------ | -------------------------------- |
+| 读取项目指令 | `LoadInstructions` | 允许读取并加入当前 Turn 上下文   |
+| 读取配置     | `LoadConfig`       | 允许读取该目录的配置贡献         |
+| 发现 Hook    | `DiscoverHooks`    | 只允许发现；运行还需执行授权     |
+| 发现 Skill   | `DiscoverSkills`   | 允许发现并按 Skill 生命周期加载  |
+| 发现 MCP     | `DiscoverMcp`      | 只允许发现声明，不自动连接       |
+| 发现 Plugin  | `DiscoverPlugins`  | 只允许发现声明，不自动安装或激活 |
 
 一个 `Trusted / Untrusted` 布尔值无法表达只读、可写但不可执行、允许指令但禁止 Hook 等组合，
 因此不进入目录模型。签名、证书与发布者验证仍可使用各自的 trust 语义。
@@ -163,15 +163,15 @@ env dir remove <env-id> <dir-id>
 
 ## 7. 所有权与不变量
 
-| 所有者 | 负责什么 |
-| --- | --- |
-| `ash-environment` | 环境身份、物理目录绑定、安全路径解析和目录句柄 |
+| 所有者            | 负责什么                                           |
+| ----------------- | -------------------------------------------------- |
+| `ash-environment` | 环境身份、物理目录绑定、安全路径解析和目录句柄     |
 | `ash-file-access` | `Dir`、`Permission`、`Grant`、撤销、快照与授权决定 |
-| `ash-file-system` | 按完整授权执行文件操作，目录句柄约束实际 I/O |
-| 权限策略 | 判断动作应允许、询问还是拒绝 |
-| 批准交互 | 收集用户决定 |
-| 沙箱 | 强制文件、网络和进程边界 |
-| Git | `Repo / Worktree` 身份与 Git 操作 |
+| `ash-file-system` | 按完整授权执行文件操作，目录句柄约束实际 I/O       |
+| 权限策略          | 判断动作应允许、询问还是拒绝                       |
+| 批准交互          | 收集用户决定                                       |
+| 沙箱              | 强制文件、网络和进程边界                           |
+| Git               | `Repo / Worktree` 身份与 Git 操作                  |
 
 长期不变量：
 

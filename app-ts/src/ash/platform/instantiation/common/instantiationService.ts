@@ -206,7 +206,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		let instance: object | undefined;
 		let initializing = false;
 		const members = new Map<PropertyKey, unknown>();
-		const pending = new Set<{ readonly property: PropertyKey; readonly listener: (event: unknown) => unknown; readonly thisArgs: unknown; subscription?: IDisposable }>();
+		const pending = new Set<{ readonly property: PropertyKey; readonly listener: (event: unknown) => unknown; readonly thisArgs: unknown; subscription?: IDisposable; }>();
 		this._register(toDisposable(() => {
 			for (const entry of pending) {
 				entry.subscription?.dispose();

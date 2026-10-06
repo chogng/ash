@@ -7,16 +7,16 @@ The directory is intentionally broad: cursor math, text coordinates, edit
 composition, line edits, and small geometry/value helpers all need to agree on
 one coordinate model.
 
-| Area | Canonical modules | Responsibility |
-| --- | --- | --- |
-| Coordinates | `position.ts`, `range.ts`, `selection.ts`, `cursorColumns.ts` | Positions, ranges, selections, visible/indent columns |
-| Ranges | `ranges/offsetRange.ts`, `lineRange.ts`, `columnRange.ts`, `rangeMapping.ts`, `rangeSingleLine.ts` | Offset, line, column, and source-to-modified mappings |
-| Text coordinates | `text/textLength.ts`, `positionToOffset*.ts`, `abstractText.ts`, `getPositionOffsetTransformerFromTextModel.ts` | UTF-16 offset/position conversion and detached text views |
-| Edit algebra | `edits/edit.ts`, `arrayEdit.ts`, `lengthEdit.ts`, `lineEdit.ts`, `stringEdit.ts`, `textEdit.ts` | Normalize, compose, inverse, rebase, map, and apply edits |
-| Edit operations | `editOperation.ts`, `textChange.ts` | Single operations, compact offset changes, change compression/serialization |
-| Text helpers | `characterClassifier.ts`, `wordCharacterClassifier.ts`, `wordHelper.ts`, `stringBuilder.ts` | Word boundaries, classifiers, UTF-16 assembly |
-| Geometry/misc | `2d/*`, `misc/*` | DOM-free points, sizes, rectangles, EOL, indentation, RGBA, model defaults |
-| Editor colors | `editorColorRegistry.ts` | Cursor, current-line, ruler, overview-ruler, bracket nesting and guide colors; Platform owns registration and theme resolution |
+| Area             | Canonical modules                                                                                               | Responsibility                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Coordinates      | `position.ts`, `range.ts`, `selection.ts`, `cursorColumns.ts`                                                   | Positions, ranges, selections, visible/indent columns                                                                          |
+| Ranges           | `ranges/offsetRange.ts`, `lineRange.ts`, `columnRange.ts`, `rangeMapping.ts`, `rangeSingleLine.ts`              | Offset, line, column, and source-to-modified mappings                                                                          |
+| Text coordinates | `text/textLength.ts`, `positionToOffset*.ts`, `abstractText.ts`, `getPositionOffsetTransformerFromTextModel.ts` | UTF-16 offset/position conversion and detached text views                                                                      |
+| Edit algebra     | `edits/edit.ts`, `arrayEdit.ts`, `lengthEdit.ts`, `lineEdit.ts`, `stringEdit.ts`, `textEdit.ts`                 | Normalize, compose, inverse, rebase, map, and apply edits                                                                      |
+| Edit operations  | `editOperation.ts`, `textChange.ts`                                                                             | Single operations, compact offset changes, change compression/serialization                                                    |
+| Text helpers     | `characterClassifier.ts`, `wordCharacterClassifier.ts`, `wordHelper.ts`, `stringBuilder.ts`                     | Word boundaries, classifiers, UTF-16 assembly                                                                                  |
+| Geometry/misc    | `2d/*`, `misc/*`                                                                                                | DOM-free points, sizes, rectangles, EOL, indentation, RGBA, model defaults                                                     |
+| Editor colors    | `editorColorRegistry.ts`                                                                                        | Cursor, current-line, ruler, overview-ruler, bracket nesting and guide colors; Platform owns registration and theme resolution |
 
 `editorColorRegistry.ts` registers editor-owned colors with Platform's shared
 registry. Themes include these definitions even when a theme was created before

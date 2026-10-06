@@ -8,7 +8,7 @@ export class ReplacePiece {
 		public readonly staticValue: string | null,
 		public readonly matchIndex: number,
 		public readonly caseOps: string[] | null,
-	) {}
+	) { }
 }
 
 interface NamedPiece {
@@ -33,12 +33,12 @@ export class ReplacePattern {
 	}
 
 	public buildReplaceString(matches: string[] | null, preserveCase = false): string {
-		const groups = (matches as (string[] & { groups?: Record<string, string | undefined> }) | null)?.groups;
+		const groups = (matches as (string[] & { groups?: Record<string, string | undefined>; }) | null)?.groups;
 		let result = '';
 		for (const piece of this.pieces) {
 			if (isNamedPiece(piece)) {
 				result += applyCaseOperations(groups && Object.hasOwn(groups, piece.name) ? groups[piece.name] ?? '' : `$<${piece.name}>`, piece.caseOps);
-		} else if (piece.staticValue !== null) {
+			} else if (piece.staticValue !== null) {
 				result += piece.staticValue;
 			} else {
 				result += applyCaseOperations(capture(matches, piece.matchIndex), piece.caseOps ?? []);

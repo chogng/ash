@@ -12,19 +12,19 @@
 
 ## 所有权与公共接口
 
-| API / type | 当前职责 | 明确不做 |
-| --- | --- | --- |
-| `LanguageServerClient` | initialize 后的单服务器 session、类型化请求、文档同步、transport-close 事实和关闭 | server discovery、共享进程、重启策略 |
-| `LanguageServerCommand` / `LanguageServerEnvironmentPolicy` | 保存宿主已经解析的 canonical program、参数、工作目录和环境策略；Unix 可独立保留代理程序依赖的 `argv[0]` 调用名 | 验证可执行文件信任、安装或沙箱策略 |
-| `LanguageServerOptions` | client identity、workspace、capability、initialize options、host 和 deadline | 读取产品配置 |
-| `LanguageServerInitialization` | 冻结 server info、初始 capability、position encoding 和 document sync policy | 把随后动态注册伪装成 initialize 快照 |
-| `LanguageServerHost` | 快速接收事件，并按顺序回答 `workspace/configuration`，消费 progress/message/log 事件 | 直接修改 UI 或阻塞协议 driver |
-| `LanguageServerDocumentRouter` | 一个 language ID 到一个 initialized client 的路由、全文 snapshot 同步、replacement replay 与断连 route retirement | server discovery、重启判断或 backoff |
-| `LanguageDocumentSnapshot` | 绑定 URI、language ID、EditorHost revision 与完整 authoritative text | 从 filesystem 或 editor 自行取内容 |
-| `RoutedDocumentVersion` | 绑定 editor revision、server incarnation 与 LSP document version | 充当磁盘或 durable revision |
-| `DocumentChange` / `DocumentSave` | 用 tagged enum 表达完整/增量 change 和 save text | 从编辑器 mutation 自动计算 range |
-| `DocumentVersion` | 每个 open document 从 1 开始单调递增 | 表示磁盘 revision 或 durable identity |
-| `lsp_types` re-export | 暴露调用类型化请求所需的标准协议类型 | 承诺 LSP 3.18 的全部新增能力 |
+| API / type                                                  | 当前职责                                                                                                          | 明确不做                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `LanguageServerClient`                                      | initialize 后的单服务器 session、类型化请求、文档同步、transport-close 事实和关闭                                 | server discovery、共享进程、重启策略  |
+| `LanguageServerCommand` / `LanguageServerEnvironmentPolicy` | 保存宿主已经解析的 canonical program、参数、工作目录和环境策略；Unix 可独立保留代理程序依赖的 `argv[0]` 调用名    | 验证可执行文件信任、安装或沙箱策略    |
+| `LanguageServerOptions`                                     | client identity、workspace、capability、initialize options、host 和 deadline                                      | 读取产品配置                          |
+| `LanguageServerInitialization`                              | 冻结 server info、初始 capability、position encoding 和 document sync policy                                      | 把随后动态注册伪装成 initialize 快照  |
+| `LanguageServerHost`                                        | 快速接收事件，并按顺序回答 `workspace/configuration`，消费 progress/message/log 事件                              | 直接修改 UI 或阻塞协议 driver         |
+| `LanguageServerDocumentRouter`                              | 一个 language ID 到一个 initialized client 的路由、全文 snapshot 同步、replacement replay 与断连 route retirement | server discovery、重启判断或 backoff  |
+| `LanguageDocumentSnapshot`                                  | 绑定 URI、language ID、EditorHost revision 与完整 authoritative text                                              | 从 filesystem 或 editor 自行取内容    |
+| `RoutedDocumentVersion`                                     | 绑定 editor revision、server incarnation 与 LSP document version                                                  | 充当磁盘或 durable revision           |
+| `DocumentChange` / `DocumentSave`                           | 用 tagged enum 表达完整/增量 change 和 save text                                                                  | 从编辑器 mutation 自动计算 range      |
+| `DocumentVersion`                                           | 每个 open document 从 1 开始单调递增                                                                              | 表示磁盘 revision 或 durable identity |
+| `lsp_types` re-export                                       | 暴露调用类型化请求所需的标准协议类型                                                                              | 承诺 LSP 3.18 的全部新增能力          |
 
 `LanguageServerClient::request<R>` 接受实现 `lsp_types::request::Request` 的请求类型。请求 ID 在
 同一 session 内单调递增；普通请求使用独立 deadline，超时后发送 `$/cancelRequest`。初始化和
@@ -32,17 +32,17 @@
 
 ## 文件与内部接口
 
-| 文件 / private symbol | 精确职责 | 不能承担 |
-| --- | --- | --- |
-| `client.rs::LanguageServerClient::connect_inner` | 创建 driver，执行 initialize/initialized gate，并冻结 capability | server selection 或 restart loop |
-| `raw_client.rs::RawClient` | 分配 request ID、序列化 typed params/result、执行 deadline cancellation | 文档或产品状态 |
-| `driver.rs::run_driver` | 单一 writer 顺序、pending response table、服务端 request/notification dispatch，并上报意外 transport close | UI callback scheduling 或 restart policy |
-| `protocol.rs::{read_frame,write_frame}` | 有界 `Content-Length` framing | LSP method 语义 |
-| `protocol.rs::parse_message` | 区分 request/response/notification；保留合法 `result: null` | typed result decoding |
-| `document.rs::DocumentSyncPolicy::from_capability` | 把 server sync capability 冻结为明确策略 | 猜测未声明能力 |
-| `client.rs::reap_process` | `exit` 后有界等待，超时则终止 child | 自动拉起 replacement |
-| `router.rs::LanguageServerDocumentRouter` | 注册唯一 language route、保存当前全文和精确 revision binding | 选择 executable 或读取 editor |
-| `router.rs::replace_server` / `remove_disconnected_server` | 显式 replacement replay；或丢弃断连 route 和旧 document bindings | 检测 crash、退避或静默吞掉 replay failure |
+| 文件 / private symbol                                      | 精确职责                                                                                                   | 不能承担                                  |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `client.rs::LanguageServerClient::connect_inner`           | 创建 driver，执行 initialize/initialized gate，并冻结 capability                                           | server selection 或 restart loop          |
+| `raw_client.rs::RawClient`                                 | 分配 request ID、序列化 typed params/result、执行 deadline cancellation                                    | 文档或产品状态                            |
+| `driver.rs::run_driver`                                    | 单一 writer 顺序、pending response table、服务端 request/notification dispatch，并上报意外 transport close | UI callback scheduling 或 restart policy  |
+| `protocol.rs::{read_frame,write_frame}`                    | 有界 `Content-Length` framing                                                                              | LSP method 语义                           |
+| `protocol.rs::parse_message`                               | 区分 request/response/notification；保留合法 `result: null`                                                | typed result decoding                     |
+| `document.rs::DocumentSyncPolicy::from_capability`         | 把 server sync capability 冻结为明确策略                                                                   | 猜测未声明能力                            |
+| `client.rs::reap_process`                                  | `exit` 后有界等待，超时则终止 child                                                                        | 自动拉起 replacement                      |
+| `router.rs::LanguageServerDocumentRouter`                  | 注册唯一 language route、保存当前全文和精确 revision binding                                               | 选择 executable 或读取 editor             |
+| `router.rs::replace_server` / `remove_disconnected_server` | 显式 replacement replay；或丢弃断连 route 和旧 document bindings                                           | 检测 crash、退避或静默吞掉 replay failure |
 
 ```text
 LanguageServerClient::start_stdio / connect

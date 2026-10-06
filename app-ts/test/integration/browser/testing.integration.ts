@@ -39,21 +39,21 @@ const tasks: ITaskService = {
 	...Disposable.None,
 	tasks: [{ id: 'script', label: 'cargo test', group: 'test', command: 'cargo test', source: 'cargo' }], activeRuns: [], lastRun: undefined,
 	onDidChangeTasks: Event.None, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
-	registerTaskProvider: () => toDisposable(() => {}),
-	registerTaskProviders: () => Object.assign(toDisposable(() => {}), { replace: () => {} }),
+	registerTaskProvider: () => toDisposable(() => { }),
+	registerTaskProviders: () => Object.assign(toDisposable(() => { }), { replace: () => { } }),
 	refresh: async () => tasks.tasks,
-	run: async () => { scriptRuns++; throw new Error('Script invoked'); }, terminate: async () => {},
+	run: async () => { scriptRuns++; throw new Error('Script invoked'); }, terminate: async () => { },
 };
 const debug = store.add(new TestDebugService());
 const service = store.add(new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service));
-const opened: { path: string; line: number | undefined }[] = [];
+const opened: { path: string; line: number | undefined; }[] = [];
 const editors: IEditorService = {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 	openEditor: async (input, options?: EditorOpenOptions) => { opened.push({ path: input.resource.path, line: options?.selection?.startLineNumber }); },
-	focusActiveEditor: () => {},
+	focusActiveEditor: () => { },
 };
 const pane = store.add(new TestingViewPane(document.querySelector<HTMLElement>('#testing')!, { id: 'ash.testing.view', title: 'Testing' }, service,
-	{ setActiveInstance: () => {} } as unknown as ITerminalService,
+	{ setActiveInstance: () => { } } as unknown as ITerminalService,
 	{ focusView: () => true } as unknown as IViewsService,
 	editors, store.add(new InMemoryConfigurationService()),
 	{ getOpenAriaHint: () => 'Press Alt+F1 for help.' } as unknown as IAccessibleViewService,
@@ -81,7 +81,7 @@ declare global {
 	interface Window {
 		ashTestingIntegration: {
 			debugLaunches(): readonly import('../../../src/ash/workbench/services/debug/common/debugService.js').IDebugConfiguration[];
-			readonly opened: readonly { path: string; line: number | undefined }[];
+			readonly opened: readonly { path: string; line: number | undefined; }[];
 			runs(): readonly (readonly string[])[]; scriptRuns(): number;
 			addCases(): Promise<void>; hold(): void; disconnect(): void; edit(): void; refresh(): Promise<void>; accessible(): string; dispose(): void;
 		};

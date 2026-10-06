@@ -25,7 +25,7 @@ test('permission commands use shared Chinese copy and require confirmation only 
 	let confirmed = false;
 	const confirmations: string[] = [];
 	services.registerInstance(IDialogService, {
-		confirm: async (options: { primaryButton: string }) => { confirmations.push(options.primaryButton); return { confirmed }; },
+		confirm: async (options: { primaryButton: string; }) => { confirmations.push(options.primaryButton); return { confirmed }; },
 	} as unknown as IDialogService);
 	using commands = new CommandService(services);
 	const selections: ApprovalMode[] = [];
@@ -55,23 +55,23 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 	let created = 0;
 	const viewService: ISessionsService = {
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
-		async openThread() {},
+		async openThread() { },
 		onDidChange: onDidChange.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
 		canNavigateForward: false,
-		async initialize() {},
-		openSession() {},
-		openUntitledSession() {},
+		async initialize() { },
+		openSession() { },
+		openUntitledSession() { },
 		openNewSession() {
 			created += 1;
 			return { untitledSessionId: `untitled-${created}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' } };
 		},
-		activateSelection() {},
-		closeVisibleSelection() {},
-		navigateBack() {},
-		navigateForward() {},
+		activateSelection() { },
+		closeVisibleSelection() { },
+		navigateBack() { },
+		navigateForward() { },
 	};
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsService, viewService);
@@ -84,7 +84,7 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 });
 
 test("Sessions History opens the selected active chat", async () => {
-	const opened: Array<{ sessionId: string; threadId: string }> = [];
+	const opened: Array<{ sessionId: string; threadId: string; }> = [];
 	const quickInput = new TestQuickInputService();
 	const sessions: readonly ISession[] = [
 		{
@@ -123,7 +123,7 @@ test("Sessions History opens the selected active chat", async () => {
 
 class TestQuickInputService implements IQuickInputService {
 	picker: TestQuickPick<IQuickPickItem> | undefined;
-	constructor(private readonly labels: string[] = []) {}
+	constructor(private readonly labels: string[] = []) { }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>(() => {

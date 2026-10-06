@@ -27,16 +27,16 @@ test('File auto save writes a dirty working copy after the configured delay', as
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: contentChanges.event,
 		backup: () => 'edited',
-		restoreBackup() {},
+		restoreBackup() { },
 		async save() {
 			saves++;
 			dirty = false;
 			dirtyChanges.fire();
 		},
-		saveAs: async () => {},
-		revert: async () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		saveAs: async () => { },
+		revert: async () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	const editorPart = {
 		domNode: browser.window.document.body,

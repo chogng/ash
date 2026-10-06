@@ -31,22 +31,22 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 
 ## 公共契约
 
-| Symbol | 职责 | 生命周期 |
-| --- | --- | --- |
-| `ModelProvider` | `ModelRuntimeRequest → ModelInvoker` port | composition/invocation safe point |
-| `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry、shared `ModelsManager`、lazy operation client 和可选 local tokenizer service |
-| `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` 与可选有效 `Model` | immutable selection request |
-| `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
-| `ModelInvoker::image_input_policy` | 按已解析的模型能力提供图片尺寸与 patch 限制 | 与请求计量和调用使用同一实例 |
-| `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port | 与 invocation 相同 immutable snapshot |
-| re-exported `LocalTokenizerBinding` / `LocalTokenizerRegistry` | 宿主安装资产后的通用本地 tokenizer 接口 | composition safe point 构建后注入 runtime |
-| `EmbeddingInvoker` | ordered text batch → finite equal-dimension vectors | one immutable embedding model snapshot |
-| `RerankInvoker` | query + ordered documents → ordered finite scores | one immutable rerank model snapshot |
-| `SemanticModelProvider` | exact model/config → embedding 或 rerank invoker | provider transport/credential boundary |
-| `Provider` | normalized provider runtime | definition、config、private adapter、client |
-| `UnavailableModel` | explicit failing invoker | host 无法配置 model 时 fail closed |
-| `EchoModel` | deterministic test/local fixture | 不是 production model |
-| `ModelProviderError` | config/model/API/credential/unavailable error | 保留 failure domain |
+| Symbol                                                                               | 职责                                                      | 生命周期                                                                                           |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ModelProvider`                                                                      | `ModelRuntimeRequest → ModelInvoker` port                 | composition/invocation safe point                                                                  |
+| `ModelProviderRuntime`                                                               | built-in concrete resolver                                | 持有 config registry、shared `ModelsManager`、lazy operation client 和可选 local tokenizer service |
+| `ModelRuntimeRequest`                                                                | exact `ModelRef + ModelProviderConfig` 与可选有效 `Model` | immutable selection request                                                                        |
+| `ModelInvoker`                                                                       | canonical `ModelRequest → ModelResponse`                  | one immutable provider/model snapshot                                                              |
+| `ModelInvoker::image_input_policy`                                                   | 按已解析的模型能力提供图片尺寸与 patch 限制               | 与请求计量和调用使用同一实例                                                                       |
+| `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port                | 与 invocation 相同 immutable snapshot                                                              |
+| re-exported `LocalTokenizerBinding` / `LocalTokenizerRegistry`                       | 宿主安装资产后的通用本地 tokenizer 接口                   | composition safe point 构建后注入 runtime                                                          |
+| `EmbeddingInvoker`                                                                   | ordered text batch → finite equal-dimension vectors       | one immutable embedding model snapshot                                                             |
+| `RerankInvoker`                                                                      | query + ordered documents → ordered finite scores         | one immutable rerank model snapshot                                                                |
+| `SemanticModelProvider`                                                              | exact model/config → embedding 或 rerank invoker          | provider transport/credential boundary                                                             |
+| `Provider`                                                                           | normalized provider runtime                               | definition、config、private adapter、client                                                        |
+| `UnavailableModel`                                                                   | explicit failing invoker                                  | host 无法配置 model 时 fail closed                                                                 |
+| `EchoModel`                                                                          | deterministic test/local fixture                          | 不是 production model                                                                              |
+| `ModelProviderError`                                                                 | config/model/API/credential/unavailable error             | 保留 failure domain                                                                                |
 
 App Server 在接受每轮执行时，用同一目录快照计算预算并绑定有效模型资料。配置和目录更新影响后续执行，不原地修改已经运行的 `RegisteredModelInvoker`；账号就绪状态在每次调用前重新检查。
 
@@ -62,19 +62,19 @@ App Server 在接受每轮执行时，用同一目录快照计算预算并绑定
 
 ## 内部接口地图
 
-| Symbol | 可见性 | 当前职责 | 方向约束 |
-| --- | --- | --- | --- |
-| `ModelProviderRuntime::instantiate_normalized` | private method | definition lookup + `Provider::instantiate` | normalization success 后 provider 必须存在 |
-| `LazyOperationClient` | private struct | 第一次 operation 才创建 production HTTP client，并缓存结果 | App Server 启动和 config inspection 不接触 TLS/proxy |
-| `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
-| `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
-| `ProviderAdapter` | crate-private trait | endpoint、模型名映射、固定 Header、图片输入限制与 token measurement | 不拥有生成请求执行或响应解析 |
-| `LocalInputTokenCounter` | crate-private struct | 官方预检不可用时把整份请求交给本地计数服务 | 不下载资产、不按 provider 猜 tokenizer revision |
-| `api_endpoint` | private function | `ApiProfile → ash_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
-| provider `*Adapter::new` | crate-private | endpoint 与供应商专属计数配置 | one immutable runtime snapshot |
-| `Provider::resolve_model` | private method | 委托 shared manager 的 static typed resolution | 不复制 catalog policy 或做远端请求 |
-| `RegisteredModelInvoker` | private struct | bind exact Provider + resolved Model | request 时只应用 normalized defaults |
-| `RegisteredModelInvoker::invoke_with_cancellation` | private trait impl | apply defaults、取得共享执行路径的最终结果 | 不读取 product config |
+| Symbol                                             | 可见性                 | 当前职责                                                            | 方向约束                                             |
+| -------------------------------------------------- | ---------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
+| `ModelProviderRuntime::instantiate_normalized`     | private method         | definition lookup + `Provider::instantiate`                         | normalization success 后 provider 必须存在           |
+| `LazyOperationClient`                              | private struct         | 第一次 operation 才创建 production HTTP client，并缓存结果          | App Server 启动和 config inspection 不接触 TLS/proxy |
+| `Provider::instantiate`                            | crate-private          | enforce definition/config ID equality，materialize adapter          | 不读取 mutable config/credential store               |
+| `providers::instantiate`                           | crate-private function | exhaustive `ProviderAdapter` enum dispatch                          | provider selection 唯一 switch                       |
+| `ProviderAdapter`                                  | crate-private trait    | endpoint、模型名映射、固定 Header、图片输入限制与 token measurement | 不拥有生成请求执行或响应解析                         |
+| `LocalInputTokenCounter`                           | crate-private struct   | 官方预检不可用时把整份请求交给本地计数服务                          | 不下载资产、不按 provider 猜 tokenizer revision      |
+| `api_endpoint`                                     | private function       | `ApiProfile → ash_api::ApiEndpoint`                                 | 按 profile，不按 provider name 猜                    |
+| provider `*Adapter::new`                           | crate-private          | endpoint 与供应商专属计数配置                                       | one immutable runtime snapshot                       |
+| `Provider::resolve_model`                          | private method         | 委托 shared manager 的 static typed resolution                      | 不复制 catalog policy 或做远端请求                   |
+| `RegisteredModelInvoker`                           | private struct         | bind exact Provider + resolved Model                                | request 时只应用 normalized defaults                 |
+| `RegisteredModelInvoker::invoke_with_cancellation` | private trait impl     | apply defaults、取得共享执行路径的最终结果                          | 不读取 product config                                |
 
 ## 运行时调用图
 
@@ -129,16 +129,16 @@ profile 与输出方式由 configuration definition 明确声明。
 
 ## 错误与模型目录
 
-| Path | Error |
-| --- | --- |
+| Path                              | Error                        |
+| --------------------------------- | ---------------------------- |
 | invalid/unknown/mismatched config | `ModelProviderError::Config` |
-| listed-only unknown model | `ModelNotRegistered` |
-| 供应商上下文上限 | `ContextOverflow` |
-| 供应商认证或授权失败 | `AuthFailed` |
-| 无效 canonical/供应商请求 | `InvalidRequest` |
-| 无效供应商响应 | `InvalidResponse` |
-| 传输、限流、过载或其他 HTTP 状态 | `Api(ApiError)` |
-| explicitly unavailable host model | `Unavailable` |
+| listed-only unknown model         | `ModelNotRegistered`         |
+| 供应商上下文上限                  | `ContextOverflow`            |
+| 供应商认证或授权失败              | `AuthFailed`                 |
+| 无效 canonical/供应商请求         | `InvalidRequest`             |
+| 无效供应商响应                    | `InvalidResponse`            |
+| 传输、限流、过载或其他 HTTP 状态  | `Api(ApiError)`              |
+| explicitly unavailable host model | `Unavailable`                |
 
 `From<ApiError>` 将四个语义类别提升为直接的 `ModelProviderError` variant，其余操作类别保留在 `Api` 中。原始供应商详情只供产品宿主的受控日志使用；跨入 Core 时必须改成无原文的类型化 `CoreError`。
 

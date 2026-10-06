@@ -112,7 +112,8 @@ function deserialize(record: IBackupRecord): WorkingCopyBackup {
 	const value = payload as Record<string, unknown>;
 	if ((value.kind !== 'text' && value.kind !== 'structuredDocument') || typeof value.content !== 'string'
 		|| ['languageId', 'contentType', 'label'].some(key => value[key] !== undefined && typeof value[key] !== 'string')) throw new Error('Invalid working-copy backup content');
-	return { resource: record.content.resource, kind: value.kind, content: value.content, updatedAt: record.updatedAt,
+	return {
+		resource: record.content.resource, kind: value.kind, content: value.content, updatedAt: record.updatedAt,
 		...(typeof value.languageId === 'string' ? { languageId: value.languageId } : {}),
 		...(typeof value.contentType === 'string' ? { contentType: value.contentType } : {}),
 		...(typeof value.label === 'string' ? { label: value.label } : {}),

@@ -10,16 +10,16 @@ Core、rollout、store、model provider、sandbox 或 `ash-tool-executor`。
 
 ## 文件与职责
 
-| 文件 | 当前职责 |
-| --- | --- |
-| `src/model.rs` | run input、approval mode、versioned event、terminal outcome 与 exit code |
-| `src/run_id.rs` | `ExecRunId` 校验和进程内生成 |
-| `src/output.rs` | `ExecEventSink`、discard sink 与逐事件 flush 的 JSONL sink |
-| `src/connection.rs` | 私有 `ExecConnection` 端口及 App Server session adapter |
-| `src/runner.rs` | 公共 runner、timeout 配置、cancellation contract 与显式 shutdown |
-| `src/run_loop.rs` | prepare、subscribe、start、observe、interrupt 与 unsubscribe 编排 |
-| `src/turn_outcome.rs` | canonical terminal status、交互等待与公开 outcome 的唯一映射 |
-| `src/*_tests.rs` | schema、JSONL、终态、取消、交互与断线 contract tests |
+| 文件                  | 当前职责                                                                 |
+| --------------------- | ------------------------------------------------------------------------ |
+| `src/model.rs`        | run input、approval mode、versioned event、terminal outcome 与 exit code |
+| `src/run_id.rs`       | `ExecRunId` 校验和进程内生成                                             |
+| `src/output.rs`       | `ExecEventSink`、discard sink 与逐事件 flush 的 JSONL sink               |
+| `src/connection.rs`   | 私有 `ExecConnection` 端口及 App Server session adapter                  |
+| `src/runner.rs`       | 公共 runner、timeout 配置、cancellation contract 与显式 shutdown         |
+| `src/run_loop.rs`     | prepare、subscribe、start、observe、interrupt 与 unsubscribe 编排        |
+| `src/turn_outcome.rs` | canonical terminal status、交互等待与公开 outcome 的唯一映射             |
+| `src/*_tests.rs`      | schema、JSONL、终态、取消、交互与断线 contract tests                     |
 
 ## 公共契约
 
@@ -43,13 +43,13 @@ Rust 调用方显式开启 `ash-exec/schema`；该 feature 同时开启 App Serv
 
 终态只由读取到的 canonical `TurnStatus::{Completed,Failed,Interrupted}` 产生：
 
-| `ExecOutcome` | 来源 | 默认退出码 |
-| --- | --- | --- |
-| `Completed` | canonical `Completed` | 0 |
-| `Failed` | canonical `Failed`，保留 `StableTurnError` | 1 |
-| `RequiresInteraction` | headless policy 请求 interrupt，随后观察到 canonical `Interrupted` | 2 |
-| `Interrupted` | canonical `Interrupted` | 130 |
-| `OutcomeUnknown` | Turn 已开始，但连接、观察或 interrupt handshake 未给出终态 | 75 |
+| `ExecOutcome`         | 来源                                                               | 默认退出码 |
+| --------------------- | ------------------------------------------------------------------ | ---------- |
+| `Completed`           | canonical `Completed`                                              | 0          |
+| `Failed`              | canonical `Failed`，保留 `StableTurnError`                         | 1          |
+| `RequiresInteraction` | headless policy 请求 interrupt，随后观察到 canonical `Interrupted` | 2          |
+| `Interrupted`         | canonical `Interrupted`                                            | 130        |
+| `OutcomeUnknown`      | Turn 已开始，但连接、观察或 interrupt handshake 未给出终态         | 75         |
 
 ## 内部接口地图与调用路径
 

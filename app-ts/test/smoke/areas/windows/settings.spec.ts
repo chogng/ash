@@ -320,8 +320,8 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	const page = workbench.page;
 	if (process.platform === 'darwin') {
 		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			settings['window.menuStyle'] = 'custom';
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
@@ -589,13 +589,13 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 	await page.evaluate(() => {
 		const row = document.querySelector<HTMLElement>('[data-settings-item-id="accessibility.verbosity.memories"]')!;
 		const indicator = row.querySelector<HTMLElement>('.ash-settings-indicators')!;
-		const measurements: { pending: boolean; height: number }[] = [];
+		const measurements: { pending: boolean; height: number; }[] = [];
 		const sample = () => measurements.push({ pending: !indicator.hidden, height: row.getBoundingClientRect().height });
 		const observer = new MutationObserver(sample);
 		observer.observe(indicator, { attributes: true, childList: true, subtree: true });
 		sample();
-		(window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver }).settingRowMeasurements = measurements;
-		(window as Window & { settingRowObserver?: MutationObserver }).settingRowObserver = observer;
+		(window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver; }).settingRowMeasurements = measurements;
+		(window as Window & { settingRowObserver?: MutationObserver; }).settingRowObserver = observer;
 	});
 	for (let index = 0; index < 4; index++) {
 		await row.locator('.ash-switch-track').click();
@@ -603,7 +603,7 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 		await expect(row.locator('.ash-settings-indicators')).toBeHidden();
 	}
 	const measurements = await page.evaluate(() => {
-		const state = window as Window & { settingRowMeasurements?: { pending: boolean; height: number }[]; settingRowObserver?: MutationObserver };
+		const state = window as Window & { settingRowMeasurements?: { pending: boolean; height: number; }[]; settingRowObserver?: MutationObserver; };
 		state.settingRowObserver!.disconnect();
 		return state.settingRowMeasurements!;
 	});

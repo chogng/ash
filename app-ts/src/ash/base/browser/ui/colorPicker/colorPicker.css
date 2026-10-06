@@ -33,7 +33,10 @@
 	aspect-ratio: 1;
 	flex-shrink: 0;
 	border-radius: var(--ash-corner-radius-medium);
-	background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), var(--ash-color-picker-hue);
+	background:
+		linear-gradient(to top, #000, transparent),
+		linear-gradient(to right, #fff, transparent),
+		var(--ash-color-picker-hue);
 	touch-action: none;
 	cursor: crosshair;
 }
@@ -77,17 +80,34 @@
 
 /* These ramps represent color data, so their endpoints do not change with the UI theme. */
 .ash-color-picker .ash-color-picker-hue {
-	background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+	background: linear-gradient(
+		to right,
+		#f00,
+		#ff0,
+		#0f0,
+		#0ff,
+		#00f,
+		#f0f,
+		#f00
+	);
 }
 
 .ash-color-picker-checker {
 	height: var(--ash-spacing-size200);
 	border-radius: var(--ash-corner-radius-circle);
-	background: repeating-conic-gradient(var(--ash-input-background) 0% 25%, var(--ash-description-foreground) 0% 50%) 0 / 8px 8px;
+	background: repeating-conic-gradient(
+			var(--ash-input-background) 0% 25%,
+			var(--ash-description-foreground) 0% 50%
+		)
+		0 / 8px 8px;
 }
 
 .ash-color-picker .ash-color-picker-alpha {
-	background: linear-gradient(to right, transparent, var(--ash-color-picker-opaque));
+	background: linear-gradient(
+		to right,
+		transparent,
+		var(--ash-color-picker-opaque)
+	);
 }
 
 .ash-color-picker input[type="range"]::-webkit-slider-thumb {
@@ -166,7 +186,16 @@
 	height: var(--ash-spacing-size200);
 	border: var(--ash-stroke-thickness) solid var(--ash-border);
 	border-radius: var(--ash-corner-radius-small);
-	background: linear-gradient(var(--ash-color-picker-value), var(--ash-color-picker-value)), repeating-conic-gradient(var(--ash-input-background) 0% 25%, var(--ash-description-foreground) 0% 50%) 0 / 8px 8px;
+	background:
+		linear-gradient(
+			var(--ash-color-picker-value),
+			var(--ash-color-picker-value)
+		),
+		repeating-conic-gradient(
+				var(--ash-input-background) 0% 25%,
+				var(--ash-description-foreground) 0% 50%
+			)
+			0 / 8px 8px;
 	pointer-events: none;
 }
 

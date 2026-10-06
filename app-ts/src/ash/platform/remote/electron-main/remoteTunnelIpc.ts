@@ -46,7 +46,7 @@ function remoteTunnelOpenRequest(value: unknown): RemoteTunnelOpenRequest {
 	return { remotePort: boundedPositiveInteger(params.remotePort, "remotePort", 65_535) };
 }
 
-function remoteTunnelCloseRequest(value: unknown): { readonly id: string } {
+function remoteTunnelCloseRequest(value: unknown): { readonly id: string; } {
 	const params = record(value, ["id"]);
 	return { id: nonEmptyString(params.id, "id") };
 }

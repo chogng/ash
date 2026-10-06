@@ -33,12 +33,12 @@ export interface DesignPathNode extends DesignPoint {
 }
 
 export type DesignShape = DesignShapeGeometry & (
-	{ readonly kind: 'rectangle' | 'ellipse' }
-	| { readonly kind: 'text'; readonly text: string; readonly fontSize: number }
-	| { readonly kind: 'path'; readonly nodes: readonly DesignPathNode[]; readonly closed: boolean; readonly strokeWidth: number }
-	| { readonly kind: 'group'; readonly children: readonly DesignShape[]; readonly contentWidth: number; readonly contentHeight: number }
-	| { readonly kind: 'frame'; readonly children: readonly DesignShape[]; readonly clip: boolean }
-	| { readonly kind: 'image'; readonly assetId: string; readonly assetVersionId: string; readonly crop: DesignImageCrop }
+	{ readonly kind: 'rectangle' | 'ellipse'; }
+	| { readonly kind: 'text'; readonly text: string; readonly fontSize: number; }
+	| { readonly kind: 'path'; readonly nodes: readonly DesignPathNode[]; readonly closed: boolean; readonly strokeWidth: number; }
+	| { readonly kind: 'group'; readonly children: readonly DesignShape[]; readonly contentWidth: number; readonly contentHeight: number; }
+	| { readonly kind: 'frame'; readonly children: readonly DesignShape[]; readonly clip: boolean; }
+	| { readonly kind: 'image'; readonly assetId: string; readonly assetVersionId: string; readonly crop: DesignImageCrop; }
 );
 
 export interface DesignImageCrop {

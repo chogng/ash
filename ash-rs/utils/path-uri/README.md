@@ -12,16 +12,16 @@ remote execution boundary 上传递文件位置的 contract，不替代当前 Ap
 
 ## 公共契约
 
-| API / type | 当前职责 | 明确不做 |
-| --- | --- | --- |
-| `PathUri::parse` | 校验并 canonicalize `file:` URI | 不接受其他 scheme、query、fragment、port 或 credentials |
-| `from_absolute_path` / `to_host_path` | 在 `AbsolutePathBuf` 与当前 host URI 之间 lossless round trip | 不接受未先建立绝对路径不变量的 `PathBuf`，也不把 foreign Windows path 映射成 POSIX path，反之亦然 |
-| `from_native_path` | 按显式 `PathConvention` 解析 POSIX、drive 或 UNC path | 不访问文件系统 |
-| `basename` / `parent` / `ancestors` / `join` | 跨 host lexical path operations | 不解析 symlink、case alias 或 Unicode filesystem normalization |
-| `starts_with` / `relative_path_from` / `overlaps` | 按路径语法、authority 和解码后的完整段判断包含与交叠 | 编码后的分隔符不参与判断；大小写仍敏感 |
-| `lexical_depth` / `decoded_path_bytes` / `is_opaque` | 检查路径层级、无损读取路径字节和识别不透明路径 | 不访问文件系统 |
-| `join_descendant` | 拼接相对子路径，拒绝父目录、绝对路径及 Windows 流组件 | 不替代文件系统授权与符号链接检查 |
-| `PathConvention` | 显式选择 POSIX/Windows grammar | 不代表一台具体机器或授权环境 |
+| API / type                                           | 当前职责                                                      | 明确不做                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `PathUri::parse`                                     | 校验并 canonicalize `file:` URI                               | 不接受其他 scheme、query、fragment、port 或 credentials                                           |
+| `from_absolute_path` / `to_host_path`                | 在 `AbsolutePathBuf` 与当前 host URI 之间 lossless round trip | 不接受未先建立绝对路径不变量的 `PathBuf`，也不把 foreign Windows path 映射成 POSIX path，反之亦然 |
+| `from_native_path`                                   | 按显式 `PathConvention` 解析 POSIX、drive 或 UNC path         | 不访问文件系统                                                                                    |
+| `basename` / `parent` / `ancestors` / `join`         | 跨 host lexical path operations                               | 不解析 symlink、case alias 或 Unicode filesystem normalization                                    |
+| `starts_with` / `relative_path_from` / `overlaps`    | 按路径语法、authority 和解码后的完整段判断包含与交叠          | 编码后的分隔符不参与判断；大小写仍敏感                                                            |
+| `lexical_depth` / `decoded_path_bytes` / `is_opaque` | 检查路径层级、无损读取路径字节和识别不透明路径                | 不访问文件系统                                                                                    |
+| `join_descendant`                                    | 拼接相对子路径，拒绝父目录、绝对路径及 Windows 流组件         | 不替代文件系统授权与符号链接检查                                                                  |
+| `PathConvention`                                     | 显式选择 POSIX/Windows grammar                                | 不代表一台具体机器或授权环境                                                                      |
 
 Serde 和 `TS` 将 `PathUri` 表示为 canonical URI string。Windows drive letter 统一为大写，
 `file://localhost/...` 统一为无 authority 的本地 URI。无法普通 URL 无歧义表示的路径
@@ -31,14 +31,14 @@ lexical containment。
 
 ## 文件与内部所有权
 
-| 文件 / private symbol | Ownership |
-| --- | --- |
-| `validation.rs::validated_file_url` | scheme、metadata、NUL、localhost 与 drive canonicalization |
-| `validation.rs::decode_opaque_path_uri` | opaque namespace 的 canonical base64 验证 |
-| `native.rs::parse_native_path` | 显式 POSIX/Windows absolute path parsing |
-| `native.rs::from_segments` | `.` / `..` lexical normalization 与 root anchor |
-| `native.rs::render_native_path` | foreign convention display，不依赖 current host |
-| `operations.rs::containment_segments` | encoded-separator fail-closed boundary |
+| 文件 / private symbol                   | Ownership                                                  |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `validation.rs::validated_file_url`     | scheme、metadata、NUL、localhost 与 drive canonicalization |
+| `validation.rs::decode_opaque_path_uri` | opaque namespace 的 canonical base64 验证                  |
+| `native.rs::parse_native_path`          | 显式 POSIX/Windows absolute path parsing                   |
+| `native.rs::from_segments`              | `.` / `..` lexical normalization 与 root anchor            |
+| `native.rs::render_native_path`         | foreign convention display，不依赖 current host            |
+| `operations.rs::containment_segments`   | encoded-separator fail-closed boundary                     |
 
 ```text
 PathUri::parse

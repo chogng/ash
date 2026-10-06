@@ -10,9 +10,11 @@ import { ContentHoverController } from './contentHoverController.js';
 class ShowOrFocusHoverAction extends EditorAction {
 	constructor() {
 		const label = localize2('hover.show', 'Show or focus hover');
-		super({ id: 'editor.action.showHover', label, precondition: EditorContextKeys.focus.isEqualTo(true),
+		super({
+			id: 'editor.action.showHover', label, precondition: EditorContextKeys.focus.isEqualTo(true),
 			menuOpts: { menuId: MenuId.CommandPalette, group: 'editor', order: 0, title: label.value },
-			kbOpts: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyI), weight: KeybindingWeight.EditorContrib } });
+			kbOpts: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyI), weight: KeybindingWeight.EditorContrib }
+		});
 	}
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const position = editor.getPosition();

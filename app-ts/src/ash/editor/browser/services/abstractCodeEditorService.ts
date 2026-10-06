@@ -282,7 +282,7 @@ function createStyle(editor?: ICodeEditor): HTMLStyleElement | undefined {
 	return style;
 }
 
-function renderDecoration(description: string, key: string, options: IDecorationRenderOptions, parent: IModelDecorationOptions | undefined): { options: IModelDecorationOptions; rules: string[] } {
+function renderDecoration(description: string, key: string, options: IDecorationRenderOptions, parent: IModelDecorationOptions | undefined): { options: IModelDecorationOptions; rules: string[]; } {
 	const name = `ash-decoration-${safeName(key)}`;
 	const rules: string[] = [];
 	if (parent) {
@@ -442,7 +442,7 @@ function uriComponentsToString(value: import('../../../base/common/uri.js').UriC
 	return `${value.scheme}:${authority}${value.path ?? ''}${query}${fragment}`;
 }
 
-function addCss(target: string[], name: string, value: string | number | { id: string } | undefined): void {
+function addCss(target: string[], name: string, value: string | number | { id: string; } | undefined): void {
 	if (value === undefined) {
 		return;
 	}

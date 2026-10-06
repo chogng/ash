@@ -54,7 +54,7 @@
 	font-size: var(--ash-font-size-label1);
 }
 
-.ash-models-settings-note[role='alert'],
+.ash-models-settings-note[role="alert"],
 .ash-models-settings-status.is-error {
 	color: var(--ash-error-foreground);
 }

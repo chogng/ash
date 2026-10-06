@@ -11,7 +11,7 @@ export interface ChatInputEditorOptions {
 	readonly ariaLabel: string;
 	readonly slashCommands: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
-	readonly height?: { readonly minimum: number; readonly maximum: number };
+	readonly height?: { readonly minimum: number; readonly maximum: number; };
 }
 
 /** Text editing contract consumed by the Chat composer. */
@@ -114,7 +114,7 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		this._onDidChange.fire(this.value);
 	}
 
-	layout(): void {}
+	layout(): void { }
 }
 
 function validateProvider(provider: IChatInputEditorProvider): void {

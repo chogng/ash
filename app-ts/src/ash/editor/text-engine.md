@@ -8,15 +8,15 @@
 
 Stanza Text Engine 是 Ash 唯一的行式文本编辑权威。文本、版本、事务、历史和 tracked range 在 Renderer 内同步完成；浏览器层只投影模型；语言、diff、文件和搜索等异步能力通过 editor-owned contract 接入，不能进入按键或 IME 热路径。
 
-| 场景 | Canonical owner | 关键保证 |
-| --- | --- | --- |
-| 输入、删除、undo/redo | `TextModel` + `CursorsController` | 一个同步事务，不等待 IPC |
-| 换行、折叠、可见行和滚动 | `common/viewModel` + `common/viewLayout` | DOM-free、版本绑定 |
-| DOM、光标、选区和 decoration | `browser/view` + `browser/viewParts` | 只投影，不创建第二套模型或滚动权威 |
-| 基础 token 与预览着色 | 前端 TextMate Worker、TextModel tokenization | 消费前端版本快照，不请求 App Server parser |
-| 语义 token、诊断、补全、折叠、符号和结构选择 | `common/languages` 与异步 provider | 结果经过 model identity 与 version gate；App Server / LSP provider 由 Workbench 注册 |
-| 打开、保存、冲突和恢复 | Workbench model resolver 与 working copy | 文件传输不拥有 live model |
-| 可选编辑能力 | `contrib/<feature>` | 移除 feature 不破坏基础模型正确性 |
+| 场景                                         | Canonical owner                              | 关键保证                                                                             |
+| -------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 输入、删除、undo/redo                        | `TextModel` + `CursorsController`            | 一个同步事务，不等待 IPC                                                             |
+| 换行、折叠、可见行和滚动                     | `common/viewModel` + `common/viewLayout`     | DOM-free、版本绑定                                                                   |
+| DOM、光标、选区和 decoration                 | `browser/view` + `browser/viewParts`         | 只投影，不创建第二套模型或滚动权威                                                   |
+| 基础 token 与预览着色                        | 前端 TextMate Worker、TextModel tokenization | 消费前端版本快照，不请求 App Server parser                                           |
+| 语义 token、诊断、补全、折叠、符号和结构选择 | `common/languages` 与异步 provider           | 结果经过 model identity 与 version gate；App Server / LSP provider 由 Workbench 注册 |
+| 打开、保存、冲突和恢复                       | Workbench model resolver 与 working copy     | 文件传输不拥有 live model                                                            |
+| 可选编辑能力                                 | `contrib/<feature>`                          | 移除 feature 不破坏基础模型正确性                                                    |
 
 ## 设计不变量
 
@@ -49,17 +49,17 @@ flowchart LR
     Contrib --> BrowserView
 ```
 
-| 层 | 拥有 | 不得拥有 |
-| --- | --- | --- |
-| `common/core` | position、range、selection value、纯 edit/range/text 算法 | model state、DOM、provider、产品逻辑 |
-| `common/model` | `TextModel`、`ITextBuffer`、history、snapshot、search、tracked range、decoration identity；PieceTree 是当前私有 buffer 实现 | CSS、selection instance、文件传输、语言 runtime |
-| `common/cursor`、`common/commands` | editor-local selection 和 DOM-free edit intent | 键盘监听、DOM、Workbench command registry |
-| `common/viewModel` | logical line → visual line、geometry、hit-test 所需纯投影 | DOM 测量、CSS、feature controller |
-| `common/viewLayout` | viewport size、content extent、scroll clamp、visible/render ranges | DOM scroll node、model mutation |
-| `common/languages.ts`、`common/languages`、`common/tokens` | 公共 provider contract、语言配置、token 状态与索引 | contribution 请求编排、parser transport、DOM presentation、Workbench service |
-| `browser` | DOM、测量、输入适配、view host、view parts、runtime adapter | 文本权威、文件生命周期、产品 pane |
-| `contrib/<feature>` | 可移除 feature 的 command、state、controller 和 presentation | 第二套 model、产品 ID、隐式宿主依赖 |
-| Workbench | pane/input、文件和 working-copy、产品组合、transport adapter | 文本事务、selection、viewport |
+| 层                                                         | 拥有                                                                                                                        | 不得拥有                                                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `common/core`                                              | position、range、selection value、纯 edit/range/text 算法                                                                   | model state、DOM、provider、产品逻辑                                         |
+| `common/model`                                             | `TextModel`、`ITextBuffer`、history、snapshot、search、tracked range、decoration identity；PieceTree 是当前私有 buffer 实现 | CSS、selection instance、文件传输、语言 runtime                              |
+| `common/cursor`、`common/commands`                         | editor-local selection 和 DOM-free edit intent                                                                              | 键盘监听、DOM、Workbench command registry                                    |
+| `common/viewModel`                                         | logical line → visual line、geometry、hit-test 所需纯投影                                                                   | DOM 测量、CSS、feature controller                                            |
+| `common/viewLayout`                                        | viewport size、content extent、scroll clamp、visible/render ranges                                                          | DOM scroll node、model mutation                                              |
+| `common/languages.ts`、`common/languages`、`common/tokens` | 公共 provider contract、语言配置、token 状态与索引                                                                          | contribution 请求编排、parser transport、DOM presentation、Workbench service |
+| `browser`                                                  | DOM、测量、输入适配、view host、view parts、runtime adapter                                                                 | 文本权威、文件生命周期、产品 pane                                            |
+| `contrib/<feature>`                                        | 可移除 feature 的 command、state、controller 和 presentation                                                                | 第二套 model、产品 ID、隐式宿主依赖                                          |
+| Workbench                                                  | pane/input、文件和 working-copy、产品组合、transport adapter                                                                | 文本事务、selection、viewport                                                |
 
 顶层依赖保持 `workbench → editor → platform → base`；Editor 内部保持 `contrib/browser → common`，其中 editor 的各层都可以按运行环境依赖更低层的 base/platform owner。Stanza 可以借鉴 VS Code 的目录和职责名称，但不复制其历史依赖、全局 service singleton 或与当前调用者无关的文件。
 
@@ -215,14 +215,14 @@ contrib/<feature>/
 
 ## 服务、持久化与宿主
 
-| 能力 | Editor owner | Host/adapter owner |
-| --- | --- | --- |
-| Live text model reference、dirty、baseline、conflict | Editor `ITextModelService` contract / Workbench `BrowserTextModelService` | Workbench 提供 resource store 与 working-copy registration |
-| 原始资源读写和 expected revision | editor-owned `ITextResourceStore` contract | Workbench/file service/App Server adapter |
-| Language provider registry | `ILanguageFeaturesService`，消费 editor 公共 provider 契约 | TextMate、Worker、Rust 或 LSP adapter |
-| Language 请求失效与结果提交 | 发起请求的 contribution 校验模型身份、版本和取消状态；模型拥有版本与编辑事务 | Adapter 传递取消与结果，不拥有编辑器请求状态 |
-| Diff request/result、算法和 `DiffModel` | `common/diff` | Workbench `IDiffService` 创建 Editor `WorkerDiffComputationService`；前端 Worker 只消费一次性快照，取消和版本检查由前端持有 |
-| Pane、tab、save command、notification | 无 | Workbench |
+| 能力                                                 | Editor owner                                                                 | Host/adapter owner                                                                                                          |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Live text model reference、dirty、baseline、conflict | Editor `ITextModelService` contract / Workbench `BrowserTextModelService`    | Workbench 提供 resource store 与 working-copy registration                                                                  |
+| 原始资源读写和 expected revision                     | editor-owned `ITextResourceStore` contract                                   | Workbench/file service/App Server adapter                                                                                   |
+| Language provider registry                           | `ILanguageFeaturesService`，消费 editor 公共 provider 契约                   | TextMate、Worker、Rust 或 LSP adapter                                                                                       |
+| Language 请求失效与结果提交                          | 发起请求的 contribution 校验模型身份、版本和取消状态；模型拥有版本与编辑事务 | Adapter 传递取消与结果，不拥有编辑器请求状态                                                                                |
+| Diff request/result、算法和 `DiffModel`              | `common/diff`                                                                | Workbench `IDiffService` 创建 Editor `WorkerDiffComputationService`；前端 Worker 只消费一次性快照，取消和版本检查由前端持有 |
+| Pane、tab、save command、notification                | 无                                                                           | Workbench                                                                                                                   |
 
 Editor contract 使用领域类型；generated DTO 和 transport error 在 runtime adapter 内终止。强制能力缺失时显式失败，不添加行为不同的 production fallback。
 
@@ -237,32 +237,32 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 
 ## 当前状态与演进
 
-| Area | Status | Boundary |
-| --- | --- | --- |
-| TextModel、ITextBuffer、history、snapshot、tracked range | 部分具备 | 行为可用；`ITextModel`、PieceTree 与 ModelService 契约仍在待处理账目 |
-| Multi-selection、IME、clipboard、pointer/keyboard input | 部分具备 | 本地链可用；cursor 与 edit-context owner 尚未对齐 |
-| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期、统一覆盖层、标准渲染上下文和 DOM/GPU `IViewLines` 几何已接通；GPU context 与两个策略的初始化、cell buffer 和释放 owner 已收敛 |
-| Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
-| 编辑器交互 Diff | 部分具备 | 双栏、Multi Diff 和 Quick Diff 使用前端 Worker；版本、取消、行与字素范围在本端处理；完整 DiffEditorWidget/MultiDiffEditorWidget 契约仍待补齐 |
-| `ViewContext → ViewPart → View` | 部分具备 | 事件、渲染阶段和释放已统一；两个输入实现仍待进入同一 Part 生命周期 |
-| `ViewModelImpl → CursorsController → CursorCollection → Cursor` | 部分具备 | selection 状态、marker、normalize、flush 和单命令 primary 语义已接通；输入与 contribution 仍需移除 controller 的仅本地公共入口 |
-| Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
+| Area                                                                  | Status    | Boundary                                                                                                                                         |
+| --------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| TextModel、ITextBuffer、history、snapshot、tracked range              | 部分具备  | 行为可用；`ITextModel`、PieceTree 与 ModelService 契约仍在待处理账目                                                                             |
+| Multi-selection、IME、clipboard、pointer/keyboard input               | 部分具备  | 本地链可用；cursor 与 edit-context owner 尚未对齐                                                                                                |
+| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备  | ViewPart 生命周期、统一覆盖层、标准渲染上下文和 DOM/GPU `IViewLines` 几何已接通；GPU context 与两个策略的初始化、cell buffer 和释放 owner 已收敛 |
+| Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备  | 异步版本边界存在；language service 与 tokenization owner 尚未对齐                                                                                |
+| 编辑器交互 Diff                                                       | 部分具备  | 双栏、Multi Diff 和 Quick Diff 使用前端 Worker；版本、取消、行与字素范围在本端处理；完整 DiffEditorWidget/MultiDiffEditorWidget 契约仍待补齐     |
+| `ViewContext → ViewPart → View`                                       | 部分具备  | 事件、渲染阶段和释放已统一；两个输入实现仍待进入同一 Part 生命周期                                                                               |
+| `ViewModelImpl → CursorsController → CursorCollection → Cursor`       | 部分具备  | selection 状态、marker、normalize、flush 和单命令 primary 语义已接通；输入与 contribution 仍需移除 controller 的仅本地公共入口                   |
+| Incremental compaction 和更广 parser-grade language coverage          | Potential | 由可复现性能与产品需求驱动                                                                                                                       |
 
 ## 关键实现入口
 
-| Symbol/file | Responsibility | 修改时同步检查 |
-| --- | --- | --- |
-| `common/model/textModel.ts` | transaction、version、history、snapshot | cursor、tracked range、language invalidation、model tests |
-| `common/cursor/cursor.ts` | 目标：由 `ViewModelImpl` 持有 selection、command 和 composition | CursorCollection、ViewModel events、input、undo/redo、composition tests |
-| `common/viewLayout/viewLayout.ts`、`linesLayout.ts`、`lineHeights.ts` | viewport/scroll/layout snapshot、行集合与行高 | wrapping、folding、hit test、viewport tests |
-| `common/viewModel/modelLineProjection.ts` | immutable logical → visual line projection data | folding、selection geometry、navigation |
-| `common/viewModel/viewModelLines.ts` | wrapping、visibility 和 model-versioned visual-line collection | folding、viewport、line-count changes |
-| `browser/view/domLineBreaksComputer.ts` | browser font measurement for logical-line breaks | DOM measurement、grapheme boundaries |
-| `browser/view.ts` | 当前 view host 和 scheduler | Part order、DOM topology、scroll |
-| `browser/view/renderingContext.ts` | 单次 render pass 的标准视口字段、纵向坐标、装饰与行几何查询 | 全部 View Parts 与 rendering-context tests |
-| `browser/viewParts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
-| `browser/editorExtensions.ts` | feature-neutral registration and model-service assembly | `editor.*.all.ts` 与 contribution order |
+| Symbol/file                                                           | Responsibility                                                  | 修改时同步检查                                                          |
+| --------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `common/model/textModel.ts`                                           | transaction、version、history、snapshot                         | cursor、tracked range、language invalidation、model tests               |
+| `common/cursor/cursor.ts`                                             | 目标：由 `ViewModelImpl` 持有 selection、command 和 composition | CursorCollection、ViewModel events、input、undo/redo、composition tests |
+| `common/viewLayout/viewLayout.ts`、`linesLayout.ts`、`lineHeights.ts` | viewport/scroll/layout snapshot、行集合与行高                   | wrapping、folding、hit test、viewport tests                             |
+| `common/viewModel/modelLineProjection.ts`                             | immutable logical → visual line projection data                 | folding、selection geometry、navigation                                 |
+| `common/viewModel/viewModelLines.ts`                                  | wrapping、visibility 和 model-versioned visual-line collection  | folding、viewport、line-count changes                                   |
+| `browser/view/domLineBreaksComputer.ts`                               | browser font measurement for logical-line breaks                | DOM measurement、grapheme boundaries                                    |
+| `browser/view.ts`                                                     | 当前 view host 和 scheduler                                     | Part order、DOM topology、scroll                                        |
+| `browser/view/renderingContext.ts`                                    | 单次 render pass 的标准视口字段、纵向坐标、装饰与行几何查询     | 全部 View Parts 与 rendering-context tests                              |
+| `browser/viewParts/viewPart.ts`                                       | view context、Part contract 和 collection                       | 全部 View Parts 与 render tests                                         |
+| `browser/widget/codeEditor/codeEditorWidget.ts`                       | canonical browser editing surface                               | input、accessibility、contribution integration                          |
+| `browser/editorExtensions.ts`                                         | feature-neutral registration and model-service assembly         | `editor.*.all.ts` 与 contribution order                                 |
 
 ## 验证与修改影响
 
@@ -282,7 +282,6 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 - 功能实例由模型作用域的 `IInstantiationService.createInstance` 创建，构造参数装饰器声明稳定服务依赖。`registerEditorContribution` 统一注册构造器和带配置钩子的贡献。`CodeEditorContributions` 在 View 创建前执行配置，创建后安装功能，并统一调度延迟创建、显式获取和模型分离时的释放；Quick Diff 的声明也由此执行。
 - 模型分离会释放功能实例和模型服务作用域，重新挂载时创建新作用域；父容器不随模型释放。缺少必需服务或构造参数错位时，容器在执行构造函数之前报错。
 - 功能上下文的内部依赖与 Widget options 中的服务装配仍需收拢；构造注入底座和功能创建链已接通，整体迁移尚未完成。
-
 
 ## 服务与预览接入
 

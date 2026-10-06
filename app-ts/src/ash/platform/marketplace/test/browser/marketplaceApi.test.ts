@@ -5,10 +5,10 @@ import { createAppServerMarketplaceApi } from '../../browser/marketplaceApi.js';
 
 test('Marketplace filtered search requires an advertised search contract before sending a request', async () => {
 	const calls: unknown[] = [];
-	const contracts: Record<string, { version: number }> = {};
+	const contracts: Record<string, { version: number; }> = {};
 	const connection = {
 		capabilities: { contracts },
-		request: async (definition: { method: string }, params: unknown) => { calls.push([definition.method, params]); return { packages: [] }; },
+		request: async (definition: { method: string; }, params: unknown) => { calls.push([definition.method, params]); return { packages: [] }; },
 	} as unknown as AppServerProtocolClient;
 	const api = createAppServerMarketplaceApi(connection);
 	const params = { query: '', packageType: null, limit: 20, capabilityKind: 'executable' as const, languageId: 'typescriptreact' };

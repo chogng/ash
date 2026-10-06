@@ -1,4 +1,9 @@
-.stanza-editor :is(.ash-quick-input-host, .stanza-editor-inspect-tokens, .stanza-editor-hover) {
+.stanza-editor
+	:is(
+		.ash-quick-input-host,
+		.stanza-editor-inspect-tokens,
+		.stanza-editor-hover
+	) {
 	font-family: var(--ash-font-family, system-ui, sans-serif);
 	font-size: 13px;
 	font-weight: var(--ash-font-weight-regular);

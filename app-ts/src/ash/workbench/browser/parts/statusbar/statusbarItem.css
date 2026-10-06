@@ -1,120 +1,125 @@
 .ash-statusbar-item {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 40vw;
-  height: 100%;
-  align-items: stretch;
-  line-height: 24px;
-  font-variant-numeric: tabular-nums;
-  border-radius: 0;
+	display: inline-flex;
+	min-width: 0;
+	max-width: 40vw;
+	height: 100%;
+	align-items: stretch;
+	line-height: 24px;
+	font-variant-numeric: tabular-nums;
+	border-radius: 0;
 }
 
 .ash-statusbar-item-label {
-  display: flex;
-  min-width: 0;
-  max-width: 100%;
-  height: 100%;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px;
-  overflow: hidden;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  white-space: pre;
-  text-overflow: ellipsis;
-  text-decoration: none;
-  cursor: pointer;
-  outline: 0;
-  border-radius: 0;
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	height: 100%;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	overflow: hidden;
+	border: 0;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	white-space: pre;
+	text-overflow: ellipsis;
+	text-decoration: none;
+	cursor: pointer;
+	outline: 0;
+	border-radius: 0;
 }
 
-.ash-statusbar-item.icon-only:not(.compact-left):not(.compact-right) > .ash-statusbar-item-label {
-  width: 24px;
-  justify-content: center;
-  padding: 0;
+.ash-statusbar-item.icon-only:not(.compact-left):not(.compact-right)
+	> .ash-statusbar-item-label {
+	width: 24px;
+	justify-content: center;
+	padding: 0;
 }
 
 .ash-statusbar-item.compact-left,
 .ash-statusbar-item.compact-left > .ash-statusbar-item-label {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
 }
 
 .ash-statusbar-item.compact-right,
 .ash-statusbar-item.compact-right > .ash-statusbar-item-label {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
 }
 
 .ash-statusbar-item.compact-left > .ash-statusbar-item-label {
-  padding: 0 6px 0 4px;
+	padding: 0 6px 0 4px;
 }
 
 .ash-statusbar-item.compact-right > .ash-statusbar-item-label {
-  padding: 0 4px 0 6px;
+	padding: 0 4px 0 6px;
 }
 
 .ash-statusbar-item.compact-left.compact-right > .ash-statusbar-item-label {
-  padding: 0 4px;
+	padding: 0 4px;
 }
 
 .ash-statusbar-item-label > .ash-icon,
 .ash-statusbar-item-segment > .ash-icon {
-  display: block;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+	display: block;
+	width: 16px;
+	height: 16px;
+	flex: 0 0 16px;
 }
 
 .ash-statusbar-item-segment {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
+	display: inline-flex;
+	min-width: 0;
+	align-items: center;
+	gap: 4px;
 }
 
 .ash-statusbar-item-label.has-segments {
-  gap: 4px;
-  padding: 0 6px;
+	gap: 4px;
+	padding: 0 6px;
 }
 
 .ash-statusbar-item-label.disabled {
-  cursor: default;
+	cursor: default;
 }
 
 .ash-statusbar-item.remote-kind {
-  color: var(--ash-status-bar-item-remote-foreground);
-  background: var(--ash-status-bar-item-remote-background);
+	color: var(--ash-status-bar-item-remote-foreground);
+	background: var(--ash-status-bar-item-remote-background);
 }
 
 .ash-statusbar-item-label:hover:not(.disabled) {
-  color: var(--ash-status-bar-item-hover-foreground);
-  background: var(--ash-status-bar-item-hover-background);
+	color: var(--ash-status-bar-item-hover-foreground);
+	background: var(--ash-status-bar-item-hover-background);
 }
 
 .ash-statusbar-item.compact-group-hover > .ash-statusbar-item-label {
-  color: var(--ash-status-bar-item-hover-foreground);
-  background: var(--ash-status-bar-item-hover-background);
+	color: var(--ash-status-bar-item-hover-foreground);
+	background: var(--ash-status-bar-item-hover-background);
 }
 
 .ash-statusbar-item.compact-entry-hover > .ash-statusbar-item-label {
-  background-image: linear-gradient(var(--ash-status-bar-item-compact-hover-background), var(--ash-status-bar-item-compact-hover-background));
+	background-image: linear-gradient(
+		var(--ash-status-bar-item-compact-hover-background),
+		var(--ash-status-bar-item-compact-hover-background)
+	);
 }
 
-.ash-statusbar-item.remote-kind > .ash-statusbar-item-label:hover:not(.disabled) {
-  color: var(--ash-status-bar-item-remote-hover-foreground);
-  background: var(--ash-status-bar-item-remote-hover-background);
+.ash-statusbar-item.remote-kind
+	> .ash-statusbar-item-label:hover:not(.disabled) {
+	color: var(--ash-status-bar-item-remote-hover-foreground);
+	background: var(--ash-status-bar-item-remote-hover-background);
 }
 
 .ash-statusbar-item-label:active:not(.disabled) {
-  background: var(--ash-status-bar-item-active-background);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	background: var(--ash-status-bar-item-active-background);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-statusbar-item-label:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }

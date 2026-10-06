@@ -29,13 +29,13 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	constructor(container: HTMLElement) { super({ root: container }); }
 	isPartVisible(): boolean { return false; }
 	isPanelMaximized(): boolean { return false; }
-	toggleMaximizedPanel(): void {}
-	showPart(): void {}
-	showParts(): void {}
-	hidePart(): void {}
-	hideParts(): void {}
+	toggleMaximizedPanel(): void { }
+	showPart(): void { }
+	showParts(): void { }
+	hidePart(): void { }
+	hideParts(): void { }
 	getPartSize() { return { width: 0, height: 0 }; }
-	resizePart(): void {}
+	resizePart(): void { }
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
 		this.styles.push(style);
@@ -79,7 +79,7 @@ test('Modern UI contribution starts at restore and owns live window layout style
 		onDidLayout: Event.None,
 		onBeforeUnload: Event.None,
 		onDidClose: closeEmitter.event,
-		layout(): void {},
+		layout(): void { },
 		dispose(): void { closeEmitter.fire(); },
 		[Symbol.dispose](): void { closeEmitter.fire(); },
 	} as unknown as IAuxiliaryWindow;

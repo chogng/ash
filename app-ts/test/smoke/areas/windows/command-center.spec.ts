@@ -7,7 +7,7 @@ test('desktop privileges reach the window title through the Main process', async
 	test.skip(target.kind !== 'electron', 'This scenario requires the desktop Code product');
 	const page = workbench.page;
 	const isAdmin = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:is-admin');
 	});
 	expect(typeof isAdmin).toBe('boolean');
@@ -361,15 +361,15 @@ test('desktop GitHub authorization opens a browser URL and can be cancelled with
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ shell }) => {
 		const original = shell.openExternal.bind(shell);
-		const state = globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; restore: () => void } };
+		const state = globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; restore: () => void; }; };
 		state.ashGitHubBrowser = { restore: () => { shell.openExternal = original; } };
 		shell.openExternal = async url => { state.ashGitHubBrowser!.url = url; };
 	});
 	try {
 		const page = workbench.page;
 		await workbench.menus.select(application, () => page.getByRole('button', { name: 'Accounts' }).click(), ['Connect GitHub']);
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string } }).ashGitHubBrowser?.url)).toBeTruthy();
-		const authorizationUrl = await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string } }).ashGitHubBrowser?.url);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; }; }).ashGitHubBrowser?.url)).toBeTruthy();
+		const authorizationUrl = await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { url?: string; }; }).ashGitHubBrowser?.url);
 		const url = new URL(authorizationUrl!);
 		expect(url.origin).toBe('https://ash-github-auth.lanxiang0901.workers.dev');
 		expect(url.pathname).toBe('/v1/oauth/github/authorize');
@@ -380,7 +380,7 @@ test('desktop GitHub authorization opens a browser URL and can be cancelled with
 		await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toHaveCount(0);
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { restore: () => void } }).ashGitHubBrowser?.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashGitHubBrowser?: { restore: () => void; }; }).ashGitHubBrowser?.restore());
 	}
 });
 
@@ -396,9 +396,9 @@ test('primary sidebar toggle sits immediately after the application menu', async
 	await expect(menu).toBeVisible();
 	expect(await toolbar.locator('.ash-action-view-item').evaluateAll(elements =>
 		elements.slice(0, 2).map(element => element.getAttribute('data-action-id')))).toEqual([
-		'ash.applicationMenu',
-		actionId,
-	]);
+			'ash.applicationMenu',
+			actionId,
+		]);
 	const rightGap = await page.locator('.ash-titlebar-actions .ash-action-bar').evaluate(element =>
 		Number.parseFloat(getComputedStyle(element).columnGap));
 	const [menuBounds, toggleBounds] = await Promise.all([menu.boundingBox(), toggle.boundingBox()]);
@@ -821,11 +821,11 @@ test('macOS context menu converts pointer and activity bar anchors at the curren
 		const window = BrowserWindow.fromId(windowId)!;
 		const originalPopup = Menu.prototype.popup;
 		const originalZoom = window.webContents.getZoomLevel();
-		const state = globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number }; restore: () => void } };
+		const state = globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number; }; restore: () => void; }; };
 		state.ashMenuPosition = {
 			restore: () => { Menu.prototype.popup = originalPopup; window.webContents.setZoomLevel(originalZoom); },
 		};
-		Menu.prototype.popup = function(options) {
+		Menu.prototype.popup = function (options) {
 			if (!options) throw new Error('Expected context menu popup options');
 			state.ashMenuPosition!.options = { x: options.x, y: options.y, positioningItem: options.positioningItem, zoom: window.webContents.getZoomFactor() };
 			options.callback?.();
@@ -836,32 +836,32 @@ test('macOS context menu converts pointer and activity bar anchors at the curren
 		const search = workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search' });
 		await workbench.page.evaluate(() => {
 			window.addEventListener('contextmenu', event => {
-				(window as Window & { ashMenuPointer?: { x: number; y: number } }).ashMenuPointer = { x: event.clientX, y: event.clientY };
+				(window as Window & { ashMenuPointer?: { x: number; y: number; }; }).ashMenuPointer = { x: event.clientX, y: event.clientY };
 			}, { capture: true, once: true });
 		});
 		await search.click({ button: 'right', position: { x: 2, y: 2 } });
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number } } }).ashMenuPosition?.options)).toBeDefined();
-		const actual = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number } } }).ashMenuPosition?.options);
-		const pointer = await workbench.page.evaluate(() => (window as Window & { ashMenuPointer?: { x: number; y: number } }).ashMenuPointer);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; }; }; }).ashMenuPosition?.options)).toBeDefined();
+		const actual = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number; }; }; }).ashMenuPosition?.options);
+		const pointer = await workbench.page.evaluate(() => (window as Window & { ashMenuPointer?: { x: number; y: number; }; }).ashMenuPointer);
 		expect(pointer).toBeDefined();
 		expect(actual!.zoom).toBeGreaterThan(1);
 		expect(actual).toEqual({ x: Math.floor(pointer!.x * actual!.zoom), y: Math.floor(pointer!.y * actual!.zoom), positioningItem: undefined, zoom: actual!.zoom });
-		await electron.evaluate(() => { (globalThis as typeof globalThis & { ashMenuPosition: { options?: unknown } }).ashMenuPosition.options = undefined; });
+		await electron.evaluate(() => { (globalThis as typeof globalThis & { ashMenuPosition: { options?: unknown; }; }).ashMenuPosition.options = undefined; });
 		const accounts = workbench.page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Accounts' });
 		await accounts.evaluate(element => {
 			element.addEventListener('mousedown', () => {
 				const bounds = element.getBoundingClientRect();
-				(window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor = { x: bounds.right, y: bounds.top };
+				(window as Window & { ashMenuAnchor?: { x: number; y: number; }; }).ashMenuAnchor = { x: bounds.right, y: bounds.top };
 			}, { once: true });
 		});
 		await accounts.click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number } } }).ashMenuPosition?.options)).toBeDefined();
-		const elementMenu = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number } } }).ashMenuPosition?.options);
-		const anchor = await workbench.page.evaluate(() => (window as Window & { ashMenuAnchor?: { x: number; y: number } }).ashMenuAnchor);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; }; }; }).ashMenuPosition?.options)).toBeDefined();
+		const elementMenu = await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { options?: { x?: number; y?: number; positioningItem?: number; zoom: number; }; }; }).ashMenuPosition?.options);
+		const anchor = await workbench.page.evaluate(() => (window as Window & { ashMenuAnchor?: { x: number; y: number; }; }).ashMenuAnchor);
 		expect(anchor).toBeDefined();
 		expect(elementMenu).toEqual({ x: Math.floor(anchor!.x * elementMenu!.zoom), y: Math.floor(anchor!.y * elementMenu!.zoom) + 4, positioningItem: undefined, zoom: elementMenu!.zoom });
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { restore: () => void } }).ashMenuPosition?.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuPosition?: { restore: () => void; }; }).ashMenuPosition?.restore());
 	}
 });
 
@@ -870,12 +870,12 @@ test('a late macOS menu close callback leaves the next menu open', async ({ targ
 	const electron = application as ElectronApplication;
 	await electron.evaluate(({ Menu }) => {
 		const originalPopup = Menu.prototype.popup;
-		const state = globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void } };
+		const state = globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void; }; };
 		state.ashMenuCallbacks = {
 			callbacks: [],
 			restore: () => { Menu.prototype.popup = originalPopup; },
 		};
-		Menu.prototype.popup = function(options) {
+		Menu.prototype.popup = function (options) {
 			if (!options) throw new Error('Expected context menu popup options');
 			state.ashMenuCallbacks!.callbacks.push(() => options.callback?.());
 		};
@@ -885,19 +885,19 @@ test('a late macOS menu close callback leaves the next menu open', async ({ targ
 		const accounts = activitybar.getByRole('button', { name: 'Accounts' });
 		const manage = activitybar.getByRole('button', { name: 'Manage' });
 		await accounts.click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[] } }).ashMenuCallbacks?.callbacks.length)).toBe(1);
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[0]!());
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; }; }).ashMenuCallbacks?.callbacks.length)).toBe(1);
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[]; }; }).ashMenuCallbacks.callbacks[0]!());
 		await expect(accounts).toHaveAttribute('aria-expanded', 'false');
 		await manage.click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[] } }).ashMenuCallbacks?.callbacks.length)).toBe(2);
+		await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; }; }).ashMenuCallbacks?.callbacks.length)).toBe(2);
 		await expect(manage).toHaveAttribute('aria-expanded', 'true');
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[0]!());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[]; }; }).ashMenuCallbacks.callbacks[0]!());
 		await workbench.page.waitForTimeout(100);
 		await expect(manage).toHaveAttribute('aria-expanded', 'true');
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[] } }).ashMenuCallbacks.callbacks[1]!());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks: { callbacks: (() => void)[]; }; }).ashMenuCallbacks.callbacks[1]!());
 		await expect(manage).toHaveAttribute('aria-expanded', 'false');
 	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void } }).ashMenuCallbacks?.restore());
+		await electron.evaluate(() => (globalThis as typeof globalThis & { ashMenuCallbacks?: { callbacks: (() => void)[]; restore: () => void; }; }).ashMenuCallbacks?.restore());
 	}
 });
 

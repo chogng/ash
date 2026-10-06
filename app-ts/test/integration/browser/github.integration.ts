@@ -25,7 +25,7 @@ import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import { LinkPresentationService } from '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
 
-interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown> }
+interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
 const sha = 'abcdef0123456789abcdef0123456789abcdef01';
 class GitHubTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -45,7 +45,7 @@ class GitHubTransport implements AppServerTransport {
 			return;
 		}
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string }).frame) as Request;
+		const request = JSON.parse((payload as { frame: string; }).frame) as Request;
 		this.requests.push(request);
 		switch (request.method) {
 			case 'initialize': this.respond(request, createTestInitializeResult()); break;
@@ -85,8 +85,8 @@ resources.add(toDisposable(() => client.dispose()));
 await client.connect();
 services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const accounts = resources.add(new Emitter<AccountState>());
-services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => {}, logout: async () => {} });
-services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => {}, cancel: async () => {} });
+services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => { }, logout: async () => { } });
+services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 services.registerInstance(ILinkPresentationService, resources.add(services.createInstance(LinkPresentationService)));
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
 host.advance(WorkbenchPhase.BlockStartup);
@@ -115,6 +115,6 @@ window.ashGitHubIntegration = {
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 declare global {
 	interface Window {
-		ashGitHubIntegration: { requests: Request[]; opened: string[]; releaseChecks(): void; releaseIssue(): void; render(text: string): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; setVerbosity(value: boolean): Promise<void>; accessibleContent(type: AccessibleViewType): string; dispose(): void };
+		ashGitHubIntegration: { requests: Request[]; opened: string[]; releaseChecks(): void; releaseIssue(): void; render(text: string): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; setVerbosity(value: boolean): Promise<void>; accessibleContent(type: AccessibleViewType): string; dispose(): void; };
 	}
 }

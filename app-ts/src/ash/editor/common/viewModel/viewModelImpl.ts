@@ -269,7 +269,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		};
 	}
 
-	reduceRestoreState(state: IViewState): { scrollLeft: number; scrollTop: number } {
+	reduceRestoreState(state: IViewState): { scrollLeft: number; scrollTop: number; } {
 		if (state.firstPosition === undefined) {
 			return { scrollLeft: state.scrollLeft, scrollTop: state.scrollTopWithoutViewZones ?? state.scrollTop ?? 0 };
 		}
@@ -430,7 +430,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		return this.model.getPositionAt(this.model.getOffsetAt(anchor) + deltaOffset + eolAdjustment);
 	}
 
-	getPlainTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean, forceCRLF: boolean): { sourceRanges: Range[]; sourceText: string | string[] } {
+	getPlainTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean, forceCRLF: boolean): { sourceRanges: Range[]; sourceText: string | string[]; } {
 		const eol = forceCRLF ? '\r\n' : this.model.getEOL();
 		const ranges = [...modelRanges].sort(Range.compareRangesUsingStarts);
 		const sourceRanges: Range[] = [];
@@ -451,7 +451,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		return { sourceRanges, sourceText: sourceText.length <= 1 ? (sourceText[0] ?? '') : sourceText };
 	}
 
-	getRichTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean): { html: string; mode: string } | null {
+	getRichTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean): { html: string; mode: string; } | null {
 		const { sourceRanges, sourceText } = this.getPlainTextToCopy(modelRanges, emptySelectionClipboard, false);
 		if (sourceRanges.length === 0) return null;
 		const texts = Array.isArray(sourceText) ? sourceText : [sourceText];

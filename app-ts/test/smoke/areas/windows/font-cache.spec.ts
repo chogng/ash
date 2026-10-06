@@ -90,7 +90,7 @@ test('Desktop migrates retired storage and restores Workbench fonts and Sessions
 		await expect(agents.locator('[data-part="sidebar"]')).toBeHidden();
 		await session.quit();
 		const file = join(userDataDirectory, 'workbench-state.json');
-		const document = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[] };
+		const document = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[]; };
 		const application = document.storages.find(storage => storage.identity.scope === StorageScope.APPLICATION)!;
 		const fonts = JSON.parse(application.entries.editorFontInfo!.value) as ISerializedFontInfo[];
 		const value = JSON.stringify(fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })));
@@ -105,7 +105,7 @@ test('Desktop migrates retired storage and restores Workbench fonts and Sessions
 		await expect.poll(async () => (await readStorageEntries(session.application, session.driver.workbench.page, { scope: StorageScope.APPLICATION, id: 'application' })).editorFontInfo).toEqual({ value, target: 'machine' });
 		const restoredAgents = await session.driver.workbench.openAgentsWindow('electron');
 		await expect(restoredAgents.locator('[data-part="sidebar"]')).toBeHidden();
-		const migrated = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[] };
+		const migrated = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[]; };
 		expect(migrated.version).toBe(2);
 		expect(migrated.storages.every(snapshot => !('applicationId' in snapshot.identity))).toBe(true);
 		expect((await readStorageEntries(session.application, session.driver.workbench.page, { scope: StorageScope.APPLICATION, id: 'application' })).academicSaved).toEqual({ value: 'retained', target: 'user' });

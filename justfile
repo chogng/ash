@@ -12,13 +12,21 @@ recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" 
 tui_profile := "ci-test"
 tui_profile_arg := "--profile " + tui_profile
 
-# Format Just, Rust, and first-party Python sources.
+# Format sources with their owning Just, Rust, Python, and frontend tools.
 fmt:
     {{ python }} -B scripts/format.py
 
 # Check formatting without modifying files.
 fmt-check:
     {{ python }} -B scripts/format.py --check
+
+# Format Rust independently of frontend dependencies.
+rust-format:
+    {{ python }} -B scripts/format.py --language rust
+
+# Check Rust formatting independently of frontend dependencies.
+rust-format-check:
+    {{ python }} -B scripts/format.py --language rust --check
 
 # Check Python build and repository tools with the pinned linter.
 lint:

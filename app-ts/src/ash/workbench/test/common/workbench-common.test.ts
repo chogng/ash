@@ -401,9 +401,9 @@ test("file views register after their host container", async () => {
 class TestView implements IView {
 	private visible = true;
 
-	constructor(readonly id: string) {}
+	constructor(readonly id: string) { }
 
-	focus(): void {}
+	focus(): void { }
 
 	isVisible(): boolean {
 		return this.visible;
@@ -436,8 +436,8 @@ class TestWorkingCopy extends Disposable {
 	}
 
 	backup(): string { return ''; }
-	restoreBackup(): void {}
-	async save(): Promise<void> {}
-	async saveAs(): Promise<void> {}
-	async revert(): Promise<void> {}
+	restoreBackup(): void { }
+	async save(): Promise<void> { }
+	async saveAs(): Promise<void> { }
+	async revert(): Promise<void> { }
 }

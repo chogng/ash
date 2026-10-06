@@ -24,11 +24,11 @@ export class MultiDiffEditorViewModel {
 	private readonly itemViewStates = new Map<string, DiffEditorItemViewState>();
 	private selectedChange: MultiDiffEditorLocation | undefined;
 
-	constructor(items: readonly { readonly id: string }[]) {
+	constructor(items: readonly { readonly id: string; }[]) {
 		this.itemIds = new Set(items.map(item => item.id));
 	}
 
-	public setItems(items: readonly { readonly id: string }[]): void {
+	public setItems(items: readonly { readonly id: string; }[]): void {
 		this.itemIds = new Set(items.map(item => item.id));
 		for (const id of this.collapsedItemIds) if (!this.itemIds.has(id)) this.collapsedItemIds.delete(id);
 		for (const id of this.itemViewStates.keys()) if (!this.itemIds.has(id)) this.itemViewStates.delete(id);

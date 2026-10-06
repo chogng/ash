@@ -189,8 +189,8 @@ export abstract class BaseLayoutController extends Disposable {
 	protected shouldShowEditor(): boolean { return this.editors.visibleEditors.length > 0 || !this.layout.isPartVisible('sessions'); }
 	protected canRestoreSessionEditors(): boolean { return this.layout.isPartVisible('sessions'); }
 	protected applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> { return this.editor.applyWorkingSet(saved, { preserveFocus: true }); }
-	protected async onSessionRestored(_selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {}
-	protected onSessionIdentityChanged(_from: string, _to: string): void {}
+	protected async onSessionRestored(_selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> { }
+	protected onSessionIdentityChanged(_from: string, _to: string): void { }
 
 	/** User transitions share the restore queue so they never mutate an incoming working set. */
 	protected enqueueLayoutOperation(operation: () => Promise<void>): Promise<void> {

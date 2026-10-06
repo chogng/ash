@@ -227,7 +227,7 @@ function validFileName(value: string): boolean {
 }
 
 function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly IWorkspaceFolder[], kind: 'file' | 'folder'): Promise<IWorkspaceFolder | undefined> {
-	type FolderItem = IQuickPickItem & { readonly folder: IWorkspaceFolder };
+	type FolderItem = IQuickPickItem & { readonly folder: IWorkspaceFolder; };
 	const picker = quickInput.createQuickPick<FolderItem>();
 	const disposables = new DisposableStore();
 	disposables.add(picker);

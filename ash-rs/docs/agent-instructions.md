@@ -8,29 +8,29 @@
 
 ## 已确定的方向与待验证的问题
 
-| 项目 | 设计决定 | 证据状态 |
-| --- | --- | --- |
-| 指令组合 | 共同规则、当前协作模式与当前 Role 分开组合 | 五种协作模式按 Turn 冻结；Role 已接入根、子 Thread 和审查 Turn |
-| 默认 Agent | `Default` 使用正常执行配置，不读取专用 Role | `general.toml` 已删除 |
-| Issue 入口 | 页面通过通用 Session 创建契约选择 `issue` | TUI 已接入，旧执行工作流已移除 |
-| 默认 worker | 选择 `Default`，不继承父 Role 的协调职责 | 关键词匹配已删除，完整历史继承也保留角色隔离 |
-| 模型专化 | Generic 或准确模型指导，收益经评测后确认 | 内置模型的规格与完整基础正文在 models.json 同一条目维护；效果未评测，见下文 |
-| 本地性能 | 分别测选择、组装、持久化和并发 | 已测选择与组合，见 [本轮数据](benchmarks/agent-instructions-2026-09-09.md)；内存和磁盘启动仍待测 |
-| 模型行为 | 同模型、同 Role、同工具下比较模板 | 尚无任务成功率和成本实测 |
-| 文档维护 | 设计、当前实现、实验结果分别标注 | 本文建立初始记录 |
+| 项目        | 设计决定                                    | 证据状态                                                                                         |
+| ----------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 指令组合    | 共同规则、当前协作模式与当前 Role 分开组合  | 五种协作模式按 Turn 冻结；Role 已接入根、子 Thread 和审查 Turn                                   |
+| 默认 Agent  | `Default` 使用正常执行配置，不读取专用 Role | `general.toml` 已删除                                                                            |
+| Issue 入口  | 页面通过通用 Session 创建契约选择 `issue`   | TUI 已接入，旧执行工作流已移除                                                                   |
+| 默认 worker | 选择 `Default`，不继承父 Role 的协调职责    | 关键词匹配已删除，完整历史继承也保留角色隔离                                                     |
+| 模型专化    | Generic 或准确模型指导，收益经评测后确认    | 内置模型的规格与完整基础正文在 models.json 同一条目维护；效果未评测，见下文                      |
+| 本地性能    | 分别测选择、组装、持久化和并发              | 已测选择与组合，见 [本轮数据](benchmarks/agent-instructions-2026-09-09.md)；内存和磁盘启动仍待测 |
+| 模型行为    | 同模型、同 Role、同工具下比较模板           | 尚无任务成功率和成本实测                                                                         |
+| 文档维护    | 设计、当前实现、实验结果分别标注            | 本文建立初始记录                                                                                 |
 
 ## 组合契约
 
 组合发生在共同规则、协作模式、模型指导与角色职责之间；模式决定当前 Turn 的处理方式，Role 决定 Agent 的职责和执行能力。更换模式不更换 Role，也不改变工具授权。一个 Role 不能撤掉共同约束，也不能通过正文授予工具、目录或外部服务权限。
 
-| 内容 | 表达什么 | 目标 owner |
-| --- | --- | --- |
-| 基础提示词 | 保留无关修改、核验交付、如实报告、遵守宿主授权 | models.json 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
-| 协作模式 | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式 | Collaboration Mode Templates；模式标识由 Protocol 定义 |
-| 模型差异 | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | models.json；Models Manager 选择并冻结 |
-| Role | 协调、实现、审查等当前职责和交付要求 | Agent Roles |
-| 工具与运行信息 | 实际可调用工具、环境、父子关系和取消状态 | 各执行领域；Core 组装 |
-| 目录规则、Skill、任务材料 | 已授权规则与任务上下文，保留各自来源和层级 | 既有 Instructions、Skill 与任务 owner |
+| 内容                      | 表达什么                                                         | 目标 owner                                                         |
+| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 基础提示词                | 保留无关修改、核验交付、如实报告、遵守宿主授权                   | models.json 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
+| 协作模式                  | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式        | Collaboration Mode Templates；模式标识由 Protocol 定义             |
+| 模型差异                  | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | models.json；Models Manager 选择并冻结                             |
+| Role                      | 协调、实现、审查等当前职责和交付要求                             | Agent Roles                                                        |
+| 工具与运行信息            | 实际可调用工具、环境、父子关系和取消状态                         | 各执行领域；Core 组装                                              |
+| 目录规则、Skill、任务材料 | 已授权规则与任务上下文，保留各自来源和层级                       | 既有 Instructions、Skill 与任务 owner                              |
 
 - 共同规则不写“必须亲自编码”或“必须委托”。这些是职责选择，会与 `issue` 等角色冲突。
 - `Default` 不加载专用 Role 正文。正常执行能力来自共同规则、任务和实际工具，不依赖额外的通用 worker 文件。
@@ -47,17 +47,17 @@
 
 本次按本地 Codex 提交 `73a1148c9c775c2a4616ce5096291740a00ed68a` 的 `codex-rs/prompts` 逐项核对，并按 Ash 已有执行入口补齐。下表维护采用范围，不以目录或文件数相同作为完成标准。
 
-| Codex 资产/模块 | Ash 对应入口 | 当前差异与接线 |
-| --- | --- | --- |
-| `collaboration-mode-templates`、`ModeKind` 与 Core 模式上下文 | [`ash-collaboration-mode-templates`](../collaboration-mode-templates/README.md)、`CollaborationMode`、Turn 指令组合 | 五种模式各有独立文本；App Server 把选中的模板与当前 Agent 指令冻结进新 Turn，不替换共同规则或 Role |
-| `permissions_instructions` 与 `templates/permissions` | [`permissions_instructions`](../prompts/src/permissions.rs) | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
-| 沙箱 read-only/workspace-write/full-access | `templates/permissions/actions.md` | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态 |
-| approval never/on-request/unless-trusted、扩展权限工具 | `templates/permissions/approval/*` | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具 |
-| compact prompt / summary prefix | [`compact.rs`](../prompts/src/compact.rs) | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容 |
-| review rubric / review request | [角色正文](../agent-roles/assets/reviewer.md)、[目标渲染](../prompts/src/review.rs) | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标 |
-| review exit success / interrupted | `review_exit_prompt` | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制 |
-| 普通 Turn 中断说明 | `TURN_INTERRUPTED_PROMPT` | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起 |
-| realtime start / end / backend | 尚未接入 | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板 |
+| Codex 资产/模块                                               | Ash 对应入口                                                                                                        | 当前差异与接线                                                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `collaboration-mode-templates`、`ModeKind` 与 Core 模式上下文 | [`ash-collaboration-mode-templates`](../collaboration-mode-templates/README.md)、`CollaborationMode`、Turn 指令组合 | 五种模式各有独立文本；App Server 把选中的模板与当前 Agent 指令冻结进新 Turn，不替换共同规则或 Role      |
+| `permissions_instructions` 与 `templates/permissions`         | [`permissions_instructions`](../prompts/src/permissions.rs)                                                         | 共同动作授权说明 + AskPermissions/AutoReview/BypassPermissions；Core 每次组装根据已保存的 Turn 模式选择 |
+| 沙箱 read-only/workspace-write/full-access                    | `templates/permissions/actions.md`                                                                                  | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态         |
+| approval never/on-request/unless-trusted、扩展权限工具        | `templates/permissions/approval/*`                                                                                  | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具                                                |
+| compact prompt / summary prefix                               | [`compact.rs`](../prompts/src/compact.rs)                                                                           | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容                            |
+| review rubric / review request                                | [角色正文](../agent-roles/assets/reviewer.md)、[目标渲染](../prompts/src/review.rs)                                 | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标                    |
+| review exit success / interrupted                             | `review_exit_prompt`                                                                                                | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制            |
+| 普通 Turn 中断说明                                            | `TURN_INTERRUPTED_PROMPT`                                                                                           | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起                                          |
+| realtime start / end / backend                                | 尚未接入                                                                                                            | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板                            |
 
 参考源码：[模块与导出](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/lib.rs)、[权限组装](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/permissions_instructions.rs)、[审查结束](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/review_exit.rs)、[实时语音资产入口](https://github.com/openai/codex/blob/73a1148c9c775c2a4616ce5096291740a00ed68a/codex-rs/prompts/src/realtime.rs)。
 
@@ -92,16 +92,16 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
     → ModelRequest
 ```
 
-| 边界 | 要求 |
-| --- | --- |
-| 输入 | 使用启动阶段选定的 provider/model；不读取 UI 模型标签或任务关键词 |
-| 匹配 | 当前只按准确 provider/model 匹配，重复登记时报错；未实现模型族或名称前缀匹配 |
-| 通用路径 | 没有登记专化规则时显式返回 `Generic`；它不代表模型被替换 |
-| 错误 | 已选专化资产损坏、摘要不符或不兼容时返回错误；不能悄悄改用其他模板 |
-| 输出 | 持久化准确模型、资产 ID/revision/正文及摘要；与 Turn 模型不一致时拒绝 |
-| 权限 | 适配内容不能增加工具、Skill、目录、凭据或委托权限 |
-| 依赖 | 模型选择不依赖 Core、Role catalog、Thread 或实时工具执行对象 |
-| 热路径 | 同一输入解析结果可复用；不在每次模型调用前扫描目录或查询外网 |
+| 边界     | 要求                                                                         |
+| -------- | ---------------------------------------------------------------------------- |
+| 输入     | 使用启动阶段选定的 provider/model；不读取 UI 模型标签或任务关键词            |
+| 匹配     | 当前只按准确 provider/model 匹配，重复登记时报错；未实现模型族或名称前缀匹配 |
+| 通用路径 | 没有登记专化规则时显式返回 `Generic`；它不代表模型被替换                     |
+| 错误     | 已选专化资产损坏、摘要不符或不兼容时返回错误；不能悄悄改用其他模板           |
+| 输出     | 持久化准确模型、资产 ID/revision/正文及摘要；与 Turn 模型不一致时拒绝        |
+| 权限     | 适配内容不能增加工具、Skill、目录、凭据或委托权限                            |
+| 依赖     | 模型选择不依赖 Core、Role catalog、Thread 或实时工具执行对象                 |
+| 热路径   | 同一输入解析结果可复用；不在每次模型调用前扫描目录或查询外网                 |
 
 模型族必须来自可核实的目录事实或代码内明确登记的映射，不能因为名称相似就认定兼容。模型别名指向变化时记录供应商实际返回的模型；无法确定具体版本的结果单独标注，不与固定版本混算。
 
@@ -109,12 +109,12 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 ### 允许的专化范围
 
-| 候选 | 评价 | 采用条件 |
-| --- | --- | --- |
-| 所有模型共享同一模板 | 最少维护成本，作为实验对照 | 每个支持模型完成能力与行为验证 |
-| 共同规则加模型指导 | 原方案，已改为完整基础正文 | 历史冻结资产保持原组合含义 |
-| 每个模型维护完整基础提示词 | 当前采用；每个模型可独立修改 | Role、权限与模式仍独立，公共要求修改要同步适用条目 |
-| 任意 section 覆盖或运行脚本改写提示词 | 扩大验证面、增加组合歧义 | 不作为普通 Role 或 Plugin 能力 |
+| 候选                                  | 评价                         | 采用条件                                           |
+| ------------------------------------- | ---------------------------- | -------------------------------------------------- |
+| 所有模型共享同一模板                  | 最少维护成本，作为实验对照   | 每个支持模型完成能力与行为验证                     |
+| 共同规则加模型指导                    | 原方案，已改为完整基础正文   | 历史冻结资产保持原组合含义                         |
+| 每个模型维护完整基础提示词            | 当前采用；每个模型可独立修改 | Role、权限与模式仍独立，公共要求修改要同步适用条目 |
+| 任意 section 覆盖或运行脚本改写提示词 | 扩大验证面、增加组合歧义     | 不作为普通 Role 或 Plugin 能力                     |
 
 当前模型条目提供完整基础提示词，上限 64 KiB；空白资产、重复登记或不一致的已保存摘要会失败。没有引入通用模板语言、动态注册中心、模型族匹配或工具条件模板。增加这些能力必须有具体消费者、兼容规则和对应评测，不能用未经验证的隐式规则代替。
 
@@ -130,12 +130,12 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 这些初始正文尚未做真实模型效果评测。以下保留原指导的设计假设与来源，来源复核日期为 2026-09-09，不代表本轮验证了远端型号的在线可用性。
 
-| 初始指导来源 | 设计假设与参考 |
-| --- | --- |
-| GPT | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 指导](https://developers.openai.com/api/docs/guides/latest-model) |
-| Claude | 明确所需产物并限制额外工程化；参考 [Claude 提示词指导](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) 的通用原则 |
-| Gemini | 简洁指令、明确当前任务、证据与目标格式；参考 [Gemini 3 指导](https://ai.google.dev/gemini-api/docs/gemini-3) |
-| 工具调用 | 执行参数与回答分离，等待实际结果后继续；参考 Ash 工具通道和 [Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling) |
+| 初始指导来源 | 设计假设与参考                                                                                                                                                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GPT          | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 指导](https://developers.openai.com/api/docs/guides/latest-model) |
+| Claude       | 明确所需产物并限制额外工程化；参考 [Claude 提示词指导](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) 的通用原则                                                             |
+| Gemini       | 简洁指令、明确当前任务、证据与目标格式；参考 [Gemini 3 指导](https://ai.google.dev/gemini-api/docs/gemini-3)                                                                                                                            |
+| 工具调用     | 执行参数与回答分离，等待实际结果后继续；参考 Ash 工具通道和 [Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling)                                                                                             |
 
 正文不授予权限或代替 Role，也不能通过文字调整 API 设置。DeepSeek 的 `reasoning_content` 和 Gemini 思考签名的保存与重放仍属于供应商 adapter。[DeepSeek 文档](https://api-docs.deepseek.com/guides/thinking_mode/)、[Gemini 文档](https://ai.google.dev/gemini-api/docs/gemini-3)
 
@@ -162,11 +162,11 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 ### 先区分三种成本
 
-| 范围 | 要测什么 | 不能据此推出什么 |
-| --- | --- | --- |
-| 本地处理 | catalog 解析、选择、集合过滤、正文渲染、请求序列化、日志提交 | 字符串组装快不代表模型任务更快 |
-| 模型调用 | 输入/输出用量、首个有效输出、调用时长、缓存读取和写入 | 首 token 快不代表工作更早完成 |
-| 整项任务 | 成功率、完成时间、全部调用、工具与协调开销 | 子 Agent 的耗时不能直接相加当作墙钟时间 |
+| 范围     | 要测什么                                                     | 不能据此推出什么                        |
+| -------- | ------------------------------------------------------------ | --------------------------------------- |
+| 本地处理 | catalog 解析、选择、集合过滤、正文渲染、请求序列化、日志提交 | 字符串组装快不代表模型任务更快          |
+| 模型调用 | 输入/输出用量、首个有效输出、调用时长、缓存读取和写入        | 首 token 快不代表工作更早完成           |
+| 整项任务 | 成功率、完成时间、全部调用、工具与协调开销                   | 子 Agent 的耗时不能直接相加当作墙钟时间 |
 
 对一次任务，墙钟耗时按实际执行时间线和依赖的最长路径计算；总用量按根 Thread 与全部后代的调用求和。重试、失败、压缩、协调和验证调用都计入，不能只统计最终 worker。
 
@@ -190,12 +190,12 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 ### 分开比较四个问题
 
-| 实验 | 固定条件 | 唯一主要变量 |
-| --- | --- | --- |
-| 组合器开销 | 完全相同的最终消息与工具 schema | 预组装输入与真实分段组装路径 |
-| 模型专化收益 | 同一模型、Role、任务、工具、权限、推理/服务配置 | 通用指导与候选模型指导 |
-| Role 收益 | 同一模型、任务和可授权能力 | 是否应用专用职责；单独报告工具集合变化 |
-| 委托拓扑收益 | 同一任务、验收与总资源上限 | 单 Agent、协调加一个 worker、协调加多个 worker |
+| 实验         | 固定条件                                        | 唯一主要变量                                   |
+| ------------ | ----------------------------------------------- | ---------------------------------------------- |
+| 组合器开销   | 完全相同的最终消息与工具 schema                 | 预组装输入与真实分段组装路径                   |
+| 模型专化收益 | 同一模型、Role、任务、工具、权限、推理/服务配置 | 通用指导与候选模型指导                         |
+| Role 收益    | 同一模型、任务和可授权能力                      | 是否应用专用职责；单独报告工具集合变化         |
+| 委托拓扑收益 | 同一任务、验收与总资源上限                      | 单 Agent、协调加一个 worker、协调加多个 worker |
 
 不同模型之间的成绩用于判断覆盖范围，不能直接归因为模板收益。不同拓扑之间的成绩用于评估协调成本，不能与纯提示词对照混成一个分数。
 
@@ -205,13 +205,13 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 复用当前 Rust owner 的测试设施，不新增另一套 Agent runtime。现有离线入口可在优化测试构建下快速复核；正式发布性能验证另用明确记录的 release 构建，不能混用结果。现有 [planner tests](../core/src/context/planner_tests.rs) 与 [Role 集成测试](../app-server/src/server/agent_session_tests.rs) 是行为设施，不能把它们的通过时间当成 benchmark 结果。
 
-| 场景 | 首轮输入规模 | 测量边界 |
-| --- | --- | --- |
-| Role 与模板选择 | 1、16、128 个 Role；Generic 与准确专化 | 预加载 catalog 到选中配置 |
-| 工具与 Skill | 16、128、512 个工具；0、8、32 个 Skill | 校验、集合收窄与片段生成 |
-| 上下文组装 | 0、32、256 KiB 历史正文；短/长 Role | 计划、预算估计与请求序列化 |
-| 生命周期 | 新建、复用、恢复、压缩后继续 | 指令恢复与持久化分别计时 |
-| 并发和缓存 | 1、4、16 个并发；命中、失效、淘汰 | 延迟、分配与进程内存增长 |
+| 场景            | 首轮输入规模                           | 测量边界                   |
+| --------------- | -------------------------------------- | -------------------------- |
+| Role 与模板选择 | 1、16、128 个 Role；Generic 与准确专化 | 预加载 catalog 到选中配置  |
+| 工具与 Skill    | 16、128、512 个工具；0、8、32 个 Skill | 校验、集合收窄与片段生成   |
+| 上下文组装      | 0、32、256 KiB 历史正文；短/长 Role    | 计划、预算估计与请求序列化 |
+| 生命周期        | 新建、复用、恢复、压缩后继续           | 指令恢复与持久化分别计时   |
+| 并发和缓存      | 1、4、16 个并发；命中、失效、淘汰      | 延迟、分配与进程内存增长   |
 
 这些数字是建议的评测矩阵，不是产品限制，也不表示本轮已执行全部场景。本轮入口已覆盖 Role 数量、工具数量、短/长 Role 和模型指导准确查找；Skill 数量、历史规模、磁盘与内存仍需单独测量。
 
@@ -225,14 +225,14 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 任务集应来自真实失败与产品使用，固定仓库提交、输入、验收和允许副作用；开发集用于调提示词，保留集用于判断是否接受变化。先规定验收，再运行模型。[评测方法参考](https://platform.claude.com/docs/en/test-and-evaluate/develop-tests)
 
-| 任务类别 | 必须覆盖的行为 |
-| --- | --- |
-| 普通编码 | 小修复、跨模块修改、测试失败定位、保留无关工作 |
-| Issue 协调 | 单 Issue、独立多 Issue、共同根因、有依赖的任务 |
-| 角色边界 | 默认 worker 不携带父角色、reviewer 只审查、失败不能冒充完成 |
-| 能力变化 | 缺 Skill、工具未连接、权限撤销、动态工具发现 |
-| 上下文 | 中文/英文、长历史、压缩、恢复、角色文件更新后的旧 Thread |
-| 外部数据 | Issue 中包含角色替换或扩大权限的文字；内容仍作为任务材料 |
+| 任务类别   | 必须覆盖的行为                                              |
+| ---------- | ----------------------------------------------------------- |
+| 普通编码   | 小修复、跨模块修改、测试失败定位、保留无关工作              |
+| Issue 协调 | 单 Issue、独立多 Issue、共同根因、有依赖的任务              |
+| 角色边界   | 默认 worker 不携带父角色、reviewer 只审查、失败不能冒充完成 |
+| 能力变化   | 缺 Skill、工具未连接、权限撤销、动态工具发现                |
+| 上下文     | 中文/英文、长历史、压缩、恢复、角色文件更新后的旧 Thread    |
+| 外部数据   | Issue 中包含角色替换或扩大权限的文字；内容仍作为任务材料    |
 
 外部 Issue/PR 的主要评测使用固定 fixture 与受控工具服务，以免内容更新、网络与真实外部写入干扰对照。真实连接测试另设受控仓库，并单独报告。不能为跑评测向用户的实际 Issue 发布评论。
 
@@ -244,17 +244,17 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 ### 必须报告的指标
 
-| 指标 | 口径 |
-| --- | --- |
-| 任务通过率 | 全部已启动运行中满足预先定义验收的比例；超时和失败保留，未启动或跳过的任务另列 |
-| 角色/权限违规 | 分开记录模型尝试越权与执行层实际放行；通过样本不等于证明永无违规 |
-| 完成时间 | 从接受任务到验收结束；另列模型、工具、排队、人工等待和协调时间 |
-| 首个有效输出 | 请求发出到首次文本或工具调用事件；不得把心跳当首 token |
-| 调用与工具次数 | 根和全部后代、重试、压缩、验证均计入 |
-| 用量 | 输入、输出、推理、缓存读取/写入；供应商缺失字段保持未知 |
-| 参考成本 | 全部尝试的参考成本；完整度与未计价原因同时报告 |
-| 每个成功任务成本 | 全部尝试参考成本总和 / 成功数；失败成本也进入分子，零成功时不定义 |
-| 工程开销 | 本地组装 p50/p95/p99、内存和请求大小 |
+| 指标             | 口径                                                                           |
+| ---------------- | ------------------------------------------------------------------------------ |
+| 任务通过率       | 全部已启动运行中满足预先定义验收的比例；超时和失败保留，未启动或跳过的任务另列 |
+| 角色/权限违规    | 分开记录模型尝试越权与执行层实际放行；通过样本不等于证明永无违规               |
+| 完成时间         | 从接受任务到验收结束；另列模型、工具、排队、人工等待和协调时间                 |
+| 首个有效输出     | 请求发出到首次文本或工具调用事件；不得把心跳当首 token                         |
+| 调用与工具次数   | 根和全部后代、重试、压缩、验证均计入                                           |
+| 用量             | 输入、输出、推理、缓存读取/写入；供应商缺失字段保持未知                        |
+| 参考成本         | 全部尝试的参考成本；完整度与未计价原因同时报告                                 |
+| 每个成功任务成本 | 全部尝试参考成本总和 / 成功数；失败成本也进入分子，零成功时不定义              |
+| 工程开销         | 本地组装 p50/p95/p99、内存和请求大小                                           |
 
 用量字段的包含关系与参考成本归一化直接遵循 [模型记账](model-accounting.md)，不在评测脚本复制计价规则。订阅用量不能套 API 单价冒充实际账单。
 
@@ -278,12 +278,12 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 下面记录的是源码或公开文档可确认的行为；“采用/不采用”是 Ash 的设计判断，不是外部产品之间的性能排名。复核日期均为 2026-09-09。
 
-| 产品与路径 | 已确认的做法 | Ash 采用 | 不直接复制 |
-| --- | --- | --- | --- |
-| Codex 子代理 Role | 基础指令与 Role 配置分开；Role 应用受限配置覆盖；内置 default 无独立配置文件 | 默认执行与专用角色分开，复用执行系统 | 整个会话配置格式作为 Role、同名覆盖语义 |
-| Claude Code 专用 Agent | `--agent` 可选择主代理；专用提示词替换默认产品提示词；普通专用子代理另装环境上下文 | 同一定义可用于根或委托，职责清楚 | 把整篇基础指导的维护责任交给每个 Role |
-| VS Code 本地 Copilot | 按模型选择基础提示词，再加入 `modeInstructions` | 模型与 Role 是独立维度 | 未指定子代理时继承当前 Role、只靠文字声明覆盖上文 |
-| VS Code Copilot Agent Host | Session 的 `agent` 与 `systemMessage` 分开；支持分段定制和模型贡献 | 创建时选择角色、有限组合、独立运行信息 | 普通 Role 任意覆盖全部段落、实验设置的宽泛改写能力 |
+| 产品与路径                 | 已确认的做法                                                                       | Ash 采用                               | 不直接复制                                         |
+| -------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------- |
+| Codex 子代理 Role          | 基础指令与 Role 配置分开；Role 应用受限配置覆盖；内置 default 无独立配置文件       | 默认执行与专用角色分开，复用执行系统   | 整个会话配置格式作为 Role、同名覆盖语义            |
+| Claude Code 专用 Agent     | `--agent` 可选择主代理；专用提示词替换默认产品提示词；普通专用子代理另装环境上下文 | 同一定义可用于根或委托，职责清楚       | 把整篇基础指导的维护责任交给每个 Role              |
+| VS Code 本地 Copilot       | 按模型选择基础提示词，再加入 `modeInstructions`                                    | 模型与 Role 是独立维度                 | 未指定子代理时继承当前 Role、只靠文字声明覆盖上文  |
+| VS Code Copilot Agent Host | Session 的 `agent` 与 `systemMessage` 分开；支持分段定制和模型贡献                 | 创建时选择角色、有限组合、独立运行信息 | 普通 Role 任意覆盖全部段落、实验设置的宽泛改写能力 |
 
 证据固定到可复核版本：
 
@@ -298,11 +298,11 @@ OpenAI 的官方指导强调稳定前缀与显式变量；Anthropic 的缓存包
 
 以下是实施前的历史统计，其中旧路径已退场，不代表当前目录。工作区基线为 `eb9885c445fdd7192c41d757bb2f5e5d7ce954bd` 加已有未提交修改，因此以下记录使用文件内容摘要，不能仅凭提交号复现。统计读取 UTF-8 文件；Role 只统计去除首尾空白后的 `developer_instructions` 正文，与当前 Role 正文归一化一致。
 
-| 资产 | 文件字节 | 指令正文字节 | Unicode 字符 |
-| --- | ---: | ---: | ---: |
-| `models-manager/templates/instructions/base.md` | 1933 | 1933 | 1933 |
-| `agent-roles/assets/builtins/issue.toml` | 2170 | 1701 | 1701 |
-| `agent-roles/assets/builtins/general.toml` | 371 | 192 | 192 |
+| 资产                                            | 文件字节 | 指令正文字节 | Unicode 字符 |
+| ----------------------------------------------- | -------: | -----------: | -----------: |
+| `models-manager/templates/instructions/base.md` |     1933 |         1933 |         1933 |
+| `agent-roles/assets/builtins/issue.toml`        |     2170 |         1701 |         1701 |
+| `agent-roles/assets/builtins/general.toml`      |      371 |          192 |          192 |
 
 ```text
 base.md sha256:b17c0ad39ee04614337b613f40699c963d016b331ee59827817f8a099b059952
@@ -312,27 +312,27 @@ general.toml sha256:98bed24189700a9d836b2217f32e85f9d3cb3d5da234782d549cdcc00e91
 
 这三段历史正文均为 ASCII，所以 UTF-8 字节数与字符数相同。数字不包含角色标签、工具 schema、目录规则、Skill、历史或供应商消息包装，不能当作完整请求大小，更不能按固定字节/token 比例换算成实测用量。
 
-| 验证 | 本次状态 |
-| --- | --- |
-| 外部源码与公开文档核对 | 已完成，参考版本见上节 |
-| 静态正文规模 | 已统计，内容摘要见上表 |
-| 当前本地选择与组装耗时 | 已完成优化测试构建测量，见 [报告及原始样本](benchmarks/agent-instructions-2026-09-09.md) |
-| 分配、峰值内存和磁盘启动 benchmark | 未执行 |
-| 模型任务集、缓存命中、参考成本比较 | 未执行 |
-| 组合方案已提升质量或性能 | 尚无实验证据 |
+| 验证                               | 本次状态                                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| 外部源码与公开文档核对             | 已完成，参考版本见上节                                                                   |
+| 静态正文规模                       | 已统计，内容摘要见上表                                                                   |
+| 当前本地选择与组装耗时             | 已完成优化测试构建测量，见 [报告及原始样本](benchmarks/agent-instructions-2026-09-09.md) |
+| 分配、峰值内存和磁盘启动 benchmark | 未执行                                                                                   |
+| 模型任务集、缓存命中、参考成本比较 | 未执行                                                                                   |
+| 组合方案已提升质量或性能           | 尚无实验证据                                                                             |
 
 ## 文档与实验的维护
 
 ### 资料分工
 
-| 资料 | 维护内容 |
-| --- | --- |
-| 本文 | 组合和适配设计、外部取舍、评测方法、已接受决定与证据入口 |
+| 资料                                                    | 维护内容                                                                   |
+| ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 本文                                                    | 组合和适配设计、外部取舍、评测方法、已接受决定与证据入口                   |
 | [模式 crate](../collaboration-mode-templates/README.md) | 五种模式的统一行为、Multitask 边界、队列、子任务、参考资料与自定义模式候选 |
-| `docs/agents.md` | Role 选择、定义及启动契约；当前实现单独标注 |
-| 所属 crate README | 当前职责、真实入口和已实现状态；不提前写成已迁移 |
-| 模板源码 | 唯一可执行正文、revision 与对应测试；文档不复制整篇正文 |
-| 实验记录 | 固定输入、运行配置、原始结果、评分规则、统计和接受决定 |
+| `docs/agents.md`                                        | Role 选择、定义及启动契约；当前实现单独标注                                |
+| 所属 crate README                                       | 当前职责、真实入口和已实现状态；不提前写成已迁移                           |
+| 模板源码                                                | 唯一可执行正文、revision 与对应测试；文档不复制整篇正文                    |
+| 实验记录                                                | 固定输入、运行配置、原始结果、评分规则、统计和接受决定                     |
 
 评测的可审阅摘要放在 `ash-rs/docs/benchmarks/`，仅在产生结果时创建。大体积 trace 与原始数据放在仓库既有或明确配置的实验产物位置，摘要必须记录可访问地址、内容摘要和保存期限；临时目录不能成为长期证据入口。
 
@@ -367,16 +367,16 @@ aggregate_and_intervals / failure_examples / artifacts_and_digests / decision
 
 ## 实现入口与兼容性
 
-| 位置 | 当前职责 |
-| --- | --- |
-| `prompts/src/agent.rs`、`prompts/templates/agent/base_prompt.md` | 未登记模型的默认基础正文与 revision |
-| `protocol/src/agent.rs` | Default/Exact 选择、共享 AgentConfiguration 与工具/Skill 上限 |
-| `protocol/src/turn/instructions.rs` | 扁平共享资产、独立模式资产、模型指导与持久化校验 |
-| `app-server/src/server/agent_selection.rs` | 根、子 Thread 共用的准确来源解析和根 Skill 依赖准备 |
-| `model-provider-info/models.json`、`models-manager/src/instructions.rs` | 模型规格和完整正文登记、准确选择与新 Turn 冻结 |
-| `core/src/thread_controller.rs` | 根配置与创建事实同批写入、幂等重放 |
-| `core/src/multi_agent` | 角色隔离、委托恢复、上下文、并发和能力上限 |
-| `code/tui/src/issues` | Issue 浏览与通用 Session 创建、稳定首 Turn 请求 |
+| 位置                                                                    | 当前职责                                                      |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `prompts/src/agent.rs`、`prompts/templates/agent/base_prompt.md`        | 未登记模型的默认基础正文与 revision                           |
+| `protocol/src/agent.rs`                                                 | Default/Exact 选择、共享 AgentConfiguration 与工具/Skill 上限 |
+| `protocol/src/turn/instructions.rs`                                     | 扁平共享资产、独立模式资产、模型指导与持久化校验              |
+| `app-server/src/server/agent_selection.rs`                              | 根、子 Thread 共用的准确来源解析和根 Skill 依赖准备           |
+| `model-provider-info/models.json`、`models-manager/src/instructions.rs` | 模型规格和完整正文登记、准确选择与新 Turn 冻结                |
+| `core/src/thread_controller.rs`                                         | 根配置与创建事实同批写入、幂等重放                            |
+| `core/src/multi_agent`                                                  | 角色隔离、委托恢复、上下文、并发和能力上限                    |
+| `code/tui/src/issues`                                                   | Issue 浏览与通用 Session 创建、稳定首 Turn 请求               |
 
 协议主版本为 2，Session/Thread/Turn capability version 为 4；旧后端必须在握手时拒绝，不能忽略角色字段后执行默认 Agent。新历史记录使用 schema 15，保留读取 12–14 的支持；旧执行器不能读取新记录并丢弃根角色约束。旧种子的冻结指令仍用于恢复，不根据已删除的 general 文件重新生成。
 
@@ -392,21 +392,21 @@ App Server 默认使用 `ModelInstructionCatalog::built_in()`。`AppServer::with
 
 本轮主要行为包括：根角色原子创建与重试、Default 不按关键词选角色、子 Agent 不继承父 Role/审查指令、权限上限与 Code Mode 内层过滤、并发预留及完成后释放名额、Skill 缺失拒绝、旧配置迁移、Issue 浏览与普通 Session 启动。测试均使用固定模型响应或本地 fixture，未向真实 Issue/PR 写入内容。
 
-| 验证入口 | 本轮结果 |
-| --- | --- |
-| `just test ash-core` | 204 项通过；离线 benchmark 默认忽略，另行运行 |
-| `just test ash-app-server agent_`、`review_turn_freezes` | 36 项 Agent 回归和 1 项审查组合测试通过 |
-| `just test ash-app-server` | 340 项通过、1 项失败、1 项 benchmark 忽略；失败说明见下文 |
-| `just test ash-app-server-protocol` | 42 项库测试和 3 项生成器测试通过，包含 schema/TypeScript 一致性与旧主版本拒绝 |
-| `just test ash-protocol`、`ash-models-manager`、`ash-prompts` | 分别 39、13、7 项通过 |
-| `just test ash-app-server-client`、`ash-agent-roles`、`ash-github` | 分别 42、5、10 项通过 |
-| `just test ash-config`、`ash-state`、`ash-history` | 分别 57、24、2 项通过 |
-| `just test ash-tui` | 全量运行中 797 项通过；新增 PR 快照审阅接受后，对应单项复核通过（合计 798 项）；1 项需要独立终端的既有测试忽略 |
-| `just test-tui actual_tui_issue_` | 3 项真实 PTY 场景通过：浏览/缓存恢复、缺 Skill 拒绝、刷新配置跨重启 |
-| `just check ash-app-server`、`ash-tui`、`ash-session`、`ash-exec` | 正常编译检查通过；本轮最终构建无新增 warning |
-| 桌面会话适配层独立 TypeScript 检查 | 通过；`session/create` 显式传入 Default |
-| 完整 Renderer TypeScript 检查 | 未通过，既有聊天类型与调试模块导出错误仍在 |
-| 文档及格式 | 本地链接有效；修改的 Rust 文件格式检查通过；无待接受快照 |
+| 验证入口                                                           | 本轮结果                                                                                                       |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `just test ash-core`                                               | 204 项通过；离线 benchmark 默认忽略，另行运行                                                                  |
+| `just test ash-app-server agent_`、`review_turn_freezes`           | 36 项 Agent 回归和 1 项审查组合测试通过                                                                        |
+| `just test ash-app-server`                                         | 340 项通过、1 项失败、1 项 benchmark 忽略；失败说明见下文                                                      |
+| `just test ash-app-server-protocol`                                | 42 项库测试和 3 项生成器测试通过，包含 schema/TypeScript 一致性与旧主版本拒绝                                  |
+| `just test ash-protocol`、`ash-models-manager`、`ash-prompts`      | 分别 39、13、7 项通过                                                                                          |
+| `just test ash-app-server-client`、`ash-agent-roles`、`ash-github` | 分别 42、5、10 项通过                                                                                          |
+| `just test ash-config`、`ash-state`、`ash-history`                 | 分别 57、24、2 项通过                                                                                          |
+| `just test ash-tui`                                                | 全量运行中 797 项通过；新增 PR 快照审阅接受后，对应单项复核通过（合计 798 项）；1 项需要独立终端的既有测试忽略 |
+| `just test-tui actual_tui_issue_`                                  | 3 项真实 PTY 场景通过：浏览/缓存恢复、缺 Skill 拒绝、刷新配置跨重启                                            |
+| `just check ash-app-server`、`ash-tui`、`ash-session`、`ash-exec`  | 正常编译检查通过；本轮最终构建无新增 warning                                                                   |
+| 桌面会话适配层独立 TypeScript 检查                                 | 通过；`session/create` 显式传入 Default                                                                        |
+| 完整 Renderer TypeScript 检查                                      | 未通过，既有聊天类型与调试模块导出错误仍在                                                                     |
+| 文档及格式                                                         | 本地链接有效；修改的 Rust 文件格式检查通过；无待接受快照                                                       |
 
 App Server 完整测试中的 `local::tests::custom_provider_catalog_fetch_is_explicit_and_feeds_model_selection` 在“刷新前不存在该 provider 条目”的断言失败，单独重跑仍失败。本轮未修改 `local.rs` 的模型目录读取实现或该测试，不通过更改其断言来掩盖结果。
 

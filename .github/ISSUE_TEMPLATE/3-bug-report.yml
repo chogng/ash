@@ -1,7 +1,7 @@
 name: 🪲 Other Bug
 description: Report an issue in
 labels:
-- bug
+  - bug
 body:
   - type: markdown
     attributes:

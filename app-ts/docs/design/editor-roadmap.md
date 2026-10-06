@@ -16,17 +16,17 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 **目前没有全部对上。**[API 对齐台账](../../src/ash/editor/api-alignment-status.md)仍有待处理项，结构检查发现同名也不等于行为正确。每做一个功能，都要把 VS Code 同路径的公开导出、类/接口成员、命令或注册 ID，与 Ash 当前公开面逐项对应；同时核对大小写、参数和返回类型、事件、取消、释放及真实调用方。对照结果只能记为“已验收”“待补”“Ash 专属”或“职责冲突待决定”，不能把只存在同名声明记为已验收。
 
-| 部分 | 优先核对的 VS Code 同路径公开面 |
-| --- | --- |
-| 0 入口与装配 | `editor.api.ts`、`editor.all.ts`、`browser/widget/codeEditor/codeEditorWidget.ts` |
-| 1 文本与文档内核 | `common/model/textModel.ts`、`common/core/{position,range,selection}.ts` |
-| 2 选区与输入 | `common/cursor/cursor.ts`、`browser/view/viewController.ts`、`browser/controller/editContext/*` |
-| 3 视图与几何 | `browser/view.ts`、`browser/viewParts/*`，包括 `minimap/minimap.ts` |
-| 4 语言与异步结果 | `common/languages.ts`、`common/services/languageFeaturesService.ts` |
-| 5 Code 编辑功能 | 本次功能对应的 `contrib/<feature>` 文件、贡献 ID 和命令 ID |
-| 6 Academic 富文档 | 与行式编辑器共用的 `TextModel` 等公开面；Academic 的 schema 与功能按 Ash 自有契约验收 |
+| 部分                | 优先核对的 VS Code 同路径公开面                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 0 入口与装配        | `editor.api.ts`、`editor.all.ts`、`browser/widget/codeEditor/codeEditorWidget.ts`                          |
+| 1 文本与文档内核    | `common/model/textModel.ts`、`common/core/{position,range,selection}.ts`                                   |
+| 2 选区与输入        | `common/cursor/cursor.ts`、`browser/view/viewController.ts`、`browser/controller/editContext/*`            |
+| 3 视图与几何        | `browser/view.ts`、`browser/viewParts/*`，包括 `minimap/minimap.ts`                                        |
+| 4 语言与异步结果    | `common/languages.ts`、`common/services/languageFeaturesService.ts`                                        |
+| 5 Code 编辑功能     | 本次功能对应的 `contrib/<feature>` 文件、贡献 ID 和命令 ID                                                 |
+| 6 Academic 富文档   | 与行式编辑器共用的 `TextModel` 等公开面；Academic 的 schema 与功能按 Ash 自有契约验收                      |
 | 7 Diff 与多文件审阅 | `browser/widget/diffEditor/diffEditorWidget.ts`、`browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` |
-| 8 宿主与持久化 | `standalone/browser/standaloneEditor.ts`、`workbench/browser/parts/editor/editorPane.ts` |
+| 8 宿主与持久化      | `standalone/browser/standaloneEditor.ts`、`workbench/browser/parts/editor/editorPane.ts`                   |
 
 这张表是核对入口，不表示表中 API 已对齐。Ash 专属的 Code 入口与 Academic 文档配置、`CodeEditorPane`、`DocumentEditorPane` 和 App Server 适配不强行套用 VS Code 名称；共享职责仍须回到上游同路径 owner。具体差异和处理决定只维护在台账中，不在这里复制一份易过期的成员清单。
 
@@ -47,17 +47,17 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 表中的“基础具备”只表示仓库已有实现和测试，不表示该部分已经验收完成。后续部分可以先调查，但实现要沿依赖从下向上闭合。
 
-| 顺序 | 部分 | 主要 owner | 逐项完成的用户行为 | 当前状态 |
-| --- | --- | --- | --- | --- |
-| 0 | 入口与装配 | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget` | 创建、挂载、切换模型、激活贡献、释放 | 0.1–0.4 行为已验收；完整 Widget API 仍待随各分部核对 |
-| 1 | 文本与文档内核 | `common/model`、`common/core` | 编辑、撤销、快照、结构事务、超大文件 | 1.1–1.5 已验收；完整公开 API 仍待随其他分部核对 |
-| 2 | 选区与输入 | `common/cursor`、`browser/controller` | 键盘和指针编辑、多光标、IME、剪贴板 | 2.1–2.4、2.6 已验收；2.5 浏览器事件链已验收，平台输入法待验收 |
-| 3 | 视图与几何 | `common/viewModel`、`common/viewLayout`、`browser/view*` | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 3.1–3.3 已验收；3.4 已验证区域收起与块装饰联动，其余待逐项验收 |
-| 4 | 语言与异步结果 | `common/languages`、`common/services`、语言贡献 | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备 |
-| 5 | Code 编辑功能 | `contrib/<feature>` | 查找、补全、悬停、导航、重命名、代码操作等 | 部分具备 |
-| 6 | Academic 富文档 | `common/model` 的文档语义、`RichTextEditorWidget`、Academic 贡献 | 结构编辑、代码区域、格式、协作 | 部分具备 |
-| 7 | Diff 与多文件审阅 | `DiffModel`、diff/multi-diff widget | 比较、同步滚动、内联差异、多文件审阅 | 部分具备 |
-| 8 | 宿主与持久化 | `standalone`、Workbench editor pane 与服务 | 打开、保存、回退、冲突、恢复、模式切换 | 部分具备 |
+| 顺序 | 部分              | 主要 owner                                                       | 逐项完成的用户行为                         | 当前状态                                                       |
+| ---- | ----------------- | ---------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| 0    | 入口与装配        | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget`           | 创建、挂载、切换模型、激活贡献、释放       | 0.1–0.4 行为已验收；完整 Widget API 仍待随各分部核对           |
+| 1    | 文本与文档内核    | `common/model`、`common/core`                                    | 编辑、撤销、快照、结构事务、超大文件       | 1.1–1.5 已验收；完整公开 API 仍待随其他分部核对                |
+| 2    | 选区与输入        | `common/cursor`、`browser/controller`                            | 键盘和指针编辑、多光标、IME、剪贴板        | 2.1–2.4、2.6 已验收；2.5 浏览器事件链已验收，平台输入法待验收  |
+| 3    | 视图与几何        | `common/viewModel`、`common/viewLayout`、`browser/view*`         | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 3.1–3.3 已验收；3.4 已验证区域收起与块装饰联动，其余待逐项验收 |
+| 4    | 语言与异步结果    | `common/languages`、`common/services`、语言贡献                  | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备                                                       |
+| 5    | Code 编辑功能     | `contrib/<feature>`                                              | 查找、补全、悬停、导航、重命名、代码操作等 | 部分具备                                                       |
+| 6    | Academic 富文档   | `common/model` 的文档语义、`RichTextEditorWidget`、Academic 贡献 | 结构编辑、代码区域、格式、协作             | 部分具备                                                       |
+| 7    | Diff 与多文件审阅 | `DiffModel`、diff/multi-diff widget                              | 比较、同步滚动、内联差异、多文件审阅       | 部分具备                                                       |
+| 8    | 宿主与持久化      | `standalone`、Workbench editor pane 与服务                       | 打开、保存、回退、冲突、恢复、模式切换     | 部分具备                                                       |
 
 ### 0. 入口与装配
 

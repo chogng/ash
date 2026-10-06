@@ -444,11 +444,13 @@ function gitSettings(gitService: IGitService): readonly ISetting[] {
 			configuration: mode as IRegisteredConfiguration<string | boolean>,
 			get title() { return localize('git.autofetch.title', 'Auto Fetch'); },
 			get description() { return localize('git.autofetch.description', 'Periodically fetch updates without changing local branches or files.'); },
-			get options() { return [
-				{ value: false, label: localize('git.autofetch.off', 'Off') },
-				{ value: true, label: localize('git.autofetch.default', 'Default remote') },
-				{ value: 'all', label: localize('git.autofetch.all', 'All remotes') },
-			] as const; },
+			get options() {
+				return [
+					{ value: false, label: localize('git.autofetch.off', 'Off') },
+					{ value: true, label: localize('git.autofetch.default', 'Default remote') },
+					{ value: 'all', label: localize('git.autofetch.all', 'All remotes') },
+				] as const;
+			},
 			binding: {
 				id: mode.key,
 				defaultValue: false,

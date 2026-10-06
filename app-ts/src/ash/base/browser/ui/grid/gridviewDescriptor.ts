@@ -64,9 +64,9 @@ export type SerializedGridViewDescriptor =
 
 export type GridViewSizing =
 	| number
-	| { readonly type: "distribute" }
-	| { readonly type: "split"; readonly index: number }
-	| { readonly type: "invisible"; readonly cachedVisibleSize: number };
+	| { readonly type: "distribute"; }
+	| { readonly type: "split"; readonly index: number; }
+	| { readonly type: "invisible"; readonly cachedVisibleSize: number; };
 
 export function normalizeRootDescriptor(
 	descriptor: GridViewDescriptor<IView>,

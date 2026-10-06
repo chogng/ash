@@ -56,7 +56,7 @@ function createEditorConfiguration(): IEditorConfiguration {
 			return option.validate(undefined) as FindComputedEditorOptionValueById<T>;
 		},
 	};
-	const noChange: Event<ConfigurationChangedEvent> = () => toDisposable(() => {});
+	const noChange: Event<ConfigurationChangedEvent> = () => toDisposable(() => { });
 	return {
 		isSimpleWidget: false,
 		contextMenuId: MenuId.EditorContext,
@@ -64,14 +64,14 @@ function createEditorConfiguration(): IEditorConfiguration {
 		onDidChangeFast: noChange,
 		onDidChange: noChange,
 		getRawOptions: (): IEditorOptions => ({}),
-		updateOptions: () => {},
-		observeContainer: () => {},
-		setIsDominatedByLongLines: () => {},
-		setModelLineCount: () => {},
-		setViewLineCount: () => {},
-		setReservedHeight: () => {},
-		setGlyphMarginDecorationLaneCount: () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		updateOptions: () => { },
+		observeContainer: () => { },
+		setIsDominatedByLongLines: () => { },
+		setModelLineCount: () => { },
+		setViewLineCount: () => { },
+		setReservedHeight: () => { },
+		setGlyphMarginDecorationLaneCount: () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 }

@@ -21,7 +21,7 @@ import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -45,7 +45,7 @@ let models: readonly ModelCatalogEntry[] = [{
 }];
 services.registerInstance(ILanguageModelsService, {
 	readApprovalReviewModel: async () => ({ type: 'automatic' }),
-	setApprovalReviewModel: async () => {},
+	setApprovalReviewModel: async () => { },
 	onDidChangeModels: modelChanged.event,
 	setModelPreferences: async (_model, update) => {
 		models = models.map(entry => ({ ...entry, fast: update.fast ?? entry.fast }));
@@ -54,18 +54,18 @@ services.registerInstance(ILanguageModelsService, {
 	},
 	listModels: async () => models,
 	getDefaultNewChatModel: () => undefined,
-	rememberSelectedModel: () => {},
+	rememberSelectedModel: () => { },
 	listModelCatalog: async () => models,
 	listCustomModelProviders: async () => [],
-	saveCustomModelProvider: async () => {},
+	saveCustomModelProvider: async () => { },
 	testProviderModel: async () => ({ type: 'passed' }),
 	listModelProviders: async () => [],
-	setModelProviderApiKey: async () => {},
-	removeModelProviderApiKey: async () => {},
+	setModelProviderApiKey: async () => { },
+	removeModelProviderApiKey: async () => { },
 	listAdvisorModels: async () => [],
 	refreshModels: async () => [],
 	isModelVisible: () => true,
-	setModelVisible: async () => {},
+	setModelVisible: async () => { },
 	discoverProviderModels: async () => [],
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
@@ -74,41 +74,51 @@ services.registerSingleton(IChatSpeechToTextService, () => services.createInstan
 registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
 const delegate: ChatInputDelegate = {
-	send: async () => {}, executeCommand: async () => {}, executeServerCommand: async () => {}, interrupt: async () => {},
-	selectModel: async () => {}, selectReasoningEffort: async effort => {
+	send: async () => { }, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+	selectModel: async () => { }, selectReasoningEffort: async effort => {
 		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, selectedReasoningEffort: effort, interaction: undefined });
-	}, selectAutomaticModel: async () => {},
-	listAgents: async () => [], selectAgent: () => {}, selectMode: () => {}, openModelSettings: async () => {},
+	}, selectAutomaticModel: async () => { },
+	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, openModelSettings: async () => { },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
-const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { showContextMenu: () => {}, hideContextMenu: () => {}, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, []));
+const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, []));
 const state: ChatInputState = {
 	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
-	interaction: { requestId: 'approval', request: { type: 'approval', request: {
-		reason: 'Review the requested actions', capabilities: [
-			{ kind: 'fileRead', scope: '/workspace/file with spaces.ts' },
-			{ kind: 'fileWrite', scope: String.raw`C:\Users\name\file.ts` },
-			{ kind: 'fileWrite', scope: String.raw`\\server\share\file.ts` },
-			{ kind: 'processSpawn', scope: 'pnpm test <script>' },
-			{ kind: 'network', scope: 'https://api.example.test' },
-			{ kind: 'credentialUse', scope: 'provider-key' },
-			{ kind: 'externalMutation', scope: 'issue:42' },
-			{ kind: 'systemConfiguration', scope: 'git.user.email' },
-			{ kind: 'userInterface', scope: 'current window' },
-			{ kind: 'fileWrite', scope: `/workspace/${'a'.repeat(160)}.ts` },
-		],
-	} } },
+	interaction: {
+		requestId: 'approval', request: {
+			type: 'approval', request: {
+				reason: 'Review the requested actions', capabilities: [
+					{ kind: 'fileRead', scope: '/workspace/file with spaces.ts' },
+					{ kind: 'fileWrite', scope: String.raw`C:\Users\name\file.ts` },
+					{ kind: 'fileWrite', scope: String.raw`\\server\share\file.ts` },
+					{ kind: 'processSpawn', scope: 'pnpm test <script>' },
+					{ kind: 'network', scope: 'https://api.example.test' },
+					{ kind: 'credentialUse', scope: 'provider-key' },
+					{ kind: 'externalMutation', scope: 'issue:42' },
+					{ kind: 'systemConfiguration', scope: 'git.user.email' },
+					{ kind: 'userInterface', scope: 'current window' },
+					{ kind: 'fileWrite', scope: `/workspace/${'a'.repeat(160)}.ts` },
+				],
+			}
+		}
+	},
 };
 part.render(state);
 window.ashChatInputIntegration = {
 	showModels: () => part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined }),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
-	showQuestions: () => part.render({ ...state, interaction: {
-		requestId: 'questions', request: { type: 'userInput', request: { questions: [
-			{ id: 'text', header: 'Answer', question: 'Your answer', allowFreeForm: true },
-			{ id: 'choice', header: 'Choice', question: 'Your choice', allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
-		] } },
-	} }),
+	showQuestions: () => part.render({
+		...state, interaction: {
+			requestId: 'questions', request: {
+				type: 'userInput', request: {
+					questions: [
+						{ id: 'text', header: 'Answer', question: 'Your answer', allowFreeForm: true },
+						{ id: 'choice', header: 'Choice', question: 'Your choice', allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
+					]
+				}
+			},
+		}
+	}),
 };
 part.setVisible(true);
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

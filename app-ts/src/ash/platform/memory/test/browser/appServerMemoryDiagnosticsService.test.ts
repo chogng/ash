@@ -18,7 +18,7 @@ class Transport implements AppServerTransport {
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'test', workspaceRoot: '/test' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string }).frame) as { id: number; method: string };
+		const request = JSON.parse((payload as { frame: string; }).frame) as { id: number; method: string; };
 		this.requests.push(request.method);
 		let result: unknown;
 		if (request.method === 'initialize') {

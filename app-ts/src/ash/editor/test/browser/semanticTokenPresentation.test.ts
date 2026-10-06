@@ -111,10 +111,12 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 		requestId: 1,
 		textModel: model,
 		modelVersion: model.version,
-		value: { tokens: [
-			{ ...token(0, 0, 5, "keyword"), presentation: { foreground: "#111111" } },
-			{ ...token(0, 6, 11, "variable"), presentation: { foreground: "#222222" } },
-		] },
+		value: {
+			tokens: [
+				{ ...token(0, 0, 5, "keyword"), presentation: { foreground: "#111111" } },
+				{ ...token(0, 6, 11, "variable"), presentation: { foreground: "#222222" } },
+			]
+		},
 	});
 	semanticStore.accept({ requestId: 1, textModel: model, modelVersion: model.version, value: { tokens: [token(0, 6, 11, "function", ["declaration"])] } });
 	using lexicalIndex = new LanguageTokenLineIndex(lexicalStore);

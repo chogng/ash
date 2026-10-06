@@ -38,9 +38,9 @@ function registerCompletionTelemetry(services: InstantiationService): IDataChann
 }
 
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
@@ -66,7 +66,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 		},
 	});
 	using inlineCompletionsService = new InlineCompletionsService();
-	using commands = new Emitter<{ readonly commandId: string }>();
+	using commands = new Emitter<{ readonly commandId: string; }>();
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
 	using services = new InstantiationService();
@@ -94,7 +94,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	await controller.trigger();
 	assert.equal(contexts.getValue('inlineSuggestionVisible'), true);
 	controller.dispose();
-	assert.deepEqual(telemetry.map(event => ({ channelId: event.channelId, eventName: (event.data as { eventName: string }).eventName, accepted: (event.data as { data: { accepted: boolean } }).data.accepted })), [
+	assert.deepEqual(telemetry.map(event => ({ channelId: event.channelId, eventName: (event.data as { eventName: string; }).eventName, accepted: (event.data as { data: { accepted: boolean; }; }).data.accepted })), [
 		{ channelId: 'editTelemetry', eventName: 'inlineCompletion.endOfLife', accepted: false },
 		{ channelId: 'editTelemetry', eventName: 'inlineCompletion.endOfLife', accepted: false },
 	]);
@@ -134,7 +134,7 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	await flushPromises();
 	controller.accept();
 	assert.equal(telemetry.length, 1);
-	const lifetime = telemetry[0]!.data as { eventName: string; data: { accepted: boolean; durationMs: number } };
+	const lifetime = telemetry[0]!.data as { eventName: string; data: { accepted: boolean; durationMs: number; }; };
 	assert.equal(lifetime.eventName, 'inlineCompletion.endOfLife');
 	assert.deepEqual(Object.keys(lifetime.data).sort(), ['accepted', 'durationMs']);
 	assert.equal(lifetime.data.accepted, true);

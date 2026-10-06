@@ -13,7 +13,7 @@ export interface IWindowsJumpListOptions {
 	readonly launchArguments: readonly string[];
 	readonly iconPath: string;
 	readonly recentProjectsTitle: string;
-	readonly tasks: readonly { readonly title: string; readonly description: string; readonly argument: string }[];
+	readonly tasks: readonly { readonly title: string; readonly description: string; readonly argument: string; }[];
 }
 
 /** Owns the Desktop history shared by every window, the taskbar, and the tray. */

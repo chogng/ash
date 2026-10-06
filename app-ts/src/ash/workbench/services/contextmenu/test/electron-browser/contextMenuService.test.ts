@@ -26,7 +26,7 @@ test("Electron context menus run the selected action with its delegate context",
 		async popup() {
 			return { selectedId: "action-1" };
 		},
-		async close() {},
+		async close() { },
 	};
 	using contextKeyService = new ContextKeyService();
 	const keybindingService = {
@@ -89,7 +89,7 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	const requests: INativeContextMenuRequest[] = [];
 	const api: INativeContextMenuApi = {
 		async popup(request) { requests.push(request); return {}; },
-		async close() {},
+		async close() { },
 	};
 	using contextKeyService = new ContextKeyService();
 	const keybindingService = {
@@ -111,7 +111,7 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	);
 	const button = environment.window.document.querySelector("button")!;
 	button.getBoundingClientRect = () => ({ left: 100.25, top: 50.5, right: 140.25, bottom: 70.5, width: 40, height: 20, x: 100.25, y: 50.5, toJSON: () => ({}) });
-	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() {} };
+	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
 	service.showContextMenu({
 		getAnchor: () => button,
 		getActions: () => [action],
@@ -147,7 +147,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	let finishPopup!: (result: INativeContextMenuResult) => void;
 	const api: INativeContextMenuApi = {
 		popup: () => new Promise(resolve => { finishPopup = resolve; }),
-		async close() {},
+		async close() { },
 	};
 	let activeView: ContextViewOptions | undefined;
 	const contextView = {
@@ -163,7 +163,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 			current?.onHide?.(ContextViewHideReason.Programmatic);
 			current?.content.remove();
 		},
-		layout() {},
+		layout() { },
 	} as IContextViewService;
 	using contextKeyService = new ContextKeyService();
 	const registry = new ConfigurationRegistry();
@@ -191,7 +191,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	const events: string[] = [];
 	using shown = service.onDidShowContextMenu(() => events.push("show"));
 	using hidden = service.onDidHideContextMenu(() => events.push("hide"));
-	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() {} };
+	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
 	service.showContextMenu({
 		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
 		getActions: () => [action],

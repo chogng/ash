@@ -169,7 +169,7 @@ test('A provider paste switches its insertion and additional text edit together'
 					title: 'Insert with another edit', kind, insertText: 'MAIN',
 					additionalEdit: { edits: [{ resource: model.uri, textEdit: { range: new Range(2, 1, 2, 6), text: 'EXTRA' } }] },
 				}],
-				dispose() {},
+				dispose() { },
 			};
 		},
 	};
@@ -208,7 +208,7 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 					insertText: { snippet: '${TM_FILENAME_BASE}: function ${1:name}(${2:value}) {$0}' },
 					additionalEdit: { edits: [{ resource: model.uri, textEdit: { range: new Range(1, 1, 1, 7), text: 'LONGPREFIX' } }] },
 				}],
-				dispose() {},
+				dispose() { },
 			};
 		},
 	};
@@ -254,7 +254,7 @@ test('Switching a paste choice reverts additional edits in another open resource
 					title: 'Insert Both', kind, insertText: 'MAIN',
 					additionalEdit: { edits: [{ resource: otherModel.uri, textEdit: { range: new Range(1, 1, 1, 6), text: 'EXTRA' } }] },
 				}],
-				dispose() {},
+				dispose() { },
 			};
 		},
 	};
@@ -294,7 +294,7 @@ test('A snippet paste tracks placeholders at every cursor', async () => {
 	const provider: DocumentPasteEditProvider = {
 		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
-			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '${1:x}$0' } }], dispose() {} };
+			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '${1:x}$0' } }], dispose() { } };
 		},
 	};
 	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
@@ -325,7 +325,7 @@ test('A delayed paste provider cannot apply after the document changes', async (
 		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
 			await gate;
-			return { edits: [{ title: 'Delayed', kind, insertText: 'late' }], dispose() {} };
+			return { edits: [{ title: 'Delayed', kind, insertText: 'late' }], dispose() { } };
 		},
 	};
 	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
@@ -415,7 +415,7 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 		async provideDocumentPasteEdits(_model, _ranges, transfer) {
 			provided += 1;
 			const value = await transfer.get('application/x-ash-prepared')!.asString();
-			return { edits: [{ title: 'Insert Prepared', kind, insertText: value }], dispose() {} };
+			return { edits: [{ title: 'Insert Prepared', kind, insertText: value }], dispose() { } };
 		},
 	};
 	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
@@ -477,10 +477,12 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 	Object.defineProperty(copy, 'clipboardData', { value: data });
 	input.dispatchEvent(copy);
 	Object.defineProperty(dom.window.navigator, 'clipboard', {
-		value: { read: async () => [{
-			types: data.types,
-			getType: async (type: string) => new Blob([data.getData(type)], { type }),
-		}] },
+		value: {
+			read: async () => [{
+				types: data.types,
+				getType: async (type: string) => new Blob([data.getData(type)], { type }),
+			}]
+		},
 	});
 	model.reset('destination');
 	editor.setSelection(new Selection(1, 1, 1, 12));
@@ -490,7 +492,7 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 
 class TestClipboardData {
 	private readonly values = new Map<string, string>();
-	constructor(readonly files: readonly File[] = []) {}
+	constructor(readonly files: readonly File[] = []) { }
 	get types(): string[] { return [...this.values.keys(), ...(this.files.length ? ['Files'] : [])]; }
 	get items(): readonly {
 		readonly kind: string;
@@ -508,7 +510,7 @@ class TestClipboardData {
 			...this.files.map(file => ({
 				kind: 'file',
 				type: file.type,
-				getAsString: (_callback: (value: string) => void) => {},
+				getAsString: (_callback: (value: string) => void) => { },
 				getAsFile: () => file,
 			})),
 		];

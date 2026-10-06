@@ -5,7 +5,7 @@ export class LineRangeMapping {
 	constructor(
 		public readonly inputRange: LineRange,
 		public readonly outputRange: LineRange,
-	) {}
+	) { }
 
 	public reverse(): LineRangeMapping {
 		return new LineRangeMapping(this.outputRange, this.inputRange);

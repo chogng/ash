@@ -33,27 +33,27 @@ Editor Extension 已确定采用 TS/JS 扩展和 TS SDK：界面与文档调用 
 适用于 Open VSX 包。运行兼容性由 TS 扩展 API 和隔离的 JS 宿主决定，具体要求见
 [`第三方扩展来源采用 Open VSX`](editor-extensions.md#05-第三方扩展来源采用-open-vsx)。
 
-| 用户动作 | 系统发生什么 | 不会自动发生什么 |
-| --- | --- | --- |
-| 安装 Marketplace Plugin bundle | `ash-core-plugins` 校验不可变 package、签名和摘要后只写入一次 | 不自动启用或授权任一 capability |
-| 各领域启用 capability | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy | 不存在 bundle 级隐式全开 |
-| 启用 local Plugin | 允许 contribution 参与解析 | 不连接 Connector、不启动 MCP、不执行脚本 |
-| 批准请求的能力 | 记录精确的进程、网络、目录或凭据授权 | 不批准未来每一次工具调用 |
-| 激活贡献 | 生成带来源和 generation 的不可变快照 | 不把 live manager 注入 Agent |
-| 更新或回滚 | 并存校验后的版本并原子切换 | 不原地修改已安装包 |
-| 卸载 | 撤销后续激活并清理可回收内容 | 不删除其他领域拥有的秘密或历史 |
-| 打开正式打包的 Ash | 从产品内固定的 root 刷新官方 HTTPS Marketplace | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
-| 浏览 Marketplace | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP |
-| 安装远端 Plugin | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要 | 不因已浏览或已下载而自动启用、授权 |
+| 用户动作                       | 系统发生什么                                                          | 不会自动发生什么                                   |
+| ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------- |
+| 安装 Marketplace Plugin bundle | `ash-core-plugins` 校验不可变 package、签名和摘要后只写入一次         | 不自动启用或授权任一 capability                    |
+| 各领域启用 capability          | Skill/MCP/Connector/Editor Extension consumer 分别应用自己的 policy   | 不存在 bundle 级隐式全开                           |
+| 启用 local Plugin              | 允许 contribution 参与解析                                            | 不连接 Connector、不启动 MCP、不执行脚本           |
+| 批准请求的能力                 | 记录精确的进程、网络、目录或凭据授权                                  | 不批准未来每一次工具调用                           |
+| 激活贡献                       | 生成带来源和 generation 的不可变快照                                  | 不把 live manager 注入 Agent                       |
+| 更新或回滚                     | 并存校验后的版本并原子切换                                            | 不原地修改已安装包                                 |
+| 卸载                           | 撤销后续激活并清理可回收内容                                          | 不删除其他领域拥有的秘密或历史                     |
+| 打开正式打包的 Ash             | 从产品内固定的 root 刷新官方 HTTPS Marketplace                        | 不信任服务器提供的新 root，不自动安装或启用 Plugin |
+| 浏览 Marketplace               | 读取已签名 manifest、能力、权限与包统计；离线时可使用仍有效的目录缓存 | 不预下载所有 Plugin ZIP                            |
+| 安装远端 Plugin                | 重新检查 TUF 与撤销状态，只下载所选 exact ZIP，再校验内容摘要         | 不因已浏览或已下载而自动启用、授权                 |
 
 ## 1. 结论
 
 Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会建立第二套生命周期：
 
-| 来源 | Package lifecycle owner | Capability activation owner |
-| --- | --- | --- |
-| Built-in / remote Marketplace Plugin bundle | `ash-core-plugins` | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域 |
-| Local Plugin v1 | `ash-core-plugins` | App Server 交给各领域；enable/grant 后形成 activation snapshot |
+| 来源                                        | Package lifecycle owner | Capability activation owner                                    |
+| ------------------------------------------- | ----------------------- | -------------------------------------------------------------- |
+| Built-in / remote Marketplace Plugin bundle | `ash-core-plugins`      | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域     |
+| Local Plugin v1                             | `ash-core-plugins`      | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
 所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。
 `ash-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。
@@ -616,18 +616,18 @@ Uninstall：
 
 ## 13. Skill、Connector 与 MCP 的明确关系
 
-| 行为 | Legacy Plugin authority | Skill manager | Connector / Auth | MCP runtime |
-| --- | --- | --- | --- | --- |
-| 校验 package digest/path | 负责 | 不负责 | 不负责 | 不负责 |
-| 解析 `SKILL.md` | 不负责 | 负责 | 不负责 | 不负责 |
-| 选择/加载 Skill | 不负责 | 负责 | 不负责 | 不负责 |
-| 管理外部账号连接状态 | 只声明 Connector | 不负责 | Connector runtime 负责 | 不负责 |
-| OAuth/API-key 交互和 secret bytes | 只声明 credential slot | 不负责 | Auth adapter 执行，Secrets owner 保存 | 只消费 materialized credential |
-| 发布 ready runtime binding | 只提供 declaration/provenance | 不负责 | connected generation 负责 | 只消费 binding |
-| 解析 MCP JSON-RPC | 不负责 | 不负责 | 不负责 | 负责 |
-| 启动 MCP process/session | 只声明/grant | 不负责 | 不启动 | 负责 |
-| 执行 script/tool | 不负责 | 不执行 | 不执行 Tool | MCP tool 只执行协议调用 |
-| approval/sandbox | 只提供最大 grant | 不扩大权限 | 连接成功不代表调用获批 | 服从 Agent/host policy |
+| 行为                              | Legacy Plugin authority       | Skill manager | Connector / Auth                      | MCP runtime                    |
+| --------------------------------- | ----------------------------- | ------------- | ------------------------------------- | ------------------------------ |
+| 校验 package digest/path          | 负责                          | 不负责        | 不负责                                | 不负责                         |
+| 解析 `SKILL.md`                   | 不负责                        | 负责          | 不负责                                | 不负责                         |
+| 选择/加载 Skill                   | 不负责                        | 负责          | 不负责                                | 不负责                         |
+| 管理外部账号连接状态              | 只声明 Connector              | 不负责        | Connector runtime 负责                | 不负责                         |
+| OAuth/API-key 交互和 secret bytes | 只声明 credential slot        | 不负责        | Auth adapter 执行，Secrets owner 保存 | 只消费 materialized credential |
+| 发布 ready runtime binding        | 只提供 declaration/provenance | 不负责        | connected generation 负责             | 只消费 binding                 |
+| 解析 MCP JSON-RPC                 | 不负责                        | 不负责        | 不负责                                | 负责                           |
+| 启动 MCP process/session          | 只声明/grant                  | 不负责        | 不启动                                | 负责                           |
+| 执行 script/tool                  | 不负责                        | 不执行        | 不执行 Tool                           | MCP tool 只执行协议调用        |
+| approval/sandbox                  | 只提供最大 grant              | 不扩大权限    | 连接成功不代表调用获批                | 服从 Agent/host policy         |
 
 一个 Skill 可以指示 Agent 使用同 Plugin 的 MCP tool，但关联必须通过 stable contribution identity
 解析。Skill 文本不能通过写一句“此工具已批准”跳过 grant 或 approval。
@@ -648,13 +648,13 @@ Connector-bound MCP composition、通用 OAuth PKCE 状态机、Desktop browser 
 已实现。Legacy Plugin enable/update 已能 live replacement，并通过 exact invocation lease 阻止旧 contribution
 在 authority commit 后开始 dispatch。完整边界由 [`connectors.md`](connectors.md) 维护。
 
-| 概念 | Identity/lifecycle | 例子 |
-| --- | --- | --- |
-| Plugin | package ID + version + digest；install/update/uninstall | 一组 GitHub 扩展贡献 |
-| Connector | account/tenant + credential binding；connect/revoke | 用户的某个 GitHub organization |
-| MCP server | server definition + connection generation | GitHub MCP session |
-| Skill | source + name + content digest；select/activate | PR review workflow |
-| Built-in tool | Ash release 中的 compiled capability | 本地受控 command executor |
+| 概念          | Identity/lifecycle                                      | 例子                           |
+| ------------- | ------------------------------------------------------- | ------------------------------ |
+| Plugin        | package ID + version + digest；install/update/uninstall | 一组 GitHub 扩展贡献           |
+| Connector     | account/tenant + credential binding；connect/revoke     | 用户的某个 GitHub organization |
+| MCP server    | server definition + connection generation               | GitHub MCP session             |
+| Skill         | source + name + content digest；select/activate         | PR review workflow             |
+| Built-in tool | Ash release 中的 compiled capability                    | 本地受控 command executor      |
 
 卸载 legacy Plugin 只解除其 contribution 和 credential-slot binding；卸载 Marketplace bundle 则由
 Manager 撤销 installation，并等待 capability lease 排空。两者都不能擅自删除 auth domain 中可能被
@@ -665,13 +665,13 @@ Manager 撤销 installation，并等待 capability lease 排空。两者都不�
 
 当前 App Server surface 与后续演进：
 
-| 状态 | Method | Authority/effect |
-| --- | --- | --- |
-| ✅ 当前 | `plugin/list` | 读取 installed/enabled/granted/effective projection |
-| ✅ 当前 | `plugin/enable` / `plugin/disable` | exact-package CAS 修改 profile enablement |
-| ✅ 当前 | `plugin/grant` / `plugin/revokeGrant` | exact-package CAS 修改 explicit grants |
-| ✅ 当前 | `plugin/uninstall` | 仅在 disabled + revoked 后移除 authority reference |
-| 尚未完成 | operation read API | 长操作 progress/result |
+| 状态     | Method                                | Authority/effect                                    |
+| -------- | ------------------------------------- | --------------------------------------------------- |
+| ✅ 当前  | `plugin/list`                         | 读取 installed/enabled/granted/effective projection |
+| ✅ 当前  | `plugin/enable` / `plugin/disable`    | exact-package CAS 修改 profile enablement           |
+| ✅ 当前  | `plugin/grant` / `plugin/revokeGrant` | exact-package CAS 修改 explicit grants              |
+| ✅ 当前  | `plugin/uninstall`                    | 仅在 disabled + revoked 后移除 authority reference  |
+| 尚未完成 | operation read API                    | 长操作 progress/result                              |
 
 已实现 Plugin mutation 使用 `CommandId + expectedRevision + exact package payload`。这些 mutation 不读取
 Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact

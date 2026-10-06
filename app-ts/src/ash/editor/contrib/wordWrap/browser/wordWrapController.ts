@@ -54,7 +54,9 @@ export class WordWrapController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.wordWrap", install: context => {
-	if (context.kind !== "text") return;
-	return context.instantiationService.createInstance(WordWrapController, context.controller.element, context.view, context.editor);
-} });
+registerEditorContribution({
+	id: "editor.contrib.wordWrap", install: context => {
+		if (context.kind !== "text") return;
+		return context.instantiationService.createInstance(WordWrapController, context.controller.element, context.view, context.editor);
+	}
+});

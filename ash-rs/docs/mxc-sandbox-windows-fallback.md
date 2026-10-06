@@ -22,17 +22,17 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 
 参考基线为本地 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`，范围限于本地沙箱与命令执行，不包含模型、云端容器或整个 Codex 产品。固定测试基线后比较相同平台、相同权限及相同命令；参考产品拒绝的组合不被误写成普遍可用能力。
 
-| 能力 | Ash 当前状态 | 本方案的完成要求 |
-| --- | --- | --- |
-| 普通命令、参数、工作目录、退出码、管道 | 已有实现 | PowerShell/Bash、Git、Python、Node、Cargo 的实际工具链验证 |
-| 路径级读/写/拒绝与权限例外 | 已有目录 Grant、单路径规则、执行前模式快照和固定 `.env` 拒绝 | 可配置规则、所有执行路径一致及跨平台验收 |
-| 文件工具与 shell 的权限一致 | 固定 `.env` 规则覆盖本地工具与沙箱范围；普通批准保留快照命中的拒绝 | 同一可配置授权结果覆盖读取、搜索、补丁和子进程 |
-| 断网、允许网络、受管代理 | 有实现及部分平台证据 | 准确区分出口、入站、宿主回环和代理客户端行为 |
-| 本地工具 IPC | macOS 已保留执行私有 IPC 路径并拒绝敏感 socket | 验证合法工具通信与跨任务隔离 |
-| 持续运行并返回进程会话标识 | 当前执行器等待命令结束 | 有界等待返回，后续读取/输入/关闭/中断/终止 |
-| PTY、REPL、终端尺寸调整 | 已有 MXC 内部 helper 与完整请求交接；跨平台实机验收未完成 | PTY 和管道使用同一权限、进程树和代理生命周期 |
-| 取消、超时、输出与异常恢复 | 已有部分实现/证据 | 等待预算与硬超时分开，保留尾部输出及清理错误 |
-| 安装、诊断与兼容支持 | 有 Windows 独立安装与历史排错记录 | 验证工具环境、代理身份、UI 设置及发布包，错误可定位 |
+| 能力                                   | Ash 当前状态                                                       | 本方案的完成要求                                           |
+| -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- |
+| 普通命令、参数、工作目录、退出码、管道 | 已有实现                                                           | PowerShell/Bash、Git、Python、Node、Cargo 的实际工具链验证 |
+| 路径级读/写/拒绝与权限例外             | 已有目录 Grant、单路径规则、执行前模式快照和固定 `.env` 拒绝       | 可配置规则、所有执行路径一致及跨平台验收                   |
+| 文件工具与 shell 的权限一致            | 固定 `.env` 规则覆盖本地工具与沙箱范围；普通批准保留快照命中的拒绝 | 同一可配置授权结果覆盖读取、搜索、补丁和子进程             |
+| 断网、允许网络、受管代理               | 有实现及部分平台证据                                               | 准确区分出口、入站、宿主回环和代理客户端行为               |
+| 本地工具 IPC                           | macOS 已保留执行私有 IPC 路径并拒绝敏感 socket                     | 验证合法工具通信与跨任务隔离                               |
+| 持续运行并返回进程会话标识             | 当前执行器等待命令结束                                             | 有界等待返回，后续读取/输入/关闭/中断/终止                 |
+| PTY、REPL、终端尺寸调整                | 已有 MXC 内部 helper 与完整请求交接；跨平台实机验收未完成          | PTY 和管道使用同一权限、进程树和代理生命周期               |
+| 取消、超时、输出与异常恢复             | 已有部分实现/证据                                                  | 等待预算与硬超时分开，保留尾部输出及清理错误               |
+| 安装、诊断与兼容支持                   | 有 Windows 独立安装与历史排错记录                                  | 验证工具环境、代理身份、UI 设置及发布包，错误可定位        |
 
 Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/protocol/src/permissions.rs)、[Windows 执行会话](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/windows-sandbox-rs/src/unified_exec/mod.rs)。账户模型不能满足 Strict 的边界单独记录，不把额外的 Strict 要求当作 Codex 账户方案已经提供的保证。
 
@@ -40,18 +40,18 @@ Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/d
 
 本节保留历史核对基线 `6cd3d58f05d3447e67109cfb75e042803b843ca4` 和 `567570084f1ebaca539b0a3186aeb68bca77788a`。当前产品固定 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，直接构造发布的 1.0 请求类型；SDK 的高层请求仍不能承载 Ash 的宿主 ACL 授权、文件对象身份和完整 PTY 交接，所以继续使用平台运行器及受审查补丁。新的 Windows 能力列表仍用于诊断；完整请求准备门禁继续实际创建临时 PSEC 环境并保留系统错误。以下将文档契约、代码证据和待验证推断分开；相似错误不自动归为相同根因。
 
-| 来源与约束 | 对 Ash 的影响与决定 |
-| --- | --- |
-| [Rust SDK](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/src/core/mxc-sdk/README.md)：流式管道可持续交互，普通 `spawn_sandbox` 不分配 PTY | 顶层 SDK 没有普通 PTY 入口；Ash 经平台运行器继承终端，并复用同一进程句柄接口 |
-| [生命周期及实施矩阵](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/state-aware-lifecycle/mxc-state-aware-sandbox-api.md)：后端与阶段的支持不同 | 不把 ProcessContainer/Seatbelt/Bubblewrap 当成可 provision/attach 的容器；不为 PTY 改用不支持所需文件/网络策略的 IsolationSession |
-| [Windows 网络](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/networking.md)：代理需要身份、私有网络能力和准确的入站配置 | 当前回环 IP 允许规则不能证明 PSEC 代理可用；按下文重新设计能力检查和代理部署 |
-| [Windows 兼容性](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/playground-limitations.md)：PowerShell 需要桌面资源；工具路径 ACL、DNS、Git 所有者也会导致失败 | 明确 UI 和工具环境，分层诊断。文档解释潜在失败机制，不能据此宣布历史所有失败均已定位 |
-| [宿主准备](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/host-prep.md)：AppContainer/DACL 需要系统盘属性权限，NUL 权限还可能每次启动重置 | 这些要求专属于对应后端；不能照搬到 Ash 账户模型，更不能在普通执行里修改宿主来试错 |
-| [Seatbelt](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/seatbelt/seatbelt-backend.md)：Unix socket 随文件路径授权，工具链依赖其 IPC | 执行私有 IPC 例外与敏感 socket 拒绝分别验证 |
-| [Bubblewrap](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/bwrap-support/bubblewrap-backend.md)：最小读取基线、网络依赖和路由均有限制 | PATH 不代替文件 Grant；验证 nft/conntrack；IPv6 被阻断不能证明 IPv6 允许可用 |
-| [策略 0.8](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/sandbox-policy/0.8.0/policy.md)：JSON 形状不等于所有 SDK 都已覆盖 | 核对 Rust 类型、生成 Config、解析后的有效策略与后端，不混用顶层 `ui` 和 `processContainer.ui` |
-| [能力探测设计](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/backend-support-probe-api-plan.md)：可用列表不解释全部失败，tier 只是上限 | 诊断列表不直接决定安全选择；需要本次请求的结构化准备结果。设计提案不作为实现完成证据 |
-| [诊断与捕获](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/diagnostics.md)：block 捕获保留限制，audit/allow 会允许被拒绝操作 | 使用保留拒绝的诊断证明失败原因；宽松审计结果不能计为隔离通过 |
+| 来源与约束                                                                                                                                                                                          | 对 Ash 的影响与决定                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [Rust SDK](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/src/core/mxc-sdk/README.md)：流式管道可持续交互，普通 `spawn_sandbox` 不分配 PTY                          | 顶层 SDK 没有普通 PTY 入口；Ash 经平台运行器继承终端，并复用同一进程句柄接口                                                      |
+| [生命周期及实施矩阵](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/state-aware-lifecycle/mxc-state-aware-sandbox-api.md)：后端与阶段的支持不同                | 不把 ProcessContainer/Seatbelt/Bubblewrap 当成可 provision/attach 的容器；不为 PTY 改用不支持所需文件/网络策略的 IsolationSession |
+| [Windows 网络](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/networking.md)：代理需要身份、私有网络能力和准确的入站配置                     | 当前回环 IP 允许规则不能证明 PSEC 代理可用；按下文重新设计能力检查和代理部署                                                      |
+| [Windows 兼容性](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/playground-limitations.md)：PowerShell 需要桌面资源；工具路径 ACL、DNS、Git 所有者也会导致失败 | 明确 UI 和工具环境，分层诊断。文档解释潜在失败机制，不能据此宣布历史所有失败均已定位                                              |
+| [宿主准备](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/host-prep.md)：AppContainer/DACL 需要系统盘属性权限，NUL 权限还可能每次启动重置                      | 这些要求专属于对应后端；不能照搬到 Ash 账户模型，更不能在普通执行里修改宿主来试错                                                 |
+| [Seatbelt](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/seatbelt/seatbelt-backend.md)：Unix socket 随文件路径授权，工具链依赖其 IPC                          | 执行私有 IPC 例外与敏感 socket 拒绝分别验证                                                                                       |
+| [Bubblewrap](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/bwrap-support/bubblewrap-backend.md)：最小读取基线、网络依赖和路由均有限制                         | PATH 不代替文件 Grant；验证 nft/conntrack；IPv6 被阻断不能证明 IPv6 允许可用                                                      |
+| [策略 0.8](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/sandbox-policy/0.8.0/policy.md)：JSON 形状不等于所有 SDK 都已覆盖                                    | 核对 Rust 类型、生成 Config、解析后的有效策略与后端，不混用顶层 `ui` 和 `processContainer.ui`                                     |
+| [能力探测设计](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/backend-support-probe-api-plan.md)：可用列表不解释全部失败，tier 只是上限                        | 诊断列表不直接决定安全选择；需要本次请求的结构化准备结果。设计提案不作为实现完成证据                                              |
+| [诊断与捕获](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/diagnostics.md)：block 捕获保留限制，audit/allow 会允许被拒绝操作                                  | 使用保留拒绝的诊断证明失败原因；宽松审计结果不能计为隔离通过                                                                      |
 
 文档存在版本和入口差异。例如 Playground 仍有旧字段 `appContainer.ui`，新 schema 使用 `processContainer.ui`；Bubblewrap 页面开头的 experimental 说明也不能覆盖固定版本的实际 SDK/解析器行为。固定版本的 schema、所用入口源码和真实执行共同决定接入，不能只复制某一页示例。
 
@@ -59,14 +59,14 @@ Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/d
 
 `Strict` 与 `WindowsAccount` 的定义见 [权限契约](../../docs/sandboxing.md#权限契约)。后端选择遵守下表：
 
-| 请求 | MXC/PSEC | Windows 账户后端 |
-| --- | --- | --- |
-| `Strict` 加受限文件权限 | 必须实施授权目录外不可写 | 启动前拒绝 |
-| `WindowsAccount` 加受限文件权限 | 完整支持请求时优先选用 | 完整支持请求时可选 |
-| `FullAccess` 加 `Denied` 或 `Managed` | 需要支持相应网络策略 | 当前不支持，拒绝 |
-| `HostAclChanges::Denied` | 只能采用无需宿主 ACL 改动的实现 | 当前不支持，拒绝 |
-| 隐藏目录、只读目录、元数据保护 | 必须逐项实施 | 必须逐项实施，扫描不代替这些限制 |
-| `Managed` 网络 | 只开放本次执行代理所需端点 | 只开放本次执行代理所需端点 |
+| 请求                                  | MXC/PSEC                        | Windows 账户后端                 |
+| ------------------------------------- | ------------------------------- | -------------------------------- |
+| `Strict` 加受限文件权限               | 必须实施授权目录外不可写        | 启动前拒绝                       |
+| `WindowsAccount` 加受限文件权限       | 完整支持请求时优先选用          | 完整支持请求时可选               |
+| `FullAccess` 加 `Denied` 或 `Managed` | 需要支持相应网络策略            | 当前不支持，拒绝                 |
+| `HostAclChanges::Denied`              | 只能采用无需宿主 ACL 改动的实现 | 当前不支持，拒绝                 |
+| 隐藏目录、只读目录、元数据保护        | 必须逐项实施                    | 必须逐项实施，扫描不代替这些限制 |
+| `Managed` 网络                        | 只开放本次执行代理所需端点      | 只开放本次执行代理所需端点       |
 
 “可选”还要求完成对应发布验收、运行时可用且准备成功；上表不宣布 PSEC 成功路径已验证。账户模型的有预算扫描不承诺整个宿主只读，不用于满足 `Strict`。接受账户模型也不允许放宽隐藏目录、明确的只读目录或网络限制。
 
@@ -103,12 +103,12 @@ flowchart TD
 
 最初对比的 Ash 和 Codex 固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4`；Ash 现已升级至 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，使用发布的 1.0 契约。以下历史基线的 [官方支持表](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/os-version-support.md) 区分 ProcessContainer 产品支持与 PSEC 能力：
 
-| 系统范围 | 固定 MXC 版本描述 | Ash 选择依据 |
-| --- | --- | --- |
-| Windows 11 23H2 | 低于 MXC ProcessContainer 官方支持下限 | 账户模型已有本机证据，不扩大为全版本支持 |
-| Windows 11 24H2 / 25H2 | ProcessContainer 支持不代表 PSEC 可用，主要依赖 AppContainer/DACL | 不根据版本号宣称可以使用 PSEC |
-| 更高 build 且启用相关系统能力 | 可能具备 PSEC，具体策略仍有能力要求 | 实际探测及本次请求检查 |
-| Windows 10、Server、其他架构或 WSL | 本方案未取得对应验收证据 | 不据现有结果作支持承诺 |
+| 系统范围                           | 固定 MXC 版本描述                                                 | Ash 选择依据                             |
+| ---------------------------------- | ----------------------------------------------------------------- | ---------------------------------------- |
+| Windows 11 23H2                    | 低于 MXC ProcessContainer 官方支持下限                            | 账户模型已有本机证据，不扩大为全版本支持 |
+| Windows 11 24H2 / 25H2             | ProcessContainer 支持不代表 PSEC 可用，主要依赖 AppContainer/DACL | 不根据版本号宣称可以使用 PSEC            |
+| 更高 build 且启用相关系统能力      | 可能具备 PSEC，具体策略仍有能力要求                               | 实际探测及本次请求检查                   |
+| Windows 10、Server、其他架构或 WSL | 本方案未取得对应验收证据                                          | 不据现有结果作支持承诺                   |
 
 版本表用于解释支持范围，不写成 `build >= 某值` 的后端开关。系统更新后也必须按实际能力检查；一个 build 的通过结果不自动覆盖其他 build。
 
@@ -207,14 +207,14 @@ PSEC 检查分为宿主能力和本次请求两部分，由现有 MXC 平台实�
 
 准备阶段允许创建并释放临时探测对象，不启动用户命令，不配置账户，不修改持久 ACL/WFP 规则。临时对象清理失败也是故障，不能当作能力不支持。
 
-| 探测或准备结果 | 对外分类 | 是否可考虑下一候选 |
-| --- | --- | --- |
-| 已确认缺少 API、系统功能未启用或请求能力不存在 | `UnsupportedContainment` → `UnsupportedPolicy` | 可以，但必须满足同一最低隔离要求 |
-| 非法请求、路径对象改变、输入格式错误 | 输入或准备错误 | 不可以 |
-| API 加载异常、访问被拒绝、资源不足、支持查询失败 | 运行故障，保留操作及系统错误码 | 不可以 |
-| 文件读取、helper 校验、安装状态或 ACL/WFP 校验失败 | 后端不可用或准备错误 | 不可以 |
-| 已选后端启动失败 | `StartFailed` | 不可以 |
-| 用户进程退出或限制拒绝 | 执行结果及拒绝证据 | 不可以 |
+| 探测或准备结果                                     | 对外分类                                       | 是否可考虑下一候选               |
+| -------------------------------------------------- | ---------------------------------------------- | -------------------------------- |
+| 已确认缺少 API、系统功能未启用或请求能力不存在     | `UnsupportedContainment` → `UnsupportedPolicy` | 可以，但必须满足同一最低隔离要求 |
+| 非法请求、路径对象改变、输入格式错误               | 输入或准备错误                                 | 不可以                           |
+| API 加载异常、访问被拒绝、资源不足、支持查询失败   | 运行故障，保留操作及系统错误码                 | 不可以                           |
+| 文件读取、helper 校验、安装状态或 ACL/WFP 校验失败 | 后端不可用或准备错误                           | 不可以                           |
+| 已选后端启动失败                                   | `StartFailed`                                  | 不可以                           |
+| 用户进程退出或限制拒绝                             | 执行结果及拒绝证据                             | 不可以                           |
 
 只有已识别的系统返回值能证明能力缺失。未知错误一律作为故障返回；不靠错误字符串匹配、不在本次准备中隐式重试，也不把所有 `false` 当作不支持。
 
@@ -236,17 +236,17 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 
 ## crate 与依赖边界
 
-| Owner | 职责 |
-| --- | --- |
-| Core / `action-policy` | 授权、审批、是否允许另一次执行 |
-| `sandboxing` | 统一策略、路径规则、最低隔离要求、候选选择及进程输入输出契约 |
-| `tool-executor` | 命令/持续会话、输出游标、预算、取消、硬超时和执行专属代理 |
-| `utils/pty` | 终端/管道、resize、信号和已有进程驱动，不拥有权限 |
-| `network-proxy` | HTTP/CONNECT/SOCKS 目标授权、执行归属与平台代理部署适配 |
-| `mxc-sandbox` | 把 Ash 请求转换到公开 MXC SDK，转换错误和句柄 |
-| MXC 固定版本与补丁 | 平台能力检查、PSEC/Bubblewrap/Seatbelt 策略和系统资源管理 |
-| `windows-sandbox` | Ash 账户、令牌、ACL、WFP、Windows 安装对象及账户进程树回收 |
-| App Server | 构造产品策略，注册候选，向执行器提供授权结果 |
+| Owner                  | 职责                                                         |
+| ---------------------- | ------------------------------------------------------------ |
+| Core / `action-policy` | 授权、审批、是否允许另一次执行                               |
+| `sandboxing`           | 统一策略、路径规则、最低隔离要求、候选选择及进程输入输出契约 |
+| `tool-executor`        | 命令/持续会话、输出游标、预算、取消、硬超时和执行专属代理    |
+| `utils/pty`            | 终端/管道、resize、信号和已有进程驱动，不拥有权限            |
+| `network-proxy`        | HTTP/CONNECT/SOCKS 目标授权、执行归属与平台代理部署适配      |
+| `mxc-sandbox`          | 把 Ash 请求转换到公开 MXC SDK，转换错误和句柄                |
+| MXC 固定版本与补丁     | 平台能力检查、PSEC/Bubblewrap/Seatbelt 策略和系统资源管理    |
+| `windows-sandbox`      | Ash 账户、令牌、ACL、WFP、Windows 安装对象及账户进程树回收   |
+| App Server             | 构造产品策略，注册候选，向执行器提供授权结果                 |
 
 - `sandboxing` 不依赖 MXC 或 Codex。公开契约不暴露供应商的请求类型。
 - `windows-sandbox` 当前直接使用 `wxc_common` 的策略类型、ACL 授权及恢复日志。这是两个后端的共享实现依赖，不是完全独立的故障隔离。
@@ -274,68 +274,68 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 
 以下状态来自源码核对及仓库已有记录，本次文档修订没有重新运行产品测试。
 
-| 能力 | 状态 | 定位 |
-| --- | --- | --- |
-| 候选顺序与统一选择器 | 已接线；选择器只接受 `UnsupportedPolicy` 继续 | [选择器](../sandboxing/src/backends.rs)、[App Server](../app-server/src/local_tools.rs) |
-| 正式版本候选与支持清单一致 | 待发布验收后核定，当前固定注册不代表取得资格 | App Server 装配与发行验证 |
-| Windows 最低模型与 Strict 拒绝 | 已实现，账户后端不改写请求 | [策略类型](../sandboxing/src/model.rs)、[账户准备](../windows-sandbox/src/windows.rs) |
-| PSEC 准备门禁 | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核 | [MXC 请求](../mxc-sandbox/src/request.rs)、[平台探测](../vendor/mxc/backends/process_container/common/src/base_container_runner.rs) |
-| PSEC Managed 接入 | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成 | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs) |
-| Windows 工具 UI 兼容 | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../mxc-sandbox/src/policy.rs) |
-| 路径级规则与最小读取基线 | 精确路径、执行前模式快照和宿主读取选择已接入；可配置授权与跨平台验收未完成 | [目录范围](../sandboxing/src/scope.rs)、[规则解析](../sandboxing/src/filesystem.rs) |
-| 受控 Unix socket | 已有执行私有 IPC 例外与敏感路径拒绝；需实机验证 | [请求转换](../mxc-sandbox/src/policy.rs) |
-| PTY 与命令会话 | MXC 管道与 PTY 已使用同一平台运行器；会话及各平台验收单独推进 | [终端交接](../mxc-sandbox/src/pty.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md) |
-| 选择器故障停止、启动不重跑 | 已有替身测试；不证明 SDK 错误转换正确 | [选择器测试](../sandboxing/src/backends_tests.rs) |
-| 账户模型实机执行 | 23H2 本机记录 21 项单测、9 项完整执行用例通过 | [验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-09-11-windowsaccount-模型验收) |
-| PSEC 完整成功路径 | 未取得实机通过证据；对应测试标为忽略 | [Windows PSEC 测试](../mxc-sandbox/tests/windows.rs) |
-| MXC 与账户后端组合 | 真实组合及故障注入验证待补 | 复用 `sandboxing`、`mxc-sandbox` 和 App Server 测试入口 |
-| Linux/macOS 隔离 | 有真实进程测试入口，需目标平台运行证据 | [Linux 测试](../mxc-sandbox/tests/linux.rs)、[macOS 测试](../mxc-sandbox/src/sandbox_tests.rs) |
-| 异常恢复 | 已有部分账户日志恢复证据，完整崩溃组合未覆盖 | [验收手册](../../docs/windows-sandbox-acceptance-runbook.md) |
+| 能力                           | 状态                                                                                           | 定位                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 候选顺序与统一选择器           | 已接线；选择器只接受 `UnsupportedPolicy` 继续                                                  | [选择器](../sandboxing/src/backends.rs)、[App Server](../app-server/src/local_tools.rs)                                             |
+| 正式版本候选与支持清单一致     | 待发布验收后核定，当前固定注册不代表取得资格                                                   | App Server 装配与发行验证                                                                                                           |
+| Windows 最低模型与 Strict 拒绝 | 已实现，账户后端不改写请求                                                                     | [策略类型](../sandboxing/src/model.rs)、[账户准备](../windows-sandbox/src/windows.rs)                                               |
+| PSEC 准备门禁                  | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核                   | [MXC 请求](../mxc-sandbox/src/request.rs)、[平台探测](../vendor/mxc/backends/process_container/common/src/base_container_runner.rs) |
+| PSEC Managed 接入              | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成                           | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs)                                        |
+| Windows 工具 UI 兼容           | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../mxc-sandbox/src/policy.rs)                                                   |
+| 路径级规则与最小读取基线       | 精确路径、执行前模式快照和宿主读取选择已接入；可配置授权与跨平台验收未完成                     | [目录范围](../sandboxing/src/scope.rs)、[规则解析](../sandboxing/src/filesystem.rs)                                                 |
+| 受控 Unix socket               | 已有执行私有 IPC 例外与敏感路径拒绝；需实机验证                                                | [请求转换](../mxc-sandbox/src/policy.rs)                                                                                            |
+| PTY 与命令会话                 | MXC 管道与 PTY 已使用同一平台运行器；会话及各平台验收单独推进                                  | [终端交接](../mxc-sandbox/src/pty.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md)                         |
+| 选择器故障停止、启动不重跑     | 已有替身测试；不证明 SDK 错误转换正确                                                          | [选择器测试](../sandboxing/src/backends_tests.rs)                                                                                   |
+| 账户模型实机执行               | 23H2 本机记录 21 项单测、9 项完整执行用例通过                                                  | [验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-09-11-windowsaccount-模型验收)                                     |
+| PSEC 完整成功路径              | 未取得实机通过证据；对应测试标为忽略                                                           | [Windows PSEC 测试](../mxc-sandbox/tests/windows.rs)                                                                                |
+| MXC 与账户后端组合             | 真实组合及故障注入验证待补                                                                     | 复用 `sandboxing`、`mxc-sandbox` 和 App Server 测试入口                                                                             |
+| Linux/macOS 隔离               | 有真实进程测试入口，需目标平台运行证据                                                         | [Linux 测试](../mxc-sandbox/tests/linux.rs)、[macOS 测试](../mxc-sandbox/src/sandbox_tests.rs)                                      |
+| 异常恢复                       | 已有部分账户日志恢复证据，完整崩溃组合未覆盖                                                   | [验收手册](../../docs/windows-sandbox-acceptance-runbook.md)                                                                        |
 
 Codex 核对基线为 `da20788df913189878ebca7f4963d8a363ee6bf2`。该提交已有 MXC PSEC 代码，但默认 Windows 选择仍为限制令牌后端，MXC 在选择入口用于可用性记录；不能据此宣称这套组合已在 Codex 默认执行链验收。具体源码与采用边界见 [Windows 候选评估](../../docs/sandboxing.md#windows-候选评估)。
 
 ## 实施顺序
 
-| 顺序 | 工作与 owner | 完成依据 |
-| --- | --- | --- |
-| 1 | `sandboxing` 与调用方补全路径、读取基线、入站/回环、IPC 和输入输出要求 | 对齐场景能准确表达；保持两个最低模型且不丢规则 |
-| 2 | MXC 补丁与适配器修复探测、Windows 代理/UI 及 Unix IPC 接入 | 有效配置符合所用 SDK/OS 契约；故障与不支持严格区分 |
-| 3 | MXC SDK/平台后端、账户后端接入 PTY，复用 `utils/pty` driver | 同一沙箱路径支持管道/PTY；isatty、resize、中断与回收通过 |
-| 4 | `tool-executor` 接入持续会话，App Server/工具层接入后续操作 | 会话归属、等待/硬超时、输出游标与一次创建语义通过 |
-| 5 | 各平台后端与真实组合链运行 Codex 对照矩阵 | 下方适用验收项全部运行；记录不支持、失败和跳过，不能删项宣称对齐 |
-| 6 | App Server 发布候选、打包、安装及共享 MXC 补丁复核 | 代理身份/工具依赖明确；注册名单与支持清单一致；版本和恢复可验证 |
-| 7 | 按发布条件审查每个平台、隔离模型和输入输出方式 | 只登记已有完整证据的支持组合 |
+| 顺序 | 工作与 owner                                                           | 完成依据                                                         |
+| ---- | ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1    | `sandboxing` 与调用方补全路径、读取基线、入站/回环、IPC 和输入输出要求 | 对齐场景能准确表达；保持两个最低模型且不丢规则                   |
+| 2    | MXC 补丁与适配器修复探测、Windows 代理/UI 及 Unix IPC 接入             | 有效配置符合所用 SDK/OS 契约；故障与不支持严格区分               |
+| 3    | MXC SDK/平台后端、账户后端接入 PTY，复用 `utils/pty` driver            | 同一沙箱路径支持管道/PTY；isatty、resize、中断与回收通过         |
+| 4    | `tool-executor` 接入持续会话，App Server/工具层接入后续操作            | 会话归属、等待/硬超时、输出游标与一次创建语义通过                |
+| 5    | 各平台后端与真实组合链运行 Codex 对照矩阵                              | 下方适用验收项全部运行；记录不支持、失败和跳过，不能删项宣称对齐 |
+| 6    | App Server 发布候选、打包、安装及共享 MXC 补丁复核                     | 代理身份/工具依赖明确；注册名单与支持清单一致；版本和恢复可验证  |
+| 7    | 按发布条件审查每个平台、隔离模型和输入输出方式                         | 只登记已有完整证据的支持组合                                     |
 
 文档修订固定以上实现要求，尚未实现新增功能。具体 API/协议由各 owner 在实现时同步生成和测试；不在本文创建第二份传输协议。达到 Codex 能力范围需要完成所有适用功能及验收，不能只修复探测或跑通一个 shell。
 
 ## 验收矩阵
 
-| 编号 | 场景 | 必须观察到的结果 |
-| --- | --- | --- |
-| AC-1 | Windows PSEC 支持本次请求，分别使用 Strict/WindowsAccount | 只启动 PSEC；账户后端无安装或执行副作用 |
-| AC-2 | 明确无 PSEC，WindowsAccount，账户已安装且支持请求 | 经真实候选链只启动账户后端一次，原始策略不变 |
-| AC-3 | 明确无 PSEC，Strict | 拒绝；账户后端不创建进程、不配置 ACL/WFP、不安装 |
-| AC-4 | PSEC 有基础能力但缺本次隐藏路径或网络能力 | WindowsAccount 可继续检查账户候选；Strict 拒绝；任何候选不得删掉限制 |
-| AC-5 | API 加载、创建环境、支持查询、启动属性或清理故障 | 原因和系统错误保留；命令零启动，不考虑其他候选 |
-| AC-6 | 选定后端后能力变化、启动失败或用户命令报权限错误 | 不重选、不自动重放；可能已经执行的结果保留该事实 |
-| AC-7 | 普通进程候选、FullAccess 加受限网络、宿主 ACL 未授权 | 不支持的组合拒绝；受限请求不能转为普通进程 |
-| AC-8 | 多 Grant、隐藏父目录中的授权例外、现有元数据 | 隐藏范围内只开放授权例外；只读和隐藏对象保持限制；ACL 恢复不改变子项继承 |
-| AC-9 | 文件替换、重解析路径、跨执行遗留文件 | Strict 验证目录外写入被拒绝；账户模型验证承诺范围并报告扫描局限，不借结果声称 Strict |
-| AC-10 | Denied/Managed 的 IPv4、IPv6、TCP、UDP、DNS、回环和入站 | 按请求拒绝直连和未授权入站；Managed 仅允许通过代理访问授权目标 |
-| AC-11 | 并发执行、跨任务代理访问、连接身份读取失败 | 代理不串用，无法证明归属时拒绝；ACL 恢复不影响另一执行 |
-| AC-12 | 取消、超时、正常退出及 helper/宿主进程被终止 | 后代被回收；日志可恢复；清理失败阻止相关资源复用并报告 |
-| AC-13 | Linux 缺命名空间或网络工具；macOS 文件及 IPC 绕行 | 必要能力缺失时拒绝；未授权 socket 不可访问，合法私有 IPC 见 AC-17 |
-| AC-14 | 安装失效、helper 被替换、遗留日志或规则异常 | 拒绝执行，不自动修复；显式恢复和卸载只处理本安装对象 |
-| AC-15 | 工作区可写、其中 `.env` 拒绝、配置子目录只读、路径/模式交叠 | shell 与文件工具结论一致；别名和后续新文件按明确的匹配契约处理 |
-| AC-16 | 最小读取基线、用户/系统工具安装、PATH/HOME/私有缓存、Git 所有者 | 工具可用且未授权凭据不可读；错误能定位到路径、环境或工具自身校验 |
-| AC-17 | Node 构建/test worker、执行私有 Unix socket、Docker/SSH/GPG socket | 合法 IPC 成功，敏感端点和跨任务通信被拒绝；IP 断网不被放宽 |
-| AC-18 | Windows 正式代理身份、无身份代理、私网入站、SOCKS DNS | 按请求与文档能力选择；不将 ingress 改为 allow 绕过；HTTP 成功不代表任意协议透明代理 |
-| AC-19 | PowerShell 5.1/7、cmd、Python、Node、ConPTY 的 UI 配置 | 有效 UI 配置可检查，命令完成；剪贴板/注入等限制保持，历史 CLR 与 UI 问题分别归因 |
-| AC-20 | 短等待返回、持续输出、后续输入、EOF 与另一个任务访问会话 | 同一进程保持运行，输出游标正确，跨任务操作拒绝；无重复创建 |
-| AC-21 | PTY 下 isatty、REPL、resize、前台中断、管道分离输出 | 终端语义正确且命令仍受隔离；不支持 PTY 时明确拒绝 |
-| AC-22 | 等待到期、硬超时、权限撤销、阻塞输入、输出洪泛与退出尾部 | 等待返回不杀进程；真正终止回收资源；输出缺口可见且尾部不被提前丢弃 |
-| AC-23 | Linux 私有 loopback、macOS 同任务 TCP、开发服务器及同端口其他网卡 | 按每个平台已声明能力执行；不可表示的监听范围拒绝，不扩大网络授权 |
-| AC-24 | 固定 SDK 与升级版本、有效策略对照、block 诊断、完整发行包 | 区分上游契约/本地补丁；诊断不放宽策略；安装、依赖和输入输出支持均有记录 |
+| 编号  | 场景                                                               | 必须观察到的结果                                                                     |
+| ----- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| AC-1  | Windows PSEC 支持本次请求，分别使用 Strict/WindowsAccount          | 只启动 PSEC；账户后端无安装或执行副作用                                              |
+| AC-2  | 明确无 PSEC，WindowsAccount，账户已安装且支持请求                  | 经真实候选链只启动账户后端一次，原始策略不变                                         |
+| AC-3  | 明确无 PSEC，Strict                                                | 拒绝；账户后端不创建进程、不配置 ACL/WFP、不安装                                     |
+| AC-4  | PSEC 有基础能力但缺本次隐藏路径或网络能力                          | WindowsAccount 可继续检查账户候选；Strict 拒绝；任何候选不得删掉限制                 |
+| AC-5  | API 加载、创建环境、支持查询、启动属性或清理故障                   | 原因和系统错误保留；命令零启动，不考虑其他候选                                       |
+| AC-6  | 选定后端后能力变化、启动失败或用户命令报权限错误                   | 不重选、不自动重放；可能已经执行的结果保留该事实                                     |
+| AC-7  | 普通进程候选、FullAccess 加受限网络、宿主 ACL 未授权               | 不支持的组合拒绝；受限请求不能转为普通进程                                           |
+| AC-8  | 多 Grant、隐藏父目录中的授权例外、现有元数据                       | 隐藏范围内只开放授权例外；只读和隐藏对象保持限制；ACL 恢复不改变子项继承             |
+| AC-9  | 文件替换、重解析路径、跨执行遗留文件                               | Strict 验证目录外写入被拒绝；账户模型验证承诺范围并报告扫描局限，不借结果声称 Strict |
+| AC-10 | Denied/Managed 的 IPv4、IPv6、TCP、UDP、DNS、回环和入站            | 按请求拒绝直连和未授权入站；Managed 仅允许通过代理访问授权目标                       |
+| AC-11 | 并发执行、跨任务代理访问、连接身份读取失败                         | 代理不串用，无法证明归属时拒绝；ACL 恢复不影响另一执行                               |
+| AC-12 | 取消、超时、正常退出及 helper/宿主进程被终止                       | 后代被回收；日志可恢复；清理失败阻止相关资源复用并报告                               |
+| AC-13 | Linux 缺命名空间或网络工具；macOS 文件及 IPC 绕行                  | 必要能力缺失时拒绝；未授权 socket 不可访问，合法私有 IPC 见 AC-17                    |
+| AC-14 | 安装失效、helper 被替换、遗留日志或规则异常                        | 拒绝执行，不自动修复；显式恢复和卸载只处理本安装对象                                 |
+| AC-15 | 工作区可写、其中 `.env` 拒绝、配置子目录只读、路径/模式交叠        | shell 与文件工具结论一致；别名和后续新文件按明确的匹配契约处理                       |
+| AC-16 | 最小读取基线、用户/系统工具安装、PATH/HOME/私有缓存、Git 所有者    | 工具可用且未授权凭据不可读；错误能定位到路径、环境或工具自身校验                     |
+| AC-17 | Node 构建/test worker、执行私有 Unix socket、Docker/SSH/GPG socket | 合法 IPC 成功，敏感端点和跨任务通信被拒绝；IP 断网不被放宽                           |
+| AC-18 | Windows 正式代理身份、无身份代理、私网入站、SOCKS DNS              | 按请求与文档能力选择；不将 ingress 改为 allow 绕过；HTTP 成功不代表任意协议透明代理  |
+| AC-19 | PowerShell 5.1/7、cmd、Python、Node、ConPTY 的 UI 配置             | 有效 UI 配置可检查，命令完成；剪贴板/注入等限制保持，历史 CLR 与 UI 问题分别归因     |
+| AC-20 | 短等待返回、持续输出、后续输入、EOF 与另一个任务访问会话           | 同一进程保持运行，输出游标正确，跨任务操作拒绝；无重复创建                           |
+| AC-21 | PTY 下 isatty、REPL、resize、前台中断、管道分离输出                | 终端语义正确且命令仍受隔离；不支持 PTY 时明确拒绝                                    |
+| AC-22 | 等待到期、硬超时、权限撤销、阻塞输入、输出洪泛与退出尾部           | 等待返回不杀进程；真正终止回收资源；输出缺口可见且尾部不被提前丢弃                   |
+| AC-23 | Linux 私有 loopback、macOS 同任务 TCP、开发服务器及同端口其他网卡  | 按每个平台已声明能力执行；不可表示的监听范围拒绝，不扩大网络授权                     |
+| AC-24 | 固定 SDK 与升级版本、有效策略对照、block 诊断、完整发行包          | 区分上游契约/本地补丁；诊断不放宽策略；安装、依赖和输入输出支持均有记录              |
 
 AC-1 至 AC-7 既需要可控故障注入，也需要真实 App Server → Executor → 候选后端的组合验证。现有选择器替身测试不能替代 SDK 探测与错误映射测试；真实隔离用例不能因为缺系统能力被跳过后仍计为通过。
 

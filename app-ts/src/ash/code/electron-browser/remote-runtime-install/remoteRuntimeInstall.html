@@ -1,24 +1,45 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Preparing Remote Runtime</title>
-    <link rel="stylesheet" href="./remoteRuntimeInstall.css">
-  </head>
-  <body>
-    <main class="remote-install" aria-labelledby="remote-install-title">
-      <div class="remote-install__mark" aria-hidden="true">&gt;_</div>
-      <section class="remote-install__content">
-        <h1 id="remote-install-title">Preparing SSH Remote</h1>
-        <p id="remote-install-host" class="remote-install__host">Waiting for the Remote host…</p>
-        <p id="remote-install-stage" class="remote-install__stage" role="status" aria-live="polite">Starting…</p>
-        <progress id="remote-install-progress" class="remote-install__progress" max="100" aria-label="Remote runtime installation progress"></progress>
-        <p id="remote-install-detail" class="remote-install__detail">Ash is preparing a compatible runtime on the Remote host.</p>
-        <button id="remote-install-cancel" type="button">Cancel Remote Startup</button>
-      </section>
-    </main>
-    <script type="module" src="./remoteRuntimeInstall.ts"></script>
-  </body>
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'self'; style-src 'self'; script-src 'self'"
+		/>
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<title>Preparing Remote Runtime</title>
+		<link rel="stylesheet" href="./remoteRuntimeInstall.css" />
+	</head>
+	<body>
+		<main class="remote-install" aria-labelledby="remote-install-title">
+			<div class="remote-install__mark" aria-hidden="true">&gt;_</div>
+			<section class="remote-install__content">
+				<h1 id="remote-install-title">Preparing SSH Remote</h1>
+				<p id="remote-install-host" class="remote-install__host">
+					Waiting for the Remote host…
+				</p>
+				<p
+					id="remote-install-stage"
+					class="remote-install__stage"
+					role="status"
+					aria-live="polite"
+				>
+					Starting…
+				</p>
+				<progress
+					id="remote-install-progress"
+					class="remote-install__progress"
+					max="100"
+					aria-label="Remote runtime installation progress"
+				></progress>
+				<p id="remote-install-detail" class="remote-install__detail">
+					Ash is preparing a compatible runtime on the Remote host.
+				</p>
+				<button id="remote-install-cancel" type="button">
+					Cancel Remote Startup
+				</button>
+			</section>
+		</main>
+		<script type="module" src="./remoteRuntimeInstall.ts"></script>
+	</body>
 </html>

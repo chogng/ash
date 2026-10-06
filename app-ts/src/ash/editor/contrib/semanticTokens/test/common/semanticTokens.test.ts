@@ -124,10 +124,12 @@ test('removed semantic provider cannot publish its delayed result', async () => 
 	using model = new TextModel('name', { tokenization: { documentSemanticTokensProvider: providers } });
 	const pending = new DeferredPromise<LanguageTokenResult>();
 	let requestSignal: AbortSignal | undefined;
-	using first = providers.register('*', { provideSemanticTokens: (_request, signal) => {
-		requestSignal = signal;
-		return pending.p;
-	} });
+	using first = providers.register('*', {
+		provideSemanticTokens: (_request, signal) => {
+			requestSignal = signal;
+			return pending.p;
+		}
+	});
 	await setImmediate();
 	assert.ok(requestSignal);
 	first.dispose();

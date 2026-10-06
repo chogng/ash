@@ -27,7 +27,7 @@ export interface IActionListItem<T> {
 	readonly item?: T;
 	readonly label: string;
 	readonly disabled?: boolean;
-	readonly group?: { readonly title: string; readonly icon?: Icon };
+	readonly group?: { readonly title: string; readonly icon?: Icon; };
 	readonly checked?: boolean;
 	readonly canPreview?: boolean;
 }
@@ -56,7 +56,7 @@ class ActionListHeader extends ActionViewItem {
 		container.append(label);
 	}
 
-	public override setTabbable(_tabbable: boolean): void {}
+	public override setTabbable(_tabbable: boolean): void { }
 }
 
 /** Owns typed action dispatch and its pending state; Menu owns row focus and navigation. */
@@ -231,7 +231,7 @@ export class ActionList<T> extends Disposable {
 		this.focusedEntry = previous && visible.includes(previous) && !previous.disabled
 			? previous
 			: visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked)
-				?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
+			?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
 		this.updatePreview();
 		const count = visible.filter(entry => entry.kind === ActionListItemKind.Action).length;
 		this.statusDomNode.textContent = '';

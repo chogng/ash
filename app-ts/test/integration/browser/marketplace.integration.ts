@@ -69,12 +69,14 @@ const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publishe
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
 let editorPolicyRevision = 1;
 let editorEntrypoint: string | null = 'dist/extension.js';
-const editorPolicies = new Map<string, { enabled: boolean; granted: boolean }>();
+const editorPolicies = new Map<string, { enabled: boolean; granted: boolean; }>();
 function editorPolicySnapshot() {
-	return { revision: editorPolicyRevision, extensions: installed.filter(entry => entry.capabilities.some(capability => capability.kind === 'editorExtension')).map(entry => ({
-		installationId: entry.installationId, package: entry.package, entrypoint: editorEntrypoint,
-		...(editorPolicies.get(entry.installationId) ?? { enabled: false, granted: false }),
-	})) };
+	return {
+		revision: editorPolicyRevision, extensions: installed.filter(entry => entry.capabilities.some(capability => capability.kind === 'editorExtension')).map(entry => ({
+			installationId: entry.installationId, package: entry.package, entrypoint: editorEntrypoint,
+			...(editorPolicies.get(entry.installationId) ?? { enabled: false, granted: false }),
+		}))
+	};
 }
 const api: IMarketplaceApi = {
 	editorExtensions: async () => editorPolicySnapshot(),
@@ -110,7 +112,7 @@ const api: IMarketplaceApi = {
 		installed[index] = { ...installed[index]!, installationId: 'updated-installation', package: { ...reference, version: params.version! } }; generation++; changed.fire(); return { ...installed[index]!, capabilities: installed[index]!.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) };
 	},
 	uninstall: async params => { requests.push(['uninstall', params]); installed = installed.filter(entry => entry.installationId !== params.installationId); generation++; changed.fire(); },
-	acquireCapability: async () => { throw new Error('unused'); }, releaseCapability: async () => {}, openResource: async () => { throw new Error('unused'); },
+	acquireCapability: async () => { throw new Error('unused'); }, releaseCapability: async () => { }, openResource: async () => { throw new Error('unused'); },
 };
 services.registerInstance(IMarketplaceService, disposables.add(new AppServerMarketplaceService(api, { subscribe: listener => changed.event(() => listener({ method: 'marketplace/changed', params: { instanceId: 'fixture', generation } })) })));
 services.registerInstance(IConfigurationService, { getValue: () => true } as unknown as IConfigurationService);
@@ -130,7 +132,7 @@ services.registerInstance(ISkillService, {
 services.registerInstance(ILanguageServerService, {
 	read: async () => ({ revision, configurations: {}, servers: [{ id: 'typescript-language-server', languageIds: ['typescriptreact'] }] }),
 	configure: async (id, config, expectedRevision) => { requests.push(['configure', id, config, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } revision++; },
-	removeConfiguration: async () => {},
+	removeConfiguration: async () => { },
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
 services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
@@ -164,11 +166,11 @@ const pluginApi: IPluginApi = {
 	revokeGrant: params => mutatePlugin('pluginRevoke', params),
 	uninstall: params => mutatePlugin('pluginUninstall', params),
 };
-services.registerInstance(IPluginService, disposables.add(new AppServerPluginService(pluginApi, { subscribe: () => ({ dispose() {} }) })));
+services.registerInstance(IPluginService, disposables.add(new AppServerPluginService(pluginApi, { subscribe: () => ({ dispose() { } }) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
 services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService);
-services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);
 services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None } as IEditorService);
 services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'fixture', folders: [] }) } as unknown as IWorkspaceContextService);
@@ -204,6 +206,6 @@ window.ashMarketplaceIntegration = {
 };
 declare global {
 	interface Window {
-		ashMarketplaceIntegration: { requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: MarketplaceOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void };
+		ashMarketplaceIntegration: { requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: MarketplaceOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }

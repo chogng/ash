@@ -79,7 +79,7 @@ export interface WorkbenchThemeRegistration extends IDisposable {
  */
 export class WorkbenchThemeRegistry {
 	private readonly _onDidChange = new Emitter<readonly IColorTheme[]>();
-	private readonly themes = new Map<string, { readonly owner: object; readonly theme: IColorTheme }>();
+	private readonly themes = new Map<string, { readonly owner: object; readonly theme: IColorTheme; }>();
 
 	readonly onDidChange: Event<readonly IColorTheme[]> = this._onDidChange.event;
 

@@ -65,18 +65,18 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
 		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
-		for (const [visualLineIndex, row] of rows) {
-			const visualLine = visualProjection.lineAt(visualLineIndex);
-			if (!visualLine) continue;
-			const number = h(row.ownerDocument, "span");
-			number.className = LineNumbersOverlay.CLASS_NAME;
-			number.classList.toggle("active", visualLine.logicalLineIndex === activeLineIndex);
-			number.classList.toggle("active-line-number", visualLine.logicalLineIndex === activeLineIndex);
-			number.textContent = visualLine.firstForLogicalLine
-				? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)
-				: '';
-			reset(row, number);
-		}
+			for (const [visualLineIndex, row] of rows) {
+				const visualLine = visualProjection.lineAt(visualLineIndex);
+				if (!visualLine) continue;
+				const number = h(row.ownerDocument, "span");
+				number.className = LineNumbersOverlay.CLASS_NAME;
+				number.classList.toggle("active", visualLine.logicalLineIndex === activeLineIndex);
+				number.classList.toggle("active-line-number", visualLine.logicalLineIndex === activeLineIndex);
+				number.textContent = visualLine.firstForLogicalLine
+					? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)
+					: '';
+				reset(row, number);
+			}
 		});
 	}
 

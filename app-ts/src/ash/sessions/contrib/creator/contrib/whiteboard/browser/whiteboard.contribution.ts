@@ -12,10 +12,12 @@ class WhiteboardWorkspace extends CreatorCanvasWorkspace {
 	protected override createModeContent(): void { this.editor.setMode(DesignMode.Draw); }
 	private addNote(): void {
 		const index = this.document.model.value.shapes.filter(shape => shape.kind === 'group').length;
-		const note = { id: generateUuid(), kind: 'group' as const, x: 40 + index % 4 * 220, y: 40 + Math.floor(index / 4) * 220, width: 200, height: 200, contentWidth: 200, contentHeight: 200, rotation: 0, fill: '#fff0a6', children: [
-			{ id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 200, height: 200, rotation: 0, fill: '#fff0a6' },
-			{ id: generateUuid(), kind: 'text' as const, x: 16, y: 16, width: 168, height: 168, rotation: 0, fill: '#242424', text: localize('sessions.creator.whiteboard.noteText', 'Your idea'), fontSize: 20 },
-		] };
+		const note = {
+			id: generateUuid(), kind: 'group' as const, x: 40 + index % 4 * 220, y: 40 + Math.floor(index / 4) * 220, width: 200, height: 200, contentWidth: 200, contentHeight: 200, rotation: 0, fill: '#fff0a6', children: [
+				{ id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 200, height: 200, rotation: 0, fill: '#fff0a6' },
+				{ id: generateUuid(), kind: 'text' as const, x: 16, y: 16, width: 168, height: 168, rotation: 0, fill: '#242424', text: localize('sessions.creator.whiteboard.noteText', 'Your idea'), fontSize: 20 },
+			]
+		};
 		this.commands.insertShape(note);
 		this.editor.revealShape(note.children[1].id);
 	}

@@ -52,7 +52,7 @@ interface ChatInputToolbarState {
 	readonly canSelectAgent: boolean;
 }
 
-const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string; readonly icon?: Icon }[] = [
+const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string; readonly icon?: Icon; }[] = [
 	{ id: "agent", label: "Agent", icon: Lxicon.unlimited },
 	{ id: "plan", label: "Plan", icon: Lxicon.plan },
 	{ id: "debug", label: "Debug", icon: Lxicon.debug },
@@ -65,7 +65,7 @@ export interface IChatInputPart extends IDisposable {
 	readonly element: HTMLElement;
 	focus(): void;
 	addContext(attachment: ChatContextAttachment): void;
-	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined>;
+	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
 	appendToDraft(text: string): void;
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
 	acceptInput(value?: string): Promise<void>;
@@ -92,7 +92,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
 	// Retaining this action keeps the open picker and its focused switch alive when the selection changes.
-	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => {});
+	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => { });
 	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
@@ -102,7 +102,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private get mode(): ChatInputMode { return this.state.mode; }
-	private pendingAgentSelection: { readonly agent: ChatAgent | undefined } | undefined;
+	private pendingAgentSelection: { readonly agent: ChatAgent | undefined; } | undefined;
 	private readonly dictationSession: DictationSession;
 	private visible = true;
 	private draftRevision = 0;
@@ -217,7 +217,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.attachmentModel.addContext(attachment);
 	}
 
-	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		const text = this.input.value;
 		const mode = this.mode;
 		const attachments = this.attachmentModel.attachments;
@@ -379,7 +379,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
 			: localize('chat.modePicker.mode', 'Mode: {0}', modeLabel);
 		const modeAction = this.toolbarState.inputKind === "command"
-			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => {})
+			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => { })
 			: new SelectorAction(
 				"ash.chat.input.mode",
 				modeLabel,
@@ -413,7 +413,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						const label = localize('chat.agentPicker.default', 'Default Agent');
 						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => { this.pendingAgentSelection = { agent: undefined }; }, !this.state.selectedAgent));
 					} else if (this.state.agentName) {
-						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => {}, true));
+						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => { }, true));
 					}
 					agentOptions.push(...agents.map(agent => new ChatInputAction(
 						`ash.chat.input.agent.${agent.sourceId}.${agent.name}`,
@@ -440,7 +440,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				undefined,
 				true,
 				'effort',
-				() => {},
+				() => { },
 			)
 			: undefined;
 		const micAction = { ...this.dictationSession.action };
@@ -449,7 +449,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const tooltip = this.toolbarState.inputKind === "command" ? "Run command" : "Send message";
 			sendAction = new ChatInputAction("ash.chat.input.send", "Send", tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit, "send", () => this.inputContainer.requestSubmit());
 		} else {
-			sendAction = new ChatInputAction("ash.chat.input.voice", localize('chat.input.voice', 'Voice conversation'), localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, false, "voice", () => {});
+			sendAction = new ChatInputAction("ash.chat.input.voice", localize('chat.input.voice', 'Voice conversation'), localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, false, "voice", () => { });
 		}
 		const trailingActions = this.toolbarState.canInterrupt
 			? [
@@ -612,7 +612,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.interaction.append(form);
 				this.interactionListeners.add(addDisposableListener(form, "submit", (event) => {
 					event.preventDefault();
-					const answers: Record<string, { value: string }> = {};
+					const answers: Record<string, { value: string; }> = {};
 					for (const [id, input] of inputs) answers[id] = { value: input.value };
 					void this.delegate.resolveInteraction({
 						type: "userInput",
@@ -635,7 +635,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return button;
 	}
 
-	private questionSelect(options: readonly { readonly label: string }[]): HTMLSelectElement {
+	private questionSelect(options: readonly { readonly label: string; }[]): HTMLSelectElement {
 		const select = h(this.element.ownerDocument, "select");
 		for (const option of options) {
 			const element = h(this.element.ownerDocument, "option");
@@ -675,7 +675,7 @@ class ChatInputAction implements IAction {
 		readonly presentation: ChatInputToolbarPresentation,
 		readonly callback: () => void,
 		readonly checked: boolean | undefined = undefined,
-	) {}
+	) { }
 
 	run(): void {
 		this.callback();
@@ -686,7 +686,7 @@ class SelectorAction extends ChatInputAction {
 	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
 
 	constructor(id: string, label: string, tooltip: string, icon: Icon | undefined, presentation: "mode" | "model", actions: readonly IAction[] | (() => Promise<readonly IAction[]>), enabled = true) {
-		super(id, label, tooltip, icon, enabled, presentation, () => {});
+		super(id, label, tooltip, icon, enabled, presentation, () => { });
 		this.actions = actions;
 	}
 }

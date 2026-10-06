@@ -17,7 +17,7 @@ import { IThemeService } from '../../../../../platform/theme/common/themeService
 import { createTextMateScopeThemeResolver } from '../../../../services/textMate/common/textMateScopeTheme.js';
 import { ITextMateService } from '../../../../services/textMate/common/textMateService.js';
 
-const initialState = ((textMate as unknown as { default?: typeof textMate }).default ?? textMate).INITIAL;
+const initialState = ((textMate as unknown as { default?: typeof textMate; }).default ?? textMate).INITIAL;
 
 class InspectEditorTokens extends Action2 {
 	constructor() {

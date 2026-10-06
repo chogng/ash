@@ -65,7 +65,7 @@ test('textarea input publishes insertText through the standard type event', () =
 	using input = new TextAreaInput(createHost(), element);
 	const order: string[] = [];
 	input.onDidBeforeInput(() => order.push('beforeinput'));
-	let typeData: { readonly text: string; readonly replacePrevCharCnt: number } | undefined;
+	let typeData: { readonly text: string; readonly replacePrevCharCnt: number; } | undefined;
 	input.onType(event => {
 		order.push('type');
 		typeData = event;
@@ -93,7 +93,7 @@ test('textarea input publishes normalized composition state', () => {
 	const dom = new JSDOM('<textarea></textarea>');
 	const element = dom.window.document.querySelector('textarea')!;
 	using input = new TextAreaInput(createHost(), element);
-	let composition: { readonly data: string } | undefined;
+	let composition: { readonly data: string; } | undefined;
 	const types: unknown[] = [];
 	let ended = 0;
 	input.onCompositionUpdate(event => composition = event);

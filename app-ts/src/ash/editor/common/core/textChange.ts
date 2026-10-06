@@ -142,7 +142,7 @@ class TextChangeCompressor {
 	private previousDelta = 0;
 	private currentDelta = 0;
 
-	constructor(private readonly previous: TextChange[], private readonly current: TextChange[]) {}
+	constructor(private readonly previous: TextChange[], private readonly current: TextChange[]) { }
 
 	compress(): TextChange[] {
 		let previousIndex = 0;

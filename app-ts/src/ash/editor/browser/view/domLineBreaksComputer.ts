@@ -17,7 +17,7 @@ export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory 
 	constructor(
 		private readonly targetWindow: WeakRef<Window>,
 		private readonly textMeasurer?: TextMeasurer,
-	) {}
+	) { }
 
 	public createLineBreaksComputer(
 		context: ILineBreaksComputerContext,

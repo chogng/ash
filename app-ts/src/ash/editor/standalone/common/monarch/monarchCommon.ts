@@ -14,7 +14,7 @@ export interface ILexer extends ILexerMin {
 	start: string;
 	maxStack: number;
 	tokenPostfix: string;
-	tokenizer: { [name: string]: IRule[] };
+	tokenizer: { [name: string]: IRule[]; };
 	brackets: IMonarchLanguageBracket[];
 }
 
@@ -30,7 +30,7 @@ export function createError(lexer: ILexerMin, message: string): Error {
 
 export function findRules(lexer: ILexer, state: string): IRule[] | null {
 	let name = state;
-	for (;;) {
+	for (; ;) {
 		if (Object.hasOwn(lexer.tokenizer, name)) {
 			return lexer.tokenizer[name]!;
 		}

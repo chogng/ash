@@ -46,12 +46,12 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }), getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {}, ...dictation } : undefined;
+	const service: IDictationService | undefined = dictation ? { onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }), getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { }, ...dictation } : undefined;
 	const services = sharedServices ?? inputResources.add(new InstantiationService());
 	if (!sharedServices) {
 		services.registerInstance(IDictationService, service);
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	registerTestDictationOnboarding(services);
+		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
 	const contextView = inputResources.add(new BrowserContextViewService(document.body));
@@ -60,27 +60,27 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 	partServices.registerSingleton(IActionWidgetService, () => partServices.createInstance(ActionWidgetService));
 	partServices.registerInstance(ILanguageModelsService, {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
+		setApprovalReviewModel: async () => { },
 		onDidChangeModels: AshEvent.None,
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listModels: async () => [],
 		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: () => {},
+		rememberSelectedModel: () => { },
 		listModelCatalog: async () => [],
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
-		setModelProviderApiKey: async () => {},
-		removeModelProviderApiKey: async () => {},
+		setModelProviderApiKey: async () => { },
+		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: async () => [],
 		refreshModels: async () => [],
 		isModelVisible: () => true,
-		setModelVisible: async () => {},
+		setModelVisible: async () => { },
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ChatInputPart,container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
+	const part = partServices.createInstance(ChatInputPart, container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
 	part.render(state);
 	return part;
 }
@@ -165,7 +165,7 @@ function edit(part: ChatInputPart, text: string): void {
 }
 
 test('Local permission and Guardian commands work before the model catalog is ready while Turn input waits', async () => {
-	const commands: Array<{ commandId: string; argumentsText: string }> = [];
+	const commands: Array<{ commandId: string; argumentsText: string; }> = [];
 	let sends = 0;
 	using part = inputPart(sharedNotifications, undefined, 'agent', {
 		executeCommand: async invocation => { commands.push(invocation); },
@@ -262,7 +262,7 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		getPreparation: async () => { reads++; return snapshot; },
 		prepareModel: async () => { prepared++; },
 		cancelPreparation: async () => { cancelled++; },
-		start: async () => { starts++; return { stop: async () => {} }; },
+		start: async () => { starts++; return { stop: async () => { } }; },
 	}, 'agent', { openModelSettings: async category => { categories.push(category); settingsOpened(); }, send: async text => { sent.push(text); } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
@@ -293,10 +293,12 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 test('Chat dictation session failure appears in notifications and releases the microphone', async () => {
 	using notifications = new NotificationService();
 	let endSession: ((error?: string) => void) | undefined;
-	using part = inputPart(notifications, { start: async (_onTranscript, onEnded) => {
-		endSession = onEnded;
-		return { stop: async () => {} };
-	} });
+	using part = inputPart(notifications, {
+		start: async (_onTranscript, onEnded) => {
+			endSession = onEnded;
+			return { stop: async () => { } };
+		}
+	});
 	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button');
 	assert.ok(microphone);
 	microphone.click();
@@ -338,7 +340,7 @@ test('Dictation replaces the selection and submission waits for final transcript
 });
 
 test('Closing an input during microphone acquisition closes the resulting session', async () => {
-	let completeStart!: (session: { stop(): Promise<void> }) => void;
+	let completeStart!: (session: { stop(): Promise<void>; }) => void;
 	let stopped = 0;
 	const part = inputPart(sharedNotifications, { start: () => new Promise(resolve => { completeStart = resolve; }) });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
@@ -359,8 +361,8 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	const backend: IDictationService = {
 		onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
 		getPreparation: async () => undefined,
-		prepareModel: async () => {},
-		cancelPreparation: async () => {},
+		prepareModel: async () => { },
+		cancelPreparation: async () => { },
 		start: async (onTranscript, onEnded) => {
 			transcript = onTranscript;
 			ended = onEnded;
@@ -397,8 +399,8 @@ test('Hiding the recording input discards stop-time text and permits another inp
 	const backend: IDictationService = {
 		onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
 		getPreparation: async () => undefined,
-		prepareModel: async () => {},
-		cancelPreparation: async () => {},
+		prepareModel: async () => { },
+		cancelPreparation: async () => { },
 		start: async onTranscript => {
 			transcript = onTranscript;
 			return { stop: () => new Promise<void>(resolve => { finishStop = () => { transcript('discarded', true); resolve(); }; stopRequested(); }) };
@@ -439,9 +441,9 @@ test('A failed shared session notifies its owning input only', async () => {
 	services.registerInstance(IDictationService, {
 		onDidChangePreparation: AshEvent.None, getOptions: async () => ({ inputDevices: [], languages: [] }),
 		getPreparation: async () => undefined,
-		prepareModel: async () => {},
-		cancelPreparation: async () => {},
-		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => {} }; },
+		prepareModel: async () => { },
+		cancelPreparation: async () => { },
+		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => { } }; },
 	});
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);

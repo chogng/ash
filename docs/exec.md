@@ -41,12 +41,12 @@ local CLI / remote scheduler
 
 这四者不能共享一个含义含糊的 `exec` API。
 
-| 用户或调度器想做什么 | 正确入口 | 当前状态 |
-| --- | --- | --- |
-| 无交互地运行完整 Agent 任务 | `ash-exec` | 本地 run-once 已实现 |
-| 执行一次已经批准的本地命令 | `ash-tool-executor` | 已实现并与 Agent runner 分离 |
-| 在远程机器执行进程或文件操作 | `ash-exec-server` | 已接入 Core 审批与结果记录 |
-| 排队、租约和取消远程 Agent 任务 | 调度协议 | 潜在方向 |
+| 用户或调度器想做什么            | 正确入口            | 当前状态                     |
+| ------------------------------- | ------------------- | ---------------------------- |
+| 无交互地运行完整 Agent 任务     | `ash-exec`          | 本地 run-once 已实现         |
+| 执行一次已经批准的本地命令      | `ash-tool-executor` | 已实现并与 Agent runner 分离 |
+| 在远程机器执行进程或文件操作    | `ash-exec-server`   | 已接入 Core 审批与结果记录   |
+| 排队、租约和取消远程 Agent 任务 | 调度协议            | 潜在方向                     |
 
 ## 2. Codex 参考与 Ash 取舍
 
@@ -325,17 +325,17 @@ Worker mode 不能简单地在循环中调用 CLI `main`。它需要明确：
 
 以下身份不能混用：
 
-| Identity | Owner | 用途 |
-| --- | --- | --- |
-| `ExecRunId` | ash-exec | 当前 runner 内的一次运行 |
-| `JobId` | scheduler | 一次逻辑远程任务 |
-| `AttemptId` | scheduler | 一次 placement/execution attempt |
-| lease/fencing token | scheduler | 阻止过期 worker 继续提交 |
-| `CommandId` | App Server caller | durable command 幂等与 replay |
-| Session/Thread/Turn ID | App Server domain | canonical Agent lifecycle |
-| JSON-RPC request ID | App Server Client | 当前 connection 的 result pairing |
-| durable sequence | aggregate | update replay 与 resync |
-| scheduler event cursor | scheduler protocol | scheduler-side delivery ack |
+| Identity               | Owner              | 用途                              |
+| ---------------------- | ------------------ | --------------------------------- |
+| `ExecRunId`            | ash-exec           | 当前 runner 内的一次运行          |
+| `JobId`                | scheduler          | 一次逻辑远程任务                  |
+| `AttemptId`            | scheduler          | 一次 placement/execution attempt  |
+| lease/fencing token    | scheduler          | 阻止过期 worker 继续提交          |
+| `CommandId`            | App Server caller  | durable command 幂等与 replay     |
+| Session/Thread/Turn ID | App Server domain  | canonical Agent lifecycle         |
+| JSON-RPC request ID    | App Server Client  | 当前 connection 的 result pairing |
+| durable sequence       | aggregate          | update replay 与 resync           |
+| scheduler event cursor | scheduler protocol | scheduler-side delivery ack       |
 
 推荐保存稳定映射：
 
@@ -387,10 +387,10 @@ Core tool port → ash-exec-server client → remote ash-exec-server
 
 二者的 security 和 lifecycle 不同：
 
-| Plane | Authority | Stable unit | Disconnect behavior |
-| --- | --- | --- | --- |
-| Agent scheduling | scheduler + App Server | Job/Session/Thread/Turn | durable recovery/reschedule |
-| Process execution | executor connection | process/filesystem request | terminate, resume or report unknown by exec protocol |
+| Plane             | Authority              | Stable unit                | Disconnect behavior                                  |
+| ----------------- | ---------------------- | -------------------------- | ---------------------------------------------------- |
+| Agent scheduling  | scheduler + App Server | Job/Session/Thread/Turn    | durable recovery/reschedule                          |
+| Process execution | executor connection    | process/filesystem request | terminate, resume or report unknown by exec protocol |
 
 `ash-exec-server` 不得接受 Agent `session/request`，`ash-exec` scheduler adapter 不得提供裸
 `process/start` 旁路。

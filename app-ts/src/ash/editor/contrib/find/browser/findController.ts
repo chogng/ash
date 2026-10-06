@@ -262,7 +262,7 @@ export class FindController extends CommonFindController {
 			searchString?: string;
 			replaceString?: string;
 			isReplaceRevealed?: boolean;
-			widget?: { widgetViewZoneVisible: boolean; scrollTop: number };
+			widget?: { widgetViewZoneVisible: boolean; scrollTop: number; };
 		};
 		this.state.change({ searchString: state.searchString, replaceString: state.replaceString, isReplaceRevealed: state.isReplaceRevealed }, false);
 		this.widget?.setViewState(state.widget);
@@ -436,14 +436,22 @@ export abstract class SelectionMatchFindAction extends EditorAction {
 }
 
 export class NextSelectionMatchFindAction extends SelectionMatchFindAction {
-	constructor() { super({ id: FIND_IDS.NextSelectionMatchFindAction, label: localize2('findNextSelection', 'Find Next Selection'), precondition: undefined,
-		kbOpts: { primary: KeyMod.CtrlCmd | KeyCode.F3, weight: KeybindingWeight.EditorContrib, kbExpr: EditorContextKeys.focus.isEqualTo(true) } }); }
+	constructor() {
+		super({
+			id: FIND_IDS.NextSelectionMatchFindAction, label: localize2('findNextSelection', 'Find Next Selection'), precondition: undefined,
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyCode.F3, weight: KeybindingWeight.EditorContrib, kbExpr: EditorContextKeys.focus.isEqualTo(true) }
+		});
+	}
 	protected _run(controller: CommonFindController): boolean { return controller.moveToNextMatch(); }
 }
 
 export class PreviousSelectionMatchFindAction extends SelectionMatchFindAction {
-	constructor() { super({ id: FIND_IDS.PreviousSelectionMatchFindAction, label: localize2('findPreviousSelection', 'Find Previous Selection'), precondition: undefined,
-		kbOpts: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.F3, weight: KeybindingWeight.EditorContrib, kbExpr: EditorContextKeys.focus.isEqualTo(true) } }); }
+	constructor() {
+		super({
+			id: FIND_IDS.PreviousSelectionMatchFindAction, label: localize2('findPreviousSelection', 'Find Previous Selection'), precondition: undefined,
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.F3, weight: KeybindingWeight.EditorContrib, kbExpr: EditorContextKeys.focus.isEqualTo(true) }
+		});
+	}
 	protected _run(controller: CommonFindController): boolean { return controller.moveToPrevMatch(); }
 }
 

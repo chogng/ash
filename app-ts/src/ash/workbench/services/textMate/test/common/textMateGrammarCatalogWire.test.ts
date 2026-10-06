@@ -27,7 +27,7 @@ import { LanguageRequestStatus } from '../../../../../editor/common/model/langua
 import { WorkerTextModelSyncServer } from '../../../../../editor/common/services/textModelSync/textModelSync.impl.js';
 import { type WebWorkerClientPort } from '../../../../../base/common/worker/webWorker.js';
 
-const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
+const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace; }).default ?? onigurumaNamespace;
 const { createOnigScanner, createOnigString, loadWASM } = onigurumaRuntime;
 const onigLib = initializeOnigLib();
 
@@ -104,7 +104,7 @@ test("Grammar catalog wire clones catalogs and poisons stale clients", async () 
 
 	await client.replaceCatalog(catalog);
 	assert.equal(store.catalogRevision, 1);
-	assert.notEqual((clientPort.sentMessages[0] as { catalog: unknown }).catalog, catalog);
+	assert.notEqual((clientPort.sentMessages[0] as { catalog: unknown; }).catalog, catalog);
 	await assert.rejects(client.replaceCatalog(catalog), /revision must increase/);
 	assert.equal(invalidations.length, 1);
 	assert.throws(() => client.replaceCatalog(grammarCatalog(2)), /already disposed/);
@@ -148,7 +148,7 @@ test("Catalog-gated Worker selects TextMate and falls back dynamically", async (
 	catalogs.replace(grammarCatalog(2, "string.quoted.demo"));
 	assert.equal((await requestTokens("demo")).status, LanguageRequestStatus.Applied);
 	assert.equal(tokens!.tokens[0]!.tokenType, "string");
-	const catalogRequests = clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "ash.textmate.grammar-catalog");
+	const catalogRequests = clientPort.sentMessages.filter(message => (message as { protocol?: string; }).protocol === "ash.textmate.grammar-catalog");
 	assert.equal(catalogRequests.length, 2);
 });
 
@@ -188,7 +188,7 @@ test("Scope themes cross the Syntax Worker boundary and invalidate cached token 
 		tokenType: "keyword",
 		modifiers: ["declaration"],
 	});
-	assert.equal(clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "ash.textmate.scope-theme").length, 1);
+	assert.equal(clientPort.sentMessages.filter(message => (message as { protocol?: string; }).protocol === "ash.textmate.scope-theme").length, 1);
 });
 
 interface MemoryWirePort extends WebWorkerClientPort {

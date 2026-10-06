@@ -2686,11 +2686,15 @@ impl AppServer {
             Some(ClientMethod::MarketplaceListInstalled) => {
                 self.marketplace_list_installed(&request.params)
             }
-            Some(ClientMethod::MarketplaceEditorExtensions | ClientMethod::MarketplaceSetEditorExtensionPolicy) => {
+            Some(
+                ClientMethod::MarketplaceEditorExtensions
+                | ClientMethod::MarketplaceSetEditorExtensionPolicy,
+            ) => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
                 }
-                if client_method(&request.method) == Some(ClientMethod::MarketplaceEditorExtensions) {
+                if client_method(&request.method) == Some(ClientMethod::MarketplaceEditorExtensions)
+                {
                     self.marketplace_editor_extensions(&request.params)
                 } else {
                     self.marketplace_set_editor_extension_policy(&request.params)
@@ -2788,7 +2792,9 @@ impl AppServer {
             Some(ClientMethod::ExtensionResourceOpen) => {
                 self.extension_resource_open(connection, &request.params)
             }
-            Some(ClientMethod::ExtensionHostActivate) => self.extension_host_activate(connection, &request.params),
+            Some(ClientMethod::ExtensionHostActivate) => {
+                self.extension_host_activate(connection, &request.params)
+            }
             Some(ClientMethod::ExtensionHostList) => self.extension_host_list(),
             Some(ClientMethod::ExtensionHostReconcile) => {
                 self.extension_host_reconcile(&request.params)

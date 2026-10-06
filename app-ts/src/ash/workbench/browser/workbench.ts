@@ -325,7 +325,7 @@ export interface IStartWorkbenchOptions {
 	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
-	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
+	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
 	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
 	readonly configurationApi?: IConfigurationApi;
@@ -431,7 +431,7 @@ export class Workbench extends Disposable {
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
 	private readonly configurationService: IConfigurationService;
-	private readonly storage: IStorageService & { switchWorkspace(workspaceId: string): void | Promise<void> };
+	private readonly storage: IStorageService & { switchWorkspace(workspaceId: string): void | Promise<void>; };
 	private readonly editor: IEditorPartsService;
 	private readonly untitledTextEditorService: IUntitledTextEditorService;
 	private readonly workbenchLayout: WorkbenchLayout;
@@ -444,7 +444,7 @@ export class Workbench extends Disposable {
 	private readonly ownerWindow: Window;
 	private restoreActiveViewContainers: (() => Promise<void>) | undefined;
 	private workspaceSwitchQueue: Promise<void> = Promise.resolve();
-	private previousUnexpectedError: { message: string | undefined; time: number } = { message: undefined, time: 0 };
+	private previousUnexpectedError: { message: string | undefined; time: number; } = { message: undefined, time: 0 };
 
 	constructor(
 		productName: string,
@@ -469,7 +469,7 @@ export class Workbench extends Disposable {
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
-		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> },
+		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
 		logger: LogService,
 		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
 		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
@@ -540,7 +540,7 @@ export class Workbench extends Disposable {
 			services.registerInstance(IFileDialogService, new BrowserFileDialogService({
 				kind: 'local',
 				provider: browserFileSystemProvider,
-				pickDirectory: startIn => (window as unknown as { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker(startIn ? { startIn } : undefined),
+				pickDirectory: startIn => (window as unknown as { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined),
 				quickInput: () => services.get(IQuickInputService),
 				fileService: () => services.get(IFileService),
 				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,

@@ -14,8 +14,8 @@ const diffService: IDiffService = {
 			const diff = computer.computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
 			return { identical: diff.changes.length === 0, quitEarly: diff.hitTimeout, changes: diff.changes, moves: diff.moves };
 		},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	}),
 };
 

@@ -13,8 +13,8 @@ suite('CountBadge', () => {
 			setupDelayedHover: () => { throw new Error('Unexpected delayed hover'); },
 			setupHover: () => ({
 				visible: false,
-				show() {},
-				hide() {},
+				show() { },
+				hide() { },
 				update: content => { descriptions.push(String(content)); },
 				dispose: () => { disposed = true; },
 				[Symbol.dispose](): void { this.dispose(); },

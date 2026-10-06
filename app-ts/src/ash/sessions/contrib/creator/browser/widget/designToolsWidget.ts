@@ -44,7 +44,7 @@ export class DesignToolsWidget extends Disposable {
 	private pointerTool = DesignTool.Select;
 	private shapeTool = DesignTool.Rectangle;
 	private menuVisible = false;
-	private renderedState: { tool: DesignTool; mode: DesignMode; isBusy: boolean } | undefined;
+	private renderedState: { tool: DesignTool; mode: DesignMode; isBusy: boolean; } | undefined;
 
 	constructor(ownerDocument: Document, selectTool: (tool: DesignTool) => unknown, selectMode: (mode: DesignMode) => unknown, runDocumentAction: (action: string) => unknown, @IContextMenuService contextMenus: IContextMenuService) {
 		super();

@@ -85,9 +85,9 @@ test("status bar entries compact adjacent members of the same group", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const { document } = dom.window;
 	using service = new StatusbarService();
-	using remote = service.addEntry({ kind: "remote", text: "", run() {} }, { id: "test.remote", alignment: StatusbarAlignment.Left, priority: 3 });
-	using branch = service.addEntry({ text: "main", run() {} }, { id: "test.branch", alignment: StatusbarAlignment.Left, priority: 2, compactGroup: "git" });
-	using sync = service.addEntry({ icon: Lxicon.sync, text: "2↓ 1↑", run() {} }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
+	using remote = service.addEntry({ kind: "remote", text: "", run() { } }, { id: "test.remote", alignment: StatusbarAlignment.Left, priority: 3 });
+	using branch = service.addEntry({ text: "main", run() { } }, { id: "test.branch", alignment: StatusbarAlignment.Left, priority: 2, compactGroup: "git" });
+	using sync = service.addEntry({ icon: Lxicon.sync, text: "2↓ 1↑", run() { } }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
 	using problems = service.addEntry({ text: "0" }, { id: "test.problems", alignment: StatusbarAlignment.Left, priority: 0 });
 	using part = new StatusbarPart(document.body, service);
 	const branchElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
@@ -193,7 +193,7 @@ test("status bar items are focused through the part and activate from the keyboa
 
 test("status bar item tooltips use the managed statusbar hover group", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const setups: Array<{ target: HTMLElement; content: unknown; groupId?: string }> = [];
+	const setups: Array<{ target: HTMLElement; content: unknown; groupId?: string; }> = [];
 	using delegateRegistration = setHoverDelegate({
 		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
 		setupHover(options) {
@@ -223,10 +223,10 @@ test("status bar item tooltips use the managed statusbar hover group", () => {
 function managedHover(): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		show() { },
+		hide() { },
+		update() { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }

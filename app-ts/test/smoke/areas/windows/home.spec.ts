@@ -110,9 +110,9 @@ for (const packageState of ['selected', 'other'] as const) {
 			if (packageState === 'other') {
 				await link(selectedBackend, existingBackend);
 			}
-			const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+			const started = JSON.parse((await execFileAsync(daemon, ['start'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number; };
 			desktop = await launchElectron({ appServerMode: 'required', userDataDirectory });
-			const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number };
+			const connected = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { readonly pid: number; };
 			expect(connected.pid === started.pid).toBe(packageState === 'selected');
 		} finally {
 			try {

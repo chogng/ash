@@ -45,8 +45,8 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 	}
 	for (const id of [null, 'vs-seti']) {
 		await workbench.page.evaluate(async id => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string; }; };
 			const values = JSON.parse(snapshot.document.source);
 			values['workbench.iconTheme'] = id;
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
@@ -172,7 +172,7 @@ test('Settings modal dims and restores Electron window controls', async ({ appli
 	if (!('windows' in application)) return;
 	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
 		if (process.platform === 'darwin') return false;
-		const state = globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] };
+		const state = globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; };
 		state.modalControlColors = [];
 		const window = BrowserWindow.getAllWindows()[0]!;
 		const setOverlay = window.setTitleBarOverlay.bind(window);
@@ -189,19 +189,19 @@ test('Settings modal dims and restores Electron window controls', async ({ appli
 	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 	await expect.poll(() => application.evaluate(() => {
-		const colors = (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1);
+		const colors = (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; }).modalControlColors.at(-1);
 		return !!colors && colors.color !== '#ffffff' && colors.symbolColor !== '#424242';
 	})).toBe(true);
 	await page.getByRole('button', { name: 'Close Ash Settings' }).click();
 	await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toHaveCount(0);
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string }[] }).modalControlColors.at(-1))).toEqual({ color: '#ffffff', symbolColor: '#424242' });
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { modalControlColors: { color?: string; symbolColor?: string; }[]; }).modalControlColors.at(-1))).toEqual({ color: '#ffffff', symbolColor: '#424242' });
 });
 
 test('Desktop migrates a user theme through the file provider and applies its colors', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'Requires the desktop profile file provider');
 	if (!('windows' in application)) return;
 	const hasOverlay = await application.evaluate(({ BrowserWindow }) => {
-		const state = globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string }[] };
+		const state = globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string; }[]; };
 		state.themeUpdates = [];
 		if (process.platform === 'darwin') return false;
 		const window = BrowserWindow.getAllWindows()[0]!;
@@ -221,8 +221,8 @@ test('Desktop migrates a user theme through the file provider and applies its co
 	expect(source.name).toBe('Test Migration');
 	expect(source.version).toBeUndefined();
 	await workbench.page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string; }; };
 		const values = JSON.parse(snapshot.document.source);
 		values['workbench.colorTheme'] = 'test-migration';
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
@@ -234,7 +234,7 @@ test('Desktop migrates a user theme through the file provider and applies its co
 	}));
 	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#304050');
 	if (hasOverlay) {
-		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string }[] }).themeUpdates.at(-1))).toEqual({ color: '#18293a', symbolColor: '#fedcba' });
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { themeUpdates: { color?: string; symbolColor?: string; }[]; }).themeUpdates.at(-1))).toEqual({ color: '#18293a', symbolColor: '#fedcba' });
 	}
 });
 

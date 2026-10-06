@@ -100,7 +100,7 @@ class TestBrowserWindow {
 	private readonly focusListeners = new Set<() => void>();
 	private focused = false;
 	private destroyed = false;
-	readonly selections: Array<{ readonly revision: number; readonly id: string }> = [];
+	readonly selections: Array<{ readonly revision: number; readonly id: string; }> = [];
 	readonly value: INativeMenubarMainWindow;
 
 	constructor(id: number) {
@@ -117,7 +117,7 @@ class TestBrowserWindow {
 				return this.value;
 			},
 			webContents: {
-				send: (_channel: string, selection: { readonly revision: number; readonly id: string }) => {
+				send: (_channel: string, selection: { readonly revision: number; readonly id: string; }) => {
 					this.selections.push(selection);
 				},
 			},

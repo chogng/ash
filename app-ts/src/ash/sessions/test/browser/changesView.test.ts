@@ -41,18 +41,20 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
 			canNavigateBack: false, canNavigateForward: false,
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
-			async initialize() {}, async openThread() {}, openSession() {}, openUntitledSession() {},
+			async initialize() { }, async openThread() { }, openSession() { }, openUntitledSession() { },
 			openNewSession(): never { throw new Error('This test selects durable conversations'); },
-			activateSelection() {}, closeVisibleSelection() {}, navigateBack() {}, navigateForward() {},
+			activateSelection() { }, closeVisibleSelection() { }, navigateBack() { }, navigateForward() { },
 		};
-		const old = new DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][] }>();
+		const old = new DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][]; }>();
 		const details = changes('current');
 		const requests: unknown[] = [];
 		const host = createDisconnectedRendererApi();
 		let truncated = false;
-		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string }> | undefined;
-		using chat = new ChatService({ modelApi: host.model, threadApi: host.thread, turnApi: host.turn, skillApi: host.skills, appServerApi: host.appServer, eventApi: host.events,
-			turnChangesApi: { ...host.turnChanges,
+		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }> | undefined;
+		using chat = new ChatService({
+			modelApi: host.model, threadApi: host.thread, turnApi: host.turn, skillApi: host.skills, appServerApi: host.appServer, eventApi: host.events,
+			turnChangesApi: {
+				...host.turnChanges,
 				list: async params => params.sessionId === 'old' ? old.p : { changeSets: [details.summary] },
 				read: async params => { requests.push(params); return details; },
 				readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
@@ -60,7 +62,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		});
 		const opened: EditorInput[] = [];
 		const openOptions: (EditorOpenOptions | undefined)[] = [];
-		const editors: IEditorService = { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() {} };
+		const editors: IEditorService = { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() { } };
 		services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });
 		services.registerInstance(ISessionsService, sessions);
 		services.registerInstance(IChatService, chat);
@@ -68,7 +70,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(IConfigurationService, config);
 		services.registerInstance(IContextKeyService, contexts);
 		services.registerInstance(INotificationService, notifications);
-		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 		using view = services.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
 		view.setVisible(true);
 		selection = selected('current');

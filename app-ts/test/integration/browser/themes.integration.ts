@@ -74,8 +74,8 @@ declare global {
 		mountNestedHighContrastWidget(): void;
 		disposeNestedHighContrastWidget(): void;
 		disposeIconSelectBox(): void;
-		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string }>;
-		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
+		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string; }>;
+		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[]>;
 		setLabelDecoration(data: IDecorationData | undefined): void;
 		removeLabelDecorationProvider(): void;
 	}
@@ -94,7 +94,7 @@ window.tokenizeInTextMateWorker = async () => {
 	using scopeTheme = new TextMateScopeThemeModel();
 	using model = new TextModel('if');
 	using syntax = new LanguageRequestCoordinator(model, createTextMateSyntaxWorkerFactory(catalogs, scopeTheme));
-	const results: { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[] = [];
+	const results: { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[] = [];
 	const capture = async (): Promise<void> => {
 		let token: LanguageToken | undefined;
 		await syntax.runLatest('tokens', { languageId: 'demo' }, result => {
@@ -125,7 +125,7 @@ window.tokenizeInTextMateWorker = async () => {
 
 const resources = new DisposableStore();
 const extensionThemes = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), {
-	subscribe: () => ({ dispose() {} }),
+	subscribe: () => ({ dispose() { } }),
 }));
 await extensionThemes.start();
 const configuration = resources.add(new WorkbenchConfigurationService());
@@ -152,7 +152,7 @@ window.registerLateThemeColor = () => {
 window.disposeThemeRoot = () => themes.dispose();
 window.selectColorTheme = id => configuration.updateValue(WorkbenchConfiguration.colorTheme, id);
 window.setThemeSetting = (key, value) => configuration.updateValue(key, value);
-let nestedHighContrastWidget: { host: HTMLElement; service: TestThemeService; binding: { dispose(): void } } | undefined;
+let nestedHighContrastWidget: { host: HTMLElement; service: TestThemeService; binding: { dispose(): void; }; } | undefined;
 window.mountNestedHighContrastWidget = () => {
 	const host = document.createElement('div');
 	host.id = 'nested-high-contrast-root';
@@ -179,15 +179,17 @@ const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl
 const grammars = resources.add(new TextMateGrammarService());
 const extensions = resources.add(new AppServerExtensionService({
 	api: {
-		list: async () => ({ generation: 1, diagnostics: [], extensions: [{
-			id: 'ash.theme-seti', name: manifest.name, publisher: manifest.publisher, version: manifest.version,
-			displayName: manifest.displayName, sourceKind: 'builtIn', manifestJson, manifestSha256: hash, packageSha256: hash,
-		}] }),
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'ash.theme-seti', name: manifest.name, publisher: manifest.publisher, version: manifest.version,
+				displayName: manifest.displayName, sourceKind: 'builtIn', manifestJson, manifestSha256: hash, packageSha256: hash,
+			}]
+		}),
 		readResource: async request => {
 			if (request.path === 'icons/font-product.json') {
-			return new TextEncoder().encode(JSON.stringify({ fonts: [{ id: 'seti', weight: '700', style: 'italic', src: [{ path: 'seti.woff', format: 'woff' }] }], iconDefinitions: { add: { fontCharacter: '\\E001', fontId: 'seti' } } }));
-		}
-		if (!urls[request.path]) { throw new Error('Unexpected icon resource'); }
+				return new TextEncoder().encode(JSON.stringify({ fonts: [{ id: 'seti', weight: '700', style: 'italic', src: [{ path: 'seti.woff', format: 'woff' }] }], iconDefinitions: { add: { fontCharacter: '\\E001', fontId: 'seti' } } }));
+			}
+			if (!urls[request.path]) { throw new Error('Unexpected icon resource'); }
 			const response = await fetch(urls[request.path]!);
 			if (!response.ok) { throw new Error('Icon resource failed'); }
 			return new Uint8Array(await response.arrayBuffer());
@@ -247,9 +249,12 @@ document.body.dataset.ready = 'true';
 
 
 window.previewInTextMateWorker = async () => {
-	using catalogs = new TextMateGrammarCatalogModel({ revision: 1, grammars: [{ scopeName: 'source.preview', languageId: 'preview', injectTo: [],
-		content: JSON.stringify({ scopeName: 'source.preview', patterns: [{ begin: '"', end: '"', name: 'string.quoted.preview' }, { match: '\\bif\\b', name: 'keyword.control.preview' }] }),
-	}] });
+	using catalogs = new TextMateGrammarCatalogModel({
+		revision: 1, grammars: [{
+			scopeName: 'source.preview', languageId: 'preview', injectTo: [],
+			content: JSON.stringify({ scopeName: 'source.preview', patterns: [{ begin: '"', end: '"', name: 'string.quoted.preview' }, { match: '\\bif\\b', name: 'keyword.control.preview' }] }),
+		}]
+	});
 	using theme = new TextMateScopeThemeModel();
 	using model = new TextModel('"start\nend"\nif', { languageId: 'preview', tokenization: { syntaxService: { workerFactory: createTextMateSyntaxWorkerFactory(catalogs, theme) } } });
 	const signal = new AbortController().signal;

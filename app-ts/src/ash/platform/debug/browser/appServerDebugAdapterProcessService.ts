@@ -7,7 +7,7 @@ import { type RendererHostCapabilities } from "../../renderer/common/rendererHos
 
 /** App Server adapter for App Server-owned DAP processes. */
 export class AppServerDebugAdapterProcessService implements IDebugAdapterProcessService {
-	constructor(private readonly connection: AppServerProtocolClient, private readonly appServer: IAppServerApi) {}
+	constructor(private readonly connection: AppServerProtocolClient, private readonly appServer: IAppServerApi) { }
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
 		return (await appServerRequest(this.connection, "debug/adapter/start", { program: options.program, arguments: [...options.arguments] })).sessionId;

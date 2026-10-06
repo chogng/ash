@@ -189,8 +189,8 @@ function compareProblems(left: ProblemEntry, right: ProblemEntry): number {
 	return left.marker.resource.toString().localeCompare(right.marker.resource.toString()) || severities.indexOf(left.marker.severity) - severities.indexOf(right.marker.severity) || comparePositions(left.marker.range.start, right.marker.range.start) || left.marker.message.localeCompare(right.marker.message);
 }
 
-function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[] }[] {
-	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[] }>();
+function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[]; }[] {
+	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[]; }>();
 	for (const problem of problems) {
 		const key = problem.marker.resource.toString();
 		const group = getOrSet(groups, key, { resource: problem.marker.resource, problems: [] });

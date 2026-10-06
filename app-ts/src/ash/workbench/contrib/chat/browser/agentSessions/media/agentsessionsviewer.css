@@ -29,7 +29,8 @@
 }
 
 .ash-agent-sessions-group h3 {
-	margin: var(--ash-spacing-size80) var(--ash-spacing-size80) var(--ash-spacing-size40);
+	margin: var(--ash-spacing-size80) var(--ash-spacing-size80)
+		var(--ash-spacing-size40);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-font-size-label2);
 	font-weight: var(--ash-font-weight-semi-bold);

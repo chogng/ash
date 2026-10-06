@@ -10,10 +10,10 @@ const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
 	onDidShowDialog: Event.None,
 	about: async () => { throw new Error('Unexpected about dialog'); },
-	showMessage: async () => {},
-	info: async () => {},
-	warn: async () => {},
-	error: async () => {},
+	showMessage: async () => { },
+	info: async () => { },
+	warn: async () => { },
+	error: async () => { },
 	confirm: async () => ({ confirmed: true }),
 	prompt: async () => { throw new Error('Unexpected prompt'); },
 	input: async () => ({ confirmed: true, values: dialogValues }),
@@ -22,7 +22,7 @@ const testDialogs: IDialogService = {
 test("Stanza collaboration contribution keeps a newly issued invitation available until its owner dismisses it", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	dialogValues = ['Writer', 'viewer'];
-	const invitations: { readonly displayName: string; readonly role: string }[] = [];
+	const invitations: { readonly displayName: string; readonly role: string; }[] = [];
 	using contribution = new CollaborationContribution(environment.window.document.body, {
 		onStart: async () => ({ roomId: "unused", principalId: undefined, canManageMembers: false }),
 		onStop: () => undefined,
@@ -148,7 +148,7 @@ test('Stanza collaboration contribution releases replaced and disposed member ac
 
 test('Stanza collaboration contribution ignores member results after disposal', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	let resolveMembers!: (members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor' }[]) => void;
+	let resolveMembers!: (members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor'; }[]) => void;
 	const contribution = new CollaborationContribution(environment.window.document.body, {
 		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
 		onStop: () => undefined,

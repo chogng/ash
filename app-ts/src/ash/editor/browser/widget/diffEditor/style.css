@@ -2,7 +2,13 @@
 	position: relative;
 	display: grid;
 	grid-template-rows: var(--ash-diff-header-height) minmax(0, 1fr);
-	grid-template-columns: minmax(0, var(--stanza-diff-original-width)) var(--ash-diff-center-width, 0px) minmax(0, 1fr) var(--ash-diff-overview-width, 30px);
+	grid-template-columns:
+		minmax(0, var(--stanza-diff-original-width)) var(
+			--ash-diff-center-width,
+			0px
+		)
+		minmax(0, 1fr)
+		var(--ash-diff-overview-width, 30px);
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
@@ -35,7 +41,10 @@
 }
 
 .stanza-diff-editor.inline-view {
-	grid-template-columns: var(--ash-diff-center-width, 0px) minmax(0, 1fr) var(--ash-diff-overview-width, 30px);
+	grid-template-columns: var(--ash-diff-center-width, 0px) minmax(0, 1fr) var(
+			--ash-diff-overview-width,
+			30px
+		);
 }
 
 .stanza-diff-editor.inline-view .stanza-diff-editor-side.original {
@@ -190,7 +199,10 @@
 	left: 0;
 	z-index: 2;
 	min-height: 2px;
-	background: var(--ash-scrollbar-slider-background, color-mix(in srgb, currentColor 12%, transparent));
+	background: var(
+		--ash-scrollbar-slider-background,
+		color-mix(in srgb, currentColor 12%, transparent)
+	);
 	will-change: transform;
 }
 

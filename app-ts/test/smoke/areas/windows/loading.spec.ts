@@ -11,7 +11,7 @@ test('production loading baseline', async ({ target, workbench }, testInfo) => {
 	await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
 	await cdp.send('Performance.enable');
 	let stage = 'startup';
-	const requests = new Map<string, { stage: string; url: string; type: string; bytes: number | null; status?: number; cached?: boolean; failed?: string }>();
+	const requests = new Map<string, { stage: string; url: string; type: string; bytes: number | null; status?: number; cached?: boolean; failed?: string; }>();
 	cdp.on('Network.requestWillBeSent', event => {
 		if (event.request.url.startsWith('http')) requests.set(event.requestId, { stage, url: event.request.url, type: event.type ?? 'Other', bytes: null });
 	});
@@ -27,7 +27,7 @@ test('production loading baseline', async ({ target, workbench }, testInfo) => {
 		const request = requests.get(event.requestId);
 		if (request) request.failed = event.errorText;
 	});
-	const samples: { stage: string; elapsedMs: number; scriptMs: number; taskMs: number; resources: unknown[] }[] = [];
+	const samples: { stage: string; elapsedMs: number; scriptMs: number; taskMs: number; resources: unknown[]; }[] = [];
 	async function measure(name: string, action: () => Promise<void>): Promise<void> {
 		stage = name;
 		const before = await metrics(cdp);

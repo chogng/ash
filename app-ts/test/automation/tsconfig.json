@@ -5,9 +5,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": [
-    "../../playwright.config.ts",
-    "./**/*.ts",
-    "../smoke/**/*.ts"
-  ]
+  "include": ["../../playwright.config.ts", "./**/*.ts", "../smoke/**/*.ts"]
 }

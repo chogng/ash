@@ -236,7 +236,7 @@ export class URI {
 	}
 
 	/** Returns a URI with the specified decoded components changed. */
-	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null }): URI {
+	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null; }): URI {
 		const scheme = change.scheme === undefined ? this.scheme : change.scheme;
 		const authority = change.authority === undefined ? this.authority : change.authority ?? '';
 		const path = change.path === undefined ? this.path : change.path ?? '';

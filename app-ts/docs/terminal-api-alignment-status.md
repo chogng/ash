@@ -4,19 +4,19 @@
 
 ## 职责与调用链
 
-| Owner | 当前职责与状态 |
-| --- | --- |
-| [platform/terminal](../src/ash/platform/terminal/README.md) | 前端进程契约与 DI 标识；现有 Rust 协议适配、SSH 租约管理继续接入同一后端 |
-| [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md) | 唯一实例集合、活动项和输入队列；进程管理器拥有读取游标、命令排序和解析等待；View 和 xterm 拥有屏幕、焦点、主题及布局 |
-| [services/terminal](../src/ash/workbench/services/terminal/README.md) | 宿主输出 PTY 创建通知与生命周期已接入 Web API 和 Terminal contribution；不保存 Shell 实例服务 |
-| `contrib/tasks/browser/taskService.ts` | 任务发现、执行与终端命令状态；稳定依赖经构造 DI 注入，注册仍由 Code 模式选择 |
-| `contrib/debug/browser/debugService.ts` | Debug 执行编排与 DAP `runInTerminal`；稳定依赖经构造 DI 注入，工厂源仍指向同一个共享 registry |
-| `services/tasks/common/taskService.ts` | 共享任务契约只公开 UI `terminalId`；Tasks/Testing View 自行定位当前终端实例，不向共享契约引入 contribution 类型 |
-| [terminalContrib](../src/ash/workbench/contrib/terminalContrib/README.md) | 现有 links、voice 的部分能力；本批只迁移实例契约 import，未添加其他贡献 |
-| `ash-rs/app-server-protocol` | `terminal/*` 请求、结果、错误与生成 decoder；本批未修改协议 |
-| `ash-rs/app-server/src/server/terminal_operations.rs` | 解码、连接身份、目录授权路由与 DTO 转换 |
-| `ash-rs/exec-server/src/terminal.rs` | 真实 PTY session、可信 profile、授权工作目录、输出 ring、命令状态与 30 秒重连租约 |
-| `ash-rs/utils/pty` | 操作系统 PTY/ConPTY、原始字节、尺寸、进程终止与句柄释放 |
+| Owner                                                                     | 当前职责与状态                                                                                                       |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [platform/terminal](../src/ash/platform/terminal/README.md)               | 前端进程契约与 DI 标识；现有 Rust 协议适配、SSH 租约管理继续接入同一后端                                             |
+| [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md)       | 唯一实例集合、活动项和输入队列；进程管理器拥有读取游标、命令排序和解析等待；View 和 xterm 拥有屏幕、焦点、主题及布局 |
+| [services/terminal](../src/ash/workbench/services/terminal/README.md)     | 宿主输出 PTY 创建通知与生命周期已接入 Web API 和 Terminal contribution；不保存 Shell 实例服务                        |
+| `contrib/tasks/browser/taskService.ts`                                    | 任务发现、执行与终端命令状态；稳定依赖经构造 DI 注入，注册仍由 Code 模式选择                                         |
+| `contrib/debug/browser/debugService.ts`                                   | Debug 执行编排与 DAP `runInTerminal`；稳定依赖经构造 DI 注入，工厂源仍指向同一个共享 registry                        |
+| `services/tasks/common/taskService.ts`                                    | 共享任务契约只公开 UI `terminalId`；Tasks/Testing View 自行定位当前终端实例，不向共享契约引入 contribution 类型      |
+| [terminalContrib](../src/ash/workbench/contrib/terminalContrib/README.md) | 现有 links、voice 的部分能力；本批只迁移实例契约 import，未添加其他贡献                                              |
+| `ash-rs/app-server-protocol`                                              | `terminal/*` 请求、结果、错误与生成 decoder；本批未修改协议                                                          |
+| `ash-rs/app-server/src/server/terminal_operations.rs`                     | 解码、连接身份、目录授权路由与 DTO 转换                                                                              |
+| `ash-rs/exec-server/src/terminal.rs`                                      | 真实 PTY session、可信 profile、授权工作目录、输出 ring、命令状态与 30 秒重连租约                                    |
+| `ash-rs/utils/pty`                                                        | 操作系统 PTY/ConPTY、原始字节、尺寸、进程终止与句柄释放                                                              |
 
 用户创建终端 / Tasks 或 Debug 请求终端 → `ITerminalService` → 唯一 `TerminalService` → 容器注入的 `ITerminalProcessService` → 当前 Rust 协议适配器 → `terminal/create|read|write|writeBinary|resize|close` → PTY。定向测试观察实例创建、字节输出、命令状态、输入、尺寸与关闭；浏览器测试还通过真实 contribution 注册入口验证两个窗口作用域的独立性及缺失依赖。
 
@@ -28,17 +28,17 @@
 
 用户于本批明确回复“同意”下面九个准确路径的退出。路径相对 `app-ts/src/ash`，对应调用方与测试已同批迁移，旧文件不存在、旧模块 import 为零；文件均由 Git 跟踪，可恢复。
 
-| 旧路径 | 当前落位 |
-| --- | --- |
-| `platform/terminal/common/terminalProcessService.ts` | `platform/terminal/common/terminal.ts` |
-| `workbench/services/terminal/common/terminal.ts` | `workbench/contrib/terminal/browser/terminal.ts` |
-| `workbench/services/terminal/browser/terminalService.ts` | `workbench/contrib/terminal/browser/terminalService.ts` |
-| `workbench/services/terminal/test/browser/terminalService.test.ts` | `workbench/contrib/terminal/test/browser/terminalService.test.ts` |
-| `workbench/services/tasks/browser/taskService.ts` | `workbench/contrib/tasks/browser/taskService.ts` |
-| `workbench/services/tasks/browser/taskServiceRegistration.ts` | 合入上述实例实现的 Code 服务注册；UI contribution 不注册该服务 |
-| `workbench/services/debug/browser/debugService.ts` | `workbench/contrib/debug/browser/debugService.ts` |
-| `workbench/services/debug/browser/debugTerminalLauncher.ts` | 合入上述执行实现；`runInTerminal` 测试从 DAP 反向请求入口验证，没有保留测试专用生产导出 |
-| `workbench/services/debug/browser/debugServiceRegistration.ts` | 合入上述实例实现的服务注册，由 `debug.contribution.ts` 加载，窗口容器创建和释放实例 |
+| 旧路径                                                             | 当前落位                                                                                |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `platform/terminal/common/terminalProcessService.ts`               | `platform/terminal/common/terminal.ts`                                                  |
+| `workbench/services/terminal/common/terminal.ts`                   | `workbench/contrib/terminal/browser/terminal.ts`                                        |
+| `workbench/services/terminal/browser/terminalService.ts`           | `workbench/contrib/terminal/browser/terminalService.ts`                                 |
+| `workbench/services/terminal/test/browser/terminalService.test.ts` | `workbench/contrib/terminal/test/browser/terminalService.test.ts`                       |
+| `workbench/services/tasks/browser/taskService.ts`                  | `workbench/contrib/tasks/browser/taskService.ts`                                        |
+| `workbench/services/tasks/browser/taskServiceRegistration.ts`      | 合入上述实例实现的 Code 服务注册；UI contribution 不注册该服务                          |
+| `workbench/services/debug/browser/debugService.ts`                 | `workbench/contrib/debug/browser/debugService.ts`                                       |
+| `workbench/services/debug/browser/debugTerminalLauncher.ts`        | 合入上述执行实现；`runInTerminal` 测试从 DAP 反向请求入口验证，没有保留测试专用生产导出 |
+| `workbench/services/debug/browser/debugServiceRegistration.ts`     | 合入上述实例实现的服务注册，由 `debug.contribution.ts` 加载，窗口容器创建和释放实例     |
 
 用户随后要求删除 `code/browser/workbench/codeWorkbenchServices.ts` 并按 VS Code 的职责组织装载：该文件在 VS Code 无同路径对应，只汇总五项注册，没有状态或独立生命周期。其唯一生产调用方已迁移，文件由 Git 跟踪，可恢复。Extension Host、Codebase Symbols 由 `workbench.common.main.ts` 加载；Tasks 由 Web、Desktop 入口选择；Debug、Testing 由各自的功能 contribution 加载服务注册，窗口容器仍按依赖安装。未新增替代汇总文件。
 
@@ -50,12 +50,12 @@
 
 比较 `app-ts/src/ash` 与只读 `../vscode/src/vs` 的生产 `.ts`、`.css`，排除 `test` 目录及 `.test.ts`。只表示文件路径，不表示完整行为完成率。
 
-| 目录 | Ash | VS Code | 双方都有 | 仅 Ash | 仅 VS Code |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `platform/terminal` | 4 | 46 | 1 | 3 | 45 |
-| `workbench/services/terminal` | 1 | 1 | 1 | 0 | 0 |
-| `workbench/contrib/terminal` | 15 | 89 | 8 | 7 | 81 |
-| `workbench/contrib/terminalContrib` | 4 | 170 | 3 | 1 | 167 |
+| 目录                                | Ash | VS Code | 双方都有 | 仅 Ash | 仅 VS Code |
+| ----------------------------------- | --: | ------: | -------: | -----: | ---------: |
+| `platform/terminal`                 |   4 |      46 |        1 |      3 |         45 |
+| `workbench/services/terminal`       |   1 |       1 |        1 |      0 |          0 |
+| `workbench/contrib/terminal`        |  15 |      89 |        8 |      7 |         81 |
+| `workbench/contrib/terminalContrib` |   4 |     170 |        3 |      1 |        167 |
 
 新增同路径 owner 承接已有 Ash 调用契约。公开名称与参数仍有差异：平台继续使用进程 ID、分页读取和命令游标；进程管理器已接入 Shell 输出事件与解析等待；完整事件型 child process/backend、process manager 的其他公开能力、profile/configuration、分组、编辑区终端和扩展自供 PTY 尚未对齐。本批不把文件迁移或 DI 标识计为完整公开 API 对齐。
 
@@ -67,36 +67,36 @@
 
 本批行为链：用户创建和输入终端 → 已有 `TerminalService` → `ITerminalProcessService` → 所选本地或 SSH 适配器 → 同一 Renderer protocol client → Rust PTY；返回原始字节、前端退出码和命令状态。SSH 适配器直接实现完整现有进程服务契约，宿主不再手工拼接普通服务与重连服务。协议解码只有一个转换入口；token 与连接代次仍只由 SSH 适配器拥有。实例继续拥有当前读取游标、输入队列和屏幕事件，本批不声称已完成事件型 child process。
 
-| 准确路径（相对 `app-ts`，文档除外） | 文件关系 / 本批动作 | 验证 |
-| --- | --- | --- |
-| `src/ash/platform/terminal/common/terminal.ts` | 双方都有；输出改为字节，退出码采用前端 `undefined`，不新增协议端口 | 平台到实例的字节与命令顺序 |
-| `src/ash/platform/terminal/browser/appServerTerminalProcessService.ts` | 已确认保留；转换生成读取结果，不向消费者暴露 base64 和 nullable 退出码 | 真实 protocol client 与 Web host 创建入口 |
-| `src/ash/platform/terminal/browser/reconnectableTerminalProcessService.ts` | 已确认保留；公开参数改用前端契约，完整提供 profile、连接状态与读取转换，保留 token/attach owner | 同一服务对象的读写、连接代次、token 旋转与租约退出 |
-| `src/ash/platform/native/electron-browser/rendererApi.ts` | Ash 产品宿主；直接选择 SSH 适配器，退出手工终端对象拼接，不更改连接创建 | Renderer 编译；实际 Electron 入口在生产构建后验证 |
-| `src/ash/workbench/contrib/terminal/browser/terminalService.ts` | 双方都有；消费已解码字节和前端退出码，保留当前轮询与实例状态 | 既有实例生命周期、命令与输出顺序测试 |
-| `src/ash/platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts` | 保留测试路径；同步创建参数并验证完整进程契约，不迁移文件 | 定向单测 |
-| `src/ash/platform/app-server/test/browser/webRendererApi.test.ts` | 现有 host 行为测试；新增从真实装配入口观察终端 DTO 转换；既有反向请求 fixture 同步生成契约要求的 Thread 身份 | 定向单测 |
-| `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts` | 双方都有；同步前端字节和退出码 fixtures | 定向单测 |
-| `test/integration/browser/terminal.integration.ts` | 既有浏览器 fixture；同步前端进程结果，不改界面 | Terminal / Testing Playwright |
-| `docs/terminal-api-alignment-status.md`、`src/ash/platform/terminal/README.md`、`src/ash/workbench/contrib/terminal/README.md`、仓库 `docs/ash-desktop-architecture.md`、`docs/remote-development.md` | 更新决定、实际装配边界与验证状态 | 文档链接与 diff 检查 |
+| 准确路径（相对 `app-ts`，文档除外）                                                                                                                                                                   | 文件关系 / 本批动作                                                                                          | 验证                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `src/ash/platform/terminal/common/terminal.ts`                                                                                                                                                        | 双方都有；输出改为字节，退出码采用前端 `undefined`，不新增协议端口                                           | 平台到实例的字节与命令顺序                         |
+| `src/ash/platform/terminal/browser/appServerTerminalProcessService.ts`                                                                                                                                | 已确认保留；转换生成读取结果，不向消费者暴露 base64 和 nullable 退出码                                       | 真实 protocol client 与 Web host 创建入口          |
+| `src/ash/platform/terminal/browser/reconnectableTerminalProcessService.ts`                                                                                                                            | 已确认保留；公开参数改用前端契约，完整提供 profile、连接状态与读取转换，保留 token/attach owner              | 同一服务对象的读写、连接代次、token 旋转与租约退出 |
+| `src/ash/platform/native/electron-browser/rendererApi.ts`                                                                                                                                             | Ash 产品宿主；直接选择 SSH 适配器，退出手工终端对象拼接，不更改连接创建                                      | Renderer 编译；实际 Electron 入口在生产构建后验证  |
+| `src/ash/workbench/contrib/terminal/browser/terminalService.ts`                                                                                                                                       | 双方都有；消费已解码字节和前端退出码，保留当前轮询与实例状态                                                 | 既有实例生命周期、命令与输出顺序测试               |
+| `src/ash/platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts`                                                                                                               | 保留测试路径；同步创建参数并验证完整进程契约，不迁移文件                                                     | 定向单测                                           |
+| `src/ash/platform/app-server/test/browser/webRendererApi.test.ts`                                                                                                                                     | 现有 host 行为测试；新增从真实装配入口观察终端 DTO 转换；既有反向请求 fixture 同步生成契约要求的 Thread 身份 | 定向单测                                           |
+| `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts`                                                                                                                             | 双方都有；同步前端字节和退出码 fixtures                                                                      | 定向单测                                           |
+| `test/integration/browser/terminal.integration.ts`                                                                                                                                                    | 既有浏览器 fixture；同步前端进程结果，不改界面                                                               | Terminal / Testing Playwright                      |
+| `docs/terminal-api-alignment-status.md`、`src/ash/platform/terminal/README.md`、`src/ash/workbench/contrib/terminal/README.md`、仓库 `docs/ash-desktop-architecture.md`、`docs/remote-development.md` | 更新决定、实际装配边界与验证状态                                                                             | 文档链接与 diff 检查                               |
 
 `disconnectedTerminalProcessService.ts` 的拒绝操作与现有契约兼容，本批无需改写。没有文件移动或删除；其余八处 UI 载体与旧重连测试路径仍未取得退出决定。
 
 下表仍没有上游同路径，不在本批移动/删除范围。前三处保留专属协议职责；其余载体须沿实际 UI 行为继续核对，不能因为 Rust 已经提供执行能力就长期保留通用职责的错位文件。
 
-| 路径（相对 `app-ts/src/ash`） | 尚待处理 |
-| --- | --- |
-| `platform/terminal/browser/appServerTerminalProcessService.ts` | 已确认保留 Rust 协议转换职责；不是上游通用 backend 的替代 owner |
-| `platform/terminal/browser/reconnectableTerminalProcessService.ts` | 已确认保留 Renderer SSH bearer 租约与连接代次职责 |
-| `platform/terminal/browser/disconnectedTerminalProcessService.ts` | 已确认保留无后端 Ash 宿主的明确拒绝行为 |
-| `workbench/contrib/terminal/browser/instance/alternateScroll.ts` | 随真实 xterm 滚动入口核对归属 |
+| 路径（相对 `app-ts/src/ash`）                                           | 尚待处理                                                                                               |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `platform/terminal/browser/appServerTerminalProcessService.ts`          | 已确认保留 Rust 协议转换职责；不是上游通用 backend 的替代 owner                                        |
+| `platform/terminal/browser/reconnectableTerminalProcessService.ts`      | 已确认保留 Renderer SSH bearer 租约与连接代次职责                                                      |
+| `platform/terminal/browser/disconnectedTerminalProcessService.ts`       | 已确认保留无后端 Ash 宿主的明确拒绝行为                                                                |
+| `workbench/contrib/terminal/browser/instance/alternateScroll.ts`        | 随真实 xterm 滚动入口核对归属                                                                          |
 | `workbench/contrib/terminal/browser/instance/terminalInstanceWidget.ts` | 对应 `browser/terminalInstance.ts` 与 `browser/xterm/xtermTerminal.ts`；仍需核对公开对象和屏幕生命周期 |
-| `workbench/contrib/terminal/browser/instance/terminalTheme.ts` | 随真实主题转换切片处理 |
-| `workbench/contrib/terminal/browser/view/media/terminal.css` | 核对本地 DOM、样式 owner 与上游 `browser/media/terminal.css` |
-| `workbench/contrib/terminal/browser/view/terminalProfileIcon.ts` | 随 profile 选择入口处理 |
-| `workbench/contrib/terminal/browser/view/terminalTabsLayout.ts` | 随分组与布局入口处理 |
-| `workbench/contrib/terminal/browser/view/terminalTitleActions.ts` | 随真实命令和菜单入口处理 |
-| `workbench/contrib/terminalContrib/voice/browser/terminalVoice.css` | 随语音界面样式职责处理 |
+| `workbench/contrib/terminal/browser/instance/terminalTheme.ts`          | 随真实主题转换切片处理                                                                                 |
+| `workbench/contrib/terminal/browser/view/media/terminal.css`            | 核对本地 DOM、样式 owner 与上游 `browser/media/terminal.css`                                           |
+| `workbench/contrib/terminal/browser/view/terminalProfileIcon.ts`        | 随 profile 选择入口处理                                                                                |
+| `workbench/contrib/terminal/browser/view/terminalTabsLayout.ts`         | 随分组与布局入口处理                                                                                   |
+| `workbench/contrib/terminal/browser/view/terminalTitleActions.ts`       | 随真实命令和菜单入口处理                                                                               |
+| `workbench/contrib/terminalContrib/voice/browser/terminalVoice.css`     | 随语音界面样式职责处理                                                                                 |
 
 重连测试旧路径 `platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts` 实际测试 Renderer 租约管理；本批没有取得它的准确退出确认，保留原测试路径与覆盖。
 
@@ -118,12 +118,12 @@ Terminal 专属无障碍帮助、输出 Accessible View、verbosity、Find、历
 
 连接状态仍由窗口 `TerminalService` 唯一拥有。实例开始读取时查询该 owner 的当前状态，创建与重启走同一个检查：本地断线进入 disconnected，不自动恢复；SSH 进入 reconnecting，在 ready 后续读成功才恢复 running。实例不新增连接快照、协议请求或重连 owner。列表变化在列表、标题、活动项和初始状态完成更新后通知，不改变创建事件先于输出订阅的约定。屏幕、DOM、焦点与尺寸 owner 不变。
 
-| 本批准入的准确路径 | 文件关系 / 动作 | 验证 |
-| --- | --- | --- |
-| `app-ts/src/ash/workbench/contrib/terminal/browser/terminalService.ts` | 双方都有；补齐创建与释放的列表通知；创建和 Relaunch 开始读取前检查唯一连接 owner | DI 服务入口的事件快照、延迟创建与连接变化、无多余读写 |
-| `app-ts/src/ash/workbench/contrib/terminal/browser/terminal.ts` | 双方都有；注释说明现有列表事件的触发与状态约定，不新增公开端口 | 契约编译与服务测试 |
-| `app-ts/src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts` | 双方都有；在已有生命周期 suite 增加回归测试，复用可控创建与读取边界 | 正常单测入口和 disposable tracker |
-| `app-ts/src/ash/workbench/contrib/terminal/README.md`、本台账、`docs/ash-desktop-architecture.md` | 已有职责文档；同步列表通知与晚到创建的连接语义 | 文档链接和 diff 检查 |
+| 本批准入的准确路径                                                                                | 文件关系 / 动作                                                                  | 验证                                                  |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `app-ts/src/ash/workbench/contrib/terminal/browser/terminalService.ts`                            | 双方都有；补齐创建与释放的列表通知；创建和 Relaunch 开始读取前检查唯一连接 owner | DI 服务入口的事件快照、延迟创建与连接变化、无多余读写 |
+| `app-ts/src/ash/workbench/contrib/terminal/browser/terminal.ts`                                   | 双方都有；注释说明现有列表事件的触发与状态约定，不新增公开端口                   | 契约编译与服务测试                                    |
+| `app-ts/src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts`                  | 双方都有；在已有生命周期 suite 增加回归测试，复用可控创建与读取边界              | 正常单测入口和 disposable tracker                     |
+| `app-ts/src/ash/workbench/contrib/terminal/README.md`、本台账、`docs/ash-desktop-architecture.md` | 已有职责文档；同步列表通知与晚到创建的连接语义                                   | 文档链接和 diff 检查                                  |
 
 重新准入：从列表事件和连接状态继续向真实命令消费者追踪，发现 Tasks / DAP 在创建返回后不检查实例状态便写入命令，可能错报启动并一直等待。这是本切片的必要调用方闭合，因此增加以下准确路径：`app-ts/src/ash/workbench/contrib/tasks/browser/taskService.ts`、`app-ts/src/ash/workbench/contrib/debug/browser/debugService.ts`（双方都有；写入前检查终端 running，失败时关闭自己创建的实例，不发布 TaskRun / DAP success）；既有 `app-ts/src/ash/workbench/services/tasks/test/browser/taskService.test.ts`、`app-ts/src/ash/workbench/services/debug/test/browser/debugTerminalLauncher.test.ts`（保留已确认测试归属；从真实 DI 服务和 DAP reverse request 链路观察未发送命令、未启动任务与关闭）；`app-ts/src/ash/workbench/services/tasks/README.md`、`app-ts/src/ash/workbench/services/debug/README.md`（更新失败语义）；`app-ts/localization/zh-CN/workbench.json`（已有词条 owner；新增错误接入 NLS 并验证中文）。实现不等待恢复后重放命令，用户可以重新运行。
 
@@ -141,32 +141,32 @@ Terminal 专属无障碍帮助、输出 Accessible View、verbosity、Find、历
 
 定向验证从 Rust 公共服务和 App Server typed dispatch 观察真实 PID、目录变化、resize、字节、信号、错误连接拒绝与关闭；从前端真实装配观察 PID 传播、DAP 回复和文本/二进制输入顺序；通过正常构建、生成物检查以及 Playwright Terminal/Tasks/Debug 产品场景验证没有退化。保留全部既有工作区变化，不新建执行后端或标准 child process 空壳。
 
-| 第五批能力 | 唯一 owner 与当前结果 |
-| --- | --- |
-| 创建/attach ready | utils-pty 在 child 交给回收任务前捕获 OS PID；exec-server 保存启动时实际使用的规范目录；attach 返回同一身份。前端实例公开 processId/initialCwd，Relaunch 才更新；DAP `runInTerminal` 成功回复携带 `shellProcessId`。 |
-| `terminal/processInfo` | exec-server 检查 connection 和目录授权后查询 root shell 的实际 cwd，返回启动信息和最后一次成功应用的字符尺寸；resize/attach 成功后才更新尺寸。macOS/Linux 查询目录，其他平台和已退出进程返回 null。此出口是 Rust 公开进程契约，尚未接入前端完整属性集合。 |
+| 第五批能力             | 唯一 owner 与当前结果                                                                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 创建/attach ready      | utils-pty 在 child 交给回收任务前捕获 OS PID；exec-server 保存启动时实际使用的规范目录；attach 返回同一身份。前端实例公开 processId/initialCwd，Relaunch 才更新；DAP `runInTerminal` 成功回复携带 `shellProcessId`。                                                       |
+| `terminal/processInfo` | exec-server 检查 connection 和目录授权后查询 root shell 的实际 cwd，返回启动信息和最后一次成功应用的字符尺寸；resize/attach 成功后才更新尺寸。macOS/Linux 查询目录，其他平台和已退出进程返回 null。此出口是 Rust 公开进程契约，尚未接入前端完整属性集合。                  |
 | `terminal/writeBinary` | App Server 检查 base64 编码上限并解码；exec-server 检查 64 KiB 原始字节上限与所有权；走与文本相同的有界 writer channel，不进行 UTF-8 转换或 command-status 文本推断。xterm onBinary 已沿两个 Renderer adapter 接入；实例按同一队列发送所有先前文本批次、二进制、随后文本。 |
-| `terminal/sendSignal` | exec-server 校验所有权及授权，再委托 utils-pty。Unix PTY 从 tcgetpgrp 找到前台 job，发送 SIGINT；pipe 保留原进程组语义，hard close 保留原 kill-tree 行为。Windows 显式报告不支持。尚未把这个 Rust 出口扩成无当前调用方的前端通用 signal facade。 |
-| 关闭与断线 | 沿用现有 connectionOwned / reconnectable 身份、token 旋转、租约过期及授权撤销清理；不改变 Main/Renderer 的连接拓扑，不重放输入。 |
+| `terminal/sendSignal`  | exec-server 校验所有权及授权，再委托 utils-pty。Unix PTY 从 tcgetpgrp 找到前台 job，发送 SIGINT；pipe 保留原进程组语义，hard close 保留原 kill-tree 行为。Windows 显式报告不支持。尚未把这个 Rust 出口扩成无当前调用方的前端通用 signal facade。                           |
+| 关闭与断线             | 沿用现有 connectionOwned / reconnectable 身份、token 旋转、租约过期及授权撤销清理；不改变 Main/Renderer 的连接拓扑，不重放输入。                                                                                                                                           |
 
 ### 第六批：宿主输出 PTY 基座
 
 用户要求补齐基座文件，范围包含建立缺失的 Web 宿主创建入口及其下层契约。生产链路是 `IWebWorkbench.window.createTerminal` → `IEmbedderTerminalService.createTerminal` → `TerminalMainContribution` → `ITerminalService.createTerminal` → 宿主 PTY 打开、输出、改名、退出与释放 → 现有 Terminal View/xterm。服务拥有 contribution 就绪前的创建请求，实例拥有接入后的进程和早到事件；窗口仍只有一个实例列表和一份屏幕。
 
-| 准确路径（相对 `app-ts`） | 关系与本批动作 |
-| --- | --- |
-| `src/ash/platform/terminal/common/terminal.ts` | 双方都有；补宿主输出所需的 launch config、进程事件、标题属性和启动/关闭契约 |
-| `src/ash/workbench/services/terminal/common/embedderTerminalService.ts` | 仅 VS Code，原路径新增；宿主 PTY 契约、窗口级创建通知、启动请求队列与进程释放 |
-| `src/ash/workbench/contrib/terminal/browser/terminalMainContribution.ts` | 仅 VS Code，原路径新增；订阅创建通知、接入现有实例服务并显示 View |
-| `src/ash/workbench/contrib/terminal/browser/terminal.contribution.ts` | 双方都有；BlockStartup 注册宿主接入 contribution |
-| `src/ash/workbench/contrib/terminal/browser/terminal.ts` | 双方都有；创建选项区分 Shell profile 与自供 PTY，实例公开只读能力 |
-| `src/ash/workbench/contrib/terminal/browser/terminalService.ts` | 双方都有；现有实例 owner 接入宿主事件、保留界面订阅前的输出与退出、处理关闭和 Relaunch |
-| `src/ash/workbench/browser/web.api.ts`、`src/ash/workbench/browser/workbench.ts` | 双方都有；Web 返回接口与窗口实现提供 `window.createTerminal` |
-| `src/ash/workbench/contrib/terminal/browser/terminalView.ts` | 双方都有；无 folder 的宿主输出终端不显示 Shell 的打开目录提示 |
-| `src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.ts` | 已记录的 Ash 屏幕 owner，本批只按实例只读能力禁止 xterm 输入，不移动或改写 DOM/CSS |
-| `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts` | 双方都有；只读宿主实例不启动语音输入 |
-| `src/ash/workbench/services/terminal/test/common/embedderTerminalService.test.ts` | 宿主链路回归测试；从真实 DI 服务和 contribution 观察创建、输出、退出、改名、跨窗口隔离、失败与释放 |
-| `test/integration/browser/terminal.integration.ts`、`test/integration/browser/terminal.integration.spec.ts` | 现有 Playwright 入口增加宿主 PTY，验证生产注册、真实 xterm 的早到输出、只读、焦点与清理 |
+| 准确路径（相对 `app-ts`）                                                                                   | 关系与本批动作                                                                                     |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/ash/platform/terminal/common/terminal.ts`                                                              | 双方都有；补宿主输出所需的 launch config、进程事件、标题属性和启动/关闭契约                        |
+| `src/ash/workbench/services/terminal/common/embedderTerminalService.ts`                                     | 仅 VS Code，原路径新增；宿主 PTY 契约、窗口级创建通知、启动请求队列与进程释放                      |
+| `src/ash/workbench/contrib/terminal/browser/terminalMainContribution.ts`                                    | 仅 VS Code，原路径新增；订阅创建通知、接入现有实例服务并显示 View                                  |
+| `src/ash/workbench/contrib/terminal/browser/terminal.contribution.ts`                                       | 双方都有；BlockStartup 注册宿主接入 contribution                                                   |
+| `src/ash/workbench/contrib/terminal/browser/terminal.ts`                                                    | 双方都有；创建选项区分 Shell profile 与自供 PTY，实例公开只读能力                                  |
+| `src/ash/workbench/contrib/terminal/browser/terminalService.ts`                                             | 双方都有；现有实例 owner 接入宿主事件、保留界面订阅前的输出与退出、处理关闭和 Relaunch             |
+| `src/ash/workbench/browser/web.api.ts`、`src/ash/workbench/browser/workbench.ts`                            | 双方都有；Web 返回接口与窗口实现提供 `window.createTerminal`                                       |
+| `src/ash/workbench/contrib/terminal/browser/terminalView.ts`                                                | 双方都有；无 folder 的宿主输出终端不显示 Shell 的打开目录提示                                      |
+| `src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.ts`                             | 已记录的 Ash 屏幕 owner，本批只按实例只读能力禁止 xterm 输入，不移动或改写 DOM/CSS                 |
+| `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts`                                  | 双方都有；只读宿主实例不启动语音输入                                                               |
+| `src/ash/workbench/services/terminal/test/common/embedderTerminalService.test.ts`                           | 宿主链路回归测试；从真实 DI 服务和 contribution 观察创建、输出、退出、改名、跨窗口隔离、失败与释放 |
+| `test/integration/browser/terminal.integration.ts`、`test/integration/browser/terminal.integration.spec.ts` | 现有 Playwright 入口增加宿主 PTY，验证生产注册、真实 xterm 的早到输出、只读、焦点与清理            |
 
 同步现有 `src/ash/platform/terminal/README.md`、`src/ash/workbench/services/terminal/README.md`、`src/ash/workbench/contrib/terminal/README.md`、本台账及仓库 `docs/ash-desktop-architecture.md`。没有删除、移动文件，没有修改 Rust 协议或生成 DTO，没有新增执行后端或屏幕 owner。
 

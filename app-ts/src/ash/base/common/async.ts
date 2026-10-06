@@ -90,7 +90,7 @@ export function rejectIfNotCanceled(error: unknown): undefined {
 	return Promise.reject(error) as never;
 }
 
-export function promiseWithResolvers<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T | PromiseLike<T>) => void; readonly reject: (reason?: unknown) => void } {
+export function promiseWithResolvers<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T | PromiseLike<T>) => void; readonly reject: (reason?: unknown) => void; } {
 	let resolve!: (value: T | PromiseLike<T>) => void;
 	let reject!: (reason?: unknown) => void;
 	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
@@ -319,7 +319,7 @@ export class DeferredPromise<T> {
 
 	private readonly resolvePromise: (value: T | PromiseLike<T>) => void;
 	private readonly rejectPromise: (reason?: unknown) => void;
-	private outcome: { readonly kind: 'resolved'; readonly value: T } | { readonly kind: 'rejected'; readonly reason: unknown } | undefined;
+	private outcome: { readonly kind: 'resolved'; readonly value: T; } | { readonly kind: 'rejected'; readonly reason: unknown; } | undefined;
 	readonly p: Promise<T>;
 
 	constructor() {
@@ -368,7 +368,7 @@ export function first<T>(promiseFactories: readonly (() => PromiseLike<T>)[], sh
 
 export class TaskQueue {
 	private running = false;
-	private pending: Array<{ readonly task: () => unknown | PromiseLike<unknown>; readonly deferred: DeferredPromise<unknown>; readonly skipIfCleared: boolean }> = [];
+	private pending: Array<{ readonly task: () => unknown | PromiseLike<unknown>; readonly deferred: DeferredPromise<unknown>; readonly skipIfCleared: boolean; }> = [];
 
 	schedule<T>(task: () => T | PromiseLike<T>): Promise<T> {
 		return this.enqueue(task, false) as Promise<T>;
@@ -419,7 +419,7 @@ export interface IdleDeadline {
 
 export function runWhenGlobalIdle(callback: (deadline: IdleDeadline) => void, timeoutMs?: number): IDisposable {
 	const idleGlobal = globalThis as typeof globalThis & {
-		requestIdleCallback?: (callback: (deadline: IdleDeadline) => void, options?: { readonly timeout?: number }) => number;
+		requestIdleCallback?: (callback: (deadline: IdleDeadline) => void, options?: { readonly timeout?: number; }) => number;
 		cancelIdleCallback?: (handle: number) => void;
 	};
 	if (idleGlobal.requestIdleCallback && idleGlobal.cancelIdleCallback) {
@@ -439,6 +439,6 @@ function validateDelay(delay: number): void {
 }
 
 function disposePromiseResult(value: unknown): void {
-	const disposable = value as { readonly dispose?: unknown } | undefined;
+	const disposable = value as { readonly dispose?: unknown; } | undefined;
 	if (typeof disposable?.dispose === 'function') disposable.dispose();
 }

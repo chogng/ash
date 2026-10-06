@@ -34,7 +34,7 @@ test("AbstractDisposable closes its tracking record when cleanup throws", () => 
 test("DisposableTracker reports an unowned disposable until it is disposed", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
-	const resource = toDisposable(() => {});
+	const resource = toDisposable(() => { });
 
 	const [leak] = tracker.leaks();
 	assert.equal(leak?.label, "toDisposable");
@@ -49,7 +49,7 @@ test("DisposableTracker reports an unowned disposable until it is disposed", () 
 test("markAsSingleton excludes a process-lifetime disposable from leak reports", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
-	const resource = markAsSingleton(toDisposable(() => {}));
+	const resource = markAsSingleton(toDisposable(() => { }));
 
 	tracker.assertNoLeaks();
 	resource.dispose();
@@ -59,7 +59,7 @@ test("DisposableTracker records ownership and closes the complete subtree", () =
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	const store = new DisposableStore();
-	store.add(toDisposable(() => {}));
+	store.add(toDisposable(() => { }));
 
 	const child = tracker.leaks().find((leak) => leak.label === "toDisposable");
 	assert.equal(child?.ownerLabel, "DisposableStore");
@@ -93,7 +93,7 @@ test("DisposableTracker follows values owned by DisposableMap", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	const resources = new DisposableMap<string>();
-	resources.set("resource", toDisposable(() => {}));
+	resources.set("resource", toDisposable(() => { }));
 
 	const child = tracker.leaks().find((leak) => leak.label === "toDisposable");
 	assert.equal(child?.ownerLabel, "DisposableMap");
@@ -106,7 +106,7 @@ test("DisposableMap releases leaked values from its ownership graph", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	const resources = new DisposableMap<string>();
-	const resource = resources.set("resource", toDisposable(() => {}));
+	const resource = resources.set("resource", toDisposable(() => { }));
 
 	assert.equal(resources.deleteAndLeak("resource"), resource);
 	const child = tracker.leaks().find((leak) => leak.label === "toDisposable");
@@ -121,8 +121,8 @@ test("DisposableTracker follows MutableDisposable values", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	const slot = new MutableDisposable();
-	const first = toDisposable(() => {});
-	const second = toDisposable(() => {});
+	const first = toDisposable(() => { });
+	const second = toDisposable(() => { });
 	slot.value = first;
 
 	assert.equal(
@@ -159,7 +159,7 @@ test("DisposableTracker follows Disposable through its internal store", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	const owner = new Owner();
-	owner.take(toDisposable(() => {}));
+	owner.take(toDisposable(() => { }));
 
 	const store = tracker.leaks().find((leak) =>
 		leak.label === "DisposableStore"
@@ -175,7 +175,7 @@ test("DisposableTracker rejects multiple owners before ownership transfers", () 
 	using installation = installDisposableTracker(tracker);
 	const first = new DisposableStore();
 	const second = new DisposableStore();
-	const resource = first.add(toDisposable(() => {}));
+	const resource = first.add(toDisposable(() => { }));
 
 	assert.throws(
 		() => second.add(resource),
@@ -216,7 +216,7 @@ test("DisposableTracker closes ownership records even when cleanup throws", () =
 
 test("tracking is disabled outside an installed development scope", () => {
 	const tracker = new DisposableTracker();
-	const resource = toDisposable(() => {});
+	const resource = toDisposable(() => { });
 
 	assert.equal(tracker.leaks().length, 0);
 	resource.dispose();

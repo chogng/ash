@@ -15,7 +15,7 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 		private readonly _containsUnusualLineTerminators: boolean,
 		private readonly _isBasicASCII: boolean,
 		private readonly _normalizeEOL: boolean,
-	) {}
+	) { }
 
 	private _getEOL(defaultEOL: DefaultEndOfLine): '\r\n' | '\n' {
 		const totalEOLCount = this._cr + this._lf + this._crlf;
@@ -23,7 +23,7 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 		return this._cr + this._crlf > totalEOLCount / 2 ? '\r\n' : '\n';
 	}
 
-	create(defaultEOL: DefaultEndOfLine): { textBuffer: PieceTreeTextBuffer; disposable: IDisposable } {
+	create(defaultEOL: DefaultEndOfLine): { textBuffer: PieceTreeTextBuffer; disposable: IDisposable; } {
 		const eol = this._getEOL(defaultEOL);
 		let value = this._chunks.join('');
 		if (this._normalizeEOL) value = value.replace(/\r\n|\r|\n/g, eol);

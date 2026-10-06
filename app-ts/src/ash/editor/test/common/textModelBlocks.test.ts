@@ -43,7 +43,7 @@ test("DocumentSchema creates and validates block, inline, and code-block nodes",
 
 test("TextModel updates plugin state across edits, history, and reset", () => {
 	const schema = createDefaultDocumentSchema();
-	const key = new DocumentPluginKey<{ readonly origins: readonly string[]; readonly selections: readonly string[]; readonly versions: readonly number[] }>("audit");
+	const key = new DocumentPluginKey<{ readonly origins: readonly string[]; readonly selections: readonly string[]; readonly versions: readonly number[]; }>("audit");
 	const plugin = createDocumentPlugin(key, {
 		init: context => ({ origins: [], selections: [], versions: [context.version] }),
 		apply: (value, context) => ({ origins: [...value.origins, context.origin], selections: value.selections, versions: [...value.versions, context.version] }),
@@ -89,11 +89,13 @@ test("TextModel exposes plugin-owned decoration sources without merging identiti
 	const plugin = createDocumentPlugin(key, {
 		init: context => new DocumentDecorationSet([createDocumentDecoration({ id: "hit", from: { nodeId: context.document.content[0]!.content[0]!.id, offset: 0 }, to: { nodeId: context.document.content[0]!.content[0]!.id, offset: 2 } })]),
 		apply: (value, context) => value.map(context.previousDocument, context.schema, context.transaction),
-	}, { decorations: (state, context) => {
-		assert.equal(context.state, state);
-		assert.equal(context.version, 1);
-		return state;
-	} });
+	}, {
+		decorations: (state, context) => {
+			assert.equal(context.state, state);
+			assert.equal(context.version, 1);
+			return state;
+		}
+	});
 	using model = TextModel.create(schema, document, { plugins: [plugin] });
 
 	const sources = model.getPluginDecorations();
@@ -337,12 +339,14 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	const line = (type: "richLine" | "codeLine" | "captionLine", text: string) => schema.createNode(type, {
 		content: text.length > 0 ? [schema.createText(text)] : [],
 	});
-	const group = schema.createNode("group", { content: [
-		schema.createNode("textBlock", { content: [line("richLine", "First"), line("richLine", "Second")] }),
-		schema.createNode("quoteBlock", { content: [line("richLine", "Quoted")] }),
-		schema.createNode("codeBlock", { content: [line("codeLine", "const value = 1;"), line("codeLine", "return value;")] }),
-		schema.createNode("imageBlock", { attrs: { src: "image.png" }, content: [line("captionLine", "Figure 1")] }),
-	] });
+	const group = schema.createNode("group", {
+		content: [
+			schema.createNode("textBlock", { content: [line("richLine", "First"), line("richLine", "Second")] }),
+			schema.createNode("quoteBlock", { content: [line("richLine", "Quoted")] }),
+			schema.createNode("codeBlock", { content: [line("codeLine", "const value = 1;"), line("codeLine", "return value;")] }),
+			schema.createNode("imageBlock", { attrs: { src: "image.png" }, content: [line("captionLine", "Figure 1")] }),
+		]
+	});
 	const document = schema.createDocument([group]);
 	using model = TextModel.create(schema, document);
 
@@ -371,7 +375,7 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	});
 	assert.deepEqual(model.lineDocument.facets.forLine(codeBlock.content[1]!.id).map(facet => facet.kind), ["group", "codeBlock", "codeLine"]);
 	assert.equal(model.lineDocument.atoms.values[0]?.kind, "image");
-	const textChanges: { readonly reason: string; readonly changes: readonly { readonly rangeOffset: number; readonly rangeLength: number; readonly text: string }[] }[] = [];
+	const textChanges: { readonly reason: string; readonly changes: readonly { readonly rangeOffset: number; readonly rangeLength: number; readonly text: string; }[]; }[] = [];
 	model.onDidChangeContent(change => textChanges.push(change));
 	const firstCodeText = group.content[2]!.content[0]!.content[0]!;
 	const textBeforeEdit = model.getText();

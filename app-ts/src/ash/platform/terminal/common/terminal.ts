@@ -11,8 +11,8 @@ export interface ITerminalProcessProfile {
 }
 
 export type TerminalProcessProfileSelection =
-	| { readonly type: "default" }
-	| { readonly type: "profile"; readonly profileId: string };
+	| { readonly type: "default"; }
+	| { readonly type: "profile"; readonly profileId: string; };
 
 export interface ITerminalProcessCreateOptions {
 	readonly dirId?: string;

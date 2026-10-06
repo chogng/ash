@@ -67,11 +67,11 @@ export interface ChatReasoningState {
 }
 
 export type ChatToolSource =
-	| { readonly type: "product"; readonly component: string }
-	| { readonly type: "plugin"; readonly pluginId: string; readonly version: string; readonly packageDigest: string; readonly contributionId: string }
-	| { readonly type: "mcp"; readonly serverId: string; readonly remoteName: string; readonly catalogGeneration: number; readonly connectionGeneration: number }
-	| { readonly type: "dynamic"; readonly name: string }
-	| { readonly type: "extension" | "system"; readonly id: string };
+	| { readonly type: "product"; readonly component: string; }
+	| { readonly type: "plugin"; readonly pluginId: string; readonly version: string; readonly packageDigest: string; readonly contributionId: string; }
+	| { readonly type: "mcp"; readonly serverId: string; readonly remoteName: string; readonly catalogGeneration: number; readonly connectionGeneration: number; }
+	| { readonly type: "dynamic"; readonly name: string; }
+	| { readonly type: "extension" | "system"; readonly id: string; };
 
 export interface ChatToolCallBinding {
 	readonly registryIncarnation?: string | null;
@@ -79,22 +79,22 @@ export interface ChatToolCallBinding {
 	readonly definitionDigest: string;
 	readonly sourceChain: readonly ChatToolSource[];
 	readonly activity?:
-		| { readonly type: "read" | "search" | "list" | "edit"; readonly target: string }
-		| { readonly type: "run" }
-		| { readonly type: "fileRead"; readonly path: string; readonly offset: number; readonly limit: number }
-		| { readonly type: "fileSearch" | "fileList"; readonly pattern: string; readonly path: string }
-		| { readonly type: "fileEdit"; readonly path: string }
-		| { readonly type: "command"; readonly program: string; readonly arguments: readonly string[]; readonly workingDirectory: string }
-		| null;
-	readonly caller: { readonly type: "direct" } | { readonly type: "codeMode"; readonly parentToolCallId: string; readonly cellId: string; readonly runtimeCallId: string };
+	| { readonly type: "read" | "search" | "list" | "edit"; readonly target: string; }
+	| { readonly type: "run"; }
+	| { readonly type: "fileRead"; readonly path: string; readonly offset: number; readonly limit: number; }
+	| { readonly type: "fileSearch" | "fileList"; readonly pattern: string; readonly path: string; }
+	| { readonly type: "fileEdit"; readonly path: string; }
+	| { readonly type: "command"; readonly program: string; readonly arguments: readonly string[]; readonly workingDirectory: string; }
+	| null;
+	readonly caller: { readonly type: "direct"; } | { readonly type: "codeMode"; readonly parentToolCallId: string; readonly cellId: string; readonly runtimeCallId: string; };
 }
 
 export type ChatContentPart =
-	| { readonly type: "text"; readonly text: string }
-	| { readonly type: "imageAttachment"; readonly attachment: ChatImageAttachment; readonly detail: "auto" | "low" | "high" | "original" }
-	| { readonly type: "imageUrl"; readonly url: string; readonly detail: "auto" | "low" | "high" | "original" }
-	| { readonly type: "audioAttachment"; readonly attachment: ChatAudioAttachment }
-	| { readonly type: "audioUrl"; readonly url: string };
+	| { readonly type: "text"; readonly text: string; }
+	| { readonly type: "imageAttachment"; readonly attachment: ChatImageAttachment; readonly detail: "auto" | "low" | "high" | "original"; }
+	| { readonly type: "imageUrl"; readonly url: string; readonly detail: "auto" | "low" | "high" | "original"; }
+	| { readonly type: "audioAttachment"; readonly attachment: ChatAudioAttachment; }
+	| { readonly type: "audioUrl"; readonly url: string; };
 
 export interface AdvisorConfig {
 	readonly model: ModelRef;
@@ -104,7 +104,7 @@ export interface AdvisorConfig {
 	readonly maxOutputTokens: number;
 }
 
-export type AdvisorSelection = { readonly type: "default" } | { readonly type: "off" } | { readonly type: "model"; readonly config: AdvisorConfig };
+export type AdvisorSelection = { readonly type: "default"; } | { readonly type: "off"; } | { readonly type: "model"; readonly config: AdvisorConfig; };
 
 export interface SlashCommandDefinition {
 	readonly name: string;
@@ -124,16 +124,16 @@ export interface SkillSelectorDefinition {
 }
 
 export type ThreadItem =
-	| { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
-	| { readonly type: "userContext"; readonly itemId: string; readonly turnId: string; readonly name: string; readonly content: string }
-	| { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string }
-	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment }
-	| { readonly type: "userAudioAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatAudioAttachment }
-	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
-	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly state: readonly ChatReasoningState[] }
-	| { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string }
-	| { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string; readonly binding?: ChatToolCallBinding | null }
-	| { readonly type: "toolResult"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly text: string; readonly content?: readonly ChatContentPart[] | null; readonly isError: boolean };
+	| { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; }
+	| { readonly type: "userContext"; readonly itemId: string; readonly turnId: string; readonly name: string; readonly content: string; }
+	| { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string; }
+	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment; }
+	| { readonly type: "userAudioAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatAudioAttachment; }
+	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; }
+	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly state: readonly ChatReasoningState[]; }
+	| { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string; }
+	| { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string; readonly binding?: ChatToolCallBinding | null; }
+	| { readonly type: "toolResult"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly text: string; readonly content?: readonly ChatContentPart[] | null; readonly isError: boolean; };
 
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
@@ -194,12 +194,12 @@ export interface ThreadGoal {
 }
 
 export type ThreadOrigin =
-	| { readonly type: "root" }
-	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
-	| { readonly type: "message"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly itemId: string; readonly boundary: "before" | "after" }
-	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly beforeTurnId: string }
-	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string }
-	| { readonly type: "replacement"; readonly sourceThreadId: ThreadId; readonly sourceSequence: number };
+	| { readonly type: "root"; }
+	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| { readonly type: "message"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly itemId: string; readonly boundary: "before" | "after"; }
+	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly beforeTurnId: string; }
+	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; }
+	| { readonly type: "replacement"; readonly sourceThreadId: ThreadId; readonly sourceSequence: number; };
 
 export interface Thread {
 	readonly advisor: AdvisorSelection;
@@ -220,9 +220,9 @@ export interface ThreadGoalUpdate {
 	readonly goal?: ThreadGoal;
 }
 
-export interface UserInputOption { readonly label: string; readonly description: string }
-export interface UserInputQuestion { readonly id: string; readonly header: string; readonly question: string; readonly options?: readonly UserInputOption[]; readonly allowFreeForm: boolean }
-export interface RequestUserInput { readonly questions: readonly UserInputQuestion[] }
+export interface UserInputOption { readonly label: string; readonly description: string; }
+export interface UserInputQuestion { readonly id: string; readonly header: string; readonly question: string; readonly options?: readonly UserInputOption[]; readonly allowFreeForm: boolean; }
+export interface RequestUserInput { readonly questions: readonly UserInputQuestion[]; }
 export interface ActionApprovalCapability {
 	readonly kind: 'fileRead' | 'fileWrite' | 'processSpawn' | 'network' | 'credentialUse' | 'externalMutation' | 'systemConfiguration' | 'userInterface';
 	readonly scope: string;
@@ -231,29 +231,30 @@ export interface ActionApprovalRequest {
 	readonly reason: string;
 	readonly capabilities: readonly ActionApprovalCapability[];
 }
-export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly definitionDigest: string; readonly arguments: unknown }
+export interface DynamicToolCall { readonly callId: string; readonly name: string; readonly definitionDigest: string; readonly arguments: unknown; }
 
 export type AgentRequest =
-	| { readonly type: "approval"; readonly request: ActionApprovalRequest }
-	| { readonly type: "userInput"; readonly request: RequestUserInput }
-	| { readonly type: "dynamicTool"; readonly call: DynamicToolCall };
+	| { readonly type: "approval"; readonly request: ActionApprovalRequest; }
+	| { readonly type: "userInput"; readonly request: RequestUserInput; }
+	| { readonly type: "dynamicTool"; readonly call: DynamicToolCall; };
 
 export type AgentResponse =
-	| { readonly type: "approval"; readonly response: { readonly decision: "approveOnce" | "decline" } }
-	| { readonly type: "userInput"; readonly response: { readonly answers: Readonly<Record<string, { readonly value: string }>> } }
-	| { readonly type: "dynamicTool"; readonly response: { readonly callId: string; readonly content: readonly ({ readonly type: "text"; readonly text: string } | { readonly type: "image"; readonly dataUrl: string })[]; readonly success: boolean } };
+	| { readonly type: "approval"; readonly response: { readonly decision: "approveOnce" | "decline"; }; }
+	| { readonly type: "userInput"; readonly response: { readonly answers: Readonly<Record<string, { readonly value: string; }>>; }; }
+	| { readonly type: "dynamicTool"; readonly response: { readonly callId: string; readonly content: readonly ({ readonly type: "text"; readonly text: string; } | { readonly type: "image"; readonly dataUrl: string; })[]; readonly success: boolean; }; };
 
 export interface TurnInteraction {
 	readonly requestId: string;
 	readonly itemId?: string | null;
 	readonly request: AgentRequest;
-	readonly deadline?: { readonly expiresAtUnixMs: number } | null;
+	readonly deadline?: { readonly expiresAtUnixMs: number; } | null;
 }
 
 export type ThreadCommittedEvent =
-	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction }
-	| { readonly type: 'turnModeChanged'; readonly turnId: string; readonly fromMode: ChatMode; readonly mode: ChatMode }
-	| { readonly type:
+	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction; }
+	| { readonly type: 'turnModeChanged'; readonly turnId: string; readonly fromMode: ChatMode; readonly mode: ChatMode; }
+	| {
+		readonly type:
 		"threadCreated"
 		| "advisorConfigured"
 		| "modelProvidersMigrated"
@@ -266,11 +267,11 @@ export type ThreadCommittedEvent =
 		| "turnExecutionBound"
 		| "agentContextSeedCommitted"
 		| "historyPrefixBound"
-			| "historyImported"
-			| "forkHistoryImported"
-			| "forkTurnImported"
-			| "forkHistoryImportCompleted"
-			| "contextCheckpointCommitted"
+		| "historyImported"
+		| "forkHistoryImported"
+		| "forkTurnImported"
+		| "forkHistoryImportCompleted"
+		| "contextCheckpointCommitted"
 		| "contextOverflowRecoveryCommitted"
 		| "turnAccepted"
 		| "turnStarted"
@@ -298,27 +299,28 @@ export type ThreadCommittedEvent =
 		| "agentMessageSent"
 		| "agentMessageReceived"
 		| "agentJoinRequested"
-		| "agentJoinSatisfied" };
+		| "agentJoinSatisfied";
+	};
 
 export type ThreadUpdate =
-	| { readonly type: "committed"; readonly event: ThreadCommittedEvent }
-	| { readonly type: "itemStarted"; readonly item: ThreadItem }
-	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string } }
-	| { readonly type: "toolOutputDelta"; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string };
+	| { readonly type: "committed"; readonly event: ThreadCommittedEvent; }
+	| { readonly type: "itemStarted"; readonly item: ThreadItem; }
+	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string; }; }
+	| { readonly type: "toolOutputDelta"; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string; };
 
 export interface ThreadUpdateEnvelope {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly durableSequence: number;
-	readonly streamCursor?: { readonly streamInstanceId: string; readonly sequence: number } | null;
+	readonly streamCursor?: { readonly streamInstanceId: string; readonly sequence: number; } | null;
 	readonly update: ThreadUpdate;
 }
 
 export type ThreadTranscriptEntry =
-	| { readonly type: "item"; readonly entryId: string; readonly turnId: string; readonly item: ThreadItem; readonly transient: boolean }
-	| { readonly type: "turnPlan"; readonly entryId: string; readonly turnId: string; readonly plan: PlanUpdate }
-	| { readonly type: "turnError"; readonly entryId: string; readonly turnId: string; readonly error: TurnError }
-	| { readonly type: "toolOutput"; readonly entryId: string; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string };
+	| { readonly type: "item"; readonly entryId: string; readonly turnId: string; readonly item: ThreadItem; readonly transient: boolean; }
+	| { readonly type: "turnPlan"; readonly entryId: string; readonly turnId: string; readonly plan: PlanUpdate; }
+	| { readonly type: "turnError"; readonly entryId: string; readonly turnId: string; readonly error: TurnError; }
+	| { readonly type: "toolOutput"; readonly entryId: string; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string; };
 
 export interface ThreadTranscriptSnapshot {
 	readonly sessionId: SessionId;
@@ -329,9 +331,9 @@ export interface ThreadTranscriptSnapshot {
 }
 
 export type ThreadTranscriptChange =
-	| { readonly type: "upsert"; readonly entry: ThreadTranscriptEntry }
-	| { readonly type: "remove"; readonly entryIds: readonly string[] }
-	| { readonly type: "clearTransient" };
+	| { readonly type: "upsert"; readonly entry: ThreadTranscriptEntry; }
+	| { readonly type: "remove"; readonly entryIds: readonly string[]; }
+	| { readonly type: "clearTransient"; };
 
 export interface ThreadTranscriptUpdateEnvelope {
 	readonly sessionId: SessionId;
@@ -367,12 +369,12 @@ export interface StartTurnOptions {
 }
 
 export type ChatMode = SessionMode;
-export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection }
-export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string }
-export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }
-export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[] }
-export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
-export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
+export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }
+export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
+export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
+export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
+export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
+export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse; }
 
 export type TurnChangeCaptureState = "open" | "sealed" | "incomplete" | "discarded";
 export type TurnChangeMessageState = "unconfigured" | "queued" | "generating" | "ready" | "failed";
@@ -385,7 +387,7 @@ export interface TurnChangeSetSummary {
 	readonly turnId: string;
 	readonly repositoryId: string;
 	readonly targetBranch?: string;
-	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number; };
 	readonly captureState: TurnChangeCaptureState;
 	readonly messageState: TurnChangeMessageState;
 	readonly commitState: TurnChangeCommitState;

@@ -28,16 +28,16 @@ tests 审查行为；不能用“来自上游”替代本地 correctness review�
 
 ### Spawn 与统一结果
 
-| Symbol | 职责 | 当前语义 |
-| --- | --- | --- |
-| `spawn_pty_process` | interactive PTY spawn | stdout/stderr 是 terminal 合并流；支持 resize |
-| `spawn_pipe_process` | stdin/stdout/stderr pipes | stdout 与 stderr 分离 |
-| `spawn_pipe_process_no_stdin` | stdin 立即关闭的 pipe spawn | 适合不接收输入的 child |
-| `SpawnedProcess` | `session + stdout_rx + stderr_rx + exit_rx` | 三种 spawn path 的统一 result |
-| `ProcessHandle` | input、state、resize、signal、terminate | Drop 终止进程并取消 I/O，child waiter 继续回收进程 |
-| `ProcessSignal::Interrupt` | cooperative interrupt request | Unix 发 SIGINT；unsupported backend 返回 error |
-| `TerminalSize` | rows/cols | 默认 24 × 80 |
-| `combine_output_receivers` | split mpsc → one broadcast stream | 不保证 stdout/stderr total order |
+| Symbol                        | 职责                                        | 当前语义                                           |
+| ----------------------------- | ------------------------------------------- | -------------------------------------------------- |
+| `spawn_pty_process`           | interactive PTY spawn                       | stdout/stderr 是 terminal 合并流；支持 resize      |
+| `spawn_pipe_process`          | stdin/stdout/stderr pipes                   | stdout 与 stderr 分离                              |
+| `spawn_pipe_process_no_stdin` | stdin 立即关闭的 pipe spawn                 | 适合不接收输入的 child                             |
+| `SpawnedProcess`              | `session + stdout_rx + stderr_rx + exit_rx` | 三种 spawn path 的统一 result                      |
+| `ProcessHandle`               | input、state、resize、signal、terminate     | Drop 终止进程并取消 I/O，child waiter 继续回收进程 |
+| `ProcessSignal::Interrupt`    | cooperative interrupt request               | Unix 发 SIGINT；unsupported backend 返回 error     |
+| `TerminalSize`                | rows/cols                                   | 默认 24 × 80                                       |
+| `combine_output_receivers`    | split mpsc → one broadcast stream           | 不保证 stdout/stderr total order                   |
 
 `spawn_*` 参数包括 program、args、cwd、完整 env map、optional arg0 与 Unix inherited FDs；PTY 额外
 接收 `TerminalSize`。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。
@@ -45,17 +45,17 @@ Unix PTY 要求 Tokio runtime 启用 I/O driver；缺少 driver 时在创建子�
 
 ### 外部驱动适配器
 
-| Symbol | 职责 | Implementation obligation |
-| --- | --- | --- |
-| `ProcessDriver` | 接入已有 stdin/output/exit backend | output sender 必须在 final bytes 后关闭 |
-| `spawn_from_driver` | 转成 standard `SpawnedProcess` | exit signal 后继续 drain 到 broadcast close |
-| `ProcessHandle::resize` | local PTY 或 driver resizer | pipe/no-resizer 返回 error |
-| `ProcessHandle::writer_sender` | clone raw-byte stdin sender | handle closed 后返回 disconnected sender |
-| `ProcessHandle::close_stdin` | drop owned stdin sender | 已 clone sender 仍可保持 channel alive |
-| `ProcessHandle::request_terminate` | kill child、保留 I/O tasks 以 drain EOF | killer 只消费一次 |
-| `ProcessHandle::terminate` | kill child 并取消 reader/writer；child waiter 继续回收，driver waiter 取消 | 不保证剩余 output drain；真实子进程仍报告 exit |
-| `ProcessHandle::{has_exited,exit_code}` | non-blocking observed exit state | `exit_rx` 是 authoritative completion notification |
-| `ProcessHandle::release_pty_handles_after_exit` | authoritative exit 后处理 parent-held PTY/ConPTY handles | 新版 Windows 保留 console 至 session 结束；旧版释放后排空输出 |
+| Symbol                                          | 职责                                                                       | Implementation obligation                                     |
+| ----------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `ProcessDriver`                                 | 接入已有 stdin/output/exit backend                                         | output sender 必须在 final bytes 后关闭                       |
+| `spawn_from_driver`                             | 转成 standard `SpawnedProcess`                                             | exit signal 后继续 drain 到 broadcast close                   |
+| `ProcessHandle::resize`                         | local PTY 或 driver resizer                                                | pipe/no-resizer 返回 error                                    |
+| `ProcessHandle::writer_sender`                  | clone raw-byte stdin sender                                                | handle closed 后返回 disconnected sender                      |
+| `ProcessHandle::close_stdin`                    | drop owned stdin sender                                                    | 已 clone sender 仍可保持 channel alive                        |
+| `ProcessHandle::request_terminate`              | kill child、保留 I/O tasks 以 drain EOF                                    | killer 只消费一次                                             |
+| `ProcessHandle::terminate`                      | kill child 并取消 reader/writer；child waiter 继续回收，driver waiter 取消 | 不保证剩余 output drain；真实子进程仍报告 exit                |
+| `ProcessHandle::{has_exited,exit_code}`         | non-blocking observed exit state                                           | `exit_rx` 是 authoritative completion notification            |
+| `ProcessHandle::release_pty_handles_after_exit` | authoritative exit 后处理 parent-held PTY/ConPTY handles                   | 新版 Windows 保留 console 至 session 结束；旧版释放后排空输出 |
 
 `ExecCommandSession` 与 `SpawnedPty` 是 backward-compatible type aliases。新增代码应优先使用
 `ProcessHandle` 与 `SpawnedProcess` 的真实名称。
@@ -66,24 +66,24 @@ channels 以 chunk 数 bounded；总 captured bytes、truncation 与 persistence
 
 ## 内部接口地图
 
-| Symbol | 可见性 | 当前职责 | 方向约束 |
-| --- | --- | --- | --- |
-| `ChildTerminator` | crate-private trait | backend-specific interrupt/hard kill | 与 helper-task abortion 分离 |
-| `PipeChildTerminator` | private | Unix process group 或 Windows job/process kill | pipe backend 不泄漏 OS handle |
-| `PtyChildTerminator` / `RawPidTerminator` | private | PTY child/process-group control | interactive descendants 必须一起 cleanup |
-| `ProcessHandle::new` | crate-private | 组装 writer、killer、tasks、exit state、PTY handles | 所有 spawn paths 共享 lifecycle |
-| `PtyMasterHandle` | crate-private | portable resizable 或 raw-FD PTY master | raw handle 必须存活到 session drop |
-| `read_output_stream` | private async fn | 8 KiB pipe reads → bounded mpsc | stdout/stderr reader 独立 drain |
-| `spawn_process_with_stdin_mode` | private async fn | pipe command + containment + channel/tasks | public pipe variants 的唯一 spawn path |
-| `spawn_process_portable` | private async fn | portable-pty/ConPTY path | 无 inherited FDs 的常规 PTY |
-| `spawn_process_preserving_fds` | private async fn, Unix | raw openpty + setsid + controlling TTY | inherited FD contract 不走 portable path |
-| `unix_io::PtyIo` | crate-private, Unix | 非阻塞 master FD、异步读写与背压 | 两条 Unix PTY 路径共用；取消不等待 slave 关闭 |
-| `WaitTask` | crate-private enum | 区分 child 回收与 driver exit 转发 | child waiter 即使仍在排队也必须执行；driver 转发随 handle 取消 |
-| `close_inherited_fds_except` | crate-private, Unix | exec 前关闭非 stdio/non-preserved non-CLOEXEC FDs | 保留 stdio、explicit FDs 与 exec-error pipe |
-| `exit_code_from_status` | crate-private | exit code；Unix signal → `128 + signal`；unknown `-1` | 所有 wait paths使用一致编码 |
-| `ClosureTerminator` | private | driver closure → hard-kill adapter | driver signal 当前 unsupported |
-| `WindowsTtyInputNormalizer` | Windows-only public | LF→CR、CRLF collapse、backspace→DEL | state 跨 write chunk 保留 |
-| process-group helpers | public module | detach、pdeathsig、SIGINT/SIGTERM/SIGKILL group operations | non-Unix 多数为 no-op |
+| Symbol                                    | 可见性                 | 当前职责                                                   | 方向约束                                                       |
+| ----------------------------------------- | ---------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| `ChildTerminator`                         | crate-private trait    | backend-specific interrupt/hard kill                       | 与 helper-task abortion 分离                                   |
+| `PipeChildTerminator`                     | private                | Unix process group 或 Windows job/process kill             | pipe backend 不泄漏 OS handle                                  |
+| `PtyChildTerminator` / `RawPidTerminator` | private                | PTY child/process-group control                            | interactive descendants 必须一起 cleanup                       |
+| `ProcessHandle::new`                      | crate-private          | 组装 writer、killer、tasks、exit state、PTY handles        | 所有 spawn paths 共享 lifecycle                                |
+| `PtyMasterHandle`                         | crate-private          | portable resizable 或 raw-FD PTY master                    | raw handle 必须存活到 session drop                             |
+| `read_output_stream`                      | private async fn       | 8 KiB pipe reads → bounded mpsc                            | stdout/stderr reader 独立 drain                                |
+| `spawn_process_with_stdin_mode`           | private async fn       | pipe command + containment + channel/tasks                 | public pipe variants 的唯一 spawn path                         |
+| `spawn_process_portable`                  | private async fn       | portable-pty/ConPTY path                                   | 无 inherited FDs 的常规 PTY                                    |
+| `spawn_process_preserving_fds`            | private async fn, Unix | raw openpty + setsid + controlling TTY                     | inherited FD contract 不走 portable path                       |
+| `unix_io::PtyIo`                          | crate-private, Unix    | 非阻塞 master FD、异步读写与背压                           | 两条 Unix PTY 路径共用；取消不等待 slave 关闭                  |
+| `WaitTask`                                | crate-private enum     | 区分 child 回收与 driver exit 转发                         | child waiter 即使仍在排队也必须执行；driver 转发随 handle 取消 |
+| `close_inherited_fds_except`              | crate-private, Unix    | exec 前关闭非 stdio/non-preserved non-CLOEXEC FDs          | 保留 stdio、explicit FDs 与 exec-error pipe                    |
+| `exit_code_from_status`                   | crate-private          | exit code；Unix signal → `128 + signal`；unknown `-1`      | 所有 wait paths使用一致编码                                    |
+| `ClosureTerminator`                       | private                | driver closure → hard-kill adapter                         | driver signal 当前 unsupported                                 |
+| `WindowsTtyInputNormalizer`               | Windows-only public    | LF→CR、CRLF collapse、backspace→DEL                        | state 跨 write chunk 保留                                      |
+| process-group helpers                     | public module          | detach、pdeathsig、SIGINT/SIGTERM/SIGKILL group operations | non-Unix 多数为 no-op                                          |
 
 ## Pipe spawn 调用图
 

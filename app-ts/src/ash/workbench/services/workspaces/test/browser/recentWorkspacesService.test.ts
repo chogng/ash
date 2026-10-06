@@ -18,7 +18,7 @@ test("RecentWorkspacesService records, persists, deduplicates, and reopens folde
 	const workspaceOpenService: IWorkspaceOpenService = {
 		canOpenFolder: true,
 		canOpenWorkspace: true,
-		openFolder: async () => {},
+		openFolder: async () => { },
 		openWorkspace: async root => {
 			openedRoots.push(root);
 		},

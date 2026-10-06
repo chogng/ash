@@ -63,7 +63,7 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				return;
 			}
 			using disposables = new DisposableStore();
-			const picker = disposables.add(quickInput.createQuickPick<IQuickPickItem & { readonly plugin: PluginPackageView }>());
+			const picker = disposables.add(quickInput.createQuickPick<IQuickPickItem & { readonly plugin: PluginPackageView; }>());
 			picker.ariaLabel = localize({ bundle: 'ash.marketplace', key: 'manageLocalExtensions' }, 'Manage local extensions');
 			picker.placeholder = localize({ bundle: 'ash.marketplace', key: 'chooseLocalExtension' }, 'Select an extension to manage');
 			picker.items = packages.map(plugin => ({
@@ -113,11 +113,13 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				return;
 			}
 			using disposables = new DisposableStore();
-			const picker = disposables.add(quickInput.createQuickPick<IQuickPickItem & { readonly extension: MarketplaceEditorExtensionPolicy }>());
+			const picker = disposables.add(quickInput.createQuickPick<IQuickPickItem & { readonly extension: MarketplaceEditorExtensionPolicy; }>());
 			picker.ariaLabel = localize({ bundle: 'ash.marketplace', key: 'manageMarketplaceExtensions' }, 'Manage Marketplace extension execution');
 			picker.placeholder = localize({ bundle: 'ash.marketplace', key: 'chooseLocalExtension' }, 'Select an extension to manage');
-			picker.items = catalog.extensions.map(extension => ({ label: extension.package.id, description: extension.package.version,
-				detail: extension.entrypoint === null ? localize({ bundle: 'ash.marketplace', key: 'noExecutableEntry' }, 'Script execution is unavailable for this package or platform.') : localize({ bundle: 'ash.marketplace', key: 'marketplaceExtensionState' }, 'Enabled: {0}. Execution authorized: {1}.', yesNo(extension.enabled), yesNo(extension.granted)), extension }));
+			picker.items = catalog.extensions.map(extension => ({
+				label: extension.package.id, description: extension.package.version,
+				detail: extension.entrypoint === null ? localize({ bundle: 'ash.marketplace', key: 'noExecutableEntry' }, 'Script execution is unavailable for this package or platform.') : localize({ bundle: 'ash.marketplace', key: 'marketplaceExtensionState' }, 'Enabled: {0}. Execution authorized: {1}.', yesNo(extension.enabled), yesNo(extension.granted)), extension
+			}));
 			const selected = await new Promise<MarketplaceEditorExtensionPolicy | undefined>(resolve => {
 				disposables.add(picker.onDidAccept(item => { resolve(item.extension); picker.hide(); }));
 				disposables.add(picker.onDidHide(() => resolve(undefined)));
@@ -129,9 +131,10 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				await dialogs.info(localize({ bundle: 'ash.marketplace', key: 'noExecutableEntry' }, 'Script execution is unavailable for this package or platform.'));
 				return;
 			}
-			await dialogs.prompt({ title: selected.package.id, message: selected.package.version,
+			await dialogs.prompt({
+				title: selected.package.id, message: selected.package.version,
 				detail: [localize({ bundle: 'ash.marketplace', key: 'marketplaceExecutionNotice' }, 'Authorize commands, hover providers and editor document access, including unsaved text. This JavaScript host supports a subset of the VS Code API; Node modules, direct file access, networking and child processes are unavailable. Unsupported APIs fail explicitly. Disable execution before uninstalling. A new package version requires new authorization.'),
-					localize({ bundle: 'ash.marketplace', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.package.digest)].join('\n\n'),
+				localize({ bundle: 'ash.marketplace', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.package.digest)].join('\n\n'),
 				buttons: [
 					...(selected.enabled || selected.entrypoint !== null ? [{ label: selected.enabled ? localize({ bundle: 'ash.marketplace', key: 'disableLocalExtension' }, 'Disable') : localize({ bundle: 'ash.marketplace', key: 'enableLocalExtension' }, 'Enable'), run: () => marketplace.setEditorExtensionPolicy(selected, selected.enabled ? 'disable' : 'enable', catalog.revision) }] : []),
 					...(selected.granted || selected.entrypoint !== null ? [{ label: selected.granted ? localize({ bundle: 'ash.marketplace', key: 'revokeMarketplaceExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.marketplace', key: 'grantMarketplaceExecution' }, 'Authorize execution'), run: () => marketplace.setEditorExtensionPolicy(selected, selected.granted ? 'revoke' : 'grant', catalog.revision) }] : []),

@@ -7,7 +7,7 @@ export interface SkillIdentity {
 
 export interface SkillReference {
 	readonly id: SkillIdentity;
-	readonly version: { readonly type: "pinnedDigest"; readonly digest: string };
+	readonly version: { readonly type: "pinnedDigest"; readonly digest: string; };
 }
 
 export interface SkillDescriptor {

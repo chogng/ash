@@ -9,12 +9,12 @@
 
 ## 1. 边界与依赖
 
-| 拥有 | 不拥有 |
-| --- | --- |
-| context window、输出预留、安全余量和压缩阈值的独立类型 | 模型目录、配置覆盖、provider 选择或凭证 |
-| 压缩压力线与模型硬窗口的统一计算 | tokenizer 实现、provider 预检网络请求或重试 |
-| 精准计数与保守估算的统一结果模型 | Thread 历史选择、Skill 注入或 `ModelRequest` 组装 |
-| `Fits`、`NeedsCompaction`、`ExceedsContextWindow` 判定 | checkpoint 生成、压缩模型调用或 durable commit |
+| 拥有                                                   | 不拥有                                            |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| context window、输出预留、安全余量和压缩阈值的独立类型 | 模型目录、配置覆盖、provider 选择或凭证           |
+| 压缩压力线与模型硬窗口的统一计算                       | tokenizer 实现、provider 预检网络请求或重试       |
+| 精准计数与保守估算的统一结果模型                       | Thread 历史选择、Skill 注入或 `ModelRequest` 组装 |
+| `Fits`、`NeedsCompaction`、`ExceedsContextWindow` 判定 | checkpoint 生成、压缩模型调用或 durable commit    |
 
 本 crate 没有运行时依赖，也不依赖某个 provider SDK。`ash-core`、App Server 或 provider adapter
 可以依赖它；它不得反向依赖这些协调与执行层。
@@ -39,11 +39,11 @@ provider 协调层提取执行 trait，预算引擎仍只消费计量结果。
 
 ### 2.2 token 计量
 
-| 可用能力 | 构造方式 | 预算使用值 | 典型来源 |
-| --- | --- | --- | --- |
-| provider 调用前预检 | `provider_preflight(revision)` + 独立 accuracy | 精确值或保守值 | OpenAI/Anthropic count API |
-| 与所选模型匹配的本地 tokenizer | `local_tokenizer(revision)` + 独立 accuracy | 精确值或保守值 | 本地 tokenizer registry |
-| 无精准计数能力 | `ContextTokenMeasurement::estimated` | 保守记账值 | `deterministic-bytes-v1` 等 estimator |
+| 可用能力                       | 构造方式                                       | 预算使用值     | 典型来源                              |
+| ------------------------------ | ---------------------------------------------- | -------------- | ------------------------------------- |
+| provider 调用前预检            | `provider_preflight(revision)` + 独立 accuracy | 精确值或保守值 | OpenAI/Anthropic count API            |
+| 与所选模型匹配的本地 tokenizer | `local_tokenizer(revision)` + 独立 accuracy    | 精确值或保守值 | 本地 tokenizer registry               |
+| 无精准计数能力                 | `ContextTokenMeasurement::estimated`           | 保守记账值     | `deterministic-bytes-v1` 等 estimator |
 
 `ContextTokenMeasurement` 必须针对最终候选请求，而不是只数消息正文。调用方负责包含 instructions、
 tools、图片和 provider wire envelope 的成本。`LocalTokenizer` 的实现者还必须保证 tokenizer 与所选
@@ -72,12 +72,12 @@ model/provider adapter or local estimator
 
 ## 3. 内部接口地图
 
-| Symbol | 可见性 | 职责 | 漂移信号 |
-| --- | --- | --- | --- |
-| `ContextBudget::resolve` | public | 校验分配并计算压力线与硬上限 | provider 名称、Thread 或压缩 I/O 进入预算数学 |
-| `ContextTokenMeasurement::estimated` | public | 固定来源 revision 与保守记账不变量 | 允许无 revision 或用 measured value 直接判定 |
-| `ContextBudgetPlanner::assess` | public | 纯比较 accounted input 与两条边界 | 直接调用 tokenizer、usage API 或修改历史 |
-| `planner::subtract` | private | 为诊断值计算无下溢差值 | 承担模型配置或计量策略选择 |
+| Symbol                               | 可见性  | 职责                               | 漂移信号                                      |
+| ------------------------------------ | ------- | ---------------------------------- | --------------------------------------------- |
+| `ContextBudget::resolve`             | public  | 校验分配并计算压力线与硬上限       | provider 名称、Thread 或压缩 I/O 进入预算数学 |
+| `ContextTokenMeasurement::estimated` | public  | 固定来源 revision 与保守记账不变量 | 允许无 revision 或用 measured value 直接判定  |
+| `ContextBudgetPlanner::assess`       | public  | 纯比较 accounted input 与两条边界  | 直接调用 tokenizer、usage API 或修改历史      |
+| `planner::subtract`                  | private | 为诊断值计算无下溢差值             | 承担模型配置或计量策略选择                    |
 
 真实调用关系：
 

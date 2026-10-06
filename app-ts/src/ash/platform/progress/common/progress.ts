@@ -29,9 +29,9 @@ export interface ProgressSnapshot {
 }
 
 export type ProgressChange =
-	| { readonly kind: "started"; readonly progress: ProgressSnapshot }
-	| { readonly kind: "updated"; readonly progress: ProgressSnapshot }
-	| { readonly kind: "done"; readonly progress: ProgressSnapshot };
+	| { readonly kind: "started"; readonly progress: ProgressSnapshot; }
+	| { readonly kind: "updated"; readonly progress: ProgressSnapshot; }
+	| { readonly kind: "done"; readonly progress: ProgressSnapshot; };
 
 /** Handle for one running progress task. */
 export interface ProgressHandle extends IDisposable {

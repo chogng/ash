@@ -232,7 +232,7 @@ class OverviewRulerSettings {
 		this.canvasHeight = this.lanes === 0 ? 0 : Math.max(0, Math.floor(this.domHeight * this.pixelRatio));
 	}
 
-	laneBounds(lane: number): { readonly left: number; readonly width: number } {
+	laneBounds(lane: number): { readonly left: number; readonly width: number; } {
 		const laneCount = Math.max(1, Math.min(3, this.lanes));
 		if (laneCount === 1 || lane === OverviewRulerLane.Full) return { left: 0, width: this.canvasWidth };
 		const leftWidth = Math.floor(this.canvasWidth / laneCount);
@@ -266,7 +266,7 @@ class OverviewRulerSettings {
 	}
 }
 
-function verticallyCenter(top: number, bottom: number, minimumHeight: number, canvasHeight: number): { readonly top: number; readonly height: number } {
+function verticallyCenter(top: number, bottom: number, minimumHeight: number, canvasHeight: number): { readonly top: number; readonly height: number; } {
 	const height = Math.max(minimumHeight, bottom - top);
 	const centeredTop = top - Math.floor((height - (bottom - top)) / 2);
 	return { top: Math.max(0, Math.min(canvasHeight - height, centeredTop)), height: Math.min(canvasHeight, height) };

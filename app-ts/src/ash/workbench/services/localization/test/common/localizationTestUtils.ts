@@ -17,20 +17,20 @@ export function initializeTestLocalization(locale: string): void {
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
 
-export function createTestLocaleService(configuration: IConfigurationService, languagePacks: ILanguagePackService, onRestart: () => Promise<void> = async () => {}, onConfirm: () => Promise<{ confirmed: boolean }> = async () => ({ confirmed: false }), store?: ILanguagePackStore): WorkbenchLocaleService {
+export function createTestLocaleService(configuration: IConfigurationService, languagePacks: ILanguagePackService, onRestart: () => Promise<void> = async () => { }, onConfirm: () => Promise<{ confirmed: boolean; }> = async () => ({ confirmed: false }), store?: ILanguagePackStore): WorkbenchLocaleService {
 	using services = new InstantiationService();
 	const catalogs = new Map<string, LanguagePackCatalog>();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILanguagePackService, languagePacks);
 	services.registerInstance(ILanguagePackStore, store ?? { read: async locale => catalogs.get(locale), write: async catalog => { catalogs.set(catalog.locale, catalog); } });
 	services.registerInstance(IDialogService, { confirm: onConfirm } as unknown as IDialogService);
-	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => {} });
+	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => { } });
 	return services.createInstance(WorkbenchLocaleService);
 }
 
 export function createTestLanguagePacks(marketplace: IMarketplaceService): MarketplaceLanguagePackService {
 	using services = new InstantiationService();
 	services.registerInstance(IMarketplaceService, marketplace);
-	services.registerInstance(ILanguagePackStore, { read: async () => undefined, write: async () => {} });
+	services.registerInstance(ILanguagePackStore, { read: async () => undefined, write: async () => { } });
 	return services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs);
 }

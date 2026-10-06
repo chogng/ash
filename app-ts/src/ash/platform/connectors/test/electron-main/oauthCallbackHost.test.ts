@@ -14,7 +14,7 @@ test('closing a window cancels pending callback waits', async () => {
 	const host = new OAuthCallbackHost();
 	const routes = host.routes();
 	const listen = routes.find(route => route.channel === 'ash:oauth-callback:listen')!;
-	const result = await listen.invoke(undefined) as { id: string };
+	const result = await listen.invoke(undefined) as { id: string; };
 	const wait = routes.find(route => route.channel === 'ash:oauth-callback:wait')!;
 	const pending = wait.invoke(result.id);
 	host.dispose();

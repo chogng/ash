@@ -1,0 +1,48 @@
+name: Formatting
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Install formatter dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Test formatter commands and file boundaries
+        run: pnpm test:format
+      - name: Check TypeScript and JavaScript formatting
+        if: always() && !cancelled()
+        run: pnpm format:ts
+      - name: Check configuration and documentation formatting
+        if: always() && !cancelled()
+        run: pnpm format:config
+
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - name: Check Rust formatting with the repository toolchain
+        run: python3 -B scripts/format.py --language rust --check

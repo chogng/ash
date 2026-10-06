@@ -11,15 +11,15 @@ suite('App Server MessagePort transport', () => {
 	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 	const previousGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	const registrations = new Set<string>();
-	const requests: { nonce: string; resolve: (value: unknown) => void; reject: (error: Error) => void }[] = [];
+	const requests: { nonce: string; resolve: (value: unknown) => void; reject: (error: Error) => void; }[] = [];
 	let Transport: typeof import('../../electron-browser/appServerMessagePortTransport.js').AppServerMessagePortTransport;
 	let tracker: DisposableTracker;
 	let tracking: ReturnType<typeof installDisposableTracker>;
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
-			send() {},
-			invoke: (_channel, params) => new Promise((resolve, reject) => { requests.push({ nonce: (params as { nonce: string }).nonce, resolve, reject }); }),
-			on: () => ({ dispose() {} }),
+			send() { },
+			invoke: (_channel, params) => new Promise((resolve, reject) => { requests.push({ nonce: (params as { nonce: string; }).nonce, resolve, reject }); }),
+			on: () => ({ dispose() { } }),
 		},
 		ipcMessagePort: { acquire: (_channel, nonce) => { registrations.add(nonce); return { dispose: () => { registrations.delete(nonce); } }; } },
 		process: { platform: process.platform, arch: process.arch },
@@ -39,14 +39,14 @@ suite('App Server MessagePort transport', () => {
 	teardown(() => { try { assert.equal(registrations.size, 0); tracker.assertNoLeaks(); } finally { tracking[Symbol.dispose](); } });
 
 	test('disabled hosts settle without a port and release their pending registration', async () => {
-		using transport = new Transport(() => {});
+		using transport = new Transport(() => { });
 		const ready = transport.acquire();
 		requests[0].resolve({ enabled: false });
 		assert.equal(await ready, false);
 	});
 
 	test('host acquisition failure preserves its error and releases the pending registration', async () => {
-		using transport = new Transport(() => {});
+		using transport = new Transport(() => { });
 		const ready = transport.acquire();
 		const failure = new Error('host stopped during validation');
 		const rejected = assert.rejects(ready, error => error === failure);
@@ -55,7 +55,7 @@ suite('App Server MessagePort transport', () => {
 	});
 
 	test('disposing during acquisition settles its waiter and ignores a late host reply', async () => {
-		const transport = new Transport(() => {});
+		const transport = new Transport(() => { });
 		const ready = transport.acquire();
 		const rejected = assert.rejects(ready, { name: 'CancellationError' });
 		transport.dispose();
@@ -65,7 +65,7 @@ suite('App Server MessagePort transport', () => {
 	});
 
 	test('disposal closes a transferred port before its acquisition continuation can attach it', async () => {
-		const transport = new Transport(() => {});
+		const transport = new Transport(() => { });
 		const channel = new MessageChannel();
 		try {
 			const ready = transport.acquire();
@@ -88,7 +88,7 @@ suite('App Server MessagePort transport', () => {
 	});
 
 	test('a superseded acquisition cannot clear the successor after its delayed host reply', async () => {
-		using transport = new Transport(() => {});
+		using transport = new Transport(() => { });
 		const first = transport.acquire();
 		const cancelled = assert.rejects(first, { name: 'CancellationError' });
 		const second = transport.acquire();

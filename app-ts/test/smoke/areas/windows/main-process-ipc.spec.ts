@@ -24,12 +24,13 @@ interface IpcHarness {
 	active(): Promise<readonly [string, number][]>;
 }
 
-const test = baseTest.extend<{ ipcHarness: IpcHarness }>({ ipcHarness: async ({ target }, use, testInfo) => {
-	baseTest.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Requires the Electron UI project.');
-	const directory = await mkdtemp(join(tmpdir(), 'ash-ipc-'));
-	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: directory });
-	const entry = testInfo.outputPath('main-process-ipc.mjs');
-	await writeFile(entry, `
+const test = baseTest.extend<{ ipcHarness: IpcHarness; }>({
+	ipcHarness: async ({ target }, use, testInfo) => {
+		baseTest.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Requires the Electron UI project.');
+		const directory = await mkdtemp(join(tmpdir(), 'ash-ipc-'));
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: directory });
+		const entry = testInfo.outputPath('main-process-ipc.mjs');
+		await writeFile(entry, `
 import { app, nativeTheme } from 'electron/main';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
@@ -70,23 +71,24 @@ Server.prototype.registerChannel = function(name, channel) {
 const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 startElectronApplication();
 `);
-	const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env });
-	const errors: string[] = [];
-	try {
-		const page = await application.firstWindow();
-		page.on('pageerror', error => errors.push(error.message));
-		await expect(page.locator('.ash-workbench')).toBeVisible();
-		await use({ application, page, active: () => application.evaluate(() => [...(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.active]) });
-		expect(errors).toEqual([]);
-	} finally {
-		await application.evaluate(({ BrowserWindow }) => {
-			(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.releaseRead?.();
-			for (const window of BrowserWindow.getAllWindows()) { window.destroy(); }
-		});
-		await application.close();
-		await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env });
+		const errors: string[] = [];
+		try {
+			const page = await application.firstWindow();
+			page.on('pageerror', error => errors.push(error.message));
+			await expect(page.locator('.ash-workbench')).toBeVisible();
+			await use({ application, page, active: () => application.evaluate(() => [...(globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.active]) });
+			expect(errors).toEqual([]);
+		} finally {
+			await application.evaluate(({ BrowserWindow }) => {
+				(globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.releaseRead?.();
+				for (const window of BrowserWindow.getAllWindows()) { window.destroy(); }
+			});
+			await application.close();
+			await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		}
 	}
-} });
+});
 
 test('Main color subscriptions follow their own window through reload and close', async ({ ipcHarness: { application, page, active } }) => {
 	const firstId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id);
@@ -111,16 +113,16 @@ test('Main color subscriptions follow their own window through reload and close'
 });
 
 test('reload cancels a pending Main call and an old reply cannot overwrite the new document', async ({ ipcHarness: { application, page, active } }) => {
-	await application.evaluate(() => { (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.holdNextRead = true; });
+	await application.evaluate(() => { (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.holdNextRead = true; });
 	await page.reload();
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.waitingRead)).toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.waitingRead)).toBe(true);
 	await page.reload();
 	await expect(page.locator('.ash-workbench')).toBeVisible();
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.cancelled)).toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.cancelled)).toBe(true);
 	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
-	await application.evaluate(() => { (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.releaseRead(); });
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.readReleased)).toBe(true);
+	await application.evaluate(() => { (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.releaseRead(); });
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.readReleased)).toBe(true);
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect.poll(async () => (await active()).map(([, count]) => count)).toEqual([1]);
 	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
@@ -129,7 +131,7 @@ test('reload cancels a pending Main call and an old reply cannot overwrite the n
 
 test('Main acquisition rejects renderer-supplied identity and removed color channels', async ({ ipcHarness: { page } }) => {
 	const errors = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, arg?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, arg?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		const failures: string[] = [];
 		for (const [channel, arg] of [
 			['ash:ipc:connect', { nonce: crypto.randomUUID(), context: 'window:other' }],

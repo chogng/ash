@@ -36,9 +36,7 @@
           ]
         }
       },
-      "required": [
-        "model"
-      ],
+      "required": ["model"],
       "type": "object"
     },
     "AgentConfig": {
@@ -123,9 +121,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "type": "object"
         },
         {
@@ -159,20 +155,14 @@
               "type": "string"
             }
           },
-          "required": [
-            "type",
-            "model"
-          ],
+          "required": ["type", "model"],
           "type": "object"
         }
       ]
     },
     "CodebaseAutomaticContext": {
       "description": "Whether code retrieval is automatically added to the first model invocation of a Turn.",
-      "enum": [
-        "off",
-        "firstInvocation"
-      ],
+      "enum": ["off", "firstInvocation"],
       "type": "string"
     },
     "CodebaseConfig": {
@@ -214,9 +204,7 @@
           ]
         }
       },
-      "required": [
-        "embeddingModel"
-      ],
+      "required": ["embeddingModel"],
       "type": "object"
     },
     "CommitMessageConfig": {
@@ -243,10 +231,7 @@
           "$ref": "#/$defs/ModelProviderConfig"
         }
       },
-      "required": [
-        "model",
-        "provider"
-      ],
+      "required": ["model", "provider"],
       "type": "object"
     },
     "ContextCompactionPolicy": {
@@ -274,9 +259,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "mode"
-          ],
+          "required": ["mode"],
           "type": "object"
         },
         {
@@ -301,9 +284,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "mode"
-          ],
+          "required": ["mode"],
           "type": "object"
         }
       ]
@@ -348,18 +329,11 @@
           "$ref": "#/$defs/CustomProviderProtocol"
         }
       },
-      "required": [
-        "name",
-        "protocol"
-      ],
+      "required": ["name", "protocol"],
       "type": "object"
     },
     "CustomProviderProtocol": {
-      "enum": [
-        "responses",
-        "chatCompletions",
-        "anthropicMessages"
-      ],
+      "enum": ["responses", "chatCompletions", "anthropicMessages"],
       "type": "string"
     },
     "DirPermissionsConfig": {
@@ -407,9 +381,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -419,9 +391,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -431,9 +401,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -443,9 +411,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -458,10 +424,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "reason"
-          ],
+          "required": ["kind", "reason"],
           "type": "object"
         }
       ]
@@ -476,20 +439,13 @@
           "$ref": "#/$defs/ExecPolicyRuleId"
         },
         "justification": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "selector": {
           "$ref": "#/$defs/ExecPolicySelector"
         }
       },
-      "required": [
-        "id",
-        "selector",
-        "effect"
-      ],
+      "required": ["id", "selector", "effect"],
       "type": "object"
     },
     "ExecPolicyRuleId": {
@@ -506,9 +462,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -521,10 +475,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "digest"
-          ],
+          "required": ["kind", "digest"],
           "type": "object"
         },
         {
@@ -537,10 +488,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "action_kind"
-          ],
+          "required": ["kind", "action_kind"],
           "type": "object"
         },
         {
@@ -550,21 +498,13 @@
               "type": "string"
             },
             "source": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "source_id": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -580,10 +520,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "kind",
-            "pattern"
-          ],
+          "required": ["kind", "pattern"],
           "type": "object"
         },
         {
@@ -599,22 +536,13 @@
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "protocol": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
-          "required": [
-            "kind",
-            "host"
-          ],
+          "required": ["kind", "host"],
           "type": "object"
         },
         {
@@ -630,11 +558,7 @@
               "$ref": "#/$defs/ScopeMatcher"
             }
           },
-          "required": [
-            "kind",
-            "capability_kind",
-            "scope"
-          ],
+          "required": ["kind", "capability_kind", "scope"],
           "type": "object"
         },
         {
@@ -650,10 +574,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "kind",
-            "selectors"
-          ],
+          "required": ["kind", "selectors"],
           "type": "object"
         }
       ]
@@ -671,10 +592,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "type": "object"
         },
         {
@@ -691,21 +609,14 @@
               "uniqueItems": true
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "type": "object"
         }
       ]
     },
     "GitAutoFetchMode": {
       "description": "Which remotes the shared Git runtime fetches automatically.",
-      "enum": [
-        "off",
-        "default",
-        "all"
-      ],
+      "enum": ["off", "default", "all"],
       "type": "string"
     },
     "GitConfig": {
@@ -727,10 +638,7 @@
     },
     "GrepBackend": {
       "description": "Selects the implementation used by the shared grep capability.",
-      "enum": [
-        "ripgrep",
-        "tgrep"
-      ],
+      "enum": ["ripgrep", "tgrep"],
       "type": "string"
     },
     "GrepConfig": {
@@ -765,10 +673,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type",
-            "program"
-          ],
+          "required": ["type", "program"],
           "type": "object"
         }
       ]
@@ -797,19 +702,12 @@
           }
         }
       },
-      "required": [
-        "id",
-        "event",
-        "action"
-      ],
+      "required": ["id", "event", "action"],
       "type": "object"
     },
     "HookEnablement": {
       "description": "Desired enablement of one Hook declaration.",
-      "enum": [
-        "disabled",
-        "enabled"
-      ],
+      "enum": ["disabled", "enabled"],
       "type": "string"
     },
     "HookEvent": {
@@ -916,10 +814,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "type": "object"
         },
         {
@@ -932,20 +827,14 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "type": "object"
         }
       ]
     },
     "HttpCompatibilityMode": {
       "description": "HTTP/2 negotiates the best supported HTTP version; HTTP/1.1 restricts ALPN for proxies.",
-      "enum": [
-        "http2",
-        "http1"
-      ],
+      "enum": ["http2", "http1"],
       "type": "string"
     },
     "IssueConfig": {
@@ -966,10 +855,7 @@
       "description": "Runtime-free language-server preference stored by the User Config authority.",
       "properties": {
         "executable": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "mode": {
           "$ref": "#/$defs/LanguageServerModeConfig",
@@ -980,10 +866,7 @@
     },
     "LanguageServerModeConfig": {
       "description": "Durable user intent for one language server.",
-      "enum": [
-        "disabled",
-        "enabled"
-      ],
+      "enum": ["disabled", "enabled"],
       "type": "string"
     },
     "LanguageServersConfig": {
@@ -1024,9 +907,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "type": "object"
         },
         {
@@ -1039,10 +920,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type",
-            "credentialRef"
-          ],
+          "required": ["type", "credentialRef"],
           "type": "object"
         }
       ]
@@ -1071,19 +949,12 @@
           "$ref": "#/$defs/McpTransportConfig"
         }
       },
-      "required": [
-        "id",
-        "displayName",
-        "transport"
-      ],
+      "required": ["id", "displayName", "transport"],
       "type": "object"
     },
     "McpServerEnablement": {
       "description": "Desired enablement for a configured MCP server.\n\nThis is user intent only. An enabled declaration still needs runtime policy, credential, and\ntransport checks before an MCP manager may connect it.",
-      "enum": [
-        "disabled",
-        "enabled"
-      ],
+      "enum": ["disabled", "enabled"],
       "type": "string"
     },
     "McpServerId": {
@@ -1109,11 +980,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type",
-            "command",
-            "args"
-          ],
+          "required": ["type", "command", "args"],
           "type": "object"
         },
         {
@@ -1126,10 +993,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type",
-            "url"
-          ],
+          "required": ["type", "url"],
           "type": "object"
         }
       ]
@@ -1145,9 +1009,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "type": "object"
         },
         {
@@ -1164,11 +1026,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "type",
-            "endpoint",
-            "credentialEnv"
-          ],
+          "required": ["type", "endpoint", "credentialEnv"],
           "type": "object"
         }
       ]
@@ -1182,10 +1040,7 @@
         "autoCompactTokenLimit": {
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "contextWindow": {
           "format": "uint32",
@@ -1193,9 +1048,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "contextWindow"
-      ],
+      "required": ["contextWindow"],
       "type": "object"
     },
     "ModelId": {
@@ -1204,10 +1057,7 @@
     "ModelProviderConfig": {
       "properties": {
         "baseUrl": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "connection": {
           "$ref": "#/$defs/ModelConnectionId"
@@ -1233,10 +1083,7 @@
         "maxOutputTokens": {
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "modelContext": {
           "additionalProperties": {
@@ -1248,10 +1095,7 @@
           "$ref": "#/$defs/ProviderId"
         }
       },
-      "required": [
-        "provider",
-        "connection"
-      ],
+      "required": ["provider", "connection"],
       "type": "object"
     },
     "ModelRef": {
@@ -1263,10 +1107,7 @@
           "$ref": "#/$defs/ProviderId"
         }
       },
-      "required": [
-        "provider",
-        "model"
-      ],
+      "required": ["provider", "model"],
       "type": "object"
     },
     "NetworkConfig": {
@@ -1277,10 +1118,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "httpMode": {
           "$ref": "#/$defs/HttpCompatibilityMode",
@@ -1333,18 +1171,12 @@
           "type": "string"
         }
       },
-      "required": [
-        "pluginId",
-        "version"
-      ],
+      "required": ["pluginId", "version"],
       "type": "object"
     },
     "PluginRequestEnablement": {
       "description": "Desired participation of a requested Plugin in future activation resolution.",
-      "enum": [
-        "disabled",
-        "enabled"
-      ],
+      "enum": ["disabled", "enabled"],
       "type": "string"
     },
     "PluginsConfig": {
@@ -1365,15 +1197,7 @@
       "type": "string"
     },
     "ReasoningEffort": {
-      "enum": [
-        "none",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "extraHigh",
-        "max"
-      ],
+      "enum": ["none", "minimal", "low", "medium", "high", "extraHigh", "max"],
       "type": "string"
     },
     "ScopeMatcher": {
@@ -1389,10 +1213,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "type": "object"
         },
         {
@@ -1405,20 +1226,14 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "type": "object"
         }
       ]
     },
     "SkillEnablement": {
       "description": "Desired user enablement for one discovered Skill.",
-      "enum": [
-        "disabled",
-        "enabled"
-      ],
+      "enum": ["disabled", "enabled"],
       "type": "string"
     },
     "SkillSourceConfig": {
@@ -1436,18 +1251,12 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "rootReference"
-      ],
+      "required": ["id", "rootReference"],
       "type": "object"
     },
     "SkillSourceEnablement": {
       "description": "Desired enablement for one configured Skill source.",
-      "enum": [
-        "disabled",
-        "enabled"
-      ],
+      "enum": ["disabled", "enabled"],
       "type": "string"
     },
     "SkillSourceId": {
@@ -1487,30 +1296,19 @@
           "default": "date"
         },
         "timeZone": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "type": "object"
     },
     "TimeContextMode": {
       "description": "Explicit model-context policy; it does not control timers or execution deadlines.",
-      "enum": [
-        "off",
-        "date",
-        "time"
-      ],
+      "enum": ["off", "date", "time"],
       "type": "string"
     },
     "ToolMode": {
       "description": "Selects how a model may use the ordinary Tool catalog for one Turn.\n\n`Direct` is the compatibility default. `CodeMode` keeps the ordinary direct surface and adds\nthe Code Mode entry points. `CodeModeOnly` exposes only those entry points while the projected\nordinary tools remain callable from JavaScript.",
-      "enum": [
-        "direct",
-        "codeMode",
-        "codeModeOnly"
-      ],
+      "enum": ["direct", "codeMode", "codeModeOnly"],
       "type": "string"
     },
     "ToolSearchConfig": {
@@ -1723,9 +1521,7 @@
       "type": "object"
     }
   },
-  "required": [
-    "schemaVersion"
-  ],
+  "required": ["schemaVersion"],
   "title": "Ash user configuration",
   "type": "object"
 }

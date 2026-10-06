@@ -21,8 +21,8 @@ export interface RemoteRuntimePackageLocation {
 }
 
 export type RemoteRuntimeCatalogSource =
-	| { readonly kind: "packaged"; readonly bundleRoot: string; readonly expectedSha256: string }
-	| { readonly kind: "network"; readonly catalogUrl: string; readonly expectedSha256: string; readonly cacheRoot: string };
+	| { readonly kind: "packaged"; readonly bundleRoot: string; readonly expectedSha256: string; }
+	| { readonly kind: "network"; readonly catalogUrl: string; readonly expectedSha256: string; readonly cacheRoot: string; };
 
 /** Reads the signed product package's exact Remote catalog binding in Electron Main. */
 export function packagedRemoteRuntimeCatalogSource(location: RemoteRuntimePackageLocation, cacheRoot: string): RemoteRuntimeCatalogSource {
@@ -56,7 +56,7 @@ function remoteRuntimePackageRoot(location: RemoteRuntimePackageLocation): strin
 
 /** A strictly validated catalog authenticated by the signed Desktop package containing it. */
 export class PackagedRemoteRuntimeCatalog {
-	private constructor(private readonly artifacts: ReadonlyMap<string, TrustedRemoteRuntimeArtifact>) {}
+	private constructor(private readonly artifacts: ReadonlyMap<string, TrustedRemoteRuntimeArtifact>) { }
 
 	static async load(bundleRoot: string, expectedSha256?: string): Promise<PackagedRemoteRuntimeCatalog> {
 		if (!isAbsolute(bundleRoot) || !validLocalCommand(bundleRoot)) throw new Error("Packaged Remote runtime bundle root must be an absolute local path");

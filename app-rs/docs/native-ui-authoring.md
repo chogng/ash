@@ -8,14 +8,14 @@ app 的具体圆角、间距和浮层视觉规格由 [`UI 样式设计规范`](u
 
 Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct 表达组件视觉，使用共享主题快照提供颜色和尺寸值；它不使用 DOM、CSS selector、stylesheet parser 或 cascade。
 
-| 想表达什么 | 当前写法 | 谁拥有含义 | 是否允许调用方穿透覆盖 |
-| --- | --- | --- | --- |
-| 组件树、基础布局和方框外观 | `style!` / `ui!`，或对应的 `ElementStyle` / `Element` builder | `zui::ui::presentation` | 否；通过公开的类型化 API 表达 |
-| Button、RadioGroup、InputBox 等组件外观 | `ButtonStyle`、`RadioGroupStyle`、`InputBoxStyle` 等 typed style | `ash-ui-components` 组件 | 否；通过 style、state 或 named variant 传入 |
-| 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `ash-ui-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
-| hover、focus、selected、disabled | host 投影的 typed state | 交互/产品 host 判定，组件解释视觉 | 否；组件不自行猜测业务状态 |
-| view-local / projected state 与订阅 | `ViewState<T>`、`ComponentRuntime`、`ComponentContext::{local_state,observe_state,retain_resource}` | `zui` 管理 presentation 生命周期；host 仍拥有产品权威状态与副作用 | 否；只能通过 typed state 和稳定 component identity 连接 |
-| 任意后代 selector、继承和 cascade | 无 | 无 | 不适用；当前 Native contract 不支持 |
+| 想表达什么                              | 当前写法                                                                                            | 谁拥有含义                                                        | 是否允许调用方穿透覆盖                                  |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------- |
+| 组件树、基础布局和方框外观              | `style!` / `ui!`，或对应的 `ElementStyle` / `Element` builder                                       | `zui::ui::presentation`                                           | 否；通过公开的类型化 API 表达                           |
+| Button、RadioGroup、InputBox 等组件外观 | `ButtonStyle`、`RadioGroupStyle`、`InputBoxStyle` 等 typed style                                    | `ash-ui-components` 组件                                          | 否；通过 style、state 或 named variant 传入             |
+| 主题颜色和标准尺寸                      | `ThemeSnapshot` 到 product palette，再到组件 style                                                  | `ash-ui-theme` 与各宿主投影                                       | 否；不在组件中复制主题值                                |
+| hover、focus、selected、disabled        | host 投影的 typed state                                                                             | 交互/产品 host 判定，组件解释视觉                                 | 否；组件不自行猜测业务状态                              |
+| view-local / projected state 与订阅     | `ViewState<T>`、`ComponentRuntime`、`ComponentContext::{local_state,observe_state,retain_resource}` | `zui` 管理 presentation 生命周期；host 仍拥有产品权威状态与副作用 | 否；只能通过 typed state 和稳定 component identity 连接 |
+| 任意后代 selector、继承和 cascade       | 无                                                                                                  | 无                                                                | 不适用；当前 Native contract 不支持                     |
 
 一次 Native UI 帧的边界如下：
 
@@ -53,13 +53,13 @@ Native UI 当前明确不提供以下能力：
 
 ## 2. 四层所有权
 
-| 层 | 负责什么 | 当前入口 | 明确不负责什么 |
-| --- | --- | --- | --- |
-| `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
-| `ash-ui-components` component | Button、RadioGroup、ScrollView、InputBox、ContextView、Dialog 等组件的内部几何、视觉状态解释和 scene composition | `ash_ui_components::{ButtonStyle,RadioGroupStyle,ScrollViewStyle,DialogStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
-| `ash-workbench` | Workbench Titlebar、Sidebar header/content、interaction identity、layout 与 presentation state | `ash_workbench::{Titlebar,SidebarView,SidebarPart,...}` | Session、Terminal、Editor 等具体内容生命周期与 UI |
-| Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `ash_ui_theme::ThemeSnapshot`、`ash_ui_theme::UiTheme` 及其 typed style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
-| Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `app`、`app-rs/workbench/environment`、`ash-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
+| 层                            | 负责什么                                                                                                                                     | 当前入口                                                                           | 明确不负责什么                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `zui` presentation            | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}`  | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用     |
+| `ash-ui-components` component | Button、RadioGroup、ScrollView、InputBox、ContextView、Dialog 等组件的内部几何、视觉状态解释和 scene composition                             | `ash_ui_components::{ButtonStyle,RadioGroupStyle,ScrollViewStyle,DialogStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用       |
+| `ash-workbench`               | Workbench Titlebar、Sidebar header/content、interaction identity、layout 与 presentation state                                               | `ash_workbench::{Titlebar,SidebarView,SidebarPart,...}`                            | Session、Terminal、Editor 等具体内容生命周期与 UI                 |
+| Theme / palette projection    | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style                                                                | `ash_ui_theme::ThemeSnapshot`、`ash_ui_theme::UiTheme` 及其 typed style factory    | 判断组件是否 hover、selected 或 visible；创建 selector            |
+| Product host                  | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action                                                                  | `app`、`app-rs/workbench/environment`、`ash-editor` 等                             | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
 这里的“组件拥有样式”表示组件拥有 style 字段的语义、状态到视觉的解释和内部绘制几何；不表示产品不能传入 palette-derived style。产品可以创建 `ButtonStyle` 的值，但不能假定 `Button` 内部的 icon、label、padding 和 state background 如何组合。
 
@@ -109,18 +109,18 @@ let button_style = ButtonStyle::new(
 
 当前 `ElementStyle` 表达以下属性：
 
-| 属性 | 当前语义 | 当前 API |
-| --- | --- | --- |
-| 方向 | 直接子节点沿横轴或纵轴排列 | `Element::row` / `Element::column` |
-| 宽度和高度 | 填满剩余空间、固定逻辑像素或使用内容自然尺寸 | `.width(...)` / `.height(...)`、`ElementLength::{Fill,Pixels,Content}`、`.content_size(...)` |
-| 主轴排列 | 子节点从起点、居中、终点或分散排列 | `.justify_content(JustifyContent)` |
-| 交叉轴排列 | 子节点在交叉轴起点、居中或终点排列 | `.align_items(AlignItems)` |
-| 内边距 | 内容区域的 top/right/bottom/left inset | `.padding(Edges)` |
-| 子节点间距 | 相邻直接子节点之间的 gap | `.gap(f32)` |
-| 圆角 | 当前节点的 rounded-rect presentation metadata | `.corner_radii(CornerRadii)` |
-| 方框外观 | 背景、边框和阴影随 computed bounds 自动绘制 | `.background(...)` / `.border(...)` / `.shadow(...)` |
-| 溢出 | 可见或按节点圆角裁剪子树与 custom content | `.overflow(ElementOverflow)` |
-| 子树 | 直接子节点顺序 | `.child(...)` / `.children(...)` |
+| 属性       | 当前语义                                      | 当前 API                                                                                     |
+| ---------- | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 方向       | 直接子节点沿横轴或纵轴排列                    | `Element::row` / `Element::column`                                                           |
+| 宽度和高度 | 填满剩余空间、固定逻辑像素或使用内容自然尺寸  | `.width(...)` / `.height(...)`、`ElementLength::{Fill,Pixels,Content}`、`.content_size(...)` |
+| 主轴排列   | 子节点从起点、居中、终点或分散排列            | `.justify_content(JustifyContent)`                                                           |
+| 交叉轴排列 | 子节点在交叉轴起点、居中或终点排列            | `.align_items(AlignItems)`                                                                   |
+| 内边距     | 内容区域的 top/right/bottom/left inset        | `.padding(Edges)`                                                                            |
+| 子节点间距 | 相邻直接子节点之间的 gap                      | `.gap(f32)`                                                                                  |
+| 圆角       | 当前节点的 rounded-rect presentation metadata | `.corner_radii(CornerRadii)`                                                                 |
+| 方框外观   | 背景、边框和阴影随 computed bounds 自动绘制   | `.background(...)` / `.border(...)` / `.shadow(...)`                                         |
+| 溢出       | 可见或按节点圆角裁剪子树与 custom content     | `.overflow(ElementOverflow)`                                                                 |
+| 子树       | 直接子节点顺序                                | `.child(...)` / `.children(...)`                                                             |
 
 布局使用 logical UI pixels；DPI 转换只属于 renderer。`ComponentElement::compute` 产生的 `ComputedElement` 是 paint、hit-test 和 inspection 的共同几何来源。`ElementStyle` 的实现和当前字段以 [`element.rs`](../zui/src/ui/presentation/element.rs) 为准。
 
@@ -136,10 +136,10 @@ let button_style = ButtonStyle::new(
 
 容器分区名表达稳定结构，分区内的组件名表达实际内容。只有一个外壳长期由固定顶部区域和主体区域组成时，才使用 `header` 和 `content`；不要因为某个区域当前恰好位于上方，就把它命名为 `header`。
 
-| 结构 | 区域命名 | 区域内容 |
-| --- | --- | --- |
-| Sidebar Part | `header`、`content` | `SidebarHeader` 挂 Cowork / Code `ModeSwitcher`，`ModeSwitcher` 组合 `RadioGroup`；`content` 挂 Sessions toolbar、`ScrollView`、分组根和 `ListItem` 子项 |
-| Chat Composer | `interaction`、`info_bar`、`editor`、`toolbar` | 各区域按真实职责命名；底部 `toolbar` 不能改称 `header` |
+| 结构          | 区域命名                                       | 区域内容                                                                                                                                                 |
+| ------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar Part  | `header`、`content`                            | `SidebarHeader` 挂 Cowork / Code `ModeSwitcher`，`ModeSwitcher` 组合 `RadioGroup`；`content` 挂 Sessions toolbar、`ScrollView`、分组根和 `ListItem` 子项 |
+| Chat Composer | `interaction`、`info_bar`、`editor`、`toolbar` | 各区域按真实职责命名；底部 `toolbar` 不能改称 `header`                                                                                                   |
 
 同级区域必须由共同的父布局一次性计算。`header` 可以组合 `Toolbar`，但 `Toolbar` 只计算自己的按钮、搜索框和内部 padding，不能计算或公开兄弟 `content` 的 bounds。出现 `Toolbar::content_bounds`、`Header::body_bounds` 或调用方重复推导同一分区几何，说明布局 ownership 已经漂移，应把分区计算移回容器布局。
 
@@ -170,14 +170,14 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 
 ### 5.2 状态由 host 判定，组件负责视觉解释
 
-| 状态 | 判定来源 | 组件能做什么 | 组件不能做什么 |
-| --- | --- | --- | --- |
-| hover | `UiDispatch` / pointer projection | 读取 `ButtonState::Hovered` 等 typed state 并选择背景 | 自己监听平台 pointer 或猜测业务 hover |
-| focus | `UiDispatch` / focus model | 绘制 focused presentation | 自己抢 focus 或创建第二套 focus tree |
-| pressed | 当前交互 dispatch | 绘制 pressed presentation | 直接执行 command 或修改产品 reducer |
-| selected / checked | 产品 host 投影 | 使用 `ButtonSelection`、`RadioSelection` 等 presentation | 把 selected 当作通用 hover 或从 `ElementId` 推断 |
-| disabled | 产品/交互 host 投影 | 禁止或弱化视觉，并让 host 决定是否注册 action | 读取业务状态、自动禁用其他节点 |
-| theme scheme | `ThemeSnapshot` | 消费 palette-derived style | 在组件中维护第二套 light/dark token 表 |
+| 状态               | 判定来源                          | 组件能做什么                                             | 组件不能做什么                                   |
+| ------------------ | --------------------------------- | -------------------------------------------------------- | ------------------------------------------------ |
+| hover              | `UiDispatch` / pointer projection | 读取 `ButtonState::Hovered` 等 typed state 并选择背景    | 自己监听平台 pointer 或猜测业务 hover            |
+| focus              | `UiDispatch` / focus model        | 绘制 focused presentation                                | 自己抢 focus 或创建第二套 focus tree             |
+| pressed            | 当前交互 dispatch                 | 绘制 pressed presentation                                | 直接执行 command 或修改产品 reducer              |
+| selected / checked | 产品 host 投影                    | 使用 `ButtonSelection`、`RadioSelection` 等 presentation | 把 selected 当作通用 hover 或从 `ElementId` 推断 |
+| disabled           | 产品/交互 host 投影               | 禁止或弱化视觉，并让 host 决定是否注册 action            | 读取业务状态、自动禁用其他节点                   |
+| theme scheme       | `ThemeSnapshot`                   | 消费 palette-derived style                               | 在组件中维护第二套 light/dark token 表           |
 
 同一视觉状态只能有一个判定来源。组件可以组合多个状态，但不能让 `:hover`、focus flag、产品 selected flag 和本地临时布尔值各自画一套冲突的背景。
 
@@ -275,12 +275,12 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 
 实现者先读本文确定 ownership，再按修改面进入对应 README：
 
-| 修改内容 | 入口 |
-| --- | --- |
-| Element、computed layout、scene、inspection、renderer-neutral primitive | [`zui` README](../zui/README.md) |
-| Button、List、Tab、ScrollView、InputBox 等通用组件 | [`ash-ui-components` README](../ui-components/README.md) |
-| 各端主题 token、alias、snapshot 的所有权 | [`Design Token 文档`](../../docs/design-tokens.md) |
-| Native host 的 pane/product composition | [`app` 文档导航](README.md) 与对应 domain crate README |
-| GPU、surface、atlas、shader 和 present | [`rendering-architecture.md`](rendering-architecture.md) |
+| 修改内容                                                                | 入口                                                     |
+| ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| Element、computed layout、scene、inspection、renderer-neutral primitive | [`zui` README](../zui/README.md)                         |
+| Button、List、Tab、ScrollView、InputBox 等通用组件                      | [`ash-ui-components` README](../ui-components/README.md) |
+| 各端主题 token、alias、snapshot 的所有权                                | [`Design Token 文档`](../../docs/design-tokens.md)       |
+| Native host 的 pane/product composition                                 | [`app` 文档导航](README.md) 与对应 domain crate README   |
+| GPU、surface、atlas、shader 和 present                                  | [`rendering-architecture.md`](rendering-architecture.md) |
 
 本契约固定的是 Native UI 的 authoring boundary；具体字段、默认值、测试入口和失败语义仍以代码与对应 crate README 为准。

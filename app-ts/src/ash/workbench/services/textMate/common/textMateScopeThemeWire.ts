@@ -15,7 +15,7 @@ interface TextMateScopeThemeResponse {
 	readonly version: typeof VERSION;
 	readonly kind: "replaceThemeResult";
 	readonly requestId: number;
-	readonly error?: { readonly name: string; readonly message: string };
+	readonly error?: { readonly name: string; readonly message: string; };
 }
 
 interface PendingRequest {

@@ -80,10 +80,10 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 		onWillShowDialog: Event.None,
 		onDidShowDialog: Event.None,
 		about: async () => { throw new Error('Unexpected about dialog'); },
-		showMessage: async () => {},
-		info: async () => {},
-		warn: async () => {},
-		error: async () => {},
+		showMessage: async () => { },
+		info: async () => { },
+		warn: async () => { },
+		error: async () => { },
 		confirm: async () => { throw new Error('Unexpected confirm'); },
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => { throw new Error('Unexpected input'); },
@@ -93,7 +93,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
 		openEditor: async (input, options) => { opened = input; openOptions = options; },
-		focusActiveEditor: () => {},
+		focusActiveEditor: () => { },
 	});
 	services.registerInstance(IDialogService, dialogs);
 	const pane = services.createInstance(BinaryFileEditor);
@@ -132,8 +132,8 @@ test("Binary diff keeps both byte previews and metadata through working-set seri
 });
 
 class TestFileService implements IFileService {
-	readonly onDidChangeFiles = () => ({ dispose() {}, [Symbol.dispose]() {} });
-	constructor(private readonly bytes: Uint8Array) {}
+	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
+	constructor(private readonly bytes: Uint8Array) { }
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.bytes.length, readonly: true, modifiedAtMillis: undefined }; }
 	async readFileBytes(resource: URI) { return { resource, bytes: this.bytes, revision: "revision-1" }; }
 	async readFile(resource: URI) { return { resource, content: "", revision: "revision-1" }; }

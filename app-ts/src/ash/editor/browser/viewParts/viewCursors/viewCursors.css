@@ -24,8 +24,14 @@
 	color: var(--ash-editor-multi-cursor-secondary-background);
 }
 
-[data-color-scheme="high-contrast-dark"] .stanza-editor .cursors-layer.has-selection > .cursor,
-[data-color-scheme="high-contrast-light"] .stanza-editor .cursors-layer.has-selection > .cursor {
+[data-color-scheme="high-contrast-dark"]
+	.stanza-editor
+	.cursors-layer.has-selection
+	> .cursor,
+[data-color-scheme="high-contrast-light"]
+	.stanza-editor
+	.cursors-layer.has-selection
+	> .cursor {
 	border-left: var(--ash-stroke-thickness) solid currentColor;
 	border-right: var(--ash-stroke-thickness) solid currentColor;
 }

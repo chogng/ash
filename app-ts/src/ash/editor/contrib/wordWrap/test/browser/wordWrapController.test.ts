@@ -87,7 +87,7 @@ test("word-wrap choice follows the model and leaves the editor setting unchanged
 	assert.equal(unrelated.defaultPrevented, false);
 });
 
-function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: { readonly altKey?: boolean; readonly shiftKey?: boolean } = {}): KeyboardEvent {
+function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: { readonly altKey?: boolean; readonly shiftKey?: boolean; } = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,

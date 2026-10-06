@@ -29,7 +29,7 @@ export enum KeybindingResolveKind {
 }
 
 export type KeybindingResolveResult =
-	| { readonly kind: KeybindingResolveKind.NoMatch }
+	| { readonly kind: KeybindingResolveKind.NoMatch; }
 	| {
 		readonly kind: KeybindingResolveKind.MoreChordsNeeded;
 		readonly keybinding: ResolvedKeybinding;

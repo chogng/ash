@@ -87,7 +87,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 	private previewHandler: IBulkEditPreviewHandler | undefined;
 
 	private readonly retainedFailedSaves = this._register(new DisposableMap<string, TextModelReference>());
-	private readonly undoGroups = new Map<number, { readonly edits: WorkspaceEditResult[]; reverted: boolean }>();
+	private readonly undoGroups = new Map<number, { readonly edits: WorkspaceEditResult[]; reverted: boolean; }>();
 
 	constructor(
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
@@ -149,7 +149,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		// the originating language request, which must not cancel an approved multi-file commit.
 		const result: WorkspaceEditResult = await this.applyTransaction(edit, previewed ? new AbortController().signal : signal, options);
 		if (result.resources.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
-		let group: { readonly edits: WorkspaceEditResult[]; reverted: boolean };
+		let group: { readonly edits: WorkspaceEditResult[]; reverted: boolean; };
 		if (options.undoRedoGroupId !== undefined) {
 			group = this.undoGroups.get(options.undoRedoGroupId) ?? { edits: [], reverted: false };
 			group.edits.push(result);
@@ -408,7 +408,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 
 export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): Promise<LanguageWorkspaceEdit> {
 	const entries: LanguageWorkspaceEditEntry[] = [];
-	const groups = new Map<string, { kind: 'textDocument'; resource: ResourceTextEdit['resource']; version?: number; expectedText?: string; edits: ResourceTextEdit['textEdit'][] }>();
+	const groups = new Map<string, { kind: 'textDocument'; resource: ResourceTextEdit['resource']; version?: number; expectedText?: string; edits: ResourceTextEdit['textEdit'][]; }>();
 	let snapshot: LanguageTextDocumentEdit | undefined;
 	const flushText = (): void => {
 		entries.push(...groups.values());

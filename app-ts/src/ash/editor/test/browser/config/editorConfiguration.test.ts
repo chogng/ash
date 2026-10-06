@@ -207,7 +207,7 @@ test('EditorConfiguration owns automatic container observation and stops it with
 		}
 
 		observe(target: Element): void { this.target = target; }
-		unobserve(): void {}
+		unobserve(): void { }
 		disconnect(): void { this.disconnected = true; }
 		takeRecords(): ResizeObserverEntry[] { return []; }
 

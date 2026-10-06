@@ -59,19 +59,29 @@
 
 #### 构建与维护
 
-| 命令 | 结果 |
-| --- | --- |
-| `just build` | 构建三条产品线及其开发所需服务程序 |
-| `just build-code` / `just build-desktop` / `just build-app` | 构建指定产品 |
-| `just build-rust` | 构建根 Rust workspace |
-| `just check <package>` | 检查指定 Rust 包 |
-| `just lint` | 检查 Python 代码 |
-| `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
-| `pnpm typecheck:build` | 检查 TypeScript 构建工具 |
-| `pnpm stylelint` | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
-| `pnpm hygiene` | 检查 CSS 变量和选择器，再用前端单测验证变量清单与注册表一致 |
-| `pnpm stylelint:update` | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查 |
-| `pnpm clean` | 清理本地产物和 Python 缓存 |
+| 命令                                                        | 结果                                                                       |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `just build`                                                | 构建三条产品线及其开发所需服务程序                                         |
+| `just build-code` / `just build-desktop` / `just build-app` | 构建指定产品                                                               |
+| `just build-rust`                                           | 构建根 Rust workspace                                                      |
+| `just check <package>`                                      | 检查指定 Rust 包                                                           |
+| `just lint`                                                 | 检查 Python 代码                                                           |
+| `just fmt` / `just fmt-check`                               | 调用各语言工具，格式化或检查 Just、Rust、Python、TS/JS、配置与文档         |
+| `just rust-format` / `just rust-format-check`               | 单独格式化或检查 Rust，不需要前端依赖                                      |
+| `pnpm format:ts` / `pnpm format:ts:fix`                     | 检查或格式化第一方 TS/JS；可追加文件或目录                                 |
+| `pnpm format:config` / `pnpm format:config:fix`             | 用 Prettier 检查或格式化 JSON、YAML、Markdown、CSS、HTML                   |
+| `pnpm format` / `pnpm format:fix`                           | 检查或格式化上述前端源码、配置与文档                                       |
+| `pnpm typecheck:build`                                      | 检查 TypeScript 构建工具                                                   |
+| `pnpm stylelint`                                            | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
+| `pnpm hygiene`                                              | 检查 CSS 变量和选择器，再用前端单测验证变量清单与注册表一致                |
+| `pnpm stylelint:update`                                     | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
+| `pnpm clean`                                                | 清理本地产物和 Python 缓存                                                 |
+
+格式化配置按语言独立维护：TS/JS 使用 TypeScript Language Service 和根 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml) 与固定工具链，Python 使用仓库固定版本的 Ruff。JSON、YAML、Markdown、CSS、HTML 使用固定版本的 Prettier 和 [`.prettierrc.toml`](../.prettierrc.toml)。`pnpm test:format` 验证前端格式化命令与文件范围；[Formatting CI](../.github/workflows/format.yml) 分别检查 TS/JS、配置与文档、Rust，Python 格式检查保留在 Build tooling CI。
+
+TS/JS 入口通过 Git 选择 `app-ts/`、`build/`、`extensions/`、`test/`、`services/` 和 `ash-rs/js-extension-host/` 下的第一方源码，排除生成文件、第三方代码、声明文件和 fixtures。TypeScript 格式化器保留现有引号与换行布局；新代码的单引号和 import 单行规则仍遵循 [TypeScript 规范](../.github/instructions/typescript-coding-guidelines.instructions.md)。编辑器使用相同 TypeScript 版本、Tab 和分号设置，自动导入使用单引号。Prettier 的排除范围在 [`.prettierignore`](../.prettierignore)，文档中的代码块不由 Prettier 重排。全量检查报告现有格式差异，检查命令不修改源码；格式化可通过语言独立入口执行。
+
+Rust 入口从 Cargo metadata 选择第一方 workspace 包，不格式化 `vendor/` 与 `third_party/` 中的包；固定 stable rustfmt 支持的配置不包含 `imports_granularity`，一行一个 import 的要求继续按 Rust 规范执行。
 
 `stylelint` 默认排除测试和测试数据中的 CSS，显式路径没有匹配生产 CSS 时返回失败。清单位于 [ash-known-variables.json](../build/lib/stylelint/ash-known-variables.json)，`colors`、`sizes` 来自注册表，`others` 仅收录已确认由组件或平台设置的变量；三类列表都需排序，不能重复。清单更新通过显式选择 `colorRegistry.releaseTest.ts` 完成，该文件不进入日常单测的默认选择。前端 `test:main` 和 CI 都运行这些检查。
 

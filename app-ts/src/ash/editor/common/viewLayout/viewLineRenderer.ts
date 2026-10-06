@@ -109,7 +109,7 @@ export class RenderLineInput {
 }
 
 export class DomPosition {
-	constructor(public readonly partIndex: number, public readonly charIndex: number) {}
+	constructor(public readonly partIndex: number, public readonly charIndex: number) { }
 }
 
 /** Bidirectional mapping between one-based source columns and rendered span positions. */
@@ -187,7 +187,7 @@ export class RenderLineOutput {
 	constructor(
 		readonly characterMapping: CharacterMapping,
 		readonly containsForeignElements: ForeignElementType,
-	) {}
+	) { }
 }
 
 export class RenderLineOutput2 {
@@ -195,7 +195,7 @@ export class RenderLineOutput2 {
 		public readonly characterMapping: CharacterMapping,
 		public readonly html: string,
 		public readonly containsForeignElements: ForeignElementType,
-	) {}
+	) { }
 }
 
 export function renderViewLine(input: RenderLineInput, builder: StringBuilder): RenderLineOutput {
@@ -305,7 +305,7 @@ function classesAt(input: RenderLineInput, offset: number): string[] {
 	return classes;
 }
 
-interface RenderedCell { readonly html: string; readonly domLength: number; readonly width: number }
+interface RenderedCell { readonly html: string; readonly domLength: number; readonly width: number; }
 
 function renderCell(input: RenderLineInput, text: string, offset: number, visibleColumn: number, trailingStart: number): RenderedCell {
 	const code = text.charCodeAt(offset);

@@ -1,8 +1,8 @@
-﻿import * as onigurumaNamespace from "vscode-oniguruma";
+import * as onigurumaNamespace from "vscode-oniguruma";
 import onigurumaWasmUrl from "vscode-oniguruma/release/onig.wasm?url&no-inline";
 import { type IOnigLib } from "vscode-textmate";
 
-const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
+const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace; }).default ?? onigurumaNamespace;
 const { createOnigScanner, createOnigString, loadWASM } = onigurumaRuntime;
 let onigLib: Promise<IOnigLib> | undefined;
 

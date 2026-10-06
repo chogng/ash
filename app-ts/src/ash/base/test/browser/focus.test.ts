@@ -96,7 +96,7 @@ class FakeElement extends FakeNode {
 		this.ownerDocument.activeElement = this;
 	}
 
-	scrollTo(): void {}
+	scrollTo(): void { }
 }
 
 Object.defineProperty(globalThis, "Node", {

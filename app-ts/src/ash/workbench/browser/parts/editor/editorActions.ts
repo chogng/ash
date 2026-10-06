@@ -27,8 +27,10 @@ export const SPLIT_EDITOR = 'workbench.action.splitEditor';
 
 registerAction2(class SplitEditorAction extends Action2 {
 	constructor() {
-		super({ id: SPLIT_EDITOR, title: localize2('workbench.splitEditor', 'Split Editor'), f1: true,
-			keybinding: { primary: Keybinding.single(logicalKey('\\', { primaryKey: true })) } });
+		super({
+			id: SPLIT_EDITOR, title: localize2('workbench.splitEditor', 'Split Editor'), f1: true,
+			keybinding: { primary: Keybinding.single(logicalKey('\\', { primaryKey: true })) }
+		});
 	}
 	override run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
 		const direction = accessor.get(IConfigurationService).getValue<string>(EditorOpenSideBySideDirectionConfiguration);
@@ -37,14 +39,20 @@ registerAction2(class SplitEditorAction extends Action2 {
 });
 
 for (const down of [false, true]) {
-	const primary = { id: SPLIT_EDITOR,
+	const primary = {
+		id: SPLIT_EDITOR,
 		title: down ? localize2('workbench.splitEditorDown', 'Split Down') : localize2('workbench.splitEditorRight', 'Split Right'),
-		icon: down ? Lxicon.splitVertical : Lxicon.splitHorizontal };
-	const alternate = { id: down ? 'workbench.action.splitEditorRight' : 'workbench.action.splitEditorDown',
+		icon: down ? Lxicon.splitVertical : Lxicon.splitHorizontal
+	};
+	const alternate = {
+		id: down ? 'workbench.action.splitEditorRight' : 'workbench.action.splitEditorDown',
 		title: down ? localize2('workbench.splitEditorRight', 'Split Right') : localize2('workbench.splitEditorDown', 'Split Down'),
-		icon: down ? Lxicon.splitHorizontal : Lxicon.splitVertical };
-	MenusRegistry.appendMenuItem(MenuId.EditorTitle, { command: primary, alt: alternate, group: 'navigation', order: 100000,
-		when: down ? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down') : ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down') });
+		icon: down ? Lxicon.splitHorizontal : Lxicon.splitVertical
+	};
+	MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+		command: primary, alt: alternate, group: 'navigation', order: 100000,
+		when: down ? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down') : ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down')
+	});
 }
 
 export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";

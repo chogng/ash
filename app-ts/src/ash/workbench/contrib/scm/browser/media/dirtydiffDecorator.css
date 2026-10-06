@@ -1,85 +1,85 @@
 .stanza-editor-line-decoration.ash-quick-diff-gutter {
-  pointer-events: auto;
-  cursor: pointer;
+	pointer-events: auto;
+	cursor: pointer;
 }
 
 /* The editor owns gutter geometry; the marker paints inside its full click target. */
 .stanza-editor-line-decoration.ash-quick-diff-gutter::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  content: '';
-  pointer-events: none;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 4px;
+	height: 100%;
+	content: "";
+	pointer-events: none;
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-added::before {
-  background: var(--ash-diff-editor-inserted-line-marker);
+	background: var(--ash-diff-editor-inserted-line-marker);
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-modified::before {
-  background: var(--ash-focus-border);
+	background: var(--ash-focus-border);
 }
 
 .stanza-editor-line-decoration.ash-quick-diff-deleted::before {
-  width: 0;
-  height: 0;
-  top: 50%;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 5px solid var(--ash-diff-editor-removed-line-marker);
-  transform: translateY(-50%);
+	width: 0;
+	height: 0;
+	top: 50%;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	border-left: 5px solid var(--ash-diff-editor-removed-line-marker);
+	transform: translateY(-50%);
 }
 
 @media (forced-colors: active) {
-  .stanza-editor-line-decoration.ash-quick-diff-gutter::before {
-    background: CanvasText;
-    border-left-color: CanvasText;
-  }
+	.stanza-editor-line-decoration.ash-quick-diff-gutter::before {
+		background: CanvasText;
+		border-left-color: CanvasText;
+	}
 
-  .stanza-editor-line-decoration.ash-quick-diff-deleted::before {
-    background: transparent;
-  }
+	.stanza-editor-line-decoration.ash-quick-diff-deleted::before {
+		background: transparent;
+	}
 }
 
 .ash-quick-diff-peek .stanza-editor-peek-view-body {
-  padding: 0;
-  overflow: hidden;
+	padding: 0;
+	overflow: hidden;
 }
 
 .ash-quick-diff-peek-body {
-  display: flex;
-  min-height: 180px;
-  flex-direction: column;
+	display: flex;
+	min-height: 180px;
+	flex-direction: column;
 }
 
 .ash-quick-diff-peek-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  gap: 2px;
-  padding: 2px 4px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	display: flex;
+	justify-content: flex-end;
+	gap: 2px;
+	padding: 2px 4px;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
 }
 
 .ash-quick-diff-peek-action {
-  min-width: 24px;
-  padding: 2px 6px;
-  color: var(--ash-editor-foreground);
-  font: inherit;
-  background: transparent;
-  border: 0;
-  border-radius: var(--ash-corner-radius-x-small);
+	min-width: 24px;
+	padding: 2px 6px;
+	color: var(--ash-editor-foreground);
+	font: inherit;
+	background: transparent;
+	border: 0;
+	border-radius: var(--ash-corner-radius-x-small);
 }
 
 .ash-quick-diff-peek-action:hover,
 .ash-quick-diff-peek-action:focus-visible {
-  background: var(--ash-list-hover-background);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	background: var(--ash-list-hover-background);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 .ash-quick-diff-peek-diff {
-  min-height: 0;
-  flex: 1;
-  height: 220px;
+	min-height: 0;
+	flex: 1;
+	height: 220px;
 }

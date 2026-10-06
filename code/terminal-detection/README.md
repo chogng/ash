@@ -5,13 +5,13 @@
 3. Resolves background appearance from an OSC-reported color and `COLORFGBG`, retaining the evidence source.
 4. Leaves terminal input and queries, child-terminal emulation, PTY management and theme selection to their owners.
 
-| Symbol | Responsibility |
-| --- | --- |
+| Symbol                 | Responsibility                                                      |
+| ---------------------- | ------------------------------------------------------------------- |
 | `detect_host_terminal` | Cached process-wide terminal, multiplexer and color-level detection |
-| `HostTerminal` | Structured program, version, TERM and multiplexer metadata |
-| `TerminalKind` | Stable known-terminal category used by product adapters |
-| `ColorLevel` | TrueColor, ANSI-256, ANSI-16 or monochrome fidelity |
-| `resolve_background` | OSC 11 RGB → `COLORFGBG` → conservative Dark resolution |
+| `HostTerminal`         | Structured program, version, TERM and multiplexer metadata          |
+| `TerminalKind`         | Stable known-terminal category used by product adapters             |
+| `ColorLevel`           | TrueColor, ANSI-256, ANSI-16 or monochrome fidelity                 |
+| `resolve_background`   | OSC 11 RGB → `COLORFGBG` → conservative Dark resolution             |
 
 The TUI owns exclusive terminal-response probe windows because those reads must be coordinated with
 its crossterm event stream. [`ash-terminal`](../../app-rs/terminal/README.md) separately owns child-terminal emulation, while

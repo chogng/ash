@@ -6,7 +6,7 @@ import type { ILanguagePackStore } from '../common/languagePackStore.js';
 import type { LanguagePackCatalog } from '../common/languagePacksService.js';
 
 export class LanguagePackStore implements ILanguagePackStore {
-	constructor(private readonly profileRoot: string) {}
+	constructor(private readonly profileRoot: string) { }
 
 	public async read(locale: string): Promise<LanguagePackCatalog | undefined> {
 		const path = this.catalogPath(locale);

@@ -175,7 +175,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.activePane?.addContext(attachment);
 	}
 
-	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
 
@@ -323,7 +323,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 		const sessionId = pane.sessionId;
 		if (!sessionId) return;
-		void this.sessionService.stopSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => {});
+		void this.sessionService.stopSession(sessionId).then(() => this.hideChatWhenEmpty()).catch(() => { });
 	}
 
 	private moveTab(sourceTabId: string, targetTabId: string | undefined, position: "before" | "after"): void {

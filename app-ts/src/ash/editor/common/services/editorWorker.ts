@@ -11,7 +11,7 @@ export const EDITOR_WORKER_NAVIGATE_VALUE_LANE = 'navigateValue';
 
 export type EditorWorkerLane = typeof EDITOR_WORKER_TEXTUAL_SUGGEST_LANE | typeof EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE | typeof EDITOR_WORKER_MINIMAL_EDITS_LANE | typeof EDITOR_WORKER_NAVIGATE_VALUE_LANE;
 
-export interface EditorWorkerUnicodeHighlightsRequest {}
+export interface EditorWorkerUnicodeHighlightsRequest { }
 
 export interface EditorWorkerMinimalEditsRequest {
 	readonly edits: readonly languages.TextEdit[];

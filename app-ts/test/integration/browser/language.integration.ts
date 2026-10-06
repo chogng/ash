@@ -51,7 +51,7 @@ for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 
 declare global {
 	interface Window {
-		languageIntegration: { registered(): boolean; requests(): number; focus(): void; dispose(): void };
+		languageIntegration: { registered(): boolean; requests(): number; focus(): void; dispose(): void; };
 	}
 }
 window.languageIntegration = {

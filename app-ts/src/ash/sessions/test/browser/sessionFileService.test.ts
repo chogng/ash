@@ -34,13 +34,15 @@ test('Session files preserve their original directory through selection, directo
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
-		const fileHost: IRendererHost = { ...host, fs: {
-			...host.fs,
-			readFile: async params => { calls.push(params); return { content: 'original', revision: 'rev-1' }; },
-			writeFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
-			copy: async params => { calls.push(params); },
-			pasteSystemFiles: async params => { calls.push(params); return true; },
-		} };
+		const fileHost: IRendererHost = {
+			...host, fs: {
+				...host.fs,
+				readFile: async params => { calls.push(params); return { content: 'original', revision: 'rev-1' }; },
+				writeFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
+				copy: async params => { calls.push(params); },
+				pasteSystemFiles: async params => { calls.push(params); return true; },
+			}
+		};
 		using files = services.createInstance(SessionFileService, fileHost);
 		const first = URI.file('C:/sessions/first/main.ts');
 		await files.readFile(first);
@@ -67,20 +69,20 @@ test('Session files preserve their original directory through selection, directo
 
 class MemoryProvider extends Disposable implements ISessionsProvider {
 	readonly onDidChangeCatalog = Event.None;
-	private readonly changed = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean }>());
+	private readonly changed = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
 	readonly onDidChangeSession = this.changed.event;
 	items = [session('first', 'C:/sessions/first'), session('second', 'C:/sessions/second')];
 	async list() { return this.items; }
 	async listAgents() { return []; }
 	async readCatalog(id: SessionId) { return this.items.find(session => session.sessionId === id); }
 	async subscribe(session: ISession) { return this.items.find(item => item.sessionId === session.sessionId)!; }
-	async unsubscribe() {}
+	async unsubscribe() { }
 	currentWorkspace() { return { type: 'current' as const }; }
 	async create(): Promise<never> { throw new Error('This test uses durable sessions'); }
-	async setModel() {}
+	async setModel() { }
 	async archive(session: ISession): Promise<ISession> { return { ...session, status: 'archived' }; }
 	async stop(session: ISession) { return session; }
-	async interrupt() {}
+	async interrupt() { }
 }
 
 function session(id: string, root: string): ISession {

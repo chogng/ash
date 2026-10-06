@@ -23,7 +23,7 @@ const { LinkedEditingContribution } = await import('../../browser/linkedEditing.
 
 
 test('linked editing applies one input transaction to every provider range', async () => {
-	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken }> = [];
+	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken; }> = [];
 	using fixture = createFixture({
 		provideLinkedEditingRanges: (model, position, token) => {
 			calls.push({ model: model as TextModel, position, token });
@@ -53,7 +53,7 @@ test('linked editing cancels stale and disposed provider requests', async () => 
 	const fixture = createFixture({
 		provideLinkedEditingRanges: (_model, _position, token) => {
 			tokens.push(token);
-			return new Promise(() => {});
+			return new Promise(() => { });
 		},
 	});
 	await waitFor(() => tokens.length === 1);

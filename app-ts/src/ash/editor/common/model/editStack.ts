@@ -34,7 +34,7 @@ export class TextModelHistory {
 	constructor(
 		private readonly transactionLimit: number,
 		private readonly textUnitLimit: number,
-	) {}
+	) { }
 
 	get canUndo(): boolean {
 		return this.undoStack.length > 0;
@@ -260,7 +260,7 @@ export class TextModelHistory {
 	private trim(): void {
 		while (
 			this.undoStack.length + this.redoStack.length >
-				this.transactionLimit ||
+			this.transactionLimit ||
 			this.historyTextUnits > this.textUnitLimit
 		) {
 			if (

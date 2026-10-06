@@ -79,8 +79,8 @@ const services = store.add(new InstantiationService(support.register(new Service
 	[IConfigurationService, StandaloneServices.get(IConfigurationService)],
 	[IContextKeyService, StandaloneServices.get(IContextKeyService)],
 	[IKeybindingService, StandaloneServices.get(IKeybindingService)],
-	[IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} }],
-	[IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() {}, hideContextMenu() {} }],
+	[IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }],
+	[IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } }],
 ))));
 const disassemblyContainer = document.createElement('div');
 document.body.append(disassemblyContainer);

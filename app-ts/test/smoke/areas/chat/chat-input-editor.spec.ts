@@ -323,12 +323,12 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the connected desktop');
 	const page = workbench.page;
 	const original = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:configuration:read') as { document: { source: string; }; }).document.source;
 	});
 	await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string; }; };
 		const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 		settings['dictation.backend'] = 'local';
 		settings['dictation.localModel'] = 'ash-playwright-missing-model';
@@ -384,8 +384,8 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await expect(introduction).toHaveCount(0);
 	} finally {
 		await page.evaluate(async source => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; };
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
 		}, original);
 	}

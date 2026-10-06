@@ -126,7 +126,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
-			let marketplaceRevision: { readonly instanceId: string; readonly generation: number } | undefined;
+			let marketplaceRevision: { readonly instanceId: string; readonly generation: number; } | undefined;
 			const subscription = options.eventApi.subscribe(event => {
 				if (event.method === 'plugin/changed') {
 					if (event.params.activationGeneration === activationGeneration) return;
@@ -168,7 +168,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	private async drainReloads(): Promise<void> {
-		let firstFailure: { readonly error: unknown } | undefined;
+		let firstFailure: { readonly error: unknown; } | undefined;
 		while (!this.isDisposed && this.reloadQueued) {
 			this.reloadQueued = false;
 			try {
@@ -221,7 +221,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
 				}
 				for (const language of manifest.contributes.languages) {
-					languages.push({ description: {
+					languages.push({
+						description: {
 							id: language.id,
 							aliases: language.aliases,
 							extensions: language.extensions,
@@ -229,7 +230,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 							filenamePatterns: language.filenamePatterns,
 							mimetypes: language.mimetypes,
 							...(language.firstLine === undefined ? {} : { firstLine: language.firstLine }),
-						}, options: { priority: 100 } });
+						}, options: { priority: 100 }
+					});
 					if (language.configuration !== undefined) {
 						const key = `${extension.id}\0${language.configuration}`;
 						const configuration = languageConfigurationResources.get(key) ?? this.loadLanguageConfiguration(resources, catalog.generation, extension.id, language.configuration);

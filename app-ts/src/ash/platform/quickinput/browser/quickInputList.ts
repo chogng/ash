@@ -23,7 +23,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
-	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>());
+	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>());
 	private _items: readonly TItem[] = [];
 	private _visibleItems: readonly TItem[] = [];
 	private maxHeight = Number.POSITIVE_INFINITY;
@@ -32,7 +32,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	readonly onDidAccept: Event<TItem> = this._onDidAccept.event;
 	readonly onDidChangeActive:
 		Event<QuickInputListActiveChangeEvent<TItem>> =
-			this._onDidChangeActive.event;
+		this._onDidChangeActive.event;
 	readonly onDidTriggerItemButton = this.buttonEmitter.event;
 
 	constructor(container: HTMLElement, presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {

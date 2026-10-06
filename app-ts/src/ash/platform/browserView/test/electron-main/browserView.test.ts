@@ -249,7 +249,7 @@ export function fixture() {
 	const f = {
 		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
 		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0,
-		commands: [] as Array<{ method: string; params: unknown }>,
+		commands: [] as Array<{ method: string; params: unknown; }>,
 		observations: [] as string[], cancelled: [] as string[], retired: [] as string[],
 		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({ targetId: pageId, url: f.url, title: f.title, loading: f.loading }),
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
@@ -275,7 +275,7 @@ export function fixture() {
 			let destroyed = false;
 			let bounds = { x: 0, y: 0, width: 0, height: 0 };
 			Object.assign(pageContents, {
-				setWebRTCIPHandlingPolicy: () => {},
+				setWebRTCIPHandlingPolicy: () => { },
 				session: browserStorage,
 				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,
 				getURL: () => f.url, getTitle: () => f.title, focus: () => { }, stop: () => { f.loading = false; }, reload: () => { },

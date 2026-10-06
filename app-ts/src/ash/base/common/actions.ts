@@ -69,7 +69,7 @@ export class Separator implements IAction {
 	readonly enabled = false;
 	readonly checked = undefined;
 
-	run(): void {}
+	run(): void { }
 }
 
 /** An action whose children are rendered as a nested menu. */
@@ -83,7 +83,7 @@ export class SubmenuAction implements IAction {
 		readonly label: string,
 		readonly actions: readonly IAction[],
 		readonly icon?: Icon,
-	) {}
+	) { }
 
-	run(): void {}
+	run(): void { }
 }

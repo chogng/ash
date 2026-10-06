@@ -1,75 +1,75 @@
 .ash-titlebar-command-center {
-  position: relative;
-  width: 100%;
+	position: relative;
+	width: 100%;
 }
 
 .ash-titlebar-command-center-navigation {
-  position: absolute;
-  right: calc(100% + var(--ash-spacing-size80));
-  top: 50%;
-  display: flex;
-  height: 100%;
-  align-items: center;
-  color: var(--ash-title-bar-action-foreground);
-  transform: translateY(-50%);
+	position: absolute;
+	right: calc(100% + var(--ash-spacing-size80));
+	top: 50%;
+	display: flex;
+	height: 100%;
+	align-items: center;
+	color: var(--ash-title-bar-action-foreground);
+	transform: translateY(-50%);
 }
 
 .ash-titlebar-command-center-button {
-  width: 100%;
-  height: 24px;
-  min-height: 24px;
-  min-width: 0;
-  padding: 0 8px;
-  color: var(--ash-command-center-foreground);
-  background: var(--ash-command-center-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-command-center-border);
-  border-radius: var(--ash-corner-radius-small);
+	width: 100%;
+	height: 24px;
+	min-height: 24px;
+	min-width: 0;
+	padding: 0 8px;
+	color: var(--ash-command-center-foreground);
+	background: var(--ash-command-center-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-command-center-border);
+	border-radius: var(--ash-corner-radius-small);
 }
 
 .ash-titlebar-command-center-button:hover {
-  background: var(--ash-command-center-hover-background);
+	background: var(--ash-command-center-hover-background);
 }
 
 .ash-titlebar-command-center-button:active,
 .ash-titlebar-command-center-button:focus-visible,
 .ash-titlebar-command-center-button.active {
-  border-color: var(--ash-command-center-active-border);
+	border-color: var(--ash-command-center-active-border);
 }
 
 .ash-titlebar-command-center-button.active {
-  background: var(--ash-title-bar-background);
+	background: var(--ash-title-bar-background);
 }
 
 .ash-titlebar-command-center-button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
 }
 
 .ash-titlebar-command-center-button .ash-button-content,
 .ash-titlebar-command-center-button .ash-button-label {
-  min-width: 0;
+	min-width: 0;
 }
 
 .ash-titlebar-command-center-button .ash-button-content {
-  max-width: 100%;
+	max-width: 100%;
 }
 
 .ash-titlebar-command-center-button .ash-icon-label-icon {
-  flex: 0 0 auto;
+	flex: 0 0 auto;
 }
 
 .ash-titlebar-command-center-button .ash-button-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 @media (max-width: 800px) {
-  .ash-titlebar-command-center-button .ash-button-label {
-    display: none;
-  }
+	.ash-titlebar-command-center-button .ash-button-label {
+		display: none;
+	}
 
-  .ash-titlebar-command-center-button {
-    padding: 0 6px;
-  }
+	.ash-titlebar-command-center-button {
+		padding: 0 6px;
+	}
 }

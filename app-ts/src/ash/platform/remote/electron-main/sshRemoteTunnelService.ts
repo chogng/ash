@@ -113,7 +113,7 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 	}
 
 	/** A storage session owns this SOCKS endpoint; Chromium sends hostname resolution through SSH. */
-	public async openProxy(signal: AbortSignal): Promise<IDisposable & { readonly localPort: number; readonly signal: AbortSignal }> {
+	public async openProxy(signal: AbortSignal): Promise<IDisposable & { readonly localPort: number; readonly signal: AbortSignal; }> {
 		this.assertNotDisposed();
 		const authority = this.remoteAuthority();
 		const localPort = await this.reserveLocalPort();
@@ -198,7 +198,7 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 		return this.changes.event(listener);
 	}
 
-	private remoteAuthority(): { readonly host: string } {
+	private remoteAuthority(): { readonly host: string; } {
 		const workspace = this.options.getWorkspace();
 		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
 		if (!remoteAuthority) {

@@ -63,7 +63,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 
 	public getId(): string { return 'chat.edits.review'; }
 	public getDomNode(): HTMLElement { return this.domNode; }
-	public getPosition(): { preference: OverlayWidgetPositionPreference } | null { return this.domNode.hidden ? null : { preference: OverlayWidgetPositionPreference.TOP_CENTER }; }
+	public getPosition(): { preference: OverlayWidgetPositionPreference; } | null { return this.domNode.hidden ? null : { preference: OverlayWidgetPositionPreference.TOP_CENTER }; }
 
 	private render(): void {
 		const resource = this.editor.getModel()?.uri;

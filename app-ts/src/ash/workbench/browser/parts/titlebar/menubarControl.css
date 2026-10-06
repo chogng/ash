@@ -1,23 +1,25 @@
 .ash-menubar {
-  /* Hosts select the radius on this root; action styling stays inside the control. */
-  --ash-menubar-action-radius: var(--ash-corner-radius-small);
-  --ash-menubar-hover-background: var(--ash-title-bar-hover-background);
+	/* Hosts select the radius on this root; action styling stays inside the control. */
+	--ash-menubar-action-radius: var(--ash-corner-radius-small);
+	--ash-menubar-hover-background: var(--ash-title-bar-hover-background);
 }
 
 .ash-menubar .ash-button {
-  border-radius: var(--ash-menubar-action-radius);
+	border-radius: var(--ash-menubar-action-radius);
 }
 
 .ash-menubar .ash-menubar-item {
-  color: var(--ash-title-bar-foreground);
+	color: var(--ash-title-bar-foreground);
 }
 
 .ash-menubar .ash-menubar-item:hover,
 .ash-menubar .ash-menubar-item.active {
-  background: var(--ash-menubar-hover-background);
+	background: var(--ash-menubar-hover-background);
 }
 
-.ash-workbench[data-color-scheme^="high-contrast-"] .ash-menubar .ash-button:is(.active, :hover):not(:disabled):not(:focus-visible) {
-  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
-  outline-offset: -1px;
+.ash-workbench[data-color-scheme^="high-contrast-"]
+	.ash-menubar
+	.ash-button:is(.active, :hover):not(:disabled):not(:focus-visible) {
+	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	outline-offset: -1px;
 }

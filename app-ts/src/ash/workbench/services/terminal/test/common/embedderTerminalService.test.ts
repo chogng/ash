@@ -172,7 +172,7 @@ class HostPty extends Disposable implements IEmbedderTerminalPty {
 	public close(): void { this.closes++; }
 }
 
-function createServices(owner: DisposableStore): { services: InstantiationService; terminals: ITerminalService; reveals: string[] } {
+function createServices(owner: DisposableStore): { services: InstantiationService; terminals: ITerminalService; reveals: string[]; } {
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IEmbedderTerminalService)?.[1];
 	assert.ok(descriptor);
 	const workspace = owner.add(new WorkspaceContextService({ id: 'empty-window' }));

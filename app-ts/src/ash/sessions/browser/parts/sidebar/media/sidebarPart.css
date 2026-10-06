@@ -1,19 +1,22 @@
 .ash-workbench-sidebar {
-  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
-  background: var(--ash-side-bar-background);
+	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	background: var(--ash-side-bar-background);
 }
 
 .ash-sessions-navigation-view {
-  display: flex;
-  flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 .ash-sessions-navigation-view > .ash-sessions-list,
 .ash-sessions-navigation-view > .ash-teams-panel {
-  min-height: 0;
-  flex: 1 1 auto;
+	min-height: 0;
+	flex: 1 1 auto;
 }
 
-.ash-sessions-window .ash-workbench-sidebar > .ash-workbench-part-content > .ash-pane-composite {
+.ash-sessions-window
+	.ash-workbench-sidebar
+	> .ash-workbench-part-content
+	> .ash-pane-composite {
 	flex: 1;
 	min-height: 0;
 }
@@ -23,7 +26,9 @@
 	background: var(--ash-side-bar-background);
 }
 
-.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host[hidden] {
+.ash-sessions-window
+	.ash-workbench-sidebar
+	.ash-sessions-activity-host[hidden] {
 	display: none;
 }
 

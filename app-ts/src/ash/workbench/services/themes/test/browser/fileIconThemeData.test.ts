@@ -37,7 +37,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 	registration.replace([theme]);
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) });
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener() { }, removeEventListener() { } }) });
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
@@ -78,7 +78,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		const group = new EditorGroupModel();
 		const input = { resource: URI.file('C:/project/main.ts') };
 		group.openEditor(input);
-		const delegate: EditorTabsDelegate = { activate() {}, preview() {}, close() {}, pinEditor() {}, unstickEditor() {}, startDrag() {}, isDragging: () => false, drop() {}, dropExternal() {}, endDrag() {} };
+		const delegate: EditorTabsDelegate = { activate() { }, preview() { }, close() { }, pinEditor() { }, unstickEditor() { }, startDrag() { }, isDragging: () => false, drop() { }, dropExternal() { }, endDrag() { } };
 		using title = editorServices.createInstance(EditorTitleControl, browser.window.document.body, delegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
 		const editors = [{ instanceId: 'main', input, panelId: 'main-panel', tabId: 'main-tab' }];
 		title.setEditors(editors, input);

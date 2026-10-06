@@ -21,23 +21,23 @@ Ash 将 Typst 0.15.1 作为 Rust 库嵌入，不调用系统安装的 `typst` �
 状态；确定性序列化器负责把该状态转换为 Typst 源码；Typst 只负责排版和 PDF 输出。legacy editor runtime
 仍然是 Code 产品的编辑器，不属于这条论文处理路径。
 
-| 想完成什么 | 当前能力 | 当前限制 |
-| --- | --- | --- |
-| 把 Typst 源码编译成 PDF | 已实现内存编译和临时 PDF 资源 | 仅支持单文件源码 |
-| 从 Academic 文档生成 Typst | 计划由确定性序列化器完成 | 尚未实现 |
-| 在 Workbench 预览 workspace PDF | PDF.js 阅读器 | 已实现；Typst 临时资源尚未桥接到该贡献 |
-| 使用本地文件、网络或外部包 | 明确拒绝 | 保持编译器信任边界 |
-| 保存最终 PDF | 调用方显式读取并导出 | 临时资源不会自动持久化 |
+| 想完成什么                      | 当前能力                      | 当前限制                               |
+| ------------------------------- | ----------------------------- | -------------------------------------- |
+| 把 Typst 源码编译成 PDF         | 已实现内存编译和临时 PDF 资源 | 仅支持单文件源码                       |
+| 从 Academic 文档生成 Typst      | 计划由确定性序列化器完成      | 尚未实现                               |
+| 在 Workbench 预览 workspace PDF | PDF.js 阅读器                 | 已实现；Typst 临时资源尚未桥接到该贡献 |
+| 使用本地文件、网络或外部包      | 明确拒绝                      | 保持编译器信任边界                     |
+| 保存最终 PDF                    | 调用方显式读取并导出          | 临时资源不会自动持久化                 |
 
 ## 所有权与端到端流程
 
-| 组件 | 职责 |
-| --- | --- |
-| `ash-typst` | 编译器 `World`、内置字体、源码限制、诊断和 PDF 字节 |
-| `ash-app-server-protocol` | `document/typst/compile` 数据结构与能力协商 |
-| `ash-app-server` | 请求分发和当前连接拥有的 PDF 资源创建 |
-| Desktop Main/Preload | 精确 IPC 校验和类型化能力桥接 |
-| Academic Workbench 贡献 | Stanza Document Engine；未来的 Typst 序列化、诊断、预览和保存/导出 |
+| 组件                      | 职责                                                               |
+| ------------------------- | ------------------------------------------------------------------ |
+| `ash-typst`               | 编译器 `World`、内置字体、源码限制、诊断和 PDF 字节                |
+| `ash-app-server-protocol` | `document/typst/compile` 数据结构与能力协商                        |
+| `ash-app-server`          | 请求分发和当前连接拥有的 PDF 资源创建                              |
+| Desktop Main/Preload      | 精确 IPC 校验和类型化能力桥接                                      |
+| Academic Workbench 贡献   | Stanza Document Engine；未来的 Typst 序列化、诊断、预览和保存/导出 |
 
 计划中的 Academic 渲染流程如下；序列化器和把临时资源打开到 PDF 阅读器的桥接尚未实现：
 

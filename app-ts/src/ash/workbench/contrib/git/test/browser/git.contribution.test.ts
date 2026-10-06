@@ -196,10 +196,12 @@ test('Graph comparisons keep each editor and file bound to its exact base and pr
 	using services = new InstantiationService();
 	registerGraphServices(services, git);
 	services.registerInstance(IQuickInputService, inputSelecting(0));
-	services.registerInstance(IEditorService, { openEditor: async (editor: EditorInput) => {
-		assert.ok(isMultiDiffEditorInput(editor));
-		opened.push({ resource: editor.resource.toString(), label: editor.label, original: editor.items[0].original.initialText, modified: editor.items[0].modified.initialText });
-	} } as unknown as IEditorService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (editor: EditorInput) => {
+			assert.ok(isMultiDiffEditorInput(editor));
+			opened.push({ resource: editor.resource.toString(), label: editor.label, original: editor.items[0].original.initialText, modified: editor.items[0].modified.initialText });
+		}
+	} as unknown as IEditorService);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	const element = historyElement({}, provider);
@@ -217,6 +219,6 @@ test('Graph comparisons keep each editor and file bound to its exact base and pr
 	]);
 	assert.ok(requests.some(request => request[0] === 'compare' && request[3] === 'mergeBase'));
 	assert.ok(requests.some(request => request[0] === 'compare' && request[2] === 'refs/remotes/origin/main'));
-	assert.deepEqual((opened as Array<{ original: string; modified: string }>).map(editor => [editor.original, editor.modified]), [[baseId, 'selected contents'], [baseId, 'selected contents'], [baseId, 'selected contents'], [firstParent, 'selected contents']]);
-	assert.notEqual((opened[0] as { resource: string }).resource, (opened[3] as { resource: string }).resource);
+	assert.deepEqual((opened as Array<{ original: string; modified: string; }>).map(editor => [editor.original, editor.modified]), [[baseId, 'selected contents'], [baseId, 'selected contents'], [baseId, 'selected contents'], [firstParent, 'selected contents']]);
+	assert.notEqual((opened[0] as { resource: string; }).resource, (opened[3] as { resource: string; }).resource);
 });

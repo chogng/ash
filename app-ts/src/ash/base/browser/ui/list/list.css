@@ -1,21 +1,21 @@
 .ash-list {
-  margin: 0;
-  padding: 0;
+	margin: 0;
+	padding: 0;
 }
 
 .ash-list-row {
-  cursor: default;
+	cursor: default;
 }
 
 /* Keep the scrollbar above selected rows and sticky tree rows. */
 .ash-list-scrollable > .ash-scrollbar-track-vertical {
-  z-index: 14;
+	z-index: 14;
 }
 
 .ash-list-row.ash-dnd-drop-before {
-  box-shadow: inset 0 1px 0 var(--ash-focus-border);
+	box-shadow: inset 0 1px 0 var(--ash-focus-border);
 }
 
 .ash-list-row.ash-dnd-drop-after {
-  box-shadow: inset 0 -1px 0 var(--ash-focus-border);
+	box-shadow: inset 0 -1px 0 var(--ash-focus-border);
 }

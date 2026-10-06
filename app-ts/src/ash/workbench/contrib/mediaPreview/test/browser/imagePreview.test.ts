@@ -39,7 +39,7 @@ class ImageFixture extends Disposable {
 		const originalRevoke = URL.revokeObjectURL;
 		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], { createImageBitmap: () => this.decode() }));
-		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void {} disconnect(): void {} } });
+		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerInstance(IFileService, {
@@ -50,8 +50,8 @@ class ImageFixture extends Disposable {
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		});
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
-		this.services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => {}, hideContextMenu: () => {} });
-		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose: () => {}, [Symbol.dispose]: () => {} });
+		this.services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
 		this.preview = this._register(EditorPanes.getEditorPane({ resource })!.create({ instantiationService: this.services }) as ImagePreview);
 		this.preview.create(this.browser.window.document.body);
 		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;

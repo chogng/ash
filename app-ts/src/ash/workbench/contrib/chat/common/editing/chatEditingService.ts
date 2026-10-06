@@ -31,7 +31,7 @@ export interface IChatEditingService {
 	readonly entries: readonly IModifiedFileEntry[];
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeAutoAccept: Event<IModifiedFileEntry>;
-	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean }>;
+	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean; }>;
 	finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void>;
 	getAutoAcceptCountdown(entry: IModifiedFileEntry): number | undefined;
 	cancelAutoAccept(entry: IModifiedFileEntry): void;

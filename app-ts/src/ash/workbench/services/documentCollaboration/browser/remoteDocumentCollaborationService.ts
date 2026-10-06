@@ -334,7 +334,7 @@ interface RemoteTarget {
 	readonly bearerToken: string;
 }
 
-type RemoteReplay = { readonly kind: "updates"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[] } | { readonly kind: "resync"; readonly snapshot: DocumentCollaborationSnapshot };
+type RemoteReplay = { readonly kind: "updates"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[]; } | { readonly kind: "resync"; readonly snapshot: DocumentCollaborationSnapshot; };
 
 interface RemotePresenceReplay {
 	readonly generation: number;
@@ -414,7 +414,7 @@ function decodeSelection(value: string): DocumentSelection {
 	}
 }
 
-function decodePoint(value: unknown, name: string): { readonly nodeId: string; readonly offset: number } {
+function decodePoint(value: unknown, name: string): { readonly nodeId: string; readonly offset: number; } {
 	const point = expectRecord(value, name);
 	return Object.freeze({ nodeId: expectString(point.nodeId, `${name} nodeId`), offset: validateProtocolInteger(point.offset, `${name} offset`, 0) });
 }

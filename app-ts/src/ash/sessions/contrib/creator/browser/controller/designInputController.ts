@@ -11,7 +11,7 @@ import type { DesignSelection } from '../../common/selection.js';
 import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
 import type { DesignDrawingParticipant } from '../designEditorBrowser.js';
 
-type PathHandle = { readonly nodeIndex: number; readonly point: 'anchor' | 'incoming' | 'outgoing' };
+type PathHandle = { readonly nodeIndex: number; readonly point: 'anchor' | 'incoming' | 'outgoing'; };
 interface ShapeGesture {
 	readonly start: DesignPoint;
 	readonly shapes: readonly DesignShape[];

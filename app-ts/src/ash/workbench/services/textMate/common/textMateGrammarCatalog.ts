@@ -5,7 +5,7 @@ import { assertLanguageId } from '../../../../editor/common/languages/language.j
 import { type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 import * as textMateNamespace from "vscode-textmate";
 
-const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace }).default ?? textMateNamespace;
+const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace; }).default ?? textMateNamespace;
 const { parseRawGrammar } = textMateRuntime;
 
 export interface TextMateGrammarCatalogEntry {

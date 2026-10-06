@@ -20,24 +20,24 @@ export interface AccountState {
 }
 
 export type AccountLoginMethod =
-	| { readonly type: 'openAiChatGptBrowser' }
-	| { readonly type: 'openAiChatGptDeviceCode' }
-	| { readonly type: 'kimiDeviceCode' }
-	| { readonly type: 'xaiDeviceCode' }
-	| { readonly type: 'bigModelBrowser' }
-	| { readonly type: 'zaiBrowser' }
-	| { readonly type: 'bigModelStartPlanBrowser' }
-	| { readonly type: 'zaiStartPlanBrowser' }
-	| { readonly type: 'gitHubBrowser' };
+	| { readonly type: 'openAiChatGptBrowser'; }
+	| { readonly type: 'openAiChatGptDeviceCode'; }
+	| { readonly type: 'kimiDeviceCode'; }
+	| { readonly type: 'xaiDeviceCode'; }
+	| { readonly type: 'bigModelBrowser'; }
+	| { readonly type: 'zaiBrowser'; }
+	| { readonly type: 'bigModelStartPlanBrowser'; }
+	| { readonly type: 'zaiStartPlanBrowser'; }
+	| { readonly type: 'gitHubBrowser'; };
 
 export type AccountLoginChallenge =
-	| { readonly type: 'connected'; readonly loginId: string }
-	| { readonly type: 'browser'; readonly loginId: string; readonly authorizationUrl: string }
-	| { readonly type: 'deviceCode'; readonly loginId: string; readonly verificationUrl: string; readonly userCode: string };
+	| { readonly type: 'connected'; readonly loginId: string; }
+	| { readonly type: 'browser'; readonly loginId: string; readonly authorizationUrl: string; }
+	| { readonly type: 'deviceCode'; readonly loginId: string; readonly verificationUrl: string; readonly userCode: string; };
 
 export type AccountLoginCompletionStatus =
-	| { readonly type: 'succeeded' }
-	| { readonly type: 'failed'; readonly failure: { readonly code: string; readonly message: string } };
+	| { readonly type: 'succeeded'; }
+	| { readonly type: 'failed'; readonly failure: { readonly code: string; readonly message: string; }; };
 
 export interface AccountLoginCompletion {
 	readonly loginId: string;

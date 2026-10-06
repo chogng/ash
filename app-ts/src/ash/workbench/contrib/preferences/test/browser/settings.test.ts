@@ -59,11 +59,11 @@ const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
 });
 Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollTo', {
 	configurable: true,
-	value() {},
+	value() { },
 });
 Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollIntoView', {
 	configurable: true,
-	value() {},
+	value() { },
 });
 const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'], {
 	navigator: browserEnvironment.window.navigator,
@@ -194,12 +194,12 @@ test('URL rule suggestions follow extension registration without changing saved 
 		configurationService: configuration,
 		contextViewProvider: contextView,
 		clipboardService: {
-			readText: async () => '', writeText: async () => {},
+			readText: async () => '', writeText: async () => { },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
-			writeResources: async () => {}, hasResources: async () => false,
+			writeResources: async () => { }, hasResources: async () => false,
 		},
-		contextMenuProvider: { showContextMenu() {} },
-		onStatus: () => {},
+		contextMenuProvider: { showContextMenu() { } },
+		onStatus: () => { },
 	}));
 	root.append(widget.domNode);
 	const opener = widget.domNode.querySelector<HTMLInputElement>('[data-pattern-part="value"]')!;
@@ -433,13 +433,13 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	const changed = disposables.add(new Emitter<void>());
 	const model = { provider: 'openai', model: 'gpt-test' };
 	let catalog = [{ model, displayName: 'GPT Test' }];
-	let resolveProviders!: (providers: readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean }[]) => void;
-	const providers = new Promise<readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean }[]>(resolve => { resolveProviders = resolve; });
+	let resolveProviders!: (providers: readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean; }[]) => void;
+	const providers = new Promise<readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean; }[]>(resolve => { resolveProviders = resolve; });
 	const chat = {
 		onDidChangeModels: changed.event,
 		listModelCatalog: async () => catalog,
 		listModelProviders: () => providers,
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 	} as unknown as IChatService;
@@ -450,7 +450,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
 	disposables.add(new SettingsTree(root, {
@@ -485,19 +485,19 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	const changed = resources.add(new Emitter<void>());
 	const models: ILanguageModelsService = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
-		setModelPreferences: async () => {},
+		setApprovalReviewModel: async () => { },
+		setModelPreferences: async () => { },
 		onDidChangeModels: changed.event,
 		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
 		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel() {},
+		rememberSelectedModel() { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
-		setModelProviderApiKey: async () => {},
-		removeModelProviderApiKey: async () => {},
+		setModelProviderApiKey: async () => { },
+		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: async () => [],
 		refreshModels: async () => catalog,
 		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
@@ -512,7 +512,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(ILanguageModelsService, models);
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const content = resources.add(services.createInstance(ModelSettingsContent, root));
 	const loaded = new DeferredPromise<void>();
 	resources.add(content.onDidChange(() => {
@@ -606,7 +606,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const clipboardService: IClipboardService = {
 		readText: async () => '',
 		readResources: async () => ({ resources: [], operation: 'copy' }),
-		writeResources: async () => {},
+		writeResources: async () => { },
 		hasResources: async () => false,
 		writeText: value => {
 			copied.push(value);
@@ -620,7 +620,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			menuActions = options.getActions?.() ?? [];
 			hideMenu = 'onHide' in options ? options.onHide : undefined;
 		},
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const languagePacksChanged = disposables.add(new Emitter<void>());
@@ -632,8 +632,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		availableLocales,
 		installedPackages: [],
 		search: async () => [],
-		install: async () => {},
-		refresh: async () => {},
+		install: async () => { },
+		refresh: async () => { },
 	};
 	const locale = disposables.add(createTestLocaleService(configuration, languagePacks));
 	await locale.whenReady;
@@ -670,7 +670,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			advisorWrites.push(next);
 		},
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
 		isModelVisible: (entry: typeof model) => entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model),
@@ -690,10 +690,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ISkillService, {
 		list: async () => ({ generation: 0, skills: [] }),
 		read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }),
-		setEnabled: async () => {},
+		setEnabled: async () => { },
 	});
 	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None } as IMarketplaceService);
-	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => {}, removeConfiguration: async () => {} });
+	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);
@@ -742,15 +742,17 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	} as unknown as IDirPermissionsService);
 	services.registerInstance(INetworkDiagnosticsService, {
 		read: async () => ({ revision: 0, httpMode: 'http2', targets: [] }),
-		configureHttp: async () => {},
+		configureHttp: async () => { },
 		run: async () => ({ network: { revision: 0, httpMode: 'http2', targets: [] }, checks: [] }),
 	});
 	let hookReads = 0;
 	let hooksFailure = false;
 	let openUserToml = 0;
-	let sources: readonly HookSource[] = [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [{
-		id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
-	}] }];
+	let sources: readonly HookSource[] = [{
+		namespace: 'user', configPath: '/profile/config.toml', hooks: [{
+			id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
+		}]
+	}];
 	const hooksChanged = disposables.add(new Emitter<void>());
 	let nextHooksRead: Promise<readonly HookSource[]> | undefined;
 	const hooksService: IHooksService = {
@@ -768,10 +770,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const prompts: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
-		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => {},
+		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { },
 		appendToActiveDraft: text => { prompts.push(text); },
 	});
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
 	await using hooksFolderCleanup = { [Symbol.asyncDispose]: async () => { await rm(hooksFolder, { recursive: true, force: true }); } };
 	services.registerInstance(IFileService, disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)])));
@@ -1180,7 +1182,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 			return {
 				completed: new Promise<ModelState.Cancelled>(resolve => { finish = resolve; }),
 				cancel: async () => { cancellations++; progress({ state: LocalTranscriptionModelState.Cancelled }); finish(LocalTranscriptionModelState.Cancelled); },
-				dispose() {},
+				dispose() { },
 			};
 		},
 	} as unknown as LocalTranscriptionService);
@@ -1238,7 +1240,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
 		],
 		listModelProviders: async () => ['openai', 'openai-compatible'].map(connection => ({ connection, provider: connection, displayName: connection, apiKeyPolicy: 'required', apiKeyConfigured: true })),
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
 		saveCustomModelProvider: async (provider: typeof saved[number]) => { saved.push(provider); },
@@ -1254,7 +1256,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const content = disposables.add(services.createInstance(ModelSettingsContent, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
 	disposables.add(new SettingsTree(root, { model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode }));

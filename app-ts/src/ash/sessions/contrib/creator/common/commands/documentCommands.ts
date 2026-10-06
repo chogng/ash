@@ -14,10 +14,12 @@ export class DocumentCommands {
 		if (kind === 'text') {
 			shape = { ...geometry, kind, x: center.x - 120, width: 240, text, fontSize: 24 };
 		} else if (kind === 'path') {
-			shape = { ...geometry, kind, closed: false, strokeWidth: 2, nodes: [
-				{ x: 0, y: 0.5, incoming: { x: 0, y: 0.5 }, outgoing: { x: 0.25, y: 0 } },
-				{ x: 1, y: 0.5, incoming: { x: 0.75, y: 1 }, outgoing: { x: 1, y: 0.5 } },
-			] };
+			shape = {
+				...geometry, kind, closed: false, strokeWidth: 2, nodes: [
+					{ x: 0, y: 0.5, incoming: { x: 0, y: 0.5 }, outgoing: { x: 0.25, y: 0 } },
+					{ x: 1, y: 0.5, incoming: { x: 0.75, y: 1 }, outgoing: { x: 1, y: 0.5 } },
+				]
+			};
 		} else { shape = { ...geometry, kind }; }
 		this.insertShape(shape);
 		return shape.id;
@@ -35,10 +37,12 @@ export class DocumentCommands {
 		const position = toDesignLocal(frame.world, center);
 		const child = { ...shape, x: position.x - shape.width / 2, y: position.y - shape.height / 2, rotation: shape.rotation - frame.world.rotation };
 		if (shape.motion) {
-			child.motion = { ...shape.motion, keyframes: shape.motion.keyframes.map(keyframe => {
-				const position = toDesignLocal(frame.world, { x: keyframe.x + shape.width / 2, y: keyframe.y + shape.height / 2 });
-				return { ...keyframe, x: position.x - shape.width / 2, y: position.y - shape.height / 2, rotation: keyframe.rotation - frame.world.rotation };
-			}) };
+			child.motion = {
+				...shape.motion, keyframes: shape.motion.keyframes.map(keyframe => {
+					const position = toDesignLocal(frame.world, { x: keyframe.x + shape.width / 2, y: keyframe.y + shape.height / 2 });
+					return { ...keyframe, x: position.x - shape.width / 2, y: position.y - shape.height / 2, rotation: keyframe.rotation - frame.world.rotation };
+				})
+			};
 		}
 		const insert = (current: DesignShape): DesignShape => {
 			if (current.id === frame.shape.id && current.kind === 'frame') { return { ...current, children: [...current.children, child] }; }
@@ -135,16 +139,18 @@ export class DocumentCommands {
 				rotation: child.rotation + group.rotation,
 			};
 			if (child.motion) {
-				geometry.motion = { ...child.motion, keyframes: child.motion.keyframes.map(frame => {
-					const dx = (frame.x + child.width / 2) * scale - group.width / 2;
-					const dy = (frame.y + child.height / 2) * scale - group.height / 2;
-					return {
-						...frame,
-						x: group.x + group.width / 2 + dx * Math.cos(radians) - dy * Math.sin(radians) - child.width * scale / 2,
-						y: group.y + group.height / 2 + dx * Math.sin(radians) + dy * Math.cos(radians) - child.height * scale / 2,
-						rotation: frame.rotation + group.rotation,
-					};
-				}) };
+				geometry.motion = {
+					...child.motion, keyframes: child.motion.keyframes.map(frame => {
+						const dx = (frame.x + child.width / 2) * scale - group.width / 2;
+						const dy = (frame.y + child.height / 2) * scale - group.height / 2;
+						return {
+							...frame,
+							x: group.x + group.width / 2 + dx * Math.cos(radians) - dy * Math.sin(radians) - child.width * scale / 2,
+							y: group.y + group.height / 2 + dx * Math.sin(radians) + dy * Math.cos(radians) - child.height * scale / 2,
+							rotation: frame.rotation + group.rotation,
+						};
+					})
+				};
 			}
 			if (geometry.kind === 'text') { return { ...geometry, fontSize: geometry.fontSize * scale }; }
 			if (geometry.kind === 'path') { return { ...geometry, strokeWidth: geometry.strokeWidth * scale }; }

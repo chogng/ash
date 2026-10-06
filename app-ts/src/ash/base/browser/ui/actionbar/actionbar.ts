@@ -262,7 +262,7 @@ export class ActionBar extends Disposable {
 		container.classList.remove(DndCssClasses.Draggable);
 		const item = store.add(
 			this.actionViewItemProvider?.(action, this.actionViewItemOptions) ??
-				createActionViewItem(action, this.actionViewItemOptions),
+			createActionViewItem(action, this.actionViewItemOptions),
 		);
 		item.render(container);
 		const entry = { action, container, item, store };
@@ -376,7 +376,7 @@ export class ActionBar extends Disposable {
 		return undefined;
 	}
 
-	private dropTargetFromEvent(event: DragEvent): { entry: ActionBarEntry | undefined; position: ActionBarDropPosition } {
+	private dropTargetFromEvent(event: DragEvent): { entry: ActionBarEntry | undefined; position: ActionBarDropPosition; } {
 		const coordinate = this.orientation === "horizontal" ? event.clientX : event.clientY;
 		let lastLaidOutEntry: ActionBarEntry | undefined;
 		for (const entry of this.entries) {

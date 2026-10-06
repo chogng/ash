@@ -52,6 +52,6 @@ function action(id: string): IAction {
 		label: id,
 		tooltip: id,
 		enabled: true,
-		run() {},
+		run() { },
 	};
 }

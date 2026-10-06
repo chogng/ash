@@ -13,9 +13,9 @@ test.beforeEach(({ target }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Shared backup recovery requires the Electron App Server product.');
 });
 
-function records(directory: string): readonly { resource: string; content: string }[] {
+function records(directory: string): readonly { resource: string; content: string; }[] {
 	const database = new DatabaseSync(join(directory, 'profile', 'state.sqlite3'), { readOnly: true });
-	try { return database.prepare('SELECT resource, content FROM backup_contents WHERE client_id = ?').all('ash-editor') as { resource: string; content: string }[]; }
+	try { return database.prepare('SELECT resource, content FROM backup_contents WHERE client_id = ?').all('ash-editor') as { resource: string; content: string; }[]; }
 	finally { database.close(); }
 }
 
@@ -141,8 +141,8 @@ test('Desktop retains conflicting legacy content until an explicit save prevents
 
 async function seedLegacy(page: Page, resource: string, content: string): Promise<void> {
 	await page.evaluate(async ({ resource, content }) => {
-		const bridge = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
-		const workspace = await bridge.ipcRenderer.invoke('ash:workspace:context:read') as { id: string };
+		const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+		const workspace = await bridge.ipcRenderer.invoke('ash:workspace:context:read') as { id: string; };
 		const database = await new Promise<IDBDatabase>((resolve, reject) => {
 			const opening = indexedDB.open('ash-working-copy-backups', 1);
 			opening.onsuccess = () => resolve(opening.result);

@@ -35,4 +35,5 @@ Closes #18
 
 Use "Refs #..." instead when an issue is related but not fully resolved.
 -->
+
 Closes #ISSUE_NUMBER

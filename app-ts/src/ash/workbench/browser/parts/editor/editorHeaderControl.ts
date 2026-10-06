@@ -188,7 +188,7 @@ export class EditorHeaderControl extends Disposable {
 		void this.loadSymbols(model, control);
 	}
 
-	private async loadSymbols(model: TextModel, control: { getModel?: () => TextModel | null; getPosition?: () => Position | null }): Promise<void> {
+	private async loadSymbols(model: TextModel, control: { getModel?: () => TextModel | null; getPosition?: () => Position | null; }): Promise<void> {
 		const controller = new AbortController();
 		this.symbolRequest.value = toDisposable(() => controller.abort());
 		try {

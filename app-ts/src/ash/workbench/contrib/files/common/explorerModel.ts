@@ -11,7 +11,7 @@ export class ExplorerItem {
 		public readonly name: string,
 		public readonly kind: FileKind,
 		public readonly children?: readonly ExplorerItem[],
-	) {}
+	) { }
 
 	public static fromFileEntry(entry: IFileEntry): ExplorerItem {
 		return new ExplorerItem(entry.resource, entry.name, entry.kind);

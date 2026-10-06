@@ -34,10 +34,12 @@ test('loads extension publisher metadata and regular-weight syntax rules through
 	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
 	const files: Record<string, unknown> = {
 		'themes/theme.json': { include: './base.json', author: 'Publisher', maintainers: ['Publisher'], semanticClass: 'dark', dracula: {}, colors: { 'editor.background': '#282a36' } },
-		'themes/base.json': { tokenColors: [
-			{ scope: 'comment', settings: { foreground: '#6272a4', fontStyle: 'normal' } },
-			{ scope: 'variable', settings: { fontStyle: 'regular' } },
-		] },
+		'themes/base.json': {
+			tokenColors: [
+				{ scope: 'comment', settings: { foreground: '#6272a4', fontStyle: 'normal' } },
+				{ scope: 'variable', settings: { fontStyle: 'regular' } },
+			]
+		},
 	};
 	const definition = await loadExtensionTheme(async path => new TextEncoder().encode(JSON.stringify(files[path])),
 		'open-vsx.dracula-theme.theme-dracula', { id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' }, 0);
@@ -56,11 +58,13 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 	let installed = true;
 	let themeDocument = JSON.stringify({ colors: { 'editor.background': '#123456' } });
 	const api: IExtensionApi = {
-		list: async () => ({ generation, diagnostics: [], extensions: installed ? [{
-			id: 'ash.example', name: 'example', publisher: 'ash', version: '1.0.0', displayName: 'Example', sourceKind: 'user',
-			manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
-			packageSha256: `sha256:${'a'.repeat(64)}`,
-		}] : [] }),
+		list: async () => ({
+			generation, diagnostics: [], extensions: installed ? [{
+				id: 'ash.example', name: 'example', publisher: 'ash', version: '1.0.0', displayName: 'Example', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
+				packageSha256: `sha256:${'a'.repeat(64)}`,
+			}] : []
+		}),
 		readResource: async ({ generation: requestedGeneration, path }) => {
 			assert.equal(requestedGeneration, generation);
 			assert.equal(path, 'themes/example.json');

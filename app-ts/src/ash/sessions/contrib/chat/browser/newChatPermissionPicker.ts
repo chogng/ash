@@ -131,11 +131,13 @@ export class NewChatPermissionPicker extends Disposable {
 				event.preventDefault(); event.stopPropagation(); this.views.hide();
 			}
 		}));
-		this.visible = this.views.show({ anchor: this.button, content: menu, presentation: 'menu', focusRestore: ContextViewFocusRestore.Previous, onHide: () => {
-			this.visible = false;
-			this.button.setAttribute('aria-expanded', 'false');
-			this.listeners.clear();
-		} });
+		this.visible = this.views.show({
+			anchor: this.button, content: menu, presentation: 'menu', focusRestore: ContextViewFocusRestore.Previous, onHide: () => {
+				this.visible = false;
+				this.button.setAttribute('aria-expanded', 'false');
+				this.listeners.clear();
+			}
+		});
 		this.button.setAttribute('aria-expanded', String(this.visible));
 		if (this.visible) buttons[approvalModeDefinitions.findIndex(definition => definition.id === this.model.inputState.approvalMode)]!.focus();
 	}

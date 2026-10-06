@@ -12,16 +12,16 @@
 split scene/interaction boundary，以及重复定义通用 UI runtime 的兼容入口。通用机制归 `zui`，可复用
 组件归 `ash-ui-components` 或对应领域 crate，app 只保留产品适配。
 
-| 读者关心的对象 | 当前 canonical owner | Native 状态 | 下一步 |
-| --- | --- | --- | --- |
-| Element、layout、ComputedElement、scene、inspection | `zui` | 委托 | 禁止在 Native 复制几何或检查树 |
-| interaction、focus、capture、失效等级 | `zui` | 委托 | 产品事件只映射为 `UiIntent` 和失效请求 |
-| animation、deadline、retained fragment lifecycle | `zui` | 委托；Native 已持有 `RetainedRuntime` 并接入 Shell cleanup | 新产品 fragment 必须显式选择即时 unmount 或 exit spec；禁止 Native 自建 runtime |
-| Button、Tree、List、Diff 等通用组件 | `ash-ui-components` / 领域 crate | 委托 | Native 只提供状态投影和 action adapter |
-| 窗口、平台事件、App Server、文件/Git/Session 状态 | `app` | ✅ 保留 | 不迁入 `zui` |
-| Shell/Composer/Inspector 的产品组合 | `app` | ✅ 保留 | 通过 `UiFrame` 组合 |
-| `ShellPresentation` 的 frame ownership | `app` | ✅ 已完成 | 继续保持单一 `UiFrame<InteractionFrame>` owner |
-| `UiScene::draw_component_with_interaction`、`UiFrame::parts_mut`、`UiFrame::into_parts` | `zui` 旧兼容 API | ✅ 已删除 | 禁止重新引入平行输出入口 |
+| 读者关心的对象                                                                          | 当前 canonical owner             | Native 状态                                                | 下一步                                                                          |
+| --------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Element、layout、ComputedElement、scene、inspection                                     | `zui`                            | 委托                                                       | 禁止在 Native 复制几何或检查树                                                  |
+| interaction、focus、capture、失效等级                                                   | `zui`                            | 委托                                                       | 产品事件只映射为 `UiIntent` 和失效请求                                          |
+| animation、deadline、retained fragment lifecycle                                        | `zui`                            | 委托；Native 已持有 `RetainedRuntime` 并接入 Shell cleanup | 新产品 fragment 必须显式选择即时 unmount 或 exit spec；禁止 Native 自建 runtime |
+| Button、Tree、List、Diff 等通用组件                                                     | `ash-ui-components` / 领域 crate | 委托                                                       | Native 只提供状态投影和 action adapter                                          |
+| 窗口、平台事件、App Server、文件/Git/Session 状态                                       | `app`                            | ✅ 保留                                                    | 不迁入 `zui`                                                                    |
+| Shell/Composer/Inspector 的产品组合                                                     | `app`                            | ✅ 保留                                                    | 通过 `UiFrame` 组合                                                             |
+| `ShellPresentation` 的 frame ownership                                                  | `app`                            | ✅ 已完成                                                  | 继续保持单一 `UiFrame<InteractionFrame>` owner                                  |
+| `UiScene::draw_component_with_interaction`、`UiFrame::parts_mut`、`UiFrame::into_parts` | `zui` 旧兼容 API                 | ✅ 已删除                                                  | 禁止重新引入平行输出入口                                                        |
 
 这里的弃用阶段已经结束：旧 split composition API 不再可调用。本文保留它作为迁移记录；以后如果
 出现同名 API、平行 `UiScene`/`InteractionFrame` 字段或第二个 frame owner，应视为架构回退，而不是
@@ -71,10 +71,10 @@ Shell；当前 Language Server switch 使用即时 unmount，SCM fold height 使
 ### 阶段三：统一 fragment cleanup（已完成框架接线）
 
 - [x] 消费 `RetainedRuntimeAdvanceReport::fragment().removed_ids` 时，在同一个 cleanup 路径移除 scene fragment、
-  interaction checkpoint 和 semantics；
+      interaction checkpoint 和 semantics；
 - [x] 让 exit animation 只保留仍在 retained presentation 中的节点，禁止 inspector 或 hit-test ghost node；
 - [x] 将 cleanup、deadline 和 redraw invalidation 固定为 deterministic clock 测试；当前产品 fragment 已明确即时
-  unmount，未来启用 exit retention 时必须同时提交产品状态与动画规格。
+      unmount，未来启用 exit retention 时必须同时提交产品状态与动画规格。
 
 ### 阶段四：删除兼容入口（已完成）
 

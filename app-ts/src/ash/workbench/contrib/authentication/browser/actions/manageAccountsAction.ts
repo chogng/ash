@@ -9,12 +9,12 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 
 type AccountPickItem =
-	| (IQuickPickItem & { readonly kind: 'account'; readonly account: Account })
-	| (IQuickPickItem & { readonly kind: 'add' });
+	| (IQuickPickItem & { readonly kind: 'account'; readonly account: Account; })
+	| (IQuickPickItem & { readonly kind: 'add'; });
 
 type LoginPickItem = IQuickPickItem & (
-	| { readonly kind: 'github' }
-	| { readonly kind: 'subscription'; readonly method: AccountLoginMethod; readonly providerName: string }
+	| { readonly kind: 'github'; }
+	| { readonly kind: 'subscription'; readonly method: AccountLoginMethod; readonly providerName: string; }
 );
 
 export class ManageAccountsAction extends Action2 {

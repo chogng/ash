@@ -60,7 +60,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private lastViewportData: ViewportData | undefined;
 	private _maxLineWidth = 0;
 	private contentRevision = 0;
-	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType } | undefined;
+	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType; } | undefined;
 
 	constructor(context: ViewContext, options: ViewLinesOptions) {
 		super(context);

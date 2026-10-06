@@ -9,7 +9,7 @@ import { IModelService } from '../../../common/services/model.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ColorService, type DefaultColorDecoratorsEnablement } from '../common/languageColors.js';
 
-function setupColorCommand(accessor: ServicesAccessor, resource: unknown): { model: TextModel; service: ColorService; enablement: DefaultColorDecoratorsEnablement } {
+function setupColorCommand(accessor: ServicesAccessor, resource: unknown): { model: TextModel; service: ColorService; enablement: DefaultColorDecoratorsEnablement; } {
 	if (!(resource instanceof URI)) { throw new TypeError('Color provider command requires a URI'); }
 	const model = accessor.get(IModelService).getModel(resource);
 	if (!(model instanceof TextModel)) { throw new TypeError('Color provider command requires a loaded text model'); }

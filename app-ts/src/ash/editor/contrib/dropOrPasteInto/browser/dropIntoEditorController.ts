@@ -23,7 +23,7 @@ import { DefaultTextPasteOrDropEditProvider } from './defaultProviders.js';
 import { sortEditsByYieldTo } from './edit.js';
 import { PostEditWidgetManager } from './postEditWidget.js';
 
-type DropEditWithProvider = DocumentDropEdit & { readonly provider: DocumentDropEditProvider };
+type DropEditWithProvider = DocumentDropEdit & { readonly provider: DocumentDropEditProvider; };
 export const dropWidgetVisibleCtx = new RawContextKey<boolean>('dropWidgetVisible', false);
 export const changeDropTypeCommandId = 'editor.changeDropType';
 export const dropAsPreferenceConfig = 'editor.dropIntoEditor.preferences';

@@ -31,8 +31,8 @@ export interface ITerminalProfile {
 
 /** Explicit profile selection for a new terminal. */
 export type ITerminalProfileSelection =
-	| { readonly type: "default" }
-	| { readonly type: "profile"; readonly profileId: string };
+	| { readonly type: "default"; }
+	| { readonly type: "profile"; readonly profileId: string; };
 
 /** Complete caller-facing input for creating one terminal. */
 export type ITerminalCreateOptions = {
@@ -40,9 +40,9 @@ export type ITerminalCreateOptions = {
 	readonly dimensions: ITerminalDimensions;
 	readonly title?: string;
 } & (
-	| { readonly profile: ITerminalProfileSelection; readonly config?: never }
-	| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never }
-);
+		| { readonly profile: ITerminalProfileSelection; readonly config?: never; }
+		| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never; }
+	);
 
 /** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {

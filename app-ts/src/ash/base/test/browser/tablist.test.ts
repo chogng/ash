@@ -193,7 +193,7 @@ test("TabList can opt its items into native drag-source presentation", () => {
 
 test("TabList forwards ActionBar drag positions using tab values", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: string | undefined; position: string }> = [];
+	const drops: Array<{ target: string | undefined; position: string; }> = [];
 	let dragging = false;
 	const tabList = new TabList<string>(dom.window.document.body, {
 		ariaLabel: "Reorderable tabs",
@@ -377,7 +377,7 @@ function tab(id: string): TabListItem<string> {
 }
 
 function keyboardEvent(
-	targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent },
+	targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent; },
 	key: string,
 ): KeyboardEvent {
 	return new targetWindow.KeyboardEvent("keydown", {
@@ -387,7 +387,7 @@ function keyboardEvent(
 	});
 }
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, "clientX", { value: clientX });
 	return event;

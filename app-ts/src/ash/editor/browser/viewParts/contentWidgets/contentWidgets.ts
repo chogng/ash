@@ -341,14 +341,14 @@ class AnchorCoordinate {
 		public readonly left: number,
 		public readonly height: number,
 		public readonly visualLineIndex: number,
-	) {}
+	) { }
 }
 
 class RenderedCoordinate implements IContentWidgetRenderedCoordinate {
 	constructor(
 		public readonly top: number,
 		public readonly left: number,
-	) {}
+	) { }
 }
 
 function anchorCoordinate(context: RenderingContext, viewContext: ViewContext, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {

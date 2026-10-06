@@ -12,8 +12,8 @@ pub use maintenance::ChatGptAuthManagement;
 pub use storage::codex_home;
 
 pub use account::ChatGptAccount;
-pub use account::usage_endpoint;
 pub use account::ChatGptUsageError;
+pub use account::usage_endpoint;
 pub use backend_client::chatgpt::CreditBalance;
 pub use backend_client::chatgpt::RateLimit;
 pub use backend_client::chatgpt::RateLimitWindow;

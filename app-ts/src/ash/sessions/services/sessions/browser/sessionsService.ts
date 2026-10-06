@@ -10,8 +10,8 @@ import type { SessionWorkspaceSelection } from '../common/session.js';
 
 /** One visible slot in the dedicated Sessions Workbench. */
 export type SessionsViewSelection =
-	| { readonly kind: "session"; readonly active: IActiveSessionThread }
-	| { readonly kind: "untitled"; readonly session: IUntitledChatSession };
+	| { readonly kind: "session"; readonly active: IActiveSessionThread; }
+	| { readonly kind: "untitled"; readonly session: IUntitledChatSession; };
 
 export interface SessionsSelection {
 	readonly visibleSelections: readonly SessionsViewSelection[];
@@ -30,7 +30,7 @@ export interface ISessionsService {
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, options?: { readonly sideBySide: boolean }): IUntitledChatSession;
+	openNewSession(title?: string, options?: { readonly sideBySide: boolean; }): IUntitledChatSession;
 	activateSelection(selection: SessionsViewSelection): void;
 	closeVisibleSelection(selection: SessionsViewSelection): void;
 	navigateBack(): void;
@@ -40,8 +40,8 @@ export interface ISessionsService {
 export const ISessionsService = createServiceIdentifier<ISessionsService>("sessionsService");
 
 type SessionsViewReference =
-	| { readonly kind: "session"; readonly sessionId: SessionId; readonly threadId: ThreadId }
-	| { readonly kind: "untitled"; readonly untitledSessionId: string };
+	| { readonly kind: "session"; readonly sessionId: SessionId; readonly threadId: ThreadId; }
+	| { readonly kind: "untitled"; readonly untitledSessionId: string; };
 
 /** Dedicated Sessions-window view state layered over the canonical Session model service. */
 export class SessionsService extends Disposable implements ISessionsService {
@@ -117,7 +117,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (revision === this.navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = 'New chat', options?: { readonly sideBySide: boolean }): IUntitledChatSession {
+	openNewSession(title = 'New chat', options?: { readonly sideBySide: boolean; }): IUntitledChatSession {
 		const session = this.sessionService.createUntitledSession(title);
 		this.select({ kind: 'untitled', session }, this.current, options?.sideBySide ? 'add' : 'open');
 		return session;
@@ -320,7 +320,7 @@ function visibilityKey(reference: SessionsViewReference | undefined): string | u
 		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
 }
 
-type StoredSessionsViewReference = Extract<SessionsViewReference, { kind: 'session' }> | { readonly kind: 'untitled'; readonly session: IUntitledChatSession };
+type StoredSessionsViewReference = Extract<SessionsViewReference, { kind: 'session'; }> | { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
 
 interface StoredSessionsSelection {
 	readonly visible: readonly StoredSessionsViewReference[];

@@ -1,18 +1,20 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SectionHeadersController } from "./sectionHeadersController.js";
 
-registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: context => {
-	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.options.sectionHeaders === false) return;
-	const options = context.options.sectionHeaders || {};
-	return new SectionHeadersController(
-		context.view,
-		context.model,
-		context.model.getLanguageId(),
-		context.configurations,
-		{
-			findRegionSectionHeaders: options.showRegionSectionHeaders ?? true,
-			findMarkSectionHeaders: options.showMarkSectionHeaders ?? true,
-			markSectionHeaderRegex: options.markSectionHeaderRegex ?? "\\bMARK:\\s*(?<separator>-?)\\s*(?<label>.*)$",
-		},
-	);
-} });
+registerEditorContribution({
+	id: "editor.contrib.sectionHeaders", install: context => {
+		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.options.sectionHeaders === false) return;
+		const options = context.options.sectionHeaders || {};
+		return new SectionHeadersController(
+			context.view,
+			context.model,
+			context.model.getLanguageId(),
+			context.configurations,
+			{
+				findRegionSectionHeaders: options.showRegionSectionHeaders ?? true,
+				findMarkSectionHeaders: options.showMarkSectionHeaders ?? true,
+				markSectionHeaderRegex: options.markSectionHeaderRegex ?? "\\bMARK:\\s*(?<separator>-?)\\s*(?<label>.*)$",
+			},
+		);
+	}
+});

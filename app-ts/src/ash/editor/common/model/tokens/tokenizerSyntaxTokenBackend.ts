@@ -29,7 +29,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 	private lastProcessedLine = 0;
 	private _tokenCount = 0;
 	private readonly idle = this._register(new MutableDisposable());
-	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>());
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number; }[]>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	public readonly onDidChangeTokens = this.changeEmitter.event;
 	public readonly onDidEncounterError = this.errorEmitter.event;
@@ -62,8 +62,8 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 		return tokens;
 	}
 
-	public get lines(): readonly { lineIndex: number; tokens: readonly LanguageToken[] }[] {
-		const lines: { lineIndex: number; tokens: readonly LanguageToken[] }[] = [];
+	public get lines(): readonly { lineIndex: number; tokens: readonly LanguageToken[]; }[] {
+		const lines: { lineIndex: number; tokens: readonly LanguageToken[]; }[] = [];
 		this.lineData.forEach((data, lineIndex) => {
 			if (data) {
 				lines.push({ lineIndex, tokens: this.getLanguageTokens(lineIndex + 1) });

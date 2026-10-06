@@ -10,18 +10,18 @@ export const DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT = "ash.document.transacti
 export const DOCUMENT_TRANSACTION_SERIALIZATION_VERSION = 1;
 
 export type SerializedDocumentStep =
-	| { readonly kind: "replaceText"; readonly nodeId: string; readonly from: number; readonly to: number; readonly text: string; readonly marks?: readonly DocumentMark[] }
-	| { readonly kind: "insertNode"; readonly parentId: string; readonly index: number; readonly node: SerializedDocumentNode }
-	| { readonly kind: "deleteNode"; readonly nodeId: string }
-	| { readonly kind: "moveNode"; readonly nodeId: string; readonly parentId: string; readonly index: number }
-	| { readonly kind: "setNodeAttributes"; readonly nodeId: string; readonly attrs: DocumentAttributes }
-	| { readonly kind: "setNodeMarks"; readonly nodeId: string; readonly marks: readonly DocumentMark[] }
-	| { readonly kind: "setNodeType"; readonly nodeId: string; readonly type: string; readonly attrs: DocumentAttributes };
+	| { readonly kind: "replaceText"; readonly nodeId: string; readonly from: number; readonly to: number; readonly text: string; readonly marks?: readonly DocumentMark[]; }
+	| { readonly kind: "insertNode"; readonly parentId: string; readonly index: number; readonly node: SerializedDocumentNode; }
+	| { readonly kind: "deleteNode"; readonly nodeId: string; }
+	| { readonly kind: "moveNode"; readonly nodeId: string; readonly parentId: string; readonly index: number; }
+	| { readonly kind: "setNodeAttributes"; readonly nodeId: string; readonly attrs: DocumentAttributes; }
+	| { readonly kind: "setNodeMarks"; readonly nodeId: string; readonly marks: readonly DocumentMark[]; }
+	| { readonly kind: "setNodeType"; readonly nodeId: string; readonly type: string; readonly attrs: DocumentAttributes; };
 
 export type SerializedDocumentSelection =
-	| { readonly kind: "all" }
-	| { readonly kind: "node"; readonly nodeId: string }
-	| { readonly kind: "text"; readonly anchor: DocumentPoint; readonly head: DocumentPoint };
+	| { readonly kind: "all"; }
+	| { readonly kind: "node"; readonly nodeId: string; }
+	| { readonly kind: "text"; readonly anchor: DocumentPoint; readonly head: DocumentPoint; };
 
 export interface SerializedDocumentTransaction {
 	readonly format: typeof DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT;
@@ -35,11 +35,11 @@ export interface SerializedDocumentTransaction {
 		readonly storedMarks?: readonly DocumentMark[];
 		readonly storedMarksSet: boolean;
 		readonly historyGroup?: string;
-		readonly metadata: readonly { readonly key: string; readonly value: JsonValue }[];
+		readonly metadata: readonly { readonly key: string; readonly value: JsonValue; }[];
 	};
 }
 
-type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };
 
 /** Serializes a Stanza transaction into a versioned, JSON-safe transport envelope. */
 export function serializeDocumentTransaction(transaction: DocumentTransaction, schema: DocumentSchema): string {

@@ -115,7 +115,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		this.lineHeight = layout.lineHeight;
 	}
 
-	private readSelection(): { readonly anchorOffset: number; readonly activeOffset: number } | undefined {
+	private readSelection(): { readonly anchorOffset: number; readonly activeOffset: number; } | undefined {
 		const state = this.state;
 		if (!state) return undefined;
 		const selection = this.domNode.domNode.ownerDocument.getSelection();

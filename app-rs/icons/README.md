@@ -12,16 +12,16 @@ rasterization 或 component。
 
 ## 所有权
 
-| Symbol | 可见性 | 精确职责 |
-| --- | --- | --- |
-| `zui::{IconId, IconDefinition, IconRendering, Icon}` | re-export | 通用 icon asset contract；canonical owner 是 `zui` |
-| `library::icons` | private module、显式 re-export | 手工维护稳定的 `icons::*` typed semantic constants |
-| `library::ALL_ICONS` | private module、显式 re-export | 按 semantic ID 排序的公共 library catalog |
-| `icon_by_id` | public | 只解析已登记的 semantic ID，不解析 artwork filename |
-| `generated::artwork` | crate-private、generated | 把全部 canonical SVG bytes 绑定为 `IconDefinition` |
-| `generated::ALL_ARTWORK` | crate-private、generated | 供完整性测试覆盖全部 artwork，不构成产品 API |
-| `zui::ui::PaintIcon` | external | logical placement、tint、clip 与 renderer submission |
-| `ash-ui-components::IconLabel` | external | icon/text component layout |
+| Symbol                                               | 可见性                         | 精确职责                                             |
+| ---------------------------------------------------- | ------------------------------ | ---------------------------------------------------- |
+| `zui::{IconId, IconDefinition, IconRendering, Icon}` | re-export                      | 通用 icon asset contract；canonical owner 是 `zui`   |
+| `library::icons`                                     | private module、显式 re-export | 手工维护稳定的 `icons::*` typed semantic constants   |
+| `library::ALL_ICONS`                                 | private module、显式 re-export | 按 semantic ID 排序的公共 library catalog            |
+| `icon_by_id`                                         | public                         | 只解析已登记的 semantic ID，不解析 artwork filename  |
+| `generated::artwork`                                 | crate-private、generated       | 把全部 canonical SVG bytes 绑定为 `IconDefinition`   |
+| `generated::ALL_ARTWORK`                             | crate-private、generated       | 供完整性测试覆盖全部 artwork，不构成产品 API         |
+| `zui::ui::PaintIcon`                                 | external                       | logical placement、tint、clip 与 renderer submission |
+| `ash-ui-components::IconLabel`                       | external                       | icon/text component layout                           |
 
 实际调用与生成关系：
 

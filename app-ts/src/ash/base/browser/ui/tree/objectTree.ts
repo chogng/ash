@@ -91,7 +91,7 @@ export class ObjectTree<TNode> extends Disposable {
 	private readonly _onDidActivate = this._register(new Emitter<ObjectTreeActivateEvent<TNode>>());
 	private readonly _onDidChangeFind = this._register(new Emitter<ObjectTreeFindResult<TNode>>());
 	private readonly onWillRender: (() => void) | undefined;
-	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent } | undefined;
+	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent; } | undefined;
 
 	readonly onPointer: Event<ObjectTreePointerEvent<TNode>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<ObjectTreePointerEvent<TNode>> = this._onDidDoubleClick.event;
@@ -331,14 +331,14 @@ export class CompressibleObjectTree<T> extends Disposable {
 	private readonly _onDidAccept = this._register(new Emitter<CompressibleTreeAcceptEvent<T>>());
 	private readonly _onDidChangeFocus = this._register(new Emitter<CompressibleTreeFocusChangeEvent<T>>());
 	private readonly _onDidChangeSelection = this._register(new Emitter<CompressibleTreeSelectionChangeEvent<T>>());
-	private readonly _onDidChangeCollapseState = this._register(new Emitter<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }>());
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }>());
 
 	readonly onPointer: Event<CompressibleTreePointerEvent<T>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<CompressibleTreePointerEvent<T>> = this._onDidDoubleClick.event;
 	readonly onDidAccept: Event<CompressibleTreeAcceptEvent<T>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<CompressibleTreeFocusChangeEvent<T>> = this._onDidChangeFocus.event;
 	readonly onDidChangeSelection: Event<CompressibleTreeSelectionChangeEvent<T>> = this._onDidChangeSelection.event;
-	readonly onDidChangeCollapseState: Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }> = this._onDidChangeCollapseState.event;
+	readonly onDidChangeCollapseState: Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined; }> = this._onDidChangeCollapseState.event;
 
 	public updateOptions(options: Pick<CompressibleObjectTreeOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
 		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined });

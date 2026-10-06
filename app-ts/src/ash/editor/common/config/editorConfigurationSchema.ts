@@ -429,7 +429,7 @@ export async function registerEditorFontConfigurations(getFontSnippets: () => Pr
 	cachedEditorConfigurationKeys = undefined;
 }
 
-function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema }): schema is IConfigurationPropertySchema {
+function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema; }): schema is IConfigurationPropertySchema {
 	return typeof schema === 'object' && (
 		schema.type !== undefined ||
 		schema.anyOf !== undefined ||

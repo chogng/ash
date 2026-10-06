@@ -19,13 +19,15 @@ suite('IPC, MessagePorts', () => {
 		ipcRenderer: {
 			send: (channel, ...args) => { if (sendFailure) { throw sendFailure; } sent.push([channel, ...args]); },
 			invoke: async () => { throw new Error('Unexpected invocation'); },
-			on: () => ({ dispose() {} }),
+			on: () => ({ dispose() { } }),
 		},
-		ipcMessagePort: { acquire: (channel, nonce) => {
-			const key = `${channel}:${nonce}`;
-			registrations.add(key);
-			return { dispose: () => { registrations.delete(key); } };
-		} },
+		ipcMessagePort: {
+			acquire: (channel, nonce) => {
+				const key = `${channel}:${nonce}`;
+				registrations.add(key);
+				return { dispose: () => { registrations.delete(key); } };
+			}
+		},
 		process: { platform: process.platform, arch: process.arch },
 		webUtils: { getPathForFile: () => '' },
 	};

@@ -22,7 +22,7 @@ export interface BrowserViewMainServiceOptions {
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
-	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshRemoteTunnelService } | undefined;
+	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshRemoteTunnelService; } | undefined;
 }
 /** The window manager is the sole table of live pages; each page owns its own disposal. */
 export class BrowserViewMainService extends Disposable implements IBrowserViewMainService {

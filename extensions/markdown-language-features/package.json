@@ -3,31 +3,93 @@
   "publisher": "vscode",
   "version": "1.0.0",
   "displayName": "Markdown Language Features",
-  "engines": { "vscode": "*" },
+  "engines": {
+    "vscode": "*"
+  },
   "browser": "./src/extension.js",
   "contributes": {
     "commands": [
-      { "command": "markdown.showPreview", "title": "%markdown.preview.title%", "icon": "$(preview)" },
-      { "command": "markdown.showPreviewToSide", "title": "%markdown.previewSide.title%", "icon": "$(open-preview)" },
-      { "command": "markdown.reopenAsPreview", "title": "%markdown.reopenAsPreview.title%", "icon": "$(preview)" },
-      { "command": "markdown.showSource", "title": "%markdown.showSource.title%", "icon": "$(file-code)" },
-      { "command": "markdown.reopenAsSource", "title": "%markdown.reopenAsSource.title%", "icon": "$(file-code)" }
+      {
+        "command": "markdown.showPreview",
+        "title": "%markdown.preview.title%",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "markdown.showPreviewToSide",
+        "title": "%markdown.previewSide.title%",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "markdown.reopenAsPreview",
+        "title": "%markdown.reopenAsPreview.title%",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "markdown.showSource",
+        "title": "%markdown.showSource.title%",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "markdown.reopenAsSource",
+        "title": "%markdown.reopenAsSource.title%",
+        "icon": "$(file-code)"
+      }
     ],
     "menus": {
       "editor/title": [
-        { "command": "markdown.showPreviewToSide", "when": "resourceLangId == markdown && activeEditor == stanza.editor.code", "group": "navigation@1", "alt": "markdown.showPreview" },
-        { "command": "markdown.reopenAsPreview", "when": "resourceLangId == markdown && activeEditor == stanza.editor.code", "group": "navigation@2" },
-        { "command": "markdown.reopenAsSource", "when": "activeEditor == vscode.markdown.preview.editor", "group": "navigation@2" }
+        {
+          "command": "markdown.showPreviewToSide",
+          "when": "resourceLangId == markdown && activeEditor == stanza.editor.code",
+          "group": "navigation@1",
+          "alt": "markdown.showPreview"
+        },
+        {
+          "command": "markdown.reopenAsPreview",
+          "when": "resourceLangId == markdown && activeEditor == stanza.editor.code",
+          "group": "navigation@2"
+        },
+        {
+          "command": "markdown.reopenAsSource",
+          "when": "activeEditor == vscode.markdown.preview.editor",
+          "group": "navigation@2"
+        }
       ],
       "editor/title/context": [
-        { "command": "markdown.showPreview", "when": "resourceLangId == markdown", "group": "1_open@10" },
-        { "command": "markdown.showSource", "when": "activeEditor == vscode.markdown.preview.editor", "group": "1_open@10" }
+        {
+          "command": "markdown.showPreview",
+          "when": "resourceLangId == markdown",
+          "group": "1_open@10"
+        },
+        {
+          "command": "markdown.showSource",
+          "when": "activeEditor == vscode.markdown.preview.editor",
+          "group": "1_open@10"
+        }
       ]
     },
     "customEditors": [
-      { "viewType": "vscode.markdown.preview.editor", "displayName": "%markdown.preview.editor%", "priority": "option", "selector": [
-        { "filenamePattern": "*.md" }, { "filenamePattern": "*.markdown" }, { "filenamePattern": "*.mdown" }, { "filenamePattern": "*.mkd" }, { "filenamePattern": "*.mkdn" }
-      ] }
+      {
+        "viewType": "vscode.markdown.preview.editor",
+        "displayName": "%markdown.preview.editor%",
+        "priority": "option",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          },
+          {
+            "filenamePattern": "*.mdown"
+          },
+          {
+            "filenamePattern": "*.mkd"
+          },
+          {
+            "filenamePattern": "*.mkdn"
+          }
+        ]
+      }
     ]
   }
 }

@@ -26,7 +26,7 @@ export class TextReplacement {
 	static fromStringReplacement(replacement: StringReplacement, initialState: AbstractText): TextReplacement { return new TextReplacement(initialState.getTransformer().getRange(replacement.replaceRange), replacement.newText); }
 	static equals(first: TextReplacement, second: TextReplacement) { return first.range.equalsRange(second.range) && first.text === second.text; }
 
-	constructor(readonly range: Range, readonly text: string) {}
+	constructor(readonly range: Range, readonly text: string) { }
 
 	get isEmpty(): boolean { return this.range.isEmpty() && this.text.length === 0; }
 	equals(other: TextReplacement): boolean { return TextReplacement.equals(this, other); }

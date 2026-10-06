@@ -20,18 +20,18 @@ import { LinkPresentationService } from '../../../../services/dataChannel/browse
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { GitHubLinkPresentationContribution } from '../../browser/githubLinkPresentation.contribution.js';
 
-function setup(resources: DisposableStore, github: GitHubService): { services: InstantiationService; accounts: Emitter<AccountState>; links: LinkPresentationService; notifications: NotificationService; signIns: string[] } {
+function setup(resources: DisposableStore, github: GitHubService): { services: InstantiationService; accounts: Emitter<AccountState>; links: LinkPresentationService; notifications: NotificationService; signIns: string[]; } {
 	const services = resources.add(new InstantiationService());
 	const accounts = resources.add(new Emitter<AccountState>());
 	const notifications = resources.add(new NotificationService());
 	const signIns: string[] = [];
 	services.registerInstance(IGitHubService, github);
-	services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use connection service'); }, cancelLogin: async () => {}, logout: async () => {} });
+	services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use connection service'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(INotificationService, notifications);
-	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { signIns.push('github'); }, cancel: async () => {} });
-	services.registerInstance(IOpenerService, { _serviceBrand: undefined, open: async () => true, registerOpener: () => Disposable.None, registerValidator: () => Disposable.None, registerExternalOpener: () => Disposable.None, registerExternalUriResolver: () => Disposable.None, setDefaultExternalOpener() {}, resolveExternalUri: async resource => ({ resolved: resource, dispose() {}, [Symbol.dispose]() {} }) });
+	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { signIns.push('github'); }, cancel: async () => { } });
+	services.registerInstance(IOpenerService, { _serviceBrand: undefined, open: async () => true, registerOpener: () => Disposable.None, registerValidator: () => Disposable.None, registerExternalOpener: () => Disposable.None, registerExternalUriResolver: () => Disposable.None, setDefaultExternalOpener() { }, resolveExternalUri: async resource => ({ resolved: resource, dispose() { }, [Symbol.dispose]() { } }) });
 	const links = resources.add(services.createInstance(LinkPresentationService));
 	services.registerInstance(ILinkPresentationService, links);
 	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
@@ -67,10 +67,12 @@ test('changing accounts cancels old reads and rejects their late presentation', 
 	using resources = new DisposableStore();
 	let release!: (value: GitHubRepositoryInfo) => void;
 	let token!: CancellationToken;
-	const { links, accounts } = setup(resources, { ...createDisconnectedGitHubService(), readRepository: async (_repository, cancellation) => {
-		token = cancellation!;
-		return new Promise<GitHubRepositoryInfo>(resolve => { release = resolve; });
-	} });
+	const { links, accounts } = setup(resources, {
+		...createDisconnectedGitHubService(), readRepository: async (_repository, cancellation) => {
+			token = cancellation!;
+			return new Promise<GitHubRepositoryInfo>(resolve => { release = resolve; });
+		}
+	});
 	const uri = URI.parse('https://github.com/team/repo');
 	const watcher = resources.add(links.createLinkPresentationWatcher(links.getLinkPresentationRule(uri)!.id, uri)!);
 	accounts.fire({ revision: 2n, accounts: [] });

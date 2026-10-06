@@ -12,13 +12,13 @@
 
 ## 模块与依赖
 
-| 模块 | 公开入口 | 负责内容 |
-| --- | --- | --- |
-| `chatgpt` | `chatgpt::Client`、`chatgpt::RouteStyle`、供应商响应类型 | ChatGPT `/wham`、Codex `/api/codex` 和 API key 费用路由 |
-| `kimi` | `kimi::Client`、`kimi::Account`、`kimi::Usage` | Kimi Coding API `/me` 与 `/usages` |
-| `supergrok` | `supergrok::Client`、供应商响应类型 | Grok 订阅后台路由、账号、模型与账单 |
-| `bigmodel`、`zai` | `issue_api_key` | 登录后取得 Coding Plan 内部请求凭据 |
-| crate 根 | `RequestError` | 不包含认证头或响应正文的请求错误 |
+| 模块              | 公开入口                                                 | 负责内容                                                |
+| ----------------- | -------------------------------------------------------- | ------------------------------------------------------- |
+| `chatgpt`         | `chatgpt::Client`、`chatgpt::RouteStyle`、供应商响应类型 | ChatGPT `/wham`、Codex `/api/codex` 和 API key 费用路由 |
+| `kimi`            | `kimi::Client`、`kimi::Account`、`kimi::Usage`           | Kimi Coding API `/me` 与 `/usages`                      |
+| `supergrok`       | `supergrok::Client`、供应商响应类型                      | Grok 订阅后台路由、账号、模型与账单                     |
+| `bigmodel`、`zai` | `issue_api_key`                                          | 登录后取得 Coding Plan 内部请求凭据                     |
+| crate 根          | `RequestError`                                           | 不包含认证头或响应正文的请求错误                        |
 
 - `ash-chatgpt`、`ash-supergrok` 认证 crate 依赖本 crate；本 crate 不依赖登录、凭据存储或模型运行时。
 - 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
@@ -31,47 +31,47 @@
 
 以下接口对应 Codex `backend-client` 的业务 HTTP 合约。路径相对于显式选择的路由前缀；API key 费用查询使用单独的目标地址。
 
-| 能力 | `chatgpt::Client` 方法 | HTTP 合约 |
-| --- | --- | --- |
-| 账号与工作区 | `read_accounts` | `GET accounts/check`，支持列表与账号映射两种响应 |
-| 个人统计与 token 历史 | `read_account_profile` | `GET profiles/me` |
-| 额度与完整策略 | `read_rate_limits`、`read_rate_limit_status` | `GET usage` |
-| Reserve 能力声明 | `read_rate_limits_with_reserve` | `GET usage`，附带 `x-openai-codex-luna-reserve: 1` |
-| 已有重置卡 | `list_reset_credits` | `GET rate-limit-reset-credits` |
-| 使用重置卡 | `consume_reset_credit` | `POST rate-limit-reset-credits/consume` |
-| 云端配置与约束 | `read_config_bundle` | `GET config/bundle` |
-| 用户设置 | `read_user_settings` | `GET settings/user`，禁止使用缓存 |
-| 工作区消息 | `list_workspace_messages` | `GET workspace-messages`，禁止保存缓存 |
-| 云任务分页 | `list_tasks` | `GET tasks/list`，支持筛选、环境与游标 |
-| 云任务详情 | `read_task` | `GET tasks/{id}`，保留任务元数据与状态，提供文本、差异和错误提取 |
-| 同轮尝试 | `list_sibling_turns` | `GET tasks/{id}/turns/{turn}/sibling_turns`，保留尝试创建时间 |
-| 创建云任务 | `create_task` | `POST tasks`，调用方提供任务 JSON 对象 |
-| 线程费用估算 | `read_thread_usage` | `POST usage/thread_usage/query` |
-| 任务额度占比与余额扣费 | `read_task_usage` | `POST usage/thread_usage/query_v2` |
-| ChatGPT 回合费用 | `query_chatgpt_turn_costs` | `POST usage/thread-estimates/query`，包含已结算响应 ID |
-| API key 回合费用 | `query_api_key_turn_costs` | `POST /v1/analytics/codex/turn-costs` |
-| 历史套餐额度 | `read_plan_limit_history` | `GET usage/plan_limit_history?days=7` |
-| 账号报表 | `read_analytics` | 根据 `AnalyticsReport` 选择下表的类型化报表 |
+| 能力                   | `chatgpt::Client` 方法                       | HTTP 合约                                                        |
+| ---------------------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| 账号与工作区           | `read_accounts`                              | `GET accounts/check`，支持列表与账号映射两种响应                 |
+| 个人统计与 token 历史  | `read_account_profile`                       | `GET profiles/me`                                                |
+| 额度与完整策略         | `read_rate_limits`、`read_rate_limit_status` | `GET usage`                                                      |
+| Reserve 能力声明       | `read_rate_limits_with_reserve`              | `GET usage`，附带 `x-openai-codex-luna-reserve: 1`               |
+| 已有重置卡             | `list_reset_credits`                         | `GET rate-limit-reset-credits`                                   |
+| 使用重置卡             | `consume_reset_credit`                       | `POST rate-limit-reset-credits/consume`                          |
+| 云端配置与约束         | `read_config_bundle`                         | `GET config/bundle`                                              |
+| 用户设置               | `read_user_settings`                         | `GET settings/user`，禁止使用缓存                                |
+| 工作区消息             | `list_workspace_messages`                    | `GET workspace-messages`，禁止保存缓存                           |
+| 云任务分页             | `list_tasks`                                 | `GET tasks/list`，支持筛选、环境与游标                           |
+| 云任务详情             | `read_task`                                  | `GET tasks/{id}`，保留任务元数据与状态，提供文本、差异和错误提取 |
+| 同轮尝试               | `list_sibling_turns`                         | `GET tasks/{id}/turns/{turn}/sibling_turns`，保留尝试创建时间    |
+| 创建云任务             | `create_task`                                | `POST tasks`，调用方提供任务 JSON 对象                           |
+| 线程费用估算           | `read_thread_usage`                          | `POST usage/thread_usage/query`                                  |
+| 任务额度占比与余额扣费 | `read_task_usage`                            | `POST usage/thread_usage/query_v2`                               |
+| ChatGPT 回合费用       | `query_chatgpt_turn_costs`                   | `POST usage/thread-estimates/query`，包含已结算响应 ID           |
+| API key 回合费用       | `query_api_key_turn_costs`                   | `POST /v1/analytics/codex/turn-costs`                            |
+| 历史套餐额度           | `read_plan_limit_history`                    | `GET usage/plan_limit_history?days=7`                            |
+| 账号报表               | `read_analytics`                             | 根据 `AnalyticsReport` 选择下表的类型化报表                      |
 
-| `AnalyticsReport` | 路径 | 附加查询条件 |
-| --- | --- | --- |
-| `Usage` | `usage/daily-token-usage-breakdown` | 起止日期，按日分组 |
-| `EnterpriseTokens` | `usage/daily-workspace-user-token-usage-breakdown` | 按模型拆分，包含 `codex` 与 `work` |
-| `WorkspaceCredits` | `usage/daily-workspace-user-token-usage-breakdown` | 起止日期，按日分组 |
-| `Credits` | `usage/credit-usage-events` | 服务端不接受日期筛选 |
-| `EnterpriseCredits` | `usage/daily-workspace-user-credit-usage` | 起止日期，调用方指定拆分维度 |
-| `Messages` | `analytics/daily-workspace-usage-counts` | 当前工作区用户，按日分组 |
-| `Plugins` | `analytics/daily-plugin-usage-metrics` | 当前工作区用户，指定数量 |
-| `Skills` | `analytics/daily-skill-usage-metrics` | 当前工作区用户，指定数量 |
+| `AnalyticsReport`   | 路径                                               | 附加查询条件                       |
+| ------------------- | -------------------------------------------------- | ---------------------------------- |
+| `Usage`             | `usage/daily-token-usage-breakdown`                | 起止日期，按日分组                 |
+| `EnterpriseTokens`  | `usage/daily-workspace-user-token-usage-breakdown` | 按模型拆分，包含 `codex` 与 `work` |
+| `WorkspaceCredits`  | `usage/daily-workspace-user-token-usage-breakdown` | 起止日期，按日分组                 |
+| `Credits`           | `usage/credit-usage-events`                        | 服务端不接受日期筛选               |
+| `EnterpriseCredits` | `usage/daily-workspace-user-credit-usage`          | 起止日期，调用方指定拆分维度       |
+| `Messages`          | `analytics/daily-workspace-usage-counts`           | 当前工作区用户，按日分组           |
+| `Plugins`           | `analytics/daily-plugin-usage-metrics`             | 当前工作区用户，指定数量           |
+| `Skills`            | `analytics/daily-skill-usage-metrics`              | 当前工作区用户，指定数量           |
 
 ## Super Grok 接口
 
-| 方法 | HTTP 合约 | 返回值 |
-| --- | --- | --- |
-| `supergrok::Client::read_models` | `GET /v1/models-v2` | `Vec<supergrok::CatalogModel>` |
-| `read_account` | `GET /v1/user?include=subscription` | `supergrok::Account`，包含实时套餐、团队和数据保留设置 |
-| `read_settings` | `GET /v1/settings` | `supergrok::Settings`，包含访问资格和计费开关 |
-| `read_billing` | `GET /v1/billing?format=credits` | `Option<supergrok::Billing>`，包含用量百分比、周期、余额和历史 |
+| 方法                             | HTTP 合约                           | 返回值                                                         |
+| -------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
+| `supergrok::Client::read_models` | `GET /v1/models-v2`                 | `Vec<supergrok::CatalogModel>`                                 |
+| `read_account`                   | `GET /v1/user?include=subscription` | `supergrok::Account`，包含实时套餐、团队和数据保留设置         |
+| `read_settings`                  | `GET /v1/settings`                  | `supergrok::Settings`，包含访问资格和计费开关                  |
+| `read_billing`                   | `GET /v1/billing?format=credits`    | `Option<supergrok::Billing>`，包含用量百分比、周期、余额和历史 |
 
 - `supergrok::BASE_URL` 指向 `https://cli-chat-proxy.grok.com/v1`；调用方提供该目标的当前认证与版本头。
 - 目录只返回可见的 Responses 模型，保留请求模型 ID、显示名称、上下文窗口和推理档位；缺失元数据保持为空。
@@ -116,16 +116,16 @@
 - 小数解析配置回归：`just test ash-backend-client --features serde_json/arbitrary_precision`。
 - 消费方回归：`just check ash-chatgpt -p ash-supergrok -p ash-model-provider`、`just test ash-chatgpt account::tests`、`just test ash-supergrok`、`just test ash-model-provider xai_tests`。
 
-| 专项测试 | 主要覆盖 | 单独运行 |
-| --- | --- | --- |
-| `chatgpt/account_tests.rs` | 账号排序与身份、统计缺失与零值、调用记录 | `just test ash-backend-client chatgpt::account::tests` |
-| `chatgpt/usage_tests.rs` | 用量窗口、独立允许状态、支出策略、重置卡列表与使用结果 | `just test ash-backend-client chatgpt::usage::tests` |
-| `chatgpt/config_tests.rs` | 配置层次、约束片段、设置布尔值、消息时间与缓存头 | `just test ash-backend-client chatgpt::config::tests` |
-| `chatgpt/tasks_tests.rs` | 分页与编码、任务身份与元数据、固定成功/失败响应、文本与差异提取 | `just test ash-backend-client chatgpt::tasks::tests` |
-| `chatgpt/costs_tests.rs` | 批量边界、线程/回合归属、十进制精度、结算与缺失数据 | `just test ash-backend-client chatgpt::costs::tests` |
+| 专项测试                     | 主要覆盖                                                        | 单独运行                                                 |
+| ---------------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |
+| `chatgpt/account_tests.rs`   | 账号排序与身份、统计缺失与零值、调用记录                        | `just test ash-backend-client chatgpt::account::tests`   |
+| `chatgpt/usage_tests.rs`     | 用量窗口、独立允许状态、支出策略、重置卡列表与使用结果          | `just test ash-backend-client chatgpt::usage::tests`     |
+| `chatgpt/config_tests.rs`    | 配置层次、约束片段、设置布尔值、消息时间与缓存头                | `just test ash-backend-client chatgpt::config::tests`    |
+| `chatgpt/tasks_tests.rs`     | 分页与编码、任务身份与元数据、固定成功/失败响应、文本与差异提取 | `just test ash-backend-client chatgpt::tasks::tests`     |
+| `chatgpt/costs_tests.rs`     | 批量边界、线程/回合归属、十进制精度、结算与缺失数据             | `just test ash-backend-client chatgpt::costs::tests`     |
 | `chatgpt/analytics_tests.rs` | 各报表真实数据结构、日期校验、负值扣费、插件/技能统计、历史额度 | `just test ash-backend-client chatgpt::analytics::tests` |
-| `chatgpt/client_tests.rs` | 全部业务请求的双路由、认证、取消、错误脱敏与禁止重试约定 | `just test ash-backend-client chatgpt::client::tests` |
-| `transport_tests.rs` | 本地 HTTPS 实际调用链 | `just test ash-backend-client transport_tests` |
-| `supergrok/models_tests.rs` | 目录筛选与元数据解析 | `just test ash-backend-client supergrok::models::tests` |
+| `chatgpt/client_tests.rs`    | 全部业务请求的双路由、认证、取消、错误脱敏与禁止重试约定        | `just test ash-backend-client chatgpt::client::tests`    |
+| `transport_tests.rs`         | 本地 HTTPS 实际调用链                                           | `just test ash-backend-client transport_tests`           |
+| `supergrok/models_tests.rs`  | 目录筛选与元数据解析                                            | `just test ash-backend-client supergrok::models::tests`  |
 
 - Super Grok 业务接口验证：`just test ash-backend-client supergrok::`；认证与资料生命周期：`just test ash-supergrok`。

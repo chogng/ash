@@ -45,7 +45,7 @@ test(
 
 		const secondaryEnvironment = new JSDOM(
 			"<!doctype html><html><head></head><body>" +
-				"<main><span></span></main></body></html>",
+			"<main><span></span></main></body></html>",
 		);
 		const secondaryWindow =
 			secondaryEnvironment.window as unknown as Window;

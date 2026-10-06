@@ -1,111 +1,111 @@
 .ash-settings-search {
-  display: flex;
-  min-width: 0;
-  min-height: 44px;
-  flex: 0 0 44px;
-  align-items: center;
-  padding: 6px 12px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-  background: var(--ash-editor-background);
+	display: flex;
+	min-width: 0;
+	min-height: 44px;
+	flex: 0 0 44px;
+	align-items: center;
+	padding: 6px 12px;
+	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	background: var(--ash-editor-background);
 }
 
 .ash-settings-search-input {
-  min-width: 0;
-  width: 100%;
-  flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+	flex: 1 1 auto;
 }
 
 .ash-settings-search-filter {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  min-height: 30px;
-  padding: 0;
-  color: var(--ash-description-foreground);
+	width: 30px;
+	min-width: 30px;
+	height: 30px;
+	min-height: 30px;
+	padding: 0;
+	color: var(--ash-description-foreground);
 }
 
 .ash-settings-search-filter:hover,
 .ash-settings-search-filter.is-open,
 .ash-settings-search-filter.checked {
-  color: var(--ash-foreground);
-  background: var(--ash-toolbar-hover-background);
+	color: var(--ash-foreground);
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-settings-search-filter > .ash-button-content > .ash-button-label {
-  display: none;
+	display: none;
 }
 
 .ash-settings-search-input input {
-  height: 30px;
-  padding: 4px 10px;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
-  outline: none;
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
+	height: 30px;
+	padding: 4px 10px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
+	outline: none;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
 }
 
 .ash-settings-search-input input:focus {
-  border-color: var(--ash-focus-border);
+	border-color: var(--ash-focus-border);
 }
 
 .ash-settings-search-input input::placeholder {
-  color: var(--ash-input-placeholder-foreground);
+	color: var(--ash-input-placeholder-foreground);
 }
 
 .ash-configuration-setting {
-  position: relative;
-  display: grid;
-  min-height: 68px;
-  box-sizing: border-box;
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) minmax(112px, 190px);
-  padding: 12px 16px;
-  color: var(--ash-foreground);
-  gap: 20px;
+	position: relative;
+	display: grid;
+	min-height: 68px;
+	box-sizing: border-box;
+	align-items: center;
+	grid-template-columns: minmax(0, 1fr) minmax(112px, 190px);
+	padding: 12px 16px;
+	color: var(--ash-foreground);
+	gap: 20px;
 }
 
 .ash-configuration-setting:hover {
-  background: var(--ash-settings-row-hover-background);
+	background: var(--ash-settings-row-hover-background);
 }
 
 .ash-configuration-setting:focus-within {
-  background: var(--ash-settings-focused-row-background);
+	background: var(--ash-settings-focused-row-background);
 }
 
 .ash-configuration-setting > .ash-setting-item-actions {
-  top: 24px;
+	top: 24px;
 }
 
 .ash-configuration-setting-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 4px;
 }
 
 .ash-configuration-setting-title {
-  font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-configuration-setting-description {
-  color: var(--ash-description-foreground);
-  font-size: 12px;
-  line-height: 1.45;
+	color: var(--ash-description-foreground);
+	font-size: 12px;
+	line-height: 1.45;
 }
 
 /* Announce transient saves without inserting a visible line into the setting row. */
 .ash-settings-indicators {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .ash-settings-indicators[hidden] {
-  display: none;
+	display: none;
 }
 
 .ash-setting-item {
@@ -283,7 +283,7 @@
 	border-color: var(--ash-focus-border);
 }
 
-.ash-string-map-row input[aria-invalid='true'] {
+.ash-string-map-row input[aria-invalid="true"] {
 	border-color: var(--ash-error-foreground);
 }
 
@@ -292,8 +292,8 @@
 }
 
 @media (max-width: 720px) {
-  .ash-configuration-settings .ash-configuration-setting {
-    align-items: start;
-    grid-template-columns: minmax(0, 1fr);
-  }
+	.ash-configuration-settings .ash-configuration-setting {
+		align-items: start;
+		grid-template-columns: minmax(0, 1fr);
+	}
 }

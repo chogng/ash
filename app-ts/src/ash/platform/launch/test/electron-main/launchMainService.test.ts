@@ -36,10 +36,12 @@ test('launch creation requires the window service and resolves folders and file 
 		await writeFile(join(root, 'one.ts'), 'first\nsecond');
 		let opened: IOpenConfiguration | undefined;
 		using services = new InstantiationService();
-		services.registerInstance(IWindowsMainService, { open: async configuration => {
-			opened = configuration;
-			return { whenClosed: Promise.resolve(), whenFilesClosed: Promise.resolve() };
-		} });
+		services.registerInstance(IWindowsMainService, {
+			open: async configuration => {
+				opened = configuration;
+				return { whenClosed: Promise.resolve(), whenFilesClosed: Promise.resolve() };
+			}
+		});
 		using launch = services.createInstance(LaunchMainService);
 		await launch.start({ args: parseLaunchArguments(['project', '-g', 'one.ts:2:3']), cwd: root });
 		assert.deepEqual(opened, {
@@ -55,7 +57,7 @@ test('waiting launches release their marker after file completion, failure or ap
 	try {
 		let finish!: () => void;
 		using services = new InstantiationService();
-		services.registerInstance(IWindowsMainService, { open: async () => ({ whenClosed: new Promise<void>(() => {}), whenFilesClosed: new Promise<void>(resolve => { finish = resolve; }) }) });
+		services.registerInstance(IWindowsMainService, { open: async () => ({ whenClosed: new Promise<void>(() => { }), whenFilesClosed: new Promise<void>(resolve => { finish = resolve; }) }) });
 		using launch = services.createInstance(LaunchMainService);
 		const marker = join(root, 'marker');
 		await writeFile(marker, '');

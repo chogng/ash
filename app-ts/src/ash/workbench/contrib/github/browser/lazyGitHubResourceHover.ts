@@ -19,8 +19,8 @@ export interface IPullRequestHoverDetails {
 }
 
 export type LazyGitHubResourceState<T> =
-	| { readonly status: 'idle' | 'loading' | 'failed' }
-	| { readonly status: 'resolved'; readonly value: T };
+	| { readonly status: 'idle' | 'loading' | 'failed'; }
+	| { readonly status: 'resolved'; readonly value: T; };
 
 interface ResourceEntry<T> extends IDisposable {
 	readonly cancellation: CancellationTokenSource;
@@ -88,7 +88,7 @@ export class LazyGitHubResourceResolver extends Disposable {
 		}, ResourceDetail.Checks);
 	}
 
-	public retain(references: readonly { readonly resource: URI }[]): void {
+	public retain(references: readonly { readonly resource: URI; }[]): void {
 		for (const [cache, kind] of [[this.issues, 'issue'], [this.pullRequests, 'pullRequest']] as const) {
 			const retained = new Set(references.map(reference => parseGitHubReferenceTarget(reference.resource, kind)).filter(target => target !== undefined).map(referenceKey));
 			for (const key of cache.keys()) {
@@ -157,7 +157,7 @@ export function parseGitHubReferenceTarget(resource: URI, kind: GitHubReferenceK
 	return Number.isSafeInteger(number) ? { owner: match[1], repo: match[2], number } : undefined;
 }
 
-function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string } {
+function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string; } {
 	return { host: 'github.com', owner: target.owner, name: target.repo };
 }
 

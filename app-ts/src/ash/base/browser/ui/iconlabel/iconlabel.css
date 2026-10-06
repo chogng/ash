@@ -1,114 +1,131 @@
 .ash-icon-label {
-  display: inline-flex;
-  min-width: 0;
-  gap: 4px;
-  align-items: center;
-  overflow: hidden;
+	display: inline-flex;
+	min-width: 0;
+	gap: 4px;
+	align-items: center;
+	overflow: hidden;
 }
 
 .ash-icon-label.ash-icon-label-wide-gap {
-  gap: var(--ash-spacing-size60);
+	gap: var(--ash-spacing-size60);
 }
 
 .ash-icon-label-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
 }
 
 .ash-icon-label-icon:empty:not(.is-reserved) {
-  display: none;
+	display: none;
 }
 
 .ash-icon-label-icon.is-reserved {
-  width: 16px;
-  height: 16px;
+	width: 16px;
+	height: 16px;
 }
 
 .ash-icon-label-icon .ash-icon,
 .ash-icon-label-image {
-  width: 16px;
-  height: 16px;
+	width: 16px;
+	height: 16px;
 }
 
 .ash-icon-label-text {
-  min-width: 0;
-  max-width: 100%;
-  flex: 0 0 auto;
-  overflow: hidden;
-  text-overflow: var(--ash-icon-label-text-overflow, ellipsis);
-  white-space: nowrap;
+	min-width: 0;
+	max-width: 100%;
+	flex: 0 0 auto;
+	overflow: hidden;
+	text-overflow: var(--ash-icon-label-text-overflow, ellipsis);
+	white-space: nowrap;
 }
 
 .ash-icon-label-container {
-  display: inline-flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  overflow: hidden;
+	display: inline-flex;
+	min-width: 0;
+	flex: 1 1 auto;
+	align-items: center;
+	overflow: hidden;
 }
 
 .ash-icon-label-name-container,
 .ash-icon-label-segment {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-icon-label-text.multiple {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
+	display: inline-flex;
+	min-width: 0;
+	align-items: center;
+	gap: 4px;
 }
 
 .ash-icon-label-description {
-  min-width: 0;
-  flex: 0 1 auto;
-  margin-left: var(--ash-spacing-size80);
-  overflow: hidden;
-  color: var(--ash-description-foreground);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	flex: 0 1 auto;
+	margin-left: var(--ash-spacing-size80);
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-icon-label-suffix {
-  flex: 0 0 auto;
-  color: var(--ash-description-foreground);
-  white-space: pre;
+	flex: 0 0 auto;
+	color: var(--ash-description-foreground);
+	white-space: pre;
 }
 
-.ash-icon-label.bold { font-weight: var(--ash-font-weight-semi-bold); }
-.ash-icon-label.italic { font-style: italic; }
-.ash-icon-label.strikethrough { text-decoration: line-through; }
-.ash-icon-label-highlight { background: var(--ash-search-match-background); }
-.ash-icon-label-inline-icon {
-  display: inline-flex;
-  width: 1em;
-  height: 1em;
-  margin: 0 2px;
-  vertical-align: -0.15em;
-  align-items: center;
-  justify-content: center;
+.ash-icon-label.bold {
+	font-weight: var(--ash-font-weight-semi-bold);
 }
-.ash-icon-label-inline-icon .ash-icon { width: 1em; height: 1em; }
-.ash-icon-label-inline-icon.default-color { color: inherit; }
+.ash-icon-label.italic {
+	font-style: italic;
+}
+.ash-icon-label.strikethrough {
+	text-decoration: line-through;
+}
+.ash-icon-label-highlight {
+	background: var(--ash-search-match-background);
+}
+.ash-icon-label-inline-icon {
+	display: inline-flex;
+	width: 1em;
+	height: 1em;
+	margin: 0 2px;
+	vertical-align: -0.15em;
+	align-items: center;
+	justify-content: center;
+}
+.ash-icon-label-inline-icon .ash-icon {
+	width: 1em;
+	height: 1em;
+}
+.ash-icon-label-inline-icon.default-color {
+	color: inherit;
+}
 .ash-icon-label-description[hidden],
-.ash-icon-label-suffix[hidden] { display: none; }
+.ash-icon-label-suffix[hidden] {
+	display: none;
+}
 
 .ash-icon-label-suffix-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  color: var(--ash-icon-label-suffix-icon-color, currentColor);
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	color: var(--ash-icon-label-suffix-icon-color, currentColor);
 }
 
 .ash-icon-label-suffix-icon .ash-icon {
-  width: var(--ash-lxicon-font-size-compact);
-  height: var(--ash-lxicon-font-size-compact);
+	width: var(--ash-lxicon-font-size-compact);
+	height: var(--ash-lxicon-font-size-compact);
 }
 
-.ash-icon-label-suffix-icon[hidden] { display: none; }
+.ash-icon-label-suffix-icon[hidden] {
+	display: none;
+}

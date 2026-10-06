@@ -5,7 +5,7 @@ import { Editor } from '../../../automation/editor.js';
 import type { AppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 
 interface StartupProbeApp extends App {
-	sessionsStartupProbe: { readonly events: string[]; readonly dispose: () => void };
+	sessionsStartupProbe: { readonly events: string[]; readonly dispose: () => void; };
 }
 
 test.use({ openWorkspace: false });
@@ -16,7 +16,7 @@ test('Agents starts its connection before loading the page and reconnects on rel
 	const mainRoot = resolve(import.meta.dirname, '../../../../../.build/app-ts/main/src');
 	await application.evaluate(({ app }, mainRoot) => {
 		const require = process.getBuiltinModule('module').createRequire(process.execPath);
-		const { AppServerDaemonLauncher: Launcher } = require(`${mainRoot}/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js`) as { AppServerDaemonLauncher: typeof AppServerDaemonLauncher };
+		const { AppServerDaemonLauncher: Launcher } = require(`${mainRoot}/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js`) as { AppServerDaemonLauncher: typeof AppServerDaemonLauncher; };
 		const events: string[] = [];
 		const launch = Launcher.prototype.launch;
 		Launcher.prototype.launch = function () {

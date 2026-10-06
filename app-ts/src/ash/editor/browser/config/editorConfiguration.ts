@@ -197,7 +197,7 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 			accessibilitySupport: this.accessibilityService.isScreenReaderOptimized()
 				? AccessibilitySupport.Enabled
 				: this.accessibilityService.getAccessibilitySupport(),
-			editContextSupported: typeof (this.targetWindow as Window & { EditContext?: unknown }).EditContext === 'function',
+			editContextSupported: typeof (this.targetWindow as Window & { EditContext?: unknown; }).EditContext === 'function',
 		};
 	}
 

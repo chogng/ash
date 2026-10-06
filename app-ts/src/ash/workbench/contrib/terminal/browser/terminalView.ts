@@ -84,7 +84,7 @@ export class TerminalViewPane extends ViewPane {
 				this.focus();
 			},
 			onClose: (instance) => {
-				void this.terminalService.closeTerminal(instance).catch(() => {});
+				void this.terminalService.closeTerminal(instance).catch(() => { });
 			},
 		}));
 		this.tabList.element.classList.add("ash-terminal-tabs");

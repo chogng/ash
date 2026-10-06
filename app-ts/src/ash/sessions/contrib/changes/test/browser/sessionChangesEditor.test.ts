@@ -20,7 +20,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	using services = new InstantiationService();
 	using configuration = new InMemoryConfigurationService();
 	using context = new ContextKeyService();
-	using changes = new Emitter<{ sessionId: string; threadId: string }>();
+	using changes = new Emitter<{ sessionId: string; threadId: string; }>();
 	using ready = new Emitter<void>();
 	const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
 	let requests = 0;

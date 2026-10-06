@@ -1,4 +1,3 @@
-use v8_runtime::ensure_v8_initialized;
 use ash_code_mode_protocol::{
     CellId, CellState, CodeModeLimits, CodeModeSessionId, EnabledTool, ExecuteRequest, OutputItem,
     RuntimeResponse, StartedCell, WaitOutcome, WaitRequest,
@@ -11,6 +10,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use v8_runtime::ensure_v8_initialized;
 
 mod cell;
 mod store;

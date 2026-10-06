@@ -5,7 +5,7 @@ import type { ITeamsProvider } from '../../../../services/teams/common/teamsProv
 
 /** Keeps generated App Server records inside the provider boundary. */
 export class AppServerTeamsProvider implements ITeamsProvider {
-	constructor(private readonly api: ITeamApi) {}
+	constructor(private readonly api: ITeamApi) { }
 
 	async list(): Promise<readonly Team[]> {
 		return (await this.api.list()).teams.map(team);
@@ -50,7 +50,9 @@ function run(value: TeamRunDto): TeamRun {
 }
 
 function message(value: TeamMessageDto): TeamMessage {
-	return { messageId: value.messageId, teamId: value.teamId, runId: value.runId,
+	return {
+		messageId: value.messageId, teamId: value.teamId, runId: value.runId,
 		senderId: value.senderId, receiverId: value.receiverId, text: value.text,
-		createdAtUnixMs: value.createdAtUnixMs };
+		createdAtUnixMs: value.createdAtUnixMs
+	};
 }

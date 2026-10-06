@@ -3,8 +3,8 @@ import { Disposable, toDisposable } from '../lifecycle.js';
 
 type WithOptionalCancellationToken<TFunction extends (...args: any[]) => unknown> =
 	TFunction extends (...args: infer TArgs) => infer TResult
-		? (...args: [...TArgs, cancellationToken?: CancellationToken]) => TResult
-		: never;
+	? (...args: [...TArgs, cancellationToken?: CancellationToken]) => TResult
+	: never;
 
 /**
  * Supply an optional final CancellationToken to a method on a Disposable instance.

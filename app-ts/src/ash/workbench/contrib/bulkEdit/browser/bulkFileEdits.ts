@@ -16,7 +16,7 @@ export class BulkFileEdits {
 		private readonly operation: FileOperation,
 		private readonly files: IFileService,
 		private readonly inverses: (() => Promise<void>)[],
-	) {}
+	) { }
 
 	public async apply(): Promise<readonly URI[]> {
 		const operation = this.operation;

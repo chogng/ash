@@ -7,7 +7,7 @@ import type { ITokenThemeRule, TokenTheme } from '../../common/languages/support
 export const IStandaloneThemeService = IThemeService as ServiceIdentifier<IStandaloneThemeService>;
 
 export type BuiltinTheme = 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';
-export type IColors = { [colorId: string]: string };
+export type IColors = { [colorId: string]: string; };
 
 export interface IStandaloneThemeData {
 	base: BuiltinTheme;

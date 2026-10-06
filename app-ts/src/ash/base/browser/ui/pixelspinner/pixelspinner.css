@@ -1,3 +1,13 @@
-.ash-pixel-spinner { display: inline-flex; gap: 2px; }
-.ash-pixel-spinner i { width: 3px; height: 3px; background: currentColor; opacity: .25; }
-.ash-pixel-spinner i.active { opacity: 1; }
+.ash-pixel-spinner {
+	display: inline-flex;
+	gap: 2px;
+}
+.ash-pixel-spinner i {
+	width: 3px;
+	height: 3px;
+	background: currentColor;
+	opacity: 0.25;
+}
+.ash-pixel-spinner i.active {
+	opacity: 1;
+}

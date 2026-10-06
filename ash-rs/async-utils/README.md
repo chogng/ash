@@ -11,35 +11,35 @@
 
 ## 公共契约
 
-| Symbol | 职责 | 关键语义 |
-| --- | --- | --- |
-| `CancellationSource<R>` | 一个 domain 的 cancel authority | clone 共享同一 domain；drop 不自动 cancel |
-| `CancellationToken<R>` | read-only observer 与 child-source factory | child cancel 不影响 parent/sibling |
-| `Cancellation<R>` | effective signal | 保留 first winner 的 reason 与 origin ID |
-| `CancelResult<R>` | cancel race 结果 | 区分本次 installed 与 already cancelled |
-| `Cancelled<R>` | 等待 token cancellation 的 future | drop 时注销 waiter |
-| `CancelOnDrop<R>` | scope-exit cancellation guard | `disarm` 后不 cancel |
-| `Cancelable<F, R>` | inner future 与 cancellation 的 race wrapper | cancellation 每次 poll 优先检查；获胜时 drop inner future |
-| `FutureCancellationExt` | 所有 Future 的 extension trait | 只在 drop-at-await 安全时使用 |
-| `wait_until`（`wait` feature） | 等待条件、单调截止时间与取消 | 取消、就绪条件、截止按此顺序检查 |
-| `Notify`（`wait` feature） | 业务 owner 的状态变化通知 | 先 listen 再读状态；通知不保存业务数据 |
+| Symbol                         | 职责                                         | 关键语义                                                  |
+| ------------------------------ | -------------------------------------------- | --------------------------------------------------------- |
+| `CancellationSource<R>`        | 一个 domain 的 cancel authority              | clone 共享同一 domain；drop 不自动 cancel                 |
+| `CancellationToken<R>`         | read-only observer 与 child-source factory   | child cancel 不影响 parent/sibling                        |
+| `Cancellation<R>`              | effective signal                             | 保留 first winner 的 reason 与 origin ID                  |
+| `CancelResult<R>`              | cancel race 结果                             | 区分本次 installed 与 already cancelled                   |
+| `Cancelled<R>`                 | 等待 token cancellation 的 future            | drop 时注销 waiter                                        |
+| `CancelOnDrop<R>`              | scope-exit cancellation guard                | `disarm` 后不 cancel                                      |
+| `Cancelable<F, R>`             | inner future 与 cancellation 的 race wrapper | cancellation 每次 poll 优先检查；获胜时 drop inner future |
+| `FutureCancellationExt`        | 所有 Future 的 extension trait               | 只在 drop-at-await 安全时使用                             |
+| `wait_until`（`wait` feature） | 等待条件、单调截止时间与取消                 | 取消、就绪条件、截止按此顺序检查                          |
+| `Notify`（`wait` feature）     | 业务 owner 的状态变化通知                    | 先 listen 再读状态；通知不保存业务数据                    |
 
 默认 reason 是 `CancellationReason::{Requested, Shutdown, DeadlineExceeded}`。需要 domain-specific
 reason 时使用 `CancellationSource::<R>::new_typed()`；`R` 不要求 `Clone`，signal 通过 `Arc` 传播。
 
 ## 内部接口地图
 
-| Symbol | 可见性 | 当前职责 | 方向约束 |
-| --- | --- | --- | --- |
-| `Node<R>` | crate-private | 一个 cancellation domain 的 ID 与 mutex state | 不暴露给 runtime 或 protocol |
-| `State<R>` | private | signal、weak children、waiters、waiter ID allocator | state transition 始终在同一 mutex 下 |
-| `Signal<R>` | crate-private | origin + reason | descendants 共享同一 effective signal |
-| `Node::child_of` | crate-private | 原子注册 child 或继承 parent signal | child creation 与 parent cancel 不能丢信号 |
-| `cancel_tree` | crate-private | iterative propagation、drain waiters/children | 不递归；先标记整棵可达树，再 wake |
-| `poll_cancelled` | crate-private | register/refresh waiter waker | repoll 必须替换 stale waker |
-| `remove_waiter` | crate-private | future/drop cleanup | pending future drop 后不能泄漏 waker |
-| `Cancelable::poll` | private impl path | cancellation-first race | inner poll 中触发 cancel 时，本次 inner output 获胜 |
-| `NEXT_CANCELLATION_ID` / `next_id` | private | process-local unique domain ID | overflow panic，不复用 identity |
+| Symbol                             | 可见性            | 当前职责                                            | 方向约束                                            |
+| ---------------------------------- | ----------------- | --------------------------------------------------- | --------------------------------------------------- |
+| `Node<R>`                          | crate-private     | 一个 cancellation domain 的 ID 与 mutex state       | 不暴露给 runtime 或 protocol                        |
+| `State<R>`                         | private           | signal、weak children、waiters、waiter ID allocator | state transition 始终在同一 mutex 下                |
+| `Signal<R>`                        | crate-private     | origin + reason                                     | descendants 共享同一 effective signal               |
+| `Node::child_of`                   | crate-private     | 原子注册 child 或继承 parent signal                 | child creation 与 parent cancel 不能丢信号          |
+| `cancel_tree`                      | crate-private     | iterative propagation、drain waiters/children       | 不递归；先标记整棵可达树，再 wake                   |
+| `poll_cancelled`                   | crate-private     | register/refresh waiter waker                       | repoll 必须替换 stale waker                         |
+| `remove_waiter`                    | crate-private     | future/drop cleanup                                 | pending future drop 后不能泄漏 waker                |
+| `Cancelable::poll`                 | private impl path | cancellation-first race                             | inner poll 中触发 cancel 时，本次 inner output 获胜 |
+| `NEXT_CANCELLATION_ID` / `next_id` | private           | process-local unique domain ID                      | overflow panic，不复用 identity                     |
 
 ## 调用图与 race 语义
 

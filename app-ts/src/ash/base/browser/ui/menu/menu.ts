@@ -44,7 +44,7 @@ function prependMenuLeadingSlot(
 
 /** Menus use the action label for accessibility without opening a tooltip. */
 abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
-	protected override setupTooltip(): void {}
+	protected override setupTooltip(): void { }
 }
 
 /** Button view item for an action presented inside a menu. */
@@ -133,7 +133,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	private contextView: ContextView | undefined;
 	private menu: Menu | undefined;
 	private pointerInside = false;
-	private lastPointerPosition: { x: number; y: number } | undefined;
+	private lastPointerPosition: { x: number; y: number; } | undefined;
 
 	constructor(
 		action: SubmenuAction,
@@ -323,7 +323,7 @@ export class Menu extends Disposable {
 	private readonly submenus: SubmenuMenuActionViewItem[] = [];
 	private readonly entries: MenuEntry[] = [];
 	private focusedEntry: MenuEntry | undefined;
-	private lastPointerPosition: { x: number; y: number } | undefined;
+	private lastPointerPosition: { x: number; y: number; } | undefined;
 
 	constructor(container: HTMLElement, options: MenuOptions) {
 		super();
@@ -356,7 +356,7 @@ export class Menu extends Disposable {
 			};
 			const item = this._register(
 				options.actionViewItemProvider?.(action, itemOptions) ??
-					createMenuActionViewItem(action, itemOptions),
+				createMenuActionViewItem(action, itemOptions),
 			);
 			if (item instanceof SubmenuMenuActionViewItem) {
 				this.submenus.push(item);

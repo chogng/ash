@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 
 export class LoopbackOAuthCallback {
 	private settled = false;
-	private readonly completion: Promise<{ readonly state: string; readonly code: string }>;
-	private resolve!: (value: { readonly state: string; readonly code: string }) => void;
+	private readonly completion: Promise<{ readonly state: string; readonly code: string; }>;
+	private resolve!: (value: { readonly state: string; readonly code: string; }) => void;
 	private reject!: (reason: Error) => void;
 	private readonly timeout: NodeJS.Timeout;
 
@@ -36,7 +36,7 @@ export class LoopbackOAuthCallback {
 		return callback;
 	}
 
-	wait(): Promise<{ readonly state: string; readonly code: string }> {
+	wait(): Promise<{ readonly state: string; readonly code: string; }> {
 		return this.completion;
 	}
 

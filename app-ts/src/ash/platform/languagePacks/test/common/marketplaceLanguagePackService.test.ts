@@ -83,12 +83,12 @@ function createMarketplace(catalogs: readonly LanguagePackCatalog[]): IMarketpla
 			lease: { id: "lease.localization.fr", capability: { id: "capability.localization.fr" }, installationId: "installation.localization.fr" },
 			spec: { kind: "localization" as const, contractVersion: "ash-localization-1", catalog: { id: "catalog.json" } },
 		}),
-		releaseCapability: async () => {},
+		releaseCapability: async () => { },
 		openResource: async () => ({ mediaType: "application/json", dataBase64: Buffer.from(JSON.stringify(catalogs[0]), "utf8").toString("base64") }),
 	};
 }
 
-function createService(marketplace: IMarketplaceService, store: ILanguagePackStore = { read: async () => undefined, write: async () => {} }): MarketplaceLanguagePackService {
+function createService(marketplace: IMarketplaceService, store: ILanguagePackStore = { read: async () => undefined, write: async () => { } }): MarketplaceLanguagePackService {
 	using services = new InstantiationService();
 	services.registerInstance(IMarketplaceService, marketplace);
 	services.registerInstance(ILanguagePackStore, store);

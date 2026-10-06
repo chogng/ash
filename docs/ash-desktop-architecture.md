@@ -18,14 +18,14 @@
 `ash` 是 Ash 的 Electron 产品界面和平台宿主：它负责窗口、交互和系统能力，只投影后端状态，
 不复制 Agent、权限或持久化规则。
 
-| 用户或开发者需求 | Desktop 负责 | 必须交给后端 |
-| --- | --- | --- |
-| 显示对话、工具和批准状态 | Renderer 组件、交互状态和可访问性 | Session、Thread、Turn 的权威状态 |
-| 启动桌面应用 | Electron Main、Preload、窗口和 App Server 监督 | Agent 生命周期与恢复 |
-| 调用本地产品能力 | 通过类型化 Preload API 和 App Server 客户端 | 领域校验、授权和持久化 |
-| 使用浏览器、终端或系统 UI | 平台桥接、用户可见控制和能力请求 | 是否允许执行的最终决定 |
-| 增加新产品功能 | 界面拥有呈现，App Server 提供类型化能力 | 禁止在 Renderer 中补一套业务状态机 |
-| 断线或后端重启 | 显示连接状态并重新取得快照 | 不根据旧 UI 状态猜测服务端事实 |
+| 用户或开发者需求          | Desktop 负责                                   | 必须交给后端                       |
+| ------------------------- | ---------------------------------------------- | ---------------------------------- |
+| 显示对话、工具和批准状态  | Renderer 组件、交互状态和可访问性              | Session、Thread、Turn 的权威状态   |
+| 启动桌面应用              | Electron Main、Preload、窗口和 App Server 监督 | Agent 生命周期与恢复               |
+| 调用本地产品能力          | 通过类型化 Preload API 和 App Server 客户端    | 领域校验、授权和持久化             |
+| 使用浏览器、终端或系统 UI | 平台桥接、用户可见控制和能力请求               | 是否允许执行的最终决定             |
+| 增加新产品功能            | 界面拥有呈现，App Server 提供类型化能力        | 禁止在 Renderer 中补一套业务状态机 |
+| 断线或后端重启            | 显示连接状态并重新取得快照                     | 不根据旧 UI 状态猜测服务端事实     |
 
 ## 1. 目标
 
@@ -95,35 +95,35 @@ Rust primitive 与 model adapter 的实现细节分别见
 [`ash-rs/utils/path-uri/README.md`](../ash-rs/utils/path-uri/README.md)；Project root 的 App Server
 输出已接入该契约，Files 的共享 URI 状态仍为“部分具备”。
 
-| 能力 | Owner | 当前状态 |
-| --- | --- | --- |
-| 文件树渲染、展开、加载态 | Renderer | ✅ 单目录 Explorer 与 Seti 文件图标 |
-| 选中、快捷键、文件打开与编辑 | Renderer | 部分具备：点击 UTF-8 文件进入编辑器；保存与键盘选择尚未完成 |
-| 系统目录选择器 | Electron Main / Preload | ✅ Empty Explorer 选择单目录并重启绑定 workspace |
-| 在原生文件管理器中显示 | Electron Main / Preload | 尚未完成 |
-| 目录枚举、metadata、文件读写与 workspace 边界校验 | Rust / App Server | ✅ `fs/readDirectory`、`fs/getMetadata`、`fs/readFile`、`fs/writeFile` |
-| 重命名、删除 | Rust / App Server | 尚未完成 |
-| workspace 内容搜索执行、取消与结果限额 | Rust / App Server | ✅ connection-owned pull job |
-| 搜索表单、增量结果分组与高亮 | Renderer | ✅ Search contrib |
-| 搜索结果打开文件 | Files / Editor vertical | 尚未完成 |
-| Explorer watcher invalidation 与文件树自动刷新 | Rust authority + Renderer projection | 部分具备：App Server 已发布 root-relative `fs/changed`；Renderer 尚未消费 |
-| 文件位置 identity | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射 |
-| 跨重启的领域 `FileId` 或 `DocumentId` | 拥有该生命周期的 Rust 领域模型 | 尚未完成 |
-| Tab、Pane 等纯 UI 实例 ID | Renderer | 已有 Workbench 基础设施 |
+| 能力                                              | Owner                                        | 当前状态                                                                  |
+| ------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------- |
+| 文件树渲染、展开、加载态                          | Renderer                                     | ✅ 单目录 Explorer 与 Seti 文件图标                                       |
+| 选中、快捷键、文件打开与编辑                      | Renderer                                     | 部分具备：点击 UTF-8 文件进入编辑器；保存与键盘选择尚未完成               |
+| 系统目录选择器                                    | Electron Main / Preload                      | ✅ Empty Explorer 选择单目录并重启绑定 workspace                          |
+| 在原生文件管理器中显示                            | Electron Main / Preload                      | 尚未完成                                                                  |
+| 目录枚举、metadata、文件读写与 workspace 边界校验 | Rust / App Server                            | ✅ `fs/readDirectory`、`fs/getMetadata`、`fs/readFile`、`fs/writeFile`    |
+| 重命名、删除                                      | Rust / App Server                            | 尚未完成                                                                  |
+| workspace 内容搜索执行、取消与结果限额            | Rust / App Server                            | ✅ connection-owned pull job                                              |
+| 搜索表单、增量结果分组与高亮                      | Renderer                                     | ✅ Search contrib                                                         |
+| 搜索结果打开文件                                  | Files / Editor vertical                      | 尚未完成                                                                  |
+| Explorer watcher invalidation 与文件树自动刷新    | Rust authority + Renderer projection         | 部分具备：App Server 已发布 root-relative `fs/changed`；Renderer 尚未消费 |
+| 文件位置 identity                                 | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射                                                   |
+| 跨重启的领域 `FileId` 或 `DocumentId`             | 拥有该生命周期的 Rust 领域模型               | 尚未完成                                                                  |
+| Tab、Pane 等纯 UI 实例 ID                         | Renderer                                     | 已有 Workbench 基础设施                                                   |
 
 集成终端同样按 UI 与进程 authority 拆分：
 
-| 能力 | Owner | 当前状态 |
-| --- | --- | --- |
-| 每实例 xterm、Tab、输入、焦点和 panel actions | Renderer | ✅ `TerminalViewPane` / `TerminalInstanceWidget` |
-| 实例列表、active instance、输入 batching 与 resize coalescing | Renderer `ITerminalService` | ✅ |
-| 前端进程契约与 App Server DTO adapter | Renderer `platform/terminal` | 已接通生成 decoder，适配器统一转换原始字节与退出码；Main 透明转发协议 frame |
-| SSH Terminal bearer lease 与 attach | Renderer `ReconnectableTerminalProcessService` | 同一后端内 30 秒有界恢复；Main 不保存 token |
-| Terminal ID、workspace binding、输出 ring 与 connection cleanup | Rust `exec-server` | 已实现 connection-owned 与 reconnectable 生命周期 |
-| PTY/ConPTY spawn、raw bytes、resize 与进程终止 | `ash-utils-pty` | ✅ |
-| 可信 Shell Profile discovery 与 ID 解析 | Rust / App Server | ✅ 不暴露 executable |
-| 宿主终端环境继承 | Electron Main + Rust / App Server | ✅ 双层 allowlist，凭据变量不进入 App Server 或 PTY |
-| 任意 executable/environment 选择 | 无 | ❌ 当前客户端不能提交 |
+| 能力                                                            | Owner                                          | 当前状态                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+| 每实例 xterm、Tab、输入、焦点和 panel actions                   | Renderer                                       | ✅ `TerminalViewPane` / `TerminalInstanceWidget`                            |
+| 实例列表、active instance、输入 batching 与 resize coalescing   | Renderer `ITerminalService`                    | ✅                                                                          |
+| 前端进程契约与 App Server DTO adapter                           | Renderer `platform/terminal`                   | 已接通生成 decoder，适配器统一转换原始字节与退出码；Main 透明转发协议 frame |
+| SSH Terminal bearer lease 与 attach                             | Renderer `ReconnectableTerminalProcessService` | 同一后端内 30 秒有界恢复；Main 不保存 token                                 |
+| Terminal ID、workspace binding、输出 ring 与 connection cleanup | Rust `exec-server`                             | 已实现 connection-owned 与 reconnectable 生命周期                           |
+| PTY/ConPTY spawn、raw bytes、resize 与进程终止                  | `ash-utils-pty`                                | ✅                                                                          |
+| 可信 Shell Profile discovery 与 ID 解析                         | Rust / App Server                              | ✅ 不暴露 executable                                                        |
+| 宿主终端环境继承                                                | Electron Main + Rust / App Server              | ✅ 双层 allowlist，凭据变量不进入 App Server 或 PTY                         |
+| 任意 executable/environment 选择                                | 无                                             | ❌ 当前客户端不能提交                                                       |
 
 Seti 文件图标是 Renderer 主题能力：`platform/theme/browser` 直接拥有主题 JSON、WOFF、文件名解析和 DOM glyph 渲染。App Server 与 Rust 客户端不参与文件图标解析；`ash code` 的当前产品要求也不包含该呈现，因此不存在跨客户端数据契约。
 
@@ -153,13 +153,13 @@ contract 拥有，Renderer 不能直接扫描用户主目录或自行解释外�
 Ash 原生 Instructions/Skills/Agents、`.ash` 命名空间以及 Import 与 source registration 的区别
 由 [`agent-customizations.md`](agent-customizations.md) 统一定义。
 
-| 外部内容 | Desktop 导入行为 | 权威 owner 与安全边界 |
-| --- | --- | --- |
-| Codex 的 `~/.agents/skills` 与 Claude 的 `~/.claude/skills` | 用户明确选择后注册为窄的只读外部来源 | Config authority 保存来源；Skill manager 校验 containment、格式、摘要和来源身份 |
-| 规则或 instruction 文件 | 预览并按明确映射导入；没有 canonical contract 时不可导入 | 对应 instruction/config 领域定义优先级，外部内容不能覆盖系统、开发者或产品策略 |
-| Agent 定义 | 仅在 Agent definition authority 提供 typed import contract 后开放 | Agent/Multi-Agent authority 校验角色、工具请求和生命周期；Desktop 只呈现映射与诊断 |
-| MCP 声明 | 单独展示并要求用户确认，不因导入自动连接或获得凭据 | MCP/config authority 保存声明；连接、网络和凭据继续走各自授权 |
-| 认证文件、密钥、日志和历史记录 | ❌ 不导入 | Desktop 不读取 `~/.codex/auth.json`，也不把整个 `~/.codex` 或 `~/.claude` 注册为可浏览根 |
+| 外部内容                                                    | Desktop 导入行为                                                  | 权威 owner 与安全边界                                                                    |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Codex 的 `~/.agents/skills` 与 Claude 的 `~/.claude/skills` | 用户明确选择后注册为窄的只读外部来源                              | Config authority 保存来源；Skill manager 校验 containment、格式、摘要和来源身份          |
+| 规则或 instruction 文件                                     | 预览并按明确映射导入；没有 canonical contract 时不可导入          | 对应 instruction/config 领域定义优先级，外部内容不能覆盖系统、开发者或产品策略           |
+| Agent 定义                                                  | 仅在 Agent definition authority 提供 typed import contract 后开放 | Agent/Multi-Agent authority 校验角色、工具请求和生命周期；Desktop 只呈现映射与诊断       |
+| MCP 声明                                                    | 单独展示并要求用户确认，不因导入自动连接或获得凭据                | MCP/config authority 保存声明；连接、网络和凭据继续走各自授权                            |
+| 认证文件、密钥、日志和历史记录                              | ❌ 不导入                                                         | Desktop 不读取 `~/.codex/auth.json`，也不把整个 `~/.codex` 或 `~/.claude` 注册为可浏览根 |
 
 导入操作只授予已选择且经过规范化的内容根只读访问，并且必须可查询、禁用和移除。它不是
 “以后同类工具都允许”的长期执行批准；导入 Skill 附带的脚本仍通过普通工具、权限与沙箱流程。
@@ -299,7 +299,6 @@ Electron 主进程由 `code/electron-main/main.ts` 编排启动，`app.ts` 装�
 `userDataPath.ts`，外部窗口启动请求归 `platform/launch/electron-main/launchMainService.ts`。
 `WindowsMainService` 统一拥有窗口身份、活动顺序和工作区复用；`app.ts` 只保留窗口对应的
 App Server、模式和产品资源。Windows 最近项目跳转列表由 `WorkspacesHistoryMainService` 更新。
-
 
 当前实现明确区分两个所有权边界：
 
@@ -448,15 +447,15 @@ execute(method: string, params?: unknown): Promise<unknown>
 
 平台目录按“契约、运行时适配、Workbench 装配”分层，不按 VS Code 的目录名称机械对齐。当前稳定边界如下：
 
-| 能力 | 前端契约 owner | 运行时或传输 owner | Workbench 装配责任 |
-| --- | --- | --- | --- |
-| 配置 | `configurationService.ts` | `configurationIpc.ts` 与 Electron adapters | Workbench 创建窗口级 service |
-| 生命周期 | `ILifecycleService` | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等 joiner；Desktop 与 Agents 的入口加入日志 flush |
-| 日志 | `ILogService` / `ILogSink` | Console、System Output 与 Desktop 文件 sinks；Main `LoggerService` 拥有文件 | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供 |
-| 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters | Connector host 注入适配器 |
-| 编辑器打开 | `IEditorService` | `BrowserEditorService` | Workbench 把具体 `EditorPart` 封装在 service 后面 |
-| 窗口宿主操作 | `IWorkbenchHostService` | `WorkbenchWindow` | Workbench 注册当前窗口实现 |
-| Code Mode 能力 | 各领域 `I*Service` | 对应 browser service implementation | `workbench.common.main.ts` 加载共同贡献与 Extension Host、Codebase Symbols；Web、Desktop 入口选择 Tasks 实现；Debug、Testing contribution 加载各自服务注册，窗口容器按依赖安装 |
+| 能力              | 前端契约 owner                         | 运行时或传输 owner                                                                                                      | Workbench 装配责任                                                                                                                                                             |
+| ----------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 配置              | `configurationService.ts`              | `configurationIpc.ts` 与 Electron adapters                                                                              | Workbench 创建窗口级 service                                                                                                                                                   |
+| 生命周期          | `ILifecycleService`                    | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等 joiner；Desktop 与 Agents 的入口加入日志 flush                                                                                               |
+| 日志              | `ILogService` / `ILogSink`             | Console、System Output 与 Desktop 文件 sinks；Main `LoggerService` 拥有文件                                             | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供                                                                                                                  |
+| 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters                                                                                         | Connector host 注入适配器                                                                                                                                                      |
+| 编辑器打开        | `IEditorService`                       | `BrowserEditorService`                                                                                                  | Workbench 把具体 `EditorPart` 封装在 service 后面                                                                                                                              |
+| 窗口宿主操作      | `IWorkbenchHostService`                | `WorkbenchWindow`                                                                                                       | Workbench 注册当前窗口实现                                                                                                                                                     |
+| Code Mode 能力    | 各领域 `I*Service`                     | 对应 browser service implementation                                                                                     | `workbench.common.main.ts` 加载共同贡献与 Extension Host、Codebase Symbols；Web、Desktop 入口选择 Tasks 实现；Debug、Testing contribution 加载各自服务注册，窗口容器按依赖安装 |
 
 `common/*Service.ts` 只能包含调用方使用的领域类型和 service identifier。IPC channel、生成 DTO、
 context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中。功能 contribution 可以加载
@@ -757,14 +756,14 @@ Ctrl/Cmd+Alt+V 启动，再按该快捷键结束，
 
 当前设置入口覆盖如下；Workbench 位于“常规 → 听写”，Sessions 位于“常规”：
 
-| 能力 | 设置页当前状态 | 使用入口与限制 |
-| --- | --- | --- |
-| 麦克风选择 | 已加入 | “麦克风与语言”提供设备列表和系统默认选项。 |
-| 转写语言 | 已加入 | 云端可选择支持的语言提示；本地模型使用自身语言能力，语言选择禁用。 |
-| 本地／云端、服务商、模型管理与 API 连接 | 已加入 | 本地显示模型管理；云端显示服务商、连接状态和 API 连接管理入口。 |
-| 普通编辑器听写 | 无独立设置开关 | 使用编辑器命令、上下文菜单或 Ctrl/Cmd+Alt+V。 |
-| 终端听写 | 无独立设置开关 | 使用终端标题栏麦克风或开始、停止命令。 |
-| 首次引导与独立试录 | 设置页入口尚未完成 | 首次使用显示引导，也可通过“听写：显示入门引导”命令打开；设置页尚无“测试麦克风／重新打开引导”按钮。 |
+| 能力                                    | 设置页当前状态     | 使用入口与限制                                                                                     |
+| --------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------- |
+| 麦克风选择                              | 已加入             | “麦克风与语言”提供设备列表和系统默认选项。                                                         |
+| 转写语言                                | 已加入             | 云端可选择支持的语言提示；本地模型使用自身语言能力，语言选择禁用。                                 |
+| 本地／云端、服务商、模型管理与 API 连接 | 已加入             | 本地显示模型管理；云端显示服务商、连接状态和 API 连接管理入口。                                    |
+| 普通编辑器听写                          | 无独立设置开关     | 使用编辑器命令、上下文菜单或 Ctrl/Cmd+Alt+V。                                                      |
+| 终端听写                                | 无独立设置开关     | 使用终端标题栏麦克风或开始、停止命令。                                                             |
+| 首次引导与独立试录                      | 设置页入口尚未完成 | 首次使用显示引导，也可通过“听写：显示入门引导”命令打开；设置页尚无“测试麦克风／重新打开引导”按钮。 |
 
 设置页待补：在上述两个设置宿主共用的听写内容中加入“测试麦克风／重新打开引导”直接入口，
 复用现有引导及其试录会话，避免另建录音状态。此项尚未实现。
@@ -873,12 +872,12 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 
 `platform/browserView` 以 `IBrowserViewService` 为共同入口。`BrowserViewMainService` 管理窗口内唯一的页面实例表，`BrowserView` 持有每个页面的 `WebContentsView`、Session 网络租约、状态、事件和关闭信号。新页面默认隐藏；Renderer 先通过 `layout(id, bounds)` 提交窗口内容坐标，再通过 `setVisible(id, true)` 显示。
 
-| 场景 | 入口 | 执行路径 | 所有权 |
-| --- | --- | --- | --- |
-| Workbench 创建、布局和导航 | `IBrowserViewService` | 可信 IPC → `BrowserViewMainService` → `BrowserView` | Main 管理实例，页面管理资源 |
-| Agent 观察和输入 | Rust 内置浏览器工具 | `BrowserHost` → 反向 JSON-RPC → `AppServerBrowserHost` → 独立 Playwright 进程 → Group/CDP → `BrowserView` | Rust 决定批准，Playwright 执行元素操作，Main 持有页面 |
-| 截图 | `browser_screenshot` 或观察选项 | Playwright 截取同一页面 → Rust `ResourceStore` | 图片按连接隔离 |
-| App Server 断开或重启 | Supervisor 状态迁移 | `AppServerBrowserHost.reset()` | 关闭 Agent 页面、撤销用户页面分享并取消待处理权限请求 |
+| 场景                       | 入口                            | 执行路径                                                                                                  | 所有权                                                |
+| -------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Workbench 创建、布局和导航 | `IBrowserViewService`           | 可信 IPC → `BrowserViewMainService` → `BrowserView`                                                       | Main 管理实例，页面管理资源                           |
+| Agent 观察和输入           | Rust 内置浏览器工具             | `BrowserHost` → 反向 JSON-RPC → `AppServerBrowserHost` → 独立 Playwright 进程 → Group/CDP → `BrowserView` | Rust 决定批准，Playwright 执行元素操作，Main 持有页面 |
+| 截图                       | `browser_screenshot` 或观察选项 | Playwright 截取同一页面 → Rust `ResourceStore`                                                            | 图片按连接隔离                                        |
+| App Server 断开或重启      | Supervisor 状态迁移             | `AppServerBrowserHost.reset()`                                                                            | 关闭 Agent 页面、撤销用户页面分享并取消待处理权限请求 |
 
 `AppServerBrowserHost` 属于 `platform/app-server`，只绑定协议请求、连接生命周期和取消信号。页面查询由 `BrowserViewMainService` 的唯一实例表决定；宿主只跟踪需释放的页面 ID 和 Thread，不持有第二套页面状态。页面按顺序执行编辑器导航和 agent 的观察、截图、输入；取消请求立即结束调用方等待，已发给 Chromium 的操作结束后才释放顺序。关闭页面统一中止等待、取消权限请求及下载，并释放监听器、Session 网络租约和 Chromium 页面。
 

@@ -25,14 +25,14 @@ Runtime snapshot
 
 ## 权威分布
 
-| 所有者 | 拥有 | 不拥有 |
-| --- | --- | --- |
-| User Config | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限、Git 自动获取，以及前端自有的 `gui`、`tui` 键值表 | secret、live connection、已安装包、运行健康状态，以及 `gui`、`tui` 字段含义 |
-| Dir Config | 目录提供的 Agent/MCP/Skill/Plugin/Hook 意图和只收紧的执行规则 | 授权、凭据、安装、激活和运行状态 |
-| Device Settings | TUI/Electron 主题、可访问性、hover、sash 等设备界面偏好 | Rust GUI 编辑器字体、Agent、Provider、目录权限和运行状态 |
-| Secret Store | opaque secret bytes | 配置类型、OAuth 流程和作用域决定 |
-| 各领域管理器 | 实际安装、连接、激活、健康状态和生命周期 | 用户配置正文 |
-| App Server | 组合不可变快照并选择生效点 | 重新拥有各领域状态 |
+| 所有者          | 拥有                                                                                                                                                       | 不拥有                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| User Config     | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限、Git 自动获取，以及前端自有的 `gui`、`tui` 键值表 | secret、live connection、已安装包、运行健康状态，以及 `gui`、`tui` 字段含义 |
+| Dir Config      | 目录提供的 Agent/MCP/Skill/Plugin/Hook 意图和只收紧的执行规则                                                                                              | 授权、凭据、安装、激活和运行状态                                            |
+| Device Settings | TUI/Electron 主题、可访问性、hover、sash 等设备界面偏好                                                                                                    | Rust GUI 编辑器字体、Agent、Provider、目录权限和运行状态                    |
+| Secret Store    | opaque secret bytes                                                                                                                                        | 配置类型、OAuth 流程和作用域决定                                            |
+| 各领域管理器    | 实际安装、连接、激活、健康状态和生命周期                                                                                                                   | 用户配置正文                                                                |
+| App Server      | 组合不可变快照并选择生效点                                                                                                                                 | 重新拥有各领域状态                                                          |
 
 ## 用户配置
 
@@ -213,31 +213,31 @@ BuiltInDefaults
 
 这不是递归对象合并。每个字段必须明确来源、merge/replace/clear 语义、provenance 和生效点。
 
-| 配置 | 来源 | 关键规则 |
-| --- | --- | --- |
-| Agent model | User、Dir、Session、launch | 只影响下一次模型安全点 |
-| Tool Mode | User、StartTurn override | Turn 接受时冻结 |
-| Context compaction | User | Turn command receipt 冻结，子任务和 Goal 续跑继承 |
-| Provider endpoint | User、Host | Dir 不能替换认证或网络边界 |
-| MCP / Skill / Plugin / Hook | User、Dir | Dir 只提供待处理意图；领域管理器决定实际状态 |
-| Execution policy | Host、Organization、User、Dir | Dir 只能保持或收紧 |
-| Directory permissions | User、Organization、Host | Dir Config 无权自授 |
-| Rust GUI theme/editor typography | User | 进入 `config/read`，不参与 Agent Turn 执行 |
-| TUI/Electron device preference | Device Settings | 不进入 Agent runtime snapshot |
+| 配置                             | 来源                          | 关键规则                                          |
+| -------------------------------- | ----------------------------- | ------------------------------------------------- |
+| Agent model                      | User、Dir、Session、launch    | 只影响下一次模型安全点                            |
+| Tool Mode                        | User、StartTurn override      | Turn 接受时冻结                                   |
+| Context compaction               | User                          | Turn command receipt 冻结，子任务和 Goal 续跑继承 |
+| Provider endpoint                | User、Host                    | Dir 不能替换认证或网络边界                        |
+| MCP / Skill / Plugin / Hook      | User、Dir                     | Dir 只提供待处理意图；领域管理器决定实际状态      |
+| Execution policy                 | Host、Organization、User、Dir | Dir 只能保持或收紧                                |
+| Directory permissions            | User、Organization、Host      | Dir Config 无权自授                               |
+| Rust GUI theme/editor typography | User                          | 进入 `config/read`，不参与 Agent Turn 执行        |
+| TUI/Electron device preference   | Device Settings               | 不进入 Agent runtime snapshot                     |
 
 目录来源未获得对应能力时，解析结果保留其待处理意图和诊断，但不会静默激活。运行时协调失败只
 更新实际状态，不回滚用户期望。
 
 ## 生效点
 
-| 变化 | 生效时机 |
-| --- | --- |
-| 模型与 Tool Mode | 下一次模型请求或 Turn 创建 |
-| MCP / Skill / Plugin / Hook catalog | 各管理器完成协调后，由新 generation 发布 |
-| 目录权限 | 新 Grant 发布后；撤销会使旧 Authorization 失效并停止依赖资源 |
-| execution policy | 下一次动作评估；已经准备的调用保留冻结版本 |
-| Rust GUI theme/editor typography | Workbench 收到新 config generation 后重建完整样式 |
-| TUI/Electron device preference | 对应 Renderer 服务自己的更新周期 |
+| 变化                                | 生效时机                                                     |
+| ----------------------------------- | ------------------------------------------------------------ |
+| 模型与 Tool Mode                    | 下一次模型请求或 Turn 创建                                   |
+| MCP / Skill / Plugin / Hook catalog | 各管理器完成协调后，由新 generation 发布                     |
+| 目录权限                            | 新 Grant 发布后；撤销会使旧 Authorization 失效并停止依赖资源 |
+| execution policy                    | 下一次动作评估；已经准备的调用保留冻结版本                   |
+| Rust GUI theme/editor typography    | Workbench 收到新 config generation 后重建完整样式            |
+| TUI/Electron device preference      | 对应 Renderer 服务自己的更新周期                             |
 
 运行中的 Turn 不读取可变 ConfigStore，也不持有 live manager。它只消费创建时冻结的快照和后续
 明确允许的安全点更新。

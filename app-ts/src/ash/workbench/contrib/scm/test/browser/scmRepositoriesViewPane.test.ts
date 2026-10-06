@@ -23,11 +23,11 @@ function provider(id: string, path: string, activate: () => Promise<void>): ISCM
 		id, providerId: 'git', label: 'ash', rootUri: URI.file(path), groups: [], onDidChangeResources: Event.None,
 		input: { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined },
 		activeRepositoryName: id, statusBarCommands: [], statusMessage: '', isBusy: false,
-		refresh: async () => {}, activate,
+		refresh: async () => { }, activate,
 	};
 }
 
-function fixture(): DisposableStore & { scm: SCMService; views: SCMViewService; services: InstantiationService; container: HTMLElement; browser: JSDOM } {
+function fixture(): DisposableStore & { scm: SCMService; views: SCMViewService; services: InstantiationService; container: HTMLElement; browser: JSDOM; } {
 	const resources = new DisposableStore();
 	const browser = browserEnvironment;
 	const scm = resources.add(new SCMService());
@@ -40,8 +40,8 @@ function fixture(): DisposableStore & { scm: SCMService; views: SCMViewService; 
 	services.registerInstance(ISCMService, scm);
 	services.registerInstance(ISCMViewService, views);
 	services.registerInstance(IConfigurationService, configuration);
-	const hover = (): IManagedHover => ({ visible: false, show() {}, hide() {}, update() {}, ...toDisposable(() => {}) });
-	services.registerInstance(IHoverService, { setupDelayedHover: hover, setupHover: hover, showHover: hover, hideHover() {} });
+	const hover = (): IManagedHover => ({ visible: false, show() { }, hide() { }, update() { }, ...toDisposable(() => { }) });
+	services.registerInstance(IHoverService, { setupDelayedHover: hover, setupHover: hover, showHover: hover, hideHover() { } });
 	return Object.assign(resources, { scm, views, services, container, browser });
 }
 
@@ -56,9 +56,9 @@ suite('SCMRepositoriesViewPane', () => {
 			using changes = new Emitter<void>();
 			let branch = 'topic';
 			let groups: readonly ISCMResourceGroup[] = [];
-			using main = environment.scm.registerSCMProvider(provider('main', '/desktop/ash', async () => {}));
+			using main = environment.scm.registerSCMProvider(provider('main', '/desktop/ash', async () => { }));
 			using worktree = environment.scm.registerSCMProvider({
-				...provider('topic', '/desktop/ash/.delta/worktrees/review/ash', async () => {}),
+				...provider('topic', '/desktop/ash/.delta/worktrees/review/ash', async () => { }),
 				onDidChangeResources: changes.event,
 				get activeRepositoryName() { return branch; },
 				get groups() { return groups; },
@@ -75,7 +75,7 @@ suite('SCMRepositoriesViewPane', () => {
 			assert.equal(environment.views.activeRepository, main);
 			const focusedId = list.getAttribute('aria-activedescendant');
 			branch = 'review-topic';
-			const resource = { sourceUri: URI.file('/desktop/ash/.delta/worktrees/review/ash/file.ts'), path: 'file.ts', decorations: { badge: 'M', tooltip: '', kind: 'modified' }, openLabel: '', actions: [], open: async () => {} };
+			const resource = { sourceUri: URI.file('/desktop/ash/.delta/worktrees/review/ash/file.ts'), path: 'file.ts', decorations: { badge: 'M', tooltip: '', kind: 'modified' }, openLabel: '', actions: [], open: async () => { } };
 			groups = [{ id: 'staged', label: '', resources: [resource], actions: [] }, { id: 'changes', label: '', resources: [resource], actions: [] }];
 			changes.fire();
 			assert.equal(list.getAttribute('aria-activedescendant'), focusedId);
@@ -98,7 +98,7 @@ suite('SCMRepositoriesViewPane', () => {
 
 	test('keeps the accepted repository after activation fails and ignores activation completed after removal', async () => {
 		using environment = fixture();
-		using main = environment.scm.registerSCMProvider(provider('main', '/desktop/ash', async () => {}));
+		using main = environment.scm.registerSCMProvider(provider('main', '/desktop/ash', async () => { }));
 		const activation = new DeferredPromise<void>();
 		using topic = environment.scm.registerSCMProvider(provider('topic', '/worktrees/ash', () => activation.p));
 		using pane = environment.services.createInstance(SCMRepositoriesViewPane, environment.container, { id: REPOSITORIES_VIEW_PANE_ID, title: 'Repositories' });

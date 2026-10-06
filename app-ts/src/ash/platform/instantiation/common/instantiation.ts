@@ -64,7 +64,7 @@ export interface SingletonRegistrationOptions {
 export type ServiceFactory<T> = (accessor: ServicesAccessor) => T;
 
 export namespace _util {
-	export function getServiceDependencies(constructor: Function): readonly { readonly index: number; readonly id: ServiceIdentifier<unknown> }[] {
+	export function getServiceDependencies(constructor: Function): readonly { readonly index: number; readonly id: ServiceIdentifier<unknown>; }[] {
 		let current: Function | null = constructor;
 		while (current && !constructorDependencies.has(current)) {
 			current = Object.getPrototypeOf(current);

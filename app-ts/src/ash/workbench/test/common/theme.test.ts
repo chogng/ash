@@ -84,7 +84,7 @@ test('built-in syntax rules use the theme-defaults extension resources', async (
 		const document = await loadColorThemeDocument(`themes/${file}.json`, async resource => JSON.parse(await readFile(resolve('../extensions/theme-defaults', resource), 'utf8')));
 		assert.ok(Array.isArray(document.tokenColors));
 		const actual = getWorkbenchColorTheme(id).tokenColors!.map(rule => ({ scopes: rule.scopes, settings: rule.settings }));
-		const expected = document.tokenColors.map((rule: { scope?: string | string[]; settings: object }) => ({ scopes: typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? [], settings: rule.settings }));
+		const expected = document.tokenColors.map((rule: { scope?: string | string[]; settings: object; }) => ({ scopes: typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? [], settings: rule.settings }));
 		assert.deepEqual(actual, expected, id);
 	}
 });
@@ -126,8 +126,8 @@ function theme(id: string, label: string, colorScheme = ColorScheme.Dark) {
 	return createColorTheme({ id, label, colorScheme });
 }
 
-function contrastRatio(foreground: { r: number; g: number; b: number }, background: { r: number; g: number; b: number }): number {
-	const luminance = (color: { r: number; g: number; b: number }): number => {
+function contrastRatio(foreground: { r: number; g: number; b: number; }, background: { r: number; g: number; b: number; }): number {
+	const luminance = (color: { r: number; g: number; b: number; }): number => {
 		const linear = (channel: number): number => {
 			const value = channel / 255;
 			return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;

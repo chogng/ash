@@ -34,7 +34,7 @@ test('Desktop trace marks each restored region and waits for asynchronous view c
 	const opened: string[] = [];
 	let finish: () => void = () => assert.fail('view creation was not requested');
 	const pending = new Promise<void>(resolvePromise => { finish = resolvePromise; });
-	const context: { restoreActiveViewContainers?: () => Promise<void> } = {};
+	const context: { restoreActiveViewContainers?: () => Promise<void>; } = {};
 	const install = new Function('paneParts', 'layout', 'panes', 'viewDescriptors', 'requiredViewContainerToRestore', 'views', 'ViewContainerLocation', 'performance', restoration);
 	install.call(context,
 		new Map(Object.values(locations).map(location => [location, { getCompositeIdToRestore: () => `view-${location}` }])),

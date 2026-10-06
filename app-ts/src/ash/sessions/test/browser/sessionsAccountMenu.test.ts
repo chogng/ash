@@ -21,7 +21,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 		onDidCompleteLogin: Event.None,
 		read: async () => ({ revision: 1n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'Ash User', plan: 'Pro', status: 'ready', credentialRevision: 1n }] }),
 		startLogin: async () => ({ type: 'connected', loginId: 'one' }),
-		cancelLogin: async () => {},
+		cancelLogin: async () => { },
 		logout: async provider => { loggedOut.push(provider); },
 	};
 	const contextMenus: IContextMenuService = {
@@ -31,7 +31,7 @@ test('Sessions account menu opens its own settings and account actions', async (
 			actions = delegate.getActions?.() ?? [];
 			hide = () => delegate.onHide?.(false);
 		},
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	const preferences = { open: async () => { settingsOpened++; } } as SessionsPreferences;
 	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences, () => { returnedToWorkbench++; });
@@ -66,14 +66,14 @@ test('Sessions settings remain available when accounts cannot be loaded', async 
 		onDidCompleteLogin: Event.None,
 		read: async () => { throw new Error('Account service unavailable'); },
 		startLogin: async () => ({ type: 'connected', loginId: 'one' }),
-		cancelLogin: async () => {},
-		logout: async () => {},
+		cancelLogin: async () => { },
+		logout: async () => { },
 	};
 	const contextMenus: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(delegate) { actions = delegate.getActions?.() ?? []; },
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	const preferences = { open: async () => { settingsOpened++; } } as SessionsPreferences;
 	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences, () => { returnedToWorkbench++; });

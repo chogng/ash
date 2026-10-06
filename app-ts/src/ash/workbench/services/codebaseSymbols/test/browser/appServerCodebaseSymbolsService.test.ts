@@ -14,7 +14,7 @@ const readyStatus = Object.freeze({
 });
 
 test("codebase-symbols service validates limits and removes transport nulls", async () => {
-	let request: { readonly query: string; readonly maxResults: number } | undefined;
+	let request: { readonly query: string; readonly maxResults: number; } | undefined;
 	const api: ICodebaseSymbolsApi = {
 		status: async () => readyStatus,
 		search: async params => {

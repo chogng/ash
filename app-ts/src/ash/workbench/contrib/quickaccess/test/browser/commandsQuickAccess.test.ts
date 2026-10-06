@@ -52,7 +52,7 @@ test('Command Palette finds localized commands by their English title and report
 		const picker = {
 			items: [] as readonly IQuickPickItem[],
 			onDidAccept: accept.event,
-			hide() {},
+			hide() { },
 		} as unknown as IQuickPick<IQuickPickItem>;
 		resources.add(provider.provide(picker));
 		const item = filterQuickPickItems(picker.items, 'Start Debugging').find(candidate => candidate.description === 'test.commandFailure');
@@ -102,7 +102,7 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	const picker = {
 		items: [] as readonly IQuickPickItem[],
 		onDidAccept: accept.event,
-		hide() {},
+		hide() { },
 	} as unknown as IQuickPick<IQuickPickItem>;
 	resources.add(provider.provide(picker));
 	const item = picker.items.find(candidate => candidate.label === 'Cancelled command');

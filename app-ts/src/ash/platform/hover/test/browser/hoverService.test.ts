@@ -253,8 +253,8 @@ class TestContextMenuService extends Disposable implements IContextMenuService {
 		this._onDidHideContextMenu.fire();
 	}
 
-	showContextMenu(): void {}
-	hideContextMenu(): void {}
+	showContextMenu(): void { }
+	hideContextMenu(): void { }
 }
 
 function requiredElement<T extends Element>(selector: string): T {

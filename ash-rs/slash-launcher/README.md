@@ -9,12 +9,12 @@ Slash Command、Skill 或产品动作，也不决定选择后的执行行为。
 
 ## 1. 边界与依赖
 
-| 拥有 | 不拥有 |
-| --- | --- |
-| 多列表的稳定顺序、ID 校验与全量快照 | Slash Command 定义、参数语法或执行 |
-| 首个 `/query` token 的识别与替换范围 | Skill 发现、启用状态、正文或激活 |
-| 跨列表前缀匹配、选择、循环移动与 dismiss | TUI、WGPU、DOM、键鼠事件或 popup 几何 |
-| 选中项的 `list_id + item_id` 和展示快照 | target registry、handler、IPC、异步刷新或授权 |
+| 拥有                                     | 不拥有                                        |
+| ---------------------------------------- | --------------------------------------------- |
+| 多列表的稳定顺序、ID 校验与全量快照      | Slash Command 定义、参数语法或执行            |
+| 首个 `/query` token 的识别与替换范围     | Skill 发现、启用状态、正文或激活              |
+| 跨列表前缀匹配、选择、循环移动与 dismiss | TUI、WGPU、DOM、键鼠事件或 popup 几何         |
+| 选中项的 `list_id + item_id` 和展示快照  | target registry、handler、IPC、异步刷新或授权 |
 
 本 crate 没有运行时依赖。产品宿主和领域 adapter 可以依赖它；它不得反向依赖
 `ash-slash-commands`、`ash-skills`、App Server protocol 或 renderer。
@@ -37,12 +37,12 @@ Slash Command、Skill 或产品动作，也不决定选择后的执行行为。
 
 ## 3. 内部接口地图
 
-| Symbol | 可见性 | 职责 | 漂移信号 |
-| --- | --- | --- | --- |
-| `model::validate_id` | private | 固定 list/item dispatch key 的最小稳定性规则 | 领域名称语法或业务授权进入通用校验 |
-| `SlashLauncherItem::matches` | crate-private | 对 label 和 keywords 做大小写无关前缀匹配 | renderer 建立第二套匹配 authority |
-| `input::launcher_token_range` | private | 定位输入开头的完整斜杠 token | 把命令参数 grammar 搬入 Launcher |
-| `SlashLauncherState::refresh` | private | 从输入与快照一次重建 query、items 和 selection | adapter 逐项修改内部结果或保存另一份选择状态 |
+| Symbol                        | 可见性        | 职责                                           | 漂移信号                                     |
+| ----------------------------- | ------------- | ---------------------------------------------- | -------------------------------------------- |
+| `model::validate_id`          | private       | 固定 list/item dispatch key 的最小稳定性规则   | 领域名称语法或业务授权进入通用校验           |
+| `SlashLauncherItem::matches`  | crate-private | 对 label 和 keywords 做大小写无关前缀匹配      | renderer 建立第二套匹配 authority            |
+| `input::launcher_token_range` | private       | 定位输入开头的完整斜杠 token                   | 把命令参数 grammar 搬入 Launcher             |
+| `SlashLauncherState::refresh` | private       | 从输入与快照一次重建 query、items 和 selection | adapter 逐项修改内部结果或保存另一份选择状态 |
 
 调用关系：
 

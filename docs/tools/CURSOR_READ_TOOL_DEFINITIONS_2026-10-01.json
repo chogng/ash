@@ -53,9 +53,7 @@
             "description": "The number of lines to read. Only provide if the file is too large to read at once."
           }
         },
-        "required": [
-          "target_file"
-        ]
+        "required": ["target_file"]
       }
     },
     {
@@ -90,9 +88,7 @@
             "description": "The number of lines to read. Only provide if the file is too large to read at once."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -127,9 +123,7 @@
             "description": "The number of lines to read. Only provide if the file is too large to read at once."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -171,9 +165,7 @@
             "description": "The number of lines to read. Only provide if the file is too large to read at once."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -208,9 +200,7 @@
             "description": "The number of lines to read. Only provide if the file is too large to read at once."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -245,9 +235,7 @@
             "description": "The number of lines to read. Only provide if the file is too large to read at once."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -281,9 +269,7 @@
             "description": "Optional. A two-element array [start_line, end_line] specifying the range of lines to read (1-indexed, inclusive). Example: [100, 150] reads lines 100 through 150."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -308,9 +294,7 @@
             "description": "The absolute path of the image to view."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -356,9 +340,7 @@
             "description": "Whether to include line numbers in the output. Lines are numbered starting at 1, using the format LINE_NUMBER|LINE_CONTENT. Prefer using this only when needed, e.g. for citing codeblocks to the user. Defaults to false."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     },
     {
@@ -397,9 +379,7 @@
             "description": "Whether to include line numbers in the output. Prefer using this only when needed, e.g. for citing codeblocks to the user. Defaults to false."
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": ["path"]
       }
     }
   ],

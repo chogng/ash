@@ -13,12 +13,12 @@ import { h } from "../../browser/dom.js";
 test("UI animations use shared timing and honor reduced motion", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const element = h(dom.window.document, "button");
-	const calls: Array<{ keyframes: unknown; options: unknown }> = [];
+	const calls: Array<{ keyframes: unknown; options: unknown; }> = [];
 	Object.defineProperty(element, "animate", {
 		configurable: true,
 		value: (keyframes: unknown, options: unknown) => {
 			calls.push({ keyframes, options });
-			return { cancel(): void {} } as unknown as Animation;
+			return { cancel(): void { } } as unknown as Animation;
 		},
 	});
 

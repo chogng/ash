@@ -184,7 +184,7 @@ for (const inputMode of ['EditContext', 'textarea'] as const) {
 		});
 		const input = page.locator('.stanza-editor-input');
 		await input.evaluate(element => {
-			const target = (element as HTMLElement & { editContext?: EventTarget }).editContext ?? element;
+			const target = (element as HTMLElement & { editContext?: EventTarget; }).editContext ?? element;
 			target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 		});
 		await expect(page.locator('.stanza-editor')).toHaveClass(/\bcomposing\b/u);
@@ -1971,7 +1971,7 @@ test('textarea clipboard events pass through TextAreaInput semantic events', asy
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^main\(\)/u);
 });
 
-function assertBox(box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null, name: string): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+function assertBox(box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number; } | null, name: string): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number; } {
 	expect(box, `Expected ${name} geometry`).not.toBeNull();
 }
 

@@ -78,7 +78,7 @@ export function escapeMarkdownSyntaxTokens(value: string): string {
 	return value.replace(/[\\`*_{}[\]()#+!~]/g, '\\$&').replace(/^([ \t]*)-/gm, '$1\\-');
 }
 
-export function parseHrefAndDimensions(href: string): { href: string; dimensions: string[] } {
+export function parseHrefAndDimensions(href: string): { href: string; dimensions: string[]; } {
 	const [source, parameters = ''] = href.split('|', 2);
 	const dimensions: string[] = [];
 	for (const name of ['width', 'height'] as const) {

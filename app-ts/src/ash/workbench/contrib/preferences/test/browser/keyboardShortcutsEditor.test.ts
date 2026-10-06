@@ -9,7 +9,7 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
-Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollTo', { configurable: true, value() {} });
+Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollTo', { configurable: true, value() { } });
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -199,9 +199,9 @@ class TestSettingsEditor extends Disposable {
 		parent.append(this.element);
 	}
 
-	async setInput(): Promise<void> {}
-	clearInput(): void {}
-	layout(): void {}
-	setVisible(): void {}
+	async setInput(): Promise<void> { }
+	clearInput(): void { }
+	layout(): void { }
+	setVisible(): void { }
 	focus(): void { this.element?.focus(); }
 }

@@ -1,11 +1,12 @@
-.ash-workbench.modern-ui :is(
-  .ash-workbench-sidebar,
-  .ash-workbench-agentSidebar,
-  .ash-workbench-panel,
-  .ash-workbench-auxiliarybar
-) {
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-large);
+.ash-workbench.modern-ui
+	:is(
+		.ash-workbench-sidebar,
+		.ash-workbench-agentSidebar,
+		.ash-workbench-panel,
+		.ash-workbench-auxiliarybar
+	) {
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large);
 }
 
 .ash-workbench.modern-ui .ash-workbench-activitybar {
@@ -41,12 +42,15 @@
 	border-bottom-right-radius: 0;
 }
 
-.ash-workbench.modern-ui .ash-workbench-layout.activitybar-absent .ash-workbench-sidebar {
+.ash-workbench.modern-ui
+	.ash-workbench-layout.activitybar-absent
+	.ash-workbench-sidebar {
 	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
 	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
 	border-radius: var(--ash-corner-radius-large);
 }
 
-:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui .stanza-editor-minimap-slider {
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	.stanza-editor-minimap-slider {
 	border-radius: var(--ash-corner-radius-small);
 }

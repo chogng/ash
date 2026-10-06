@@ -37,11 +37,13 @@ test('namespace migration resumes after interrupted cleanup without replacing cu
 		const backend = dom.window.localStorage;
 		const original = JSON.stringify({ version: 1, entries: { saved: { value: 'old', target: StorageTarget.USER } } });
 		backend.setItem('ash.code.storage.application', original);
-		const interrupted = new Proxy(backend, { get(target, property) {
-			if (property === 'removeItem') { return () => { throw new Error('Interrupted cleanup'); }; }
-			const value = Reflect.get(target, property);
-			return typeof value === 'function' ? value.bind(target) : value;
-		} });
+		const interrupted = new Proxy(backend, {
+			get(target, property) {
+				if (property === 'removeItem') { return () => { throw new Error('Interrupted cleanup'); }; }
+				const value = Reflect.get(target, property);
+				return typeof value === 'function' ? value.bind(target) : value;
+			}
+		});
 		assert.throws(() => migrateBrowserStorage(interrupted), /Interrupted cleanup/);
 		assert.equal(backend.getItem('ash.storage.v1.code.application'), original);
 		backend.setItem('ash.storage.application', JSON.stringify({ version: 1, entries: { saved: { value: 'current', target: StorageTarget.USER } } }));
@@ -241,7 +243,7 @@ test("Browser storage projects external document changes", () => {
 		.find((key) => key?.includes(".profile."));
 	assert.ok(storageKey);
 	const document = JSON.parse(dom.window.localStorage.getItem(storageKey)!) as {
-		entries: Record<string, { value: string; target: string }>;
+		entries: Record<string, { value: string; target: string; }>;
 	};
 	document.entries.size!.value = "310";
 	const newValue = JSON.stringify(document);
@@ -284,7 +286,7 @@ test("Browser storage reports malformed persisted documents and falls back", () 
 	dom.window.close();
 });
 
-function parseWorkspaceTestState(value: unknown): { readonly value: string } {
+function parseWorkspaceTestState(value: unknown): { readonly value: string; } {
 	if (typeof value !== "object" || value === null || !("value" in value) || typeof value.value !== "string") {
 		throw new TypeError("Workspace test state is invalid");
 	}

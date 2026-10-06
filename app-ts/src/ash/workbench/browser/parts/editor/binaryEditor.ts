@@ -85,7 +85,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		if (this.content) this.content.textContent = "";
 	}
 
-	layout(_dimension: IDimension): void {}
+	layout(_dimension: IDimension): void { }
 
 	setVisible(visibility: EditorPaneVisibility): void {
 		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;

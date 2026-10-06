@@ -378,7 +378,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		];
 	}
 
-	acceptVersionId(_versionId: number): void {}
+	acceptVersionId(_versionId: number): void { }
 
 	private refresh(): void {
 		if (this.usesInitialMeasurement()) this.startInitialMeasurement();
@@ -546,7 +546,7 @@ export class ViewModelLinesFromModelAsIs extends Disposable implements IViewMode
 		return new IdentityLineBreaksComputer();
 	}
 
-	onModelFlushed(): void {}
+	onModelFlushed(): void { }
 
 	onModelLinesDeleted(_versionId: number | null, fromLineNumber: number, toLineNumber: number): viewEvents.ViewLinesDeletedEvent {
 		return new viewEvents.ViewLinesDeletedEvent(fromLineNumber, toLineNumber);
@@ -560,7 +560,7 @@ export class ViewModelLinesFromModelAsIs extends Disposable implements IViewMode
 		return [false, new viewEvents.ViewLinesChangedEvent(lineNumber, 1), null, null];
 	}
 
-	acceptVersionId(_versionId: number): void {}
+	acceptVersionId(_versionId: number): void { }
 
 	getViewLineCount(): number {
 		return this.model.getLineCount();
@@ -640,7 +640,7 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 	constructor(
 		private readonly model: TextModel,
 		private readonly lines: ViewModelLinesFromProjectedModel,
-	) {}
+	) { }
 
 	public convertViewPositionToModelPosition(viewPosition: Position): Position {
 		const position = this.lines.normalizePosition(viewPosition, PositionAffinity.None);

@@ -74,7 +74,7 @@ function parseHsl(value: string): IColor | undefined {
 	return normalizedColor(red + match, green + match, blue + match, alpha / 255);
 }
 
-function colorFunctionParts(value: string): { readonly channels: readonly string[]; readonly alpha?: string } | undefined {
+function colorFunctionParts(value: string): { readonly channels: readonly string[]; readonly alpha?: string; } | undefined {
 	const start = value.indexOf('(');
 	const end = value.lastIndexOf(')');
 	if (start < 0 || end <= start) return undefined;

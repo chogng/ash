@@ -81,8 +81,8 @@ const { BrowserMenubarControl } = await import(
 const contextMenuService: IContextMenuService = {
 	onDidShowContextMenu: Event.None,
 	onDidHideContextMenu: Event.None,
-	showContextMenu() {},
-	hideContextMenu() {},
+	showContextMenu() { },
+	hideContextMenu() { },
 };
 
 test('host focus follows registered windows without publishing a false blur during a handoff', async () => {
@@ -140,7 +140,7 @@ test('title service shares the resolved title with its registered part and relea
 		onDidActiveEditorChange: activeChanged.event,
 		onDidVisibleEditorsChange: Event.None,
 		async openEditor(input) { activeEditor = input; activeChanged.fire(); },
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	};
 	const groups: IEditorGroupsContainer = {
 		activeGroup: {
@@ -152,7 +152,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IMenuService, new MenuService(commandService, contextKeys));
 	services.registerInstance(ContextMenuServiceId, contextMenuService);
-	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
+	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	services.registerInstance(IEditorService, editors);
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -216,7 +216,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(IHostService, {
 		get hasFocus() { return focused; },
 		onDidChangeFocus: focusChanged.event,
-		async restart() {}, async openWindow() {},
+		async restart() { }, async openWindow() { },
 	});
 	services.registerInstance(IDebugService, {
 		session: { get state() { return state; }, onDidChangeState: sessionStateChanged.event },
@@ -259,7 +259,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
+	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
@@ -290,7 +290,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	};
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const titlebar = disposables.add(services.createInstance(BrowserTitlebarPart, ownerDocument.body, {
-		windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() {}, registerVariables() {} },
+		windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 		menuService,
 		contextMenuService,
 		localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
@@ -353,7 +353,7 @@ test("titlebar renders its product icon, command center, and application menu", 
 	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() {} });
+	services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
@@ -477,7 +477,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 			menuLabels = options.getActions?.().map((action) => action.label) ?? [];
 			openSubmenusImmediatelyOnHover = options.openSubmenusImmediatelyOnHover;
 		},
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	const applicationMenuLabel = "Application menu";
 	const localizationService: ILocalizationService = {
@@ -543,7 +543,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	assert.equal(openSubmenusImmediatelyOnHover, true);
 	assert.equal(updatedButton.getAttribute("aria-expanded"), "true");
 	extraAction.dispose();
-	menubar.setTrailingActions([{ id: 'test.titlebar.back', label: 'Back', tooltip: 'Back', icon: Lxicon.arrowLeft, enabled: true, run() {} }]);
+	menubar.setTrailingActions([{ id: 'test.titlebar.back', label: 'Back', tooltip: 'Back', icon: Lxicon.arrowLeft, enabled: true, run() { } }]);
 	assert.deepEqual(
 		Array.from(menubar.domNode.querySelectorAll<HTMLButtonElement>('button'), item => item.getAttribute('aria-label')),
 		[applicationMenuLabel, 'Toggle sidebar', 'Back'],

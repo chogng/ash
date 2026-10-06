@@ -13,7 +13,8 @@
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-editor-group-border);
+	border-bottom: var(--ash-stroke-thickness) solid
+		var(--ash-editor-group-border);
 }
 
 .ash-scm-merge-header h2 {

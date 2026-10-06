@@ -50,8 +50,8 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 	private readonly runButton: Button;
 	private readonly status: HTMLElement;
 	private readonly results: HTMLElement;
-	private readonly rowLabels = new Map<HTMLElement, { title: HTMLElement; description: HTMLElement }>();
-	private statusMessage: { key: string; text: string } | undefined;
+	private readonly rowLabels = new Map<HTMLElement, { title: HTMLElement; description: HTMLElement; }>();
+	private statusMessage: { key: string; text: string; } | undefined;
 	private snapshot: NetworkSnapshot | undefined;
 	private report: NetworkDiagnostics | undefined;
 	private visible = false;

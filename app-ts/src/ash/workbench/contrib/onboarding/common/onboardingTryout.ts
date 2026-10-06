@@ -8,9 +8,9 @@ export const RUN_ONBOARDING_TRYOUT_COMMAND_ID = 'workbench.action.onboarding.try
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export type OnboardingTryoutPresentation =
-	| { readonly kind: 'command'; readonly commandId: string; readonly arguments?: readonly unknown[] }
-	| { readonly kind: 'openView'; readonly viewId: string }
-	| { readonly kind: 'guided'; readonly steps: readonly IOnboardingStep[]; readonly prepare?: (token: CancellationToken) => string | void | Promise<string | void> };
+	| { readonly kind: 'command'; readonly commandId: string; readonly arguments?: readonly unknown[]; }
+	| { readonly kind: 'openView'; readonly viewId: string; }
+	| { readonly kind: 'guided'; readonly steps: readonly IOnboardingStep[]; readonly prepare?: (token: CancellationToken) => string | void | Promise<string | void>; };
 
 export interface IOnboardingTryout {
 	readonly id: string;
@@ -19,7 +19,7 @@ export interface IOnboardingTryout {
 	readonly presentation: OnboardingTryoutPresentation;
 	readonly isAvailable?: (token: CancellationToken) => boolean | Promise<boolean>;
 	readonly unavailableMessage?: string;
-	readonly setup?: { readonly label: string; readonly commandId: string };
+	readonly setup?: { readonly label: string; readonly commandId: string; };
 }
 
 class OnboardingTryoutRegistry {

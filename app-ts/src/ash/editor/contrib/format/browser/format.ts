@@ -52,7 +52,7 @@ export interface IFormattingEditProviderSelector {
 }
 
 export abstract class FormattingConflicts {
-	private static readonly selectors: { select: IFormattingEditProviderSelector }[] = [];
+	private static readonly selectors: { select: IFormattingEditProviderSelector; }[] = [];
 
 	public static setFormatterSelector(selector: IFormattingEditProviderSelector): IDisposable {
 		const registration = { select: selector };
@@ -166,7 +166,7 @@ async function provideEdits(
 		return provider.provideDocumentRangesFormattingEdits(model, ranges, options, token);
 	}
 	const pending = [...ranges];
-	const completed: { range: Range; edits: TextEdit[] }[] = [];
+	const completed: { range: Range; edits: TextEdit[]; }[] = [];
 	while (pending.length > 0) {
 		if (token.isCancellationRequested) {
 			return undefined;

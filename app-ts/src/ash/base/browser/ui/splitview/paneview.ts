@@ -166,7 +166,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	}
 
 	/** Subclasses lay out content here; the container owns the outer geometry. */
-	protected layoutBody(_height: number, _width: number): void {}
+	protected layoutBody(_height: number, _width: number): void { }
 
 	setHeaderActionsHost(host?: HTMLElement): void {
 		const focused = this.element.ownerDocument.activeElement;

@@ -303,7 +303,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private refreshLayout(): void {
 		const previousLayouts = this.layouts.slice();
 		const previousScrollTop = this.scrollView.getLogicalScrollTop();
-		let wrapping: { readonly fontInfo: FontInfo; readonly column: number } | undefined;
+		let wrapping: { readonly fontInfo: FontInfo; readonly column: number; } | undefined;
 		if (this.wordWrap) {
 			const gutterWidth = this.showLineNumbers ? 52 : 0;
 			const cellWidth = Math.max(1, (this.viewportWidth - MULTI_DIFF_HORIZONTAL_INSET - SCROLLBAR_RESERVE - 30) / 2 - gutterWidth);

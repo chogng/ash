@@ -46,7 +46,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public setActiveSession(session: IDebugSession): void { this.activate(session); }
 	public async restart(session = this.session): Promise<IDebugSession> { return session!; }
 	public async stop(): Promise<void> { this.operations.push('stop'); }
-	public async stopAll(): Promise<void> {}
+	public async stopAll(): Promise<void> { }
 	public toggleBreakpoint(resource: URI, lineNumber: number): void {
 		const id = `${resource.toString()}:${lineNumber}`;
 		if (this.breakpoints.some(point => point.id === id)) this.removeBreakpoint(id);
@@ -117,7 +117,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsDisassembleRequest: true, supportsSteppingGranularity: true, exceptionBreakpointFilters: Object.freeze([{ filter: 'uncaught', label: 'Uncaught', default: true }, { filter: 'caught', label: 'Caught', default: false }]) });
 	public state: DebugSessionState = 'stopped';
 	public readonly operations: string[] = [];
-	public readonly assignments: { reference: number; name: string; value: string }[] = [];
+	public readonly assignments: { reference: number; name: string; value: string; }[] = [];
 	public watchValue = '42';
 	public readonly reason = 'breakpoint';
 	public readonly onDidChangeState = this.stateEmitter.event;
@@ -128,12 +128,12 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		this.configuration = configuration(name);
 	}
 	public get threadId(): number { return this.selectedThread; }
-	public async continue(): Promise<void> {}
+	public async continue(): Promise<void> { }
 	public async pause(): Promise<void> { this.operations.push('pause'); }
 	public async stepOver(granularity?: DebugSteppingGranularity): Promise<void> { this.operations.push(granularity ? `stepOver:${granularity}` : 'stepOver'); }
-	public async stepInto(): Promise<void> {}
-	public async stepOut(): Promise<void> {}
-	public async restart(): Promise<void> {}
+	public async stepInto(): Promise<void> { }
+	public async stepOut(): Promise<void> { }
+	public async restart(): Promise<void> { }
 	public async threads(): Promise<readonly IDebugThread[]> { return Object.freeze([{ id: 1, name: 'main' }, { id: 2, name: 'worker' }]); }
 	public selectThread(threadId: number): void { this.selectedThread = threadId; }
 	public async stackTrace(): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: 'main', source: this.stackSource, lineNumber: 1, columnNumber: 1 }]); }
@@ -147,9 +147,9 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		this.dataInfoRequests.push({ name, variablesReference, frameId });
 		return { dataId: `variable:${variablesReference}:${name}`, description: name, canPersist: false, accessTypes: ['read', 'write', 'readWrite'] };
 	}
-	public async setExceptionBreakpoints(): Promise<void> {}
+	public async setExceptionBreakpoints(): Promise<void> { }
 	public async disassemble(_reference: string, _offset: number, _instructionOffset: number, _instructionCount: number): Promise<readonly IDisassembledInstruction[]> { return []; }
-	public async disconnect(): Promise<void> {}
+	public async disconnect(): Promise<void> { }
 }
 
 function configuration(name: string): IDebugConfiguration { return { id: name, name, type: 'demo', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {} }; }

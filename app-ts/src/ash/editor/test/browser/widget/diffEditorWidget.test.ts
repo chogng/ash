@@ -31,9 +31,9 @@ import { installEditorTestDom } from '../editorTestGlobals.js';
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
 const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent',
@@ -60,9 +60,9 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
+	setAccessibilitySupport: () => { },
+	alert: () => { },
+	status: () => { },
 };
 
 test('DiffEditorWidget colors inline removed lines and refreshes their tokens without replacing the accessible zone', async () => {
@@ -363,7 +363,7 @@ class WidgetTestDiffComputationService implements IDocumentDiffProvider {
 		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

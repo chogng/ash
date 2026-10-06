@@ -68,7 +68,7 @@ export class MergeEditor extends Disposable {
 	private columnLayout = false;
 	private activeHunk = 0;
 	private syncingScroll = false;
-	private pendingActionFocus: { readonly index: number; readonly action: MergeEditorChoice | 'markHandled' | 'markUnhandled' } | undefined;
+	private pendingActionFocus: { readonly index: number; readonly action: MergeEditorChoice | 'markHandled' | 'markUnhandled'; } | undefined;
 
 	constructor(
 		public readonly resultEditor: MergeResultEditor,
@@ -558,7 +558,7 @@ export class MergeEditor extends Disposable {
 		}
 	}
 
-	private synchronizeScroll(source: MergeEditorSide, event: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }): void {
+	private synchronizeScroll(source: MergeEditorSide, event: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }): void {
 		const model = this.model;
 		if (!model?.isReady || this.syncingScroll || (source === 'base' && !this.showBase)) return;
 		const sourceEditor = source === 'result' ? this.resultEditor.getControl() : this.sourceEditors.get(source);

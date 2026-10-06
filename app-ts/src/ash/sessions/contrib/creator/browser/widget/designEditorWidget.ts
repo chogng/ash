@@ -422,7 +422,7 @@ export class DesignEditorWidget extends Disposable {
 			}
 			else { this.camera.panBy(-direction.x * KEYBOARD_PAN_DISTANCE, -direction.y * KEYBOARD_PAN_DISTANCE); this.applyTransform(); }
 		} else {
-			 switch (event.key.toLowerCase()) {
+			switch (event.key.toLowerCase()) {
 				case 'f': this.addFrame(); break;
 				case 'i': void this.importImage(); break;
 				case 'v': this.setTool(DesignTool.Select); break;

@@ -9,7 +9,7 @@ import { ServiceCollection } from '../../../platform/instantiation/common/servic
 // Main supplies both the port and its window identity; renderers cannot address another window.
 const connections = new DisposableMap<string, DisposableStore>();
 process.parentPort.on('message', (event: Electron.MessageEvent) => {
-	const { context } = event.data as { context: string };
+	const { context } = event.data as { context: string; };
 	const [port] = event.ports;
 	if (!port || typeof context !== 'string') { throw new TypeError('Invalid shared-process connection'); }
 	const resources = new DisposableStore();

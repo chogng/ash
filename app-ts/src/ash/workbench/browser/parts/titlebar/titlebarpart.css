@@ -1,81 +1,81 @@
 .ash-workbench-titlebar {
-  position: relative;
-  color: var(--ash-title-bar-foreground);
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  background: var(--ash-title-bar-background);
+	position: relative;
+	color: var(--ash-title-bar-foreground);
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px;
+	background: var(--ash-title-bar-background);
 }
 
 .ash-workbench-titlebar .ash-workbench-part-title {
-  display: flex;
-  min-width: 0;
-  height: 100%;
-  align-items: center;
-  gap: 8px;
+	display: flex;
+	min-width: 0;
+	height: 100%;
+	align-items: center;
+	gap: 8px;
 }
 
 .ash-workbench-titlebar .ash-workbench-part-content {
-  flex: 0 0 auto;
-  flex-direction: row;
-  align-items: center;
-  align-self: stretch;
+	flex: 0 0 auto;
+	flex-direction: row;
+	align-items: center;
+	align-self: stretch;
 }
 
 .ash-titlebar-center {
-  /* The desktop reserves unequal space for window controls; center against the full window. */
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  min-width: 0;
-  width: 400px;
-  transform: translate(-50%, -50%);
+	/* The desktop reserves unequal space for window controls; center against the full window. */
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	min-width: 0;
+	width: 400px;
+	transform: translate(-50%, -50%);
 }
 
 .ash-titlebar-center-adjacent-actions {
-  position: absolute;
-  left: calc(100% + var(--ash-spacing-size80));
-  top: 50%;
-  display: flex;
-  align-items: center;
-  color: var(--ash-title-bar-action-foreground);
-  transform: translateY(-50%);
+	position: absolute;
+	left: calc(100% + var(--ash-spacing-size80));
+	top: 50%;
+	display: flex;
+	align-items: center;
+	color: var(--ash-title-bar-action-foreground);
+	transform: translateY(-50%);
 }
 
 @media (max-width: 800px) {
-  .ash-titlebar-center {
-    width: 32px;
-  }
+	.ash-titlebar-center {
+		width: 32px;
+	}
 }
 
 .ash-titlebar-app-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  background-color: currentColor;
-  /* The explicit browser segment lets Vite resolve this shared asset in development. */
-  mask: center / contain no-repeat url("../../../browser/media/ash-mark.svg");
+	width: 16px;
+	height: 16px;
+	flex: 0 0 auto;
+	background-color: currentColor;
+	/* The explicit browser segment lets Vite resolve this shared asset in development. */
+	mask: center / contain no-repeat url("../../../browser/media/ash-mark.svg");
 }
 
 .ash-workbench[data-os="mac"] .ash-titlebar-app-icon {
-  display: none;
+	display: none;
 }
 
 .ash-titlebar-actions {
-  display: flex;
-  height: 100%;
-  align-items: center;
-  color: var(--ash-title-bar-action-foreground);
+	display: flex;
+	height: 100%;
+	align-items: center;
+	color: var(--ash-title-bar-action-foreground);
 }
 
 .ash-auxiliary-titlebar {
-  flex: 0 0 auto;
-  border-radius: 0;
+	flex: 0 0 auto;
+	border-radius: 0;
 }
 
 .ash-auxiliary-titlebar-compact > .ash-workbench-part-title,
 .ash-auxiliary-titlebar-compact > .ash-workbench-part-content,
 .ash-auxiliary-titlebar-compact .ash-titlebar-center-adjacent-actions {
-  display: none;
+	display: none;
 }

@@ -151,7 +151,7 @@ export class ResolvedKeybinding {
 	constructor(
 		readonly chords: readonly ResolvedKeybindingChord[],
 		readonly operatingSystem: OperatingSystem,
-	) {}
+	) { }
 }
 
 /** Keyboard data consumed by a resolver without depending on browser types. */

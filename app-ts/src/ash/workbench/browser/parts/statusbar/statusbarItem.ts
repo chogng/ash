@@ -96,7 +96,7 @@ export class StatusbarEntryItem extends Disposable {
 					content: entry.tooltip,
 					groupId: StatusbarHoverGroupId,
 				})
-			: undefined;
+				: undefined;
 		}
 	}
 
@@ -117,7 +117,7 @@ export class StatusbarEntryItem extends Disposable {
 		this.hover.value?.hide();
 	}
 
-	setCompactNeighbors(neighbors: { readonly left: boolean; readonly right: boolean }): void {
+	setCompactNeighbors(neighbors: { readonly left: boolean; readonly right: boolean; }): void {
 		this.domNode.classList.toggle("compact-left", neighbors.left);
 		this.domNode.classList.toggle("compact-right", neighbors.right);
 	}

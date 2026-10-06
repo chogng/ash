@@ -35,8 +35,8 @@ for (const mode of ['paste', 'drop'] as const) {
 		registerCodeEditorServices(services);
 		const opened: IOpenSettingsOptions[] = [];
 		services.registerInstance(IPreferencesService, {
-			openSettings: async () => {},
-			openGlobalKeybindingSettings: async () => {},
+			openSettings: async () => { },
+			openGlobalKeybindingSettings: async () => { },
 			openUserSettings: async options => { opened.push(options!); },
 		});
 		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [DropOrPasteIntoCommands.ID]);
@@ -52,11 +52,11 @@ for (const mode of ['paste', 'drop'] as const) {
 		using provider = mode === 'paste'
 			? features.documentPasteEditProvider.register(selector, {
 				copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
-				provideDocumentPasteEdits: async () => ({ edits: [edit], dispose() {} }),
+				provideDocumentPasteEdits: async () => ({ edits: [edit], dispose() { } }),
 			})
 			: features.documentDropEditProvider.register(selector, {
 				dropMimeTypes: ['text/plain'], providedDropEditKinds: [kind],
-				provideDocumentDropEdits: () => ({ edits: [edit], dispose() {} }),
+				provideDocumentDropEdits: () => ({ edits: [edit], dispose() { } }),
 			});
 		using model = new TextModel('alpha');
 		using editor = createTestCodeEditor({
@@ -65,7 +65,7 @@ for (const mode of ['paste', 'drop'] as const) {
 		});
 		editor.setPosition({ lineNumber: 1, column: 6 });
 		editor.layout({ width: 240, height: 40 });
-		editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON() {} });
+		editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON() { } });
 		const data = {
 			types: ['text/plain'], files: [], getData: () => 'raw',
 			items: [{
@@ -150,12 +150,14 @@ for (const [args, expected] of [[{ preferences: ['missing', 'html', 'text'] }, '
 		using close = toDisposable(() => dom.window.close());
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		Object.defineProperty(dom.window.navigator, 'clipboard', {
-			value: { read: async () => [{
-				types: ['text/plain', 'text/html', 'text/uri-list'],
-				getType: async (type: string) => new Blob([
-					type === 'text/html' ? '<b>markup</b>' : type === 'text/uri-list' ? 'https://example.test/' : 'plain',
-				], { type }),
-			}] },
+			value: {
+				read: async () => [{
+					types: ['text/plain', 'text/html', 'text/uri-list'],
+					getType: async (type: string) => new Blob([
+						type === 'text/html' ? '<b>markup</b>' : type === 'text/uri-list' ? 'https://example.test/' : 'plain',
+					], { type }),
+				}]
+			},
 		});
 		using model = new TextModel('old');
 		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });

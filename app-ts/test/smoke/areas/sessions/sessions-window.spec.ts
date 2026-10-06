@@ -23,7 +23,7 @@ async function clickCanvasMenu(canvas: Locator, name: string, application: Playw
 	}
 }
 
-async function inspectCanvasMenu(canvas: Locator, application: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean }[]> {
+async function inspectCanvasMenu(canvas: Locator, application: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean; }[]> {
 	const trigger = async (): Promise<void> => {
 		await canvas.focus();
 		if (pointer) await canvas.locator('.ash-canvas-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
@@ -107,7 +107,7 @@ async function expectComposerFocusWithoutOutline(card: Locator, input: Locator, 
 	await expect(card).toHaveCSS('outline-style', 'none');
 }
 
-async function readComposerShadow(card: Locator): Promise<{ shadow: string; themeOpacity: number; layerOpacities: number[] }> {
+async function readComposerShadow(card: Locator): Promise<{ shadow: string; themeOpacity: number; layerOpacities: number[]; }> {
 	return card.evaluate(element => {
 		const style = getComputedStyle(element);
 		const canvas = document.createElement('canvas');
@@ -2226,13 +2226,13 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = await workbench.openAgentsWindow(target.kind);
 	const original = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:configuration:read') as { document: { source: string; }; }).document.source;
 	});
 	const updateSettings = async (location: string, compact: boolean): Promise<void> => {
 		await page.evaluate(async values => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			settings['sessions.activityBar.location'] = values.location;
 			settings['sessions.activityBar.compact'] = values.compact;
@@ -2281,8 +2281,8 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expectActivityIconSize(activityNavigation, 24);
 	} finally {
 		await page.evaluate(async source => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; };
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
 		}, original);
 	}
@@ -2294,8 +2294,8 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	if (process.platform === 'darwin') {
 		// The system menu is outside Playwright's page DOM; use the product's custom menu for this UI flow.
 		await workbench.page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			settings['window.menuStyle'] = 'custom';
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
@@ -2368,13 +2368,13 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
 	await expect(sessionsWindow).toBeVisible();
 	const original = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		return (await ipc.invoke('ash:configuration:read') as { document: { source: string } }).document.source;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		return (await ipc.invoke('ash:configuration:read') as { document: { source: string; }; }).document.source;
 	});
 	const updateSettings = async (values: Record<string, string>): Promise<void> => {
 		await sessionsPage.evaluate(async changes => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string } };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			for (const [key, value] of Object.entries(changes)) settings[key] = value;
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
@@ -2410,8 +2410,8 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 		await expect(sessionsPage.locator('.ash-sessions-content-card')).toHaveCSS('border-radius', '12px');
 	} finally {
 		await sessionsPage.evaluate(async source => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; };
 			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
 		}, original);
 	}
@@ -2426,8 +2426,8 @@ test('Sessions applies an installed extension color theme', async ({ application
 	const sessionsPage = await sessionPagePromise;
 	await expect(sessionsPage.locator('.ash-code-sessions-window')).toBeVisible();
 	await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string; }; };
 		const values = JSON.parse(snapshot.document.source);
 		values['workbench.colorTheme'] = 'extension-vscode-theme-defaults-visual-studio-dark';
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
@@ -2581,24 +2581,28 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await sessionsPage.waitForLoadState("domcontentloaded");
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toBeVisible();
 	const resources = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
-		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly revision: number; readonly bindings: readonly unknown[] };
-		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string };
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly revision: number; readonly bindings: readonly unknown[]; };
+		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
 		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.revision, bindings: keybindings.bindings.length, connectionKind: connection.kind };
 	});
 	expect(resources).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: expect.any(Number), bindings: expect.any(Number), connectionKind: 'local' });
 	const configurationChange = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: {
-			invoke(channel: string, params?: unknown): Promise<unknown>;
-			on(channel: string, listener: (value: unknown) => void): { dispose(): void };
-		} } }).ash.ipcRenderer;
-		const before = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string } };
+		const ipc = (globalThis as unknown as {
+			readonly ash: {
+				readonly ipcRenderer: {
+					invoke(channel: string, params?: unknown): Promise<unknown>;
+					on(channel: string, listener: (value: unknown) => void): { dispose(): void; };
+				};
+			};
+		}).ash.ipcRenderer;
+		const before = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
 		const changed = new Promise<number>((resolve, reject) => {
 			const subscription = ipc.on('ash:configuration:changed', value => {
 				clearTimeout(timeout);
 				subscription.dispose();
-				resolve((value as { readonly revision: number }).revision);
+				resolve((value as { readonly revision: number; }).revision);
 			});
 			const timeout = setTimeout(() => {
 				subscription.dispose();
@@ -2608,7 +2612,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		const updated = await ipc.invoke('ash:configuration:update', {
 			expectedRevision: before.revision,
 			document: { ...before.document, source: `${before.document.source}\n` },
-		}) as { readonly revision: number };
+		}) as { readonly revision: number; };
 		const notifiedRevision = await changed;
 		await ipc.invoke('ash:configuration:update', { expectedRevision: updated.revision, document: before.document });
 		return { updatedRevision: updated.revision, notifiedRevision };
@@ -2625,8 +2629,8 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
 	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#ffffff");
 	const originalThemeSettings = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string } };
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
 		const values = JSON.parse(snapshot.document.source);
 		values['workbench.colorTheme'] = 'ash-dark';
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
@@ -2636,8 +2640,8 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
 	await workbench.setAppearance(application, 'dark', sessionsPage);
 	await sessionsPage.evaluate(async document => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
 		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document });
 	}, originalThemeSettings);
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
@@ -2671,12 +2675,12 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		]);
 		expect(controlsBounds!.x).toBeGreaterThanOrEqual(spacerBounds!.x + spacerBounds!.width);
 		await sessionsPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: -2 });
 		});
 		await expect.poll(() => spacer.evaluate(element => Number.parseFloat(getComputedStyle(element).width))).toBeGreaterThan(90);
 		await sessionsPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			await ipc.invoke('ash:window:operation', { kind: 'setZoom', level: 0 });
 		});
 	}
@@ -2741,32 +2745,32 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 
 	const sessionWindowState = await application.evaluate(({ BrowserWindow }) => {
 		const windows = BrowserWindow.getAllWindows();
-		return windows.map((window: { readonly id: number; getTitle(): string; readonly webContents: { getURL(): string } }) => ({
+		return windows.map((window: { readonly id: number; getTitle(): string; readonly webContents: { getURL(): string; }; }) => ({
 			id: window.id,
 			title: window.getTitle(),
 			url: window.webContents.getURL(),
 		}));
 	});
 	expect(sessionWindowState).toHaveLength(2);
-	expect(sessionWindowState.some((window: { readonly url: string }) => window.url.includes("sessions-code.html"))).toBe(true);
-	const windowIds = sessionWindowState.map((window: { readonly id: number }) => window.id).sort((left: number, right: number) => left - right);
+	expect(sessionWindowState.some((window: { readonly url: string; }) => window.url.includes("sessions-code.html"))).toBe(true);
+	const windowIds = sessionWindowState.map((window: { readonly id: number; }) => window.id).sort((left: number, right: number) => left - right);
 	await openSessions.click();
 	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id).sort((left, right) => left - right))).toEqual(windowIds);
 	await workbench.reloadWindow(sessionsPage);
 	await expect(sessionsPage.locator('.ash-code-sessions-window')).toBeVisible();
 	await expect.poll(() => application.windows().length).toBe(2);
 	const reloadedIpc = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
-		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly bindings: readonly unknown[] };
-		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string };
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly bindings: readonly unknown[]; };
+		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
 		await ipc.invoke('ash:native-host:open-agents-window');
-		const windows = await (ipc as { invoke(channel: string, params: unknown): Promise<unknown> }).invoke('ash:window:operation', { kind: 'list' }) as readonly unknown[];
+		const windows = await (ipc as { invoke(channel: string, params: unknown): Promise<unknown>; }).invoke('ash:window:operation', { kind: 'list' }) as readonly unknown[];
 		return { configurationRevision: configuration.revision, bindings: keybindings.bindings.length, connectionKind: connection.kind, windowCount: windows.length };
 	});
 	expect(reloadedIpc).toEqual({ configurationRevision: expect.any(Number), bindings: expect.any(Number), connectionKind: 'local', windowCount: 2 });
 	await expect(workbenchPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:sessions:return-to-workbench');
 	})).rejects.toThrow(/Untrusted renderer IPC sender/);
 	const expectedBounds = await application.evaluate(({ BrowserWindow }) => {
@@ -3243,10 +3247,10 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 			await parent.close();
 			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
 			const windows = await child.evaluate(async () => {
-				const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
-				const list = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly title: string }[];
-				const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number };
-				const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string };
+				const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+				const list = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly title: string; }[];
+				const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+				const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
 				return { titles: list.map(window => window.title), configurationRevision: configuration.revision, connectionKind: connection.kind };
 			});
 			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], configurationRevision: expect.any(Number), connectionKind: 'local' });
@@ -3306,7 +3310,7 @@ test('Agents retains the system-wide shortcut after the Workbench closes and for
 				globalShortcut.register = (accelerator, callback) => {
 					const registered = register.call(globalShortcut, accelerator, callback);
 					if (accelerator === 'Control+Alt+Shift+F24') {
-						(globalThis as typeof globalThis & { ashOpenAgentsShortcut?: () => void }).ashOpenAgentsShortcut = callback;
+						(globalThis as typeof globalThis & { ashOpenAgentsShortcut?: () => void; }).ashOpenAgentsShortcut = callback;
 						globalShortcut.register = register;
 					}
 					return registered;
@@ -3324,7 +3328,7 @@ test('Agents retains the system-wide shortcut after the Workbench closes and for
 			await editor.waitForEditorContents(contents => contents === 'From the Agents command');
 			// Draft handoff preserves unsent text; clear the previous draft before accepting another.
 			await replaceChatInput(editor, '');
-			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut());
+			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void; }).ashOpenAgentsShortcut());
 			await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 			await driver.workbench.page.close();
 			await expect.poll(() => application.windows().length).toBe(1);
@@ -3333,12 +3337,12 @@ test('Agents retains the system-wide shortcut after the Workbench closes and for
 			await child.keyboard.press('Control+Shift+Y');
 			await editor.waitForEditorContents(contents => contents === 'From the Agents command');
 			await replaceChatInput(editor, '');
-			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut());
+			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void; }).ashOpenAgentsShortcut());
 			await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 			await new Workbench(child).reloadWindow(child);
 			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(true);
 			await replaceChatInput(editor, '');
-			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut());
+			await application.evaluate(() => (globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void; }).ashOpenAgentsShortcut());
 			await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 			await writeFile(resourcePath, '[]\n');
 			await expect.poll(() => application.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Control+Alt+Shift+F24'))).toBe(false);

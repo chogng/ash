@@ -1,17 +1,17 @@
 .ash-chat-tabs-control.ash-chat-tabs-pane-title {
-  min-width: 0;
-  height: 100%;
-  flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	flex: 1 1 auto;
 }
 
 .ash-chat-title-actions {
-  display: flex;
-  height: 100%;
-  flex: 0 0 auto;
-  align-items: center;
+	display: flex;
+	height: 100%;
+	flex: 0 0 auto;
+	align-items: center;
 }
 
 .ash-chat-title-layout-actions.ash-toolbar {
-  height: 100%;
-  flex: 0 0 auto;
+	height: 100%;
+	flex: 0 0 auto;
 }

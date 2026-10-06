@@ -13,7 +13,7 @@ import type {
 
 /** App Server implementation of the terminal process service. */
 export class AppServerTerminalProcessService implements ITerminalProcessService {
-	constructor(private readonly connection: AppServerProtocolClient, private readonly appServerApi: IAppServerApi) {}
+	constructor(private readonly connection: AppServerProtocolClient, private readonly appServerApi: IAppServerApi) { }
 
 	async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
 		const result = await appServerRequest(this.connection, "terminal/profile/list", {});

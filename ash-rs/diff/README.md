@@ -10,22 +10,22 @@
 
 ## 所有权与接口
 
-| Symbol | 可见性 | 精确职责 |
-| --- | --- | --- |
-| `DiffEngine` | public | 冻结一次 diff 的策略；提供 text/bytes 与 cancellable/non-cancellable 入口 |
-| `DiffDocument::from_text` | public | 用默认三行上下文、精确比较和默认 limits 构建映射 |
-| `DiffDocument::with_options` | public | 以显式 `DiffOptions` 构建映射 |
-| `DiffOptions` | public | 组合 context、whitespace、case、line-ending、inline 与 limits policy |
-| `DiffLimits` | public | 限制每侧 bytes/lines、最大 edit distance 和 Myers trace cells |
-| `DiffCancellation` / `NeverCancel` | public | 由 host 提供低成本取消探针；crate 不拥有 timer 或 task lifecycle |
-| `DiffLine` / `LineEnding` | public | 保留一基行号、line text 和 LF/CRLF/CR/EOF terminator |
-| `DiffRow` / `DiffRowKind` | public | 表达 Context、Added、Removed、Modified 及两侧行 correspondence |
-| `InlineChange` | public | 用 UTF-8 byte range 表达 grapheme-boundary 内联变化 |
-| `DiffHunk` | public | 表达 Git-style old/new start/count 与 document row 半开范围 |
-| `engine::split_lines` | private | 单次扫描 UTF-8，保留精确 line ending 并观察 cancellation |
-| `myers::edits` | private | 在 edit-distance/trace limits 内计算最短行或 grapheme 编辑路径 |
-| `engine::map_rows` | private | 把编辑路径配对为稳定行映射，并为 Modified 行计算 inline ranges |
-| `engine::group_hunks` | private | 根据 context 合并相邻变化并生成 Git-style header |
+| Symbol                             | 可见性  | 精确职责                                                                  |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `DiffEngine`                       | public  | 冻结一次 diff 的策略；提供 text/bytes 与 cancellable/non-cancellable 入口 |
+| `DiffDocument::from_text`          | public  | 用默认三行上下文、精确比较和默认 limits 构建映射                          |
+| `DiffDocument::with_options`       | public  | 以显式 `DiffOptions` 构建映射                                             |
+| `DiffOptions`                      | public  | 组合 context、whitespace、case、line-ending、inline 与 limits policy      |
+| `DiffLimits`                       | public  | 限制每侧 bytes/lines、最大 edit distance 和 Myers trace cells             |
+| `DiffCancellation` / `NeverCancel` | public  | 由 host 提供低成本取消探针；crate 不拥有 timer 或 task lifecycle          |
+| `DiffLine` / `LineEnding`          | public  | 保留一基行号、line text 和 LF/CRLF/CR/EOF terminator                      |
+| `DiffRow` / `DiffRowKind`          | public  | 表达 Context、Added、Removed、Modified 及两侧行 correspondence            |
+| `InlineChange`                     | public  | 用 UTF-8 byte range 表达 grapheme-boundary 内联变化                       |
+| `DiffHunk`                         | public  | 表达 Git-style old/new start/count 与 document row 半开范围               |
+| `engine::split_lines`              | private | 单次扫描 UTF-8，保留精确 line ending 并观察 cancellation                  |
+| `myers::edits`                     | private | 在 edit-distance/trace limits 内计算最短行或 grapheme 编辑路径            |
+| `engine::map_rows`                 | private | 把编辑路径配对为稳定行映射，并为 Modified 行计算 inline ranges            |
+| `engine::group_hunks`              | private | 根据 context 合并相邻变化并生成 Git-style header                          |
 
 ```text
 DiffEngine::compute[_bytes][_cancellable]

@@ -39,7 +39,7 @@ export class SearchResultImpl {
 	private readonly fileMatches = new Map<string, SearchFileMatch>();
 	private readonly matchIds = new Set<string>();
 
-	constructor(private readonly workspaceFolders: readonly IWorkspaceFolder[]) {}
+	constructor(private readonly workspaceFolders: readonly IWorkspaceFolder[]) { }
 
 	public get children(): readonly SearchFolderMatch[] { return [...this.roots.values()]; }
 	public get files(): readonly SearchFileMatch[] { return [...this.fileMatches.values()]; }

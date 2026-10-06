@@ -6,14 +6,14 @@
 
 ## 构建策略
 
-| 行为 | 开发构建（启用 `debug_assertions`） | 发布构建（关闭 `debug_assertions`） |
-| --- | --- | --- |
-| Unix core dump 限制 | 保留调用前设置 | 软、硬限制均置零 |
-| Linux / Android 调试附加 | 保留系统默认策略 | 设置 `PR_SET_DUMPABLE=0` |
-| macOS 调试附加 | 保留系统默认策略 | 使用 `PT_DENY_ATTACH` |
-| `LD_*` / `DYLD_*` | 保留工具链环境 | 构造阶段全部清理 |
-| Windows DLL 搜索与崩溃弹窗 | 限制搜索目录、关闭弹窗 | 相同 |
-| Windows 标准句柄 | 关闭隐式继承；保留显式 stdio 重定向 | 相同 |
+| 行为                       | 开发构建（启用 `debug_assertions`） | 发布构建（关闭 `debug_assertions`） |
+| -------------------------- | ----------------------------------- | ----------------------------------- |
+| Unix core dump 限制        | 保留调用前设置                      | 软、硬限制均置零                    |
+| Linux / Android 调试附加   | 保留系统默认策略                    | 设置 `PR_SET_DUMPABLE=0`            |
+| macOS 调试附加             | 保留系统默认策略                    | 使用 `PT_DENY_ATTACH`               |
+| `LD_*` / `DYLD_*`          | 保留工具链环境                      | 构造阶段全部清理                    |
+| Windows DLL 搜索与崩溃弹窗 | 限制搜索目录、关闭弹窗              | 相同                                |
+| Windows 标准句柄           | 关闭隐式继承；保留显式 stdio 重定向 | 相同                                |
 
 - 自定义构建配置按 `debug_assertions` 决定策略；发布产物必须关闭该选项。
 - 发布版清理包含 `LD_LIBRARY_PATH`，不能依赖继承的加载器变量运行工具链；开发构建保留这些变量。

@@ -75,7 +75,7 @@ class TestFileProvider implements IFileSystemProvider {
 	private failingRead: string | undefined;
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(private readonly label: string) {}
+	constructor(private readonly label: string) { }
 
 	public emit(resource: URI): void {
 		this.changes.fire({ resources: [resource] });

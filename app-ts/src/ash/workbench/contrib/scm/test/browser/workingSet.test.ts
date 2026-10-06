@@ -79,7 +79,7 @@ class TestSCMProvider implements ISCMProvider {
 	private readonly changed = new Emitter<void>();
 	readonly onDidChangeResources = this.changed.event;
 
-	constructor(public activeRepositoryName: string) {}
+	constructor(public activeRepositoryName: string) { }
 	accept(ref: string): void { this.activeRepositoryName = ref; this.changed.fire(); }
 	refresh(): Promise<void> { return Promise.resolve(); }
 	activate(): Promise<void> { return Promise.resolve(); }

@@ -59,7 +59,7 @@ export class Rulers extends ViewPart {
 		}
 	}
 
-	private readConfiguration(): { readonly rulers: readonly IRulerOption[]; readonly typicalHalfwidthCharacterWidth: number } {
+	private readConfiguration(): { readonly rulers: readonly IRulerOption[]; readonly typicalHalfwidthCharacterWidth: number; } {
 		const editorOptions = this._context.configuration.options;
 		return {
 			rulers: editorOptions.get(EditorOption.rulers),

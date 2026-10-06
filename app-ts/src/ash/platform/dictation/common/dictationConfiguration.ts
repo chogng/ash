@@ -22,7 +22,7 @@ function parseCloudProvider(value: unknown): 'openAi' | 'xai' {
 	throw new TypeError('dictation.cloudProvider must be openAi or xai');
 }
 
-export function dictationBackend(document: IConfigurationDocument): { readonly type: 'local'; readonly modelId: string } | { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string } {
+export function dictationBackend(document: IConfigurationDocument): { readonly type: 'local'; readonly modelId: string; } | { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string; } {
 	const values = configurationValues(document);
 	const type = parseBackend(values[DictationConfiguration.backend] ?? 'local');
 	if (type === 'local') {
@@ -44,7 +44,7 @@ function parseLanguage(value: unknown): string {
 	throw new TypeError('dictation.language must be auto or a language code');
 }
 
-export function dictationInputOptions(document: IConfigurationDocument, backend: 'local' | 'cloud'): { inputDevice: string | null; language: string | null } {
+export function dictationInputOptions(document: IConfigurationDocument, backend: 'local' | 'cloud'): { inputDevice: string | null; language: string | null; } {
 	const values = configurationValues(document);
 	const inputDevice = parseInputDevice(values['dictation.inputDevice'] ?? '');
 	const language = parseLanguage(values['dictation.language'] ?? 'auto');

@@ -17,6 +17,13 @@
   },
   "scripts": {
     "preinstall": "node build/pnpm/preinstall.ts",
+    "format": "pnpm format:ts && pnpm format:config",
+    "format:fix": "pnpm format:ts:fix && pnpm format:config:fix",
+    "format:ts": "node build/format.ts --check",
+    "format:ts:fix": "node build/format.ts --write",
+    "format:config": "prettier --check \"**/*.{json,jsonc,yml,yaml,md,css,html}\"",
+    "format:config:fix": "prettier --write \"**/*.{json,jsonc,yml,yaml,md,css,html}\"",
+    "test:format": "node --test build/format.test.ts",
     "build": "pnpm run build:desktop",
     "build:desktop": "pnpm --dir app-ts build",
     "package:desktop:win32": "pnpm --dir app-ts package:win32:bundle && pnpm --dir app-ts package:win32:verify && pnpm --dir app-ts package:win32:installer",
@@ -71,6 +78,7 @@
     "stylelint:update": "pnpm --dir app-ts test:unit --run src/ash/workbench/contrib/themes/test/node/colorRegistry.releaseTest.ts"
   },
   "devDependencies": {
+    "prettier": "3.9.9",
     "sirv": "^3.0.2"
   }
 }

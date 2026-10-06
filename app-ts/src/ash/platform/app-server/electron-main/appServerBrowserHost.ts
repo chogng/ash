@@ -34,7 +34,7 @@ export class AppServerBrowserHost extends Disposable {
 	}
 
 	private readonly hostedTargets = new Map<string, string>();
-	async create(params: BrowserCreateParams, context: { signal: AbortSignal }) {
+	async create(params: BrowserCreateParams, context: { signal: AbortSignal; }) {
 		this.assertNotDisposed();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
 		const view = await this.views.createTarget(params.url, params.threadId, signal);
@@ -44,7 +44,7 @@ export class AppServerBrowserHost extends Disposable {
 		}
 		return { targetId: view.id };
 	}
-	observe(params: BrowserObserveParams, context: { signal: AbortSignal }) {
+	observe(params: BrowserObserveParams, context: { signal: AbortSignal; }) {
 		const { view, signal } = this.target(params.targetId, params.threadId, context.signal);
 		return this.automate(view, params.threadId, signal, async id => {
 			const observation = await this.playwright.getObservation(id, params.threadId, view.id, params);
@@ -53,7 +53,7 @@ export class AppServerBrowserHost extends Disposable {
 			return { ...observation, url: state.url, title: state.title, loading: state.loading };
 		});
 	}
-	async perform(params: BrowserPerformParams, context: { signal: AbortSignal }) {
+	async perform(params: BrowserPerformParams, context: { signal: AbortSignal; }) {
 		const { view, signal } = this.target(params.action.targetId, params.threadId, context.signal);
 		if (params.action.type === 'navigate') { await view.loadURL(params.action.url, signal); }
 		else { await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action)); }
@@ -79,7 +79,7 @@ export class AppServerBrowserHost extends Disposable {
 		try { await this.views.destroyBrowserView(params.targetId); return null; }
 		finally { this.hostedTargets.delete(params.targetId); }
 	}
-	private target(id: string, sessionId: string, requestSignal: AbortSignal): { view: BrowserView; signal: AbortSignal } {
+	private target(id: string, sessionId: string, requestSignal: AbortSignal): { view: BrowserView; signal: AbortSignal; } {
 		this.assertNotDisposed();
 		const view = this.views.validateAgentAccess(id, sessionId);
 		return { view, signal: AbortSignal.any([requestSignal, this.cancellation.signal, this.views.agentAccessSignal(id, sessionId)]) };
@@ -98,11 +98,11 @@ export class AppServerBrowserHost extends Disposable {
 	protected override disposeCore(): void { this.reset(); super.disposeCore(); }
 
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
-		const operation = (value: unknown): { id: string; params: unknown } => {
+		const operation = (value: unknown): { id: string; params: unknown; } => {
 			if (!isRecord(value) || typeof value.id !== 'string' || !/^[a-f0-9-]{36}$/.test(value.id)) { throw new Error('Invalid browser operation'); }
 			return { id: value.id, params: value.params };
 		};
-		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal }) => unknown | Promise<unknown>): Promise<unknown> => {
+		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; }) => unknown | Promise<unknown>): Promise<unknown> => {
 			this.assertNotDisposed();
 			const request = operation(value);
 			if (this.operations.has(request.id) || this.operations.size >= 128) { throw new Error('Browser operation capacity exceeded'); }
@@ -113,12 +113,14 @@ export class AppServerBrowserHost extends Disposable {
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
-			{ channel: 'ash:browser-host:sharing', validate: operation, invoke: value => run(value, async params => {
-				const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);
-				// Revoking a closed page still acknowledges release of the backend's grant record.
-				if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
-				return null;
-			}) },
+			{
+				channel: 'ash:browser-host:sharing', validate: operation, invoke: value => run(value, async params => {
+					const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);
+					// Revoking a closed page still acknowledges release of the backend's grant record.
+					if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
+					return null;
+				})
+			},
 			{ channel: 'ash:browser-host:create', validate: operation, invoke: value => run(value, (params, context) => this.create(decodeAppServerServerRequestParams('browser/create', params), context)) },
 			{ channel: 'ash:browser-host:observe', validate: operation, invoke: value => run(value, (params, context) => this.observe(decodeAppServerServerRequestParams('browser/observe', params), context)) },
 			{ channel: 'ash:browser-host:perform', validate: operation, invoke: value => run(value, (params, context) => this.perform(decodeAppServerServerRequestParams('browser/perform', params), context)) },

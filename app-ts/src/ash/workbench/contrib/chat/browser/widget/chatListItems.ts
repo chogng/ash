@@ -2,10 +2,10 @@ import type { PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } f
 import { localize } from "../../../../../nls.js";
 
 export type ChatTurnErrorAction =
-	| { readonly type: "retry"; readonly label: string; readonly turnId: string }
-	| { readonly type: "chooseModel"; readonly label: string }
-	| { readonly type: "startNewChat"; readonly label: string }
-	| { readonly type: "revise"; readonly label: string };
+	| { readonly type: "retry"; readonly label: string; readonly turnId: string; }
+	| { readonly type: "chooseModel"; readonly label: string; }
+	| { readonly type: "startNewChat"; readonly label: string; }
+	| { readonly type: "revise"; readonly label: string; };
 
 interface ChatTurnErrorListItemOptions {
 	readonly actionsEnabled?: boolean;
@@ -61,10 +61,10 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 			try { value = JSON.parse(item.text); } catch { /* Core policy/recovery errors are plain text tool results. */ }
 			if (typeof value !== "object" || value === null) return [{ ...chatListItem(item), id: entry.entryId, type: "advisor" as const, label: "Advisor" }];
 			const result = value as Record<string, unknown>;
-			const model = result.model as { provider?: unknown; model?: unknown } | undefined;
+			const model = result.model as { provider?: unknown; model?: unknown; } | undefined;
 			const modelLabel = typeof model?.provider === "string" && typeof model.model === "string" ? `${model.provider}/${model.model}` : "Advisor";
 			const advice = typeof result.advice === "string" ? result.advice : typeof result.message === "string" ? result.message : result.status === "limitReached" ? "The advisor call limit for this Turn has been reached." : "No advice returned";
-			const usage = result.usage as { inputTokens?: number; outputTokens?: number } | undefined;
+			const usage = result.usage as { inputTokens?: number; outputTokens?: number; } | undefined;
 			const details = [typeof result.question === "string" ? result.question : undefined, typeof result.sourceSequence === "number" ? `Conversation sequence ${result.sourceSequence}` : undefined, usage ? `Tokens: ${usage.inputTokens ?? "unknown"} input · ${usage.outputTokens ?? "unknown"} output` : undefined].filter(Boolean).join(" · ");
 			return [{ id: entry.entryId, type: "advisor" as const, text: advice, transient: false, isError: item.isError, label: `Advisor · ${modelLabel}`, detail: details }];
 		}
@@ -124,7 +124,7 @@ export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItem
 	};
 }
 
-function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction } {
+function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction; } {
 	switch (error.code) {
 		case "policyCircuitBreaker":
 			return {
@@ -172,11 +172,11 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 	}
 }
 
-function retryPresentation(turnId: string, label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
+function retryPresentation(turnId: string, label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction; } {
 	return { label, detail, action: { type: "retry", label: "Try again", turnId } };
 }
 
-function revisePresentation(label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
+function revisePresentation(label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction; } {
 	return { label, detail, action: { type: "revise", label: "Change approach" } };
 }
 

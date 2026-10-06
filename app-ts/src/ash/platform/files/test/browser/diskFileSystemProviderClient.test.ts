@@ -13,7 +13,7 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 	const directory = await mkdtemp(join(tmpdir(), 'ash-local-files-'));
 	using provider = new DiskFileSystemProvider([URI.file(directory)]);
 	const route = diskFileSystemProviderRoutes(provider, URI.file(directory)).find(route => route.channel === LOCAL_FILE_SYSTEM_CHANNEL_NAME)!;
-	using client = new DiskFileSystemProviderClient(async request => structuredClone(await route.invoke(route.validate(structuredClone(request)))), () => ({ dispose() {} }));
+	using client = new DiskFileSystemProviderClient(async request => structuredClone(await route.invoke(route.validate(structuredClone(request)))), () => ({ dispose() { } }));
 	try {
 		const resource = URI.file(join(directory, 'test.json'));
 		await client.createFile(resource, 'error');
@@ -61,7 +61,7 @@ test('desktop file provider rejects directory links outside the granted root', a
 
 test('desktop file events retain exact resources and reject malformed transport data', () => {
 	let notify: ((resources: unknown) => void) | undefined;
-	using client = new DiskFileSystemProviderClient(async () => undefined, listener => { notify = listener; return { dispose() {} }; });
+	using client = new DiskFileSystemProviderClient(async () => undefined, listener => { notify = listener; return { dispose() { } }; });
 	const observed: Array<readonly string[] | undefined> = [];
 	using subscription = client.onDidChangeFiles(event => observed.push(event.resources?.map(resource => resource.toString())));
 	const resource = URI.file('/profile/keybindings.json');

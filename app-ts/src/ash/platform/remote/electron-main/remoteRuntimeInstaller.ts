@@ -104,7 +104,7 @@ export class RemoteRuntimeInstaller {
 class RemoteRuntimeInstallProgressDecoder {
 	private buffered = "";
 
-	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) {}
+	constructor(private readonly report: (progress: RemoteRuntimeInstallProgress) => void) { }
 
 	accept(chunk: string): void {
 		this.buffered += chunk;

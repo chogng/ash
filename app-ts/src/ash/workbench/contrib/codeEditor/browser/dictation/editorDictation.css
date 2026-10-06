@@ -2,6 +2,14 @@
 	max-width: min(32rem, 90%);
 	color: var(--ash-foreground);
 }
-.ash-editor-dictation-controls { display: flex; gap: var(--ash-spacing-size80); }
-.ash-editor-dictation-controls[hidden] { display: none; }
-.ash-editor-dictation p { margin: 0; overflow-wrap: anywhere; }
+.ash-editor-dictation-controls {
+	display: flex;
+	gap: var(--ash-spacing-size80);
+}
+.ash-editor-dictation-controls[hidden] {
+	display: none;
+}
+.ash-editor-dictation p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}

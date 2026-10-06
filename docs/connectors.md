@@ -19,15 +19,15 @@ Connector 管理“外部服务是否已经连接以及连接对应哪个账号�
 这是 declaration 和 runtime 之间的数据流，不是 Plugin 在运行时包含 Connector、MCP session 或 Tool。
 Connector 不要求用户登录 Ash，连接的账号是 GitHub、Slack、Google Drive 等外部产品账号。
 
-| 用户场景 | 系统发生什么 | 不会自动发生什么 |
-| --- | --- | --- |
-| 安装 GitHub Marketplace Plugin bundle | Manager 只安装一次，Connector/MCP consumer 分别读取 exact capabilities | 不连接 GitHub、不启动 MCP |
-| 启用 legacy GitHub Plugin | 兼容 contribution 提供 GitHub Connector declaration | 不建立远端安装旁路 |
-| 查看未连接的 GitHub | Connector 以 `Connect` candidate 出现在 discovery | 不向 Agent 暴露 GitHub tools |
-| 完成 GitHub OAuth | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes |
-| Connector 成为 connected | ready MCP binding 可以由 host materialize | 不绕过 MCP policy 或 Tool approval |
-| 用户断开 GitHub | connection generation 前进，ready binding 立即撤销 | 不删除 Plugin package 或 Thread 历史 |
-| 用户直接配置 MCP server | 经过配置、凭据和策略解析后直接进入 MCP runtime | 不必须伪造 Plugin 或 Connector |
+| 用户场景                              | 系统发生什么                                                             | 不会自动发生什么                     |
+| ------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------ |
+| 安装 GitHub Marketplace Plugin bundle | Manager 只安装一次，Connector/MCP consumer 分别读取 exact capabilities   | 不连接 GitHub、不启动 MCP            |
+| 启用 legacy GitHub Plugin             | 兼容 contribution 提供 GitHub Connector declaration                      | 不建立远端安装旁路                   |
+| 查看未连接的 GitHub                   | Connector 以 `Connect` candidate 出现在 discovery                        | 不向 Agent 暴露 GitHub tools         |
+| 完成 GitHub OAuth                     | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes         |
+| Connector 成为 connected              | ready MCP binding 可以由 host materialize                                | 不绕过 MCP policy 或 Tool approval   |
+| 用户断开 GitHub                       | connection generation 前进，ready binding 立即撤销                       | 不删除 Plugin package 或 Thread 历史 |
+| 用户直接配置 MCP server               | 经过配置、凭据和策略解析后直接进入 MCP runtime                           | 不必须伪造 Plugin 或 Connector       |
 
 ## 1. 结论
 
@@ -35,13 +35,13 @@ Connector 不要求用户登录 Ash，连接的账号是 GitHub、Slack、Google
 
 > Marketplace Manager 管 package lifecycle，Connector 管外部账号连接，MCP 管协议会话与能力调用，Tool 是 Agent 最终消费的能力。
 
-| 对象 | 回答的核心问题 | 产出 | 不拥有 |
-| --- | --- | --- | --- |
-| Marketplace package/bundle | “一次安装提供哪些 capabilities？” | 带版本、摘要和来源的 capability declarations | enable/grant、外部账号、MCP session |
-| Legacy Plugin | “本地兼容包当前启用了哪些贡献？” | generation-bound contribution declaration | 远端安装、外部账号、MCP session |
-| Connector | “这个外部产品连上了吗，连的是哪个账号？” | generation-bound connection state 和 ready runtime binding | Plugin package、secret bytes、MCP transport |
-| MCP | “如何与 capability server 建立会话并发现、调用能力？” | session、capability catalog、绑定和调用结果 | Plugin/Connector authority、每次 Tool approval |
-| Tool Registry / Core | “Agent 当前可以调用什么，这次调用是否允许？” | provider-independent Tool definition、approval 和 durable result | Plugin 安装、connect/OAuth lifecycle |
+| 对象                       | 回答的核心问题                                        | 产出                                                             | 不拥有                                         |
+| -------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| Marketplace package/bundle | “一次安装提供哪些 capabilities？”                     | 带版本、摘要和来源的 capability declarations                     | enable/grant、外部账号、MCP session            |
+| Legacy Plugin              | “本地兼容包当前启用了哪些贡献？”                      | generation-bound contribution declaration                        | 远端安装、外部账号、MCP session                |
+| Connector                  | “这个外部产品连上了吗，连的是哪个账号？”              | generation-bound connection state 和 ready runtime binding       | Plugin package、secret bytes、MCP transport    |
+| MCP                        | “如何与 capability server 建立会话并发现、调用能力？” | session、capability catalog、绑定和调用结果                      | Plugin/Connector authority、每次 Tool approval |
+| Tool Registry / Core       | “Agent 当前可以调用什么，这次调用是否允许？”          | provider-independent Tool definition、approval 和 durable result | Plugin 安装、connect/OAuth lifecycle           |
 
 ```mermaid
 flowchart TD
@@ -80,14 +80,14 @@ Connector；Plugin 或 User/Directory 也可以独立声明 MCP server。只有�
 
 ## 2. 所有权边界
 
-| Owner | 拥有 | 明确不拥有 |
-| --- | --- | --- |
-| `ash-plugin` | Plugin manifest 与 `ConnectorContribution` 定义 | 安装、启用、外部账号、OAuth、MCP session |
-| `ash-core-plugins` | package artifact/install/update/uninstall、enable/grant provenance、exact capability 与 lease | 外部账号、OAuth、MCP session |
-| `ash-connectors-extension` | 身份、定义、连接状态、目录发现、SQLite authority、API-token/OAuth 编排 | secret backend、MCP session、Tool execution |
-| Connector auth adapter（同一 crate） | provider 授权协议、凭据交换、刷新与撤销 | Plugin package、连接状态持久化、Tool execution |
-| `ash-mcp-extension` | ready declaration 到 live MCP tools runtime 的 host integration | Connector account authority |
-| `ash-tools` / Core | Tool registry、approval、durable execution | Connect/OAuth lifecycle |
+| Owner                                | 拥有                                                                                          | 明确不拥有                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `ash-plugin`                         | Plugin manifest 与 `ConnectorContribution` 定义                                               | 安装、启用、外部账号、OAuth、MCP session       |
+| `ash-core-plugins`                   | package artifact/install/update/uninstall、enable/grant provenance、exact capability 与 lease | 外部账号、OAuth、MCP session                   |
+| `ash-connectors-extension`           | 身份、定义、连接状态、目录发现、SQLite authority、API-token/OAuth 编排                        | secret backend、MCP session、Tool execution    |
+| Connector auth adapter（同一 crate） | provider 授权协议、凭据交换、刷新与撤销                                                       | Plugin package、连接状态持久化、Tool execution |
+| `ash-mcp-extension`                  | ready declaration 到 live MCP tools runtime 的 host integration                               | Connector account authority                    |
+| `ash-tools` / Core                   | Tool registry、approval、durable execution                                                    | Connect/OAuth lifecycle                        |
 
 Connector account 不是 Ash account。Ash login 只能作为云端 directory、同步或 managed policy 的可选
 adapter；不得成为 `ConnectorId`、connection generation 或本地 runtime readiness 的前置条件。
@@ -129,13 +129,13 @@ device；browser host 与 TUI 可执行 device flow，user code 复制到 clipbo
 
 ## 4. 身份、凭据与 generation
 
-| 值 | 含义 | 不能替代 |
-| --- | --- | --- |
-| `ConnectorId` | 一个 connectable product declaration | Plugin ID、account ID |
-| `ConnectorAccountId` | provider 返回的外部 account/tenant identity | Ash user ID |
-| `ConnectorCredentialRef` | auth owner 可解释的 non-secret reference | access/refresh token bytes |
-| `ConnectorConnectionGeneration` | connect/revoke attempt 的单调身份 | MCP catalog generation |
-| `ConnectorSnapshotGeneration` | 一次 immutable Connector catalog projection | config revision、Tool registry generation |
+| 值                              | 含义                                        | 不能替代                                  |
+| ------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| `ConnectorId`                   | 一个 connectable product declaration        | Plugin ID、account ID                     |
+| `ConnectorAccountId`            | provider 返回的外部 account/tenant identity | Ash user ID                               |
+| `ConnectorCredentialRef`        | auth owner 可解释的 non-secret reference    | access/refresh token bytes                |
+| `ConnectorConnectionGeneration` | connect/revoke attempt 的单调身份           | MCP catalog generation                    |
+| `ConnectorSnapshotGeneration`   | 一次 immutable Connector catalog projection | config revision、Tool registry generation |
 
 连接完成必须引用当前 `Connecting` attempt 的 exact connection generation；disconnect 必须推进
 connection generation；任何状态变化都必须同时推进 snapshot generation。这样晚到的 OAuth callback、
@@ -151,27 +151,27 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 
 ## 6. 当前状态与后续阶段
 
-| 能力 | 状态 |
-| --- | --- |
-| 纯 Connector identity/definition/binding | ✅ 已实现 |
-| connection transition 与双 generation 防 stale | ✅ 已实现 |
-| Plugin manifest → Connector domain projection | ✅ 已实现 |
-| disconnected discovery / connected ready binding projection | ✅ 已实现 |
-| SQLite connection authority + exact retry receipts | ✅ 已实现 |
-| definition/package digest 变化触发 reauthorization | ✅ 重启恢复与 live Plugin activation 更新均已实现 |
-| API-token connect/disconnect + local secret cleanup | ✅ 已实现 |
-| OAuth state/PKCE/exchange 编排 | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback |
-| refresh、远端 revoke | ✅ 已实现通用 lifecycle 与 GitHub adapter；远端失败保留本地连接供重试 |
-| `ash-secrets` memory/unavailable backend | ✅ 已实现 |
-| profile 私有文件 backend | ✅ 已实现并作为本地默认 Connector persistence |
-| 系统钥匙串 backend | ✅ 保留为显式 host 注入选项；daemon 默认不请求钥匙串许可 |
-| App Server list/connect/disconnect + changed notification | ✅ 已实现 |
-| Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
-| OAuth browser/device interaction | ✅ Desktop browser+device、browser host device、TUI device 已实现 |
-| ready binding → `ash-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider） |
-| exact legacy Plugin activation → Connector/MCP runtime provider | ✅ 已实现，支持 live install/enable/disable authority reconcile |
-| Marketplace bundle → Connector/MCP runtime provider | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
-| MCP `tools/list_changed` → safe-point rebuild | ✅ 已实现 |
+| 能力                                                             | 状态                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 纯 Connector identity/definition/binding                         | ✅ 已实现                                                                                                                 |
+| connection transition 与双 generation 防 stale                   | ✅ 已实现                                                                                                                 |
+| Plugin manifest → Connector domain projection                    | ✅ 已实现                                                                                                                 |
+| disconnected discovery / connected ready binding projection      | ✅ 已实现                                                                                                                 |
+| SQLite connection authority + exact retry receipts               | ✅ 已实现                                                                                                                 |
+| definition/package digest 变化触发 reauthorization               | ✅ 重启恢复与 live Plugin activation 更新均已实现                                                                         |
+| API-token connect/disconnect + local secret cleanup              | ✅ 已实现                                                                                                                 |
+| OAuth state/PKCE/exchange 编排                                   | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback                                                      |
+| refresh、远端 revoke                                             | ✅ 已实现通用 lifecycle 与 GitHub adapter；远端失败保留本地连接供重试                                                     |
+| `ash-secrets` memory/unavailable backend                         | ✅ 已实现                                                                                                                 |
+| profile 私有文件 backend                                         | ✅ 已实现并作为本地默认 Connector persistence                                                                             |
+| 系统钥匙串 backend                                               | ✅ 保留为显式 host 注入选项；daemon 默认不请求钥匙串许可                                                                  |
+| App Server list/connect/disconnect + changed notification        | ✅ 已实现                                                                                                                 |
+| Desktop API-token UI；TUI 列表/断开/通知刷新                     | ✅ 已实现                                                                                                                 |
+| OAuth browser/device interaction                                 | ✅ Desktop browser+device、browser host device、TUI device 已实现                                                         |
+| ready binding → `ash-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider）                                                                                       |
+| exact legacy Plugin activation → Connector/MCP runtime provider  | ✅ 已实现，支持 live install/enable/disable authority reconcile                                                           |
+| Marketplace bundle → Connector/MCP runtime provider              | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
+| MCP `tools/list_changed` → safe-point rebuild                    | ✅ 已实现                                                                                                                 |
 
 产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /
 `ASH_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明通用 Marketplace Manager registry、broker URL 和 public client ID，不允许

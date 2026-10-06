@@ -29,9 +29,11 @@
 }
 
 .inline-progress-widget:hover .icon::before {
-	content: '×';
+	content: "×";
 }
 
 @keyframes inline-progress-spin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }

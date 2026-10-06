@@ -180,7 +180,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 		if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError("A collaboration envelope requires a Stanza transaction");
 	}
 
-	private emitChange(options: { readonly kind: DocumentCollaborationSynchronizationChange["kind"]; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[] }): DocumentCollaborationSynchronizationChange {
+	private emitChange(options: { readonly kind: DocumentCollaborationSynchronizationChange["kind"]; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[]; }): DocumentCollaborationSynchronizationChange {
 		const change = Object.freeze({ kind: options.kind, document: this._document, canonicalDocument: this._canonicalDocument, pending: this.pending, envelope: options.envelope, droppedSteps: Object.freeze([...options.droppedSteps]) });
 		this.changeEmitter.fire(change);
 		return change;
@@ -195,7 +195,7 @@ export class DocumentCollaborationError extends Error {
 	}
 }
 
-function applySynchronizerTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode } {
+function applySynchronizerTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode; } {
 	const applied = applyDocumentTransaction(document, schema, transaction);
 	if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
 	return applied;

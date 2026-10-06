@@ -554,7 +554,7 @@ class TreeFindController<T, TNode extends AbstractTreeNode<T>> {
 	private matches: readonly TNode[] = [];
 	private activeIndex = -1;
 
-	constructor(private readonly options: TreeFindControllerOptions<T, TNode>) {}
+	constructor(private readonly options: TreeFindControllerOptions<T, TNode>) { }
 
 	get query(): string { return this.pattern; }
 	get activeMatch(): TNode | undefined { return this.matches[this.activeIndex]; }

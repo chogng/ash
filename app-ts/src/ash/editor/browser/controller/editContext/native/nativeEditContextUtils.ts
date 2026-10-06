@@ -113,7 +113,7 @@ export function createNativeTextWindow(
 	text: string,
 	selectionStart: number,
 	selectionEnd: number,
-): { readonly startOffset: number; readonly endOffset: number } {
+): { readonly startOffset: number; readonly endOffset: number; } {
 	if (text.length <= NATIVE_TEXT_WINDOW_LENGTH) {
 		return { startOffset: 0, endOffset: text.length };
 	}

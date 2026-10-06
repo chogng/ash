@@ -8,7 +8,7 @@ export interface DiffRowLayout {
 }
 
 /** Estimates paired row heights for continuous multi-file scrolling and change navigation. */
-export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapping?: { readonly fontInfo: FontInfo; readonly column: number }): DiffRowLayout {
+export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapping?: { readonly fontInfo: FontInfo; readonly column: number; }): DiffRowLayout {
 	const rows = model.diff?.rows ?? [];
 	const offsets = [0];
 	if (!wrapping) {

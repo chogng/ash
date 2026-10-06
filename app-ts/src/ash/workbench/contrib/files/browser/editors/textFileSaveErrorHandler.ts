@@ -6,7 +6,7 @@ import { TextModelConflictError } from '../../../../services/textmodelResolver/c
 
 /** Presents save failures without discarding the editor's unsaved working copy. */
 export class TextFileSaveErrorHandler {
-	constructor(@IDialogService private readonly dialogs: IDialogService) {}
+	constructor(@IDialogService private readonly dialogs: IDialogService) { }
 
 	async onSaveError(error: unknown, resource: URI | undefined): Promise<void> {
 		if (error instanceof TextModelConflictError) {

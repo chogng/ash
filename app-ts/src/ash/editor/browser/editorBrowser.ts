@@ -173,7 +173,7 @@ export interface ICodeEditor extends IEditor {
 	readonly onWillChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
-	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
+	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>;
 	readonly onDidChangeModelDecorations: Event<IModelDecorationsChangedEvent>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidAttemptReadOnlyEdit: Event<void>;
@@ -196,7 +196,7 @@ export interface ICodeEditor extends IEditor {
 	readonly onMouseDrag: Event<IEditorMouseEvent>;
 	readonly onMouseDrop: Event<IPartialEditorMouseEvent>;
 	readonly onMouseDropCanceled: Event<void>;
-	readonly onDropIntoEditor: Event<{ readonly position: IPosition; readonly event: DragEvent }>;
+	readonly onDropIntoEditor: Event<{ readonly position: IPosition; readonly event: DragEvent; }>;
 	readonly onContextMenu: Event<IEditorMouseEvent>;
 	readonly onMouseMove: Event<IEditorMouseEvent>;
 	readonly onMouseLeave: Event<IPartialEditorMouseEvent>;
@@ -249,7 +249,7 @@ export interface ICodeEditor extends IEditor {
 	getOptions(): IComputedEditorOptions;
 	getOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T>;
 	getRawOptions(): IEditorOptions;
-	getScrolledVisiblePosition(position: IPosition): { top: number; left: number; height: number } | null;
+	getScrolledVisiblePosition(position: IPosition): { top: number; left: number; height: number; } | null;
 	getWidthOfLine(lineNumber: number): number;
 	applyFontInfo(target: HTMLElement): void;
 	createDecorationsCollection(decorations?: IModelDeltaDecoration[]): IEditorDecorationsCollection;

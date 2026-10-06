@@ -14,12 +14,12 @@ Code has a bottom Panel and Details docked below the editor tabs. Hiding Editor 
 
 Mobile presentation, separate desktop lifecycle strategy classes, and the controller-selection contribution below remain intended contracts. Current behavior tests live in `contrib/layout/test/browser/desktopLayoutController.test.ts`, `test/browser/sessions-layout.test.ts`, and `test/smoke/areas/sessions/sessions-code.spec.ts`.
 
-| File | Responsibility | Rules |
-|------|----------------|-------|
-| `contrib/layout/browser/baseSessionLayoutController.ts` (`BaseLayoutController`) | Shared panel, editor working-set, persistence, and multi-session mechanics | [baseSessionLayoutController.md](contrib/layout/browser/baseSessionLayoutController.md), `B1`–`B6` |
-| `contrib/layout/browser/desktopLayoutController.ts` (`DesktopLayoutController`) | Non-phone Editor/Details composition and lifecycle strategies | [DESKTOP.md](DESKTOP.md) |
-| `services/layout/common/sessionsLayoutService.ts` / `contrib/layout/browser/sessionsLayoutService.ts` | Feature entry contract, shared host activation and entry visibility persistence | [LAYOUT.md](LAYOUT.md#activity-bar-entry-switching) |
-| `contrib/layout/browser/mobileSessionLayoutController.ts` (`MobileLayoutController`) | Phone adaptation without auxiliary-bar automation | [mobileSessionLayoutController.md](contrib/layout/browser/mobileSessionLayoutController.md), `M1`–`M2` |
+| File                                                                                                  | Responsibility                                                                  | Rules                                                                                                  |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `contrib/layout/browser/baseSessionLayoutController.ts` (`BaseLayoutController`)                      | Shared panel, editor working-set, persistence, and multi-session mechanics      | [baseSessionLayoutController.md](contrib/layout/browser/baseSessionLayoutController.md), `B1`–`B6`     |
+| `contrib/layout/browser/desktopLayoutController.ts` (`DesktopLayoutController`)                       | Non-phone Editor/Details composition and lifecycle strategies                   | [DESKTOP.md](DESKTOP.md)                                                                               |
+| `services/layout/common/sessionsLayoutService.ts` / `contrib/layout/browser/sessionsLayoutService.ts` | Feature entry contract, shared host activation and entry visibility persistence | [LAYOUT.md](LAYOUT.md#activity-bar-entry-switching)                                                    |
+| `contrib/layout/browser/mobileSessionLayoutController.ts` (`MobileLayoutController`)                  | Phone adaptation without auxiliary-bar automation                               | [mobileSessionLayoutController.md](contrib/layout/browser/mobileSessionLayoutController.md), `M1`–`M2` |
 
 Current non-phone Agents windows use `DesktopWorkbench`. The Sessions layout service creates the DesktopLayoutController; `sessions.layout.contribution.ts` registers the service and built-in Chat, Code and Collaboration commands. Workbench restores the saved entry through the owning command before declaring restoration complete. Phone presentation remains planned with MobileWorkbench and MobileLayoutController.
 
@@ -33,15 +33,15 @@ It is the detailed companion to the [layout-controller boundary](LAYOUT.md#layou
 
 The Agents window keeps a single active session but lets the user move between many. Each session owns its editor working set. The desktop layout governs side-pane and bottom-panel visibility at the workbench level while remembering the relevant content per session.
 
-| State | Storage | Scope |
-|-------|---------|-------|
-| Editor working set | `sessions.singlePane.layoutState` | Per session |
-| Panel view | `sessions.singlePane.layoutState` | Per session |
-| Entry content visibility | `sessions.layout.entryVisibility` | Profile, per entry |
-| Active entry's restore command | `sessions.layout.activeEntry` | Workspace |
-| Creator workspace selection | `sessions.creator.activeMode` | Workspace, owned by Creator |
-| Last open Code side pane | `sessions.layout.sidePane.lastOpen` | Profile |
-| Side-pane and panel visibility | Workbench part visibility | Window |
+| State                          | Storage                             | Scope                       |
+| ------------------------------ | ----------------------------------- | --------------------------- |
+| Editor working set             | `sessions.singlePane.layoutState`   | Per session                 |
+| Panel view                     | `sessions.singlePane.layoutState`   | Per session                 |
+| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry          |
+| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                   |
+| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator |
+| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                     |
+| Side-pane and panel visibility | Workbench part visibility           | Window                      |
 
 Session changes restore document working sets without selecting another product mode or changing its user visibility preferences. A Code composition with only managed inputs initially shows Details-only; opening an ordinary document reveals its content.
 

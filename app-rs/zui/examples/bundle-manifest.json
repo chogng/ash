@@ -11,7 +11,5 @@
       "destination": "content"
     }
   ],
-  "protocols": [
-    "my-app"
-  ]
+  "protocols": ["my-app"]
 }

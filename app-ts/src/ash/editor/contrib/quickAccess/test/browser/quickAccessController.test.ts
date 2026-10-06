@@ -100,7 +100,7 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
-function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: { readonly ctrlKey?: boolean; readonly metaKey?: boolean } = {}): KeyboardEvent {
+function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: { readonly ctrlKey?: boolean; readonly metaKey?: boolean; } = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,

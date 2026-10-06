@@ -81,7 +81,7 @@
 }
 
 .ash-chat-models-test-status::before {
-	content: '';
+	content: "";
 	display: inline-block;
 	width: var(--ash-spacing-size80);
 	height: var(--ash-spacing-size80);

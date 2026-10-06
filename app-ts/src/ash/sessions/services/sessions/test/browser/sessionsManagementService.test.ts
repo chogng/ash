@@ -36,7 +36,7 @@ test('a refresh from an old connection cannot revert a newer catalog or suppress
 	using service = createManagement(fake);
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
-	let release!: (result: { session: SessionDto }) => void;
+	let release!: (result: { session: SessionDto; }) => void;
 	const original = fake.host.session.readCatalog;
 	fake.host.session.readCatalog = () => new Promise(resolve => { release = resolve; });
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
@@ -109,7 +109,7 @@ test('reconnection preserves the active untitled Session and its manually select
 
 test('a catalog result from an old connection cannot replace the restored catalog', async () => {
 	const fake = sessionHost([]);
-	let release!: (result: { sessions: SessionDto[] }) => void;
+	let release!: (result: { sessions: SessionDto[]; }) => void;
 	const original = fake.host.session.subscribeCatalog;
 	let first = true;
 	fake.host.session.subscribeCatalog = () => {
@@ -550,7 +550,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 				agentTree,
 			};
 		},
-		async unsubscribe() {},
+		async unsubscribe() { },
 		async createThread() { throw new Error("Not used"); },
 		async forkThread() { throw new Error("Not used"); },
 		async archive(params) {
@@ -589,7 +589,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 			if (state !== 'ready') catalogSubscribed = false;
 			for (const listener of connectionListeners) listener(state);
 		},
-		host: { session: api, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[]): Promise<SessionExecutionTarget | undefined> => undefined },
+		host: { session: api, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
 		sessions,
 		archiveRequests,
 		interruptRequests,
@@ -605,7 +605,7 @@ function threadProjection(sessionId: string, threadId: string): SessionThreadPro
 	return {
 		thread: {
 			advisor: { type: "default" },
-		agentId: "agent-1",
+			agentId: "agent-1",
 			origin: { type: "root" },
 			referenceCost: { knownAmounts: [], complete: true },
 			sessionId,

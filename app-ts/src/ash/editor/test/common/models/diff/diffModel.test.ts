@@ -160,7 +160,7 @@ class ResolvedDiffComputationService implements IDocumentDiffProvider {
 		});
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

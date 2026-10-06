@@ -131,7 +131,7 @@ export class StorageMainService extends Disposable {
 
 /** Retires the old product dimension; Code wins collisions regardless of file order. */
 function migrateStorage(candidates: readonly unknown[]): ReadonlyMap<string, IStorageSnapshot> {
-	const sources = new Map<string, { applicationId: string; snapshot: IStorageSnapshot }>();
+	const sources = new Map<string, { applicationId: string; snapshot: IStorageSnapshot; }>();
 	for (const candidate of candidates) {
 		if (!isRecord(candidate) || !isRecord(candidate.identity) || !['code', 'academic'].includes(candidate.identity.applicationId as string)) {
 			throw new TypeError('Invalid legacy Desktop storage identity');

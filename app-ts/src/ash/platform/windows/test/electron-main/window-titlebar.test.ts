@@ -76,7 +76,7 @@ test('system context menus follow the window frame on Windows and Linux', () => 
 });
 
 test('window controls follow the modal backdrop and restore the latest theme', () => {
-	const updates: { color: string; symbolColor: string; height: number }[] = [];
+	const updates: { color: string; symbolColor: string; height: number; }[] = [];
 	const controls = new WindowControlsOverlay(colors => updates.push(colors));
 	controls.setTheme({ backgroundColor: '#ffffff', symbolColor: '#424242', backdropColor: '#00000080' });
 	controls.setDimmed(true);
@@ -91,7 +91,7 @@ test('window controls follow the modal backdrop and restore the latest theme', (
 });
 
 test('opaque high-contrast backdrop keeps window control symbols visible', () => {
-	const updates: { color: string; symbolColor: string; height: number }[] = [];
+	const updates: { color: string; symbolColor: string; height: number; }[] = [];
 	const controls = new WindowControlsOverlay(colors => updates.push(colors));
 	controls.setTheme({ backgroundColor: '#000000', symbolColor: '#ffffff', backdropColor: '#000000' });
 	controls.setDimmed(true);

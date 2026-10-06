@@ -43,7 +43,7 @@ suite('Desktop storage owner', () => {
 				const data = JSON.parse(await readFile(file, 'utf8'));
 				assert.equal(data.version, 2);
 				assert.equal(data.storages.length, 3);
-				assert.equal(data.storages.some((snapshot: { identity: object }) => 'applicationId' in snapshot.identity), false);
+				assert.equal(data.storages.some((snapshot: { identity: object; }) => 'applicationId' in snapshot.identity), false);
 				assert.equal(await readFile(`${file}.v1`, 'utf8'), source);
 			} finally { await rm(directory, { recursive: true, force: true }); }
 		});
@@ -113,14 +113,14 @@ suite('Desktop storage owner', () => {
 			const ids = ['empty-window-live', 'empty-window-restore', 'empty-window-unused', 'sessions', 'folder-hash'];
 			for (const id of ids) { await storage.getItems({ ...application, scope: StorageScope.WORKSPACE, id }, { layout: entry(id) }); }
 			const channel = new StorageDatabaseChannel(storage);
-			using active = channel.listen('window:1', 'onDidChangeStorage', { ...application, scope: StorageScope.WORKSPACE, id: 'empty-window-live' })(() => {});
+			using active = channel.listen('window:1', 'onDidChangeStorage', { ...application, scope: StorageScope.WORKSPACE, id: 'empty-window-live' })(() => { });
 			await storage.cleanUpStorage(new Set(['empty-window-restore']));
 			const data = JSON.parse(await readFile(join(directory, 'state.json'), 'utf8'));
-			assert.deepEqual(data.storages.map((snapshot: { identity: IStorageIdentity }) => snapshot.identity.id), ['empty-window-live', 'empty-window-restore', 'sessions', 'folder-hash']);
+			assert.deepEqual(data.storages.map((snapshot: { identity: IStorageIdentity; }) => snapshot.identity.id), ['empty-window-live', 'empty-window-restore', 'sessions', 'folder-hash']);
 			active.dispose();
 			await storage.cleanUpStorage(new Set(['empty-window-restore']));
 			const cleaned = JSON.parse(await readFile(join(directory, 'state.json'), 'utf8'));
-			assert.deepEqual(cleaned.storages.map((snapshot: { identity: IStorageIdentity }) => snapshot.identity.id), ['empty-window-restore', 'sessions', 'folder-hash']);
+			assert.deepEqual(cleaned.storages.map((snapshot: { identity: IStorageIdentity; }) => snapshot.identity.id), ['empty-window-restore', 'sessions', 'folder-hash']);
 		} finally { await rm(directory, { recursive: true, force: true }); }
 	});
 });

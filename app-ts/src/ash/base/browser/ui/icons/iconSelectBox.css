@@ -9,7 +9,10 @@
 	color: var(--ash-foreground);
 }
 
-.ash-icon-select-scroll { flex: 1; min-height: 0; }
+.ash-icon-select-scroll {
+	flex: 1;
+	min-height: 0;
+}
 
 .ash-icon-select-help {
 	position: absolute;
@@ -40,7 +43,9 @@
 	cursor: pointer;
 }
 
-.ash-icon-select-item:hover { background: var(--ash-list-hover-background); }
+.ash-icon-select-item:hover {
+	background: var(--ash-list-hover-background);
+}
 .ash-icon-select-item.focused {
 	background: var(--ash-list-active-selection-background);
 	color: var(--ash-list-active-selection-foreground);
@@ -60,8 +65,10 @@
 	font-weight: var(--ash-font-weight-semi-bold);
 }
 
-.ash-icon-select-empty { padding: 8px; }
+.ash-icon-select-empty {
+	padding: 8px;
+}
 
-[data-color-scheme^='high-contrast'] .ash-icon-select-item.focused {
+[data-color-scheme^="high-contrast"] .ash-icon-select-item.focused {
 	border-color: var(--ash-contrast-border);
 }

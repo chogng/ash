@@ -41,7 +41,7 @@ export interface TabListItem<T> {
 /** Named visual presentation for the ActionBar and tabs rendered by a TabList. */
 export type TabListPresentation = "flush" | "inset";
 /** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
-export type TabListSizing = { readonly mode: 'fit' | 'shrink' } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number };
+export type TabListSizing = { readonly mode: 'fit' | 'shrink'; } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number; };
 export type TabListDropPosition = ActionBarDropPosition;
 
 /** Drag callbacks for a tab list; the caller owns payload and mutation semantics. */

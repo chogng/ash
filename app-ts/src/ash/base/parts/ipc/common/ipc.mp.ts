@@ -5,8 +5,8 @@ import { IPCClient, type IMessagePassingProtocol } from './ipc.js';
 
 export interface IMessagePort {
 	postMessage(data: Uint8Array): void;
-	addEventListener(type: 'message' | 'close', listener: (event: { data: unknown }) => void): void;
-	removeEventListener(type: 'message' | 'close', listener: (event: { data: unknown }) => void): void;
+	addEventListener(type: 'message' | 'close', listener: (event: { data: unknown; }) => void): void;
+	removeEventListener(type: 'message' | 'close', listener: (event: { data: unknown; }) => void): void;
 	start(): void;
 	close(): void;
 }
@@ -18,7 +18,7 @@ class Protocol extends Disposable implements IMessagePassingProtocol {
 	public readonly onDidClose = this.closed.event;
 	constructor(private readonly port: IMessagePort) {
 		super();
-		const message = (event: { data: unknown }): void => {
+		const message = (event: { data: unknown; }): void => {
 			if (!(event.data instanceof Uint8Array)) { this.closed.fire(); return; }
 			this.messages.fire(VSBuffer.wrap(new Uint8Array(event.data)));
 		};

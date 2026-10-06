@@ -89,7 +89,7 @@ export function observeKeyboardMapping(
 
 export function getKeyboardMappingValue(
 	entry: IKeyboardMappingEntry | undefined,
-	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean },
+	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean; },
 	mapAltGrToCtrlAlt: boolean,
 ): string {
 	if (!entry) {
@@ -107,7 +107,7 @@ export function getKeyboardMappingValue(
 
 export function isKeyboardMappingDeadKey(
 	entry: IKeyboardMappingEntry | undefined,
-	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean },
+	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'> & { readonly altGraphKey?: boolean; },
 	mapAltGrToCtrlAlt: boolean,
 ): boolean {
 	if (!entry) {

@@ -14,7 +14,7 @@ interface EmbeddedState {
 }
 
 class LineState implements IState {
-	constructor(public readonly stack: readonly string[], public readonly embedded: EmbeddedState | null) {}
+	constructor(public readonly stack: readonly string[], public readonly embedded: EmbeddedState | null) { }
 
 	public clone(): IState {
 		return new LineState(this.stack.slice(), this.embedded && { ...this.embedded, state: this.embedded.state?.clone() ?? null });
@@ -33,7 +33,7 @@ class LineState implements IState {
 	}
 }
 
-export type ILoadStatus = { loaded: true } | { loaded: false; promise: Promise<void> };
+export type ILoadStatus = { loaded: true; } | { loaded: false; promise: Promise<void>; };
 
 export class MonarchTokenizer extends Disposable implements ITokenizationSupport {
 	private readonly embeddedLanguages = new Set<string>();
@@ -88,7 +88,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 		return { tokens: new Uint32Array(result.encoded), rawTokens: result.tokens, endState: result.endState };
 	}
 
-	private scan(line: string, hasEOL: boolean, initial: IState, encoded: boolean): { tokens: Token[]; encoded: number[]; endState: LineState } {
+	private scan(line: string, hasEOL: boolean, initial: IState, encoded: boolean): { tokens: Token[]; encoded: number[]; endState: LineState; } {
 		this.assertNotDisposed();
 		if (!(initial instanceof LineState)) {
 			throw createError(this.lexer, 'Tokenization state belongs to another tokenizer');

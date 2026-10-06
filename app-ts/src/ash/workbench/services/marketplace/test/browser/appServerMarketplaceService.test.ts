@@ -28,13 +28,13 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
 		download: async () => ({ id: "artifact-1", package: packageReference }),
 		install: async () => installed,
 		update: async () => installed,
-		uninstall: async () => {},
+		uninstall: async () => { },
 		listInstalled: async () => {
 			installedReads += 1;
 			return { instanceId: "marketplace-runtime-1", generation: 1, packages: [] };
 		},
 		acquireCapability: async () => { throw new Error("unused"); },
-		releaseCapability: async () => {},
+		releaseCapability: async () => { },
 		openResource: async () => { throw new Error("unused"); },
 	} as IMarketplaceApi;
 	const events = {

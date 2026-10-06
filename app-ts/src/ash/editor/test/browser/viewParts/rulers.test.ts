@@ -160,8 +160,8 @@ function testViewContext(state: ReturnType<typeof configurationState>): ViewCont
 			},
 		},
 		theme: new EditorTheme(darkColorTheme),
-		addEventHandler() {},
-		removeEventHandler() {},
+		addEventHandler() { },
+		removeEventHandler() { },
 	} as unknown as ViewContext;
 }
 

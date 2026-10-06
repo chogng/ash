@@ -48,7 +48,7 @@ export class EditorWorker extends AbstractDisposable implements EditorWorkerImpl
 		}
 	}
 
-	protected disposeCore(): void {}
+	protected disposeCore(): void { }
 }
 
 function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMinimalEditsRequest, signal: AbortSignal): readonly languages.TextEdit[] {
@@ -81,7 +81,7 @@ function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMi
 
 function mergeAdjacentEdits(edits: readonly languages.TextEdit[]): readonly languages.TextEdit[] {
 	const sorted = edits.map(edit => Object.freeze({ range: Range.lift(edit.range), text: edit.text })).sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
-	const result: { readonly range: Range; readonly text: string }[] = [];
+	const result: { readonly range: Range; readonly text: string; }[] = [];
 	for (const edit of sorted) {
 		const previous = result.at(-1);
 		if (previous && previous.range.getEndPosition().equals(edit.range.getStartPosition())) {
@@ -198,7 +198,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		readonly languageId: string;
 		readonly initialState: languages.IState;
 		readonly states: TokenizationStateStore<languages.IState>;
-		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[] }[];
+		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[]; }[];
 	} | undefined;
 
 	constructor(
@@ -285,7 +285,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
 			? this.tokenizationCache
 			: undefined;
-		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[] }[] = [];
+		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] | Uint32Array; rawTokens?: readonly languages.Token[]; }[] = [];
 		const states = new TokenizationStateStore<languages.IState>();
 		let state = support.getInitialState();
 		const initialState = state.clone();
@@ -644,10 +644,12 @@ function encodeItem(item: languages.LanguageCompletionItem): unknown {
 		...(item.sortText === undefined ? {} : { sortText: item.sortText }),
 		...(item.preselect === undefined ? {} : { preselect: item.preselect }),
 		...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
-		...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits.map(edit => Object.freeze({
-			range: Object.freeze({ start: encodePosition(edit.range.getStartPosition()), end: encodePosition(edit.range.getEndPosition()) }),
-			text: edit.text,
-		})) }),
+		...(item.additionalTextEdits === undefined ? {} : {
+			additionalTextEdits: item.additionalTextEdits.map(edit => Object.freeze({
+				range: Object.freeze({ start: encodePosition(edit.range.getStartPosition()), end: encodePosition(edit.range.getEndPosition()) }),
+				text: edit.text,
+			}))
+		}),
 		...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
 	});
 }
@@ -696,7 +698,7 @@ function decodeOptionalCommitCharacters(value: unknown): readonly string[] | und
 	return value.map(character => decodeString(character, "Completion wire item commit character"));
 }
 
-function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: Range; readonly text: string }[] | undefined {
+function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: Range; readonly text: string; }[] | undefined {
 	if (value === undefined) return undefined;
 	if (!Array.isArray(value)) throw new TypeError("Completion wire item additional text edits must be an array");
 	return value.map(edit => {

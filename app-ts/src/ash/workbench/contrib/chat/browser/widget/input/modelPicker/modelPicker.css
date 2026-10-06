@@ -1,161 +1,161 @@
 .ash-chat-model-picker {
-  display: flex;
-  position: relative;
-  box-sizing: border-box;
-  width: 320px;
-  max-width: calc(100vw - var(--ash-spacing-size160));
-  max-height: min(420px, calc(100vh - var(--ash-spacing-size240)));
-  flex-direction: column;
-  overflow: visible;
-  font-size: var(--ash-font-size-label1);
+	display: flex;
+	position: relative;
+	box-sizing: border-box;
+	width: 320px;
+	max-width: calc(100vw - var(--ash-spacing-size160));
+	max-height: min(420px, calc(100vh - var(--ash-spacing-size240)));
+	flex-direction: column;
+	overflow: visible;
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-chat-model-picker [hidden] {
-  display: none;
+	display: none;
 }
 
 .ash-chat-model-picker-empty {
-  display: flex;
-  min-height: 160px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ash-spacing-size80);
-  padding: var(--ash-spacing-size240) var(--ash-spacing-size160);
-  text-align: center;
+	display: flex;
+	min-height: 160px;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size240) var(--ash-spacing-size160);
+	text-align: center;
 }
 
 .ash-chat-model-picker-empty-message {
-  color: var(--ash-foreground);
-  font-size: var(--ash-font-size-body1);
-  font-weight: var(--ash-font-weight-semi-bold);
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-chat-model-picker-empty-guidance {
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label2);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label2);
 }
 
 .ash-chat-model-picker-empty > .ash-button {
-  margin-top: var(--ash-spacing-size80);
+	margin-top: var(--ash-spacing-size80);
 }
 
 .ash-chat-model-picker-search {
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size120) 0;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120) 0;
 }
 
 .ash-chat-model-picker-search input {
-  box-sizing: border-box;
-  width: 100%;
-  height: var(--ash-spacing-size280);
-  padding: 0;
-  border: 0;
-  outline: none;
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-input-foreground);
-  background: transparent;
-  font: inherit;
+	box-sizing: border-box;
+	width: 100%;
+	height: var(--ash-spacing-size280);
+	padding: 0;
+	border: 0;
+	outline: none;
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-input-foreground);
+	background: transparent;
+	font: inherit;
 }
 
 .ash-chat-model-picker-search input:focus {
-  outline: none;
+	outline: none;
 }
 
 .ash-chat-model-picker-search input::placeholder {
-  color: var(--ash-description-foreground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-chat-model-picker-list {
-  min-height: 0;
-  overflow: hidden;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .ash-context-view-menu:has(.ash-chat-model-picker) {
-  overflow: visible;
+	overflow: visible;
 }
 
 .ash-chat-model-picker-auto {
-  padding: 0 var(--ash-spacing-size120);
+	padding: 0 var(--ash-spacing-size120);
 }
 
 .ash-chat-model-picker-auto > .ash-switch {
-  width: 100%;
-  min-height: var(--ash-spacing-size280);
+	width: 100%;
+	min-height: var(--ash-spacing-size280);
 }
 
 .ash-chat-model-configuration-menu {
-  min-width: 160px;
-  font-size: var(--ash-font-size-label1);
+	min-width: 160px;
+	font-size: var(--ash-font-size-label1);
 }
 
 .ash-chat-model-configuration-heading {
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label2);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label2);
 }
 
 .ash-chat-model-picker-footer {
-  border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
 }
 
 .ash-chat-model-picker-details-menu {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  left: calc(100% + var(--ash-spacing-size40));
-  box-sizing: border-box;
-  width: 180px;
-  max-height: calc(100vh - var(--ash-spacing-size160));
-  overflow-y: auto;
-  max-width: calc(100vw - var(--ash-spacing-size160));
-  padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-large);
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background);
-  box-shadow: 0 2px 8px var(--ash-widget-shadow);
+	position: absolute;
+	z-index: 1;
+	top: 0;
+	left: calc(100% + var(--ash-spacing-size40));
+	box-sizing: border-box;
+	width: 180px;
+	max-height: calc(100vh - var(--ash-spacing-size160));
+	overflow-y: auto;
+	max-width: calc(100vw - var(--ash-spacing-size160));
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
 }
 
 .ash-chat-model-picker-details-menu.is-left {
-  right: calc(100% + var(--ash-spacing-size40));
-  left: auto;
+	right: calc(100% + var(--ash-spacing-size40));
+	left: auto;
 }
 
 /* The card hosts switch roots; each switch retains ownership of its track and focus state. */
 .ash-chat-model-card > .ash-switch,
 .ash-chat-model-card-context > .ash-switch {
-  width: 100%;
-  min-height: var(--ash-spacing-size280);
+	width: 100%;
+	min-height: var(--ash-spacing-size280);
 }
 
 .ash-chat-model-card-context {
-  display: flex;
-  min-height: var(--ash-spacing-size280);
-  align-items: center;
+	display: flex;
+	min-height: var(--ash-spacing-size280);
+	align-items: center;
 }
 
 .ash-chat-model-card:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: var(--ash-spacing-size20);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-spacing-size20);
 }
 
 .ash-chat-model-card-description {
-  margin: 0 0 var(--ash-spacing-size80);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label2);
-  overflow-wrap: anywhere;
+	margin: 0 0 var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label2);
+	overflow-wrap: anywhere;
 }
 
 .ash-chat-model-card-error {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-high-contrast .ash-chat-model-picker-details-menu {
-  border-color: var(--ash-contrast-border);
-  box-shadow: none;
+	border-color: var(--ash-contrast-border);
+	box-shadow: none;
 }
 
 .ash-chat-model-picker-error {
-  padding: var(--ash-spacing-size80);
-  color: var(--ash-error-foreground);
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-error-foreground);
 }

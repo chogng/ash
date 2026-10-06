@@ -56,7 +56,7 @@ function acceptanceEvents(revision: string, workingCopyContent?: string) {
 	let opened = 0;
 	const files = { readFile: async () => ({ resource, content: "fn main() {}\n", revision }) } as unknown as IFileService;
 	const workingCopies = { get: () => workingCopyContent === undefined ? [] : [{ backupKind: "text", backup: () => workingCopyContent }] } as unknown as IWorkingCopyService;
-	const editor = { ...emptyEditorServiceState, openEditor: async () => { opened += 1; }, focusActiveEditor() {} } satisfies IEditorService;
+	const editor = { ...emptyEditorServiceState, openEditor: async () => { opened += 1; }, focusActiveEditor() { } } satisfies IEditorService;
 	return {
 		files,
 		workingCopies,

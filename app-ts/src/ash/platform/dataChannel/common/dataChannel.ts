@@ -36,7 +36,7 @@ export interface ILinkPresentation {
 	readonly reference?: string;
 	readonly status?: ILinkPresentationStatus;
 	readonly secondaryStatus?: ILinkPresentationStatus;
-	readonly changes?: { readonly insertions: number; readonly deletions: number };
+	readonly changes?: { readonly insertions: number; readonly deletions: number; };
 	readonly tooltip?: string;
 	readonly ariaLabel?: string;
 	readonly isLoading?: boolean;
@@ -124,6 +124,6 @@ export class NullDataChannelService implements IDataChannelService {
 	public readonly _serviceBrand = undefined;
 	public readonly onDidSendData = Event.None;
 	public getDataChannel<T>(_channelId: string): CoreDataChannel<T> {
-		return { sendData: () => {} };
+		return { sendData: () => { } };
 	}
 }

@@ -111,7 +111,7 @@ export class UpdateMainService extends AbstractDisposable {
 		}
 	}
 
-	private async hostRequest(command: 'check' | 'download', policy: 'latest' | 'stable', stagingDirectory?: string): Promise<{ executable: string; request: object }> {
+	private async hostRequest(command: 'check' | 'download', policy: 'latest' | 'stable', stagingDirectory?: string): Promise<{ executable: string; request: object; }> {
 		if (process.platform !== 'win32' && process.platform !== 'darwin') {
 			throw new Error('Desktop updates are unavailable on this platform');
 		}
@@ -211,7 +211,7 @@ export class UpdateMainService extends AbstractDisposable {
 
 	private async cleanupPreviousMacUpdate(): Promise<void> {
 		const marker = join(app.getPath('userData'), 'updates', 'mac-cleanup.json');
-		let record: { current: string; previous: string };
+		let record: { current: string; previous: string; };
 		try { record = JSON.parse(await readFile(marker, 'utf8')); }
 		catch (error) { if (isMissing(error)) return; throw error; }
 		const current = resolve(process.resourcesPath, '..', '..');

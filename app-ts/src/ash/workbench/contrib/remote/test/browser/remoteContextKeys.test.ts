@@ -97,5 +97,5 @@ const TestRemoteConnectionService: IRemoteConnectionService = {
 	save: async connection => connection,
 	update: async (_originalName, connection) => connection,
 	remove: async () => undefined,
-	connect: async () => {},
+	connect: async () => { },
 };

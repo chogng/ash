@@ -251,7 +251,7 @@ test('TextModel setValue advances the version and flushes even when the text is 
 	const request = createLanguageFeatureRequest(model, model.getLanguageId(), new AbortController().signal);
 	assert.equal(isLanguageFeatureRequestCurrent(request), true);
 	const previousVersion = model.getVersionId();
-	const events: Array<{ readonly version: number; readonly reason: TextModelChangeReason; readonly changes: number }> = [];
+	const events: Array<{ readonly version: number; readonly reason: TextModelChangeReason; readonly changes: number; }> = [];
 	using listener = model.onDidChangeContent(change => events.push({
 		version: change.version,
 		reason: change.reason,
@@ -383,7 +383,7 @@ test("TextModel reset replaces content and clears undo and redo history", () => 
 test('TextModel EOL changes preserve positions, history, and event identity', () => {
 	using model = new TextModel('first\nsecond');
 	using tracked = model.trackRange(range(1, 1, 1, 4), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
-	const events: Array<{ readonly eol: string; readonly isEolChange: boolean }> = [];
+	const events: Array<{ readonly eol: string; readonly isEolChange: boolean; }> = [];
 	using listener = model.onDidChangeContent(event => events.push(event));
 
 	model.applyOperations([{ range: range(1, 0, 1, 1), text: 'S' }]);
@@ -552,7 +552,7 @@ test('TextModel alternative version follows document states through undo and red
 
 test('TextModel applies external undo and redo payloads without taking history ownership', () => {
 	using model = new TextModel('abc');
-	const events: Array<{ reason: TextModelChangeReason; selection: Selection[] | null }> = [];
+	const events: Array<{ reason: TextModelChangeReason; selection: Selection[] | null; }> = [];
 	using listener = model.onDidChangeContent(change => events.push({
 		reason: change.reason,
 		selection: change.resultingSelection,
@@ -642,7 +642,7 @@ test("TextModel owns VS Code tracked-range identifiers", () => {
 
 test("TextModel owns decoration identifiers, ranges, and lane invalidation", () => {
 	using model = new TextModel("abc");
-	const events: Array<{ minimap: boolean; overview: boolean; glyph: boolean; lineNumber: boolean }> = [];
+	const events: Array<{ minimap: boolean; overview: boolean; glyph: boolean; lineNumber: boolean; }> = [];
 	using listener = model.onDidChangeDecorations(event => events.push({
 		minimap: event.affectsMinimap,
 		overview: event.affectsOverviewRuler,
@@ -787,9 +787,9 @@ test('TextModel owns view-model delivery and model-part events', () => {
 	using configurations = createTestLanguageConfigurationService();
 	using model = new TextModel('alpha\nbeta', { languageConfigurationService: configurations });
 	const order: string[] = [];
-	const lineHeights: Array<{ line: number; height: number | null }> = [];
+	const lineHeights: Array<{ line: number; height: number | null; }> = [];
 	const fontLines: number[][] = [];
-	const tokenRanges: Array<{ fromLineNumber: number; toLineNumber: number }[]> = [];
+	const tokenRanges: Array<{ fromLineNumber: number; toLineNumber: number; }[]> = [];
 	let languageConfigurationChanges = 0;
 	using contentListener = model.onDidChangeContent(() => order.push('content'));
 	using lineHeightListener = model.onDidChangeLineHeight(event => {

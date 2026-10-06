@@ -18,15 +18,15 @@ test('GitHub connection handles completion received before login start returns',
 		revision: 2n,
 		accounts: [{ provider: 'github', accountId: 'octocat', status: 'ready', credentialRevision: 1n }],
 	};
-	let finishStart: (challenge: AccountLoginChallenge) => void = () => {};
+	let finishStart: (challenge: AccountLoginChallenge) => void = () => { };
 	const startResult = new Promise<AccountLoginChallenge>(resolve => { finishStart = resolve; });
 	const accounts: IAccountService = {
 		onDidChangeAccounts: Event.None,
 		onDidCompleteLogin: completed.event,
 		read: async () => accountState,
 		startLogin: async () => startResult,
-		cancelLogin: async () => {},
-		logout: async () => {},
+		cancelLogin: async () => { },
+		logout: async () => { },
 	};
 	services.registerInstance(IAccountService, accounts);
 	const announcements: string[] = [];
@@ -41,7 +41,7 @@ test('GitHub connection handles completion received before login start returns',
 		translate: (_bundle: string, _key: string, fallback: string) => fallback,
 	});
 	services.registerInstance(ILogService, {
-		trace() {}, debug() {}, info() {}, warn() {}, error() {},
+		trace() { }, debug() { }, info() { }, warn() { }, error() { },
 	});
 	const connection = disposables.add(services.createInstance(GitHubConnectionService));
 

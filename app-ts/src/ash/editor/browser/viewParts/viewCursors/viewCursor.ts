@@ -52,7 +52,7 @@ class ViewCursorRenderData {
 		public readonly height: number,
 		public readonly textContent: string,
 		public readonly presentation: ViewCursorCharacterPresentation | undefined,
-	) {}
+	) { }
 }
 
 interface CursorGrapheme {

@@ -123,7 +123,7 @@ export class ColorDetector extends Disposable {
 	}
 }
 
-function colorToCss(color: { readonly red: number; readonly green: number; readonly blue: number; readonly alpha: number }): string {
+function colorToCss(color: { readonly red: number; readonly green: number; readonly blue: number; readonly alpha: number; }): string {
 	return `rgba(${Math.round(color.red * 255)}, ${Math.round(color.green * 255)}, ${Math.round(color.blue * 255)}, ${color.alpha})`;
 }
 

@@ -487,7 +487,7 @@ export abstract class Workbench extends Disposable {
 			await design.activeEditor.get()!.adoptAssetVersion(version);
 		}));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
-			const request = value as { readonly prompt: string; readonly content: string };
+			const request = value as { readonly prompt: string; readonly content: string; };
 			view.openNewSession(localize('sessions.creator.make.session', 'Make development'));
 			await commandService.executeCommand('sessions.open.code');
 			sessionsPart!.addContext({ id: 'creator-source', name: 'creator.html', kind: 'file', resolve: async () => ({ name: 'creator.html', content: request.content }) });

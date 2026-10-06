@@ -176,7 +176,7 @@ export class ActivityBarPart extends WorkbenchPart {
 		return actions;
 	}
 
-	private createActivityButton(container: HTMLElement, options: ButtonOptions & { title: string }): Button {
+	private createActivityButton(container: HTMLElement, options: ButtonOptions & { title: string; }): Button {
 		const button = this._register(new Button(container, { ...options, title: undefined }));
 		this._register(this.hoverService.setupDelayedHover(button.domNode, () => ({
 			content: options.title,

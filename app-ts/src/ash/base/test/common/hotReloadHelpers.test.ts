@@ -8,7 +8,7 @@ import type { IReader } from "../../common/observable.js";
 import type { IDisposable } from "../../common/lifecycle.js";
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
+	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string; }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
 };
 
 enableHotReload();
@@ -36,9 +36,9 @@ test("readHotReloadableExport ignores unrelated module replacements", () => {
 });
 
 test("createHotClass retains one observable slot across class replacement", async () => {
-	const Original = class HotReloadHelpersFixture {};
+	const Original = class HotReloadHelpersFixture { };
 	const original = createHotClass(Original);
-	const Replacement = class HotReloadHelpersFixture {};
+	const Replacement = class HotReloadHelpersFixture { };
 	const replacement = createHotClass(Replacement);
 
 	assert.equal(replacement, original);

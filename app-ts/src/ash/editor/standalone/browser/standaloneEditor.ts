@@ -90,7 +90,7 @@ export function onWillDisposeModel(listener: (model: ITextModel) => void): IDisp
 	return StandaloneServices.get(IModelService).onModelRemoved(listener);
 }
 
-export function onDidChangeModelLanguage(listener: (event: { readonly model: ITextModel; readonly oldLanguage: string }) => void): IDisposable {
+export function onDidChangeModelLanguage(listener: (event: { readonly model: ITextModel; readonly oldLanguage: string; }) => void): IDisposable {
 	return StandaloneServices.get(IModelService).onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
 }
 
@@ -179,7 +179,7 @@ export function removeAllMarkers(owner: string): void {
 	StandaloneServices.get(IMarkerService).remove(owner);
 }
 
-export function getModelMarkers(filter: { readonly owner?: string; readonly resource?: URI; readonly take?: number } = {}): readonly Marker[] {
+export function getModelMarkers(filter: { readonly owner?: string; readonly resource?: URI; readonly take?: number; } = {}): readonly Marker[] {
 	const markers = StandaloneServices.get(IMarkerService).read(filter.resource, filter.owner);
 	if (filter.take === undefined) return markers;
 	if (!Number.isSafeInteger(filter.take) || filter.take < 0) throw new RangeError('Marker take must be a non-negative integer');

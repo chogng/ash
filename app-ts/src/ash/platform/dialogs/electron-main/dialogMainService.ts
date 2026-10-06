@@ -113,7 +113,7 @@ export class DialogMainService extends Disposable {
 	}
 
 	private lockFileDialog(options: OpenDialogOptions | SaveDialogOptions, window: BrowserWindow | undefined): (() => void) | undefined {
-		if (!window) return () => {};
+		if (!window) return () => { };
 		const windowId = window.id;
 		const key = hash(options);
 		const locks = this.fileDialogLocks.get(windowId) ?? new Set<number>();

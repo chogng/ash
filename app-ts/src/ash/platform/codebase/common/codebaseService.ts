@@ -9,7 +9,7 @@ export interface CodebaseProviderConfiguration {
 	readonly provider: string;
 	readonly baseUrl?: string | null;
 	readonly maxOutputTokens?: number | null;
-	readonly modelContext?: Readonly<Record<string, { readonly contextWindow: number; readonly autoCompactTokenLimit?: number | null }>>;
+	readonly modelContext?: Readonly<Record<string, { readonly contextWindow: number; readonly autoCompactTokenLimit?: number | null; }>>;
 }
 
 export interface CodebaseModels {

@@ -9,6 +9,15 @@
 	color: var(--ash-foreground);
 	font-size: var(--ash-font-size-body1);
 }
-.ash-dictation-onboarding h3, .ash-dictation-onboarding p { margin: 0; }
-.ash-dictation-onboarding p { overflow-wrap: anywhere; }
-.ash-dictation-onboarding-actions { display: flex; flex-wrap: wrap; gap: var(--ash-spacing-size80); }
+.ash-dictation-onboarding h3,
+.ash-dictation-onboarding p {
+	margin: 0;
+}
+.ash-dictation-onboarding p {
+	overflow-wrap: anywhere;
+}
+.ash-dictation-onboarding-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}

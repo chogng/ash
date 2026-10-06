@@ -1,10 +1,7 @@
 {
   "model": "gpt-5.6-sol",
   "scope": "Codex child task traces, not direct standalone API TTFT",
-  "pilot_pairs": [
-    1,
-    2
-  ],
+  "pilot_pairs": [1, 2],
   "script_sha256": "4ca8956fc61bfffa66a740010bc0e1657acadc15c73e2255ce2ab2fe9f5f8292",
   "rows": [
     {

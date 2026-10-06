@@ -32,7 +32,7 @@ export class LineTokens implements IViewLineTokens {
 		return new LineTokens(tokens, lineContent, decoder);
 	}
 
-	public static createFromTextAndMetadata(data: { text: string; metadata: number }[], decoder: ILanguageIdCodec): LineTokens {
+	public static createFromTextAndMetadata(data: { text: string; metadata: number; }[], decoder: ILanguageIdCodec): LineTokens {
 		let offset = 0;
 		let fullText = '';
 		const tokens = new Array<number>();
@@ -199,7 +199,7 @@ export class LineTokens implements IViewLineTokens {
 	}
 
 	/** @param insertTokens Must be sorted by offset. */
-	public withInserted(insertTokens: { offset: number; text: string; tokenMetadata: number }[]): LineTokens {
+	public withInserted(insertTokens: { offset: number; text: string; tokenMetadata: number; }[]): LineTokens {
 		if (insertTokens.length === 0) {
 			return this;
 		}

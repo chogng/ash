@@ -16,9 +16,11 @@ export class LoggerChannelClient implements ILoggerService, ILogSink {
 
 	public createLogger(category: string): LogService {
 		if (!category.trim()) { throw new TypeError('Invalid logger category'); }
-		return new LogService({ sinks: [new ConsoleLogSink(), {
-			log: entry => this.log({ ...entry, category: entry.category === 'application' ? category : entry.category }),
-		}] });
+		return new LogService({
+			sinks: [new ConsoleLogSink(), {
+				log: entry => this.log({ ...entry, category: entry.category === 'application' ? category : entry.category }),
+			}]
+		});
 	}
 
 	public log(entry: LogEntry): void {

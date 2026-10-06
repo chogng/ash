@@ -14,7 +14,7 @@ interface WebLaunch {
 	reloadBackend(): Promise<void>;
 }
 
-export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv> }): Promise<WebLaunch> {
+export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; }): Promise<WebLaunch> {
 	const root = resolve(import.meta.dirname, '../..');
 	const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 	const suffix = process.platform === 'win32' ? '.exe' : '';
@@ -39,10 +39,12 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	const child = spawn(executable, arguments_, { cwd: root, env: environment, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
 	let diagnostic = '';
 	child.stderr.on('data', chunk => { diagnostic = (diagnostic + String(chunk)).slice(-8192); });
-	const exited = new Promise<number>(resolveExit => { child.once('close', code => {
-		if (code !== 0 && diagnostic) console.error(diagnostic.trim());
-		resolveExit(code ?? 1);
-	}); });
+	const exited = new Promise<number>(resolveExit => {
+		child.once('close', code => {
+			if (code !== 0 && diagnostic) console.error(diagnostic.trim());
+			resolveExit(code ?? 1);
+		});
+	});
 	let closing: Promise<void> | undefined;
 	const close = (): Promise<void> => closing ??= (async () => {
 		child.stdin.end();
@@ -67,17 +69,19 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 				} catch (error) { finish(error instanceof Error ? error : new Error('Invalid Web launch record')); }
 			});
 		});
-		return { info, exited, close, reloadBackend: async () => {
-			const selected = developmentAshPackagePath(root, 'packaged-node');
-			const backend = source.ASH_APP_SERVER_PATH ?? join(selected, 'bin', `ash-app-server${suffix}`);
-			// Keep the Web lease alive: it restores the same listener and browser tokens
-			// when the managed backend adopts the newly published package.
-			await promisify(execFile)(join(selected, 'bin', `ash-app-server-daemon${suffix}`), ['ensure-selected'], {
-				env: { ...environment, ASH_APP_SERVER_PATH: backend, ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(selected, 'ash-path', `rg${suffix}`)) },
-				windowsHide: true, timeout: 30_000,
-			});
-			console.info('[app-server] Web backend selected');
-		} };
+		return {
+			info, exited, close, reloadBackend: async () => {
+				const selected = developmentAshPackagePath(root, 'packaged-node');
+				const backend = source.ASH_APP_SERVER_PATH ?? join(selected, 'bin', `ash-app-server${suffix}`);
+				// Keep the Web lease alive: it restores the same listener and browser tokens
+				// when the managed backend adopts the newly published package.
+				await promisify(execFile)(join(selected, 'bin', `ash-app-server-daemon${suffix}`), ['ensure-selected'], {
+					env: { ...environment, ASH_APP_SERVER_PATH: backend, ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(selected, 'ash-path', `rg${suffix}`)) },
+					windowsHide: true, timeout: 30_000,
+				});
+				console.info('[app-server] Web backend selected');
+			}
+		};
 	} catch (error) { await close(); throw error; }
 }
 

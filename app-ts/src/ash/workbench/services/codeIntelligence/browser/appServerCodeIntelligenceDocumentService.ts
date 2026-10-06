@@ -3,7 +3,7 @@ import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentSe
 
 /** App Server adapter for ephemeral code-intelligence document overlays. */
 export class AppServerCodeIntelligenceDocumentService implements ICodeIntelligenceDocumentService {
-	constructor(private readonly api: Pick<ICodebaseSymbolsApi, "synchronize" | "close">) {}
+	constructor(private readonly api: Pick<ICodebaseSymbolsApi, "synchronize" | "close">) { }
 
 	async synchronize(document: CodeIntelligenceDocumentSnapshot): Promise<void> {
 		await this.api.synchronize({ document });

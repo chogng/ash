@@ -4,6 +4,7 @@ A successful PSEC 1.0 execution does not establish independent ingress policy.
 The ABI and NetworkIngress bit follow MXC's pinned process_container secenv.rs.
 No environment or process is created by this inventory.
 """
+
 import ctypes
 import json
 import sys
@@ -27,8 +28,11 @@ def inventory():
     except AttributeError as error:
         report.update(status="unsupported-api", error=str(error))
         return report
-    version.argtypes = [wintypes.DWORD, ctypes.POINTER(ctypes.c_ubyte),
-                        ctypes.POINTER(wintypes.DWORD)]
+    version.argtypes = [
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_ubyte),
+        ctypes.POINTER(wintypes.DWORD),
+    ]
     version.restype = ctypes.c_long
     support.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
     support.restype = ctypes.c_long
@@ -36,17 +40,27 @@ def inventory():
     version_result = version(1, ctypes.byref(available), ctypes.byref(minor))
     flags = ctypes.c_uint64()
     support_result = support(ctypes.byref(flags))
-    report.update(version={"hresult": hex(version_result & 0xffffffff),
-                           "available": bool(available.value), "major": 1,
-                           "minor": minor.value},
-                  support={"hresult": hex(support_result & 0xffffffff),
-                           "flags": hex(flags.value),
-                           "networkIngress": bool(flags.value & 0x8)})
+    report.update(
+        version={
+            "hresult": hex(version_result & 0xFFFFFFFF),
+            "available": bool(available.value),
+            "major": 1,
+            "minor": minor.value,
+        },
+        support={
+            "hresult": hex(support_result & 0xFFFFFFFF),
+            "flags": hex(flags.value),
+            "networkIngress": bool(flags.value & 0x8),
+        },
+    )
     if version_result < 0 or support_result < 0:
         report["status"] = "failed"
     else:
-        report["status"] = ("advertised-ingress-api" if available.value and
-                            minor.value >= 1 and flags.value & 0x8 else "unsupported-ingress-api")
+        report["status"] = (
+            "advertised-ingress-api"
+            if available.value and minor.value >= 1 and flags.value & 0x8
+            else "unsupported-ingress-api"
+        )
     return report
 
 

@@ -12,7 +12,7 @@ import { type TextMateGrammarContent, type RegisteredTextMateGrammarDefinition, 
 import * as textMateNamespace from "vscode-textmate";
 import { type IGrammar, type IGrammarConfiguration, type IOnigLib, type IRawGrammar, type Registry as TextMateRegistry, type StateStack } from "vscode-textmate";
 
-const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace }).default ?? textMateNamespace;
+const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace; }).default ?? textMateNamespace;
 const { INITIAL, Registry, parseRawGrammar } = textMateRuntime;
 
 export interface TextMateGrammarSnapshotSource {
@@ -281,7 +281,7 @@ class TextMateTokenizationCache {
 		private readonly scopeResolver: TextMateScopeResolver,
 		private readonly metadataResolver: TextMateScopeMetadataResolver,
 		private readonly onDidUpdate: TextMateTokenizationServiceOptions["onDidUpdateCache"],
-	) {}
+	) { }
 
 	getTokens(snapshot: TextSnapshot, signal: AbortSignal): LanguageTokenResult {
 		if (this.syntax?.version === snapshot.version) return this.syntax.tokens;
@@ -411,7 +411,7 @@ function createGrammarMetadataResolver(definition: RegisteredTextMateGrammarDefi
 	const balanced = definition.balancedBracketScopes ?? ["*"];
 	const unbalanced = definition.unbalancedBracketScopes ?? [];
 	return scopes => {
-		let embedded: { readonly selector: string; readonly languageId: string } | undefined;
+		let embedded: { readonly selector: string; readonly languageId: string; } | undefined;
 		for (const [selector, languageId] of embeddedLanguages) {
 			if (matchesScopeSelector(selector, scopes) && (!embedded || selector.length > embedded.selector.length)) embedded = { selector, languageId };
 		}
@@ -425,7 +425,7 @@ function grammarAndInjections(definition: RegisteredTextMateGrammarDefinition, s
 }
 
 function resolveTokenTypeOverride(scopes: readonly string[], tokenTypes: ReadonlyMap<string, TextMateGrammarTokenType>): string | undefined {
-	let best: { readonly selector: string; readonly tokenType: TextMateGrammarTokenType } | undefined;
+	let best: { readonly selector: string; readonly tokenType: TextMateGrammarTokenType; } | undefined;
 	for (const [selector, tokenType] of tokenTypes) {
 		if (!matchesScopeSelector(selector, scopes)) continue;
 		if (!best || selector.length > best.selector.length) best = { selector, tokenType };
@@ -468,7 +468,7 @@ function normalizeRawGrammar(content: TextMateGrammarContent, scopeName: string,
 	return grammar;
 }
 
-function scanAllLines(grammar: IGrammar, lines: readonly string[], timeLimit: number, resolver: TextMateScopeResolver, metadataResolver: TextMateScopeMetadataResolver, signal?: AbortSignal): { readonly lineResults: readonly TextMateLineResult[]; readonly scannedLineCount: number } {
+function scanAllLines(grammar: IGrammar, lines: readonly string[], timeLimit: number, resolver: TextMateScopeResolver, metadataResolver: TextMateScopeMetadataResolver, signal?: AbortSignal): { readonly lineResults: readonly TextMateLineResult[]; readonly scannedLineCount: number; } {
 	const lineResults: TextMateLineResult[] = [];
 	let state = INITIAL;
 	for (const line of lines) {
@@ -480,7 +480,7 @@ function scanAllLines(grammar: IGrammar, lines: readonly string[], timeLimit: nu
 	return { lineResults: Object.freeze(lineResults), scannedLineCount: lines.length };
 }
 
-function updateLines(grammar: IGrammar, previousLines: readonly string[], previousResults: readonly TextMateLineResult[], lines: readonly string[], timeLimit: number, resolver: TextMateScopeResolver, metadataResolver: TextMateScopeMetadataResolver, signal?: AbortSignal): { readonly lineResults: readonly TextMateLineResult[]; readonly scannedLineCount: number } {
+function updateLines(grammar: IGrammar, previousLines: readonly string[], previousResults: readonly TextMateLineResult[], lines: readonly string[], timeLimit: number, resolver: TextMateScopeResolver, metadataResolver: TextMateScopeMetadataResolver, signal?: AbortSignal): { readonly lineResults: readonly TextMateLineResult[]; readonly scannedLineCount: number; } {
 	const prefixLength = commonPrefixLength(previousLines, lines);
 	const suffixLength = commonArraySuffixLength(previousLines, lines, prefixLength);
 	const lineResults = previousResults.slice(0, prefixLength);
@@ -526,7 +526,7 @@ function scanLine(grammar: IGrammar, line: string, inputState: StateStack, timeL
 	return Object.freeze({ inputState, outputState: result.ruleStack, tokens: Object.freeze(tokens) });
 }
 
-function normalizeStyle(style: TextMateResolvedTokenStyle): TextMateResolvedTokenStyle & { readonly tokenType: string; readonly modifiers: readonly string[] } {
+function normalizeStyle(style: TextMateResolvedTokenStyle): TextMateResolvedTokenStyle & { readonly tokenType: string; readonly modifiers: readonly string[]; } {
 	if (typeof style !== "object" || style === null || typeof style.tokenType !== "string" || style.tokenType.trim() !== style.tokenType || style.tokenType.length === 0) {
 		throw new TypeError("TextMate scope resolver must return a non-empty token type");
 	}
@@ -544,7 +544,7 @@ function normalizeStyle(style: TextMateResolvedTokenStyle): TextMateResolvedToke
 	return Object.freeze({ tokenType: style.tokenType, modifiers: Object.freeze(modifiers), ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) });
 }
 
-function appendRelativeToken(tokens: TextMateRelativeToken[], startColumn: number, endColumn: number, style: TextMateResolvedTokenStyle & { readonly tokenType: string; readonly modifiers: readonly string[] }, metadata: TextMateScopeMetadata): void {
+function appendRelativeToken(tokens: TextMateRelativeToken[], startColumn: number, endColumn: number, style: TextMateResolvedTokenStyle & { readonly tokenType: string; readonly modifiers: readonly string[]; }, metadata: TextMateScopeMetadata): void {
 	const presentation = style.foreground === undefined && style.background === undefined && style.fontStyle === undefined ? undefined : Object.freeze({ ...(style.foreground === undefined ? {} : { foreground: style.foreground }), ...(style.background === undefined ? {} : { background: style.background }), ...(style.fontStyle === undefined ? {} : { fontStyle: style.fontStyle }) });
 	const previous = tokens.at(-1);
 	if (previous && previous.endColumn === startColumn && previous.tokenType === style.tokenType && arraysEqual(previous.modifiers, style.modifiers) && previous.languageId === metadata.languageId && previous.balancedBrackets === metadata.balancedBrackets && presentationsEqual(previous.presentation, presentation)) {

@@ -10,8 +10,8 @@ transcript layout 或主题选择。
 
 ## 公共契约
 
-| Symbol | 职责 | Failure semantics |
-| --- | --- | --- |
+| Symbol      | 职责                                                                        | Failure semantics                                                   |
+| ----------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | `ansi_text` | ANSI SGR → Ratatui styles；移除其他 terminal control sequence；tab → 四空格 | best-effort、无 `Result`；解析失败时移除 ESC byte 并返回 plain text |
 
 调用关系固定为：
@@ -30,9 +30,9 @@ parser state，或依赖 `ash-terminal`。完整 PTY terminal emulation 属于
 
 ## 内部实现与修改影响
 
-| Symbol | 可见性 | 职责 | 修改影响 |
-| --- | --- | --- | --- |
-| `expand_tabs` | private | 固定把 tab 投影为四空格，避免 transcript gutter 碰撞 | 同步检查 tab 测试和调用方 gutter contract |
+| Symbol                  | 可见性              | 职责                                                   | 修改影响                                        |
+| ----------------------- | ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| `expand_tabs`           | private             | 固定把 tab 投影为四空格，避免 transcript gutter 碰撞   | 同步检查 tab 测试和调用方 gutter contract       |
 | `ansi_to_tui::IntoText` | dependency boundary | 解析 SGR、过滤非展示 escape sequence、生成 owned spans | 升级时必须与 workspace Ratatui 版本保持类型兼容 |
 
 当前依赖 `ansi-to-tui 7`，对应 workspace 的 Ratatui `0.29` 类型。若升级 Ratatui，必须先验证

@@ -11,13 +11,13 @@
 这份规范帮助需求提出方把“希望增加一个接口”写成能够实现、测试和长期维护的产品契约。先说明
 用户问题和权威状态，再定义方法、字段、错误、取消、幂等和恢复；不能只提交一组 DTO 或方法名。
 
-| 你正在确认什么 | 文档必须给出的答案 |
-| --- | --- |
-| 为什么需要接口 | 用户或客户端要完成的真实任务，以及明确不做什么 |
-| 谁拥有状态 | Server、连接、Session、Thread、Turn 或能力句柄中的唯一所有者 |
-| 成功意味着什么 | 可观察结果、持久化边界和它不保证的内容 |
-| 失败后怎么办 | 稳定错误、能否重试、取消和迟到结果处理 |
-| 如何安全演进 | 能力协商、版本、生成物和所有调用方同步方式 |
+| 你正在确认什么 | 文档必须给出的答案                                           |
+| -------------- | ------------------------------------------------------------ |
+| 为什么需要接口 | 用户或客户端要完成的真实任务，以及明确不做什么               |
+| 谁拥有状态     | Server、连接、Session、Thread、Turn 或能力句柄中的唯一所有者 |
+| 成功意味着什么 | 可观察结果、持久化边界和它不保证的内容                       |
+| 失败后怎么办   | 稳定错误、能否重试、取消和迟到结果处理                       |
+| 如何安全演进   | 能力协商、版本、生成物和所有调用方同步方式                   |
 
 ## 1. 文档头
 
@@ -46,10 +46,10 @@ lastUpdated: YYYY-MM-DD
 
 先提供一张完整清单：
 
-| Method | Direction | Consumers | Side effect | Idempotent | Capability | Summary |
-|---|---|---|---:|---:|---|---|
-| `session/request` (`createThread`) | Client → Server | Desktop, CLI | yes | required | sessions | 创建 Thread |
-| `browser/observe` | Server → Client | Desktop host | no | n/a | browser | 观察目标 |
+| Method                             | Direction       | Consumers    | Side effect | Idempotent | Capability | Summary     |
+| ---------------------------------- | --------------- | ------------ | ----------: | ---------: | ---------- | ----------- |
+| `session/request` (`createThread`) | Client → Server | Desktop, CLI |         yes |   required | sessions   | 创建 Thread |
+| `browser/observe`                  | Server → Client | Desktop host |          no |        n/a | browser    | 观察目标    |
 
 Direction 只能使用：
 
@@ -82,10 +82,10 @@ transport 不支持该能力，必须通过 initialize capability 明确声明�
 
 字段表格式：
 
-| Field | Type | Required | Nullable | Constraints | Meaning |
-|---|---|---:|---:|---|---|
-| `threadId` | `ThreadId` | yes | no | existing | 目标 Thread |
-| `maxBytes` | integer | yes | no | 1..262144 | 最大 chunk |
+| Field      | Type       | Required | Nullable | Constraints | Meaning     |
+| ---------- | ---------- | -------: | -------: | ----------- | ----------- |
+| `threadId` | `ThreadId` |      yes |       no | existing    | 目标 Thread |
+| `maxBytes` | integer    |      yes |       no | 1..262144   | 最大 chunk  |
 
 `required` 和 `nullable` 必须分开说明。不能用“可选”同时表达字段缺失和 JSON `null`。
 
@@ -242,10 +242,10 @@ Server → Client 请求必须定义：
 
 每个错误码必须稳定，并包含：
 
-| Error | Retryable | Client action | Data |
-|---|---:|---|---|
-| `ServerOverloaded` | yes | jitter backoff | `retryAfterMs` |
-| `BrowserTargetUnavailable` | no | 刷新目标列表 | `targetId` |
+| Error                      | Retryable | Client action  | Data           |
+| -------------------------- | --------: | -------------- | -------------- |
+| `ServerOverloaded`         |       yes | jitter backoff | `retryAfterMs` |
+| `BrowserTargetUnavailable` |        no | 刷新目标列表   | `targetId`     |
 
 不要只写“失败时返回 error”。
 

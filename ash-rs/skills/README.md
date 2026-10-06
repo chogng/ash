@@ -30,21 +30,21 @@ Catalog scanner 通过 [`ash-file-identity`](../file-identity/README.md) 从已�
 
 ## 公共契约
 
-| Symbol | 当前职责 | 不承担 |
-| --- | --- | --- |
-| `ash_protocol::SkillName` | Agent Skills 的 lowercase ASCII、数字、单连字符、1–64 字符 identity | display alias、Unicode normalization |
-| `ash_protocol::{SkillSourceId, SkillId}` | 跨 config/catalog/App Server 的 source-qualified stable identity | raw host path、版本选择 |
-| `SkillSourceRoot` | host 注入并验证的 built-in/user/Directory collection 或 exact Plugin/Marketplace Skill handle | config resolution、安装、immutability |
-| `SkillCatalog::discover` | 对受控 roots 做首次 bounded metadata scan | arbitrary path search、recursive source search |
-| `SkillCatalog::refresh` | 重扫并仅在 visible projection 改变时 bump generation | filesystem watching、safe-point scheduling |
-| `SkillCatalogSnapshot::list/read` | deterministic metadata-only read API | `SKILL.md` body/content API |
-| `SkillCatalog::activate` | 解析 `SkillRef`、校验 pinned digest 并从受控 root 读取 exact body | enablement、compatibility、Turn 持久化 |
-| `ActivatedSkill` | 将完整 body 与 `FrozenSkillActivation` provenance 绑定 | Core instruction precedence、工具授权 |
-| `SkillResourcePath` | 校验 Skill package root 下非空、无 traversal 的相对路径 | absolute path、authority、执行权限 |
-| `SkillResourceKind` | 按首层目录标识 instruction/reference/script/asset/agent metadata/other 用途 | 改变 resolver、授予执行或发布权限 |
-| `SkillCatalog::read_resource` | 在 pinned Skill digest 下读取单个有界 regular file | 递归展开、脚本执行、MIME 或外部 URL |
-| `SkillResource` | 返回 relative path、用途、内容摘要与原始 bytes | 模型文本编码、host private root |
-| `SkillDiagnostic` | 隔离单 entry/source discovery failure | secret/body/private root 回传 |
+| Symbol                                   | 当前职责                                                                                      | 不承担                                         |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `ash_protocol::SkillName`                | Agent Skills 的 lowercase ASCII、数字、单连字符、1–64 字符 identity                           | display alias、Unicode normalization           |
+| `ash_protocol::{SkillSourceId, SkillId}` | 跨 config/catalog/App Server 的 source-qualified stable identity                              | raw host path、版本选择                        |
+| `SkillSourceRoot`                        | host 注入并验证的 built-in/user/Directory collection 或 exact Plugin/Marketplace Skill handle | config resolution、安装、immutability          |
+| `SkillCatalog::discover`                 | 对受控 roots 做首次 bounded metadata scan                                                     | arbitrary path search、recursive source search |
+| `SkillCatalog::refresh`                  | 重扫并仅在 visible projection 改变时 bump generation                                          | filesystem watching、safe-point scheduling     |
+| `SkillCatalogSnapshot::list/read`        | deterministic metadata-only read API                                                          | `SKILL.md` body/content API                    |
+| `SkillCatalog::activate`                 | 解析 `SkillRef`、校验 pinned digest 并从受控 root 读取 exact body                             | enablement、compatibility、Turn 持久化         |
+| `ActivatedSkill`                         | 将完整 body 与 `FrozenSkillActivation` provenance 绑定                                        | Core instruction precedence、工具授权          |
+| `SkillResourcePath`                      | 校验 Skill package root 下非空、无 traversal 的相对路径                                       | absolute path、authority、执行权限             |
+| `SkillResourceKind`                      | 按首层目录标识 instruction/reference/script/asset/agent metadata/other 用途                   | 改变 resolver、授予执行或发布权限              |
+| `SkillCatalog::read_resource`            | 在 pinned Skill digest 下读取单个有界 regular file                                            | 递归展开、脚本执行、MIME 或外部 URL            |
+| `SkillResource`                          | 返回 relative path、用途、内容摘要与原始 bytes                                                | 模型文本编码、host private root                |
+| `SkillDiagnostic`                        | 隔离单 entry/source discovery failure                                                         | secret/body/private root 回传                  |
 
 `SkillSourceRoot` 的 canonical host path 是 private implementation state，其 `Debug` 输出也会隐藏
 路径。调用方必须从已解析的 config/内建 release authority 构造 handle，不能把客户端提交的 path
@@ -80,16 +80,16 @@ SkillCatalog::read_resource
 
 关键 limits：
 
-| 项目 | 当前值 |
-| --- | ---: |
-| source direct entries | 1,024 |
-| frontmatter | 16 KiB |
-| frontmatter lines | 256 |
-| one frontmatter line | 2 KiB |
-| complete `SKILL.md` | 1 MiB |
-| one package resource | 256 KiB |
-| resource relative path | 1 KiB |
-| metadata entries | 64 |
+| 项目                   |  当前值 |
+| ---------------------- | ------: |
+| source direct entries  |   1,024 |
+| frontmatter            |  16 KiB |
+| frontmatter lines      |     256 |
+| one frontmatter line   |   2 KiB |
+| complete `SKILL.md`    |   1 MiB |
+| one package resource   | 256 KiB |
+| resource relative path |   1 KiB |
+| metadata entries       |      64 |
 
 `scan_skill_file` 对完整 `SKILL.md` bytes 流式 SHA-256，但最多只保留 16 KiB frontmatter；
 Markdown body 不进入 catalog entry、diagnostic 或 snapshot debug projection。只有

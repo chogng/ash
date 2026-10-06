@@ -21,23 +21,23 @@
 
 ## 运行基础设施
 
-| Method | 参数与结果 | 行为 |
-| --- | --- | --- |
-| `diagnostics/read` | 空参数 → `DiagnosticSnapshot` | 有界无内容诊断、构建身份和使用计数 |
-| `mcp/server/status` | 空参数 → `McpServerStatusResult` | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
-| `feedback/prepare` | HTTPS endpoint → `PreparedFeedback` | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效 |
-| `feedback/upload` | operationId、digest → 空结果 | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation |
-| `queue/enqueue` | commandId、Session/Thread、输入、mode、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；目录和省略时的工具模式由后端选择 |
-| `queue/list` | Session/Thread → messages | 返回队列状态和输入；窗口关闭不删除队列 |
-| `queue/cancel` | Session/Thread、commandId → QueuedMessage | 取消未交付消息；交付中或已开始使用 Turn 中断 |
-| `queue/edit` | Session/Thread、commandId、expectedRevision、action → QueuedMessage | pause、replace、move、send；冲突直接报错 |
-| `extension/items/list` | Session/Thread → items | 返回扩展自有文本展示项；校验身份和大小 |
-| `memory/add` / `memory/update` / `memory/delete` | commandId、作用域、Memory 身份与 revision → mutation result | 用户显式新增、按 revision 更新或删除；命令可重放，删除立即移除正文 |
-| `memory/scopes` | 可选 Thread → scope 标签和 policy | 返回 Profile、当前关联 Project 与已授权 Dir |
-| `memory/list` / `memory/read` / `memory/search` | 精确作用域、分页或 Memory 身份 → 有界结果 | 只允许产品 host；cursor 绑定 catalog revision 和查询 |
-| `memory/citation/read` | Memory ID、作用域、revision、UTF-8 范围 → 引用正文 | 引用不授予权限；已删除或版本不符明确报错 |
-| `memory/policy/read` / `memory/policy/update` | 作用域、commandId、policy revision、automaticRead、modelWrite → 读取与模型保存授权 | 默认关闭；修改与重放沿用 Memory 通知和冲突契约 |
-| `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource | 进程内存诊断，不读取长期 Memory |
+| Method                                                            | 参数与结果                                                                                      | 行为                                                                                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `diagnostics/read`                                                | 空参数 → `DiagnosticSnapshot`                                                                   | 有界无内容诊断、构建身份和使用计数                                                                         |
+| `mcp/server/status`                                               | 空参数 → `McpServerStatusResult`                                                                | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
+| `feedback/prepare`                                                | HTTPS endpoint → `PreparedFeedback`                                                             | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效                                                       |
+| `feedback/upload`                                                 | operationId、digest → 空结果                                                                    | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation                          |
+| `queue/enqueue`                                                   | commandId、Session/Thread、输入、mode、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；目录和省略时的工具模式由后端选择                                                   |
+| `queue/list`                                                      | Session/Thread → messages                                                                       | 返回队列状态和输入；窗口关闭不删除队列                                                                     |
+| `queue/cancel`                                                    | Session/Thread、commandId → QueuedMessage                                                       | 取消未交付消息；交付中或已开始使用 Turn 中断                                                               |
+| `queue/edit`                                                      | Session/Thread、commandId、expectedRevision、action → QueuedMessage                             | pause、replace、move、send；冲突直接报错                                                                   |
+| `extension/items/list`                                            | Session/Thread → items                                                                          | 返回扩展自有文本展示项；校验身份和大小                                                                     |
+| `memory/add` / `memory/update` / `memory/delete`                  | commandId、作用域、Memory 身份与 revision → mutation result                                     | 用户显式新增、按 revision 更新或删除；命令可重放，删除立即移除正文                                         |
+| `memory/scopes`                                                   | 可选 Thread → scope 标签和 policy                                                               | 返回 Profile、当前关联 Project 与已授权 Dir                                                                |
+| `memory/list` / `memory/read` / `memory/search`                   | 精确作用域、分页或 Memory 身份 → 有界结果                                                       | 只允许产品 host；cursor 绑定 catalog revision 和查询                                                       |
+| `memory/citation/read`                                            | Memory ID、作用域、revision、UTF-8 范围 → 引用正文                                              | 引用不授予权限；已删除或版本不符明确报错                                                                   |
+| `memory/policy/read` / `memory/policy/update`                     | 作用域、commandId、policy revision、automaticRead、modelWrite → 读取与模型保存授权              | 默认关闭；修改与重放沿用 Memory 通知和冲突契约                                                             |
+| `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource                                                                  | 进程内存诊断，不读取长期 Memory                                                                            |
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
 
@@ -97,10 +97,10 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 
 ## 指令导入
 
-| Method | 参数与结果 | 行为 |
-| --- | --- | --- |
+| Method                       | 参数与结果                                                                                          | 行为                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `instructions/importPreview` | `scope`、`source`、`directory: {sessionId, path}`、`sources: string[]` → digest、items、diagnostics | 预览选定生态和作用范围的指令，sources 为空时发现全部；非空时只接受准确的已发现相对路径。需要目录 ReadFiles 与 BrowseFiles。 |
-| `instructions/import` | 同一 scope、source、directory、sources 与已审阅 digest → items | 重读来源并检查摘要；需要 WriteFiles，逐文件有条件发布。 |
+| `instructions/import`        | 同一 scope、source、directory、sources 与已审阅 digest → items                                      | 重读来源并检查摘要；需要 WriteFiles，逐文件有条件发布。                                                                     |
 
 `scope` 必填，值为 `directory` 或 `user`，不隐式选择作用范围。`source` 必填，值为 `copilot`、`claude`、`codex` 或 `cursor`，无默认来源。摘要绑定该来源，不能跨来源复用。
 
@@ -130,12 +130,12 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 
 ## 通话屏幕共享
 
-| 接口 | 参数与结果 | 行为 |
-| --- | --- | --- |
-| `call/screenSources` | `resourceId` → `sources` | 返回可用显示器和窗口的 `target`、标题与尺寸；要求已连接且成员可共享。 |
-| `call/control` | `control: {type: "shareScreen", target: {type: "display" 或 "window", id}}` | 按所选来源以 15 fps 采集并发布；来源 ID 在执行时重新验证。 |
-| `call/control` | `control: {type: "stopScreenShare"}` | 停止采集并注销视频轨道，保留通话。 |
-| `call/screenFrames` | `resourceId` → `mediaEpoch`、`tracks`、`frames` | 拉取最新画面；每个 frame 含 `trackId`、`participantId` 和 base64 `jpeg`。 |
+| 接口                 | 参数与结果                                                                  | 行为                                                                      |
+| -------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `call/screenSources` | `resourceId` → `sources`                                                    | 返回可用显示器和窗口的 `target`、标题与尺寸；要求已连接且成员可共享。     |
+| `call/control`       | `control: {type: "shareScreen", target: {type: "display" 或 "window", id}}` | 按所选来源以 15 fps 采集并发布；来源 ID 在执行时重新验证。                |
+| `call/control`       | `control: {type: "stopScreenShare"}`                                        | 停止采集并注销视频轨道，保留通话。                                        |
+| `call/screenFrames`  | `resourceId` → `mediaEpoch`、`tracks`、`frames`                             | 拉取最新画面；每个 frame 含 `trackId`、`participantId` 和 base64 `jpeg`。 |
 
 `CallStatus.screenSharing` 表示本地共享状态。上述接口仅允许拥有该通话资源的产品连接调用。角色限制由通话运行时执行；窗口关闭、重连和离开后需要用户重新选择并开始共享。
 
@@ -152,20 +152,19 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 
 - `ThreadItem.reasoning.state` 保存带作用域的加密 Responses 项；重载历史和工具续轮保留完整项，切换账户、模型或端点后不再发送旧项。
 
-
 ## 交互式终端进程
 
 `terminal/create` 和 `terminal/createInSessionDirectory` 返回实际启动信息 `ready: {pid, cwd}`；
 `terminal/attach` 返回同一进程的启动信息并旋转短期 bearer token。cwd 是启动时实际使用的目录，
 不是窗口 Workspace 的猜测，也不是当前目录。
 
-| Method | 当前协议语义 |
-| --- | --- |
+| Method                 | 当前协议语义                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `terminal/processInfo` | 按 terminalId/dirId 查询 ready、当前 cwd 和最后成功应用的 rows/cols；当前 cwd 在 macOS/Linux 查询，在无法查询的平台或退出后为 null。 |
-| `terminal/write` | 1–65536 字节 UTF-8 输入，保留现有命令状态检测。 |
-| `terminal/writeBinary` | base64 包装的 1–65536 个原始字节；编码长度最多 87384，不解码成文本，不推断命令。 |
-| `terminal/sendSignal` | signal 为 interrupt；Unix PTY 中断当前前台进程组，Windows 返回 TerminalUnsupported（-32066）。 |
-| `terminal/resize` | 成功应用字符尺寸后更新进程属性；非法尺寸不更新。 |
+| `terminal/write`       | 1–65536 字节 UTF-8 输入，保留现有命令状态检测。                                                                                      |
+| `terminal/writeBinary` | base64 包装的 1–65536 个原始字节；编码长度最多 87384，不解码成文本，不推断命令。                                                     |
+| `terminal/sendSignal`  | signal 为 interrupt；Unix PTY 中断当前前台进程组，Windows 返回 TerminalUnsupported（-32066）。                                       |
+| `terminal/resize`      | 成功应用字符尺寸后更新进程属性；非法尺寸不更新。                                                                                     |
 
 以上查询与控制只允许当前附着 connection，并重新检查目录执行授权；错误连接返回 TerminalNotOwner。
 非法 base64、超大输入和未知 signal 返回 InvalidParams。decoder、method map 和 schema 从 Rust 定义生成。
@@ -202,7 +201,6 @@ Turn summary 新增部分提交状态与 `committedPaths`；状态从精确回�
 授权绑定包摘要与宿主权限版本，更新不能继承不同包的授权。旧 revision 返回 PluginRevisionConflict；
 客户端重新查询，不自动覆盖。提交可能已落盘但回复丢失时，先查询，不自动重放修改。
 停用和撤销返回成功前，扩展运行时完成旧调用取消与进程退役。API 兼容性由实际扩展激活验证，入口存在不保证全部代码受支持。
-
 
 ## 编辑器扩展按事件启动
 

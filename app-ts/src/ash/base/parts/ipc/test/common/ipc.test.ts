@@ -126,7 +126,7 @@ suite('IPC channels', () => {
 		using resources = new DisposableStore();
 		const connections = resources.add(new Emitter<ClientConnectionEvent>());
 		const server = resources.add(new IPCServer(connections.event));
-		const operations: { context: string; cancelled: boolean; finish(value: unknown): void }[] = [];
+		const operations: { context: string; cancelled: boolean; finish(value: unknown): void; }[] = [];
 		const active = new Set<string>();
 		server.registerChannel('system', {
 			call<T>(context: string, _command: string, _arg: unknown, token?: CancellationToken): Promise<T> {
@@ -138,7 +138,7 @@ suite('IPC channels', () => {
 			},
 			listen<T>(context: string): Event<T> { return () => { active.add(context); return toDisposable(() => { active.delete(context); }); }; },
 		});
-		const open = (context: string): { client: IPCClient; disconnect: Emitter<void> } => {
+		const open = (context: string): { client: IPCClient; disconnect: Emitter<void>; } => {
 			const [a, b] = pair(resources);
 			const disconnect = resources.add(new Emitter<void>());
 			const client = resources.add(new IPCClient(a, 'untrusted renderer claim'));
@@ -147,8 +147,8 @@ suite('IPC channels', () => {
 			return { client, disconnect };
 		};
 		const first = open('window:1'); const second = open('window:2');
-		resources.add(first.client.getChannel('system').listen('changed')(() => {}));
-		resources.add(second.client.getChannel('system').listen('changed')(() => {}));
+		resources.add(first.client.getChannel('system').listen('changed')(() => { }));
+		resources.add(second.client.getChannel('system').listen('changed')(() => { }));
 		const firstChannel = first.client.getChannel('system');
 		const firstCall = firstChannel.call('read'); const secondCall = second.client.getChannel('system').call('read');
 		await setImmediate();
@@ -192,7 +192,7 @@ suite('IPC channels', () => {
 		using resources = new DisposableStore();
 		const connections = resources.add(new Emitter<ClientConnectionEvent>());
 		const server = resources.add(new IPCServer(connections.event));
-		const open = (context: string): { changes: Emitter<string>; disconnect: Emitter<void> } => {
+		const open = (context: string): { changes: Emitter<string>; disconnect: Emitter<void>; } => {
 			const [a, b] = pair(resources);
 			const client = resources.add(new IPCClient(a, 'renderer claim'));
 			const changes = resources.add(new Emitter<string>());

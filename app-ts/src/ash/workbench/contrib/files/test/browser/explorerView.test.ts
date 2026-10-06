@@ -33,7 +33,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 	const root = URI.file("/project");
 	const nextRoot = URI.file("/next-project");
 	const directoryReads: string[] = [];
-	using fileChanges = new Emitter<{ readonly resources: readonly URI[] | undefined }>();
+	using fileChanges = new Emitter<{ readonly resources: readonly URI[] | undefined; }>();
 	let addedRootFile = false;
 	let addedNestedFile = false;
 	let failNextRootRead = false;
@@ -150,7 +150,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			return testManagedHover(() => { hoverDisposals += 1; });
 		},
 		showHover: () => testManagedHover(),
-		hideHover() {},
+		hideHover() { },
 	};
 
 	try {
@@ -162,9 +162,9 @@ test("ExplorerView opens workspace files on single click", async () => {
 		using contextKeyService = new ContextKeyService();
 		const accessibleViewService: IAccessibleViewService = {
 			show: () => false,
-			getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => {}, showAccessibleViewHelp: () => {},
-			dispose() {},
-			[Symbol.dispose]() {},
+			getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { },
+			dispose() { },
+			[Symbol.dispose]() { },
 		};
 		const { EmptyView } = await import(
 			"../../../../../workbench/contrib/files/browser/views/emptyView.js"
@@ -182,7 +182,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 				openFolder: async () => {
 					folderOpens += 1;
 				},
-				openWorkspace: async () => {},
+				openWorkspace: async () => { },
 				pickFolder: async () => undefined,
 			},
 		);
@@ -405,7 +405,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		});
 		await waitFor(() =>
 			pane.element.querySelector(".ash-pane-view-header-title")?.textContent ===
-				"next-project" &&
+			"next-project" &&
 			rowLabels(pane.element).includes("next.txt")
 		);
 		assert.deepEqual(rowLabels(pane.element), ["link", "next.txt", "unknown"]);
@@ -426,9 +426,9 @@ test("ExplorerView opens workspace files on single click", async () => {
 function testManagedHover(onDispose?: () => void): IManagedHover {
 	return {
 		visible: false,
-		show() {},
-		hide() {},
-		update() {},
+		show() { },
+		hide() { },
+		update() { },
 		dispose() { onDispose?.(); },
 		[Symbol.dispose]() { onDispose?.(); },
 	};

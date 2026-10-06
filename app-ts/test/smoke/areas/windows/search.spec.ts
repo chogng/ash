@@ -197,7 +197,7 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	if (target.kind === 'electron') {
 		await (application as ElectronApplication).evaluate(({ dialog }) => {
 			dialog.showMessageBox = async (...args: unknown[]) => {
-				(globalThis as typeof globalThis & { searchConfirmation?: unknown }).searchConfirmation = args.at(-1);
+				(globalThis as typeof globalThis & { searchConfirmation?: unknown; }).searchConfirmation = args.at(-1);
 				return { response: 0, checkboxChecked: false };
 			};
 		});
@@ -211,7 +211,7 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	await workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true }).fill('updated');
 	await workbench.search.element.getByRole('button', { name: 'Replace All', exact: true }).click();
 	if (target.kind === 'electron') {
-		await expect.poll(() => (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { searchConfirmation?: unknown }).searchConfirmation)).toMatchObject({ message: 'Replace 1 matches in 1 files?' });
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { searchConfirmation?: unknown; }).searchConfirmation)).toMatchObject({ message: 'Replace 1 matches in 1 files?' });
 	} else {
 		const dialog = workbench.page.getByRole('dialog');
 		await expect(dialog).toContainText('Replace 1 matches in 1 files?');
@@ -300,7 +300,7 @@ test.describe('Search with a granted browser folder', () => {
 			let release!: () => void;
 			const pending = new Promise<void>(resolve => { release = resolve; });
 			FileSystemFileHandle.prototype.getFile = async function () { await pending; return original.call(this); };
-			(globalThis as typeof globalThis & { resumeSearchRead?: () => void }).resumeSearchRead = () => {
+			(globalThis as typeof globalThis & { resumeSearchRead?: () => void; }).resumeSearchRead = () => {
 				FileSystemFileHandle.prototype.getFile = original;
 				release();
 			};
@@ -313,7 +313,7 @@ test.describe('Search with a granted browser folder', () => {
 			await expect(pane.getByRole('button', { name: 'Search again', exact: true })).toBeEnabled();
 		} finally {
 			await page.evaluate(() => {
-				const boundary = globalThis as typeof globalThis & { resumeSearchRead?: () => void };
+				const boundary = globalThis as typeof globalThis & { resumeSearchRead?: () => void; };
 				boundary.resumeSearchRead!();
 				delete boundary.resumeSearchRead;
 			});

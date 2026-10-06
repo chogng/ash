@@ -11,7 +11,7 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(private readonly invoke: (request: unknown) => Promise<unknown>, onDidChange: (listener: (resources: unknown) => void) => { dispose(): void }) {
+	constructor(private readonly invoke: (request: unknown) => Promise<unknown>, onDidChange: (listener: (resources: unknown) => void) => { dispose(): void; }) {
 		super();
 		const subscription = onDidChange(value => {
 			if (value === undefined) { this.changes.fire({ resources: undefined }); return; }
@@ -28,7 +28,7 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 		return { ...stat, resource };
 	}
 	public async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-		const entries = await this.call<readonly { name: string; kind: IFileEntry['kind']; resource: string }[]>('readDirectory', resource);
+		const entries = await this.call<readonly { name: string; kind: IFileEntry['kind']; resource: string; }[]>('readDirectory', resource);
 		return entries.map(entry => ({ ...entry, resource: URI.parse(entry.resource) }));
 	}
 	public async readFile(resource: URI): Promise<IFileContent> {

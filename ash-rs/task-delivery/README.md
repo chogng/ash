@@ -11,12 +11,12 @@
 提供 `taskDelivery` version 1 contract。
 已经移交历史、只提供执行服务的远端 profile 不接受 Agent 任务。
 
-| Agent 工具 | 用途 |
-| --- | --- |
-| `remote_task_targets` | 列出保存的机器、项目目录及 runtime 配置状态 |
-| `remote_task_send` | 指定目标、标题、验收要求和上下文，返回关联的目标 Session 回执 |
-| `remote_task_list` | 找回当前来源 Thread 最近 50 次投递的编号，包括回执丢失的投递 |
-| `remote_task_read` | 按编号读取目标的 Queue、当前 Turn、错误和最新报告 |
+| Agent 工具            | 用途                                                          |
+| --------------------- | ------------------------------------------------------------- |
+| `remote_task_targets` | 列出保存的机器、项目目录及 runtime 配置状态                   |
+| `remote_task_send`    | 指定目标、标题、验收要求和上下文，返回关联的目标 Session 回执 |
+| `remote_task_list`    | 找回当前来源 Thread 最近 50 次投递的编号，包括回执丢失的投递  |
+| `remote_task_read`    | 按编号读取目标的 Queue、当前 Turn、错误和最新报告             |
 
 发送与远端查询分别声明外部写入、外部读取权限，沿用现有操作审批。发送必须有用户的跨机器
 委托指令。目标任务使用接收机器的模型、凭据和自动审批规则；审批或界面能力不足时，通过普通

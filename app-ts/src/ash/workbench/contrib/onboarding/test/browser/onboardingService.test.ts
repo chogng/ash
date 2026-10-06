@@ -26,7 +26,7 @@ suite('OnboardingScenarioService', () => {
 			services.registerInstance(IConfigurationService, { getValue: () => true, onDidChangeConfiguration: Event.None } as unknown as IConfigurationService);
 			services.registerInstance(IContextKeyService, context);
 			services.registerInstance(ILayoutService, { mainContainer: container } as ILayoutService);
-			services.registerInstance(IStorageService, { getBoolean: () => false, store() {}, remove() {} } as unknown as IStorageService);
+			services.registerInstance(IStorageService, { getBoolean: () => false, store() { }, remove() { } } as unknown as IStorageService);
 			using scenario = registerOnboardingScenario({ id: 'test.lateTarget', steps: [{ target: 'test.lateTarget.control', title: 'Late target', description: 'Appeared after startup' }] });
 			using service = services.createInstance(OnboardingScenarioService);
 			service.start();

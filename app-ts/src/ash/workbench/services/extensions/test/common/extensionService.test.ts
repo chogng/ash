@@ -220,7 +220,7 @@ test("registers extension grammars transactionally and loads resources through t
 					[Symbol.dispose]() { this.dispose(); },
 				};
 			},
-			prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void }, replacement: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(replacement); return {}; } }),
+			prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void; }, replacement: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(replacement); return {}; } }),
 			whenReady: async () => ({}),
 		},
 	} as unknown as ITextMateService;
@@ -252,7 +252,7 @@ test("fails before registering when TextMate candidate preparation is unavailabl
 	let registrations = 0;
 	const textMateService = {
 		grammars: {
-			registerGrammars: () => { registrations += 1; return { replace: () => {}, ...toDisposable(() => {}) }; },
+			registerGrammars: () => { registrations += 1; return { replace: () => { }, ...toDisposable(() => { }) }; },
 			whenReady: async () => ({}),
 		},
 	} as unknown as ITextMateService;
@@ -274,13 +274,15 @@ test("disposes a TextMate service-owned grammar registration without taking dupl
 
 test("reads each generation-scoped resource once while preparing one catalog", async () => {
 	const themedDescriptor = descriptorWithManifest({
-			name: "demo",
-			publisher: "ash",
-			version: "1.0.0",
-			contributes: { themes: [
+		name: "demo",
+		publisher: "ash",
+		version: "1.0.0",
+		contributes: {
+			themes: [
 				{ id: "first", label: "First", path: "themes/shared.json", uiTheme: "vs-dark" },
 				{ id: "second", label: "Second", path: "themes/shared.json", uiTheme: "vs" },
-			] },
+			]
+		},
 	});
 	let reads = 0;
 	const api: IExtensionApi = {
@@ -455,14 +457,14 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	const catalog: ExtensionCatalog = Object.freeze({
 		generation: 3,
 		extensions: Object.freeze([descriptorWithManifest({
-				name: "demo",
-				publisher: "ash",
-				version: "1.0.0",
-				contributes: {
-					languages: [{ id: "demo", extensions: [".demo"] }],
-					themes: [{ id: "dark", label: "Demo Dark", path: "themes/dark.json", uiTheme: "vs-dark" }],
-					debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter" } }],
-				},
+			name: "demo",
+			publisher: "ash",
+			version: "1.0.0",
+			contributes: {
+				languages: [{ id: "demo", extensions: [".demo"] }],
+				themes: [{ id: "dark", label: "Demo Dark", path: "themes/dark.json", uiTheme: "vs-dark" }],
+				debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter" } }],
+			},
 		})]),
 		diagnostics: Object.freeze([]),
 	});
@@ -473,7 +475,7 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
-	const observations: Array<{ readonly themeCount: number; readonly adapterCount: number; readonly generation: number }> = [];
+	const observations: Array<{ readonly themeCount: number; readonly adapterCount: number; readonly generation: number; }> = [];
 	using listener = languageService.languages.onDidChange(() => observations.push({
 		themeCount: service.themes.currentCatalog.themes.length,
 		adapterCount: service.debugAdapters.definitions.length,
@@ -499,7 +501,7 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
 		list: () => new Promise((_resolve, reject) => { rejectList = reject; }),
 		readResource: async () => new Uint8Array(),
 	};
-	const textMateService = { grammars: { registerGrammars: () => ({ replace: () => {}, ...toDisposable(() => {}) }), prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }), whenReady: async () => ({}) } } as unknown as ITextMateService;
+	const textMateService = { grammars: { registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }), prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void; }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }), whenReady: async () => ({}) } } as unknown as ITextMateService;
 	const service = new AppServerExtensionService({ api, textMateService });
 	const failures: unknown[] = [];
 	using listener = service.onDidFail(failure => failures.push(failure.error));
@@ -561,14 +563,14 @@ function emptyCatalog(generation: number): ExtensionCatalog {
 function emptyTextMateService(): ITextMateService {
 	return {
 		grammars: {
-			registerGrammars: () => ({ replace: () => {}, ...toDisposable(() => {}) }),
-			prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }),
+			registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }),
+			prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void; }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }),
 			whenReady: async () => ({}),
 		},
 	} as unknown as ITextMateService;
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
 	const promise = new Promise<T>(accept => { resolve = accept; });
 	return { promise, resolve };
@@ -582,16 +584,19 @@ test('extension theme contributions activate together, retain the last valid cat
 	let generation = 1;
 	let contributed = true;
 	let invalid = false;
-	const manifest = () => descriptorWithManifest({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
-		colors: [{ id: 'test.extensionAccent', description: 'Extension accent', defaults: { light: '#123456', dark: '#654321' } }],
-		semanticTokenTypes: [{ id: 'testCustomFunction', description: 'Custom function', superType: invalid ? 'missingType' : 'function' }],
-		semanticTokenModifiers: [{ id: 'testCustomModifier', description: 'Custom modifier' }],
-		semanticTokenScopes: [{ language: 'typescript', scopes: { testCustomFunction: ['entity.name.function.custom'] } }],
-		icons: { 'test-extension-alias': { description: 'Extension icon', default: 'add' } },
-	} });
+	const manifest = () => descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+			colors: [{ id: 'test.extensionAccent', description: 'Extension accent', defaults: { light: '#123456', dark: '#654321' } }],
+			semanticTokenTypes: [{ id: 'testCustomFunction', description: 'Custom function', superType: invalid ? 'missingType' : 'function' }],
+			semanticTokenModifiers: [{ id: 'testCustomModifier', description: 'Custom modifier' }],
+			semanticTokenScopes: [{ language: 'typescript', scopes: { testCustomFunction: ['entity.name.function.custom'] } }],
+			icons: { 'test-extension-alias': { description: 'Extension icon', default: 'add' } },
+		}
+	});
 	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), readResource: async () => { throw new Error('Unexpected resource'); } }, textMateService: emptyTextMateService() });
 	await service.start();
-	const themed = parseUserColorTheme(JSON.stringify({ name: 'Extension mappings', colors: { 'test.extensionAccent': '#abcdef' },
+	const themed = parseUserColorTheme(JSON.stringify({
+		name: 'Extension mappings', colors: { 'test.extensionAccent': '#abcdef' },
 		tokenColors: [{ scope: 'entity.name.function.custom', settings: { foreground: '#112233', fontStyle: 'italic' } }],
 		semanticTokenColors: { function: { bold: true } },
 	}));

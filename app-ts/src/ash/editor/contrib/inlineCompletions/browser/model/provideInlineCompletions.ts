@@ -56,7 +56,7 @@ async function completeBrackets(model: TextModel, item: LanguageInlineCompletion
 	const text = prefix + normalizeTextLineEndings(item.insertText);
 	const lines = await model.tokenization.tokenizeLinesAtAsync(range.startLineNumber, text.split('\n'), signal);
 	if (!lines || signal.aborted) return item;
-	const segments: { text: string; metadata: number }[] = [];
+	const segments: { text: string; metadata: number; }[] = [];
 	for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
 		const line = lines[lineIndex]!;
 		for (let index = 0; index < line.getCount(); index++) {

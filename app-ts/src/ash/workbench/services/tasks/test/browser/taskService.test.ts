@@ -120,7 +120,7 @@ test("TaskService retains the last good task set when a provider refresh fails",
 
 class FakeFileService implements IFileService {
 	readonly onDidChangeFiles = Event.None;
-	constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>) {}
+	constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>) { }
 	async stat(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.files[path]!.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readFile(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, content: this.files[path]!, revision: "1" }; }
 	async readDirectory() { return []; }
@@ -145,9 +145,9 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly onDidChangeActiveInstance = Event.None;
 	async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.dirId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
-	async relaunchTerminal() {}
+	async relaunchTerminal() { }
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
-	moveTerminal() {}
+	moveTerminal() { }
 	async closeTerminal(instance: ITerminalInstance) { await instance.close(); }
 }
 
@@ -166,7 +166,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidChangeState = Event.None;
 	constructor(readonly id: string, readonly dirId: string, readonly title: string) { super(); }
 	write(data: string): void { this.writes.push(data); }
-	resize(_dimensions: ITerminalDimensions): void {}
+	resize(_dimensions: ITerminalDimensions): void { }
 	async close(): Promise<void> { this.state = "exited"; }
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
 }
@@ -200,7 +200,7 @@ suite('TaskService terminal availability', () => {
 				create: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'task-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: persistence }),
 				read: async () => { throw new Error('Disconnected terminal must not poll'); },
 				write: async () => { calls.push('write'); },
-				resize: async () => {},
+				resize: async () => { },
 				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
 			const workspace: IWorkspaceContextService = {
@@ -209,7 +209,7 @@ suite('TaskService terminal availability', () => {
 				getWorkbenchState: () => 2,
 				getWorkspaceFolder: () => null,
 			};
-			const output = { createChannel: () => ({ ...Disposable.None, appendLine: () => {} }) } as unknown as IOutputService;
+			const output = { createChannel: () => ({ ...Disposable.None, appendLine: () => { } }) } as unknown as IOutputService;
 			const services = resources.add(new InstantiationService(new ServiceCollection(
 				[IFileService, new FakeFileService(root, {})],
 				[IWorkspaceContextService, workspace],

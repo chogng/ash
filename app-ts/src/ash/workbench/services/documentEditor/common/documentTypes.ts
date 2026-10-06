@@ -17,7 +17,7 @@ export const DocumentTypes = new class {
 		this.types.set(type.id, type);
 	}
 
-	public find(input: { readonly resource: URI; readonly contentType?: string }): DocumentType | undefined {
+	public find(input: { readonly resource: URI; readonly contentType?: string; }): DocumentType | undefined {
 		if (input.contentType !== undefined) {
 			return [...this.types.values()].find(type => type.contentType === input.contentType);
 		}
@@ -26,5 +26,5 @@ export const DocumentTypes = new class {
 	}
 };
 
-export interface IDocumentEditorTextModelService extends ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> {}
+export interface IDocumentEditorTextModelService extends ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> { }
 export const IDocumentEditorTextModelService = createServiceIdentifier<IDocumentEditorTextModelService>('documentEditorTextModelService');

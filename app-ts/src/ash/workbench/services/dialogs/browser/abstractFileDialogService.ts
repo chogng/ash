@@ -4,7 +4,7 @@ import { ConfirmResult, DialogSeverity, type IDialogService } from '../../../../
 
 /** Owns the save decision shared by browser and desktop file dialogs. */
 export abstract class AbstractFileDialogService {
-	constructor(protected readonly dialogs: () => IDialogService) {}
+	constructor(protected readonly dialogs: () => IDialogService) { }
 
 	async showSaveConfirm(fileNamesOrResources: readonly (string | URI)[], detail?: string): Promise<ConfirmResult> {
 		if (fileNamesOrResources.length === 0) return ConfirmResult.DONT_SAVE;

@@ -1,161 +1,162 @@
 .ash-problems {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 8px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: 8px;
 }
 
 .ash-problems-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
 }
 
 .ash-problems-filter {
-  flex: 1 1 220px;
-  min-width: 120px;
-  border: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: var(--ash-corner-radius-small);
-  padding: 6px 8px;
-  color: inherit;
-  background: color-mix(in srgb, currentColor 6%, transparent);
-  font: inherit;
+	flex: 1 1 220px;
+	min-width: 120px;
+	border: var(--ash-stroke-thickness) solid
+		color-mix(in srgb, currentColor 25%, transparent);
+	border-radius: var(--ash-corner-radius-small);
+	padding: 6px 8px;
+	color: inherit;
+	background: color-mix(in srgb, currentColor 6%, transparent);
+	font: inherit;
 }
 
 .ash-problems-filter:focus {
-  border-color: var(--ash-focus-border);
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	border-color: var(--ash-focus-border);
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
 }
 
 .ash-problems-severities {
-  display: flex;
-  gap: 4px;
+	display: flex;
+	gap: 4px;
 }
 
 .ash-problems-severity {
-  border: var(--ash-stroke-thickness) solid transparent;
-  border-radius: var(--ash-corner-radius-small);
-  padding: 4px 8px;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  opacity: 0.48;
+	border: var(--ash-stroke-thickness) solid transparent;
+	border-radius: var(--ash-corner-radius-small);
+	padding: 4px 8px;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+	opacity: 0.48;
 }
 
 .ash-problems-severity.checked {
-  border-color: color-mix(in srgb, currentColor 24%, transparent);
-  background: color-mix(in srgb, currentColor 9%, transparent);
-  opacity: 1;
+	border-color: color-mix(in srgb, currentColor 24%, transparent);
+	background: color-mix(in srgb, currentColor 9%, transparent);
+	opacity: 1;
 }
 
 .ash-problems-severity:focus-visible,
 .ash-problems-item-button:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-problems-status {
-  min-height: 18px;
-  padding: 6px 2px 2px;
-  color: color-mix(in srgb, currentColor 72%, transparent);
-  font-size: 12px;
+	min-height: 18px;
+	padding: 6px 2px 2px;
+	color: color-mix(in srgb, currentColor 72%, transparent);
+	font-size: 12px;
 }
 
 .ash-problems-results,
 .ash-problems-file-items {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .ash-problems-results {
-  min-height: 0;
-  overflow: auto;
+	min-height: 0;
+	overflow: auto;
 }
 
 .ash-problems-file + .ash-problems-file {
-  margin-top: 8px;
+	margin-top: 8px;
 }
 
 .ash-problems-file-heading {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  padding: 4px 6px;
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	padding: 4px 6px;
 }
 
 .ash-problems-file-name {
-  overflow: hidden;
-  font-weight: var(--ash-font-weight-semi-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	font-weight: var(--ash-font-weight-semi-bold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-problems-file-path {
-  overflow: hidden;
-  color: color-mix(in srgb, currentColor 62%, transparent);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	color: color-mix(in srgb, currentColor 62%, transparent);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-problems-file-count {
-  margin-left: auto;
-  font-size: 11px;
-  opacity: 0.65;
+	margin-left: auto;
+	font-size: 11px;
+	opacity: 0.65;
 }
 
 .ash-problems-item-button {
-  display: grid;
-  grid-template-columns: 10px minmax(120px, 1fr) auto auto;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  border: 0;
-  padding: 4px 6px 4px 16px;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+	display: grid;
+	grid-template-columns: 10px minmax(120px, 1fr) auto auto;
+	gap: 8px;
+	align-items: center;
+	width: 100%;
+	border: 0;
+	padding: 4px 6px 4px 16px;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
 }
 
 .ash-problems-item-button:hover {
-  background: color-mix(in srgb, currentColor 7%, transparent);
+	background: color-mix(in srgb, currentColor 7%, transparent);
 }
 
 .ash-problems-marker {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
 }
 
 .ash-problems-item.error .ash-problems-marker {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-problems-item.warning .ash-problems-marker {
-  color: var(--ash-warning-foreground);
+	color: var(--ash-warning-foreground);
 }
 
 .ash-problems-item.information .ash-problems-marker,
 .ash-problems-item.hint .ash-problems-marker {
-  color: var(--ash-accent-foreground);
+	color: var(--ash-accent-foreground);
 }
 
 .ash-problems-message {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-problems-source,
 .ash-problems-location {
-  color: color-mix(in srgb, currentColor 58%, transparent);
-  font-size: 11px;
-  white-space: nowrap;
+	color: color-mix(in srgb, currentColor 58%, transparent);
+	font-size: 11px;
+	white-space: nowrap;
 }

@@ -190,7 +190,7 @@ function compileTheme(name: string, data: IStandaloneThemeData, definitions: Rea
 	const base = name === data.base ? builtin : definitions.get(data.base)!;
 	const inheritedRules = base.inherit ? [...builtin.rules, ...base.rules] : base.rules;
 	const rules = data.inherit ? [...inheritedRules, ...data.rules] : data.rules;
-	const defaults: { foreground?: string; background?: string } = {};
+	const defaults: { foreground?: string; background?: string; } = {};
 	for (const rule of rules) {
 		if (rule.token === '') {
 			if (rule.foreground !== undefined) {

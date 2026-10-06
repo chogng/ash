@@ -37,7 +37,7 @@ export function createReferenceIndexPlugin(): DocumentPlugin<ReferenceIndex> {
 /** Scans one immutable document snapshot for bibliography definitions and citation uses. */
 export function buildReferenceIndex(document: DocumentNode): ReferenceIndex {
 	const references: ReferenceEntry[] = [];
-	const citationNodes: Array<{ readonly key: string; readonly nodeId: DocumentNodeId }> = [];
+	const citationNodes: Array<{ readonly key: string; readonly nodeId: DocumentNodeId; }> = [];
 	const visit = (node: DocumentNode): void => {
 		if (node.type === "reference" && typeof node.attrs.key === "string" && node.attrs.key.length > 0) {
 			references.push({ key: node.attrs.key, nodeId: node.id, label: readNodeText(node).trim() || node.attrs.key, ordinal: references.length + 1 });

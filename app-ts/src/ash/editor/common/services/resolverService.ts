@@ -60,7 +60,7 @@ export function createResolvedTextEditorModelReference(model: ITextModel, releas
 	const object: IResolvedTextEditorModel = {
 		textEditorModel: model,
 		onWillDispose: willDispose.event,
-		resolve: async () => {},
+		resolve: async () => { },
 		isResolved: () => !released && !model.isDisposed(),
 		createSnapshot: () => model.createSnapshot(),
 		isReadonly: () => false,

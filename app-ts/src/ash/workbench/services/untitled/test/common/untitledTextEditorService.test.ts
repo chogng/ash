@@ -123,12 +123,12 @@ test("closing the last working copy releases its untitled identity and shared te
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: Event.None,
 		backup: () => "",
-		restoreBackup: () => {},
-		save: async () => {},
-		saveAs: async () => {},
-		revert: async () => {},
-		dispose: () => {},
-		[Symbol.dispose]: () => {},
+		restoreBackup: () => { },
+		save: async () => { },
+		saveAs: async () => { },
+		revert: async () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
 	};
 	using first = workingCopies.register(copy);
 	using second = workingCopies.register({ ...copy });
@@ -147,7 +147,7 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 	using models = createModels();
 	services.registerInstance(ITextModelResourceService, models);
 	using untitled = services.createInstance(UntitledTextEditorService);
-	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
+	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; }> = [];
 	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
 	services.registerInstance(IUntitledTextEditorService, untitled);
 	services.registerInstance(IEditorPart, editorPart);
@@ -178,7 +178,7 @@ test("New File from Template opens the selected extension template as an untitle
 		body: "export class Example {}\n",
 		description: "Create a class",
 	}]);
-	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string }> = [];
+	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string; }> = [];
 	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
 	const quickInput = new TestQuickInputService();
 	services.registerInstance(IUntitledTextEditorService, untitled);
@@ -334,7 +334,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 		if (item) this.acceptEmitter.fire(item);
 	}
 
-	show(): void {}
+	show(): void { }
 
 	hide(): void {
 		this.hideEmitter.fire();

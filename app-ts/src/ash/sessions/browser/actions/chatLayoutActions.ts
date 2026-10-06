@@ -126,7 +126,7 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 		const chat = accessor.get(IChatService);
 		const quickInput = accessor.get(IQuickInputService);
 		const [current, models] = await Promise.all([chat.readAdvisorDefault(), accessor.get(ILanguageModelsService).listAdvisorModels()]);
-		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; manageProviderKeys?: true; clearModel?: true };
+		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; manageProviderKeys?: true; clearModel?: true; };
 		const picker = quickInput.createQuickPick<Setting>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
@@ -240,8 +240,10 @@ function pickModelProvider(quickInput: IQuickInputService, providers: readonly M
 			description = localize('chat.providerKeys.optional', 'No API key saved');
 		}
 		const items: ModelProviderQuickPickItem[] = [];
-		if (provider.apiKeyPolicy !== 'unsupported') items.push({ provider,
-			label: localize('chat.connections.saveKey', 'Save key for {0}', provider.displayName), description });
+		if (provider.apiKeyPolicy !== 'unsupported') items.push({
+			provider,
+			label: localize('chat.connections.saveKey', 'Save key for {0}', provider.displayName), description
+		});
 		return items;
 	});
 	return new Promise(resolve => {

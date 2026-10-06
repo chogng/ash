@@ -32,7 +32,7 @@ type WorkerEventType = 'message' | 'error' | 'messageerror';
 
 class TestWorker {
 	private readonly listeners = new Map<WorkerEventType, Set<(event: never) => void>>();
-	public readonly sent: { readonly message: unknown; readonly transfer: readonly Transferable[] }[] = [];
+	public readonly sent: { readonly message: unknown; readonly transfer: readonly Transferable[]; }[] = [];
 	public terminationCount = 0;
 
 	public addEventListener(type: WorkerEventType, listener: (event: never) => void): void {

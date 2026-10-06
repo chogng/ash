@@ -40,7 +40,7 @@ class CheckForUpdatesAction extends Action2 {
 	}
 }
 
-function showAvailableUpdate(notifications: INotificationService, update: IUpdateService, result: Extract<UpdateCheckResult, { status: 'available' }>): void {
+function showAvailableUpdate(notifications: INotificationService, update: IUpdateService, result: Extract<UpdateCheckResult, { status: 'available'; }>): void {
 	let prompt: NotificationHandle;
 	prompt = notifications.info(localize('update.available', 'Ash {0} is available. You are using {1}.', result.version, result.currentVersion), [{
 		id: 'update.download',

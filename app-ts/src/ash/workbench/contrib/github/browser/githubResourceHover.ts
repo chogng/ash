@@ -33,7 +33,7 @@ export interface IPullRequestResourceHoverData extends ResourceHoverData {
 	readonly pullRequest: GitHubPullRequest;
 	readonly checksStatus?: GitHubChecksStatus;
 	readonly onDidClickBaseBranch: () => void;
-	readonly headBranchLink: { readonly href: string; readonly onClick: () => void } | undefined;
+	readonly headBranchLink: { readonly href: string; readonly onClick: () => void; } | undefined;
 }
 
 export interface ICommitResourceHoverData extends ResourceHoverData {
@@ -66,7 +66,7 @@ export class GitHubResourcePresentation implements ILinkPresentation {
 	}
 }
 
-export function createRepositoryResourceHover(data: ResourceHoverData & { readonly repository: GitHubRepositoryInfo }): IGitHubResourceHover {
+export function createRepositoryResourceHover(data: ResourceHoverData & { readonly repository: GitHubRepositoryInfo; }): IGitHubResourceHover {
 	return resourceHover(data, data.repository.fullName, data.repository.defaultBranch, localize('github.repository', 'Repository'), localize('github.defaultBranch', 'Default branch: {0}', data.repository.defaultBranch));
 }
 
@@ -142,7 +142,7 @@ export function getPullRequestChecksStatusLabel(status: GitHubChecksStatus): str
 	}
 }
 
-function resourceHover(data: ResourceHoverData, title: string, reference: string, status: string, body: string): DisposableStore & { readonly element: HTMLElement; readonly tabbableElements: HTMLElement[] } {
+function resourceHover(data: ResourceHoverData, title: string, reference: string, status: string, body: string): DisposableStore & { readonly element: HTMLElement; readonly tabbableElements: HTMLElement[]; } {
 	const store = new DisposableStore();
 	const element = $('.ash-github-resource-hover');
 	element.classList.toggle('compact', data.density === 'compact');

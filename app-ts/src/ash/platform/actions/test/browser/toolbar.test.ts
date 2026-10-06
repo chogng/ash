@@ -29,7 +29,7 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 		label: "Child",
 		tooltip: "Child",
 		enabled: true,
-		run() {},
+		run() { },
 	};
 	const item = createActionViewItem(
 		new SubmenuItemAction({
@@ -102,7 +102,7 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 		contexts,
 		commandService,
 	);
-	const item = createActionViewItem(primary, { showContextMenu() {} });
+	const item = createActionViewItem(primary, { showContextMenu() { } });
 	assert.ok(item);
 	const container = h(dom.window.document, "div");
 	dom.window.document.body.append(container);
@@ -275,8 +275,8 @@ test("menu toolbar applies custom primary groups and submenu inlining", async ()
 	const menu = {
 		onDidChange: Event.None,
 		getActions: () => groups,
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	const menuService = {
 		createMenu: () => menu,
@@ -285,7 +285,7 @@ test("menu toolbar applies custom primary groups and submenu inlining", async ()
 	using toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
 		menuService,
-		{ showContextMenu() {} },
+		{ showContextMenu() { } },
 		MenuId.for("test.toolbar.custom-groups"),
 		{
 			toolbarOptions: {
@@ -341,7 +341,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 	const menus = new MenuService(commands, contexts);
 	const action = menus.getMenuActions(menuId)[0]?.[1][0];
 	assert.ok(action);
-	const toolbar = new WorkbenchToolBar(dom.window.document.body, { showContextMenu() {} });
+	const toolbar = new WorkbenchToolBar(dom.window.document.body, { showContextMenu() { } });
 	toolbar.setActions([action]);
 	dom.window.document.body.append(toolbar.element);
 
@@ -477,7 +477,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
 		new MenuService(new CommandService(new InstantiationService()), contexts),
-		{ showContextMenu() {} },
+		{ showContextMenu() { } },
 		menuId,
 	);
 	dom.window.document.body.append(toolbar.element);
@@ -542,7 +542,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
 		new MenuService(new CommandService(new InstantiationService()), contexts),
-		{ showContextMenu() {} },
+		{ showContextMenu() { } },
 		menuId,
 	);
 	dom.window.document.body.append(toolbar.element);
@@ -570,7 +570,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	Object.defineProperty(dom.window.HTMLElement.prototype, "scrollTo", {
 		configurable: true,
-		value: () => {},
+		value: () => { },
 	});
 	Object.defineProperty(dom.window.HTMLElement.prototype, "getClientRects", {
 		configurable: true,
@@ -619,8 +619,8 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		contexts,
 		{
 			inChordMode: false,
-		registerSchemaContribution: () => Disposable.None,
-		getKeybindings: () => [],
+			registerSchemaContribution: () => Disposable.None,
+			getKeybindings: () => [],
 			onDidUpdateKeybindings: Event.None,
 			resolveKeybinding() { throw new Error("Not used"); },
 			resolveUserBinding() { return undefined; },

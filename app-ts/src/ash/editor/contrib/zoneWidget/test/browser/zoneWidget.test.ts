@@ -186,7 +186,7 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 });
 
 class TestZoneWidget extends ZoneWidget {
-	public readonly layouts: Array<{ readonly heightInPixels: number; readonly widthInPixels: number }> = [];
+	public readonly layouts: Array<{ readonly heightInPixels: number; readonly widthInPixels: number; }> = [];
 	public readonly revealedRanges: Range[] = [];
 
 	public resizeTo(heightInLines: number): void {

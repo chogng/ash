@@ -13,7 +13,7 @@ import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../
 export class ChatMarkdownDecorationsRenderer extends Disposable {
 	private readonly bindings = this._register(new DisposableStore());
 	private readonly verbosity: IObservable<boolean>;
-	private readonly anchors: readonly { readonly anchor: HTMLAnchorElement; readonly contents: readonly ChildNode[]; readonly title: string | null; readonly ariaLabel: string | null; readonly ariaDescription: string | null }[];
+	private readonly anchors: readonly { readonly anchor: HTMLAnchorElement; readonly contents: readonly ChildNode[]; readonly title: string | null; readonly ariaLabel: string | null; readonly ariaDescription: string | null; }[];
 
 	constructor(root: HTMLElement, @ILinkPresentationService private readonly links: ILinkPresentationService, @IHoverService private readonly hoverService: IHoverService, @IConfigurationService configuration: IConfigurationService) {
 		super();

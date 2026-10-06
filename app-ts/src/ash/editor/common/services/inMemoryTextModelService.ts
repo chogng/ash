@@ -15,11 +15,11 @@ export class InMemoryTextModelService implements ITextModelService {
 	private readonly contentProviders = new Map<string, ITextModelContentProvider>();
 	private readonly providerModelReferences = new Map<ITextModel, number>();
 
-	constructor(@IModelService private readonly models: IModelServiceContract) {}
+	constructor(@IModelService private readonly models: IModelServiceContract) { }
 
 	async createModelReference(resource: URI): Promise<IReference<IResolvedTextEditorModel>> {
 		const existing = this.models.getModel(resource);
-		if (existing) return createResolvedTextEditorModelReference(existing, () => {});
+		if (existing) return createResolvedTextEditorModelReference(existing, () => { });
 		const provider = this.contentProviders.get(resource.scheme);
 		if (!provider) throw new ReferenceError(`Text model not found: ${resource.toString()}`);
 		const model = await provider.provideTextContent(resource);

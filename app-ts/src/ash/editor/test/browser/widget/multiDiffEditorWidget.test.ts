@@ -17,9 +17,9 @@ import { getIconDefinition } from '../../../../platform/theme/common/iconRegistr
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { }
+	unobserve(): void { }
+	disconnect(): void { }
 }
 const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent',
@@ -59,19 +59,21 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 		lineHeight: 20,
 		overscanRowCount: 1,
 		showLineNumbers: false,
-		workbenchUIElementFactory: { createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {
-			const button = h(container.ownerDocument, 'button');
-			button.type = 'button';
-			button.textContent = `Open ${item.label}`;
-			container.append(button);
-			let disposed = false;
-			const dispose = () => {
-				if (disposed) return;
-				disposed = true;
-				disposedItemActions += 1;
-			};
-			return { dispose, [Symbol.dispose]: dispose };
-		} },
+		workbenchUIElementFactory: {
+			createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {
+				const button = h(container.ownerDocument, 'button');
+				button.type = 'button';
+				button.textContent = `Open ${item.label}`;
+				container.append(button);
+				let disposed = false;
+				const dispose = () => {
+					if (disposed) return;
+					disposed = true;
+					disposedItemActions += 1;
+				};
+				return { dispose, [Symbol.dispose]: dispose };
+			}
+		},
 	});
 	editor.layout({ width: 480, height: 80 });
 
@@ -129,7 +131,7 @@ class MultiDiffTestComputationService implements IDocumentDiffProvider {
 		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

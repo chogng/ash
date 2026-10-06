@@ -72,12 +72,12 @@ export class CursorConfiguration {
 	public readonly autoClosingPairs: AutoClosingPairs;
 	public readonly surroundingPairs: CharacterMap;
 	public readonly blockCommentStartToken: string | null;
-	public readonly shouldAutoCloseBefore: { quote: (ch: string) => boolean; bracket: (ch: string) => boolean; comment: (ch: string) => boolean };
+	public readonly shouldAutoCloseBefore: { quote: (ch: string) => boolean; bracket: (ch: string) => boolean; comment: (ch: string) => boolean; };
 	public readonly wordSegmenterLocales: string[];
 	public readonly overtypeOnPaste: boolean;
 
 	private readonly _languageId: string;
-	private _electricChars: { [key: string]: boolean } | null;
+	private _electricChars: { [key: string]: boolean; } | null;
 
 	public static shouldRecreate(e: ConfigurationChangedEvent): boolean {
 		return (

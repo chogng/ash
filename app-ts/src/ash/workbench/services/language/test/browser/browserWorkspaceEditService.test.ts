@@ -30,10 +30,12 @@ test("workspace edits preflight every document before mutating and persist close
 	const files = new MemoryFileService([[first, "alpha"], [second, "bravo"]]);
 	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
-	await service.apply({ entries: [
-		{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "one" }] },
-		{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "two" }] },
-	] });
+	await service.apply({
+		entries: [
+			{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "one" }] },
+			{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "two" }] },
+		]
+	});
 
 	assert.equal(store.text(first), "one");
 	assert.equal(store.text(second), "two");
@@ -50,10 +52,12 @@ test("workspace edit undo restores multiple closed documents", async () => {
 	const dialogs = new TestDialogService();
 	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]), configuration, dialogs);
 
-	const applied = await service.apply({ entries: [
-		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
-		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
-	] });
+	const applied = await service.apply({
+		entries: [
+			{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
+		]
+	});
 	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.deepEqual([store.text(first), store.text(second)], ['alpha', 'bravo']);
@@ -88,10 +92,12 @@ test('bulk edit progress follows the committed operations and undo restores thei
 
 	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'a'], [second, 'b']]), configuration, dialogs);
 	const progress: unknown[] = [];
-	const applied = await bulkEdits.apply({ entries: [
-		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }] },
-		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 2), text: 'B' }] },
-	] }, { progress: { report: update => progress.push(update) } });
+	const applied = await bulkEdits.apply({
+		entries: [
+			{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 2), text: 'A' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 2), text: 'B' }] },
+		]
+	}, { progress: { report: update => progress.push(update) } });
 	assert.deepEqual({ progress, text: [store.text(first), store.text(second)] }, { progress: [{ total: 2, increment: 0 }, { increment: 1 }, { increment: 1 }], text: ['A', 'B'] });
 	if (!applied.isApplied) throw new Error('Expected the transaction to apply');
 	assert.ok(applied.isApplied);
@@ -111,11 +117,13 @@ test('bulk edits with unchanged text and ignored file operations report no appli
 
 	using bulkEdits = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 	const progress: unknown[] = [];
-	const result = await bulkEdits.apply({ entries: [
-		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 9), text: 'original' }] },
-		{ kind: 'create', resource, existing: 'ignore' },
-		{ kind: 'delete', resource: missing, missing: 'ignore', mode: 'fileOrEmptyDirectory' },
-	] }, { progress: { report: update => progress.push(update) } });
+	const result = await bulkEdits.apply({
+		entries: [
+			{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 9), text: 'original' }] },
+			{ kind: 'create', resource, existing: 'ignore' },
+			{ kind: 'delete', resource: missing, missing: 'ignore', mode: 'fileOrEmptyDirectory' },
+		]
+	}, { progress: { report: update => progress.push(update) } });
 	assert.deepEqual({ applied: result.isApplied, saved: store.saved, text: files.text(resource), missing: files.has(missing), progress }, {
 		applied: false, saved: [], text: 'original', missing: false, progress: [{ total: 0, increment: 0 }],
 	});
@@ -152,10 +160,12 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 
 	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]), configuration, dialogs);
 
-	const result = await bulkEdits.apply({ entries: [
-		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 4), text: 'longword' }] },
-		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 10, 1, 13), text: 'XYZ' }] },
-	] });
+	const result = await bulkEdits.apply({
+		entries: [
+			{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 4), text: 'longword' }] },
+			{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 10, 1, 13), text: 'XYZ' }] },
+		]
+	});
 	assert.equal(store.text(resource), 'longword XYZ');
 	if (!result.isApplied) throw new Error('Expected the bulk edit to apply');
 	await result.undo();
@@ -172,10 +182,12 @@ test("workspace edit undo reverses a created file and its inserted text", async 
 	const files = new MemoryFileService([]);
 	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
-	const applied = await service.apply({ entries: [
-		{ kind: 'create', resource, existing: 'error' },
-		{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 1), text: 'ready' }] },
-	] });
+	const applied = await service.apply({
+		entries: [
+			{ kind: 'create', resource, existing: 'error' },
+			{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 1), text: 'ready' }] },
+		]
+	});
 	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.equal(files.has(resource), false);
@@ -194,11 +206,13 @@ test('workspace edit undo restores file creation, rename, and deletion together'
 	const files = new MemoryFileService([[source, 'source'], [deleted, 'deleted']]);
 	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
-	const applied = await service.apply({ entries: [
-		{ kind: 'create', resource: created, existing: 'error' },
-		{ kind: 'rename', source, target: renamed, existing: 'error' },
-		{ kind: 'delete', resource: deleted, missing: 'error', mode: 'fileOrEmptyDirectory' },
-	] });
+	const applied = await service.apply({
+		entries: [
+			{ kind: 'create', resource: created, existing: 'error' },
+			{ kind: 'rename', source, target: renamed, existing: 'error' },
+			{ kind: 'delete', resource: deleted, missing: 'error', mode: 'fileOrEmptyDirectory' },
+		]
+	});
 	assert.ok(applied.isApplied);
 	await applied.undo();
 	assert.deepEqual({
@@ -220,10 +234,12 @@ test('workspace edit undo leaves all resources intact when another target change
 	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]), configuration, dialogs);
 	const secondReference = await models.acquire({ resource: second }, new AbortController().signal);
 
-	const applied = await service.apply({ entries: [
-		{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
-		{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
-	] });
+	const applied = await service.apply({
+		entries: [
+			{ kind: 'textDocument', resource: first, edits: [{ range: new Range(1, 1, 1, 6), text: 'one' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: new Range(1, 1, 1, 6), text: 'two' }] },
+		]
+	});
 	secondReference.model.applyOperations([{ range: new Range(1, 4, 1, 4), text: '!' }]);
 	assert.ok(applied.isApplied);
 	await assert.rejects(applied.undo(), /changed before replacement/);
@@ -262,10 +278,12 @@ test("workspace edit preflight rejects stale or invalid edits without changing a
 	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, "alpha"], [second, "bravo"]]), configuration, dialogs);
 	const reference = await models.acquire({ resource: first }, new AbortController().signal);
 
-	await assert.rejects(service.apply({ entries: [
-		{ kind: "textDocument", resource: first, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
-		{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((4) + 1, (0) + 1)), text: "invalid" }] },
-	] }), /outside|line/i);
+	await assert.rejects(service.apply({
+		entries: [
+			{ kind: "textDocument", resource: first, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
+			{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((4) + 1, (0) + 1)), text: "invalid" }] },
+		]
+	}), /outside|line/i);
 
 	assert.equal(reference.model.getText(), "alpha");
 	assert.equal(store.text(second), "bravo");
@@ -283,10 +301,12 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 	const dialogs = new TestDialogService();
 	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, "first"], [second, "changed"]]), configuration, dialogs);
 
-	await assert.rejects(service.apply({ entries: [
-		{ kind: "textDocument", resource: first, expectedText: "first", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
-		{ kind: "textDocument", resource: second, expectedText: "second", edits: [{ range: Range.fromPositions(new Position((0) + 1, (6) + 1)), text: "!" }] },
-	] }), /content.*stale/);
+	await assert.rejects(service.apply({
+		entries: [
+			{ kind: "textDocument", resource: first, expectedText: "first", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
+			{ kind: "textDocument", resource: second, expectedText: "second", edits: [{ range: Range.fromPositions(new Position((0) + 1, (6) + 1)), text: "!" }] },
+		]
+	}), /content.*stale/);
 	assert.equal(store.text(first), "first");
 	assert.equal(store.text(second), "changed");
 });
@@ -301,10 +321,12 @@ test("workspace edit applies create then text edit in protocol order", async () 
 	const files = new MemoryFileService([]);
 	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
-	await service.apply({ entries: [
-		{ kind: "create", resource: created, existing: "error" },
-		{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "export const ready = true;" }] },
-	] });
+	await service.apply({
+		entries: [
+			{ kind: "create", resource: created, existing: "error" },
+			{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "export const ready = true;" }] },
+		]
+	});
 
 	assert.equal(files.has(created), true);
 	assert.equal(store.text(created), "export const ready = true;");
@@ -322,10 +344,12 @@ test("workspace edit rolls back created resources when a later operation fails",
 	files.failRename = true;
 	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
 
-	await assert.rejects(service.apply({ entries: [
-		{ kind: "create", resource: created, existing: "error" },
-		{ kind: "rename", source: created, target: URI.file("C:\\workspace\\moved.ts"), existing: "error" },
-	] }), /injected rename failure/);
+	await assert.rejects(service.apply({
+		entries: [
+			{ kind: "create", resource: created, existing: "error" },
+			{ kind: "rename", source: created, target: URI.file("C:\\workspace\\moved.ts"), existing: "error" },
+		]
+	}), /injected rename failure/);
 
 	assert.equal(files.has(created), false);
 	assert.equal(files.text(target), "occupied");
@@ -343,9 +367,11 @@ test("workspace edits classify caller cancellation before mutating resources", a
 	const controller = new AbortController();
 	controller.abort("superseded");
 
-	await assert.rejects(service.apply({ entries: [
-		{ kind: "create", resource: created, existing: "error" },
-	] }, { token: controller.signal }), error => isCancellationError(error) && error.reason === "superseded");
+	await assert.rejects(service.apply({
+		entries: [
+			{ kind: "create", resource: created, existing: "error" },
+		]
+	}, { token: controller.signal }), error => isCancellationError(error) && error.reason === "superseded");
 
 	assert.equal(files.has(created), false);
 });
@@ -362,10 +388,10 @@ function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acqu
 		backup: () => reference.model.getText(),
 		restoreBackup: content => reference.model.reset(content),
 		save: signal => reference.save(signal),
-		saveAs: async () => {},
+		saveAs: async () => { },
 		revert: signal => reference.revert(signal),
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 }
 
@@ -378,10 +404,12 @@ test("workspace edit content checks accept the current CRLF document and preserv
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, "alpha\r\nbravo"]]), configuration, dialogs);
-	const result = await service.apply({ entries: [{
-		kind: "textDocument", resource, expectedText: "alpha\r\nbravo",
-		edits: [{ range: new Range(1, 1, 1, 6), text: "updated" }],
-	}] });
+	const result = await service.apply({
+		entries: [{
+			kind: "textDocument", resource, expectedText: "alpha\r\nbravo",
+			edits: [{ range: new Range(1, 1, 1, 6), text: "updated" }],
+		}]
+	});
 	assert.equal(store.text(resource), "updated\r\nbravo");
 	assert.ok(result.isApplied);
 	await result.undo();
@@ -407,9 +435,11 @@ test("workspace edits recheck model versions after asynchronous file operations"
 		}
 	}([[resource, "original"]]);
 	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
-	await assert.rejects(service.apply({ entries: [
-		{ kind: "create", resource: created, existing: "error" },
-		{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: new Range(1, 1, 1, 9), text: "agent" }] },
-	] }), /stale/);
+	await assert.rejects(service.apply({
+		entries: [
+			{ kind: "create", resource: created, existing: "error" },
+			{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: new Range(1, 1, 1, 9), text: "agent" }] },
+		]
+	}), /stale/);
 	assert.deepEqual({ text: reference.model.getText(), created: files.has(created) }, { text: "original", created: false });
 });

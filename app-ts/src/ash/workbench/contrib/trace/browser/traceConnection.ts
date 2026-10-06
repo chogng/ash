@@ -1,7 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 
-type JsonObject = { readonly [key: string]: unknown };
+type JsonObject = { readonly [key: string]: unknown; };
 
 export interface TraceSpan {
 	readonly key: string;
@@ -51,9 +51,11 @@ export class TraceBuffer {
 
 /** Standard OTLP ExportTraceServiceRequest JSON, including only the spans supplied by the caller. */
 export function exportTrace(spans: readonly TraceSpan[]): string {
-	return JSON.stringify({ resourceSpans: spans.map(span => ({
-		...span.resource, scopeSpans: [{ ...span.scope, spans: [span.data] }],
-	})) }, null, 2);
+	return JSON.stringify({
+		resourceSpans: spans.map(span => ({
+			...span.resource, scopeSpans: [{ ...span.scope, spans: [span.data] }],
+		}))
+	}, null, 2);
 }
 
 /** The wire boundary validates the values consumed by the viewer; unknown OTLP fields are preserved on export. */

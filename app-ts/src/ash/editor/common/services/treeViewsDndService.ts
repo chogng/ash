@@ -3,7 +3,7 @@ import { InstantiationType, registerSingleton } from '../../../platform/instanti
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { type ITreeViewsDnDService as ITreeViewsDnDServiceCommon, TreeViewsDnDService } from './treeViewsDnd.js';
 
-export interface ITreeViewsDnDService extends ITreeViewsDnDServiceCommon<VSDataTransfer> {}
+export interface ITreeViewsDnDService extends ITreeViewsDnDServiceCommon<VSDataTransfer> { }
 
 export const ITreeViewsDnDService = createServiceIdentifier<ITreeViewsDnDService>('treeViewsDndService');
 registerSingleton(ITreeViewsDnDService, TreeViewsDnDService<VSDataTransfer>, InstantiationType.Delayed);

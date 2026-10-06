@@ -11,9 +11,11 @@ function register(registration) {
 	if (phase !== 'activating') { throw new Error('Registrations must be created during activation'); }
 	if (registrations.has(registration.registrationId)) { throw new Error(`Duplicate registration '${registration.registrationId}'`); }
 	registrations.set(registration.registrationId, registration);
-	return Object.freeze({ dispose() {
-		if (registrations.get(registration.registrationId) === registration) { registrations.delete(registration.registrationId); }
-	} });
+	return Object.freeze({
+		dispose() {
+			if (registrations.get(registration.registrationId) === registration) { registrations.delete(registration.registrationId); }
+		}
+	});
 }
 
 export const commands = Object.freeze({
@@ -31,26 +33,28 @@ export const languages = Object.freeze({
 			throw new TypeError('A hover provider requires an ID, unique language IDs and provideHover');
 		}
 		const selector = Object.freeze([...languageIds]);
-		return register({ registrationId, kind: 'languageProvider', languageIds: selector, operations: ['hover'], operation: 'hover', async callback(context, payload) {
-			if (!selector.includes(payload.languageId) || !Number.isSafeInteger(payload.version) || payload.version < 1 || typeof payload.text !== 'string' || (payload.resource !== undefined && typeof payload.resource !== 'string')) {
-				throw new TypeError('Invalid hover document snapshot');
+		return register({
+			registrationId, kind: 'languageProvider', languageIds: selector, operations: ['hover'], operation: 'hover', async callback(context, payload) {
+				if (!selector.includes(payload.languageId) || !Number.isSafeInteger(payload.version) || payload.version < 1 || typeof payload.text !== 'string' || (payload.resource !== undefined && typeof payload.resource !== 'string')) {
+					throw new TypeError('Invalid hover document snapshot');
+				}
+				const position = checkedPosition({ line: payload.position?.lineIndex, character: payload.position?.columnIndex }, payload.text);
+				const document = Object.freeze({ uri: payload.resource, languageId: payload.languageId, version: payload.version, text: payload.text, getText() { return payload.text; } });
+				const hover = await provider.provideHover(context, document, position);
+				if (hover === undefined) { return null; }
+				if (!Array.isArray(hover?.contents) || !hover.contents.length || hover.contents.some(content => typeof content !== 'string' && (typeof content?.value !== 'string' || (content.language !== undefined && typeof content.language !== 'string')))) {
+					throw new TypeError('Invalid hover contents');
+				}
+				let range;
+				if (hover.range !== undefined) {
+					const start = checkedPosition(hover.range.start, payload.text);
+					const end = checkedPosition(hover.range.end, payload.text);
+					if (start.line > end.line || (start.line === end.line && start.character > end.character)) { throw new RangeError('Hover range must be ordered'); }
+					range = { start: { lineIndex: start.line, columnIndex: start.character }, end: { lineIndex: end.line, columnIndex: end.character } };
+				}
+				return { contents: hover.contents, ...(range === undefined ? {} : { range }) };
 			}
-			const position = checkedPosition({ line: payload.position?.lineIndex, character: payload.position?.columnIndex }, payload.text);
-			const document = Object.freeze({ uri: payload.resource, languageId: payload.languageId, version: payload.version, text: payload.text, getText() { return payload.text; } });
-			const hover = await provider.provideHover(context, document, position);
-			if (hover === undefined) { return null; }
-			if (!Array.isArray(hover?.contents) || !hover.contents.length || hover.contents.some(content => typeof content !== 'string' && (typeof content?.value !== 'string' || (content.language !== undefined && typeof content.language !== 'string')))) {
-				throw new TypeError('Invalid hover contents');
-			}
-			let range;
-			if (hover.range !== undefined) {
-				const start = checkedPosition(hover.range.start, payload.text);
-				const end = checkedPosition(hover.range.end, payload.text);
-				if (start.line > end.line || (start.line === end.line && start.character > end.character)) { throw new RangeError('Hover range must be ordered'); }
-				range = { start: { lineIndex: start.line, columnIndex: start.character }, end: { lineIndex: end.line, columnIndex: end.character } };
-			}
-			return { contents: hover.contents, ...(range === undefined ? {} : { range }) };
-		} });
+		});
 	},
 });
 

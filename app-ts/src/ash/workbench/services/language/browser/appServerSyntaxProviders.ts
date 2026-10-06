@@ -266,7 +266,7 @@ function projectRange(range: SyntaxRange, lines: readonly string[]): Range {
 	return Range.fromPositions(projectPosition(range.start, lines), projectPosition(range.end, lines));
 }
 
-function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number }, lines: readonly string[]): Position {
+function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number; }, lines: readonly string[]): Position {
 	if (!Number.isSafeInteger(position.lineIndex) || !Number.isSafeInteger(position.columnIndex) || position.lineIndex < 0 || position.columnIndex < 0 || position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
 		throw new RangeError("App Server syntax range is outside its editor snapshot");
 	}

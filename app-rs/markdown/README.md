@@ -13,32 +13,32 @@
 
 ## 所有权与接口
 
-| Symbol | 可见性 | 精确职责 |
-| --- | --- | --- |
-| `MarkdownDocument::parse` | public | 在 4 MiB 输入、100,000 blocks 和 64 层嵌套上限内建立不可变文档 snapshot |
-| `MarkdownError` | public | 区分输入过大、嵌套过深和 block 数超限 |
-| `MarkdownLayoutEngine` | public | 保留可复用 font shaping state，把文档、bounds、`ScrollState` 和 style 投影为一帧 `Markdown` |
-| `MarkdownPresentation` | public | 绑定 caller-retained selection、search matches 与已授权解码的图片 snapshot |
-| `Markdown` / `MarkdownLink` | public | 保存当前帧可见 primitive、文本命中/选择几何、语义树和 viewport-clipped link hit fragments |
-| `MarkdownLinkPolicy` | public | 解析 document fragment 或绝对 URL，拒绝 credentials/未知 scheme，并只产出策略允许的 `MarkdownLinkTarget` |
-| `MarkdownImages` / `decode_markdown_image` | public | 接收 host 已授权取得的 bytes，在 16,777,216 pixel 上限内解码为 `zui::ui::ImageData`；不执行 I/O |
-| `MarkdownSyntaxHighlighter` / `SyntectMarkdownHighlighter` | public | 定义 fenced-code byte-range 高亮 contract，并提供 bundled syntax/theme 实现 |
-| `render_markdown_math` / `MarkdownMathMode` | public | 在 64 KiB source 和 4,194,304 pixel 上限内把 inline/display LaTeX 排版并栅格化为 `ImageData` |
-| `MarkdownSelectionController` / `MarkdownDocument::text_for_selection` | public | 保存 pointer selection anchor/focus，并把合法范围投影为可写入 clipboard 的文本 |
-| `MarkdownDocument::search` | public | 在 copyable block text 上执行大小写敏感或 Unicode lowercase literal search |
-| `MarkdownSemanticNode` | public | 暴露 document/block/link/table-row/cell 的 role、label、level、destination 和 viewport bounds |
-| `MarkdownStyle` | public | 提供正文、标题、链接、代码、引用、列表和表格的 presentation token 与 geometry |
-| `document::DocumentBuilder` | private | 消费 `pulldown-cmark` event，维护 inline format、quote/list/table nesting 和当前 block |
-| `table::TableBuilder` | private | 把 table event 序列组装成保留 row/cell 边界的单个 `MarkdownTable` block |
-| `document::push_run` | private | 合并相邻同样式 run，避免解析事件制造无意义的 span 碎片 |
-| `inline_layout::layout_inline` | private | 调用 `TextLayoutEngine::layout_spans`，从同一次 shaping 取得 span fragments，并生成 code/link/strikethrough decoration |
-| `document_text` | private | 规范化 block plain text、selection copy 与 literal search range；不得读取 scene geometry |
-| `component_interaction` | private | 用同一次 shaping 的 UTF-8 cluster geometry 完成 point hit、selection/search fragments 和链接策略入口 |
-| `component_paint` | private | 生成 rect/image/text primitive，并构造与当前 viewport geometry 一致的语义节点 |
-| `math::MarkdownMathCache` | private | 按 source、mode、颜色和字号缓存 RaTeX 结果；失败项缓存为空并由布局回退为可见 source |
-| `table_layout::layout_table` | private | 从全部 cell 的 intrinsic width 计算列宽，再按列宽 wrapping cell，并保存 row height |
-| `component::ProjectedBlock` | private | 保存 shaping 后的单个 text/code/table/rule block 高度与宽度 |
-| `Markdown::emit` | private | 把自然文档坐标减去有效 viewport offset，剔除不可见 block 并生成 scene primitive |
+| Symbol                                                                 | 可见性  | 精确职责                                                                                                               |
+| ---------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `MarkdownDocument::parse`                                              | public  | 在 4 MiB 输入、100,000 blocks 和 64 层嵌套上限内建立不可变文档 snapshot                                                |
+| `MarkdownError`                                                        | public  | 区分输入过大、嵌套过深和 block 数超限                                                                                  |
+| `MarkdownLayoutEngine`                                                 | public  | 保留可复用 font shaping state，把文档、bounds、`ScrollState` 和 style 投影为一帧 `Markdown`                            |
+| `MarkdownPresentation`                                                 | public  | 绑定 caller-retained selection、search matches 与已授权解码的图片 snapshot                                             |
+| `Markdown` / `MarkdownLink`                                            | public  | 保存当前帧可见 primitive、文本命中/选择几何、语义树和 viewport-clipped link hit fragments                              |
+| `MarkdownLinkPolicy`                                                   | public  | 解析 document fragment 或绝对 URL，拒绝 credentials/未知 scheme，并只产出策略允许的 `MarkdownLinkTarget`               |
+| `MarkdownImages` / `decode_markdown_image`                             | public  | 接收 host 已授权取得的 bytes，在 16,777,216 pixel 上限内解码为 `zui::ui::ImageData`；不执行 I/O                        |
+| `MarkdownSyntaxHighlighter` / `SyntectMarkdownHighlighter`             | public  | 定义 fenced-code byte-range 高亮 contract，并提供 bundled syntax/theme 实现                                            |
+| `render_markdown_math` / `MarkdownMathMode`                            | public  | 在 64 KiB source 和 4,194,304 pixel 上限内把 inline/display LaTeX 排版并栅格化为 `ImageData`                           |
+| `MarkdownSelectionController` / `MarkdownDocument::text_for_selection` | public  | 保存 pointer selection anchor/focus，并把合法范围投影为可写入 clipboard 的文本                                         |
+| `MarkdownDocument::search`                                             | public  | 在 copyable block text 上执行大小写敏感或 Unicode lowercase literal search                                             |
+| `MarkdownSemanticNode`                                                 | public  | 暴露 document/block/link/table-row/cell 的 role、label、level、destination 和 viewport bounds                          |
+| `MarkdownStyle`                                                        | public  | 提供正文、标题、链接、代码、引用、列表和表格的 presentation token 与 geometry                                          |
+| `document::DocumentBuilder`                                            | private | 消费 `pulldown-cmark` event，维护 inline format、quote/list/table nesting 和当前 block                                 |
+| `table::TableBuilder`                                                  | private | 把 table event 序列组装成保留 row/cell 边界的单个 `MarkdownTable` block                                                |
+| `document::push_run`                                                   | private | 合并相邻同样式 run，避免解析事件制造无意义的 span 碎片                                                                 |
+| `inline_layout::layout_inline`                                         | private | 调用 `TextLayoutEngine::layout_spans`，从同一次 shaping 取得 span fragments，并生成 code/link/strikethrough decoration |
+| `document_text`                                                        | private | 规范化 block plain text、selection copy 与 literal search range；不得读取 scene geometry                               |
+| `component_interaction`                                                | private | 用同一次 shaping 的 UTF-8 cluster geometry 完成 point hit、selection/search fragments 和链接策略入口                   |
+| `component_paint`                                                      | private | 生成 rect/image/text primitive，并构造与当前 viewport geometry 一致的语义节点                                          |
+| `math::MarkdownMathCache`                                              | private | 按 source、mode、颜色和字号缓存 RaTeX 结果；失败项缓存为空并由布局回退为可见 source                                    |
+| `table_layout::layout_table`                                           | private | 从全部 cell 的 intrinsic width 计算列宽，再按列宽 wrapping cell，并保存 row height                                     |
+| `component::ProjectedBlock`                                            | private | 保存 shaping 后的单个 text/code/table/rule block 高度与宽度                                                            |
+| `Markdown::emit`                                                       | private | 把自然文档坐标减去有效 viewport offset，剔除不可见 block 并生成 scene primitive                                        |
 
 ```text
 MarkdownDocument::parse

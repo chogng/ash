@@ -1,21 +1,146 @@
-.ash-notification-host { display: flex; min-height: 0; flex-direction: column; gap: 8px; overflow-y: auto; pointer-events: auto; order: -1; }
-.ash-notification-host:empty { display: none; }
-.ash-notification, .ash-notifications-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground)); border-radius: var(--ash-corner-radius-medium); color: var(--ash-foreground); background: var(--ash-editor-background, var(--ash-workbench-background)); box-shadow: 0 4px 16px var(--ash-widget-shadow); }
-.ash-notification-content { min-width: 0; flex: 1 1 auto; }
-.ash-notification-message { white-space: pre-wrap; overflow-wrap: anywhere; }
-.ash-notification-source { margin-top: 4px; opacity: .75; font-size: .9em; }
-.ash-notification-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.ash-notification-action, .ash-notification-close, .ash-notifications-center button, .ash-notifications-toggle { border: var(--ash-stroke-thickness) solid var(--ash-button-border, var(--ash-foreground)); border-radius: var(--ash-corner-radius-small); color: inherit; background: var(--ash-button-background, transparent); cursor: pointer; }
-.ash-notification-close, .ash-notifications-remove, .ash-notifications-hide { inline-size: 24px; block-size: 24px; padding: 0; font-size: 18px; line-height: 20px; }
-.ash-notifications-center { position: absolute; z-index: 1001; inset-inline-end: 12px; inset-block-end: calc(var(--ash-feedback-statusbar-height, 0px) + 8px); width: min(450px, calc(100% - 24px)); max-height: min(70vh, calc(100% - 48px)); display: flex; flex-direction: column; border: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground)); border-radius: var(--ash-corner-radius-medium); color: var(--ash-foreground); background: var(--ash-editor-background, var(--ash-workbench-background)); box-shadow: 0 6px 24px var(--ash-widget-shadow); }
-.ash-notifications-center[hidden] { display: none; }
-.ash-notifications-center-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border, var(--ash-foreground)); }
-.ash-notifications-center-header h2 { flex: 1; margin: 0; font-size: 1em; }
-.ash-notifications-list { min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
-.ash-notifications-row { position: relative; padding-inline-end: 44px; flex-direction: column; gap: 0; box-shadow: none; }
-.ash-notifications-center:focus-visible, .ash-notifications-row:focus-visible, .ash-notifications-center button:focus-visible, .ash-notification button:focus-visible, .ash-notifications-toggle:focus-visible { outline: 2px solid var(--ash-focus-border, currentColor); outline-offset: 2px; }
-.ash-notifications-remove { position: absolute; inset-inline-end: 8px; inset-block-start: 8px; }
-.ash-notifications-empty { margin: 8px; }
-.ash-notifications-toggle { position: absolute; z-index: 1000; inset-inline-end: 12px; inset-block-end: 8px; padding: 4px 8px; }
-.ash-sessions-window { position: relative; }
-.ash-sessions-window .ash-feedback-host { position: absolute; z-index: 1000; inset-inline-end: 12px; inset-block-end: 40px; width: min(420px, calc(100% - 24px)); max-height: calc(100% - 56px); pointer-events: none; }
+.ash-notification-host {
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
+	gap: 8px;
+	overflow-y: auto;
+	pointer-events: auto;
+	order: -1;
+}
+.ash-notification-host:empty {
+	display: none;
+}
+.ash-notification,
+.ash-notifications-row {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 10px 12px;
+	border: var(--ash-stroke-thickness) solid
+		var(--ash-widget-border, var(--ash-foreground));
+	border-radius: var(--ash-corner-radius-medium);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background, var(--ash-workbench-background));
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+}
+.ash-notification-content {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+.ash-notification-message {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ash-notification-source {
+	margin-top: 4px;
+	opacity: 0.75;
+	font-size: 0.9em;
+}
+.ash-notification-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 8px;
+	flex-wrap: wrap;
+}
+.ash-notification-action,
+.ash-notification-close,
+.ash-notifications-center button,
+.ash-notifications-toggle {
+	border: var(--ash-stroke-thickness) solid
+		var(--ash-button-border, var(--ash-foreground));
+	border-radius: var(--ash-corner-radius-small);
+	color: inherit;
+	background: var(--ash-button-background, transparent);
+	cursor: pointer;
+}
+.ash-notification-close,
+.ash-notifications-remove,
+.ash-notifications-hide {
+	inline-size: 24px;
+	block-size: 24px;
+	padding: 0;
+	font-size: 18px;
+	line-height: 20px;
+}
+.ash-notifications-center {
+	position: absolute;
+	z-index: 1001;
+	inset-inline-end: 12px;
+	inset-block-end: calc(var(--ash-feedback-statusbar-height, 0px) + 8px);
+	width: min(450px, calc(100% - 24px));
+	max-height: min(70vh, calc(100% - 48px));
+	display: flex;
+	flex-direction: column;
+	border: var(--ash-stroke-thickness) solid
+		var(--ash-widget-border, var(--ash-foreground));
+	border-radius: var(--ash-corner-radius-medium);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background, var(--ash-workbench-background));
+	box-shadow: 0 6px 24px var(--ash-widget-shadow);
+}
+.ash-notifications-center[hidden] {
+	display: none;
+}
+.ash-notifications-center-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: var(--ash-stroke-thickness) solid
+		var(--ash-widget-border, var(--ash-foreground));
+}
+.ash-notifications-center-header h2 {
+	flex: 1;
+	margin: 0;
+	font-size: 1em;
+}
+.ash-notifications-list {
+	min-height: 0;
+	overflow-y: auto;
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.ash-notifications-row {
+	position: relative;
+	padding-inline-end: 44px;
+	flex-direction: column;
+	gap: 0;
+	box-shadow: none;
+}
+.ash-notifications-center:focus-visible,
+.ash-notifications-row:focus-visible,
+.ash-notifications-center button:focus-visible,
+.ash-notification button:focus-visible,
+.ash-notifications-toggle:focus-visible {
+	outline: 2px solid var(--ash-focus-border, currentColor);
+	outline-offset: 2px;
+}
+.ash-notifications-remove {
+	position: absolute;
+	inset-inline-end: 8px;
+	inset-block-start: 8px;
+}
+.ash-notifications-empty {
+	margin: 8px;
+}
+.ash-notifications-toggle {
+	position: absolute;
+	z-index: 1000;
+	inset-inline-end: 12px;
+	inset-block-end: 8px;
+	padding: 4px 8px;
+}
+.ash-sessions-window {
+	position: relative;
+}
+.ash-sessions-window .ash-feedback-host {
+	position: absolute;
+	z-index: 1000;
+	inset-inline-end: 12px;
+	inset-block-end: 40px;
+	width: min(420px, calc(100% - 24px));
+	max-height: calc(100% - 56px);
+	pointer-events: none;
+}

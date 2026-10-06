@@ -64,7 +64,7 @@ test.describe('Git ignore decorations', () => {
 			observer.observe(explorer, { attributes: true, childList: true, subtree: true });
 			const tick = () => { sample(); frame = requestAnimationFrame(tick); };
 			frame = requestAnimationFrame(tick);
-			(window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }).stopIgnoreColorMonitor = () => {
+			(window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[]; }; }).stopIgnoreColorMonitor = () => {
 				observer.disconnect();
 				cancelAnimationFrame(frame);
 				return { samples, failures: [...failures] };
@@ -76,7 +76,7 @@ test.describe('Git ignore decorations', () => {
 			await writeFile(join(testWorkspace.directory, name), `change ${index}`);
 			await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).toHaveAttribute('aria-label', `${name}, Untracked`);
 		}
-		const observation = await page.evaluate(() => (window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }).stopIgnoreColorMonitor());
+		const observation = await page.evaluate(() => (window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[]; }; }).stopIgnoreColorMonitor());
 		expect(observation.samples).toBeGreaterThan(0);
 		expect(observation.failures).toEqual([]);
 		await writeFile(join(testWorkspace.directory, '.gitignore'), '*.tmp\n!keep.tmp\nmain.ts\n');
@@ -243,7 +243,7 @@ test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input im
 	await viewport.hover();
 	// Sample rendered positions through the actual wheel handler, including its synchronous result.
 	await viewport.evaluate(element => {
-		const state = window as typeof window & { scrollSamples: Promise<number[]> };
+		const state = window as typeof window & { scrollSamples: Promise<number[]>; };
 		state.scrollSamples = new Promise(resolve => {
 			element.addEventListener('wheel', () => {
 				const values = [element.scrollTop];
@@ -259,25 +259,25 @@ test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input im
 	});
 	await page.mouse.wheel(0, 120);
 	await page.mouse.wheel(0, 120);
-	const samples = await page.evaluate(() => (window as typeof window & { scrollSamples: Promise<number[]> }).scrollSamples);
+	const samples = await page.evaluate(() => (window as typeof window & { scrollSamples: Promise<number[]>; }).scrollSamples);
 	expect(samples[0]).toBe(0);
 	expect(samples.at(-1)).toBe(240);
 	expect(new Set(samples.filter(value => value > 0 && value < 240)).size).toBeGreaterThan(1);
 	await tree.press('Home');
 	await viewport.evaluate(element => {
-		element.addEventListener('wheel', () => { (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition = element.scrollTop; }, { once: true });
+		element.addEventListener('wheel', () => { (window as typeof window & { immediateWheelPosition: number; }).immediateWheelPosition = element.scrollTop; }, { once: true });
 	});
 	await page.mouse.wheel(0, 8);
-	expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition)).toBe(8);
+	expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number; }).immediateWheelPosition)).toBe(8);
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await expect(page.locator('.ash-workbench')).toHaveClass(/ash-reduce-motion/u);
 	for (let index = 0; index < 2; index += 1) {
 		await tree.press('Home');
 		await viewport.evaluate(element => {
-			element.addEventListener('wheel', () => { (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition = element.scrollTop; }, { once: true });
+			element.addEventListener('wheel', () => { (window as typeof window & { immediateWheelPosition: number; }).immediateWheelPosition = element.scrollTop; }, { once: true });
 		});
 		await page.mouse.wheel(0, 120);
-		expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition)).toBe(120);
+		expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number; }).immediateWheelPosition)).toBe(120);
 	}
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 	await tree.press('Home');

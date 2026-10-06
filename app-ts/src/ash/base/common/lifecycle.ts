@@ -25,8 +25,8 @@ export class ImmortalReference<T> implements IReference<T> {
 	constructor(object: T) {
 		this.object = object;
 	}
-	dispose(): void {}
-	[Symbol.dispose](): void {}
+	dispose(): void { }
+	[Symbol.dispose](): void { }
 }
 
 /**
@@ -39,8 +39,8 @@ export interface IAsyncDisposable extends globalThis.AsyncDisposable {
 
 /** Reusable cleanup handle for contracts that intentionally own no resource. */
 export const noneDisposable: IDisposable = Object.freeze({
-	dispose(): void {},
-	[Symbol.dispose](): void {},
+	dispose(): void { },
+	[Symbol.dispose](): void { },
 });
 
 /** @internal */
@@ -640,12 +640,12 @@ export function combinedDisposable(
 	return store;
 }
 
-export function dispose<T extends { dispose(): void }>(resource: T): T;
-export function dispose<T extends { dispose(): void }>(resource: T | undefined): T | undefined;
-export function dispose<T extends { dispose(): void }, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
-export function dispose<T extends { dispose(): void }>(resources: Array<T>): Array<T>;
-export function dispose<T extends { dispose(): void }>(resources: ReadonlyArray<T>): ReadonlyArray<T>;
-export function dispose<T extends { dispose(): void }>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
+export function dispose<T extends { dispose(): void; }>(resource: T): T;
+export function dispose<T extends { dispose(): void; }>(resource: T | undefined): T | undefined;
+export function dispose<T extends { dispose(): void; }, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
+export function dispose<T extends { dispose(): void; }>(resources: Array<T>): Array<T>;
+export function dispose<T extends { dispose(): void; }>(resources: ReadonlyArray<T>): ReadonlyArray<T>;
+export function dispose<T extends { dispose(): void; }>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
 	if (!value) {
 		return value;
 	}

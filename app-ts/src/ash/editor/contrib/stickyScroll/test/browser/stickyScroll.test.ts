@@ -134,7 +134,7 @@ suite('Sticky scroll scope sources', () => {
 
 	test('overlapping updates cancel all previous providers and keep the newer selection', async () => {
 		using fixture = new Fixture();
-		const pending: { signal: AbortSignal; finish: (symbols: readonly LanguageDocumentSymbol[]) => void }[] = [];
+		const pending: { signal: AbortSignal; finish: (symbols: readonly LanguageDocumentSymbol[]) => void; }[] = [];
 		using first = fixture.features.documentSymbolProvider.register('*', {
 			provideDocumentSymbols: request => new Promise(resolve => { pending.push({ signal: request.signal, finish: resolve }); }),
 		});

@@ -44,11 +44,11 @@ Hooks 在指定事件发生时执行用户配置的程序。Ash 提供 33 种事
 用户补充需求后再发送。浏览操作不新增、删除或切换 Hook；旧格式文件的读取遵循 Config 的
 版本迁移规则。
 
-| 范围 | 配置位置 | 用途 |
-| --- | --- | --- |
-| 用户 | `<profile>/config.toml`，默认 `~/.ash/config.toml` | 跨项目使用；以当前连接的 App Server profile 为准 |
-| 项目 | `<项目>/.ash/config.toml` | 项目声明，可随仓库保存；发现与执行仍受目录权限控制 |
-| 脚本 | 建议 `<项目>/.ash/hooks/` | 存放程序文件；TOML 显式引用，目录本身不自动注册 Hook |
+| 范围 | 配置位置                                           | 用途                                                 |
+| ---- | -------------------------------------------------- | ---------------------------------------------------- |
+| 用户 | `<profile>/config.toml`，默认 `~/.ash/config.toml` | 跨项目使用；以当前连接的 App Server profile 为准     |
+| 项目 | `<项目>/.ash/config.toml`                          | 项目声明，可随仓库保存；发现与执行仍受目录权限控制   |
+| 脚本 | 建议 `<项目>/.ash/hooks/`                          | 存放程序文件；TOML 显式引用，目录本身不自动注册 Hook |
 
 本地连接通过系统文本编辑器打开 TOML；首次编辑项目配置时创建空文件，已有文件保持原样。
 远程连接显示远程来源路径，通过远程主机编辑或让 Ash 配置，不能把远程路径交给本地编辑器。
@@ -131,14 +131,14 @@ Hook，也不授予权限。
 用户声明的程序化更新继续使用 `hook/upsert`、`hook/remove`、`hook/enablement/set`，携带
 `commandId` 与 `expectedRevision`。TUI 浏览页只读，编辑入口交给 TOML 或助手。
 
-| 责任 | 实现入口 |
-| --- | --- |
-| 事件名称及可匹配工具的事件 | [protocol](../protocol/src/hook.rs) |
-| TOML、ID、声明校验 | [config](../config/src/hooks.rs) |
-| 来源查询与配置命令 | [App Server](../app-server/src/server/extension_config_operations.rs) |
-| 事件列表、详情与配置入口 | [Ash Code](../../code/tui/src/hooks.rs) |
-| 桌面 Settings 与配置入口 | [Hooks Settings](../../app-ts/src/ash/workbench/contrib/hooks/browser/hooksSettingsContent.ts) |
-| 执行、进程协议与运行记录 | [运行时说明](docs/runtime.md) |
+| 责任                       | 实现入口                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| 事件名称及可匹配工具的事件 | [protocol](../protocol/src/hook.rs)                                                            |
+| TOML、ID、声明校验         | [config](../config/src/hooks.rs)                                                               |
+| 来源查询与配置命令         | [App Server](../app-server/src/server/extension_config_operations.rs)                          |
+| 事件列表、详情与配置入口   | [Ash Code](../../code/tui/src/hooks.rs)                                                        |
+| 桌面 Settings 与配置入口   | [Hooks Settings](../../app-ts/src/ash/workbench/contrib/hooks/browser/hooksSettingsContent.ts) |
+| 执行、进程协议与运行记录   | [运行时说明](docs/runtime.md)                                                                  |
 
 定向验证：
 

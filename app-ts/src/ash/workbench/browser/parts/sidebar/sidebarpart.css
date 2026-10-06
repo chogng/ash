@@ -1,21 +1,23 @@
 .ash-workbench-sidebar,
 .ash-workbench-agentSidebar {
-  border: 0;
-  border-radius: 0;
-  background: var(--ash-side-bar-background);
+	border: 0;
+	border-radius: 0;
+	background: var(--ash-side-bar-background);
 }
 
 .ash-workbench-sidebar {
-  border-right: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-workbench-agentSidebar {
-  border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 .ash-sidebar-part {
-  background: var(--ash-side-bar-background);
+	background: var(--ash-side-bar-background);
 }
-.ash-sidebar-part > .ash-composite-content { overflow: auto; }
+.ash-sidebar-part > .ash-composite-content {
+	overflow: auto;
+}
 
 .ash-sidebar-composite-bar-top,
 .ash-sidebar-composite-bar-bottom {

@@ -258,6 +258,6 @@ function equalJson(left: JsonValue, right: JsonValue): boolean {
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function issue(message: string, node: { readonly offset: number; readonly length: number }): JsonSchemaIssue {
+function issue(message: string, node: { readonly offset: number; readonly length: number; }): JsonSchemaIssue {
 	return Object.freeze({ message, offset: node.offset, length: Math.max(node.length, 1) });
 }

@@ -35,7 +35,7 @@ export class LineDecorationToRender {
 		public readonly zIndex: number,
 		public readonly tooltip: string | null,
 		public readonly icon?: Icon,
-	) {}
+	) { }
 }
 
 export class VisibleLineDecorationsToRender {
@@ -277,7 +277,7 @@ export interface IRenderInfo {
 }
 
 type PreparedGlyphCandidate =
-	| { readonly kind: 'widget'; readonly lineNumber: number; readonly laneIndex: number; readonly zIndex: number; readonly data: IWidgetData }
+	| { readonly kind: 'widget'; readonly lineNumber: number; readonly laneIndex: number; readonly zIndex: number; readonly data: IWidgetData; }
 	| PreparedModelDecoration;
 
 interface PreparedModelDecoration {

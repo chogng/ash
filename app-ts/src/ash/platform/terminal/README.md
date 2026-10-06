@@ -4,12 +4,12 @@
 
 `common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主 child process 当前只覆盖输出生命周期；Shell 的 `IProcessDataEvent` 保留原始字节，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。完整 child process 的输入、signal、通用属性和服务器 flow control 仍待接入，没有添加空操作实现。
 
-| 文件 | 职责与生产入口 |
-| --- | --- |
-| `common/terminal.ts` | 前端进程契约：profile、带真实 PID/启动目录的创建、文本或原始字节输入、尺寸、增量字节输出、关闭和连接状态；退出码使用 `undefined` 表达未知，由 `IRendererHost.terminal` 提供给 Workbench |
-| `browser/appServerTerminalProcessService.ts` | 本地 Electron 与已连接 Web 的协议适配；通过现有 Renderer protocol client 调用 `terminal/*`，创建 `connectionOwned` 进程 |
-| `browser/reconnectableTerminalProcessService.ts` | SSH Electron 的完整进程适配器：保存和旋转 token，在新 connection generation attach 原 PTY，恢复最后尺寸；宿主直接选择这个服务对象 |
-| `browser/disconnectedTerminalProcessService.ts` | 无后端的 UI 运行环境明确拒绝进程操作；不创建模拟 Shell |
+| 文件                                             | 职责与生产入口                                                                                                                                                                          |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `common/terminal.ts`                             | 前端进程契约：profile、带真实 PID/启动目录的创建、文本或原始字节输入、尺寸、增量字节输出、关闭和连接状态；退出码使用 `undefined` 表达未知，由 `IRendererHost.terminal` 提供给 Workbench |
+| `browser/appServerTerminalProcessService.ts`     | 本地 Electron 与已连接 Web 的协议适配；通过现有 Renderer protocol client 调用 `terminal/*`，创建 `connectionOwned` 进程                                                                 |
+| `browser/reconnectableTerminalProcessService.ts` | SSH Electron 的完整进程适配器：保存和旋转 token，在新 connection generation attach 原 PTY，恢复最后尺寸；宿主直接选择这个服务对象                                                       |
+| `browser/disconnectedTerminalProcessService.ts`  | 无后端的 UI 运行环境明确拒绝进程操作；不创建模拟 Shell                                                                                                                                  |
 
 两个适配器消费同一个 `AppServerProtocolClient`。创建结果的 ready 信息来自 Rust；文本走 `terminal/write`，原始字节只在适配边界编码为 base64 后走 `terminal/writeBinary`，不经过 UTF-8 转换。普通与 SSH 读取都经过同一 DTO 转换入口，在适配边界把 base64 解码为原始 `Uint8Array`，把 nullable 退出码转为前端 `undefined`；多字节字符和控制字节不会经过逐块文本解码。重连租约管理复用该 client 的状态和代次，只恢复已有 PTY，不自行建立连接。Main 负责 connection acquisition、透明 relay，以及运行时更换通知，不解析 `terminal/*`，也不保存终端 token。
 

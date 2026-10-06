@@ -1,112 +1,112 @@
 .ash-testing {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 8px;
-  padding: 8px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	gap: 8px;
+	padding: 8px;
 }
 
 .ash-testing-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
 }
 
 .ash-testing-status {
-  min-height: 18px;
-  color: var(--ash-description-foreground);
-  font-size: 12px;
+	min-height: 18px;
+	color: var(--ash-description-foreground);
+	font-size: 12px;
 }
 
 .ash-testing-tree {
-  flex: 1;
-  min-height: 120px;
-  overflow: hidden;
+	flex: 1;
+	min-height: 120px;
+	overflow: hidden;
 }
 
 .ash-testing-row {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-  width: 100%;
-  align-items: center;
+	display: flex;
+	gap: 8px;
+	min-width: 0;
+	width: 100%;
+	align-items: center;
 }
 
 .ash-testing-row > span:first-child,
 .ash-testing-script > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-testing-case-state {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--ash-description-foreground);
+	margin-left: auto;
+	flex-shrink: 0;
+	font-size: 11px;
+	color: var(--ash-description-foreground);
 }
 
 .ash-testing-case-state.passed {
-  color: var(--ash-success-foreground);
+	color: var(--ash-success-foreground);
 }
 
 .ash-testing-case-state.failed,
 .ash-testing-case-state.errored {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-testing-output {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 35%;
-  overflow: auto;
+	flex: 0 1 auto;
+	min-height: 0;
+	max-height: 35%;
+	overflow: auto;
 }
 
 .ash-testing-result-label {
-  overflow-wrap: anywhere;
-  font-size: 12px;
+	overflow-wrap: anywhere;
+	font-size: 12px;
 }
 
 .ash-testing-output pre {
-  max-height: 160px;
-  margin: 4px 0;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: var(--ash-font-family-monospace);
-  font-size: 12px;
+	max-height: 160px;
+	margin: 4px 0;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--ash-font-family-monospace);
+	font-size: 12px;
 }
 
 .ash-testing-scripts {
-  display: flex;
-  flex-direction: column;
-  max-height: 180px;
-  overflow: auto;
+	display: flex;
+	flex-direction: column;
+	max-height: 180px;
+	overflow: auto;
 }
 
 .ash-testing-script {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+	display: flex;
+	gap: 8px;
+	align-items: center;
 }
 
 .ash-testing summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--ash-description-foreground);
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--ash-description-foreground);
 }
 
 .ash-testing summary:focus-visible,
 .ash-testing-output pre:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-testing-tree {
-  display: flex;
-  flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 .ash-testing-tree > .ash-list-scrollable {
-  flex: 1;
+	flex: 1;
 }

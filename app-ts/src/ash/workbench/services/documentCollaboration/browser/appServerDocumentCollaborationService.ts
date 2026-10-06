@@ -185,7 +185,7 @@ function decodeUpdate(value: AppServerDocumentCollaborationUpdate, schema: Docum
 	});
 }
 
-function decodePresence(value: AppServerDocumentCollaborationPresenceSnapshot): { readonly generation: number; readonly presences: readonly DocumentCollaborationPresence[] } {
+function decodePresence(value: AppServerDocumentCollaborationPresenceSnapshot): { readonly generation: number; readonly presences: readonly DocumentCollaborationPresence[]; } {
 	return Object.freeze({
 		generation: validateProtocolInteger(value.generation, "presence generation", 0),
 		presences: Object.freeze(value.presences.map(presence => Object.freeze({ clientId: presence.clientId, selection: decodeSelection(presence.selection) }))),
@@ -208,7 +208,7 @@ function decodeSelection(value: string): DocumentSelection {
 	}
 }
 
-function decodePoint(value: unknown, name: string): { readonly nodeId: string; readonly offset: number } {
+function decodePoint(value: unknown, name: string): { readonly nodeId: string; readonly offset: number; } {
 	const point = expectRecord(value, name);
 	return Object.freeze({ nodeId: expectString(point.nodeId, `${name} nodeId`), offset: validateProtocolInteger(point.offset, `${name} offset`, 0) });
 }

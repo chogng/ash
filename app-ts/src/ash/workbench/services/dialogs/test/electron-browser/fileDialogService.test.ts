@@ -9,7 +9,7 @@ import { FileDialogService } from '../../electron-browser/fileDialogService.js';
 import { DialogService } from '../../common/dialogService.js';
 
 test('Save As passes the suggested file name to the owning desktop window', async () => {
-	const calls: Array<{ readonly defaultName?: string } | undefined> = [];
+	const calls: Array<{ readonly defaultName?: string; } | undefined> = [];
 	using services = new InstantiationService();
 	services.registerInstance(IDialogService, new DialogService());
 	services.registerInstance(INativeHostService, {

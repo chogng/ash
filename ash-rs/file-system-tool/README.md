@@ -10,15 +10,15 @@ directory confinement、App Server RPC、mutation 或 watcher。
 
 ## 公共契约与内部接口
 
-| Symbol | 可见性 | 职责 |
-| --- | --- | --- |
-| `FileSystemTool` | public | 持有 environment binding、共享 filesystem、limits 与 immutable definition |
-| `FileSystemLimits` | public | 非零 read/list bounds；默认 64 KiB 与 1,000 direct entries |
-| `FileSystemToolError` | public | construction-time limit/definition failure |
-| `FileSystemInput` / `FileSystemOperation` | private | deny-unknown-fields 的 `read`、`list`、`metadata` input |
-| `validate_invocation` | private | cancellation、environment、exposed name 与 definition digest binding |
-| `file_system_definition` | private | provider-facing function schema |
-| `returned_json` / `returned_error` | private | `ToolExecutionOutcome` 编码与 success/error 分类 |
+| Symbol                                    | 可见性  | 职责                                                                      |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `FileSystemTool`                          | public  | 持有 environment binding、共享 filesystem、limits 与 immutable definition |
+| `FileSystemLimits`                        | public  | 非零 read/list bounds；默认 64 KiB 与 1,000 direct entries                |
+| `FileSystemToolError`                     | public  | construction-time limit/definition failure                                |
+| `FileSystemInput` / `FileSystemOperation` | private | deny-unknown-fields 的 `read`、`list`、`metadata` input                   |
+| `validate_invocation`                     | private | cancellation、environment、exposed name 与 definition digest binding      |
+| `file_system_definition`                  | private | provider-facing function schema                                           |
+| `returned_json` / `returned_error`        | private | `ToolExecutionOutcome` 编码与 success/error 分类                          |
 
 调用路径：
 

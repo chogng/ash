@@ -20,24 +20,24 @@ Ash 通过独立的 server provider、LSP manager 和 LSP 运行时连接现有�
 启动时冻结的 PATH 解析。Marketplace package 的安装确认同时写入 activation receipt，因此其 packaged
 route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执行时保持无语言服务器。
 
-| 使用场景 | 当前结果 | 谁负责下一步 |
-| --- | --- | --- |
-| 启动一个已解析的语言服务器命令 | ✅ 完成 initialize/initialized，冻结能力和位置编码 | `ash-lsp` |
-| 打开、修改、保存和关闭文档 | ✅ Desktop 发送 editor revision/full text；协调层绑定 LSP version | `ash-lsp-manager` + `ash-lsp` |
-| hover、completion、definition 等请求 | ✅ 产品 facade、capability/freshness gate、Desktop 编辑器 provider；completion resolve/command 和多目标 Peek 已接通 | `ash-lsp-manager` + Desktop |
-| 请求取消与冷暖延迟观测 | ✅ in-flight task cancellation；按 request kind/server incarnation/config/service generation 记录 content-free outcome | `ash-lsp-manager` + App Server metrics sink |
-| Semantic Tokens 与文档特性 | ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 已适配现有 Editor contract | `ash-lsp-manager` + Desktop |
-| push / document pull diagnostics | ✅ 共用 freshness 校验和 Problems 数据入口；pull full report 替换当前快照，unchanged report 保留已有结果 | `ash-lsp-manager` + App Server + Desktop |
-| workspace diagnostics | ✅ 调用标准 `workspace/diagnostic`，App Server 通过目录 Grant 读取未打开文件并转换范围，Desktop 将完整结果写入同一 Problems repository | `ash-lsp-manager` + App Server + Desktop |
-| 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
-| 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
-| 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、resolver 校验与热重配 | 扩展安装 provider/UI |
-| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection | 通过 `/marketplace` 或 `/lsp` 查找并安装包 |
-| 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `ash-lsp-manager` + Desktop |
-| 安装、更新和移除 server | 按签名 catalog 的 languageServer/runtime 声明重建 provider；前端动态刷新语言列表和打开的文档 | Marketplace / App Server / Workbench |
-| 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `ash-lsp` + `ash-lsp-manager` |
-| workspace edit | ✅ ordered workspace edit、Desktop transaction 与 Workbench preview 已接通 | `ash-lsp-manager` + Desktop Workbench |
-| LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
+| 使用场景                                              | 当前结果                                                                                                                               | 谁负责下一步                                |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 启动一个已解析的语言服务器命令                        | ✅ 完成 initialize/initialized，冻结能力和位置编码                                                                                     | `ash-lsp`                                   |
+| 打开、修改、保存和关闭文档                            | ✅ Desktop 发送 editor revision/full text；协调层绑定 LSP version                                                                      | `ash-lsp-manager` + `ash-lsp`               |
+| hover、completion、definition 等请求                  | ✅ 产品 facade、capability/freshness gate、Desktop 编辑器 provider；completion resolve/command 和多目标 Peek 已接通                    | `ash-lsp-manager` + Desktop                 |
+| 请求取消与冷暖延迟观测                                | ✅ in-flight task cancellation；按 request kind/server incarnation/config/service generation 记录 content-free outcome                 | `ash-lsp-manager` + App Server metrics sink |
+| Semantic Tokens 与文档特性                            | ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 已适配现有 Editor contract                    | `ash-lsp-manager` + Desktop                 |
+| push / document pull diagnostics                      | ✅ 共用 freshness 校验和 Problems 数据入口；pull full report 替换当前快照，unchanged report 保留已有结果                               | `ash-lsp-manager` + App Server + Desktop    |
+| workspace diagnostics                                 | ✅ 调用标准 `workspace/diagnostic`，App Server 通过目录 Grant 读取未打开文件并转换范围，Desktop 将完整结果写入同一 Problems repository | `ash-lsp-manager` + App Server + Desktop    |
+| 日志、show message 与 work-done progress              | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output                      | App Server + Desktop Workbench              |
+| 显式替换服务器并恢复文档                              | ✅ 新实例重放成功后切换 route/incarnation                                                                                              | 宿主需暂存 replacement 早期事件             |
+| 配置与发现 Rust/JSON/Shell server                     | ✅ 独立 Settings draft、revision-safe mode/path、resolver 校验与热重配                                                                 | 扩展安装 provider/UI                        |
+| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection          | 通过 `/marketplace` 或 `/lsp` 查找并安装包  |
+| 意外退出、退避重启和 crash-loop                       | ✅ 断连 retirement、有限指数退避、状态展示和全文重放                                                                                   | `ash-lsp-manager` + Desktop                 |
+| 安装、更新和移除 server                               | 按签名 catalog 的 languageServer/runtime 声明重建 provider；前端动态刷新语言列表和打开的文档                                           | Marketplace / App Server / Workbench        |
+| 动态注册与 work-done progress                         | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate                                                                 | `ash-lsp` + `ash-lsp-manager`               |
+| workspace edit                                        | ✅ ordered workspace edit、Desktop transaction 与 Workbench preview 已接通                                                             | `ash-lsp-manager` + Desktop Workbench       |
+| LSP 3.18 新能力                                       | 尚未完成                                                                                                                               | 后续按真实消费者逐项加入                    |
 
 继续阅读：[一次操作](#1-一次操作)、[所有权](#2-所有权边界)、
 [失败语义](#3-可靠性与失败语义)、[当前状态](#4-当前实现与演进)。
@@ -111,18 +111,18 @@ Git object identity 或 durable product sequence。
 
 ## 2. 所有权边界
 
-| 能力 | `ash-lsp` | LSP Server Provider | LSP Manager | Distribution | Desktop / Editor | App Server |
-| --- | --- | --- | --- | --- | --- | --- |
-| framing、initialize、request pairing、shutdown | ✅ | ❌ | 委托 | ❌ | ❌ | ❌ |
-| PATH discovery、canonical executable、server identity | ❌ | ✅ | ❌ | ❌ | 提供候选/policy | ❌ |
-| managed Node 与 package 启动命令 | 只执行冻结 command | ✅ | ❌ | 只返回入口路径 | 注入 package/provider | 组合 provider |
-| process enablement、language route、generation | ❌ | 提供 definition | ✅ | ❌ | 组合 | 配置与组合 |
-| restart backoff、预算和 crash-loop | 只上报断连事实 | ❌ | ✅ | ❌ | 展示运行态 | 事件转发 |
-| server 包 TUF/digest 校验与 side-by-side 安装 | ❌ | 只消费已安装 receipt | ❌ | ✅ 安装/activation | 展示确认 | ✅ 组合 Marketplace consumer |
-| 当前 document text / editor revision | ❌ | ❌ | 借用 snapshot | ❌ | ✅ | 文件 I/O authority |
-| diagnostics freshness 与 position conversion | 提供协议事实 | ❌ | ✅ | ❌ | ✅ Editor 绘制，Desktop hover | 协议投影 |
-| mode/path durable preference | ❌ | 只消费 preference | ❌ | ❌ | Settings UI / adapter | ✅ authority |
-| directory capabilities / executable policy | ❌ | 只消费结果 | 只消费 definition | ❌ | 协调 | authority |
+| 能力                                                  | `ash-lsp`          | LSP Server Provider  | LSP Manager       | Distribution       | Desktop / Editor              | App Server                   |
+| ----------------------------------------------------- | ------------------ | -------------------- | ----------------- | ------------------ | ----------------------------- | ---------------------------- |
+| framing、initialize、request pairing、shutdown        | ✅                 | ❌                   | 委托              | ❌                 | ❌                            | ❌                           |
+| PATH discovery、canonical executable、server identity | ❌                 | ✅                   | ❌                | ❌                 | 提供候选/policy               | ❌                           |
+| managed Node 与 package 启动命令                      | 只执行冻结 command | ✅                   | ❌                | 只返回入口路径     | 注入 package/provider         | 组合 provider                |
+| process enablement、language route、generation        | ❌                 | 提供 definition      | ✅                | ❌                 | 组合                          | 配置与组合                   |
+| restart backoff、预算和 crash-loop                    | 只上报断连事实     | ❌                   | ✅                | ❌                 | 展示运行态                    | 事件转发                     |
+| server 包 TUF/digest 校验与 side-by-side 安装         | ❌                 | 只消费已安装 receipt | ❌                | ✅ 安装/activation | 展示确认                      | ✅ 组合 Marketplace consumer |
+| 当前 document text / editor revision                  | ❌                 | ❌                   | 借用 snapshot     | ❌                 | ✅                            | 文件 I/O authority           |
+| diagnostics freshness 与 position conversion          | 提供协议事实       | ❌                   | ✅                | ❌                 | ✅ Editor 绘制，Desktop hover | 协议投影                     |
+| mode/path durable preference                          | ❌                 | 只消费 preference    | ❌                | ❌                 | Settings UI / adapter         | ✅ authority                 |
+| directory capabilities / executable policy            | ❌                 | 只消费结果           | 只消费 definition | ❌                 | 协调                          | authority                    |
 
 `ash-editor` 保持纯 presentation，不依赖 provider、`ash-lsp` 或 manager。Desktop host 组合 provider、
 editor 和 `ash-lsp-manager`，只在 adapter 中转换文档与事件；其他 editor runtime host 可以消费相同系统语义，

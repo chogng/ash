@@ -12,7 +12,7 @@ class ColorHover implements IHoverPart {
 }
 
 export class HoverColorPickerParticipant implements IEditorHoverParticipant {
-	constructor(private readonly editor: ICodeEditor) {}
+	constructor(private readonly editor: ICodeEditor) { }
 
 	public computeSync(anchor: HoverAnchor): IHoverPart[] {
 		const controller = this.editor.getContribution<ColorPickerController>('editor.contrib.colorPicker');

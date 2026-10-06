@@ -180,7 +180,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	/** Textarea accessibility geometry is maintained by its dedicated controller. */
-	updateBounds(_position: EditContextPosition): void {}
+	updateBounds(_position: EditContextPosition): void { }
 
 	setReadOnly(readOnly: boolean): void {
 		this.textArea.domNode.readOnly = readOnly;
@@ -352,7 +352,7 @@ class TextAreaAccessibilityController extends Disposable {
 	}
 }
 
-function accessibleInputWindow(modelLength: number, selectionStartOffset: number, selectionEndOffset: number, activeOffset: number): { readonly startOffset: number; readonly endOffset: number } {
+function accessibleInputWindow(modelLength: number, selectionStartOffset: number, selectionEndOffset: number, activeOffset: number): { readonly startOffset: number; readonly endOffset: number; } {
 	if (modelLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) return { startOffset: 0, endOffset: modelLength };
 	const selectionLength = selectionEndOffset - selectionStartOffset;
 	if (selectionLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {

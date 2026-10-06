@@ -7,7 +7,7 @@ import { getSingleFolderWorkspaceIdentifier, nodeWorkspacePathService, stableWor
 
 /** Resolves workspace files and canonical folder identities for desktop windows. */
 export class WorkspacesManagementMainService {
-	constructor(private readonly pathService: IWorkspacePathService = nodeWorkspacePathService) {}
+	constructor(private readonly pathService: IWorkspacePathService = nodeWorkspacePathService) { }
 
 	public async resolveFolder(path: string): Promise<ISingleFolderWorkspaceIdentifier> {
 		const folder = await this.pathService.resolvePath(resolve(path));

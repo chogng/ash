@@ -171,7 +171,7 @@ export class BrowserFileService extends Disposable implements IFileService, ISys
 		return this.api.delete({ ...this.fileTarget(resource), missing, mode });
 	}
 
-	private fileTarget(resource: URI): { readonly dirId: string; readonly path: string } {
+	private fileTarget(resource: URI): { readonly dirId: string; readonly path: string; } {
 		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
 		if (!folder) throw new Error("Resource must belong to a current workspace folder");
 		return { dirId: folder.id, path: workspaceRelativePath(folder.uri, resource) };

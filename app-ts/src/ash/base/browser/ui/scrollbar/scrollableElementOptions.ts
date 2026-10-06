@@ -27,7 +27,7 @@ interface ScrollableElementBaseOptions {
 	readonly wheel?: ScrollbarWheelOptions;
 	readonly mouseWheelSmoothScroll?: boolean;
 	readonly onScroll?: (
-		position: { readonly left: number; readonly top: number },
+		position: { readonly left: number; readonly top: number; },
 	) => void;
 }
 

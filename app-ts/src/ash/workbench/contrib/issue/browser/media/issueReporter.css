@@ -41,19 +41,52 @@
 	min-width: 0;
 }
 
-.ash-issue-reporter textarea { resize: vertical; width: 100%; }
+.ash-issue-reporter textarea {
+	resize: vertical;
+	width: 100%;
+}
 .ash-issue-reporter .issue-reporter-diagnostics,
-.ash-issue-reporter .issue-reporter-actions { display: flex; flex-wrap: wrap; gap: var(--ash-spacing-size120); }
-.ash-issue-reporter .issue-reporter-diagnostics label { display: flex; align-items: center; gap: var(--ash-spacing-size60); }
-.ash-issue-reporter pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-.ash-issue-reporter a { color: var(--ash-accent-foreground); overflow-wrap: anywhere; }
-.ash-issue-reporter summary { cursor: pointer; }
-.ash-issue-reporter .issue-reporter-results { margin: 0; padding: 0 var(--ash-spacing-size240); }
-.ash-issue-reporter p { margin: 0; }
-.ash-issue-reporter .issue-reporter-hint { color: var(--ash-description-foreground); font-size: var(--ash-font-size-body2); }
-.ash-issue-reporter .issue-reporter-status.error { color: var(--ash-error-foreground); }
+.ash-issue-reporter .issue-reporter-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+}
+.ash-issue-reporter .issue-reporter-diagnostics label {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size60);
+}
+.ash-issue-reporter pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+}
+.ash-issue-reporter a {
+	color: var(--ash-accent-foreground);
+	overflow-wrap: anywhere;
+}
+.ash-issue-reporter summary {
+	cursor: pointer;
+}
+.ash-issue-reporter .issue-reporter-results {
+	margin: 0;
+	padding: 0 var(--ash-spacing-size240);
+}
+.ash-issue-reporter p {
+	margin: 0;
+}
+.ash-issue-reporter .issue-reporter-hint {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-body2);
+}
+.ash-issue-reporter .issue-reporter-status.error {
+	color: var(--ash-error-foreground);
+}
 .ash-issue-reporter textarea:focus-visible,
 .ash-issue-reporter select:focus-visible,
 .ash-issue-reporter a:focus-visible,
 .ash-issue-reporter summary:focus-visible,
-.ash-issue-reporter pre:focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: -1px; }
+.ash-issue-reporter pre:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}

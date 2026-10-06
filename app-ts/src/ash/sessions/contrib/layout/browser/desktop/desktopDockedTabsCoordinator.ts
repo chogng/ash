@@ -7,7 +7,7 @@ import type { SessionsViewSelection } from '../../../../services/sessions/browse
 
 /** Only settled session/reveal transitions seed tabs; ordinary closes never recreate defaults. */
 export class DesktopDockedTabsCoordinator {
-	constructor(@IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService) {}
+	constructor(@IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService) { }
 
 	public async reconcile(selection: SessionsViewSelection, detailsOnly: boolean): Promise<void> {
 		const changes = new SessionChangesEditorInput(selection);

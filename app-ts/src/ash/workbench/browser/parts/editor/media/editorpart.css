@@ -1,22 +1,24 @@
 .ash-workbench-editor {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background: var(--ash-editor-background);
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	border: 0;
+	border-radius: 0;
+	background: var(--ash-editor-background);
 }
 
 .ash-workbench-editor .ash-workbench-part-content {
-  padding: 0;
-  overflow: hidden;
+	padding: 0;
+	overflow: hidden;
 }
 
-.ash-workbench-editor .ash-workbench-part-content > :is(.ash-grid, .ash-split-view) {
-  flex: 1 1 auto;
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  min-height: 0;
+.ash-workbench-editor
+	.ash-workbench-part-content
+	> :is(.ash-grid, .ash-split-view) {
+	flex: 1 1 auto;
+	position: relative;
+	width: 100%;
+	min-width: 0;
+	height: 100%;
+	min-height: 0;
 }

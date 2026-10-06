@@ -51,19 +51,21 @@ function describeDiagnostic(diagnostic: LanguageDiagnostic): string {
 	return `${prefix}: ${diagnostic.message}`;
 }
 
-function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range }[], active: Position): number {
+function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range; }[], active: Position): number {
 	for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
 		if (Position.compare(diagnostics[index]!.range.getEndPosition(), active) < 0) return index;
 	}
 	return -1;
 }
 
-registerEditorContribution({ id: "editor.contrib.gotoError", install: context => {
-	if (context.kind !== "text") return;
-	return new DiagnosticNavigationController(
-		context.controller.element,
-		context.view,
-		context.viewModel,
-		context.getService(TextEditorCapability.diagnosticDecorations),
-	);
-} });
+registerEditorContribution({
+	id: "editor.contrib.gotoError", install: context => {
+		if (context.kind !== "text") return;
+		return new DiagnosticNavigationController(
+			context.controller.element,
+			context.view,
+			context.viewModel,
+			context.getService(TextEditorCapability.diagnosticDecorations),
+		);
+	}
+});

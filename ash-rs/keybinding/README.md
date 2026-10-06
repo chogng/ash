@@ -10,14 +10,14 @@
 
 ## 文件与调用方
 
-| 文件 | 内容 |
-| --- | --- |
-| `key.rs` | 按键、修饰键和按键序列类型 |
-| `parser.rs` | 按键序列解析、序列化和标签 |
-| `context.rs` | 条件表达式解析和求值 |
-| `binding.rs` | 规则集合、来源和优先级 |
-| `resolver.rs` | 条件与按键序列匹配 |
-| `user.rs` | 用户规则编译、平台覆盖和重复诊断 |
+| 文件          | 内容                             |
+| ------------- | -------------------------------- |
+| `key.rs`      | 按键、修饰键和按键序列类型       |
+| `parser.rs`   | 按键序列解析、序列化和标签       |
+| `context.rs`  | 条件表达式解析和求值             |
+| `binding.rs`  | 规则集合、来源和优先级           |
+| `resolver.rs` | 条件与按键序列匹配               |
+| `user.rs`     | 用户规则编译、平台覆盖和重复诊断 |
 
 [App Workbench](../../app-rs/workbench/platform/keybindings.rs) 和 [Ash Code TUI](../../code/tui/src/keymap.rs) 在本端转换输入事件，再调用本库。两端的命令和配置相互独立。TypeScript 端保留自己的实现，通过同一份 [一致性测试向量](../../resources/keybindings/conformance.json) 验证共同规则。
 

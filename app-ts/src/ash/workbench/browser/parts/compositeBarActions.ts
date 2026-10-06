@@ -37,7 +37,7 @@ export interface CompositeBarActionOptions {
 	readonly tabId: string;
 	readonly panelId?: string;
 	readonly checked: boolean;
-	readonly badge?: { readonly count: number; readonly description: string };
+	readonly badge?: { readonly count: number; readonly description: string; };
 	readonly badgeEnabled: boolean;
 	readonly onActivate: (compositeId: string) => void;
 }
@@ -46,7 +46,7 @@ export interface CompositeBarActionOptions {
 export class CompositeBarAction implements IAction {
 	readonly enabled = true;
 
-	constructor(readonly options: CompositeBarActionOptions) {}
+	constructor(readonly options: CompositeBarActionOptions) { }
 
 	get id(): string {
 		return this.options.id;
@@ -229,5 +229,5 @@ export class CompositeOverflowActivityAction implements IAction {
 		this.tooltip = label;
 	}
 
-	run(): void {}
+	run(): void { }
 }

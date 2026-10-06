@@ -75,10 +75,12 @@ test('approval commits every resource when the first mutation retires the origin
 
 test('preview preserves content checks and sequential snapshots', async () => {
 	using fixture = new BulkEditTestServices([[first, 'a']]);
-	const edit: LanguageWorkspaceEdit = { entries: [
-		{ kind: 'textDocument', resource: first, expectedText: 'a', edits: [{ range: new Range(1, 1, 1, 2), text: 'long' }] },
-		{ kind: 'textDocument', resource: first, expectedText: 'long', edits: [{ range: new Range(1, 5, 1, 5), text: '!' }] },
-	] };
+	const edit: LanguageWorkspaceEdit = {
+		entries: [
+			{ kind: 'textDocument', resource: first, expectedText: 'a', edits: [{ range: new Range(1, 1, 1, 2), text: 'long' }] },
+			{ kind: 'textDocument', resource: first, expectedText: 'long', edits: [{ range: new Range(1, 5, 1, 5), text: '!' }] },
+		]
+	};
 	using handler = fixture.service.setPreviewHandler(async edits => {
 		const preview = await toLanguageWorkspaceEdit(edits);
 		assert.deepEqual(preview, edit);
@@ -92,10 +94,12 @@ test('preview retains distinct sequential snapshots when steps reuse a text edit
 	using fixture = new BulkEditTestServices([[first, 'ab']]);
 	const payload = { range: new Range(1, 1, 1, 1), text: '!' };
 	using handler = fixture.service.setPreviewHandler(async edits => edits);
-	await fixture.service.apply({ entries: [
-		{ kind: 'textDocument', resource: first, expectedText: 'ab', edits: [payload] },
-		{ kind: 'textDocument', resource: first, expectedText: '!ab', edits: [payload] },
-	] }, { showPreview: true });
+	await fixture.service.apply({
+		entries: [
+			{ kind: 'textDocument', resource: first, expectedText: 'ab', edits: [payload] },
+			{ kind: 'textDocument', resource: first, expectedText: '!ab', edits: [payload] },
+		]
+	}, { showPreview: true });
 	assert.equal(fixture.store.text(first), '!!ab');
 });
 
@@ -172,10 +176,12 @@ test('registered bulk edits share the window dialog queue regardless of registra
 
 test('standard workspace edits use original coordinates and expose an exact inverse', async () => {
 	using fixture = new BulkEditTestServices([[first, 'abc def']]);
-	const result = await fixture.service.apply({ edits: [
-		{ resource: first, textEdit: { range: new Range(1, 1, 1, 4), text: 'long' } },
-		{ resource: first, textEdit: { range: new Range(1, 5, 1, 8), text: 'XYZ' } },
-	] });
+	const result = await fixture.service.apply({
+		edits: [
+			{ resource: first, textEdit: { range: new Range(1, 1, 1, 4), text: 'long' } },
+			{ resource: first, textEdit: { range: new Range(1, 5, 1, 8), text: 'XYZ' } },
+		]
+	});
 	assert.equal(fixture.store.text(first), 'long XYZ');
 	assert.ok(result.isApplied);
 	await result.undo();
@@ -237,7 +243,7 @@ for (const autoSave of [true, false, 'failure'] as const) {
 			backup: () => reference.model.getText(), restoreBackup: value => reference.model.setValue(value),
 			save: signal => reference.save(signal), revert: signal => reference.revert(signal),
 			saveAs: async () => { throw new Error('Save As is outside this scenario'); },
-			dispose: () => {}, [Symbol.dispose]: () => {},
+			dispose: () => { }, [Symbol.dispose]: () => { },
 		}));
 		try {
 			const result = await fixture.service.apply({ entries: [...textEdit(first, '1').entries, ...textEdit(second, '2').entries] }, { respectAutoSaveConfig: true });

@@ -26,7 +26,7 @@ export class RowCache<T> extends Disposable {
 		}));
 	}
 
-	alloc(templateId: string): { row: IRow; isReusingConnectedDomNode: boolean } {
+	alloc(templateId: string): { row: IRow; isReusingConnectedDomNode: boolean; } {
 		let row = this.available.get(templateId)?.pop();
 		if (row) {
 			this.pendingRemoval.delete(row);

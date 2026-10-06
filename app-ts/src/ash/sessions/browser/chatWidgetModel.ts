@@ -22,8 +22,8 @@ export type ChatWidgetState =
 
 /** The local or durable identity currently displayed by a Chat pane. */
 export type ChatWidgetSelection =
-	| { readonly kind: "session"; readonly active: IActiveSessionThread }
-	| { readonly kind: "untitled"; readonly session: IUntitledChatSession };
+	| { readonly kind: "session"; readonly active: IActiveSessionThread; }
+	| { readonly kind: "untitled"; readonly session: IUntitledChatSession; };
 
 /**
  * State for one Chat tab, before or after it acquires a durable Thread.
@@ -56,7 +56,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
-	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined }>();
+	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
@@ -177,8 +177,8 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === "untitled"
 			? this.selection.session.model
 			: this.selectedModels.get(this.selection.active.threadId)
-				?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model ?? undefined : undefined)
-				?? this.selection.active.session.model ?? undefined;
+			?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model ?? undefined : undefined)
+			?? this.selection.active.session.model ?? undefined;
 	}
 
 	get isAutomaticModel(): boolean {
@@ -817,7 +817,7 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === "session" ? this.selection.active : undefined;
 	}
 
-	private requireChangeOwner(): { readonly sessionId: SessionId; readonly threadId: ThreadId } {
+	private requireChangeOwner(): { readonly sessionId: SessionId; readonly threadId: ThreadId; } {
 		const active = this.activeSession;
 		if (!active) throw new Error("Turn changes require a durable Session and Thread");
 		return { sessionId: active.session.sessionId, threadId: active.threadId };

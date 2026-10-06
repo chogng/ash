@@ -78,7 +78,7 @@ test('code editor services require their host and keep registrations within its 
 test('code editor resource opening reaches the Workbench group with its selection and focus preferences', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
-	const requests: Array<{ input: EditorInput; options: EditorOpenOptions; target: EditorOpenTarget }> = [];
+	const requests: Array<{ input: EditorInput; options: EditorOpenOptions; target: EditorOpenTarget; }> = [];
 	let control: unknown;
 	services.registerInstance(IEditorPartsService, {
 		openEditor: async (input: EditorInput, options: EditorOpenOptions, target: EditorOpenTarget) => {

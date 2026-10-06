@@ -25,8 +25,8 @@ import type { ISessionsService } from '../../services/sessions/browser/sessionsS
 
 class TestPart extends WorkbenchPart {
 	public getTabsHeight(): number { return 35; }
-	public setContentRightInset(_inset: number): void {}
-	public setEditorContentVisible(_visible: boolean): void {}
+	public setContentRightInset(_inset: number): void { }
+	public setEditorContentVisible(_visible: boolean): void { }
 	constructor(container: HTMLElement, id: SessionsPartId) { super(container, id); }
 }
 
@@ -58,20 +58,20 @@ test('Sessions titlebar initializes localized actions and closes the application
 	};
 	const sessions: ISessionsService = {
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
-		async openThread() {},
+		async openThread() { },
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
 		canNavigateForward: false,
-		async initialize() {},
-		openSession() {},
-		openUntitledSession() {},
+		async initialize() { },
+		openSession() { },
+		openUntitledSession() { },
 		openNewSession() { throw new Error('This scenario does not create sessions'); },
-		activateSelection() {},
-		closeVisibleSelection() {},
-		navigateBack() {},
-		navigateForward() {},
+		activateSelection() { },
+		closeVisibleSelection() { },
+		navigateBack() { },
+		navigateForward() { },
 	};
 	setNlsResolver((bundle, key, fallback) => {
 		if (bundle === 'ash.regions' && key === 'applicationMenu') { return '应用程序菜单'; }
@@ -127,8 +127,8 @@ test('Sessions titlebar initializes localized actions and closes the application
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
-	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);

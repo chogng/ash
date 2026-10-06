@@ -49,14 +49,14 @@ HTTP backend 与共享 proxy/TLS policy 属于 `ash-http-client`；WebSocket han
 属于 `ash-websocket-client`；operation retry、SSE/NDJSON framing 和 operation telemetry 属于
 `ash-client`。
 
-| 需要处理的内容 | 本层是否负责 | 交给谁 |
-| --- | --- | --- |
-| 把统一模型请求编码成供应商 JSON | ✅ | 本层 |
-| 解释供应商响应、错误和流式事件 | ✅ | 本层 |
-| 选择供应商、模型和凭据 | ❌ | 模型调用系统 |
-| 判断是否安全重试并执行等待 | ❌ | 模型调用操作层 |
-| 建立 HTTP 连接、代理和 TLS | ❌ | 网络层 |
-| 推进 Agent Turn 和工具循环 | ❌ | 会话与执行系统 |
+| 需要处理的内容                  | 本层是否负责 | 交给谁         |
+| ------------------------------- | ------------ | -------------- |
+| 把统一模型请求编码成供应商 JSON | ✅           | 本层           |
+| 解释供应商响应、错误和流式事件  | ✅           | 本层           |
+| 选择供应商、模型和凭据          | ❌           | 模型调用系统   |
+| 判断是否安全重试并执行等待      | ❌           | 模型调用操作层 |
+| 建立 HTTP 连接、代理和 TLS      | ❌           | 网络层         |
+| 推进 Agent Turn 和工具循环      | ❌           | 会话与执行系统 |
 
 ## 2. 四层关系
 
@@ -126,13 +126,13 @@ ash-client      ash-protocol
 
 需要修正：
 
-| 当前设计 | 目标 |
-| --- | --- |
-| 分散的生成端点路径、头和请求实现 | 三套生成 codec 已合并归属到 `endpoint/` 对应模块 |
-| `JsonHttpTransport` / `UreqJsonHttpTransport` | 已替换为 `ClientRequest`/`ClientResponse` 与 `HttpClient` |
-| `ResolvedApiTarget` 同时承担 runtime 和协议职责 | 仍需将其演进为 typed client request；API 只追加协议 path/header |
-| transport 直接返回 `serde_json::Value` | client 已返回 status/headers/body bytes，API 负责 JSON |
-| provider facade 与 wire codec 两套目录 | Provider facade 已只留在 model-provider；API dispatch 只按 endpoint/profile |
+| 当前设计                                        | 目标                                                                        |
+| ----------------------------------------------- | --------------------------------------------------------------------------- |
+| 分散的生成端点路径、头和请求实现                | 三套生成 codec 已合并归属到 `endpoint/` 对应模块                            |
+| `JsonHttpTransport` / `UreqJsonHttpTransport`   | 已替换为 `ClientRequest`/`ClientResponse` 与 `HttpClient`                   |
+| `ResolvedApiTarget` 同时承担 runtime 和协议职责 | 仍需将其演进为 typed client request；API 只追加协议 path/header             |
+| transport 直接返回 `serde_json::Value`          | client 已返回 status/headers/body bytes，API 负责 JSON                      |
+| provider facade 与 wire codec 两套目录          | Provider facade 已只留在 model-provider；API dispatch 只按 endpoint/profile |
 
 HTTP 调用、Responses WebSocket 与公共 Realtime GA 会话已有实现；NDJSON codec 和更多服务协议仍未完成，
 不能把 transport 可用描述成模型协议已接通。
@@ -245,19 +245,18 @@ OpenAI Platform 与 ChatGPT subscription 分别选择 `OpenAiResponses` 和 `Cha
 
 Platform API key 不能访问 subscription target，ChatGPT OAuth token 也不能用于 Platform target。任意 custom OpenAI-compatible URL 不得冒充 subscription service。新增 compact、images、memories、search 或 realtime 能力时，仍需独立验证其公开 contract；Responses codec 的复用不能推导其他 endpoint 兼容。
 
-
 对照本地 Codex 源码 `818f1cca8c` 的 `codex-rs/codex-api/src/endpoint`，差距不能仅按文件数判断：
 
-| Codex 操作 | Ash 当前状态 | 处理结论 |
-| --- | --- | --- |
-| responses + responses_websocket | HTTP／SSE 已有；本轮补齐顺序 WebSocket 会话 | 共用请求和事件解码，先验证主推理链 |
-| realtime_websocket | 本轮补齐公共 Realtime GA JSON 会话 | Codex 的 v1／v2／frameless 协议分别对待，未宣称兼容 |
-| realtime_call | 未实现 WebRTC calls 和 sideband | 需要 SDP、call ID 及产品音频生命周期；不属于本轮 WebSocket 文本连接 |
-| models | 已有 model-provider catalog discovery，路径与 JSON 尚在 catalog adapter | 后续将线上的模型列表协议归入 API；刷新、合并和缓存仍在 models-manager |
-| images | API crate 未实现独立生成／编辑操作 | 需要图片请求／结果契约及对应模型验证；图片输入支持不能代替生成 |
-| memories/trace_summarize | 未实现 Codex 对应服务操作 | 本地记忆和 checkpoint 不代表拥有该云端接口 |
-| alpha/search | 未实现 Codex 对应搜索操作 | 需明确服务授权与结果契约，不能等同普通模型工具调用 |
-| session | Ash 已有 OperationClient、认证解析及显式会话组合 | 沿现有职责复用，不再复制一套 Provider／认证／重试框架 |
+| Codex 操作                      | Ash 当前状态                                                            | 处理结论                                                              |
+| ------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| responses + responses_websocket | HTTP／SSE 已有；本轮补齐顺序 WebSocket 会话                             | 共用请求和事件解码，先验证主推理链                                    |
+| realtime_websocket              | 本轮补齐公共 Realtime GA JSON 会话                                      | Codex 的 v1／v2／frameless 协议分别对待，未宣称兼容                   |
+| realtime_call                   | 未实现 WebRTC calls 和 sideband                                         | 需要 SDP、call ID 及产品音频生命周期；不属于本轮 WebSocket 文本连接   |
+| models                          | 已有 model-provider catalog discovery，路径与 JSON 尚在 catalog adapter | 后续将线上的模型列表协议归入 API；刷新、合并和缓存仍在 models-manager |
+| images                          | API crate 未实现独立生成／编辑操作                                      | 需要图片请求／结果契约及对应模型验证；图片输入支持不能代替生成        |
+| memories/trace_summarize        | 未实现 Codex 对应服务操作                                               | 本地记忆和 checkpoint 不代表拥有该云端接口                            |
+| alpha/search                    | 未实现 Codex 对应搜索操作                                               | 需明确服务授权与结果契约，不能等同普通模型工具调用                    |
+| session                         | Ash 已有 OperationClient、认证解析及显式会话组合                        | 沿现有职责复用，不再复制一套 Provider／认证／重试框架                 |
 
 这次实现优先补足两条 WebSocket 协议调用链。其余服务差距在表中保留，新增时仍需完整的请求、响应、错误和实际调用者，不能用空端点声明“已支持”。
 
@@ -265,25 +264,25 @@ Platform API key 不能访问 subscription target，ChatGPT OAuth token 也不�
 
 端点的路径、协议头、字段支持和调用代码已移到同一模块。公共入口仍是 `ApiEndpoint`；不按 provider 复制通用请求头，也不新增 crate。
 
-| 原路径（ash-api/src 下） | 当前归属 |
-| --- | --- |
-| requests/openai_responses.rs | endpoint/responses.rs |
+| 原路径（ash-api/src 下）            | 当前归属                     |
+| ----------------------------------- | ---------------------------- |
+| requests/openai_responses.rs        | endpoint/responses.rs        |
 | requests/openai_chat_completions.rs | endpoint/chat_completions.rs |
-| requests/anthropic_messages.rs | endpoint/anthropic.rs |
-| input_token_count_endpoint.rs | endpoint/token_count.rs |
-| semantic.rs | endpoint/semantic.rs |
-| sse/openai_responses.rs | endpoint/responses/events.rs |
-| sse/mod.rs | sse.rs |
+| requests/anthropic_messages.rs      | endpoint/anthropic.rs        |
+| input_token_count_endpoint.rs       | endpoint/token_count.rs      |
+| semantic.rs                         | endpoint/semantic.rs         |
+| sse/openai_responses.rs             | endpoint/responses/events.rs |
+| sse/mod.rs                          | sse.rs                       |
 
 对应测试随 owner 移动。公开的 `OpenAiResponsesSseDecoder` 更名为 `ResponsesEventDecoder`，同时解码已分帧的 SSE 和 WebSocket JSON；现有调用方已更新。`headers.rs` 保留协议合并与媒体类型规则，通用 Header 语法校验由 HTTP 请求构造边界保证，WebSocket 请求复用该校验并禁止覆盖传输层握手头。
 
-| 能力 | 本轮实现与证据 | 明确边界 |
-| --- | --- | --- |
-| Responses WebSocket | 建连、response.create、文本／工具／用量事件、显式预热、增量续接；本地集成及 Luna／low 实连通过 | 每个对象顺序处理一个响应；未实现 stream_id 多路复用 |
-| Realtime GA WebSocket | session.created/update、文本、PCM16 24kHz 音频、VAD 配置、工具结果、取消、音频截断、状态与用量 | 本地服务验证；未实连 Realtime 模型，不包含采集和播放 |
-| 底层连接 | 复用代理、TLS、帧限制；取消、截止时间、Ping/Pong、关闭、握手 HTTP 状态和脱敏 | 不重放模型请求，不切换另一种传输 |
-| Codex 私有语音／GPT-Live | 已对照其协议差异 | 未把 frameless、session.start 或私有 handoff 当成 Realtime GA |
-| WebRTC calls／client secrets、音频产品入口 | 本轮未实现 | 需要独立服务操作和具体产品 owner |
+| 能力                                       | 本轮实现与证据                                                                                 | 明确边界                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Responses WebSocket                        | 建连、response.create、文本／工具／用量事件、显式预热、增量续接；本地集成及 Luna／low 实连通过 | 每个对象顺序处理一个响应；未实现 stream_id 多路复用           |
+| Realtime GA WebSocket                      | session.created/update、文本、PCM16 24kHz 音频、VAD 配置、工具结果、取消、音频截断、状态与用量 | 本地服务验证；未实连 Realtime 模型，不包含采集和播放          |
+| 底层连接                                   | 复用代理、TLS、帧限制；取消、截止时间、Ping/Pong、关闭、握手 HTTP 状态和脱敏                   | 不重放模型请求，不切换另一种传输                              |
+| Codex 私有语音／GPT-Live                   | 已对照其协议差异                                                                               | 未把 frameless、session.start 或私有 handoff 当成 Realtime GA |
+| WebRTC calls／client secrets、音频产品入口 | 本轮未实现                                                                                     | 需要独立服务操作和具体产品 owner                              |
 
 `ResponsesWebSocketSession` 接收完整 `ModelRequest`。只有模型设置、工具、指令和先前输入／输出前缀一致时，才发送 `previous_response_id` 与新增输入。已知的服务端 reasoning 留在该响应链内，不从摘要重建；回滚、压缩、不同设置或不能准确比较的输出会开始完整请求，不引用旧 response ID。引用只是该连接的派生状态，不写成 Thread 历史或 Agent 身份。
 
@@ -375,13 +374,13 @@ ash_http_client::HttpRequest
 
 Header ownership：
 
-| Header | Owner |
-| --- | --- |
-| Authorization、API key、tenant/deployment | model-provider/credential runtime |
-| Content-Type、Accept | ash-api endpoint |
-| Anthropic version/beta feature, session-id, x-grok-conv-id | ash-api endpoint/typed request |
-| traceparent、tracestate | client/HTTP telemetry |
-| User-Agent、x-goog-api-client、OAuth 设备标识 | product/provider/login runtime |
+| Header                                                     | Owner                             |
+| ---------------------------------------------------------- | --------------------------------- |
+| Authorization、API key、tenant/deployment                  | model-provider/credential runtime |
+| Content-Type、Accept                                       | ash-api endpoint                  |
+| Anthropic version/beta feature, session-id, x-grok-conv-id | ash-api endpoint/typed request    |
+| traceparent、tracestate                                    | client/HTTP telemetry             |
+| User-Agent、x-goog-api-client、OAuth 设备标识              | product/provider/login runtime    |
 
 `headers::build` 按实际调用设置 JSON/SSE 媒体类型。大小写无关的同名同值头合并；冲突值、非法名称和控制字符在发送前报错，错误不回显值。每次调用及认证重试均重走该入口，不修改共享 target。
 
@@ -490,13 +489,13 @@ Created
 
 分工示例：
 
-| Wire input | `ash-client` | `ash-api` | Canonical output |
-| --- | --- | --- | --- |
-| Anthropic `event: ping` | 生成 `SseEvent`、更新 frame activity | 识别为 heartbeat | 无 |
-| DeepSeek `: keep-alive` | 生成 comment frame、更新 activity | profile 确认为 liveness | 无 |
-| `data: [DONE]` | 生成 data event | profile 校验 terminal | `Completed` |
-| OpenAI typed delta | 生成 data event | 解码/组装 | text/tool/usage delta |
-| Ollama JSON line | 生成 NDJSON record | 解码 `done/error` | delta/completed/error |
+| Wire input              | `ash-client`                         | `ash-api`               | Canonical output      |
+| ----------------------- | ------------------------------------ | ----------------------- | --------------------- |
+| Anthropic `event: ping` | 生成 `SseEvent`、更新 frame activity | 识别为 heartbeat        | 无                    |
+| DeepSeek `: keep-alive` | 生成 comment frame、更新 activity    | profile 确认为 liveness | 无                    |
+| `data: [DONE]`          | 生成 data event                      | profile 校验 terminal   | `Completed`           |
+| OpenAI typed delta      | 生成 data event                      | 解码/组装               | text/tool/usage delta |
+| Ollama JSON line        | 生成 NDJSON record                   | 解码 `done/error`       | delta/completed/error |
 
 EOF 不自动等于成功。需要文档化 terminal event/marker 的 API，在 terminal 之前 EOF 必须返回
 truncated stream。
@@ -648,19 +647,19 @@ ash-rs/ash-api/src/
 
 以下是当前 Rust 调用路径，不将厂商提供但 Ash 尚未实现的接口列为已支持。统一契约测试覆盖内置 provider，真实服务验证单独记录。
 
-| 通道 | 当前生成协议／认证 | 特有头或边界 | 本轮验证 |
-| --- | --- | --- | --- |
-| OpenAI API | Responses / Bearer | 按模型支持显式缓存断点 | 契约、传输 |
-| ChatGPT 订阅 | ChatGptResponses / OAuth | session-id；省略显式断点，拒绝计数 | Luna／low 实连、契约 |
-| Anthropic API key | Messages / x-api-key | anthropic-version=2023-06-01；不自动添加 beta | 官方契约、传输 |
-| Google | 兼容 Chat / Bearer | x-goog-api-client；countTokens 独立使用 x-goog-api-key | 官方契约、传输 |
-| xAI | Responses / Bearer | API 与订阅代理使用独立认证 target；Chat 协议的头不自动用于 Responses | 官方契约、传输 |
-| DeepSeek | Chat / Bearer | hit/miss 用量与通用 Chat 分开解析 | 官方示例、传输 |
-| Kimi Open Platform | Chat / Bearer | 与 Kimi Code OAuth 分开 | 官方示例、传输 |
-| Kimi Code | Chat / OAuth | 设备和客户端标识由登录能力提供 | 本地登录／传输契约，未实连 |
-| Ollama | 本地兼容 Chat / 无认证 | 不继承保存的远端 API key | 本地契约、传输 |
-| Z.AI | 兼容 Chat / Bearer | 保留语言偏好；tokenizer 为独立操作 | 既有契约、传输，未新增实连 |
-| 自定义兼容端点 | 按配置选择协议／凭据 | 不根据 URL 或模型名继承订阅能力 | 契约、真实本地 HTTP |
+| 通道               | 当前生成协议／认证       | 特有头或边界                                                         | 本轮验证                   |
+| ------------------ | ------------------------ | -------------------------------------------------------------------- | -------------------------- |
+| OpenAI API         | Responses / Bearer       | 按模型支持显式缓存断点                                               | 契约、传输                 |
+| ChatGPT 订阅       | ChatGptResponses / OAuth | session-id；省略显式断点，拒绝计数                                   | Luna／low 实连、契约       |
+| Anthropic API key  | Messages / x-api-key     | anthropic-version=2023-06-01；不自动添加 beta                        | 官方契约、传输             |
+| Google             | 兼容 Chat / Bearer       | x-goog-api-client；countTokens 独立使用 x-goog-api-key               | 官方契约、传输             |
+| xAI                | Responses / Bearer       | API 与订阅代理使用独立认证 target；Chat 协议的头不自动用于 Responses | 官方契约、传输             |
+| DeepSeek           | Chat / Bearer            | hit/miss 用量与通用 Chat 分开解析                                    | 官方示例、传输             |
+| Kimi Open Platform | Chat / Bearer            | 与 Kimi Code OAuth 分开                                              | 官方示例、传输             |
+| Kimi Code          | Chat / OAuth             | 设备和客户端标识由登录能力提供                                       | 本地登录／传输契约，未实连 |
+| Ollama             | 本地兼容 Chat / 无认证   | 不继承保存的远端 API key                                             | 本地契约、传输             |
+| Z.AI               | 兼容 Chat / Bearer       | 保留语言偏好；tokenizer 为独立操作                                   | 既有契约、传输，未新增实连 |
+| 自定义兼容端点     | 按配置选择协议／凭据     | 不根据 URL 或模型名继承订阅能力                                      | 契约、真实本地 HTTP        |
 
 本轮修正了共享 JSON/SSE 请求头缺失、Google 生成与计数认证混用、xAI Chat 未映射缓存分组的问题。API 不读取密钥存储；credential service 从同一次密钥读取分别生成两个操作的认证头，计数不再搬用完整的生成 target。
 

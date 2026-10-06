@@ -175,7 +175,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 		await this.initialLoad;
 	}
 
-	keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory?: string[] } {
+	keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory?: string[]; } {
 		return {
 			default: [...this.registry.getConfigurations()],
 			policy: [],

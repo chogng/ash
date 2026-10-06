@@ -34,7 +34,7 @@ test('data channel telemetry forwards clean data and preserves base logging when
 		],
 		baseEvents: ['completion', 'suppressed', 'empty'],
 	});
-	assert.deepEqual(Object.getOwnPropertySymbols((received[0]!.data as { data: object }).data), []);
+	assert.deepEqual(Object.getOwnPropertySymbols((received[0]!.data as { data: object; }).data), []);
 	const handle = channels.getDataChannel('editTelemetry');
 	channels.dispose();
 	assert.throws(() => handle.sendData({}), ReferenceError);

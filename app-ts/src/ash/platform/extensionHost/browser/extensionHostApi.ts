@@ -15,17 +15,17 @@ import { ICommandService } from '../../commands/common/commands.js';
 import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../common/extensionHostApi.js';
 
 export type BrowserExtensionHostRequest =
-	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string }
-	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0] }
-	| { readonly id: number; readonly type: 'cancel'; readonly invocationId: number }
-	| { readonly id: number; readonly type: 'commandResult'; readonly success: true; readonly result: JsonValue }
-	| { readonly id: number; readonly type: 'commandResult'; readonly success: false; readonly error: string };
+	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; }
+	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0]; }
+	| { readonly id: number; readonly type: 'cancel'; readonly invocationId: number; }
+	| { readonly id: number; readonly type: 'commandResult'; readonly success: true; readonly result: JsonValue; }
+	| { readonly id: number; readonly type: 'commandResult'; readonly success: false; readonly error: string; };
 
 /** A package snapshot is executed in a window-owned Worker, never in the Workbench realm. */
 export class BrowserExtensionHostApi extends Disposable implements IExtensionHostApi {
-    public registerClientHandler(handler: ExtensionClientHandler): ReturnType<IExtensionHostApi['registerClientHandler']> {
-        return this.remote.registerClientHandler(handler);
-    }
+	public registerClientHandler(handler: ExtensionClientHandler): ReturnType<IExtensionHostApi['registerClientHandler']> {
+		return this.remote.registerClientHandler(handler);
+	}
 	private readonly workers = this._register(new DisposableMap<string, BrowserExtensionWorker>());
 	private readonly changes = this._register(new Emitter<number>());
 	private generation = 0;
@@ -156,7 +156,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 	}
 }
 
-type WorkerRequest = Omit<Extract<BrowserExtensionHostRequest, { type: 'activate' }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'invoke' }>, 'id'>;
+type WorkerRequest = Omit<Extract<BrowserExtensionHostRequest, { type: 'activate'; }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'invoke'; }>, 'id'>;
 
 class BrowserExtensionWorker extends Disposable {
 	private readonly failures = this._register(new Emitter<Error>());
@@ -164,7 +164,7 @@ class BrowserExtensionWorker extends Disposable {
 	public readonly entryPoint: string;
 	private readonly worker: Worker;
 	private nextId = 1;
-	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void }>();
+	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 
 	constructor(source: Uint8Array, commandService: ICommandService) {
 		super();
@@ -231,7 +231,7 @@ function runtimeIdentity(extension: ExtensionDescriptor, generation: number): Om
 
 export function createDisconnectedExtensionHostApi(unavailable: UnavailableOperation): IExtensionHostApi {
 	return {
-        registerClientHandler: () => inertSubscription(),
+		registerClientHandler: () => inertSubscription(),
 		isAvailable: () => Promise.resolve(false),
 		list: () => unavailable("extensionHost.list"),
 		reconcile: () => unavailable("extensionHost.reconcile"),
@@ -250,23 +250,23 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		cancel: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId }),
 	};
 	return {
-        registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async (operation, context) => {
-            if (operation.operation === 'readWorkspaceFile') {
-                throw new Error('Workspace file requests must be handled by App Server');
-            }
-            const request = operation.operation === 'executeCommand'
-                ? { ...operation, arguments: operation.arguments.map(normalizeExtensionHostPayload) }
-                : operation.operation === 'updateConfiguration'
-                    ? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
-                    : operation;
-            const result = await handler(request, context.signal);
-            // Domain payloads are immutable; the transport owns a separate mutable wire value.
-            switch (result.result) {
-                case 'command':
-                case 'configuration': return { ...result, value: protocolJsonValue(result.value) };
-                default: return result;
-            }
-        }),
+		registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async (operation, context) => {
+			if (operation.operation === 'readWorkspaceFile') {
+				throw new Error('Workspace file requests must be handled by App Server');
+			}
+			const request = operation.operation === 'executeCommand'
+				? { ...operation, arguments: operation.arguments.map(normalizeExtensionHostPayload) }
+				: operation.operation === 'updateConfiguration'
+					? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
+					: operation;
+			const result = await handler(request, context.signal);
+			// Domain payloads are immutable; the transport owns a separate mutable wire value.
+			switch (result.result) {
+				case 'command':
+				case 'configuration': return { ...result, value: protocolJsonValue(result.value) };
+				default: return result;
+			}
+		}),
 		isAvailable: () => Promise.resolve(connection.capabilities?.extensionHost === true),
 		list: async () => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/list", {})),
 		reconcile: async mode => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/reconcile", { mode })),
@@ -281,7 +281,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 }
 
 function protocolJsonValue(value: JsonValue): ProtocolJsonValue {
-    if (value === null || typeof value !== 'object') { return value; }
-    if (Array.isArray(value)) { return value.map(protocolJsonValue); }
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, protocolJsonValue(entry)]));
+	if (value === null || typeof value !== 'object') { return value; }
+	if (Array.isArray(value)) { return value.map(protocolJsonValue); }
+	return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, protocolJsonValue(entry)]));
 }

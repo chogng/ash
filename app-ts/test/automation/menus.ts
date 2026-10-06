@@ -4,7 +4,7 @@ import type { PlaywrightApplication } from './playwrightDriver.js';
 
 /** Exercises context menus through their real Browser or Main owner. */
 export class Menus {
-	constructor(private readonly page: Page) {}
+	constructor(private readonly page: Page) { }
 
 	async select(application: PlaywrightApplication, open: () => Promise<unknown>, path: readonly string[]): Promise<void> {
 		if (await this.isSystemMenu(application) && 'windows' in application) {
@@ -54,8 +54,8 @@ export class Menus {
 	async isSystemMenu(application: PlaywrightApplication): Promise<boolean> {
 		if (!('windows' in application)) { return false; }
 		const settings = await this.page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { document: { source: string } };
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { document: { source: string; }; };
 			return JSON.parse(snapshot.document.source) as Record<string, unknown>;
 		});
 		// Stored settings omit default values; the product registry owns them.
@@ -80,11 +80,11 @@ interface CapturedMenu {
 }
 
 interface MenuCaptureGlobal {
-	ashTestMenuCapture?: { readonly restore: () => void; result?: CapturedMenu };
+	ashTestMenuCapture?: { readonly restore: () => void; result?: CapturedMenu; };
 }
 
 /** Selects only the OS popup item; renderer dispatch, IPC and action execution remain real. */
-export async function captureElectronMenu(application: ElectronApplication, trigger: () => Promise<unknown>, selection?: { readonly label: string; readonly checked?: boolean; readonly path?: readonly string[] }): Promise<readonly ElectronMenuItem[]> {
+export async function captureElectronMenu(application: ElectronApplication, trigger: () => Promise<unknown>, selection?: { readonly label: string; readonly checked?: boolean; readonly path?: readonly string[]; }): Promise<readonly ElectronMenuItem[]> {
 	await application.evaluate(({ Menu }, selection) => {
 		const state = globalThis as MenuCaptureGlobal;
 		if (state.ashTestMenuCapture) throw new Error('Another test menu capture is active');

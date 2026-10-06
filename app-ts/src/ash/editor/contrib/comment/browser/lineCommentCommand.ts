@@ -51,7 +51,7 @@ export class LineCommentCommand implements ICommand {
 		private readonly insertSpace: boolean,
 		private readonly ignoreEmptyLines: boolean,
 		private readonly ignoreFirstLine = false,
-	) {}
+	) { }
 
 	public static _analyzeLines(type: Type, insertSpace: boolean, model: ISimpleModel, lines: ILinePreflightData[], startLineNumber: number, ignoreEmptyLines: boolean, ignoreFirstLine: boolean, languageConfigurationService: ILanguageConfigurationService, languageId: string): IPreflightData {
 		const noIndent = languageConfigurationService.getLanguageConfiguration(languageId).comments?.lineCommentNoIndent === true;

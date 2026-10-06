@@ -9,13 +9,13 @@ import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID } from "../../../.
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export type SlashCommandBinding =
-	| { readonly origin: "local"; readonly actionId: string }
-	| { readonly origin: "server" };
+	| { readonly origin: "local"; readonly actionId: string; }
+	| { readonly origin: "server"; };
 
 export type SlashCommandInput =
-	| { readonly kind: "message"; readonly text: string }
-	| { readonly kind: "unknown"; readonly name: string }
-	| { readonly kind: "command"; readonly command: SlashCommandDefinition; readonly binding: SlashCommandBinding; readonly argumentsText: string };
+	| { readonly kind: "message"; readonly text: string; }
+	| { readonly kind: "unknown"; readonly name: string; }
+	| { readonly kind: "command"; readonly command: SlashCommandDefinition; readonly binding: SlashCommandBinding; readonly argumentsText: string; };
 
 /** Registers one canonical definition with its Desktop-only execution binding. */
 export interface LocalSlashCommandRegistration {
@@ -162,7 +162,7 @@ export function matchedCharacterIndices(text: string, query: string): readonly n
 			return needle.map((_, offset) => start + offset);
 		}
 	}
-	let best: { gap: number; start: number; indices: number[] } | undefined;
+	let best: { gap: number; start: number; indices: number[]; } | undefined;
 	for (let start = 0; start < characters.length; start++) {
 		if (characters[start] !== needle[0]) continue;
 		const indices = [start];

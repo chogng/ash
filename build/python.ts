@@ -9,7 +9,7 @@ export interface PythonHost {
 
 const currentHost: PythonHost = { platform: process.platform, environment: process.env, fileExists: existsSync };
 
-export function pythonCommand(args: string[], host: PythonHost = currentHost): { command: string; args: string[] } {
+export function pythonCommand(args: string[], host: PythonHost = currentHost): { command: string; args: string[]; } {
 	const configured = host.environment.PYTHON;
 	if (configured) return { command: configured, args };
 	if (host.platform === 'darwin') {

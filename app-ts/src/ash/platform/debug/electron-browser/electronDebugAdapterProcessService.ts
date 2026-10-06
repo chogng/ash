@@ -9,7 +9,7 @@ import { type RendererHostCapabilities } from "../../renderer/common/rendererHos
 export class ElectronDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private readonly workspaceFolders = new Map<string, string | undefined>();
 
-	constructor(private readonly appServer: IAppServerApi) {}
+	constructor(private readonly appServer: IAppServerApi) { }
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
 		const params: DebugAdapterStartParams = { ...workspaceFolder(options.dirId), program: options.program, arguments: [...options.arguments] };
@@ -40,7 +40,7 @@ export class ElectronDebugAdapterProcessService implements IDebugAdapterProcessS
 	}
 }
 
-function workspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+function workspaceFolder(dirId: string | undefined): { readonly dirId?: string; } {
 	return dirId === undefined ? {} : { dirId };
 }
 

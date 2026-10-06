@@ -20,7 +20,9 @@ impl ExtensionClientRequest {
     pub fn validate(&self, limits: &ProtocolLimits) -> Result<(), ProtocolError> {
         self.context.validate()?;
         if self.call_id == 0 {
-            return Err(ProtocolError::InvalidProtocol("client call ID must be non-zero".into()));
+            return Err(ProtocolError::InvalidProtocol(
+                "client call ID must be non-zero".into(),
+            ));
         }
         validate_encoded_size(&self.operation, limits.maximum_payload_bytes)?;
         validate_encoded_size(self, limits.maximum_frame_bytes)
@@ -31,40 +33,75 @@ impl ExtensionClientRequest {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "export", derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "operation", deny_unknown_fields)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "operation",
+    deny_unknown_fields
+)]
 pub enum ExtensionClientOperation {
-    ExecuteCommand { command: String, arguments: Vec<Value> },
-    ReadDocument { uri: String },
+    ExecuteCommand {
+        command: String,
+        arguments: Vec<Value>,
+    },
+    ReadDocument {
+        uri: String,
+    },
     /// Workspace-relative disk read. The App Server filesystem owner handles this, never the renderer.
     ReadWorkspaceFile {
         path: String,
     },
     ListDocuments,
-    ApplyEdit { documents: Vec<ExtensionDocumentEdit> },
-    ReadConfiguration { section: String, resource: Option<String> },
-    UpdateConfiguration { section: String, value: Value, target: ExtensionConfigurationTarget },
-    ShowMessage { message: String, severity: ExtensionMessageSeverity },
-    ShowQuickPick { items: Vec<String>, placeholder: String },
+    ApplyEdit {
+        documents: Vec<ExtensionDocumentEdit>,
+    },
+    ReadConfiguration {
+        section: String,
+        resource: Option<String>,
+    },
+    UpdateConfiguration {
+        section: String,
+        value: Value,
+        target: ExtensionConfigurationTarget,
+    },
+    ShowMessage {
+        message: String,
+        severity: ExtensionMessageSeverity,
+    },
+    ShowQuickPick {
+        items: Vec<String>,
+        placeholder: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "export", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
-pub enum ExtensionConfigurationTarget { User, Workspace }
+pub enum ExtensionConfigurationTarget {
+    User,
+    Workspace,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "export", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
-pub enum ExtensionMessageSeverity { Information, Warning, Error }
+pub enum ExtensionMessageSeverity {
+    Information,
+    Warning,
+    Error,
+}
 
 /// Zero-based UTF-16 edit coordinates.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "export", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExtensionTextPosition { pub line: u32, pub character: u32 }
+pub struct ExtensionTextPosition {
+    pub line: u32,
+    pub character: u32,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -101,7 +138,12 @@ pub struct ExtensionDocumentSnapshot {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "export", derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "result", deny_unknown_fields)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "result",
+    deny_unknown_fields
+)]
 pub enum ExtensionClientResult {
     Command {
         value: Value,

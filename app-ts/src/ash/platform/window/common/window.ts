@@ -133,9 +133,9 @@ export interface IWindowFilesRequest {
 }
 
 export type WindowFilesResponse =
-	| { readonly kind: 'ready' }
-	| { readonly kind: 'opened' | 'closed'; readonly id: number }
-	| { readonly kind: 'failed'; readonly id: number; readonly message: string };
+	| { readonly kind: 'ready'; }
+	| { readonly kind: 'opened' | 'closed'; readonly id: number; }
+	| { readonly kind: 'failed'; readonly id: number; readonly message: string; };
 
 export function validateWindowFilesRequest(value: unknown): IWindowFilesRequest {
 	if (!isRecord(value)) {
@@ -184,10 +184,10 @@ export function validateWindowFilesResponse(value: unknown): WindowFilesResponse
 export const WINDOW_ZOOM_LEVEL_SETTING = 'window.zoomLevel';
 
 export type WindowCloseResponse =
-	| { readonly kind: 'ready' }
-	| { readonly kind: 'complete'; readonly token: number }
-	| { readonly kind: 'vetoed'; readonly token: number }
-	| { readonly kind: 'failed'; readonly token: number; readonly message: string };
+	| { readonly kind: 'ready'; }
+	| { readonly kind: 'complete'; readonly token: number; }
+	| { readonly kind: 'vetoed'; readonly token: number; }
+	| { readonly kind: 'failed'; readonly token: number; readonly message: string; };
 
 export function validateWindowCloseResponse(value: unknown): WindowCloseResponse {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid window close response');
@@ -205,19 +205,19 @@ export interface IWorkbenchWindowInfo {
 }
 
 export type WindowOperation =
-	| { readonly kind: 'list' }
-	| { readonly kind: 'focus'; readonly windowId: number }
-	| { readonly kind: 'focusSelf' }
-	| { readonly kind: 'close' }
-	| { readonly kind: 'closeOthers' }
-	| { readonly kind: 'getZoom' }
-	| { readonly kind: 'getZoomFactor' }
-	| { readonly kind: 'setZoom'; readonly level: number }
-	| { readonly kind: 'getFullscreen' }
-	| { readonly kind: 'getAlwaysOnTop' }
-	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean }
-	| { readonly kind: 'nativeTab'; readonly action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar' }
-	| { readonly kind: 'newTab' };
+	| { readonly kind: 'list'; }
+	| { readonly kind: 'focus'; readonly windowId: number; }
+	| { readonly kind: 'focusSelf'; }
+	| { readonly kind: 'close'; }
+	| { readonly kind: 'closeOthers'; }
+	| { readonly kind: 'getZoom'; }
+	| { readonly kind: 'getZoomFactor'; }
+	| { readonly kind: 'setZoom'; readonly level: number; }
+	| { readonly kind: 'getFullscreen'; }
+	| { readonly kind: 'getAlwaysOnTop'; }
+	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean; }
+	| { readonly kind: 'nativeTab'; readonly action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar'; }
+	| { readonly kind: 'newTab'; };
 
 export function validateWindowOperation(value: unknown): WindowOperation {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid window operation');

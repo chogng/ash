@@ -90,15 +90,15 @@ export class CodeEditorContributions extends Disposable {
 		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.Eventually), 5_000));
 	}
 
-	saveViewState(): { [key: string]: unknown } {
-		const state: { [key: string]: unknown } = {};
+	saveViewState(): { [key: string]: unknown; } {
+		const state: { [key: string]: unknown; } = {};
 		for (const [id, contribution] of this.instances) {
 			if (typeof contribution.saveViewState === 'function') state[id] = contribution.saveViewState();
 		}
 		return state;
 	}
 
-	restoreViewState(state: { [key: string]: unknown }): void {
+	restoreViewState(state: { [key: string]: unknown; }): void {
 		for (const [id, contribution] of this.instances) {
 			if (typeof contribution.restoreViewState === 'function') contribution.restoreViewState(state[id]);
 		}

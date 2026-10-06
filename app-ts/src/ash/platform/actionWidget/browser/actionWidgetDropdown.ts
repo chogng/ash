@@ -6,7 +6,7 @@ import { Lxicon } from '../../../base/common/lxicons.js';
 import { ActionListItemKind, type IActionListOptions } from './actionList.js';
 import { IActionWidgetService } from './actionWidget.js';
 
-export interface IActionWidgetDropdownAction extends IAction {}
+export interface IActionWidgetDropdownAction extends IAction { }
 
 export interface IActionWidgetDropdownOptions {
 	readonly label: string;

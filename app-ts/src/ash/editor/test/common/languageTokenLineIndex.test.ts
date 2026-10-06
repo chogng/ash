@@ -136,9 +136,9 @@ test("Model changes preserve unaffected token lines and shift later lines", () =
 	assert.deepEqual(index.getLineTokens(1), []);
 	assert.deepEqual(index.getLineTokens(4).map(entry => entry.tokenType), ["last"]);
 	assert.deepEqual(events.map(event => ({
-		reason: (event as { readonly reason: LanguageResultStoreChangeReason }).reason,
-		tokenCount: (event as { readonly tokenCount: number }).tokenCount,
-		reusedLineCount: (event as { readonly reusedLineCount: number }).reusedLineCount,
+		reason: (event as { readonly reason: LanguageResultStoreChangeReason; }).reason,
+		tokenCount: (event as { readonly tokenCount: number; }).tokenCount,
+		reusedLineCount: (event as { readonly reusedLineCount: number; }).reusedLineCount,
 	})), [{
 		reason: LanguageResultStoreChangeReason.ModelChanged,
 		tokenCount: 2,
@@ -177,7 +177,7 @@ test("Token line index reuses unchanged sparse lines from a confirmed delta", ()
 	acceptTokens(store, model, 1, initialTokens);
 	using index = new LanguageTokenLineIndex(store);
 	const originalLines = index.lines;
-	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number }> = [];
+	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number; }> = [];
 	using listener = index.onDidChange(event => events.push(event));
 	const changedLine = 517;
 	const oldLine = lines[changedLine]!;
@@ -225,7 +225,7 @@ test("Token line index rebuilds only two disjoint splice lines", () => {
 	acceptTokens(store, model, 1, initialTokens);
 	using index = new LanguageTokenLineIndex(store);
 	const originalLines = index.lines;
-	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number }> = [];
+	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number; }> = [];
 	using listener = index.onDidChange(event => events.push(event));
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((100) + 1, (0) + 1), new Position((100) + 1, (lines[100]!.length) + 1)),
@@ -290,7 +290,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 		value: firstDecoded.value,
 	}), LanguageResultAcceptance.Applied);
 	const originalLines = index.lines;
-	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number }> = [];
+	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number; }> = [];
 	using listener = index.onDidChange(event => events.push(event));
 	const insertionLine = 100;
 	const insertionOffset = lines.slice(0, insertionLine).reduce((offset, line) => offset + line.length + 1, 0);

@@ -62,8 +62,7 @@ export interface IContextViewProvider {
 /** An anchored, transient host for menus, hovers, and other overlays. */
 export class ContextView
 	extends Disposable
-	implements IContextViewProvider
-{
+	implements IContextViewProvider {
 	readonly element: HTMLDivElement;
 	private readonly _onDidHide = this._register(new Emitter<ContextViewHideReason>());
 	readonly onDidHide = this._onDidHide.event;
@@ -307,7 +306,7 @@ function getAnchorDocument(
 ): Document {
 	if (isElementAnchor(anchor)) return anchor.ownerDocument;
 	const targetWindow = "targetWindow" in anchor
-		? (anchor as IRectangle & { readonly targetWindow?: Window }).targetWindow
+		? (anchor as IRectangle & { readonly targetWindow?: Window; }).targetWindow
 		: undefined;
 	return targetWindow?.document ?? fallback;
 }

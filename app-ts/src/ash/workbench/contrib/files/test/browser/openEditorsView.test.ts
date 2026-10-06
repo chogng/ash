@@ -48,9 +48,9 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 	} as unknown as IEditorPart;
 	const accessibility: IAccessibleViewService = {
 		show: () => false,
-		getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => {}, showAccessibleViewHelp: () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	using services = createTestEditorServices(configuration);
 	services.registerInstance(IEditorPart, editorPart);
@@ -117,12 +117,12 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: Event.None,
 		backup: () => '',
-		restoreBackup() {},
-		save: async () => {},
-		saveAs: async () => {},
-		revert: async () => {},
-		dispose() {},
-		[Symbol.dispose]() {},
+		restoreBackup() { },
+		save: async () => { },
+		saveAs: async () => { },
+		revert: async () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	using registration = workingCopies.register(first);
 	assert.equal(activeBadge?.number, 1);

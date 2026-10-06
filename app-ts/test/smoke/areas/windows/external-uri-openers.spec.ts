@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
 
 interface URLRuleSmokeState { readonly urls: string[]; restore(): void; }
-type URLRuleSmokeGlobal = typeof globalThis & { urlRuleSmoke: URLRuleSmokeState };
+type URLRuleSmokeGlobal = typeof globalThis & { urlRuleSmoke: URLRuleSmokeState; };
 
 test('Graphical URL opening rules support suggestions, validation, persistence and Chinese labels', async ({ workbench, restartWorkbench }) => {
 	const page = workbench.page;
@@ -146,7 +146,7 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 			const row = rules.locator('.ash-string-map-row').last();
 			await row.getByRole('textbox').fill(pattern);
 			await row.getByRole('textbox').press('Tab');
-			await workbench.page.getByRole('option', { name: new RegExp(`^${id.replaceAll('.', '\\.') } `, 'u') }).click();
+			await workbench.page.getByRole('option', { name: new RegExp(`^${id.replaceAll('.', '\\.')} `, 'u') }).click();
 			await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
 		}
 		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();

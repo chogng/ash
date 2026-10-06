@@ -18,13 +18,13 @@
 4. 颜色和尺寸值来自 design token；token 不拥有 selector、状态机或 DOM 结构。
 5. 同一组件需要不同外观时，增加有名字的 presentation variant，不在 host CSS 中穿透覆盖。
 
-| 想修改什么 | 样式所有者 | 正确做法 |
-| --- | --- | --- |
-| 组件内部间距和交互状态 | 创建该 DOM 和状态的组件 | 修改组件自己的样式 |
-| Workbench 区域布局和边界 | 对应 Part | 只修改直接托管区域的外部盒子 |
-| 同一组件的另一种正式外观 | 组件公开的展示变体 | 增加有名字的变体 |
-| 主题颜色或标准尺寸 | Design Token | 修改语义 token，不修改 selector |
-| 某个业务动作的显隐 | Command/Menu/Context Key | 不用 CSS 猜业务状态 |
+| 想修改什么               | 样式所有者               | 正确做法                        |
+| ------------------------ | ------------------------ | ------------------------------- |
+| 组件内部间距和交互状态   | 创建该 DOM 和状态的组件  | 修改组件自己的样式              |
+| Workbench 区域布局和边界 | 对应 Part                | 只修改直接托管区域的外部盒子    |
+| 同一组件的另一种正式外观 | 组件公开的展示变体       | 增加有名字的变体                |
+| 主题颜色或标准尺寸       | Design Token             | 修改语义 token，不修改 selector |
+| 某个业务动作的显隐       | Command/Menu/Context Key | 不用 CSS 猜业务状态             |
 
 ## Settings 内容
 
@@ -45,13 +45,13 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 
 ## 分层所有权
 
-| 层级 | 当前代表 | 必须负责 | 禁止负责 |
-| --- | --- | --- | --- |
-| Primitive | `Button`、`ActionBar`、`ToolBar`、`TabList`、`PaneView` | 通用 DOM、键盘行为、ARIA、基础布局和 primitive 自身状态 | Workbench 区域语义、Panel/Sidebar 特例 |
-| Composed control | `CompositeBar`、Editor/Chat tabs control、`MenubarControl` | 领域内 item 几何、presentation variant、hover/active/selected 视觉 | Part 的位置、区域背景和网格尺寸 |
-| Part | `TitlebarPart`、`PanelPart`、`SidebarPart` | Part 根节点、标题区/内容区布局、边框、背景、直接子组件占位 | 深入修改组件内部 `.ash-action-bar`、`.ash-tab`、`.ash-button` 状态 |
-| Contribution/View | `TerminalViewPane`、Explorer、Search、Chat | 自有内容、命令、View 内部交互和私有子控件 | Workbench Part 的全局布局或其他 View 的皮肤 |
-| Theme | color/size registries 与 CSS custom properties | 视觉值、别名、主题覆盖和快照投影 | selector、DOM、active/hover 判定 |
+| 层级              | 当前代表                                                   | 必须负责                                                           | 禁止负责                                                           |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Primitive         | `Button`、`ActionBar`、`ToolBar`、`TabList`、`PaneView`    | 通用 DOM、键盘行为、ARIA、基础布局和 primitive 自身状态            | Workbench 区域语义、Panel/Sidebar 特例                             |
+| Composed control  | `CompositeBar`、Editor/Chat tabs control、`MenubarControl` | 领域内 item 几何、presentation variant、hover/active/selected 视觉 | Part 的位置、区域背景和网格尺寸                                    |
+| Part              | `TitlebarPart`、`PanelPart`、`SidebarPart`                 | Part 根节点、标题区/内容区布局、边框、背景、直接子组件占位         | 深入修改组件内部 `.ash-action-bar`、`.ash-tab`、`.ash-button` 状态 |
+| Contribution/View | `TerminalViewPane`、Explorer、Search、Chat                 | 自有内容、命令、View 内部交互和私有子控件                          | Workbench Part 的全局布局或其他 View 的皮肤                        |
+| Theme             | color/size registries 与 CSS custom properties             | 视觉值、别名、主题覆盖和快照投影                                   | selector、DOM、active/hover 判定                                   |
 
 文件位置不是所有权的唯一证据，root class 和构造者才是。Part 私有子控件可以与 Part CSS 共置，但 selector 必须以该私有子控件的 root class 开始，不能借 Part root 任意穿透共享组件。
 
@@ -75,22 +75,22 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 
 ## 当前控件的准确职责
 
-| 控件 | 当前职责 | 状态视觉 owner |
-| --- | --- | --- |
-| `ActionBar` | action 排列、方向键导航、roving tabindex、item shell；可显式启用 toggled 高亮上下文 | 不自动决定业务 selected/checked 视觉；Workbench 全局皮肤统一提供横向 action hover |
-| `Button` | button DOM、focus-visible、disabled，以及 `.checked` 与 `aria-pressed` 的并行状态投影 | 不默认提供 hover 背景；hover 与 checked 的具体皮肤由 presentation context 决定 |
-| `Switch` | track/thumb 结构、on/off、hover、focus、pressed、disabled 的内部 presentation | 宿主只提供状态与命名变体，不穿透覆盖内部 track/thumb |
-| `ContextView` | 浮层挂载、锚点定位、视口内翻转和裁剪，以及通用浮层外壳 | 下拉框、提示、选择器和菜单各自的内容结构与交互状态 |
-| `ActionWidget` | 共享动作选择浮层、关闭、焦点恢复、过滤、预览与无障碍帮助；Chat 模式选择也使用此服务 | `actionWidget.css` 拥有浮层根节点的背景、边框、圆角、阴影和字体，`ActionList` 提供图标与右侧单选标记，`Menu` 负责行导航；ContextView 使用 `plain` 外壳，只负责定位。ActionWidget 消费主题绑定的 `shadow-lg` token，普通主题为 `0 0 12px rgba(0, 0, 0, 0.14)`，高对比度为 `none` |
-| `ToolBar` | primary/secondary action 编排、22px icon action 尺寸、More Actions、可选 toggled 高亮 | Button 负责状态投影；所在 presentation context 决定 hover 皮肤 |
-| `DropdownWithPrimaryActionViewItem` | primary 与 dropdown 的组合 DOM、连续几何、内部键盘导航 | Workbench 全局 ActionBar 皮肤为整个 split action 提供 hover；产品只提供 actions 和 menu 数据 |
-| `WorkbenchToolBar` | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供 | 横向 action hover 归 Workbench 全局皮肤，其余视觉仍归 base `ToolBar`/`Button` |
-| `MenuWorkbenchToolBar` | 从 `MenuId` 解析并刷新 `WorkbenchToolBar` actions | Menu 来源不改变 toolbar ARIA 与视觉 owner |
-| `TabList` | `tablist/tab` ARIA、`aria-selected`、激活回调、`.checked` 状态投影，以及标准 tab 的选中背景 | `tablist.css` |
-| `CompositeBar` | View Container 切换，以及 `icon`/`label` 两种 presentation | presentation 专属的几何与前景色；不重定义标准 tab 选中背景 |
-| `PaneComposite` | `tabpanel`、pane 生命周期、pane header presentation | `views.css` |
-| `PaneCompositePart` | 32px title control、CompositeBar/自有标题与 title actions 的左右槽位 | `paneCompositePart.css` 只拥有外层布局 |
-| `TitlebarPart` | 左区、应用菜单、标题和右区的窗口级布局 | 通用 toolbar/button 状态不归 Titlebar |
+| 控件                                | 当前职责                                                                                    | 状态视觉 owner                                                                                                                                                                                                                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ActionBar`                         | action 排列、方向键导航、roving tabindex、item shell；可显式启用 toggled 高亮上下文         | 不自动决定业务 selected/checked 视觉；Workbench 全局皮肤统一提供横向 action hover                                                                                                                                                                                               |
+| `Button`                            | button DOM、focus-visible、disabled，以及 `.checked` 与 `aria-pressed` 的并行状态投影       | 不默认提供 hover 背景；hover 与 checked 的具体皮肤由 presentation context 决定                                                                                                                                                                                                  |
+| `Switch`                            | track/thumb 结构、on/off、hover、focus、pressed、disabled 的内部 presentation               | 宿主只提供状态与命名变体，不穿透覆盖内部 track/thumb                                                                                                                                                                                                                            |
+| `ContextView`                       | 浮层挂载、锚点定位、视口内翻转和裁剪，以及通用浮层外壳                                      | 下拉框、提示、选择器和菜单各自的内容结构与交互状态                                                                                                                                                                                                                              |
+| `ActionWidget`                      | 共享动作选择浮层、关闭、焦点恢复、过滤、预览与无障碍帮助；Chat 模式选择也使用此服务         | `actionWidget.css` 拥有浮层根节点的背景、边框、圆角、阴影和字体，`ActionList` 提供图标与右侧单选标记，`Menu` 负责行导航；ContextView 使用 `plain` 外壳，只负责定位。ActionWidget 消费主题绑定的 `shadow-lg` token，普通主题为 `0 0 12px rgba(0, 0, 0, 0.14)`，高对比度为 `none` |
+| `ToolBar`                           | primary/secondary action 编排、22px icon action 尺寸、More Actions、可选 toggled 高亮       | Button 负责状态投影；所在 presentation context 决定 hover 皮肤                                                                                                                                                                                                                  |
+| `DropdownWithPrimaryActionViewItem` | primary 与 dropdown 的组合 DOM、连续几何、内部键盘导航                                      | Workbench 全局 ActionBar 皮肤为整个 split action 提供 hover；产品只提供 actions 和 menu 数据                                                                                                                                                                                    |
+| `WorkbenchToolBar`                  | 把 platform action representation 适配到 base `ToolBar`；actions 仍由调用方提供             | 横向 action hover 归 Workbench 全局皮肤，其余视觉仍归 base `ToolBar`/`Button`                                                                                                                                                                                                   |
+| `MenuWorkbenchToolBar`              | 从 `MenuId` 解析并刷新 `WorkbenchToolBar` actions                                           | Menu 来源不改变 toolbar ARIA 与视觉 owner                                                                                                                                                                                                                                       |
+| `TabList`                           | `tablist/tab` ARIA、`aria-selected`、激活回调、`.checked` 状态投影，以及标准 tab 的选中背景 | `tablist.css`                                                                                                                                                                                                                                                                   |
+| `CompositeBar`                      | View Container 切换，以及 `icon`/`label` 两种 presentation                                  | presentation 专属的几何与前景色；不重定义标准 tab 选中背景                                                                                                                                                                                                                      |
+| `PaneComposite`                     | `tabpanel`、pane 生命周期、pane header presentation                                         | `views.css`                                                                                                                                                                                                                                                                     |
+| `PaneCompositePart`                 | 32px title control、CompositeBar/自有标题与 title actions 的左右槽位                        | `paneCompositePart.css` 只拥有外层布局                                                                                                                                                                                                                                          |
+| `TitlebarPart`                      | 左区、应用菜单、标题和右区的窗口级布局                                                      | 通用 toolbar/button 状态不归 Titlebar                                                                                                                                                                                                                                           |
 
 `PaneCompositePart` 的标题高度为 `32px`；`titleContentElement` 占据左侧弹性空间，`titleActionsSlotElement` 固定在右侧并提供 `4px` 的双侧 inset。当前 View 的 `partTitleProjection.actions` 与 Part 级 menu toolbar 使用独立子槽并列；Part CSS 只拥有这些直接槽位的外框与排列，不得穿透修改其中的 toolbar/button 内部状态。
 
@@ -98,15 +98,15 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 
 ## 状态归属矩阵
 
-| 状态 | 判定 owner | 样式 owner | Host 可以做什么 |
-| --- | --- | --- | --- |
-| `hover` | 原生 pointer 状态 | presentation context；Workbench 横向 ActionBar 由全局 Workbench 皮肤统一处理 | 选择 presentation；不得在具体 Part 或 contribution 中重写内部 action |
-| `focus-visible` / `disabled` | 原生交互 primitive | primitive CSS | 选择 primitive；不得重写内部状态 |
-| menu 当前项 | `Menu` 统一投射鼠标与键盘焦点为 `.focused` | `menu.css` | 提供 actions；不得用调用方 selector 重建菜单焦点态 |
-| tab `selected` / `active` | `TabList` 投影状态 | `TabList` 默认皮肤；有独立语义的组合控件通过自己的 token 覆盖 | 选择 presentation variant，不能复用 ActionBar token |
-| toggle `checked` / `pressed` | command/action model | 控件并行投影 `.checked` 与 ARIA；具体 composed control CSS 决定皮肤 | 提供 checked 值或显式启用 toggled 高亮；不得在 Part 中猜状态 |
-| Part visible/hidden | Workbench layout | Part/layout CSS | contribution 只能请求命令 |
-| theme light/dark/high contrast | Theme service | token snapshot | 组件消费 token，不硬编码主题分支 |
+| 状态                           | 判定 owner                                 | 样式 owner                                                                   | Host 可以做什么                                                      |
+| ------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `hover`                        | 原生 pointer 状态                          | presentation context；Workbench 横向 ActionBar 由全局 Workbench 皮肤统一处理 | 选择 presentation；不得在具体 Part 或 contribution 中重写内部 action |
+| `focus-visible` / `disabled`   | 原生交互 primitive                         | primitive CSS                                                                | 选择 primitive；不得重写内部状态                                     |
+| menu 当前项                    | `Menu` 统一投射鼠标与键盘焦点为 `.focused` | `menu.css`                                                                   | 提供 actions；不得用调用方 selector 重建菜单焦点态                   |
+| tab `selected` / `active`      | `TabList` 投影状态                         | `TabList` 默认皮肤；有独立语义的组合控件通过自己的 token 覆盖                | 选择 presentation variant，不能复用 ActionBar token                  |
+| toggle `checked` / `pressed`   | command/action model                       | 控件并行投影 `.checked` 与 ARIA；具体 composed control CSS 决定皮肤          | 提供 checked 值或显式启用 toggled 高亮；不得在 Part 中猜状态         |
+| Part visible/hidden            | Workbench layout                           | Part/layout CSS                                                              | contribution 只能请求命令                                            |
+| theme light/dark/high contrast | Theme service                              | token snapshot                                                               | 组件消费 token，不硬编码主题分支                                     |
 
 `ActionBar` 是行为与排列基座，不因为它包裹了 item 就自动拥有业务 selected 皮肤。需要通用 toggled 背景时，由调用方显式启用 `highlightToggledItems`，ActionBar 再通过 `.highlight-toggled .checked` selector 应用自己的公开高亮 presentation。
 
@@ -128,10 +128,10 @@ Menu 的 pointer hover 与键盘导航必须汇入同一个 `focusedEntry`，并
 
 行为身份和视觉身份必须使用不同契约：
 
-| 身份 | 表达方式 | 允许用途 | 禁止用途 |
-| --- | --- | --- | --- |
-| 行为身份 | `IAction.id`、`data-action-id` | TypeScript 路由、动作查找、诊断和测试 | CSS selector、颜色、显隐和布局 |
-| 视觉身份 | 组件拥有的稳定 class，例如 `.ash-tab-close-action` | 组件 CSS、交互状态和 presentation | 命令分派、持久化身份和业务查找 |
+| 身份     | 表达方式                                           | 允许用途                              | 禁止用途                       |
+| -------- | -------------------------------------------------- | ------------------------------------- | ------------------------------ |
+| 行为身份 | `IAction.id`、`data-action-id`                     | TypeScript 路由、动作查找、诊断和测试 | CSS selector、颜色、显隐和布局 |
+| 视觉身份 | 组件拥有的稳定 class，例如 `.ash-tab-close-action` | 组件 CSS、交互状态和 presentation     | 命令分派、持久化身份和业务查找 |
 
 组合控件定义某个 item 的语义时，也负责把该语义投影为稳定的视觉 class。底层控件可以继续保留行为 ID，但 CSS 不得把 ID 当作公开样式 API：
 
@@ -204,14 +204,14 @@ Sidebar 使用默认 `icon` presentation；Panel 显式选择 `label` presentati
 
 Panel 顶部的 Problems、Output、Terminal、Ports 是同一 View Container location 中的互斥目的地，因此语义是 `tablist`，实现为 `CompositeBar`。右侧是当前选中 Panel View 的上下文命令，因此语义是 `toolbar`，实现为 `ToolBar`。
 
-| 区域 | 语义/实现 | 样式 owner |
-| --- | --- | --- |
-| Problems / Output / Terminal / Ports | `TabList` + `CompositeBar` | 标准 tab 的选中背景归 `tablist.css`；label presentation 归 `compositebar.css` |
-| 当前 View 命令 | `WorkbenchToolBar` 或 `MenuWorkbenchToolBar` | action 编排归 toolbar；button 状态归 button |
-| 未显示的 Panel 目的地 | `CompositeBar` 自有 overflow button 与菜单 | `CompositeBar` |
-| title control 左右布局 | `PanelPart` | `panelpart.css` |
-| terminal 实例列表 | Terminal View 内第二级 `TabList` | Terminal contribution/view |
-| pane header 是否显示 | `PaneComposite` presentation | `views.css` |
+| 区域                                 | 语义/实现                                    | 样式 owner                                                                    |
+| ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| Problems / Output / Terminal / Ports | `TabList` + `CompositeBar`                   | 标准 tab 的选中背景归 `tablist.css`；label presentation 归 `compositebar.css` |
+| 当前 View 命令                       | `WorkbenchToolBar` 或 `MenuWorkbenchToolBar` | action 编排归 toolbar；button 状态归 button                                   |
+| 未显示的 Panel 目的地                | `CompositeBar` 自有 overflow button 与菜单   | `CompositeBar`                                                                |
+| title control 左右布局               | `PanelPart`                                  | `panelpart.css`                                                               |
+| terminal 实例列表                    | Terminal View 内第二级 `TabList`             | Terminal contribution/view                                                    |
+| pane header 是否显示                 | `PaneComposite` presentation                 | `views.css`                                                                   |
 
 Panel 不拥有 tab 的 active 下划线，也不拥有 active/hover 背景。选中态应填满 `CompositeBar` item 的命中区域；标准背景由 `TabList` 的 token 与 CSS 决定。
 
@@ -221,12 +221,12 @@ Panel 不拥有 tab 的 active 下划线，也不拥有 active/hover 背景。�
 
 Titlebar 是 Workbench Part，不是一个巨型 toolbar。它负责窗口拖拽区、左中右区域编排、应用菜单与窗口控件的占位；其中嵌入的 Button、ToolBar、ActionBar 仍保留各自状态所有权，横向 ActionBar 的 hover 由 Workbench 全局皮肤统一提供。
 
-| Titlebar 内容 | Owner | Titlebar 可以负责 | Titlebar 不负责 |
-| --- | --- | --- | --- |
-| 窗口级网格、拖拽区、左右区域 | `TitlebarPart` | 高度、排列、间距、背景、边界 | 子控件 active/hover 状态 |
-| 应用菜单 | `MenubarControl` | Titlebar 只放置其 root | 菜单 item 内部状态 |
-| 通用图标命令 | `ToolBar` + `Button` + Workbench 全局 ActionBar 皮肤 | toolbar root 的位置 | action hover、button focus/disabled |
-| 窗口控制按钮 | Electron/native integration | 预留布局与主题投影 | 模拟通用 Workbench action 状态 |
+| Titlebar 内容                | Owner                                                | Titlebar 可以负责            | Titlebar 不负责                     |
+| ---------------------------- | ---------------------------------------------------- | ---------------------------- | ----------------------------------- |
+| 窗口级网格、拖拽区、左右区域 | `TitlebarPart`                                       | 高度、排列、间距、背景、边界 | 子控件 active/hover 状态            |
+| 应用菜单                     | `MenubarControl`                                     | Titlebar 只放置其 root       | 菜单 item 内部状态                  |
+| 通用图标命令                 | `ToolBar` + `Button` + Workbench 全局 ActionBar 皮肤 | toolbar root 的位置          | action hover、button focus/disabled |
+| 窗口控制按钮                 | Electron/native integration                          | 预留布局与主题投影           | 模拟通用 Workbench action 状态      |
 
 Titlebar 可以给直接托管的公共组件 root 设置适配当前背景所需的继承色，但不应改变组件内部状态规则。如果某种前景色必须在不同背景下变化，优先注册语义 token 或公开 presentation，而不是新增深层 selector。
 
@@ -246,14 +246,14 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabL
 
 字体角色由字号与强调程度两个正交 token 组合，不增加 `body1Strong`、`label1Bold` 之类的复合 token。`fontSize.*` 回答文本处于哪个阅读层级；`fontWeight.*` 回答它是否需要强调。这样同一强调语义能在不同字号间保持一致，也避免把 600 或 400 重新写成局部魔法数。
 
-| 文本语义 | 字号 token | 字重 token |
-| --- | --- | --- |
-| 常规正文 | `fontSize.body1` | `fontWeight.regular` |
-| 常规标签 / 次级标题 | `fontSize.label1` | `fontWeight.regular` |
-| 元数据 | `fontSize.label2` | `fontWeight.regular` |
-| 控件 / 导航 / 当前项 | `fontSize.body1` 或 `fontSize.label1` | `fontWeight.medium` |
-| 强调正文 / Pane tab | `fontSize.body1` | `fontWeight.semiBold` |
-| 强调标题 | 对应 `fontSize.heading*` 或 `fontSize.label1` | `fontWeight.semiBold` |
+| 文本语义             | 字号 token                                    | 字重 token            |
+| -------------------- | --------------------------------------------- | --------------------- |
+| 常规正文             | `fontSize.body1`                              | `fontWeight.regular`  |
+| 常规标签 / 次级标题  | `fontSize.label1`                             | `fontWeight.regular`  |
+| 元数据               | `fontSize.label2`                             | `fontWeight.regular`  |
+| 控件 / 导航 / 当前项 | `fontSize.body1` 或 `fontSize.label1`         | `fontWeight.medium`   |
+| 强调正文 / Pane tab  | `fontSize.body1`                              | `fontWeight.semiBold` |
+| 强调标题             | 对应 `fontSize.heading*` 或 `fontSize.label1` | `fontWeight.semiBold` |
 
 `TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只投影各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。系统提供 regular（400）、medium（500）与 semiBold（600）三级，不使用 700 弥补层级或间距问题。
 
@@ -266,23 +266,23 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabL
 
 ## 当前实现状态
 
-| 项目 | 状态 |
-| --- | --- |
-| Panel 一级目的地使用 `CompositeBar`/`TabList` | ✅ |
-| Panel 右侧上下文命令使用 `ToolBar` | ✅ |
-| `CompositeBar` 提供 `icon` / `label` presentation | ✅ |
-| Panel tab 几何与状态已从 `panelpart.css` 移回 `compositebar.css` | ✅ |
-| Panel pane header 显示策略由 `PaneComposite` 拥有 | ✅ |
-| tab 与 tabpanel 使用 `aria-controls` / `aria-labelledby` 配对 | ✅ |
-| Workbench Part CSS 共享交互控件 selector 门禁 | ✅ |
-| CSS 禁止使用 ARIA state attribute 作为视觉 selector 的门禁 | ✅ |
-| CSS 禁止使用 `data-action-id` 作为视觉 selector 的门禁 | ✅ |
-| CSS 禁止通过 `:not(.checked)` 等否定投影状态表达优先级 | ✅ |
-| 全仓所有组合控件的深层 selector 自动判定 | 尚未完成 |
-| Button 并行投影 `.checked` 与 `aria-pressed`，CSS 不依赖 ARIA selector | ✅ |
-| ActionBar/ToolBar 通过 `highlightToggledItems` 选择通用 checked 背景 | ✅ |
-| `WorkbenchToolBar` 与 `MenuWorkbenchToolBar` 不改变 base toolbar 样式所有权 | ✅ |
-| `MenuWorkbenchToolBar` 以 `.empty` 投影空状态，CSS 不选择 `hidden` attribute | ✅ |
+| 项目                                                                         | 状态     |
+| ---------------------------------------------------------------------------- | -------- |
+| Panel 一级目的地使用 `CompositeBar`/`TabList`                                | ✅       |
+| Panel 右侧上下文命令使用 `ToolBar`                                           | ✅       |
+| `CompositeBar` 提供 `icon` / `label` presentation                            | ✅       |
+| Panel tab 几何与状态已从 `panelpart.css` 移回 `compositebar.css`             | ✅       |
+| Panel pane header 显示策略由 `PaneComposite` 拥有                            | ✅       |
+| tab 与 tabpanel 使用 `aria-controls` / `aria-labelledby` 配对                | ✅       |
+| Workbench Part CSS 共享交互控件 selector 门禁                                | ✅       |
+| CSS 禁止使用 ARIA state attribute 作为视觉 selector 的门禁                   | ✅       |
+| CSS 禁止使用 `data-action-id` 作为视觉 selector 的门禁                       | ✅       |
+| CSS 禁止通过 `:not(.checked)` 等否定投影状态表达优先级                       | ✅       |
+| 全仓所有组合控件的深层 selector 自动判定                                     | 尚未完成 |
+| Button 并行投影 `.checked` 与 `aria-pressed`，CSS 不依赖 ARIA selector       | ✅       |
+| ActionBar/ToolBar 通过 `highlightToggledItems` 选择通用 checked 背景         | ✅       |
+| `WorkbenchToolBar` 与 `MenuWorkbenchToolBar` 不改变 base toolbar 样式所有权  | ✅       |
+| `MenuWorkbenchToolBar` 以 `.empty` 投影空状态，CSS 不选择 `hidden` attribute | ✅       |
 
 历史 CSS 中可能仍有不符合本规范的穿透 selector。它们是待迁移实现，不构成新的先例；修改相关区域时应就地迁移到 owner 或公开 variant。
 

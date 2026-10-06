@@ -7,14 +7,19 @@
   "license": "Apache-2.0",
   "compatibility": { "ash": ">=0.1.0" },
   "contributions": {
-    "editorExtensions": [{
-      "id": "inspect",
-      "runtime": "javascript",
-      "entrypoint": "example/extension.js",
-      "runtimeApiVersion": 1,
-      "activationEvents": [{ "type": "onCommand", "id": "ash.example.inspect" }, { "type": "onLanguage", "id": "plaintext" }],
-      "capabilities": ["command", "languageProvider"]
-    }]
+    "editorExtensions": [
+      {
+        "id": "inspect",
+        "runtime": "javascript",
+        "entrypoint": "example/extension.js",
+        "runtimeApiVersion": 1,
+        "activationEvents": [
+          { "type": "onCommand", "id": "ash.example.inspect" },
+          { "type": "onLanguage", "id": "plaintext" }
+        ],
+        "capabilities": ["command", "languageProvider"]
+      }
+    ]
   },
   "permissions": [{ "type": "directory", "access": "read" }]
 }

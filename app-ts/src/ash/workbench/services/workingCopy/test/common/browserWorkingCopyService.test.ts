@@ -71,9 +71,9 @@ class FakeWorkingCopy extends Disposable implements IWorkingCopy {
 		this.dirtyEmitter.fire();
 	}
 
-	async save(_signal: AbortSignal): Promise<void> {}
+	async save(_signal: AbortSignal): Promise<void> { }
 	backup(): string { return ""; }
-	restoreBackup(): void {}
-	async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> {}
-	async revert(_signal: AbortSignal): Promise<void> {}
+	restoreBackup(): void { }
+	async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> { }
+	async revert(_signal: AbortSignal): Promise<void> { }
 }

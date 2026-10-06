@@ -1,18 +1,18 @@
 {
-	"$schema": "vscode://schemas/color-theme",
-	"name": "Dark High Contrast",
-	"colors": {
-		"editor.background": "#000000",
-		"editor.foreground": "#FFFFFF",
-		"editorIndentGuide.background1": "#FFFFFF",
-		"editorIndentGuide.activeBackground1": "#FFFFFF",
-		"sideBarTitle.foreground": "#FFFFFF",
-		"selection.background": "#008000",
-		"editor.selectionBackground": "#FFFFFF",
-		"statusBarItem.remoteBackground": "#00000000",
-		"ports.iconRunningProcessForeground": "#FFFFFF",
-		"editorWhitespace.foreground": "#7c7c7c",
-		"actionBar.toggledBackground": "#383a49"
-	},
-	"include": "./hc_dark_syntax.json"
+  "$schema": "vscode://schemas/color-theme",
+  "name": "Dark High Contrast",
+  "colors": {
+    "editor.background": "#000000",
+    "editor.foreground": "#FFFFFF",
+    "editorIndentGuide.background1": "#FFFFFF",
+    "editorIndentGuide.activeBackground1": "#FFFFFF",
+    "sideBarTitle.foreground": "#FFFFFF",
+    "selection.background": "#008000",
+    "editor.selectionBackground": "#FFFFFF",
+    "statusBarItem.remoteBackground": "#00000000",
+    "ports.iconRunningProcessForeground": "#FFFFFF",
+    "editorWhitespace.foreground": "#7c7c7c",
+    "actionBar.toggledBackground": "#383a49"
+  },
+  "include": "./hc_dark_syntax.json"
 }

@@ -21,7 +21,7 @@ export class SymbolsQuickAccessProvider implements IQuickAccessProvider {
 		@IEditorService private readonly editor: IEditorService,
 		@IFileService private readonly files: IFileService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
-	) {}
+	) { }
 
 	provide(picker: IQuickPick<IQuickPickItem>, prefix: string, signal: AbortSignal): DisposableStore {
 		const disposables = new DisposableStore();

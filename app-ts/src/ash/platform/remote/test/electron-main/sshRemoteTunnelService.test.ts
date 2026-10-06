@@ -12,7 +12,7 @@ import type { RemoteTunnelChange } from "../../../../platform/remote/common/remo
 
 test("SSH tunnel coordinator fixes both ends of the forward to loopback", async () => {
 	let child = new FakeChildProcess();
-	let launch: { executable: string; args: readonly string[] } | undefined;
+	let launch: { executable: string; args: readonly string[]; } | undefined;
 	let workspace: IAnyWorkspaceIdentifier = { id: 'remote', uri: createSshRemoteWorkspaceUri('build-server', '/srv/project') };
 	using service = new SshRemoteTunnelService({
 		getWorkspace: () => workspace,
@@ -25,7 +25,7 @@ test("SSH tunnel coordinator fixes both ends of the forward to loopback", async 
 		},
 		probeLoopbackListener: readyListener,
 		startupTimeoutMs: 50,
-		wait: async () => {},
+		wait: async () => { },
 	});
 
 	const tunnel = await service.open({ remotePort: 3_000 });
@@ -81,7 +81,7 @@ test("SSH tunnel coordinator recovers repeatedly on the original local port", as
 		},
 		probeLoopbackListener: readyListener,
 		startupTimeoutMs: 50,
-		wait: async () => {},
+		wait: async () => { },
 	});
 	service.onDidChange(change => changes.push(change));
 
@@ -245,7 +245,7 @@ test("SSH tunnel startup failure is reported without entering recovery", async (
 		spawnProcess: () => new FakeChildProcess(17) as unknown as ChildProcess,
 		probeLoopbackListener: readyListener,
 		startupTimeoutMs: 50,
-		wait: async () => {},
+		wait: async () => { },
 	});
 	service.onDidChange(change => changes.push(change));
 
@@ -291,7 +291,7 @@ test("SSH tunnel startup times out and stops the child when no listener appears"
 		spawnProcess: () => child as unknown as ChildProcess,
 		probeLoopbackListener: async () => "pending",
 		startupTimeoutMs: 20,
-		wait: async () => {},
+		wait: async () => { },
 	});
 
 	await assert.rejects(() => service.open({ remotePort: 3_000 }), /did not listen on 127\.0\.0\.1:41234 within 20ms/);

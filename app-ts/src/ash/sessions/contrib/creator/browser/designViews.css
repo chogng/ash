@@ -13,7 +13,9 @@
 	flex-direction: column;
 }
 
-.ash-design-layers-tree > .ash-tree { flex: 1; }
+.ash-design-layers-tree > .ash-tree {
+	flex: 1;
+}
 
 .ash-design-panel-message {
 	margin: 0;
@@ -22,7 +24,9 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-design-panel-message[hidden] { display: none; }
+.ash-design-panel-message[hidden] {
+	display: none;
+}
 
 .ash-design-layer-label {
 	overflow: hidden;

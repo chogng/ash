@@ -5,7 +5,7 @@ import { DialogResult, type DialogRequest, type IDialogOutcome } from '../common
 export function massageMessageBoxOptions(
 	options: MessageBoxOptions,
 	platform: NodeJS.Platform = process.platform,
-): { options: MessageBoxOptions; buttonIndices: readonly number[] } {
+): { options: MessageBoxOptions; buttonIndices: readonly number[]; } {
 	const buttons = [...options.buttons ?? []];
 	const buttonIndices = buttons.map((_, index) => index);
 	const originalDefault = options.defaultId ?? 0;
@@ -33,7 +33,7 @@ export function massageMessageBoxOptions(
 	};
 }
 
-export function messageBoxOptions(request: Exclude<DialogRequest, { kind: 'input' }>, signal: AbortSignal): MessageBoxOptions {
+export function messageBoxOptions(request: Exclude<DialogRequest, { kind: 'input'; }>, signal: AbortSignal): MessageBoxOptions {
 	const buttons = request.kind === 'choice'
 		? [...request.buttons, request.cancelButton]
 		: request.kind === 'message'
@@ -58,7 +58,7 @@ export function messageBoxOptions(request: Exclude<DialogRequest, { kind: 'input
 }
 
 export function messageBoxOutcome(
-	request: Exclude<DialogRequest, { kind: 'input' }>,
+	request: Exclude<DialogRequest, { kind: 'input'; }>,
 	result: MessageBoxReturnValue,
 ): IDialogOutcome {
 	if (request.kind === 'choice') {

@@ -7,7 +7,7 @@ import { createAppServerModelApi } from '../../browser/sessionApi.js';
 test('Model preferences send a targeted update with the current revision', async () => {
 	const writes: ModelPreferencesUpdateParams[] = [];
 	const connection = {
-		async request(definition: { method: string }, params: ModelPreferencesUpdateParams): Promise<unknown> {
+		async request(definition: { method: string; }, params: ModelPreferencesUpdateParams): Promise<unknown> {
 			if (definition.method === 'config/read') { return { revision: 7 }; }
 			assert.equal(definition.method, 'model/preferences/update');
 			writes.push(params);
@@ -31,7 +31,7 @@ test('Review model saves only independent review settings with the current confi
 	const selection = { type: 'explicit', model: { provider: 'openai', model: 'gpt-6-luna' }, connection: 'openai', reasoningEffort: 'low' } as const;
 	const writes: ConfigUpdateParams[] = [];
 	const connection = {
-		async request(definition: { method: string }, params: ConfigUpdateParams): Promise<unknown> {
+		async request(definition: { method: string; }, params: ConfigUpdateParams): Promise<unknown> {
 			if (definition.method === 'config/read') return { revision: 9, approvalReviewModel: selection, model: { provider: 'openai', model: 'gpt-6-astra' } };
 			assert.equal(definition.method, 'config/update');
 			writes.push(params);

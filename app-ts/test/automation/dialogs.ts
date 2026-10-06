@@ -19,7 +19,7 @@ interface DialogCaptureGlobal {
 
 /** Exercises the product dialog boundary on both supported hosts. */
 export class Dialogs {
-	constructor(private readonly page: Page) {}
+	constructor(private readonly page: Page) { }
 
 	async expectMessage(application: PlaywrightApplication, title: string, open: () => Promise<unknown>): Promise<DialogMessage> {
 		return this.respond(application, title, open);

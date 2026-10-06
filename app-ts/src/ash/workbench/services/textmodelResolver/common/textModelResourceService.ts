@@ -54,7 +54,7 @@ export interface ITextModelResourceService<TInput extends TextModelInput = TextM
 export interface IFileTextModelService extends ITextModelResourceService {
 	readonly onModelAdded: Event<TextModel>;
 	readonly onModelRemoved: Event<TextModel>;
-	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string }>;
+	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string; }>;
 	getModel(resource: URI): TextModel | null;
 	/** Revalidates an open file after the host regains focus. */
 	refresh(resource: URI): Promise<void>;

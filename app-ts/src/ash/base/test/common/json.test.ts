@@ -59,5 +59,5 @@ test('JSONC compatibility helpers strip comments and trailing commas without tou
 	assert.match(stripped, /"text": "\/\/ keep,\}"/u);
 	assert.doesNotMatch(stripped, /remove/u);
 	assert.doesNotMatch(stripped, /true,\s*\}/u);
-	assert.deepEqual(parse<{ text: string; enabled: boolean }>(source), { text: '// keep,}', enabled: true });
+	assert.deepEqual(parse<{ text: string; enabled: boolean; }>(source), { text: '// keep,}', enabled: true });
 });

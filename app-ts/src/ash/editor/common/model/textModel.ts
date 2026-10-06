@@ -55,7 +55,7 @@ import { GuidesTextModelPart } from './guidesTextModelPart.js';
 import type { IViewModel } from '../viewModel.js';
 import { createPieceTreeTextBuffer } from './pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
-interface OffsetEdit extends OffsetTextEdit {}
+interface OffsetEdit extends OffsetTextEdit { }
 
 interface AnnotatedOffsetEdit extends OffsetEdit {
 	readonly identifier: IIdentifiedSingleEditOperation['identifier'];
@@ -183,7 +183,7 @@ export class TextModel implements ITextModel {
 	private readonly lineHeightEmitter = this._register(new Emitter<ModelLineHeightChangedEvent>());
 	private readonly fontEmitter = this._register(new Emitter<ModelFontChangedEvent>());
 	private readonly attachedEmitter = this._register(new Emitter<void>());
-	private readonly attachedViews = new Map<IAttachedView, readonly { startLineNumber: number; endLineNumber: number }[]>();
+	private readonly attachedViews = new Map<IAttachedView, readonly { startLineNumber: number; endLineNumber: number; }[]>();
 	private readonly viewModels = new Set<IViewModel>();
 	private readonly languageSelection = this._register(new MutableDisposable<IDisposable>());
 	private readonly trackedRanges = this._register(new TrackedRangeCollection(
@@ -544,7 +544,7 @@ export class TextModel implements ITextModel {
 		this.assertNotDisposed();
 		const model = this;
 		const view: IAttachedView = Object.freeze({
-			setVisibleLines(visibleLines: { startLineNumber: number; endLineNumber: number }[], stabilized: boolean): void {
+			setVisibleLines(visibleLines: { startLineNumber: number; endLineNumber: number; }[], stabilized: boolean): void {
 				if (!model.attachedViews.has(view)) throw new ReferenceError('Text model view is not attached');
 				for (const range of visibleLines) {
 					if (!Number.isSafeInteger(range.startLineNumber) || !Number.isSafeInteger(range.endLineNumber)
@@ -1355,7 +1355,7 @@ export class TextModel implements ITextModel {
 		const previousById = new Map(previous.map(entry => [entry.id, entry]));
 		const currentById = new Map(current.map(entry => [entry.id, entry]));
 		const ids = new Set([...previousById.keys(), ...currentById.keys()]);
-		const changed: Array<{ previous?: ModelDecorationEntry; current?: ModelDecorationEntry }> = [];
+		const changed: Array<{ previous?: ModelDecorationEntry; current?: ModelDecorationEntry; }> = [];
 		for (const id of ids) {
 			const oldEntry = previousById.get(id);
 			const newEntry = currentById.get(id);
@@ -1501,7 +1501,7 @@ export class TextModel implements ITextModel {
 		}
 	}
 
-	edit(edit: TextEdit, options: { reason?: TextModelEditSource } = {}): void {
+	edit(edit: TextEdit, options: { reason?: TextModelEditSource; } = {}): void {
 		this.pushEditOperations(
 			null,
 			edit.replacements.map(replacement => ({ range: replacement.range, text: replacement.text })),
@@ -1544,7 +1544,7 @@ export class TextModel implements ITextModel {
 		editOperations: readonly IIdentifiedSingleEditOperation[],
 		cursorStateComputer: ICursorStateComputer | null,
 		options: TextEditOptions,
-	): { readonly change: TextModelChange; readonly inverseEditOperations: IValidEditOperation[] } | undefined {
+	): { readonly change: TextModelChange; readonly inverseEditOperations: IValidEditOperation[]; } | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		if (!Array.isArray(editOperations)) throw new TypeError("Edit operations must be an array");
@@ -2105,7 +2105,7 @@ export class TextModel implements ITextModel {
 	}
 
 	/** Commits flattened line text for one already-validated block transaction. */
-	private commitBlockText(text: string): { readonly version: number; readonly change?: TextModelChange } {
+	private commitBlockText(text: string): { readonly version: number; readonly change?: TextModelChange; } {
 		const previousText = this.buffer.createSnapshot().getText();
 		const nextText = this.normalizeTextToBufferEOL(text);
 		let prefixLength = 0;
@@ -2288,7 +2288,7 @@ export class TextModel implements ITextModel {
 
 export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions: model.InjectedTextOptions[] | null, injectionOffsets: number[] | null): LineTokens {
 	if (!injectionOffsets) return tokens;
-	const tokensToInsert: { offset: number; text: string; tokenMetadata: number }[] = [];
+	const tokensToInsert: { offset: number; text: string; tokenMetadata: number; }[] = [];
 	for (let index = 0; index < injectionOffsets.length; index += 1) {
 		const offset = injectionOffsets[index]!;
 		const options = injectionOptions![index]!;

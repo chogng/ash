@@ -20,7 +20,7 @@ class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 		@ChatServiceId private readonly chat: IChatService,
 		@IEditorService private readonly editors: IEditorServiceContract,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
-	) {}
+	) { }
 
 	sourceActions(): readonly IAction[] {
 		const available = this.sessions.active !== undefined;
@@ -53,10 +53,12 @@ class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 		if (input.source?.kind !== 'external') { return undefined; }
 		const preview = commitSourceIdentity(input.resource);
 		if (preview && input.source.providerId === 'sessions.turnCommit') {
-			return { id: 'multiDiff.commit.selection', label: localize('sessions.changes.commitPrepared', 'Commit this preview'), tooltip: localize('sessions.changes.commitPreparedHint', 'Commit exactly the reviewed files and message'), icon: Lxicon.gitCommit, enabled: true, run: async () => {
-				await this.chat.commitTurnChange(preview.sessionId, preview.threadId, preview.commitId);
-				return localize('sessions.changes.commitQueued', 'The reviewed commit is queued.');
-			} };
+			return {
+				id: 'multiDiff.commit.selection', label: localize('sessions.changes.commitPrepared', 'Commit this preview'), tooltip: localize('sessions.changes.commitPreparedHint', 'Commit exactly the reviewed files and message'), icon: Lxicon.gitCommit, enabled: true, run: async () => {
+					await this.chat.commitTurnChange(preview.sessionId, preview.threadId, preview.commitId);
+					return localize('sessions.changes.commitQueued', 'The reviewed commit is queued.');
+				}
+			};
 		}
 		if (input.source.providerId !== 'sessions.turn') { return undefined; }
 		return { id: 'multiDiff.commit.preview', label: localize('sessions.changes.previewCommit', 'Preview commit…'), tooltip: localize('sessions.changes.previewCommitHint', 'Choose a message and review the remaining Turn changes before committing'), icon: Lxicon.gitCommit, enabled: true, run: () => this.previewCommit(input) };
@@ -122,7 +124,7 @@ function turnSourceIdentity(uri: URI): {
 	return { scope, sessionId, threadId, changeSetIds: changes.split(',') };
 }
 
-function commitSourceIdentity(uri: URI): { readonly sessionId: string; readonly threadId: string; readonly commitId: string } | undefined {
+function commitSourceIdentity(uri: URI): { readonly sessionId: string; readonly threadId: string; readonly commitId: string; } | undefined {
 	if (uri.scheme !== 'ash-multi-diff' || !uri.path.startsWith('/turn-commit/')) { return undefined; }
 	const query = new URLSearchParams(uri.toEncodedComponents().query);
 	const sessionId = query.get('session');

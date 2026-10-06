@@ -5,8 +5,8 @@ import type { IView, IViewContainerDescriptor, IViewDescriptor, IViewPaneContain
 
 /** Window-scoped access to registered views and their retained container instances. */
 export interface IViewsService {
-	readonly onDidChangeViewContainerVisibility: Event<{ id: string; visible: boolean; location: ViewContainerLocation }>;
-	readonly onDidChangeViewVisibility: Event<{ id: string; visible: boolean }>;
+	readonly onDidChangeViewContainerVisibility: Event<{ id: string; visible: boolean; location: ViewContainerLocation; }>;
+	readonly onDidChangeViewVisibility: Event<{ id: string; visible: boolean; }>;
 	readonly onDidChangeFocusedView: Event<void>;
 
 	isViewContainerVisible(id: string): boolean;

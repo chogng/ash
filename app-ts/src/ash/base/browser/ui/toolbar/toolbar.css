@@ -1,40 +1,42 @@
 .ash-toolbar {
-  align-items: center;
+	align-items: center;
 }
 
 .ash-toolbar.empty {
-  display: none;
+	display: none;
 }
 
 .ash-toolbar + .ash-toolbar {
-  margin-left: var(--ash-toolbar-item-gap);
+	margin-left: var(--ash-toolbar-item-gap);
 }
 
 .ash-toolbar-inherit-foreground .ash-button {
-  color: inherit;
+	color: inherit;
 }
 
 .ash-toolbar .ash-action-view-item > .ash-button {
-  height: var(--ash-toolbar-action-size);
-  min-height: var(--ash-toolbar-action-size);
-  padding-block: 4px;
+	height: var(--ash-toolbar-action-size);
+	min-height: var(--ash-toolbar-action-size);
+	padding-block: 4px;
 }
 
 .ash-toolbar .ash-action-view-item > .ash-action-label {
-  height: var(--ash-toolbar-action-size);
-  min-height: var(--ash-toolbar-action-size);
+	height: var(--ash-toolbar-action-size);
+	min-height: var(--ash-toolbar-action-size);
 }
 
 /* Center the glyph in the fixed hit area without shrinking its content box. */
 .ash-toolbar .ash-action-view-item.icon > .ash-button {
-  width: var(--ash-toolbar-action-size);
-  min-width: var(--ash-toolbar-action-size);
-  border: 0;
-  padding: 0;
+	width: var(--ash-toolbar-action-size);
+	min-width: var(--ash-toolbar-action-size);
+	border: 0;
+	padding: 0;
 }
 
-.ash-toolbar .ash-action-view-item.icon .ash-icon-label-container { display: none; }
+.ash-toolbar .ash-action-view-item.icon .ash-icon-label-container {
+	display: none;
+}
 
 .ash-toolbar .ash-action-view-item.icon .ash-dropdown-menu-indicator {
-  display: none;
+	display: none;
 }

@@ -311,8 +311,10 @@ test.describe('File tab label format', () => {
 			range.selectNodeContents(text);
 			const textBounds = range.getBoundingClientRect();
 			const action = element.querySelector<HTMLElement>('.ash-tab-primary-action button')!.getBoundingClientRect();
-			return { width: element.getBoundingClientRect().width, clipped: text.scrollWidth > text.clientWidth,
-				textRight: textBounds.right, labelRight: label.getBoundingClientRect().right, actionLeft: action.left };
+			return {
+				width: element.getBoundingClientRect().width, clipped: text.scrollWidth > text.clientWidth,
+				textRight: textBounds.right, labelRight: label.getBoundingClientRect().right, actionLeft: action.left
+			};
 		});
 		await page.locator('.ash-explorer').getByRole('treeitem', { name: names[0]!, exact: true }).dblclick();
 		await expect(tab).toBeVisible();

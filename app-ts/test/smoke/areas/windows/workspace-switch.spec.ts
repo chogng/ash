@@ -29,19 +29,19 @@ test('repeated folder opens wait for the permission choice past 30 seconds', asy
 	await mkdir(nextFolder);
 	const page = workbench.page;
 	const initial = await page.evaluate(() => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:workspace:context:read');
 	});
 	expect(parseWorkspace(initial).folders[0]?.uri.fsPath).toBe(testWorkspace.directory);
 
 	const opening = page.evaluate(folder => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:open-workspace', folder);
 	}, nextFolder).then(() => undefined, error => String(error));
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
 	await expect(prompt).toBeVisible();
 	const repeatedOpening = page.evaluate(folder => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:open-workspace', folder);
 	}, nextFolder).then(() => undefined, error => String(error));
 	await page.waitForTimeout(31_000);
@@ -50,7 +50,7 @@ test('repeated folder opens wait for the permission choice past 30 seconds', asy
 	expect(await Promise.all([opening, repeatedOpening])).toEqual([undefined, undefined]);
 	await expect.poll(async () => {
 		const workspace = await page.evaluate(() => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			return ipc.invoke('ash:workspace:context:read');
 		});
 		return parseWorkspace(workspace).folders[0]?.uri.fsPath;
@@ -66,7 +66,7 @@ test('opening a folder displays its files in Explorer', async ({ target, testWor
 	await writeFile(join(nextFolder, 'inner', 'nested.txt'), 'nested');
 	const page = workbench.page;
 	const opening = page.evaluate(folder => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:open-workspace', folder);
 	}, nextFolder);
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
@@ -124,7 +124,7 @@ test('Explorer shortcuts copy and move binary files into folders', async ({ targ
 	});
 	expect(copiedFiles).toContain('clipboard.bin');
 	await expect(page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<void> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		await ipc.invoke('ash:host:writeClipboardResources', { resources: [], operation: 'delete' });
 	})).rejects.toThrow(/Invalid clipboard resources/);
 	if (process.platform === 'win32') {
@@ -333,7 +333,7 @@ test('Explorer uses the desktop clipboard and imports binary files from a paste 
 	await explorer.getByRole('tree').focus();
 	await page.keyboard.press('ControlOrMeta+C');
 	await expect.poll(() => page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ resources: string[]; operation: 'copy' | 'move' }> } } }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ resources: string[]; operation: 'copy' | 'move'; }>; }; }; }).ash.ipcRenderer;
 		const result = await ipc.invoke('ash:host:readClipboardResources');
 		return result.resources.length;
 	})).toBe(1);

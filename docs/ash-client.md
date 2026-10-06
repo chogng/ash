@@ -48,26 +48,26 @@ ash-api    负责“这个 API 的 bytes/event 表示什么”
 
 `ResolvedApiTarget` 由认证所属领域创建，绑定请求用途、连接或账号身份、凭据版本以及固定的服务地址。地址、认证头和绑定信息只读；协议层通过 `endpoint` 添加相对路径，通过 `request` 检查最终地址并组装 HTTP 请求。最终地址必须保持原来的协议、主机和有效端口；WebSocket 使用对应的 `ws` / `wss` 地址。业务领域可以在同一来源下拥有多个路由，但不能把认证头复制到新的服务来源。
 
-| 内容 | 唯一负责方 |
-| --- | --- |
-| 登录、凭据存储、刷新、签名和设备认证 | 各供应商认证领域 |
-| 账号、凭据版本、用途与目标的绑定 | 认证领域提供，`ash-client` 承载并检查 |
-| 模型生成和目录、输入计数、账号接口的用途区分 | 请求绑定；对应 API 入口检查 |
-| 协议版本、Content-Type、Accept 和协议编码 | `ash-api` 或 `backend-client` |
-| 请求头合并和目标来源检查 | `ash-client` |
-| 实际 HTTP 重定向处理 | `ash-http-client`，遵守每个请求的拒绝标记 |
+| 内容                                         | 唯一负责方                                |
+| -------------------------------------------- | ----------------------------------------- |
+| 登录、凭据存储、刷新、签名和设备认证         | 各供应商认证领域                          |
+| 账号、凭据版本、用途与目标的绑定             | 认证领域提供，`ash-client` 承载并检查     |
+| 模型生成和目录、输入计数、账号接口的用途区分 | 请求绑定；对应 API 入口检查               |
+| 协议版本、Content-Type、Accept 和协议编码    | `ash-api` 或 `backend-client`             |
+| 请求头合并和目标来源检查                     | `ash-client`                              |
+| 实际 HTTP 重定向处理                         | `ash-http-client`，遵守每个请求的拒绝标记 |
 
 请求头按名称忽略大小写合并：相同值只保留一次，不同值直接报错，不允许协议头覆盖认证方已经提供的头。错误只包含头名称；凭据、账号和凭据摘要不会进入目标的 Debug 输出。绑定目标生成的 HTTP 请求一律拒绝重定向，即使网络全局允许跟随，也不把设备证明或自定义密钥头交给下一跳。
 
 输入计数目标在认证或配置解析时单独创建，使用计数协议对应的头和地址。计数适配器消费该目标，不能复制生成认证头后更换地址。Start Plan 的额度、策略和生成目标使用同一份凭据快照，检查结束后确认账号与版本仍然一致，不重新读取凭据替换已检查的身份。
 
-| 调用中发生的事情 | 本层是否负责 | 说明 |
-| --- | --- | --- |
-| 按明确策略重试一次操作 | ✅ | 包含退避、抖动和总截止时间 |
-| 把字节流切成 SSE 或 NDJSON 记录 | ✅ | 不解释记录中的供应商语义 |
-| 选择模型、服务地址或凭据 | ❌ | 由模型调用系统决定 |
-| 解释 OpenAI 或 Anthropic 事件 | ❌ | 由模型 API 协议层负责 |
-| 处理代理、TLS 和连接池 | ❌ | 由网络层负责 |
+| 调用中发生的事情                | 本层是否负责 | 说明                       |
+| ------------------------------- | ------------ | -------------------------- |
+| 按明确策略重试一次操作          | ✅           | 包含退避、抖动和总截止时间 |
+| 把字节流切成 SSE 或 NDJSON 记录 | ✅           | 不解释记录中的供应商语义   |
+| 选择模型、服务地址或凭据        | ❌           | 由模型调用系统决定         |
+| 解释 OpenAI 或 Anthropic 事件   | ❌           | 由模型 API 协议层负责      |
+| 处理代理、TLS 和连接池          | ❌           | 由网络层负责               |
 
 ## 2. 拥有与不拥有
 
@@ -299,11 +299,11 @@ Client 不维护“模型是否有语义进展”。Anthropic `ping`、comment h
 
 Deadline 分层：
 
-| Owner | Deadline |
-| --- | --- |
+| Owner             | Deadline                                       |
+| ----------------- | ---------------------------------------------- |
 | `ash-http-client` | DNS/connect/TLS/first-byte/idle/single-attempt |
-| `ash-client` | 包含 retry/backoff 的 overall operation |
-| runtime | Turn、auth recovery 或产品流程 deadline |
+| `ash-client`      | 包含 retry/backoff 的 overall operation        |
+| runtime           | Turn、auth recovery 或产品流程 deadline        |
 
 Operation client 在每次 attempt 前计算 remaining budget，并把 bounded attempt deadline 交给
 `ash-http-client`。任一上层 deadline 结束后不能启动新 attempt。
@@ -326,14 +326,14 @@ backpressure 属于 `ash-client`。Client 不能合并或丢弃它不理解的 P
 
 Telemetry 分为两层：
 
-| `ash-http-client` | `ash-client` |
-| --- | --- |
-| DNS/connect/TLS/HTTP timing | operation duration |
-| proxy/redirect/pool evidence | attempt count |
-| request/response byte count | retry reason/backoff |
-| status class/transport error | first frame/frame count |
-| transport timeout/cancel | framing/operation outcome |
-| HTTP redaction policy | low-cardinality API metadata |
+| `ash-http-client`            | `ash-client`                 |
+| ---------------------------- | ---------------------------- |
+| DNS/connect/TLS/HTTP timing  | operation duration           |
+| proxy/redirect/pool evidence | attempt count                |
+| request/response byte count  | retry reason/backoff         |
+| status class/transport error | first frame/frame count      |
+| transport timeout/cancel     | framing/operation outcome    |
+| HTTP redaction policy        | low-cardinality API metadata |
 
 业务调用方只提供低基数 operation metadata，例如：
 

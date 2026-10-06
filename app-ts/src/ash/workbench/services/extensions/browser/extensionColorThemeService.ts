@@ -15,7 +15,7 @@ export class ExtensionColorThemeService extends Disposable {
 	constructor(private readonly api: IExtensionApi, events: IServerEventApi) {
 		super();
 		let activationGeneration: number | undefined;
-		let marketplaceRevision: { readonly instanceId: string; readonly generation: number } | undefined;
+		let marketplaceRevision: { readonly instanceId: string; readonly generation: number; } | undefined;
 		const subscription = events.subscribe(event => {
 			if (event.method === 'plugin/changed') {
 				if (event.params.activationGeneration === activationGeneration) return;

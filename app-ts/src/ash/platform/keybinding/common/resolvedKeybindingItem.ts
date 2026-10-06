@@ -13,6 +13,6 @@ export class ResolvedKeybindingItem {
 		public readonly extensionId: string | null,
 		public readonly isBuiltinExtension: boolean,
 		// Retain the exact rule identity so a stale editor row cannot edit a different rule.
-		public readonly userBinding?: { readonly index: number; readonly entry: IUserFriendlyKeybinding },
-	) {}
+		public readonly userBinding?: { readonly index: number; readonly entry: IUserFriendlyKeybinding; },
+	) { }
 }

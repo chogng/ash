@@ -188,7 +188,12 @@ pub struct MarketplaceListInstalledResult {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum MarketplaceEditorExtensionPolicyActionDto { Enable, Disable, Grant, Revoke }
+pub enum MarketplaceEditorExtensionPolicyActionDto {
+    Enable,
+    Disable,
+    Grant,
+    Revoke,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

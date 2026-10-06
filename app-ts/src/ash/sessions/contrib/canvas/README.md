@@ -2,11 +2,11 @@
 
 `canvas` 是与 `creator` 平级的 Sessions contrib。七个 Creator 模式的画布编辑器使用这份实现；其他空间编辑器也可以通过相同接口挂载自己的内容。
 
-| 模块 | 职责 |
-| --- | --- |
-| [CanvasViewport](common/canvasViewport.ts) | 每个视图的缩放、平移、视口坐标转内容坐标与缩放锚点 |
+| 模块                                                          | 职责                                                               |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [CanvasViewport](common/canvasViewport.ts)                    | 每个视图的缩放、平移、视口坐标转内容坐标与缩放锚点                 |
 | [Canvas](browser/canvas.ts)、[canvas.css](browser/canvas.css) | 空间容器、网格、内容挂载、视口变换、选框、光标、主题订阅和焦点提示 |
-| [CanvasInputController](browser/canvasInputController.ts) | 滚轮导航、指针捕获、坐标换算、手势完成与取消 |
+| [CanvasInputController](browser/canvasInputController.ts)     | 滚轮导航、指针捕获、坐标换算、手势完成与取消                       |
 
 调用方为每个视图创建 CanvasViewport，创建并释放 Canvas 和输入控制器，向 `setContent` 传入自己拥有的 DOM。`CanvasInputParticipant` 根据点击对象和当前工具选择手势，接收内容坐标，负责编辑预览与提交。共享输入层只在对应指针释放时完成编辑，取消捕获丢弃预览；释放控制器会取消当前手势并移除监听。Canvas 释放主题订阅并移除自己的 DOM。
 

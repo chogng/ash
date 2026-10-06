@@ -25,10 +25,10 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 	public readonly isSupported = true;
 	private readonly transcribed = this._register(new Emitter<ILocalTranscriptionResult>());
 	public readonly onDidTranscribe = this.transcribed.event;
-	private readonly ended = this._register(new Emitter<{ readonly error?: string }>());
+	private readonly ended = this._register(new Emitter<{ readonly error?: string; }>());
 	public readonly onDidEnd = this.ended.event;
 	private active: ActiveTranscription | undefined;
-	private readonly modelStatus = this._register(new Emitter<{ readonly model: string; readonly status: ILocalTranscriptionModelStatus }>());
+	private readonly modelStatus = this._register(new Emitter<{ readonly model: string; readonly status: ILocalTranscriptionModelStatus; }>());
 	public readonly onDidChangeModelStatus = this.modelStatus.event;
 	private readonly models = this._register(new DisposableMap<string, ModelOperation>());
 
@@ -75,7 +75,7 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		return this.startModelOperation(model, { type: 'prepare' }, onProgress);
 	}
 
-	public importModel(options: { readonly model: string; readonly sourcePath: string }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
+	public importModel(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: ILocalTranscriptionModelStatus) => void): ILocalTranscriptionModelOperation {
 		return this.startModelOperation(options.model, { type: 'import', sourceDirectory: options.sourcePath }, onProgress);
 	}
 
@@ -89,7 +89,7 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		return handle;
 	}
 
-	public async start(options: { readonly model: string; readonly inputDevice?: string }): Promise<void> {
+	public async start(options: { readonly model: string; readonly inputDevice?: string; }): Promise<void> {
 		this.assertNotDisposed();
 		if (!this.backend.isConnected) { throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
 		if (this.active) { throw new Error(localize('dictation.alreadyActive', 'Dictation is already active')); }

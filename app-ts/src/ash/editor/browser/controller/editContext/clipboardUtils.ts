@@ -34,7 +34,7 @@ export const CopyOptions = {
 	cutEventHasFired: false,
 };
 
-export function generateDataToCopyAndStoreInMemory(viewModel: IViewModel, id: string | undefined, useFirefoxLineEndings: boolean): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {
+export function generateDataToCopyAndStoreInMemory(viewModel: IViewModel, id: string | undefined, useFirefoxLineEndings: boolean): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata; } {
 	const { dataToCopy, metadata } = generateDataToCopy(viewModel, id);
 	const storedText = useFirefoxLineEndings ? dataToCopy.text.replaceAll('\r\n', '\n') : dataToCopy.text;
 	InMemoryClipboardMetadataManager.INSTANCE.set(storedText, metadata);
@@ -128,7 +128,7 @@ export function createClipboardCopyEvent(
 	};
 }
 
-function generateDataToCopy(viewModel: IViewModel, id?: string): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {
+function generateDataToCopy(viewModel: IViewModel, id?: string): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata; } {
 	const emptySelectionClipboard = viewModel.getEditorOption(EditorOption.emptySelectionClipboard);
 	const copyWithSyntaxHighlighting = viewModel.getEditorOption(EditorOption.copyWithSyntaxHighlighting);
 	const selections = viewModel.getCursorStates().map(cursor => cursor.modelState.selection);

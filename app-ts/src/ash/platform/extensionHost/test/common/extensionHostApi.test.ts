@@ -56,7 +56,7 @@ test("polls a fenced invocation until one strict terminal result", async () => {
 		cancel: async () => { cancels += 1; return { disposition: "alreadyTerminal" }; },
 	}, invocation(), new AbortController().signal, { now: () => 100, wait: async () => undefined });
 
-	assert.equal(typeof result === "object" && result !== null && !Array.isArray(result) ? (result as { readonly ok?: JsonValue }).ok : undefined, true);
+	assert.equal(typeof result === "object" && result !== null && !Array.isArray(result) ? (result as { readonly ok?: JsonValue; }).ok : undefined, true);
 	assert.equal(requests[0]?.activationGeneration, 4);
 	assert.equal(requests[0]?.incarnation, 5);
 	assert.equal(reads, 2);
@@ -91,9 +91,11 @@ function invocation(): ExtensionHostInvocationRequest {
 
 
 test('dormant manifests contain declarations without process registrations or authority', () => {
-	const extension = { id: 'acme.lazy', version: '1', packageDigest: DIGEST, runtimeApiVersion: 1,
+	const extension = {
+		id: 'acme.lazy', version: '1', packageDigest: DIGEST, runtimeApiVersion: 1,
 		activationGeneration: 4, incarnation: null, lifecycle: 'dormant', failure: null, stderr: '', outputEvents: [], registrations: [],
-		activation: { events: ['onCommand:acme.run'], commands: [{ command: 'acme.run', title: 'Run' }] } };
+		activation: { events: ['onCommand:acme.run'], commands: [{ command: 'acme.run', title: 'Run' }] }
+	};
 	const normalize = (override: object) => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ ...extension, ...override }] });
 	const runtime = normalize({}).extensions[0]!;
 	assert.equal(runtime.incarnation, undefined);

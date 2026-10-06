@@ -6,12 +6,12 @@ import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/wo
 import { launchElectronApplication, type ElectronApplicationLaunchResult } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
 
-test.beforeEach(({}, testInfo) => {
+test.beforeEach(({ }, testInfo) => {
 	test.skip(testInfo.project.name !== 'electron-ui', 'Window restoration is a Desktop process lifecycle scenario.');
 });
 
 for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
-	test(`Desktop retains logical Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
+	test(`Desktop retains logical Workbench and Agents geometry at ${scaleFactor * 100}% display scaling`, async ({ }, testInfo) => {
 		test.setTimeout(90_000);
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
@@ -61,9 +61,9 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			application = undefined;
 
 			const statePath = join(userDataDirectory, 'state.json');
-			type Placement = { mode: string; displayId: number; bounds: typeof expected; workArea: typeof expected };
-			type WindowState = { lastActiveWindow: { uiState: Placement }; openedWindows: { uiState: Placement }[] };
-			const saved = JSON.parse(await readFile(statePath, 'utf8')) as { windowsState: WindowState; sessionsWindowState: WindowState };
+			type Placement = { mode: string; displayId: number; bounds: typeof expected; workArea: typeof expected; };
+			type WindowState = { lastActiveWindow: { uiState: Placement; }; openedWindows: { uiState: Placement; }[]; };
+			const saved = JSON.parse(await readFile(statePath, 'utf8')) as { windowsState: WindowState; sessionsWindowState: WindowState; };
 			await writeFile(testInfo.outputPath('saved-geometry.json'), JSON.stringify({ expected, workbench: saved.windowsState.openedWindows[0]?.uiState, agents: saved.sessionsWindowState.openedWindows[0]?.uiState }, null, 2));
 			for (const [key, state] of Object.entries(saved)) {
 				if (key !== 'windowsState' && key !== 'sessionsWindowState') {
@@ -120,7 +120,7 @@ for (const scenario of [
 	{ resolution: '1920 × 1080', scaleFactor: 1.5, width: 1280, height: 720, expected: { width: 1200, height: 680 } },
 	{ resolution: '3840 × 2160', scaleFactor: 2, width: 1920, height: 1080, expected: { width: 1200, height: 800 } },
 ]) {
-	test(`Desktop new windows fit simulated ${scenario.resolution} at ${scenario.scaleFactor * 100}% scaling`, async ({}, testInfo) => {
+	test(`Desktop new windows fit simulated ${scenario.resolution} at ${scenario.scaleFactor * 100}% scaling`, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		// The screen adapter supplies DIP rectangles; physical frame rounding is
@@ -141,7 +141,7 @@ for (const scenario of [
 					bounds: { x: 0, y: 0, width: scenario.width, height: scenario.height },
 					workArea: { x: 0, y: 0, width: scenario.width, height: scenario.height - 40 },
 				};
-				(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
+				(globalThis as { restoreTestDisplay?: () => void; }).restoreTestDisplay = () => {
 					screen.getAllDisplays = originalAll;
 					screen.getPrimaryDisplay = originalPrimary;
 					screen.getDisplayMatching = originalMatching;
@@ -154,7 +154,7 @@ for (const scenario of [
 			const agents = await workbench.openAgentsWindow('electron');
 			const opened = application.waitForEvent('window');
 			await page.evaluate(async () => {
-				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 				await bridge.invoke('ash:window:open', {});
 			});
 			const empty = await opened;
@@ -176,7 +176,7 @@ for (const scenario of [
 			});
 		} finally {
 			await application.evaluate(() => {
-				const context = globalThis as { restoreTestDisplay?: () => void };
+				const context = globalThis as { restoreTestDisplay?: () => void; };
 				context.restoreTestDisplay?.();
 				delete context.restoreTestDisplay;
 			});
@@ -185,7 +185,7 @@ for (const scenario of [
 	});
 }
 
-test('Desktop places a new Agents window on the active display of a simulated mixed-DPI desktop', async ({}, testInfo) => {
+test('Desktop places a new Agents window on the active display of a simulated mixed-DPI desktop', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	const session = await launch(userDataDirectory);
@@ -204,7 +204,7 @@ test('Desktop places a new Agents window on the active display of a simulated mi
 			const secondary = { ...display, id: 20, scaleFactor: 1, workArea: { ...area, width: split } };
 			primary.bounds = primary.workArea;
 			secondary.bounds = secondary.workArea;
-			(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
+			(globalThis as { restoreTestDisplay?: () => void; }).restoreTestDisplay = () => {
 				screen.getAllDisplays = originalAll;
 				screen.getPrimaryDisplay = originalPrimary;
 				screen.getDisplayMatching = originalMatching;
@@ -235,7 +235,7 @@ test('Desktop places a new Agents window on the active display of a simulated mi
 		await agentsWindow.dispose();
 	} finally {
 		await application.evaluate(() => {
-			const context = globalThis as { restoreTestDisplay?: () => void };
+			const context = globalThis as { restoreTestDisplay?: () => void; };
 			context.restoreTestDisplay?.();
 			delete context.restoreTestDisplay;
 		});
@@ -244,7 +244,7 @@ test('Desktop places a new Agents window on the active display of a simulated mi
 });
 
 for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
-	test(`Desktop new windows share the 1200 by 800 default after resizing the active window at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
+	test(`Desktop new windows share the 1200 by 800 default after resizing the active window at ${scaleFactor * 100}% display scaling`, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(userDataDirectory, { recursive: true });
 		const session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
@@ -275,18 +275,18 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 			try {
 				await expect.poll(async () => {
 					const bounds = await agentsWindow.evaluate(window => window.getBounds());
-				return Math.max(Math.abs(bounds.width - defaults.width), Math.abs(bounds.height - defaults.height));
+					return Math.max(Math.abs(bounds.width - defaults.width), Math.abs(bounds.height - defaults.height));
 				}).toBeLessThanOrEqual(2);
 			} finally {
 				await agentsWindow.dispose();
 			}
 			await expect.poll(async () => {
-				const state = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowsState?: { lastActiveWindow?: { uiState: { bounds: { width: number } } } } };
+				const state = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowsState?: { lastActiveWindow?: { uiState: { bounds: { width: number; }; }; }; }; };
 				return Math.abs((state.windowsState?.lastActiveWindow?.uiState.bounds.width ?? NaN) - customBounds.width);
 			}).toBeLessThanOrEqual(2);
 			const openedWindow = application.waitForEvent('window');
 			await page.evaluate(async () => {
-				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 				await bridge.invoke('ash:window:open', {});
 			});
 			const empty = await openedWindow;
@@ -306,7 +306,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 	});
 }
 
-test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({}, testInfo) => {
+test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	const session = await launch(userDataDirectory, undefined, ['--force-device-scale-factor=1']);
@@ -338,11 +338,13 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 			const originalAll = screen.getAllDisplays;
 			const originalMatching = screen.getDisplayMatching;
 			const display = screen.getPrimaryDisplay();
-			const changed = { ...display, workArea: {
-				x: display.workArea.x, y: display.workArea.y,
-				width: Math.floor(display.workArea.width / 2), height: Math.floor(display.workArea.height / 2),
-			} };
-			(globalThis as { restoreTestDisplay?: () => void }).restoreTestDisplay = () => {
+			const changed = {
+				...display, workArea: {
+					x: display.workArea.x, y: display.workArea.y,
+					width: Math.floor(display.workArea.width / 2), height: Math.floor(display.workArea.height / 2),
+				}
+			};
+			(globalThis as { restoreTestDisplay?: () => void; }).restoreTestDisplay = () => {
 				screen.getAllDisplays = originalAll;
 				screen.getDisplayMatching = originalMatching;
 			};
@@ -356,7 +358,7 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 		}))).toEqual({ focus: before.focus, zoom: before.zoom });
 	} finally {
 		await application.evaluate(() => {
-			const context = globalThis as { restoreTestDisplay?: () => void };
+			const context = globalThis as { restoreTestDisplay?: () => void; };
 			context.restoreTestDisplay?.();
 			delete context.restoreTestDisplay;
 		});
@@ -365,7 +367,7 @@ test('Desktop adapts open Workbench and Agents windows to display changes withou
 });
 
 for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) {
-	test(`Desktop shares the ${policy} dimension setting across Workbench and Agents windows`, async ({}, testInfo) => {
+	test(`Desktop shares the ${policy} dimension setting across Workbench and Agents windows`, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.newWindowDimensions': policy }));
@@ -403,7 +405,7 @@ for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) 
 				await agentsWindow.evaluate(window => window.focus());
 				const openedEmpty = application.waitForEvent('window');
 				await agents.evaluate(() => {
-					const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+					const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 					return bridge.invoke('ash:window:open', {});
 				});
 				const empty = await openedEmpty;
@@ -427,7 +429,7 @@ for (const policy of ['inherit', 'offset', 'maximized', 'fullscreen'] as const) 
 }
 
 for (const restoreFullscreen of [false, true]) {
-	test(`Desktop restores saved fullscreen for both window kinds only when enabled (${restoreFullscreen})`, async ({}, testInfo) => {
+	test(`Desktop restores saved fullscreen for both window kinds only when enabled (${restoreFullscreen})`, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
 		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreFullscreen': restoreFullscreen }));
@@ -452,7 +454,7 @@ for (const restoreFullscreen of [false, true]) {
 	});
 }
 
-test('Desktop window sizing settings expose Chinese labels and keyboard selection', async ({}, testInfo) => {
+test('Desktop window sizing settings expose Chinese labels and keyboard selection', async ({ }, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.locale":"zh-CN"}');
@@ -478,7 +480,7 @@ test('Desktop window sizing settings expose Chinese labels and keyboard selectio
 	} finally { await session.close(); }
 });
 
-test('Desktop restores open Workbench and Agents windows and honors startup intent', async ({}, testInfo) => {
+test('Desktop restores open Workbench and Agents windows and honors startup intent', async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	const folder = testInfo.outputPath('folder');
@@ -498,7 +500,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await session.quit();
 		application = undefined;
 
-		const saved = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowSession: { active: number; windows: { kind: string; modeId?: string }[] } };
+		const saved = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowSession: { active: number; windows: { kind: string; modeId?: string; }[]; }; };
 		expect(saved.windowSession.windows.map(window => window.kind)).toEqual(['workbench', 'sessions']);
 		expect(saved.windowSession.active).toBe(1);
 		expect(saved.windowSession.windows.every(window => !('modeId' in window))).toBe(true);
@@ -543,7 +545,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await expect(restoredAgents.locator('.ash-sessions-window')).toBeVisible();
 		const returned = application.waitForEvent('window');
 		await restoredAgents.evaluate(() => {
-			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 			void bridge.invoke('ash:sessions:return-to-workbench');
 		});
 		await new Workbench(await returned).waitForReady();
@@ -586,7 +588,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 	}
 });
 
-test('Workbench restores editor tabs unless editor restoration is disabled', async ({}, testInfo) => {
+test('Workbench restores editor tabs unless editor restoration is disabled', async ({ }, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	const folder = testInfo.outputPath('folder');
@@ -644,7 +646,7 @@ test('Workbench restores editor tabs unless editor restoration is disabled', asy
 	}
 });
 
-test('Workbench reopens detached editor windows with their tabs', async ({}, testInfo) => {
+test('Workbench reopens detached editor windows with their tabs', async ({ }, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
@@ -683,7 +685,7 @@ test('Workbench reopens detached editor windows with their tabs', async ({}, tes
 	}
 });
 
-test('updated version restores all windows once despite a none preference', async ({}, testInfo) => {
+test('updated version restores all windows once despite a none preference', async ({ }, testInfo) => {
 	test.setTimeout(90_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
@@ -728,14 +730,14 @@ async function launch(userDataDirectory: string, folder?: string, extraArgs?: re
 	return launchElectronApplication({ appServerMode: 'disabled', userDataDirectory, workspaceDirectory: folder, extraArgs });
 }
 
-async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number }, kind: 'normal' | 'current'): Promise<number> {
+async function geometryDelta(application: ElectronApplication, expected: { x: number; y: number; width: number; height: number; }, kind: 'normal' | 'current'): Promise<number> {
 	const bounds = await application.evaluate(({ BrowserWindow }, kind) => BrowserWindow.getAllWindows().map(window => kind === 'normal' ? window.getNormalBounds() : window.getBounds()), kind);
 	return Math.max(...bounds.flatMap(rectangle => (['x', 'y', 'width', 'height'] as const).map(key => Math.abs(rectangle[key] - expected[key]))));
 }
 
 async function workspaceFolder(page: Page): Promise<string | undefined> {
 	const value = await page.evaluate(() => {
-		const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+		const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return bridge.invoke('ash:workspace:context:read');
 	});
 	return parseWorkspace(value).folders[0]?.uri.fsPath;

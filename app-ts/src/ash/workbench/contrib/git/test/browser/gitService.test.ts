@@ -85,7 +85,7 @@ test('GitService catalog notifications supersede stale discovery and remove the 
 });
 
 test('GitService routes branch and worktree operations to an explicit repository and keeps session deletion out of Git', async () => {
-	const requests: Array<{ operation: string; params: Record<string, unknown> }> = [];
+	const requests: Array<{ operation: string; params: Record<string, unknown>; }> = [];
 	const record = (operation: string, params: Record<string, unknown>): void => { requests.push({ operation, params }); };
 	const api = {
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
@@ -132,8 +132,8 @@ test('GitService queries ignore rules in the nearest repository and preserves re
 	const requests: unknown[] = [];
 	const api = {
 		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
-		status: async (params: { repositoryId: string }) => ({ repositoryId: params.repositoryId, streamInstanceId: 'ignore-test', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] }),
-		checkIgnore: async (params: { repositoryId: string; paths: string[] }) => {
+		status: async (params: { repositoryId: string; }) => ({ repositoryId: params.repositoryId, streamInstanceId: 'ignore-test', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] }),
+		checkIgnore: async (params: { repositoryId: string; paths: string[]; }) => {
 			requests.push(params);
 			return { ignoredPaths: params.paths };
 		},
@@ -177,7 +177,7 @@ test("GitService keeps empty windows off the App Server and becomes ready with a
 			repositoryCalls += 1;
 			return { repositories: [{ id: repositoryId, label: "workspace", path: "" }] };
 		},
-		async status(params: { readonly repositoryId?: string }) {
+		async status(params: { readonly repositoryId?: string; }) {
 			statusCalls += 1;
 			assert.equal(params.repositoryId, repositoryId);
 			return {
@@ -231,11 +231,13 @@ test("GitService routes resources and requests to an explicitly selected reposit
 	const nestedId = `repo_${"2".repeat(64)}`;
 	const statusRequests: string[] = [];
 	const api = {
-		repositories: async () => ({ repositories: [
-			{ id: rootId, label: "workspace", path: "" },
-			{ id: nestedId, label: "nested", path: "packages/nested" },
-		] }),
-		status: async ({ repositoryId }: { readonly repositoryId?: string }) => {
+		repositories: async () => ({
+			repositories: [
+				{ id: rootId, label: "workspace", path: "" },
+				{ id: nestedId, label: "nested", path: "packages/nested" },
+			]
+		}),
+		status: async ({ repositoryId }: { readonly repositoryId?: string; }) => {
 			statusRequests.push(repositoryId ?? "");
 			return {
 				repositoryId: repositoryId!,
@@ -276,7 +278,7 @@ test('GitService reads and writes shared Auto Fetch settings through App Server'
 	const writes: typeof git[] = [];
 	const api = {
 		readConfig: async () => ({ revision, git, gitConfigured: revision > 0 }),
-		updateConfig: async (params: { expectedRevision: number; git: typeof git }) => {
+		updateConfig: async (params: { expectedRevision: number; git: typeof git; }) => {
 			assert.equal(params.expectedRevision, revision);
 			git = params.git;
 			writes.push(git);
@@ -307,7 +309,7 @@ test('GitService migrates persisted Desktop Auto Fetch settings once', async () 
 	let git = { autofetch: 'off', autofetchPeriod: 180 };
 	const api = {
 		readConfig: async () => ({ revision, git, gitConfigured: revision > 0 }),
-		updateConfig: async (params: { expectedRevision: number; git: typeof git }) => {
+		updateConfig: async (params: { expectedRevision: number; git: typeof git; }) => {
 			assert.equal(params.expectedRevision, revision);
 			git = params.git;
 			revision++;

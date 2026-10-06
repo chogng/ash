@@ -12,7 +12,7 @@ export class InternalEditorAction implements IEditorAction {
 		private readonly precondition: ContextKeyExpression | undefined,
 		private readonly execute: (args: unknown) => Promise<void>,
 		private readonly context: IContextKeyService,
-	) {}
+	) { }
 
 	public isSupported(): boolean {
 		return this.context.contextMatchesRules(this.precondition);

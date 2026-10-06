@@ -4,40 +4,40 @@ on:
   push:
     branches: [main]
     paths:
-      - 'app-ts/**'
-      - 'build/**'
-      - 'third_party/livekit/**'
-      - 'resources/**'
-      - 'extensions/**'
-      - 'ash-rs/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - '.nvmrc'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rust-toolchain.toml'
-      - '.cargo/**'
-      - '.github/workflows/frontend.yml'
+      - "app-ts/**"
+      - "build/**"
+      - "third_party/livekit/**"
+      - "resources/**"
+      - "extensions/**"
+      - "ash-rs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".nvmrc"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - ".github/workflows/frontend.yml"
   pull_request:
     paths:
-      - 'app-ts/**'
-      - 'build/**'
-      - 'third_party/livekit/**'
-      - 'resources/**'
-      - 'extensions/**'
-      - 'ash-rs/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - '.nvmrc'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rust-toolchain.toml'
-      - '.cargo/**'
-      - '.github/workflows/frontend.yml'
+      - "app-ts/**"
+      - "build/**"
+      - "third_party/livekit/**"
+      - "resources/**"
+      - "extensions/**"
+      - "ash-rs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".nvmrc"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - ".github/workflows/frontend.yml"
   workflow_dispatch:
 
 permissions:
@@ -77,7 +77,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26'
+          go-version: "1.26"
           cache: false
       - name: Cache App Server builds
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2

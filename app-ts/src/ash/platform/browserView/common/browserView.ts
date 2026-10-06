@@ -70,12 +70,12 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
-	| { readonly type: 'created'; readonly info: IBrowserViewInfo }
-	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[] }
-	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string }
-	| { readonly type: 'permissionRequestClosed'; readonly targetId: string; readonly requestId: string }
-	| { readonly type: 'downloadProgress'; readonly targetId: string; readonly filename: string; readonly receivedBytes: number; readonly totalBytes: number; readonly state: 'progressing' | 'completed' | 'cancelled' | 'interrupted' }
-	| { readonly type: "focusAddress"; readonly targetId: BrowserViewTargetId }
+	| { readonly type: 'created'; readonly info: IBrowserViewInfo; }
+	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[]; }
+	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string; }
+	| { readonly type: 'permissionRequestClosed'; readonly targetId: string; readonly requestId: string; }
+	| { readonly type: 'downloadProgress'; readonly targetId: string; readonly filename: string; readonly receivedBytes: number; readonly totalBytes: number; readonly state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'; }
+	| { readonly type: "focusAddress"; readonly targetId: BrowserViewTargetId; }
 	| {
 		readonly type: "stateChanged";
 		readonly state: IBrowserViewState;
@@ -108,7 +108,7 @@ export interface IBrowserViewCreateOptions {
 	readonly session: IBrowserViewSessionOptions;
 }
 
-export type IBrowserViewOwner = { readonly type: 'user' } | { readonly type: 'agent'; readonly sessionId: string };
+export type IBrowserViewOwner = { readonly type: 'user'; } | { readonly type: 'agent'; readonly sessionId: string; };
 
 export enum BrowserViewStorageScope {
 	Global = 'global',
@@ -118,12 +118,12 @@ export enum BrowserViewStorageScope {
 }
 
 export type IBrowserViewSessionOptions =
-	| { readonly scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral }
-	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string };
+	| { readonly scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral; }
+	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; };
 
 export interface IBrowserViewInfo {
 	readonly id: string;
-	readonly host: { readonly windowId: number };
+	readonly host: { readonly windowId: number; };
 	readonly owner: IBrowserViewOwner;
 	readonly session: IBrowserViewSessionOptions;
 	readonly state: IBrowserViewState;
@@ -169,14 +169,14 @@ export interface IBrowserViewObservation {
 	readonly loading: boolean;
 	readonly accessibilityTree?: string;
 	readonly domSnapshot?: string;
-	readonly screenshot?: { readonly mimeType: 'image/png'; readonly dataBase64: string; readonly decodedLength: number };
+	readonly screenshot?: { readonly mimeType: 'image/png'; readonly dataBase64: string; readonly decodedLength: number; };
 }
 export type BrowserViewAction =
-	| { readonly type: 'navigate'; readonly url: string }
-	| { readonly type: 'click'; readonly target: { readonly nodeId: string } }
-	| { readonly type: 'typeText'; readonly text: string; readonly target: { readonly type: 'focusedElement' } | { readonly type: 'element'; readonly target: { readonly nodeId: string } } }
-	| { readonly type: 'scroll'; readonly deltaX: number; readonly deltaY: number }
-	| { readonly type: 'goBack' | 'reload' };
+	| { readonly type: 'navigate'; readonly url: string; }
+	| { readonly type: 'click'; readonly target: { readonly nodeId: string; }; }
+	| { readonly type: 'typeText'; readonly text: string; readonly target: { readonly type: 'focusedElement'; } | { readonly type: 'element'; readonly target: { readonly nodeId: string; }; }; }
+	| { readonly type: 'scroll'; readonly deltaX: number; readonly deltaY: number; }
+	| { readonly type: 'goBack' | 'reload'; };
 
 const MAX_URL_LENGTH = 8192;
 const MAX_BOUND_MAGNITUDE = 100_000;

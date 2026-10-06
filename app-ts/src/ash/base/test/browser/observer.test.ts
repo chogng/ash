@@ -40,7 +40,7 @@ test("element-size observation falls back to the content rectangle", () => {
 	Object.defineProperty(ownerDocument.defaultView, "ResizeObserver", {
 		value: WindowResizeObserver,
 	});
-	const sizes: { readonly width: number; readonly height: number }[] = [];
+	const sizes: { readonly width: number; readonly height: number; }[] = [];
 	using registration = observeElementSize(ownerDocument.body.firstElementChild as HTMLElement, size => sizes.push(size));
 	observer?.emit([{
 		contentRect: { width: 320, height: 180 },
@@ -71,7 +71,7 @@ test("resize observation keeps auxiliary-window constructors isolated", () => {
 	const registration = observeResize([
 		firstDocument.body.firstElementChild!,
 		secondDocument.body.firstElementChild!,
-	], () => {});
+	], () => { });
 
 	assert.equal(firstInstances.length, 1);
 	assert.equal(secondInstances.length, 1);
@@ -97,7 +97,7 @@ class TestResizeObserver {
 	readonly options: (ResizeObserverOptions | undefined)[] = [];
 	disconnected = false;
 
-	constructor(private readonly callback: ResizeObserverCallback) {}
+	constructor(private readonly callback: ResizeObserverCallback) { }
 
 	observe(target: Element, options?: ResizeObserverOptions): void {
 		this.targets.push(target);

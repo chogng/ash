@@ -16,7 +16,7 @@ registerAction2(class ReviewChangesAction extends Action2 {
 		const notifications = accessor.get(INotificationService);
 		const codeEditors = accessor.get(ICodeEditorService);
 		const store = new DisposableStore();
-		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { entry: IModifiedFileEntry }>());
+		const picker = store.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { entry: IModifiedFileEntry; }>());
 		picker.ariaLabel = picker.placeholder = localize('chatEditing.review', 'Review Agent changes');
 		const countdowns = new Map<IModifiedFileEntry, boolean>();
 		const refresh = (): void => {

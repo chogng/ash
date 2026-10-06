@@ -83,9 +83,9 @@ registerAction2(class extends Action2 {
 const PageSize = 50;
 
 type ExpandedCommit =
-	| { readonly state: "loading" }
-	| { readonly state: "ready"; readonly result: readonly ISCMHistoryItemChange[] }
-	| { readonly state: "error"; readonly message: string };
+	| { readonly state: "loading"; }
+	| { readonly state: "ready"; readonly result: readonly ISCMHistoryItemChange[]; }
+	| { readonly state: "error"; readonly message: string; };
 
 interface HistoryPage {
 	readonly items: readonly ISCMHistoryItem[];
@@ -685,13 +685,15 @@ export class SCMHistoryViewPane extends ViewPane {
 						targetWindow: event.view ?? undefined,
 					}),
 					menuId: MenuId.SCMHistoryItemChangeContext,
-					menuActionOptions: { arg: {
-						repository,
-						historyItemViewModel,
-						historyItemChange: change,
-						graphColumns: historyItemViewModel.outputSwimlanes,
-						type: 'historyItemChangeViewModel',
-					} satisfies SCMHistoryItemChangeViewModelTreeElement },
+					menuActionOptions: {
+						arg: {
+							repository,
+							historyItemViewModel,
+							historyItemChange: change,
+							graphColumns: historyItemViewModel.outputSwimlanes,
+							type: 'historyItemChangeViewModel',
+						} satisfies SCMHistoryItemChangeViewModelTreeElement
+					},
 				});
 			}));
 			row.append(button);
@@ -748,7 +750,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
-	private renderCommitHover(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, resources: DisposableStore, token: CancellationToken, layout: () => void): { domNode: HTMLDivElement; toolbar: MenuWorkbenchToolBar } {
+	private renderCommitHover(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, resources: DisposableStore, token: CancellationToken, layout: () => void): { domNode: HTMLDivElement; toolbar: MenuWorkbenchToolBar; } {
 		const historyItem = target.historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
 		const hover = h(document, "div");

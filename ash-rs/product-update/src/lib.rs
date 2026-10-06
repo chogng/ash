@@ -138,7 +138,9 @@ fn stage_package_reader(
     mut reader: impl Read,
 ) -> Result<PathBuf, UpdateError> {
     if package.size == 0 || package.size > MAX_PACKAGE_BYTES {
-        return Err(UpdateError::new("signed update package size is unsupported"));
+        return Err(UpdateError::new(
+            "signed update package size is unsupported",
+        ));
     }
     let name = Path::new(&package.file_name);
     if name.components().count() != 1
@@ -163,9 +165,9 @@ fn stage_package_reader(
         let mut size = 0u64;
         let mut buffer = [0u8; 64 * 1024];
         loop {
-            let count = reader
-                .read(&mut buffer)
-                .map_err(|error| UpdateError::new(format!("could not read update package: {error}")))?;
+            let count = reader.read(&mut buffer).map_err(|error| {
+                UpdateError::new(format!("could not read update package: {error}"))
+            })?;
             if count == 0 {
                 break;
             }
@@ -174,19 +176,22 @@ fn stage_package_reader(
                 return Err(UpdateError::new("downloaded update exceeds signed size"));
             }
             digest.update(&buffer[..count]);
-            output
-                .write_all(&buffer[..count])
-                .map_err(|error| UpdateError::new(format!("could not stage update package: {error}")))?;
+            output.write_all(&buffer[..count]).map_err(|error| {
+                UpdateError::new(format!("could not stage update package: {error}"))
+            })?;
         }
         let actual_digest: [u8; 32] = digest.finalize().into();
         if size != package.size || actual_digest != package.sha256 {
-            return Err(UpdateError::new("downloaded update does not match signed size and SHA-256"));
+            return Err(UpdateError::new(
+                "downloaded update does not match signed size and SHA-256",
+            ));
         }
         output
             .sync_all()
             .map_err(|error| UpdateError::new(format!("could not sync update package: {error}")))?;
-        fs::rename(&temporary, &destination)
-            .map_err(|error| UpdateError::new(format!("could not publish staged update: {error}")))?;
+        fs::rename(&temporary, &destination).map_err(|error| {
+            UpdateError::new(format!("could not publish staged update: {error}"))
+        })?;
         Ok(destination)
     })();
     if result.is_err() {

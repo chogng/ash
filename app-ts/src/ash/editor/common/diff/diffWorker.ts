@@ -118,7 +118,7 @@ function readRange(value: unknown, lines: readonly string[], parent: LineRange):
 	return new Range(value.startLineNumber, value.startColumn, value.endLineNumber, value.endColumn);
 }
 
-function isDocument(value: unknown): value is { version: number; text: string } {
+function isDocument(value: unknown): value is { version: number; text: string; } {
 	return isRecord(value) && isIndex(value.version) && typeof value.text === 'string';
 }
 

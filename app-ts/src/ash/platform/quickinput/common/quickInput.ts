@@ -43,7 +43,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidHide: Event<void>;
 	readonly onDidBlur: Event<void>;
-	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton }>;
+	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>;
 
 	items: readonly TItem[];
 	ariaLabel: string;

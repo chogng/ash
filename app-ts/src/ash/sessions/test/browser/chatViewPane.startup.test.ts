@@ -84,12 +84,12 @@ test("opens a local Chat tab before the backend session request settles", () => 
 
 class PendingSessionService implements ISessionsManagementService {
 	private readonly _onDidChange = new Emitter<void>();
-	private readonly pendingInitialization = new Promise<void>(() => {});
+	private readonly pendingInitialization = new Promise<void>(() => { });
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
 	private _activeUntitledSessionId: string | undefined;
 
 	readonly onDidChange = this._onDidChange.event;
-	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>(this, new Map());
 	readonly sessions: readonly ISession[] = [];
 	readonly active: IActiveSessionThread | undefined = undefined;
 	readonly state: SessionsManagementState = "loading";
@@ -104,7 +104,7 @@ class PendingSessionService implements ISessionsManagementService {
 	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
 	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 
-	selectThread(_sessionId: SessionId, _threadId: ThreadId): void {}
+	selectThread(_sessionId: SessionId, _threadId: ThreadId): void { }
 	interruptThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 
 	createUntitledSession(title = "New Chat"): IUntitledChatSession {
@@ -117,12 +117,12 @@ class PendingSessionService implements ISessionsManagementService {
 
 	selectUntitledSession(untitledSessionId: string): void { this._activeUntitledSessionId = untitledSessionId; }
 	restoreUntitledSession(session: IUntitledChatSession): void { this._untitledSessions = [session, ...this._untitledSessions]; }
-	discardUntitledSession(_untitledSessionId: string): void {}
-	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
-	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void {}
-	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
+	discardUntitledSession(_untitledSessionId: string): void { }
+	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
+	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
+	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
-	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void {}
+	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void { }
 	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
@@ -135,27 +135,27 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	private readonly _onDidChangePartVisibility = this._register(new Emitter<WorkbenchPartVisibilityChangeEvent>());
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
-	setLayoutStyle(): void {}
+	setLayoutStyle(): void { }
 
 	isPartVisible(partId: WorkbenchPartId): boolean { return partId === "auxiliarybar"; }
 	isPanelMaximized(): boolean { return false; }
-	toggleMaximizedPanel(): void {}
-	showPart(_partId: WorkbenchPartId): void {}
-	showParts(_partIds: readonly WorkbenchPartId[]): void {}
-	hidePart(_partId: WorkbenchPartId): void {}
-	hideParts(_partIds: readonly WorkbenchPartId[]): void {}
+	toggleMaximizedPanel(): void { }
+	showPart(_partId: WorkbenchPartId): void { }
+	showParts(_partIds: readonly WorkbenchPartId[]): void { }
+	hidePart(_partId: WorkbenchPartId): void { }
+	hideParts(_partIds: readonly WorkbenchPartId[]): void { }
 	getPartSize(_partId: WorkbenchPartId) { return { width: 0, height: 0 }; }
-	resizePart(_partId: WorkbenchPartId, _dimension: { readonly width: number; readonly height: number }): void {}
+	resizePart(_partId: WorkbenchPartId, _dimension: { readonly width: number; readonly height: number; }): void { }
 }
 
 function unavailableChatService(): IChatService & ILanguageModelsService {
-	const pending = new Promise<never>(() => {});
-	const neverEvent = <T>(): Event<T> => () => toDisposable(() => {});
+	const pending = new Promise<never>(() => { });
+	const neverEvent = <T>(): Event<T> => () => toDisposable(() => { });
 	return {
-		configureAdvisor: async () => {},
-		consultAdvisor: async () => {},
+		configureAdvisor: async () => { },
+		consultAdvisor: async () => { },
 		readAdvisorDefault: async () => null,
-		saveAdvisorDefault: async () => {},
+		saveAdvisorDefault: async () => { },
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
 		onDidUpdateGoal: neverEvent<import("../../../workbench/services/chat/common/chatService.js").ThreadGoalUpdate>(),
@@ -167,17 +167,17 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		discoverProviderModels: () => pending,
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: () => {},
+		rememberSelectedModel: () => { },
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,
-		setModelPreferences: async () => {},
+		setModelPreferences: async () => { },
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => {},
+		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
-		saveCustomModelProvider: async () => {},
+		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		setModelProviderApiKey: () => pending as Promise<void>,
-		removeModelProviderApiKey: async () => {},
+		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		refreshModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		isModelVisible: () => true,
@@ -208,8 +208,8 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 }
 
 function emptyMenuService(): IMenuService {
-	const menu = Object.assign(toDisposable(() => {}), {
-		onDidChange: () => toDisposable(() => {}),
+	const menu = Object.assign(toDisposable(() => { }), {
+		onDidChange: () => toDisposable(() => { }),
 		getActions: () => [],
 	}) satisfies IMenu;
 	return {

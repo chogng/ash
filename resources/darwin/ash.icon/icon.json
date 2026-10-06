@@ -1,33 +1,30 @@
 {
-  "fill" : {
-    "solid" : "extended-srgb:0.00000,0.00000,0.00000,1.00000"
+  "fill": {
+    "solid": "extended-srgb:0.00000,0.00000,0.00000,1.00000"
   },
-  "groups" : [
+  "groups": [
     {
-      "layers" : [
+      "layers": [
         {
-          "image-name" : "ash-white.svg",
-          "name" : "ash-white"
+          "image-name": "ash-white.svg",
+          "name": "ash-white"
         }
       ],
-      "position" : {
-        "scale" : 0.75,
-        "translation-in-points" : [
-          0,
-          0
-        ]
+      "position": {
+        "scale": 0.75,
+        "translation-in-points": [0, 0]
       },
-      "shadow" : {
-        "kind" : "none",
-        "opacity" : 0.5
+      "shadow": {
+        "kind": "none",
+        "opacity": 0.5
       },
-      "translucency" : {
-        "enabled" : false,
-        "value" : 0.5
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
       }
     }
   ],
-  "supported-platforms" : {
-    "squares" : "shared"
+  "supported-platforms": {
+    "squares": "shared"
   }
 }

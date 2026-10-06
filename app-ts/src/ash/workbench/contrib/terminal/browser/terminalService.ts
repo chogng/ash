@@ -257,7 +257,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 	private readonly pendingOutput: IProcessDataEvent[] = [];
 	private readonly shellLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private shellProcessManager: TerminalProcessManager | undefined;
-	private pendingExit: { readonly code: number | undefined } | undefined;
+	private pendingExit: { readonly code: number | undefined; } | undefined;
 	private readonly customLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private customProcess: ITerminalChildProcess | undefined;
 	private readonly onClosed: () => void;
@@ -489,7 +489,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.closeTask = this.releaseProcess().finally(() => this.dispose());
 		// IDisposable starts release without an async error channel. close() retains
 		// the original promise, so explicit callers can await and observe failures.
-		void this.closeTask.catch(() => {});
+		void this.closeTask.catch(() => { });
 		return this.closeTask;
 	}
 
@@ -558,7 +558,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private async performRelaunch(dimensions: ITerminalDimensions): Promise<void> {
-		await this.closeProcess().catch(() => {});
+		await this.closeProcess().catch(() => { });
 		if (this.closed) {
 			throw new CancellationError();
 		}
@@ -613,7 +613,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 			const data = takeUtf8Prefix(this.pendingInput, MAX_INPUT_BATCH_BYTES);
 			this.pendingInput = this.pendingInput.slice(data.length);
 			// Text input has a state event for failures; binary callers also receive rejection.
-			void this.enqueueInput(data).catch(() => {});
+			void this.enqueueInput(data).catch(() => { });
 		}
 	}
 
@@ -710,7 +710,7 @@ function isHighSurrogate(codeUnit: number): boolean {
 	return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
 }
 
-function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: string; } {
 	return dirId === undefined ? {} : { dirId };
 }
 

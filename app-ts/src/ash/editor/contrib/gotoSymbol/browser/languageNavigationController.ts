@@ -42,12 +42,12 @@ export class LanguageNavigationController extends Disposable {
 		this._register(editor.onDidChangeCursorSelection(() => this.closePeek()));
 		this._register(editor.onDidBlurEditorWidget(() => this.closePeek()));
 		for (const registry of [languageFeatures.definitionProvider, languageFeatures.declarationProvider,
-			languageFeatures.implementationProvider, languageFeatures.typeDefinitionProvider, languageFeatures.referenceProvider]) {
+		languageFeatures.implementationProvider, languageFeatures.typeDefinitionProvider, languageFeatures.referenceProvider]) {
 			this._register(registry.onDidChange(() => this.closePeek()));
 		}
 	}
 
-	navigate(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
+	navigate(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; } = {}): Promise<void> {
 		return this.requestLocations(kind, options);
 	}
 
@@ -69,7 +69,7 @@ export class LanguageNavigationController extends Disposable {
 		void action.run().catch(this.onError);
 	}
 
-	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
+	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; } = {}): Promise<void> {
 		this.closePeek();
 		const request = this.request = new AbortController();
 		const position = this.editor.getSelections()![0]!.getPosition();

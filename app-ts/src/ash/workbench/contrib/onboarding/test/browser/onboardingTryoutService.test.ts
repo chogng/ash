@@ -21,27 +21,27 @@ suite('OnboardingTryoutService', () => {
 		let shown = 0;
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IOnboardingScenarioService, {
-			start() {},
+			start() { },
 			async run() { return 'unavailable' as const; },
 			async showSteps() { shown += 1; return 'completed' as const; },
-			resetAll() {},
+			resetAll() { },
 		});
 		services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 		services.registerInstance(IDialogService, {
 			onWillShowDialog: Event.None,
 			onDidShowDialog: Event.None,
 			about: async () => { throw new Error('Unexpected about dialog'); },
-			async showMessage() {},
-			async info() {},
-			async warn() {},
-			async error() {},
+			async showMessage() { },
+			async info() { },
+			async warn() { },
+			async error() { },
 			async confirm(_options: IConfirmationDialogOptions) { return { confirmed }; },
 			async input() { throw new Error('Unexpected input dialog'); },
 			async prompt(): Promise<never> { throw new Error('Unexpected prompt'); },
 		});
 		const notify = (options: NotificationOptions) => {
 			notifications.push(options);
-			return { item: { ...options, id: 1, createdAt: 0 }, close() {} };
+			return { item: { ...options, id: 1, createdAt: 0 }, close() { } };
 		};
 		services.registerInstance(INotificationService, {
 			onDidAdd: Event.None,
@@ -50,7 +50,7 @@ suite('OnboardingTryoutService', () => {
 			info(message, actions) { return notify({ severity: NotificationSeverity.Info, message, actions }); },
 			warning(message, actions) { return notify({ severity: NotificationSeverity.Warning, message, actions }); },
 			error(message, actions) { return notify({ severity: NotificationSeverity.Error, message, actions }); },
-			getNotifications: () => [], remove: () => false, clear() {},
+			getNotifications: () => [], remove: () => false, clear() { },
 		});
 		return {
 			services,

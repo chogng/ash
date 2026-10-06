@@ -142,7 +142,9 @@ function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint 
 	});
 }
 
-registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
-	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-	return context.instantiationService.createInstance(InlayHintsController, context.view, context.editor, context.onLanguageError);
-} });
+registerEditorContribution({
+	id: "editor.contrib.inlayHints", install: context => {
+		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+		return context.instantiationService.createInstance(InlayHintsController, context.view, context.editor, context.onLanguageError);
+	}
+});

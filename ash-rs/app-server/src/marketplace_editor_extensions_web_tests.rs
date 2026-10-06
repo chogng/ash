@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use ash_core::InMemoryThreadStore;
+use ash_core::ThreadController;
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::DownloadPackageRequest;
 use ash_core_plugins::EditorExtensionPolicy;
@@ -20,8 +22,6 @@ use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::SearchPackagesResult;
 use ash_core_plugins::UninstallMode;
 use ash_core_plugins::UninstallPackageRequest;
-use ash_core::InMemoryThreadStore;
-use ash_core::ThreadController;
 use ash_model_provider::EchoModel;
 use serde_json::json;
 
@@ -152,7 +152,11 @@ fn marketplace_web_execution_requires_exact_persistent_consent_and_pins_the_pack
     server.handle_json(&mut untrusted, &json!({"jsonrpc":"2.0", "id":1, "method":"initialize", "params":{"clientInfo":{"name":"test","version":"1"}, "capabilities":{}}}).to_string());
     for (id, method, params) in [
         (2, "marketplace/editorExtensions", json!({})),
-        (4, "extensionHost/activate", json!({"extensionId":"lazy","activationGeneration":1,"event":{"type":"command","command":"lazy.run"}})),
+        (
+            4,
+            "extensionHost/activate",
+            json!({"extensionId":"lazy","activationGeneration":1,"event":{"type":"command","command":"lazy.run"}}),
+        ),
         (
             3,
             "marketplace/setEditorExtensionPolicy",
@@ -181,7 +185,10 @@ fn marketplace_web_execution_requires_exact_persistent_consent_and_pins_the_pack
         "initialize",
         json!({"clientInfo":{"name":"test","version":"1"}, "capabilities":{}}),
     );
-    let invalid_activation = call("extensionHost/activate", json!({"extensionId":"lazy","activationGeneration":1,"event":{"type":"language","languageId":""}}));
+    let invalid_activation = call(
+        "extensionHost/activate",
+        json!({"extensionId":"lazy","activationGeneration":1,"event":{"type":"language","languageId":""}}),
+    );
     assert_eq!(invalid_activation["error"]["code"], -32602);
     let listing = call("marketplace/editorExtensions", json!({}));
     assert_eq!(listing["result"]["extensions"][0]["entrypoint"], "main.js");
@@ -219,12 +226,14 @@ fn marketplace_web_execution_requires_exact_persistent_consent_and_pins_the_pack
             .granted
     );
     let lease = deployment.authority.acquire().unwrap();
-    assert!(manager
-        .uninstall(UninstallPackageRequest {
-            installation_id: installed.installation_id.clone(),
-            mode: UninstallMode::IfUnused
-        })
-        .is_err());
+    assert!(
+        manager
+            .uninstall(UninstallPackageRequest {
+                installation_id: installed.installation_id.clone(),
+                mode: UninstallMode::IfUnused
+            })
+            .is_err()
+    );
     call(
         "marketplace/setEditorExtensionPolicy",
         params("revoke", 3, &installed.package.digest),
@@ -238,10 +247,12 @@ fn marketplace_web_execution_requires_exact_persistent_consent_and_pins_the_pack
             mode: UninstallMode::IfUnused,
         })
         .unwrap();
-    assert!(manager
-        .list_installed(ListInstalledRequest {})
-        .unwrap()
-        .is_empty());
+    assert!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

@@ -9,7 +9,7 @@ import { MarkdownDocumentView } from '../../../src/ash/workbench/contrib/markdow
 import { prepareReleaseNotesMarkdown } from '../../../src/ash/workbench/contrib/update/browser/releaseNotesTryouts.js';
 
 declare global {
-	interface Window { ashReleaseNotesIntegration: { readonly opened: readonly string[] }; }
+	interface Window { ashReleaseNotesIntegration: { readonly opened: readonly string[]; }; }
 }
 
 const opened: string[] = [];

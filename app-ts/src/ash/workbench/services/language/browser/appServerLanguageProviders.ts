@@ -116,7 +116,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 	readonly id = "ash.appServer.completions";
 	readonly triggerCharacters = Object.freeze([".", ":", "<", "\"", "'", "/", "@", "#"]);
 
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[]) {}
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[]) { }
 
 	async provideHover(request: languages.LanguageHoverRequest, signal: AbortSignal) {
 		const root = workspaceRootForResource(this.workspace, request.resource);
@@ -183,7 +183,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 	provideOutgoingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> { return this.followCallHierarchy("outgoingCalls", request, signal); }
 	provideSupertypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.followTypeHierarchy("supertypes", request, signal); }
 	provideSubtypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.followTypeHierarchy("subtypes", request, signal); }
-	async prepareRename(request: languages.LanguageRenameRequest, signal: AbortSignal): Promise<{ readonly range: Range; readonly placeholder: string } | undefined> {
+	async prepareRename(request: languages.LanguageRenameRequest, signal: AbortSignal): Promise<{ readonly range: Range; readonly placeholder: string; } | undefined> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return undefined;
@@ -351,7 +351,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		return Object.freeze(result.ranges.map(item => Object.freeze({ startLineIndex: item.startLineIndex, endLineIndex: item.endLineIndex, ...(item.kind ? { kind: item.kind } : {}), ...(item.collapsedText ? { collapsedText: item.collapsedText } : {}) })));
 	}
 
-	private documentForRequest(request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string }; readonly model: { readonly largeFile: { readonly tooLargeForSynchronization: boolean } } }) {
+	private documentForRequest(request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string; }; readonly model: { readonly largeFile: { readonly tooLargeForSynchronization: boolean; }; }; }) {
 		if (request.model.largeFile.tooLargeForSynchronization) return undefined;
 		return languageSnapshotDocument(workspaceRootForResource(this.workspace, request.resource), request);
 	}
@@ -422,7 +422,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 }
 
 class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSymbolProvider {
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly support: AppServerLanguageSupport) {}
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly support: AppServerLanguageSupport) { }
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly languages.LanguageWorkspaceSymbol[]> {
 		const folders = this.workspace.getWorkspace().folders;
@@ -456,7 +456,7 @@ function languageCompletionDocument(root: LanguageWorkspaceRoot, request: langua
 	return languageSnapshotDocument(root, { resource: request.resource, languageId: request.languageId, snapshot: request.snapshot });
 }
 
-function languageSnapshotDocument(root: LanguageWorkspaceRoot, request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string } }) {
+function languageSnapshotDocument(root: LanguageWorkspaceRoot, request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string; }; }) {
 	if (!request.resource) return undefined;
 	const text = request.snapshot.getText();
 	if (VSBuffer.fromString(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
@@ -473,11 +473,11 @@ function languageInlayHintsDocument(root: LanguageWorkspaceRoot, request: langua
 	return languageSnapshotDocument(root, request);
 }
 
-function appServerCompletionResolveData(value: unknown): { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown } {
+function appServerCompletionResolveData(value: unknown): { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown; } {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("App Server completion resolve data must be an object");
-	const data = value as { readonly document?: unknown; readonly providerData?: unknown };
+	const data = value as { readonly document?: unknown; readonly providerData?: unknown; };
 	if (typeof data.document !== "object" || data.document === null) throw new TypeError("App Server completion resolve data must include its document snapshot");
-	return data as { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown };
+	return data as { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown; };
 }
 
 function languageSemanticTokensDocument(root: LanguageWorkspaceRoot, request: languages.LanguageSemanticTokensRequest) {
@@ -485,7 +485,7 @@ function languageSemanticTokensDocument(root: LanguageWorkspaceRoot, request: la
 	return languageSnapshotDocument(root, request);
 }
 
-function formattingEdits(edits: readonly { readonly range: { readonly start: { readonly lineIndex: number; readonly columnIndex: number }; readonly end: { readonly lineIndex: number; readonly columnIndex: number } }; readonly newText: string }[]) {
+function formattingEdits(edits: readonly { readonly range: { readonly start: { readonly lineIndex: number; readonly columnIndex: number; }; readonly end: { readonly lineIndex: number; readonly columnIndex: number; }; }; readonly newText: string; }[]) {
 	return Object.freeze(edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText })));
 }
 
@@ -513,7 +513,7 @@ function completionKind(kind: LanguageCompletionItemKindDto): languages.Language
 	}
 }
 
-function dtoPosition(position: Position): { readonly lineIndex: number; readonly columnIndex: number } { return { lineIndex: position.lineNumber - 1, columnIndex: position.column - 1 }; }
+function dtoPosition(position: Position): { readonly lineIndex: number; readonly columnIndex: number; } { return { lineIndex: position.lineNumber - 1, columnIndex: position.column - 1 }; }
 
 function hierarchyItem(root: LanguageWorkspaceRoot, item: LanguageHierarchyItemDto): languages.LanguageHierarchyItem {
 	return Object.freeze({ name: item.name, symbolKind: item.symbolKind, ...(item.detail ? { detail: item.detail } : {}), resource: workspaceResource(root, item.path), range: range(item.range), selectionRange: range(item.selectionRange), ...(item.data === undefined ? {} : { data: item.data }) });
@@ -529,14 +529,16 @@ function dtoRange(value: IRange) {
 }
 
 function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageDirectoryEditDto) {
-	return Object.freeze({ entries: Object.freeze(edit.entries.map(entry => {
-		switch (entry.kind) {
-			case "textDocument": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.document.path), expectedText: entry.document.expectedText, edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) });
-			case "create": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), existing: entry.existing });
-			case "rename": return Object.freeze({ kind: entry.kind, source: workspaceResource(root, entry.source), target: workspaceResource(root, entry.target), existing: entry.existing });
-			case "delete": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), missing: entry.missing, mode: entry.mode });
-		}
-	})) });
+	return Object.freeze({
+		entries: Object.freeze(edit.entries.map(entry => {
+			switch (entry.kind) {
+				case "textDocument": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.document.path), expectedText: entry.document.expectedText, edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) });
+				case "create": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), existing: entry.existing });
+				case "rename": return Object.freeze({ kind: entry.kind, source: workspaceResource(root, entry.source), target: workspaceResource(root, entry.target), existing: entry.existing });
+				case "delete": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), missing: entry.missing, mode: entry.mode });
+			}
+		}))
+	});
 }
 
 function codeAction(root: LanguageWorkspaceRoot, action: LanguageCodeActionDto): languages.LanguageCodeAction {
@@ -547,7 +549,7 @@ function documentSymbol(value: LanguageDocumentSymbolDto): languages.LanguageDoc
 	return Object.freeze({ name: value.name, ...(value.detail ? { detail: value.detail } : {}), kind: value.symbolKind, range: range(value.range), selectionRange: range(value.selectionRange), ...(value.children.length > 0 ? { children: Object.freeze(value.children.map(documentSymbol)) } : {}) });
 }
 
-type AppServerCodeLens = languages.CodeLens & { readonly providerData?: unknown };
+type AppServerCodeLens = languages.CodeLens & { readonly providerData?: unknown; };
 
 function codeLens(value: LanguageCodeLensDto): languages.CodeLens {
 	return Object.freeze({ range: range(value.range), ...(value.command ? { command: Object.freeze({ id: value.command.id, title: value.command.title, arguments: [...value.command.arguments] }) } : {}), ...(value.providerData === undefined ? {} : { providerData: value.providerData }) });
@@ -595,6 +597,6 @@ function workspaceResource(root: LanguageWorkspaceRoot, relativePath: string): U
 	return resource;
 }
 
-function range(value: { readonly start: { readonly lineIndex: number; readonly columnIndex: number }; readonly end: { readonly lineIndex: number; readonly columnIndex: number } }): Range {
+function range(value: { readonly start: { readonly lineIndex: number; readonly columnIndex: number; }; readonly end: { readonly lineIndex: number; readonly columnIndex: number; }; }): Range {
 	return Range.fromPositions(new Position((value.start.lineIndex) + 1, (value.start.columnIndex) + 1), new Position((value.end.lineIndex) + 1, (value.end.columnIndex) + 1));
 }

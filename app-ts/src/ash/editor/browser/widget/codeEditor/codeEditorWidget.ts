@@ -128,10 +128,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly mouseDragEmitter = this._register(new Emitter<IEditorMouseEvent>());
 	private readonly mouseDropEmitter = this._register(new Emitter<IPartialEditorMouseEvent>());
 	private readonly mouseDropCanceledEmitter = this._register(new Emitter<void>());
-	private readonly dropIntoEditorEmitter = this._register(new Emitter<{ readonly position: Position; readonly event: DragEvent }>());
+	private readonly dropIntoEditorEmitter = this._register(new Emitter<{ readonly position: Position; readonly event: DragEvent; }>());
 	private readonly mouseWheelEmitter = this._register(new Emitter<IMouseWheelEvent>());
 	private readonly changeEmitter = this._register(new Emitter<IModelContentChangedEvent>());
-	private readonly scrollChangeEmitter = this._register(new Emitter<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>());
+	private readonly scrollChangeEmitter = this._register(new Emitter<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>());
 	private readonly modelWillChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelDecorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
@@ -242,19 +242,19 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				options.isSimpleWidget ?? false,
 				options.contextMenuId ?? (options.isSimpleWidget ? MenuId.SimpleEditorContext : MenuId.EditorContext),
 				{
-				...constructionOptions,
-				lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
-				minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
-				guides: {
-					...options.guides,
-					indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
-				},
-				renderLineHighlight: options.renderLineHighlight ?? (options.presentation === 'embedded' ? 'none' : undefined),
-				wordWrap: options.wordWrap ?? (options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off'),
-				padding: options.padding === undefined ? undefined : {
-					top: options.padding.top ?? 0,
-					bottom: options.padding.bottom ?? 0,
-				},
+					...constructionOptions,
+					lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
+					minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
+					guides: {
+						...options.guides,
+						indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
+					},
+					renderLineHighlight: options.renderLineHighlight ?? (options.presentation === 'embedded' ? 'none' : undefined),
+					wordWrap: options.wordWrap ?? (options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off'),
+					padding: options.padding === undefined ? undefined : {
+						top: options.padding.top ?? 0,
+						bottom: options.padding.bottom ?? 0,
+					},
 				},
 				options.container,
 			));
@@ -610,7 +610,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.configuration.getRawOptions();
 	}
 
-	getScrolledVisiblePosition(position: Position): { top: number; left: number; height: number } | null {
+	getScrolledVisiblePosition(position: Position): { top: number; left: number; height: number; } | null {
 		if (!this.currentModel) return null;
 		this.view.textModel.offsetAt(position);
 		const coordinates = this.view.getPositionContentCoordinates(position);
@@ -1312,7 +1312,7 @@ export function isCodeEditorViewState(value: unknown): value is CodeEditorViewSt
 
 function executeEditorCommand<T>(emitter: Emitter<EditorCommandEvent>, commandId: string, operation: () => T): T {
 	const result = operation();
-	if (result && typeof (result as { readonly then?: unknown }).then === 'function') {
+	if (result && typeof (result as { readonly then?: unknown; }).then === 'function') {
 		return Promise.resolve(result).then(value => {
 			emitter.fire(Object.freeze({ commandId }));
 			return value;

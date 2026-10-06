@@ -6,7 +6,7 @@ import { MultiChatTabsControl } from "../../browser/widgetHosts/viewPane/multiCh
 
 test("MultiChatTabsControl moves the dragged tab through its delegate", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const moves: Array<{ source: string; target: string | undefined; position: string }> = [];
+	const moves: Array<{ source: string; target: string | undefined; position: string; }> = [];
 	const control = new MultiChatTabsControl(dom.window.document.body, "chat", {
 		selectTab: () => undefined,
 		closeTab: () => undefined,
@@ -33,7 +33,7 @@ test("MultiChatTabsControl moves the dragged tab through its delegate", () => {
 	dom.window.close();
 });
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, "clientX", { value: clientX });
 	return event;

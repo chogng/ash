@@ -19,7 +19,7 @@ export interface MemoryDiagnosticSummary {
 	readonly status: string;
 	readonly elapsedSeconds: number;
 	readonly evidenceGaps: number;
-	readonly targets: readonly { readonly label: string; readonly samples: number; readonly metrics: readonly string[]; readonly findings: readonly string[] }[];
+	readonly targets: readonly { readonly label: string; readonly samples: number; readonly metrics: readonly string[]; readonly findings: readonly string[]; }[];
 }
 export interface IMemoryDiagnosticsService {
 	readonly onDidChange: Event<void>;

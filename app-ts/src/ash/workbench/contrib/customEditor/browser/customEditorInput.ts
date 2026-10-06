@@ -3,7 +3,7 @@ import type { EditorInput } from '../../../services/editor/common/editorService.
 /** An independently opened custom view shares the source URI but has its own tab identity. */
 export class CustomEditorInput implements EditorInput {
 	public static readonly ID = 'workbench.editors.customEditorInput';
-	constructor(private readonly source: EditorInput, public readonly editorId: string) {}
+	constructor(private readonly source: EditorInput, public readonly editorId: string) { }
 	public get resource(): EditorInput['resource'] { return this.source.resource; }
 	public get languageId(): string | undefined { return this.source.languageId; }
 	public get contentType(): string | undefined { return this.source.contentType; }

@@ -2,7 +2,7 @@ import { validateTokenId, type ColorContribution } from '../../../../platform/th
 import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import type { SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
 
-export interface ExtensionIconContribution { readonly id: string; readonly description: string; readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string }; }
+export interface ExtensionIconContribution { readonly id: string; readonly description: string; readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string; }; }
 export interface ExtensionGrammarContribution {
 	readonly language?: string;
 	readonly scopeName: string;
@@ -73,7 +73,7 @@ export interface ExtensionManifestDescriptor {
 	readonly displayName?: string;
 }
 
-export async function verifyExtensionManifestDigest(extension: { readonly id: string; readonly manifestJson: string; readonly manifestSha256: string }): Promise<void> {
+export async function verifyExtensionManifestDigest(extension: { readonly id: string; readonly manifestJson: string; readonly manifestSha256: string; }): Promise<void> {
 	const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(extension.manifestJson));
 	const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}`;
 	if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
@@ -291,7 +291,7 @@ function scopeNameValue(value: unknown, owner: string): string {
 function normalizeResourcePath(value: unknown, owner: string): string {
 	let path = boundedText(value, owner, 1024);
 	while (path.startsWith("./")) path = path.slice(2);
-	if (path.length === 0 || path.includes("\\") || path.startsWith("/") || path.includes(":" ) || path.split("/").some(segment => segment.length === 0 || segment === "." || segment === "..")) {
+	if (path.length === 0 || path.includes("\\") || path.startsWith("/") || path.includes(":") || path.split("/").some(segment => segment.length === 0 || segment === "." || segment === "..")) {
 		throw new TypeError(`${owner} must be a safe relative path`);
 	}
 	return path;
@@ -326,10 +326,12 @@ function parseColors(value: unknown, extensionId: string): readonly ColorContrib
 			} else { validateTokenId(text, 'color'); }
 			return text;
 		};
-		return { id, description: requiredString(color.description, 'Color description', 1024), owner: extensionId, defaults: {
-			light: parse(defaults.light), dark: parse(defaults.dark),
-			highContrastDark: parse(defaults.highContrast ?? defaults.dark), highContrastLight: parse(defaults.highContrastLight ?? defaults.light),
-		} };
+		return {
+			id, description: requiredString(color.description, 'Color description', 1024), owner: extensionId, defaults: {
+				light: parse(defaults.light), dark: parse(defaults.dark),
+				highContrastDark: parse(defaults.highContrast ?? defaults.dark), highContrastLight: parse(defaults.highContrastLight ?? defaults.light),
+			}
+		};
 	});
 }
 

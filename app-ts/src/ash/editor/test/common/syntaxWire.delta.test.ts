@@ -31,7 +31,7 @@ test('Syntax wire preserves metadata-only token changes and removals in deltas',
 			const previous: SyntaxResult = { lane: SYNTAX_TOKEN_LANE, value: { tokens: [before, second] } };
 			const current: SyntaxResult = { lane: SYNTAX_TOKEN_LANE, value: { tokens: [after, second] } };
 			const base = { requestId: 1, snapshot, result: previous };
-			const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { kind: string };
+			const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { kind: string; };
 			const full = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, undefined);
 
 			assert.equal(encoded.kind, 'delta');
@@ -56,7 +56,7 @@ test("Syntax wire deltas stay equal to full results across random edits", () => 
 		const snapshot = model.createVersionedSnapshot();
 		for (const lane of [SYNTAX_TOKEN_LANE, SYNTAX_DIAGNOSTIC_LANE] as const) {
 			const result = syntaxResult(lane, snapshot);
-			const encoded = syntaxWireCodec.encodeResult(lane, result, snapshot, serverStates.get(lane)) as { readonly kind: string };
+			const encoded = syntaxWireCodec.encodeResult(lane, result, snapshot, serverStates.get(lane)) as { readonly kind: string; };
 			const decoded = syntaxWireCodec.decodeResult(lane, structuredClone(encoded), snapshot, clientStates.get(lane));
 			assert.deepEqual(serializeResult(decoded), serializeResult(result));
 			if (encoded.kind === "delta") deltaCount += 1;
@@ -128,7 +128,7 @@ test("Syntax wire uses full fallback when a delta cannot reduce item transfer", 
 	const second = tokenResult("keyword");
 	const base = Object.freeze({ requestId: 1, snapshot, result: first });
 
-	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, second, snapshot, base) as { readonly kind: string };
+	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, second, snapshot, base) as { readonly kind: string; };
 
 	assert.equal(encoded.kind, "full");
 	assert.deepEqual(serializeResult(syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, encoded, snapshot, base)), serializeResult(second));
@@ -147,7 +147,7 @@ test("Syntax wire bounds a one-line edit independently of document token count",
 	const snapshot = model.createVersionedSnapshot();
 	const current = syntaxResult(SYNTAX_TOKEN_LANE, snapshot);
 
-	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[] }[] };
+	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[]; }[]; };
 	const decoded = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, base);
 
 	assert.equal(encoded.kind, "delta");
@@ -172,7 +172,7 @@ test("Syntax wire isolates two distant edits into multiple item splices", () => 
 	const snapshot = model.createVersionedSnapshot();
 	const current = syntaxResult(SYNTAX_TOKEN_LANE, snapshot);
 
-	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[] }[] };
+	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[]; }[]; };
 	const decoded = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, base);
 
 	assert.equal(encoded.kind, "delta");
@@ -192,7 +192,7 @@ test("Syntax wire multi-splices stay exact across repeated disjoint transactions
 	for (let requestId = 1; requestId <= 40; requestId += 1) {
 		const snapshot = model.createVersionedSnapshot();
 		const result = syntaxResult(SYNTAX_TOKEN_LANE, snapshot);
-		const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, result, snapshot, serverState) as { readonly kind: string; readonly splices?: readonly unknown[] };
+		const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, result, snapshot, serverState) as { readonly kind: string; readonly splices?: readonly unknown[]; };
 		const decoded = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, clientState);
 		assert.deepEqual(serializeResult(decoded), serializeResult(result));
 		if ((encoded.splices?.length ?? 0) >= 2) multiSpliceCount += 1;

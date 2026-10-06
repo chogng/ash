@@ -15,8 +15,8 @@ interface WindowCloseState {
 }
 
 interface ILifecycleWindow {
-	on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
-	off(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+	on(event: 'close', listener: (event: { preventDefault(): void; }) => void): unknown;
+	off(event: 'close', listener: (event: { preventDefault(): void; }) => void): unknown;
 	isDestroyed(): boolean;
 	close(): void;
 	readonly webContents: {
@@ -90,7 +90,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			state.completeUnload?.(false);
 			state.completeUnload = undefined;
 		};
-		const onClose = (event: { preventDefault(): void }): void => {
+		const onClose = (event: { preventDefault(): void; }): void => {
 			if (state.authorized || !state.ready) return;
 			event.preventDefault();
 			if (state.pendingToken !== undefined) return;

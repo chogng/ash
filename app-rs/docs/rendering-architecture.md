@@ -10,13 +10,13 @@
 执行一帧”，私有 wgpu 模块才知道 device、queue、shader、surface 和 present。单 crate 收拢的是
 发布和接入边界，不是取消内部分层。
 
-| 常见问题 | 当前行为 | 替换后端时是否改组件 |
-| --- | --- | --- |
-| 组件如何绘制矩形、文字、图标和图片？ | 向 `zui::ui::UiScene` 写入 backend-neutral primitive | ❌ |
-| 谁执行一帧？ | `zui::app::WindowContext` 调用 `dyn zui::render::Renderer` | ❌ |
-| 谁接触 GPU 对象？ | 仅 `zui` 私有 `render/wgpu` 或注入的替代 backend | 不适用 |
-| 当前默认后端是什么？ | `zui::render::WgpuRendererFactory` 选择私有 wgpu 实现 | 不适用 |
-| 可以增加 raw Metal/Vulkan backend 吗？ | ✅，实现 public `Renderer` 与 `RendererFactory` 后注入 | ❌ |
+| 常见问题                               | 当前行为                                                   | 替换后端时是否改组件 |
+| -------------------------------------- | ---------------------------------------------------------- | -------------------- |
+| 组件如何绘制矩形、文字、图标和图片？   | 向 `zui::ui::UiScene` 写入 backend-neutral primitive       | ❌                   |
+| 谁执行一帧？                           | `zui::app::WindowContext` 调用 `dyn zui::render::Renderer` | ❌                   |
+| 谁接触 GPU 对象？                      | 仅 `zui` 私有 `render/wgpu` 或注入的替代 backend           | 不适用               |
+| 当前默认后端是什么？                   | `zui::render::WgpuRendererFactory` 选择私有 wgpu 实现      | 不适用               |
+| 可以增加 raw Metal/Vulkan backend 吗？ | ✅，实现 public `Renderer` 与 `RendererFactory` 后注入     | ❌                   |
 
 ```mermaid
 flowchart LR
@@ -32,17 +32,17 @@ flowchart LR
 
 ## 边界与所有权
 
-| 层 | 决定什么 | 明确禁止 |
-| --- | --- | --- |
-| Component / product | 状态、声明式 Element、primitive 顺序、clip 与 overlay | GPU handle、shader、backend feature、手写检查元数据 |
-| `zui::ui` / `zui::runtime` | logical UI contract、scene、interaction 与 retained runtime | window、具体 GPU API、产品状态 |
-| `zui::render::Renderer` contract | target size、frame outcome、统一 backend error 与 frame execution | surface、window、pipeline、atlas |
-| private `zui::render/wgpu` | physical conversion、batch execution、resource cache、shader、submit、present | 产品 layout、identity、input、accessibility |
-| `zui::window` / `zui::input` private native integration | native window、keyboard/IME、chrome capability | scene、GPU pipeline、产品 reducer |
-| `zui::app` | event loop、backend 选择、window/renderer registry、resize/scale 与 retry orchestration | 产品领域状态、具体组件 |
-| `ash-ui-components` | Button、RadioGroup、ActionBar、ContextView 等通用控件 | scene/backend ownership、Workbench 或产品状态 |
-| `ash-workbench` | Workbench Tab/Pane 模型、布局、标题栏、Tab 导航、交互标识和界面状态 | Session、Terminal、Editor 等具体内容生命周期和命令执行 |
-| Product | Session、PTY、App Server、command 与 authoritative state transition | 直接依赖内部 platform/GPU 实现 |
+| 层                                                      | 决定什么                                                                                | 明确禁止                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Component / product                                     | 状态、声明式 Element、primitive 顺序、clip 与 overlay                                   | GPU handle、shader、backend feature、手写检查元数据    |
+| `zui::ui` / `zui::runtime`                              | logical UI contract、scene、interaction 与 retained runtime                             | window、具体 GPU API、产品状态                         |
+| `zui::render::Renderer` contract                        | target size、frame outcome、统一 backend error 与 frame execution                       | surface、window、pipeline、atlas                       |
+| private `zui::render/wgpu`                              | physical conversion、batch execution、resource cache、shader、submit、present           | 产品 layout、identity、input、accessibility            |
+| `zui::window` / `zui::input` private native integration | native window、keyboard/IME、chrome capability                                          | scene、GPU pipeline、产品 reducer                      |
+| `zui::app`                                              | event loop、backend 选择、window/renderer registry、resize/scale 与 retry orchestration | 产品领域状态、具体组件                                 |
+| `ash-ui-components`                                     | Button、RadioGroup、ActionBar、ContextView 等通用控件                                   | scene/backend ownership、Workbench 或产品状态          |
+| `ash-workbench`                                         | Workbench Tab/Pane 模型、布局、标题栏、Tab 导航、交互标识和界面状态                     | Session、Terminal、Editor 等具体内容生命周期和命令执行 |
+| Product                                                 | Session、PTY、App Server、command 与 authoritative state transition                     | 直接依赖内部 platform/GPU 实现                         |
 
 布局检查器消费 `UiScene` 同步生成的 `InspectionFrame`。所有 `Component` 和产品 composition
 surface 都先声明 `Element`；进入 scene 前递归校验整棵树，computed layout 自动生成尺寸、padding、

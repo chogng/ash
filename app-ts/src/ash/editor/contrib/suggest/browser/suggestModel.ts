@@ -344,10 +344,10 @@ function createLanguageCompletionAcceptCommand(model: TextModel, editor: ICodeEd
 }
 
 class LanguageCompletionAcceptCommand implements ICommand {
-	private readonly edits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string }[];
+	private readonly edits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string; }[];
 	private readonly primaryEditIndex: number;
 
-	constructor(primaryRange: import("../../../common/core/range.js").Range, text: string, additionalEdits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string }[]) {
+	constructor(primaryRange: import("../../../common/core/range.js").Range, text: string, additionalEdits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string; }[]) {
 		const primaryEdit = { range: primaryRange, text };
 		this.edits = [primaryEdit, ...additionalEdits].sort((left, right) => {
 			const start = Position.compare(left.range.getStartPosition(), right.range.getStartPosition());

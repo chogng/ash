@@ -25,7 +25,7 @@ export interface SemanticTokenDefaultRule { readonly selector: TokenSelector; re
 
 /** Owns semantic classifications and their syntax scope mappings, including extension lifetimes. */
 export class TokenClassificationRegistry extends Disposable {
-	private readonly groups = new Map<symbol, { types: readonly string[]; modifiers: readonly string[]; selectors: readonly TokenSelector[] }>();
+	private readonly groups = new Map<symbol, { types: readonly string[]; modifiers: readonly string[]; selectors: readonly TokenSelector[]; }>();
 	private readonly types = new Map<string, TokenTypeOrModifierContribution>();
 	private readonly modifiers = new Map<string, TokenTypeOrModifierContribution>();
 	private readonly defaults = new Map<TokenSelector, TokenStyleDefaults>();
@@ -87,7 +87,7 @@ export class TokenClassificationRegistry extends Disposable {
 	public deregisterTokenStyleDefault(selector: TokenSelector): void { if (this.defaults.delete(selector)) { this.publish(); } }
 	public getTokenStylingDefaultRules(): readonly SemanticTokenDefaultRule[] { return [...this.defaults].map(([selector, defaults]) => ({ selector, defaults })); }
 	/** Validate the complete catalog first; replacement and removal publish one revision. */
-	public replaceContributions(owner: symbol, types: readonly TokenTypeOrModifierContribution[], modifiers: readonly TokenTypeOrModifierContribution[], scopes: readonly { readonly language?: string; readonly scopes: Readonly<Record<string, readonly string[]>> }[]): void {
+	public replaceContributions(owner: symbol, types: readonly TokenTypeOrModifierContribution[], modifiers: readonly TokenTypeOrModifierContribution[], scopes: readonly { readonly language?: string; readonly scopes: Readonly<Record<string, readonly string[]>>; }[]): void {
 		const previous = this.groups.get(owner);
 		if (!previous && !types.length && !modifiers.length && !scopes.length) { return; }
 		using validation = new TokenClassificationRegistry();

@@ -33,7 +33,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 		get activeEditor() { return opened.at(-1); },
 		get visibleEditors() { return opened; },
 		async openEditor(input: EditorInput) { opened.push(input); },
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
@@ -78,7 +78,7 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 		get activeEditor() { return opened.at(-1); },
 		get visibleEditors() { return opened; },
 		async openEditor(input: EditorInput) { opened.push(input); },
-		focusActiveEditor() {},
+		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new WorkspaceContextService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);

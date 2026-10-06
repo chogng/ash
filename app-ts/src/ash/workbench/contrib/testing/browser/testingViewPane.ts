@@ -182,10 +182,12 @@ export class TestingViewPane extends ViewPane {
 			const first = tests[0]!;
 			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === first.dirId)!;
 			const target = first.targetKind === 'documentation' ? localize('testing.documentationTarget', '{0} · Documentation Tests', first.target) : first.target;
-			return { element: { id, label: `${folder.name} / ${first.package} / ${target}`, keys: tests.map(test => test.key) }, children: [...files].map(([path, cases]) => ({
-				element: { id: id + ':' + path, label: path || localize('testing.noSource', 'Tests without a source location'), keys: cases.map(test => test.key) },
-				children: cases.map(test => ({ element: { id: test.key, label: test.name, keys: [test.key], test } })),
-			})) };
+			return {
+				element: { id, label: `${folder.name} / ${first.package} / ${target}`, keys: tests.map(test => test.key) }, children: [...files].map(([path, cases]) => ({
+					element: { id: id + ':' + path, label: path || localize('testing.noSource', 'Tests without a source location'), keys: cases.map(test => test.key) },
+					children: cases.map(test => ({ element: { id: test.key, label: test.name, keys: [test.key], test } })),
+				}))
+			};
 		});
 	}
 

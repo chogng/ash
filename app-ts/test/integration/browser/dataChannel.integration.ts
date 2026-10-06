@@ -22,7 +22,7 @@ import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/
 import { DataChannelService, LinkPresentationService } from '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
-	public registerClientHandler(): { dispose(): void } { throw new Error('Client calls are outside this fixture'); }
+	public registerClientHandler(): { dispose(): void; } { throw new Error('Client calls are outside this fixture'); }
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	private incarnation = 1;
@@ -32,15 +32,17 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public readonly uriDelivery = document.createElement('output');
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
 	public list(): Promise<ExtensionHostFleetSnapshot> {
-		return Promise.resolve(normalizeExtensionHostSnapshot({ generation: this.incarnation, extensions: [{
-			id: 'test.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
-			activationGeneration: 1, incarnation: this.incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
-			registrations: [
-				{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
-				{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Extension browser' },
-				{ kind: 'linkPresentationProvider', registrationId: 'issues', uriPattern: '^https://example\\.com/issues/', presentationKind: 'issue' },
-			],
-		}] }));
+		return Promise.resolve(normalizeExtensionHostSnapshot({
+			generation: this.incarnation, extensions: [{
+				id: 'test.links', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+				activationGeneration: 1, incarnation: this.incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
+				registrations: [
+					{ kind: 'dataChannel', registrationId: 'edits', channelId: 'editTelemetry' },
+					{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Extension browser' },
+					{ kind: 'linkPresentationProvider', registrationId: 'issues', uriPattern: '^https://example\\.com/issues/', presentationKind: 'issue' },
+				],
+			}]
+		}));
 	}
 	public reconcile(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }
 	public activateByEvent(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Activation is outside this fixture'); }
@@ -79,7 +81,7 @@ services.registerSingleton(ILinkPresentationService, () => services.createInstan
 const bridge = resources.add(services.createInstance(MainThreadDataChannels, 1_000));
 await bridge.start();
 const editorServices = createCodeEditorServices(resources, services);
-editorServices.registerInstance(IPreferencesService, { openSettings: async () => {}, openGlobalKeybindingSettings: async () => {}, openUserSettings: async () => {} });
+editorServices.registerInstance(IPreferencesService, { openSettings: async () => { }, openGlobalKeybindingSettings: async () => { }, openUserSettings: async () => { } });
 editorServices.registerInstance(IExternalUriOpenerService, resources.add(editorServices.createInstance(ExternalUriOpenerService)));
 const uriBridge = resources.add(editorServices.createInstance(MainThreadUriOpeners, 1_000));
 await uriBridge.start();

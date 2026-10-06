@@ -9,7 +9,7 @@ import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench
 
 const run = promisify(execFile);
 
-test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({}, testInfo) => {
+test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({ }, testInfo) => {
 	assert(['win32', 'darwin'].includes(process.platform), 'Desktop release requires Windows or macOS');
 	const archive = resolve(required('ASH_RELEASE_ARCHIVE'));
 	const version = required('ASH_RELEASE_VERSION');

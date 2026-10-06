@@ -66,7 +66,7 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 	dom.window.close();
 });
 
-function testViewContext(configuration: { allowOverflow: boolean; fixedOverflowWidgets: boolean }, minimumWidths: number[]): ViewContext {
+function testViewContext(configuration: { allowOverflow: boolean; fixedOverflowWidgets: boolean; }, minimumWidths: number[]): ViewContext {
 	return {
 		configuration: {
 			options: {
@@ -87,7 +87,7 @@ function testViewContext(configuration: { allowOverflow: boolean; fixedOverflowW
 			},
 		},
 		viewLayout: { setOverlayWidgetsMinWidth: (width: number) => minimumWidths.push(width) },
-		addEventHandler() {},
-		removeEventHandler() {},
+		addEventHandler() { },
+		removeEventHandler() { },
 	} as unknown as ViewContext;
 }

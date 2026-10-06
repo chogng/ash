@@ -21,8 +21,8 @@ export class NullLocalTranscriptionService extends AbstractDisposable implements
 		throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
 	}
 	public async stop(): Promise<string> { return ''; }
-	public async cancel(): Promise<void> {}
-	protected override disposeCore(): void {}
+	public async cancel(): Promise<void> { }
+	protected override disposeCore(): void { }
 }
 
 function unavailable(): Error { return new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }

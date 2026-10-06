@@ -92,7 +92,7 @@ test('Quick Pick item button fires without accepting its row', () => {
 test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	installDomGlobals(dom);
-	const list = new QuickInputList<{ label: string }>(
+	const list = new QuickInputList<{ label: string; }>(
 		dom.window.document.body,
 	);
 	dom.window.document.body.append(list.element);
@@ -439,8 +439,8 @@ function emptyKeybindingService(): KeybindingService {
 	return {
 		inChordMode: false,
 		onDidUpdateKeybindings: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
+			dispose() { },
+			[Symbol.dispose]() { },
 		}),
 		resolveKeybinding() {
 			throw new Error("Not needed by Command Palette test");

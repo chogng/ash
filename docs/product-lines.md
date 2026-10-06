@@ -13,11 +13,11 @@ Ash 有三个独立 UI 宿主，共享 `ash-rs` 的 Rust 后端契约。仓库�
 `Session`、`Thread`、`Turn`、`ThreadItem` Agent 产品能力，都必须经过 App Server；`app-rs`
 当前直接组合的路径只属于终端/PTY 宿主，不是 Agent API 的例外。
 
-| 产品线 | 产品形态 | 当前 UI/宿主 | 前后端接线 | 终端实现边界 |
-| --- | --- | --- | --- | --- |
-| `ash code` | TUI 产品 | `code/tui`，由根部 `ash-cli` 启动 | `ash-app-server-client` 连接 App Server | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY |
-| `ash` | Electron Desktop | `app-ts` 的 Renderer、Preload 与 Electron Main | Electron Main 连接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `ash-utils-pty` |
-| `app` | Rust Desktop 工作台 | `app-rs` 的 Rust 窗口与 UI | Agent 能力通过 App Server；外部 AI CLI 由 Terminal host 启动 | `ash-terminal` 负责终端语义，`ash-utils-pty` 负责 AI CLI 的 PTY/进程 |
+| 产品线     | 产品形态            | 当前 UI/宿主                                   | 前后端接线                                                   | 终端实现边界                                                         |
+| ---------- | ------------------- | ---------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `ash code` | TUI 产品            | `code/tui`，由根部 `ash-cli` 启动              | `ash-app-server-client` 连接 App Server                      | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY      |
+| `ash`      | Electron Desktop    | `app-ts` 的 Renderer、Preload 与 Electron Main | Electron Main 连接 Rust App Server                           | 当前 Renderer 用 xterm；Rust/App Server 管理 `ash-utils-pty`         |
+| `app`      | Rust Desktop 工作台 | `app-rs` 的 Rust 窗口与 UI                     | Agent 能力通过 App Server；外部 AI CLI 由 Terminal host 启动 | `ash-terminal` 负责终端语义，`ash-utils-pty` 负责 AI CLI 的 PTY/进程 |
 
 产品线与 Electron 的内部 Workbench 模式不是同一个维度。Desktop 当前使用 `code` 工作台，Academic 作为论文文档贡献接入同一窗口；打开论文不需要切换模式。它们不代表 `ash code` TUI，也不构成额外的公开产品线。具体说明见 [`workbench-modes.md`](workbench-modes.md)。
 
@@ -50,33 +50,33 @@ flowchart LR
 
 ## 终端分层
 
-| 层 | 当前 owner | 负责什么 | 不负责什么 |
-| --- | --- | --- | --- |
-| PTY/进程层 | `ash-utils-pty` | spawn、读写、resize、signal、exit | ANSI/VT 解析、网格、scrollback 语义 |
-| 终端语义层 | `app-rs/terminal` 的 `ash-terminal` | App 进程内的 ANSI/VT parser、cell/grid、cursor、mode、scrollback 等 | 创建 Shell 进程、Electron IPC、产品窗口 |
-| 产品后端层 | Rust App Server | 连接级 Terminal session、授权、生命周期和 protocol DTO | Renderer DOM 或 TUI 绘制 |
-| Electron 桥接层 | `ash` 的 Electron Main | 进程监督、trusted IPC、Renderer adapter | 复制 Rust 终端状态机 |
-| TUI 宿主层 | `ash code` 的 `ash-tui` | raw mode、alternate screen、输入事件和 Ratatui frame | 第二套 Agent runtime 或 PTY authority |
-| Rust 窗口层 | `app` 的 `app-rs/` | 窗口、GPU/UI、终端输入输出组合 | Electron Main、Renderer bridge |
+| 层              | 当前 owner                          | 负责什么                                                            | 不负责什么                              |
+| --------------- | ----------------------------------- | ------------------------------------------------------------------- | --------------------------------------- |
+| PTY/进程层      | `ash-utils-pty`                     | spawn、读写、resize、signal、exit                                   | ANSI/VT 解析、网格、scrollback 语义     |
+| 终端语义层      | `app-rs/terminal` 的 `ash-terminal` | App 进程内的 ANSI/VT parser、cell/grid、cursor、mode、scrollback 等 | 创建 Shell 进程、Electron IPC、产品窗口 |
+| 产品后端层      | Rust App Server                     | 连接级 Terminal session、授权、生命周期和 protocol DTO              | Renderer DOM 或 TUI 绘制                |
+| Electron 桥接层 | `ash` 的 Electron Main              | 进程监督、trusted IPC、Renderer adapter                             | 复制 Rust 终端状态机                    |
+| TUI 宿主层      | `ash code` 的 `ash-tui`             | raw mode、alternate screen、输入事件和 Ratatui frame                | 第二套 Agent runtime 或 PTY authority   |
+| Rust 窗口层     | `app` 的 `app-rs/`                  | 窗口、GPU/UI、终端输入输出组合                                      | Electron Main、Renderer bridge          |
 
 `ash-terminal` 与 `ash-utils-pty` 在 `app` 中分别承担终端模型与进程执行。Electron Renderer 的 xterm
 继续持有本端终端模型；App Server 提供 PTY 字节与进程状态，不统一接管各前端的网格、光标或滚动。
 
 ## 代码入口对照
 
-| 公开产品线 | 当前代码入口 | 当前状态 |
-| --- | --- | --- |
-| `ash code` | `ash-cli` 的 `ash` binary → `code/tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
-| `ash` | `app-ts` Electron client | Electron Desktop 已存在；统一 Renderer 使用 Code 工作台，并装配 Academic 文档贡献 |
-| `app` | `app-rs/` 的 `app` binary | 终端宿主已存在，并直接组合 `ash-terminal` 与 `ash-utils-pty`；Agent 能力通过 App Server 使用 |
+| 公开产品线 | 当前代码入口                           | 当前状态                                                                                     |
+| ---------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `ash code` | `ash-cli` 的 `ash` binary → `code/tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作                                          |
+| `ash`      | `app-ts` Electron client               | Electron Desktop 已存在；统一 Renderer 使用 Code 工作台，并装配 Academic 文档贡献            |
+| `app`      | `app-rs/` 的 `app` binary              | 终端宿主已存在，并直接组合 `ash-terminal` 与 `ash-utils-pty`；Agent 能力通过 App Server 使用 |
 
 ## Canonical `just` 命令
 
-| 命令 | 产品线 | 运行方式 |
-| --- | --- | --- |
-| `just ash` | `ash code` | 从 Rust workspace 启动 TUI，并接收 CLI 参数 |
-| `just ash-desktop` | `ash` | 启动 Electron Desktop 开发环境 |
-| `just app` | `app` | 启动纯 Rust Desktop |
+| 命令               | 产品线     | 运行方式                                    |
+| ------------------ | ---------- | ------------------------------------------- |
+| `just ash`         | `ash code` | 从 Rust workspace 启动 TUI，并接收 CLI 参数 |
+| `just ash-desktop` | `ash`      | 启动 Electron Desktop 开发环境              |
+| `just app`         | `app`      | 启动纯 Rust Desktop                         |
 
 产品线命令是公开的 `just` 命令面；不要为 TUI 或底层实现再建同义入口。
 

@@ -80,12 +80,12 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 		},
 	};
 	const scans: ReviewEnvironmentScanOptions[] = [];
-	const writes: Array<{ root: string; entries: readonly ReviewEnvironmentInput[] }> = [];
+	const writes: Array<{ root: string; entries: readonly ReviewEnvironmentInput[]; }> = [];
 	const service: EnvironmentService = {
-		read: async scope => { assert.equal((scope as { root: string }).root, '/chosen'); return { root: '/chosen', revision: 0, entries: [], scanOptions }; },
-		scan: async (scope, id, options) => { assert.equal((scope as { root: string }).root, '/chosen'); scans.push(options); return { root: '/chosen', id, baseRevision: 0, history: { sessionsAvailable: 120, sessionsScanned: 100, commandsAvailable: 1000, commandsScanned: 800, factsAvailable: 80, factsIncluded: 40 }, entries: [{ id: 'historical', kind: 'fact', title: 'curl', content: 'curl\nhttps://staging.example.com', source: { id: 'source', kind: 'recentCommand', label: 'thread-old:7:1000', revision: '123456789', command: { occurrences: 10, sessionCount: 2, samples: [{ sessionId: 'session-old', threadId: 'thread-old', turnId: 'turn-old', sequence: 7, recordedAtUnixMs: 1000 }] } }, accepted: false, current: true }] }; },
+		read: async scope => { assert.equal((scope as { root: string; }).root, '/chosen'); return { root: '/chosen', revision: 0, entries: [], scanOptions }; },
+		scan: async (scope, id, options) => { assert.equal((scope as { root: string; }).root, '/chosen'); scans.push(options); return { root: '/chosen', id, baseRevision: 0, history: { sessionsAvailable: 120, sessionsScanned: 100, commandsAvailable: 1000, commandsScanned: 800, factsAvailable: 80, factsIncluded: 40 }, entries: [{ id: 'historical', kind: 'fact', title: 'curl', content: 'curl\nhttps://staging.example.com', source: { id: 'source', kind: 'recentCommand', label: 'thread-old:7:1000', revision: '123456789', command: { occurrences: 10, sessionCount: 2, samples: [{ sessionId: 'session-old', threadId: 'thread-old', turnId: 'turn-old', sequence: 7, recordedAtUnixMs: 1000 }] } }, accepted: false, current: true }] }; },
 		cancel: async () => { assert.fail('a completed scan must not be cancelled'); },
-		save: async (scope, _id, revision, entries, draftId) => { assert.equal(revision, 0); assert.ok(draftId); writes.push({ root: (scope as { root: string }).root, entries }); return { root: '/chosen', revision: 1, entries: [], scanOptions }; },
+		save: async (scope, _id, revision, entries, draftId) => { assert.equal(revision, 0); assert.ok(draftId); writes.push({ root: (scope as { root: string; }).root, entries }); return { root: '/chosen', revision: 1, entries: [], scanOptions }; },
 	};
 	services.registerInstance(IApprovalEnvironmentService, service);
 	services.registerInstance(IQuickInputService, input);
@@ -116,7 +116,7 @@ test('closing a running environment scan calls the backend cancellation API and 
 		save: async () => { assert.fail('cancelled drafts must not be saved'); },
 	} satisfies EnvironmentService);
 	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'chosen', workspace: { root: '/chosen' } }], untitledSessions: [] } as unknown as ISessionsManagementService);
-	services.registerInstance(INotificationService, { info() {}, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
+	services.registerInstance(INotificationService, { info() { }, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 	using commands = new CommandService(services);
 	// After cancellation the next environment picker closes, leaving the existing profile untouched.
 	services.registerInstance(IQuickInputService, {
@@ -144,7 +144,7 @@ test('rescanning replaces untouched observations while retaining explicit edits 
 			},
 		} satisfies EnvironmentService);
 		services.registerInstance(ISessionsManagementService, { untitledSessions: [{ untitledSessionId: 'chosen', workspace: { type: 'local', root: '/chosen' } }] } as unknown as ISessionsManagementService);
-		services.registerInstance(INotificationService, { info() {}, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
+		services.registerInstance(INotificationService, { info() { }, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 		services.registerInstance(IQuickInputService, {
 			createQuickPick: <T extends IQuickPickItem>() => new Picker<T>(picker => { if (picker.ariaLabel !== 'Preparing review environment') { picker.choose(choices.shift()!); } }),
 			input: async () => 'pnpm build with pinned Node',

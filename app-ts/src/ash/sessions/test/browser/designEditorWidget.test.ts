@@ -133,7 +133,7 @@ services.registerInstance(IFileService, {
 		return { revision, stat: { resource, kind: FileKind.File, sizeBytes: fileContent.length, readonly: false, modifiedAtMillis: undefined } };
 	},
 });
-services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => {}, shutdown: async () => {} });
+services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => { }, shutdown: async () => { } });
 
 suiteTeardown(() => {
 	colorContextView.dispose();
@@ -179,7 +179,7 @@ class DesignEditorFixture extends Disposable {
 		this._register(toDisposable(() => { editorHost.remove(); this.propertiesDomNode.remove(); this.layersDomNode.remove(); }));
 	}
 	focus(): void { this.pane.focus(); }
-	layout(dimension: { width: number; height: number }): void { this.pane.layout(dimension); }
+	layout(dimension: { width: number; height: number; }): void { this.pane.layout(dimension); }
 }
 
 function createView(): DesignEditorFixture {
@@ -193,13 +193,13 @@ function createView(): DesignEditorFixture {
 	return view;
 }
 
-function projectedTransform(view: { readonly domNode: HTMLElement }): ProjectedTransform {
+function projectedTransform(view: { readonly domNode: HTMLElement; }): ProjectedTransform {
 	const transform = view.domNode.querySelector<HTMLElement>('.ash-canvas-world')!.style.transform;
 	const match = transform.match(/translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/)!;
 	return { panX: Number(match[1]), panY: Number(match[2]), scale: Number(match[3]) };
 }
 
-function dispatchWheel(view: { readonly domNode: HTMLElement }, init: WheelEventInit & { clientX?: number; clientY?: number }): void {
+function dispatchWheel(view: { readonly domNode: HTMLElement; }, init: WheelEventInit & { clientX?: number; clientY?: number; }): void {
 	view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!
 		.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
 }
@@ -415,18 +415,18 @@ test('Design color picker uses Chinese labels and releases its overlay when the 
 	} finally { resetNlsResolver(); }
 });
 
-function pressCanvas(view: { readonly domNode: HTMLElement }, key: string, options: KeyboardEventInit = {}): void {
+function pressCanvas(view: { readonly domNode: HTMLElement; }, key: string, options: KeyboardEventInit = {}): void {
 	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...options }));
 }
 
-async function clickAction(view: { readonly domNode: HTMLElement }, name: string): Promise<void> {
+async function clickAction(view: { readonly domNode: HTMLElement; }, name: string): Promise<void> {
 	const button = Array.from(view.domNode.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === name || button.textContent === name)!;
 	button.click();
 	// File-service promises are immediate in this fixture, but the action crosses several async boundaries.
 	for (let index = 0; index < 20; index++) { await Promise.resolve(); }
 }
 
-async function clickCanvasMenu(view: { readonly domNode: HTMLElement }, name: string): Promise<void> {
+async function clickCanvasMenu(view: { readonly domNode: HTMLElement; }, name: string): Promise<void> {
 	pressCanvas(view, 'F10', { shiftKey: true });
 	const action = contextMenu!.getActions().find(action => action.label === name)!;
 	assert.equal(action.enabled, true);
@@ -1156,7 +1156,7 @@ class CreatorFixture extends Disposable {
 		const child = this._register(services.createChild());
 		this.editors = this._register(child.createInstance(DesignEditorService));
 		child.registerInstance(IDesignEditorService, this.editors);
-		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() {}, [Symbol.dispose]() {} });
+		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() { }, [Symbol.dispose]() { } });
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
 		child.registerInstance(IStorageService, storage);
 		this.page = this._register(child.createInstance(CreatorPage, browser.window.document));

@@ -13,11 +13,13 @@ test('commit links share a request and discard a late result after the final lin
 	let complete!: (value: GitHubCommit) => void;
 	let token!: CancellationToken;
 	let reads = 0;
-	services.registerInstance(IGitHubService, { ...createDisconnectedGitHubService(), readCommit: async (_repository, _sha, cancellation) => {
-		reads++;
-		token = cancellation!;
-		return new Promise<GitHubCommit>(resolve => { complete = resolve; });
-	} });
+	services.registerInstance(IGitHubService, {
+		...createDisconnectedGitHubService(), readCommit: async (_repository, _sha, cancellation) => {
+			reads++;
+			token = cancellation!;
+			return new Promise<GitHubCommit>(resolve => { complete = resolve; });
+		}
+	});
 	using resolver = services.createInstance(GitHubCommitResolver);
 	const target = { owner: 'team', repo: 'repo', sha: 'a'.repeat(40) };
 	const value = resolver.get(target);
@@ -43,10 +45,12 @@ test('commit metadata is delivered through the observable used by the provider',
 test('a failed commit read can be retried by a new link without retaining the rejected promise', async () => {
 	using services = new InstantiationService();
 	let attempts = 0;
-	services.registerInstance(IGitHubService, { ...createDisconnectedGitHubService(), readCommit: async () => {
-		if (++attempts === 1) { throw new Error('Connection lost'); }
-		return commit;
-	} });
+	services.registerInstance(IGitHubService, {
+		...createDisconnectedGitHubService(), readCommit: async () => {
+			if (++attempts === 1) { throw new Error('Connection lost'); }
+			return commit;
+		}
+	});
 	using resolver = services.createInstance(GitHubCommitResolver);
 	const target = { owner: 'team', repo: 'repo', sha: 'a'.repeat(40) };
 	const value = resolver.get(target);

@@ -32,8 +32,10 @@ export async function prepareBrowserExtensions(): Promise<void> {
 		if (typeof manifest.browser === 'string') {
 			// Each Worker imports one immutable module. Package dependencies stay inside that module.
 			const entry = manifest.browser.replace(/^\.\//, '');
-			const result = await build({ configFile: false, logLevel: 'error',
-				build: { write: false, minify: false, lib: { entry: resolve(packageRoot, entry), formats: ['es'], fileName: 'extension' } } });
+			const result = await build({
+				configFile: false, logLevel: 'error',
+				build: { write: false, minify: false, lib: { entry: resolve(packageRoot, entry), formats: ['es'], fileName: 'extension' } }
+			});
 			const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
 			const chunks = outputs.filter(output => output.type === 'chunk');
 			if (chunks.length !== 1) throw new Error(`Browser extension '${id}' must produce one ES module`);

@@ -13,7 +13,7 @@ export class DesktopDetailPanelCoordinator {
 		@IViewsService private readonly views: IViewsService,
 		@IEditorService private readonly editors: IEditorService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
-	) {}
+	) { }
 
 	public get supportsActiveEditor(): boolean {
 		const input = this.editors.activeEditor;

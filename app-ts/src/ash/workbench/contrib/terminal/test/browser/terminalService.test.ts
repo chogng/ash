@@ -307,18 +307,18 @@ suite('Terminal process identity and raw input', () => {
 class TestTerminalProcessService implements ITerminalProcessService {
 	profileListCalls = 0;
 	readonly createCalls: ITerminalProcessCreateOptions[] = [];
-	readonly writeCalls: Array<{ terminalId: string; data: string | Uint8Array }> = [];
-	readonly resizeCalls: Array<{ terminalId: string; rows: number; cols: number }> = [];
+	readonly writeCalls: Array<{ terminalId: string; data: string | Uint8Array; }> = [];
+	readonly resizeCalls: Array<{ terminalId: string; rows: number; cols: number; }> = [];
 	readonly readCursors: number[] = [];
 	readonly commandReadCursors: number[] = [];
 	readonly closeCalls: string[] = [];
 	public readonly creationGates: Promise<void>[] = [];
 	public readonly closeGates: Promise<void>[] = [];
-	public readonly closeOptions: Array<{ terminalId: string; dirId?: string }> = [];
+	public readonly closeOptions: Array<{ terminalId: string; dirId?: string; }> = [];
 	private readonly connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
 	private connectionState: TerminalProcessConnectionState = "ready";
 
-	constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") {}
+	constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") { }
 
 	async listProfiles() {
 		this.profileListCalls += 1;
@@ -341,21 +341,21 @@ class TestTerminalProcessService implements ITerminalProcessService {
 		this.reads.push(result);
 	}
 
-	async write(params: { terminalId: string; data: string | Uint8Array }) {
+	async write(params: { terminalId: string; data: string | Uint8Array; }) {
 		this.writeCalls.push(params);
 	}
 
-	async resize(params: { terminalId: string; rows: number; cols: number }) {
+	async resize(params: { terminalId: string; rows: number; cols: number; }) {
 		this.resizeCalls.push(params);
 	}
 
-	async read(params: { terminalId: string; afterSequence: number; afterCommandSequence: number; maxChunks: number }) {
+	async read(params: { terminalId: string; afterSequence: number; afterCommandSequence: number; maxChunks: number; }) {
 		this.readCursors.push(params.afterSequence);
 		this.commandReadCursors.push(params.afterCommandSequence);
 		return await (this.reads.shift() ?? readResult({ nextSequence: params.afterSequence, nextCommandSequence: params.afterCommandSequence }));
 	}
 
-	public async close(params: { terminalId: string; dirId?: string }): Promise<void> {
+	public async close(params: { terminalId: string; dirId?: string; }): Promise<void> {
 		this.closeCalls.push(params.terminalId);
 		this.closeOptions.push(params);
 		await this.closeGates.shift();
@@ -380,7 +380,7 @@ function folderWorkspaceContext(): WorkspaceContextService {
 	return new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") });
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; readonly reject: (error: Error) => void } {
+function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; readonly reject: (error: Error) => void; } {
 	let resolve!: (value: T) => void;
 	let reject!: (error: Error) => void;
 	const promise = new Promise<T>((accept, fail) => {
@@ -436,7 +436,7 @@ suite('TerminalService lifecycle', () => {
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processService, workspace);
 		const service = services.get(ITerminalService);
-		const snapshots: Array<{ ids: string[]; titles: string[]; active: string | undefined }> = [];
+		const snapshots: Array<{ ids: string[]; titles: string[]; active: string | undefined; }> = [];
 		using listener = service.onDidChangeInstances(() => snapshots.push({
 			ids: service.instances.map(instance => instance.id),
 			titles: service.instances.map(instance => instance.title),

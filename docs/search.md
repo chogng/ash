@@ -23,14 +23,14 @@ flowchart TD
     G --> R[ripgrep 适配实现]
 ```
 
-| 能力 | 职责与依赖边界 |
-| --- | --- |
-| `grep` | 文件内容查询；依赖目录访问、索引存储和引擎适配，不依赖使用者 |
-| `file-search` | 文件枚举、路径匹配和模糊搜索；与 grep 并列，各自封装实现 |
-| Codebase 检索 | 调用 grep 获取文字候选，组合其他候选，再通过源码管理复核、去重和限额 |
-| 源码与 chunk 管理 | 扫描、分块、版本与未保存内容管理；不依赖 grep |
-| 符号、全文和语义索引 | 消费已授权、已复核的源码与 chunk，维护各自查询所需的数据 |
-| Agent / 编辑器 | 选择所需能力，负责请求转换、权限衔接、结果预算和呈现 |
+| 能力                 | 职责与依赖边界                                                       |
+| -------------------- | -------------------------------------------------------------------- |
+| `grep`               | 文件内容查询；依赖目录访问、索引存储和引擎适配，不依赖使用者         |
+| `file-search`        | 文件枚举、路径匹配和模糊搜索；与 grep 并列，各自封装实现             |
+| Codebase 检索        | 调用 grep 获取文字候选，组合其他候选，再通过源码管理复核、去重和限额 |
+| 源码与 chunk 管理    | 扫描、分块、版本与未保存内容管理；不依赖 grep                        |
+| 符号、全文和语义索引 | 消费已授权、已复核的源码与 chunk，维护各自查询所需的数据             |
+| Agent / 编辑器       | 选择所需能力，负责请求转换、权限衔接、结果预算和呈现                 |
 
 文件名、文字、符号和向量索引分别由对应能力管理。grep 返回匹配位置；Codebase 保留
 源码与 chunk 身份的所有权，使用当前源码复核候选。
@@ -56,14 +56,14 @@ flowchart TD
 
 当前实现按上面的职责关系组装；各入口保留自己的权限、结果预算和展示方式。
 
-| 项目 | 实现 | 边界 |
-| --- | --- | --- |
-| 公共内容搜索 | Agent、编辑器和 Codebase 检索使用公共 grep 服务 | 共享目录索引，分别管理请求 |
-| 配置与组装 | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者 | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
-| Codebase 职责 | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选 | `Codebase` 的源码、chunk 与版本管理不引用 grep |
-| 文件路径搜索 | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI 和 Rust 桌面文件面板调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引 |
-| 查询新鲜度 | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式 | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选 |
-| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计 | 统计描述初始文件筛选，不包含后续内容批次或 Ash 写入覆盖 |
+| 项目             | 实现                                                                                                    | 边界                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 公共内容搜索     | Agent、编辑器和 Codebase 检索使用公共 grep 服务                                                         | 共享目录索引，分别管理请求                                         |
+| 配置与组装       | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者                                        | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
+| Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                               | `Codebase` 的源码、chunk 与版本管理不引用 grep                     |
+| 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI 和 Rust 桌面文件面板调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引      |
+| 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                  | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
+| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                              | 统计描述初始文件筛选，不包含后续内容批次或 Ash 写入覆盖            |
 
 实现入口：[宿主组装](../ash-rs/app-server/src/server/environment_runtime.rs)、
 [检索组合](../ash-rs/codebase/src/retrieval/service.rs)、
@@ -89,15 +89,15 @@ Search UI
 
 ## 所有权
 
-| 内容 | 所有者 |
-| --- | --- |
-| 查询表单、结果分组、高亮和取消时机 | Renderer |
-| IPC 参数形状和输入上限 | Electron Main |
-| 目录选择、`SearchFiles` 检查和连接级任务路由 | App Server |
-| 引擎选择、执行、结构化结果、目录索引、分页和取消 | `ash-grep` |
-| 文件名模糊查找 | `ash-file-search` |
-| Agent 的 `grep` 工具 | Tool 授权、100 行预算和模型文本格式；调用公共 grep API |
-| Codebase 文字候选 | 调用公共 grep API，将命中映射为自己的 chunk，再复核当前内容 |
+| 内容                                             | 所有者                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| 查询表单、结果分组、高亮和取消时机               | Renderer                                                    |
+| IPC 参数形状和输入上限                           | Electron Main                                               |
+| 目录选择、`SearchFiles` 检查和连接级任务路由     | App Server                                                  |
+| 引擎选择、执行、结构化结果、目录索引、分页和取消 | `ash-grep`                                                  |
+| 文件名模糊查找                                   | `ash-file-search`                                           |
+| Agent 的 `grep` 工具                             | Tool 授权、100 行预算和模型文本格式；调用公共 grep API      |
+| Codebase 文字候选                                | 调用公共 grep API，将命中映射为自己的 chunk，再复核当前内容 |
 
 ## 协议
 

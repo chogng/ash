@@ -81,7 +81,7 @@ export class PdfJsRenderer implements IPdfRenderer {
 class PdfJsRenderResult implements IPdfRenderResult {
 	private disposed = false;
 
-	constructor(readonly pages: readonly PdfRenderedPage[], private readonly releaseDocument: () => void) {}
+	constructor(readonly pages: readonly PdfRenderedPage[], private readonly releaseDocument: () => void) { }
 
 	get pageCount(): number {
 		return this.pages.length;

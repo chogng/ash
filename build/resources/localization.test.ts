@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { extractLocalizationMessages, validateLocalizationTranslation } from './localization.ts';
 
 test('source extraction preserves bundle identities, aliases and original command titles', () => {
-	const messages = extractLocalizationMessages([{ path: 'editor/action.ts', text: `
+	const messages = extractLocalizationMessages([{
+		path: 'editor/action.ts', text: `
 		import { localize as text, localize2 as title } from '../nls.js';
 		import * as nls from '../nls.js';
 		text('hello', 'Hello {0}', name);
@@ -14,7 +15,8 @@ test('source extraction preserves bundle identities, aliases and original comman
 });
 
 test('conflicting English declarations fail the build', () => {
-	assert.throws(() => extractLocalizationMessages([{ path: 'commands.ts', text: `
+	assert.throws(() => extractLocalizationMessages([{
+		path: 'commands.ts', text: `
 		import { localize } from '../nls.js'; localize('open', 'Open'); localize('open', 'Open Folder');
 	` }]), /Conflicting English declaration/);
 });
@@ -34,7 +36,8 @@ test('repeated English declarations share one entry while different bundles keep
 });
 
 test('unrelated imports and dynamic messages do not become localization declarations', () => {
-	assert.deepEqual(extractLocalizationMessages([{ path: 'feature.ts', text: `
+	assert.deepEqual(extractLocalizationMessages([{
+		path: 'feature.ts', text: `
 		import { localize as other } from './other.js';
 		import * as unrelated from './other.js';
 		import { localize } from './nls.js';
@@ -69,7 +72,8 @@ for (const [name, original, translation, valid] of [
 }
 
 test('theme descriptions are extracted from the owner declarations', () => {
-	assert.deepEqual(extractLocalizationMessages([{ path: 'theme.ts', text: `
+	assert.deepEqual(extractLocalizationMessages([{
+		path: 'theme.ts', text: `
 		const color = (id: string, description: string) => registerColor(id, defaults, { description, owner: 'theme' });
 		color('widget.shadow', 'Shadow around widgets.');
 		registerColor('input.background', defaults, { description: 'Input background.', owner: 'theme' });

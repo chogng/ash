@@ -10,7 +10,7 @@ export class DefaultLinesDiffComputer implements ILinesDiffComputer {
 	public computeDiff(originalLines: string[], modifiedLines: string[], options: ILinesDiffComputerOptions): LinesDiff {
 		const computation = diffLines(originalLines, modifiedLines, options);
 		const deadline = options.maxComputationTimeMs === 0 ? Infinity : performance.now() + options.maxComputationTimeMs;
-		for (;;) {
+		for (; ;) {
 			const step = computation.next();
 			if (step.done) return step.value;
 			if (performance.now() >= deadline) return timedOutDiff(originalLines.length, modifiedLines.length);
@@ -22,7 +22,7 @@ export class DefaultLinesDiffComputer implements ILinesDiffComputer {
 		const computation = diffLines(originalLines, modifiedLines, options);
 		const deadline = options.maxComputationTimeMs === 0 ? Infinity : performance.now() + options.maxComputationTimeMs;
 		let yieldAt = performance.now() + 8;
-		for (;;) {
+		for (; ;) {
 			signal.throwIfAborted();
 			const step = computation.next();
 			if (step.done) return step.value;
@@ -153,7 +153,7 @@ function* findMoves(changes: readonly DetailedLineRangeMapping[], original: read
 	}
 	const candidates: MoveCandidate[] = [];
 	for (const source of sources) {
-		const overlaps = new Map<MoveSpan, { weight: number; words: number }>();
+		const overlaps = new Map<MoveSpan, { weight: number; words: number; }>();
 		for (const [word, count] of source.words) {
 			for (const destination of destinationWords.get(word) ?? []) {
 				if (source.change === destination.change) {
@@ -242,7 +242,7 @@ function* anchoredMoveCandidates(source: MoveSpan, destination: MoveSpan): Gener
 	const remainingOriginal = new Set(original.map((_, index) => index));
 	const remainingModified = new Set(modified.map((_, index) => index));
 	const candidates: MoveCandidate[] = [];
-	for (;;) {
+	for (; ;) {
 		const originalIndexes = [...remainingOriginal];
 		const modifiedIndexes = [...remainingModified];
 		const matches = yield* matchingItems(originalIndexes.map(index => original[index]!), modifiedIndexes.map(index => modified[index]!));

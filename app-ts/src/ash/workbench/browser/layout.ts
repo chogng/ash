@@ -503,10 +503,10 @@ function createWorkbenchGridDescriptor(
 	const editorWidth = Math.max(
 		0,
 		dimension.width -
-			(activityBarLocation === ActivityBarPosition.DEFAULT ? activitybarWidth : 0) -
-			(state.sidebar.visible ? state.sidebar.width : 0) -
-			(state.auxiliarybar.visible ? state.auxiliarybar.width : 0) -
-			(state.agentSidebar.visible ? state.agentSidebar.width : 0),
+		(activityBarLocation === ActivityBarPosition.DEFAULT ? activitybarWidth : 0) -
+		(state.sidebar.visible ? state.sidebar.width : 0) -
+		(state.auxiliarybar.visible ? state.auxiliarybar.width : 0) -
+		(state.agentSidebar.visible ? state.agentSidebar.width : 0),
 	);
 	const primary: SerializedGridDescriptor[] = sideBarLocation === 'left'
 		? [leaf('activitybar', activitybarWidth, activityBarLocation === ActivityBarPosition.DEFAULT), leaf('sidebar', state.sidebar.width, state.sidebar.visible)]
@@ -653,8 +653,8 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 	) {
 		throw new TypeError("Workbench layout state is invalid or unsupported");
 	}
-	let panel: { readonly height: number; readonly visible: boolean };
-	let agentSidebar: { readonly width: number; readonly visible: boolean };
+	let panel: { readonly height: number; readonly visible: boolean; };
+	let agentSidebar: { readonly width: number; readonly visible: boolean; };
 	if (value.version === 1) {
 		panel = { height: DEFAULT_PANEL_HEIGHT, visible: true };
 		agentSidebar = { width: DEFAULT_AGENT_SIDEBAR_WIDTH, visible: false };
@@ -904,7 +904,7 @@ function storedDimension(value: number | undefined, fallback: number): number {
 
 function isHorizontalLayoutRegionState(
 	value: unknown,
-): value is { readonly width: number; readonly visible: boolean } {
+): value is { readonly width: number; readonly visible: boolean; } {
 	return (
 		isRecord(value) &&
 		isLayoutDimension(value.width) &&
@@ -914,7 +914,7 @@ function isHorizontalLayoutRegionState(
 
 function isVerticalLayoutRegionState(
 	value: unknown,
-): value is { readonly height: number; readonly visible: boolean } {
+): value is { readonly height: number; readonly visible: boolean; } {
 	return (
 		isRecord(value) &&
 		isLayoutDimension(value.height) &&

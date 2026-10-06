@@ -86,15 +86,15 @@ let dynamicSecond: DocumentDiffItem | undefined;
 let completeDeferredComparison: (() => void) | undefined;
 let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
-let lastHunkAction: { text: string; originalStart: number; modifiedStart: number } | undefined;
+let lastHunkAction: { text: string; originalStart: number; modifiedStart: number; } | undefined;
 let themeBinding: IDisposable | undefined;
 
 const harness = {
-	readIndicatorSetting(): { title: string; description: string } {
+	readIndicatorSetting(): { title: string; description: string; } {
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration('diffEditor.renderIndicators')!.setting!;
 		return { title: setting.title, description: setting.description };
 	},
-	setTheme(themeId: string): { marker: string; background: string } {
+	setTheme(themeId: string): { marker: string; background: string; } {
 		themeBinding ??= resources.add(bindColorTheme(editorServices.themeService, document.getElementById('single')!));
 		editorServices.themeService.setTheme(themeId);
 		const theme = editorServices.themeService.getColorTheme();
@@ -146,10 +146,12 @@ const harness = {
 		manyResources.add(editorServices.createInstance(MultiDiffEditorWidget, {
 			container: document.getElementById('many')!,
 			model: manyResources.add(new MultiDiffEditorModel(Array.from({ length: count }, (_, index) => manyResources.add(new DocumentDiffItem({ id: `file-${index}`, label: `file-${index}.ts` }, model))))),
-			workbenchUIElementFactory: { createItemActions: () => {
-				activeManyActions++;
-				return toDisposable(() => activeManyActions--);
-			} },
+			workbenchUIElementFactory: {
+				createItemActions: () => {
+					activeManyActions++;
+					return toDisposable(() => activeManyActions--);
+				}
+			},
 		}));
 	},
 	showLazyComparisons(count: number): void {
@@ -248,7 +250,7 @@ const harness = {
 	removeSymbolProvider(): void {
 		symbolProvider.dispose();
 	},
-	visibleDiffRanges(): { original: number[][]; modified: number[][] } {
+	visibleDiffRanges(): { original: number[][]; modified: number[][]; } {
 		const lines = (ranges: readonly Range[]) => ranges.map(range => [range.startLineNumber, range.endLineNumber]);
 		return { original: lines(single.originalEditor.getVisibleRanges()), modified: lines(single.modifiedEditor.getVisibleRanges()) };
 	},

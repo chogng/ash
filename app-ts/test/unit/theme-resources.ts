@@ -15,7 +15,7 @@ const api: IExtensionApi = {
 	readResource: async request => decodeBase64(bundle.resources[request.extensionId][request.path]).buffer,
 };
 const themes = new ExtensionColorThemeService(api, {
-	subscribe: () => ({ dispose() {} }),
+	subscribe: () => ({ dispose() { } }),
 });
 await themes.start();
 process.once('exit', () => themes.dispose());

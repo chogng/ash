@@ -20,30 +20,30 @@ resources/icons/*.svg
                        → native product host
 ```
 
-| 想做什么 | 使用的契约 | 不应该传递什么 |
-| --- | --- | --- |
-| 在产品界面使用已有图标 | 稳定语义图标 ID | 文件名或原始 SVG |
-| 更换图稿但保留含义 | 更新语义 ID 对应的资源 | 要求所有调用方改名 |
-| 增加新的产品动作图标 | 显式注册新的语义图标 | 让资源目录自动扩张公共 API |
-| 在不同渲染器显示图标 | 各渲染器消费同一语义定义 | 把 GPU 或组件类型放入资源 crate |
+| 想做什么               | 使用的契约               | 不应该传递什么                  |
+| ---------------------- | ------------------------ | ------------------------------- |
+| 在产品界面使用已有图标 | 稳定语义图标 ID          | 文件名或原始 SVG                |
+| 更换图稿但保留含义     | 更新语义 ID 对应的资源   | 要求所有调用方改名              |
+| 增加新的产品动作图标   | 显式注册新的语义图标     | 让资源目录自动扩张公共 API      |
+| 在不同渲染器显示图标   | 各渲染器消费同一语义定义 | 把 GPU 或组件类型放入资源 crate |
 
 ## 2. 所有权
 
-| 能力 | 当前 owner | 状态 |
-| --- | --- | --- |
-| Canonical first-party SVG artwork | `resources/icons` | ✅ |
-| Desktop generated SVG factories | `app-ts/src/ash/base/common/productIcons.ts` | ✅ |
-| Desktop built-in SVG catalog | `base/common/lxicons.ts` / `lxiconsUtil.ts` | ✅ |
-| Desktop semantic registration与resolution | `platform/theme/common/iconRegistry.ts` | ✅ |
-| Desktop SVG creation and display | `base/browser/ui/lxicons` | ✅ |
-| Desktop searchable SVG icon selector | `base/browser/ui/icons/iconSelectBox.ts` | ✅，等待产品调用入口 |
-| Desktop product SVG theme selection | `workbench/services/themes` | ✅ |
-| Rust semantic identity、definition 与 rendering mode | `ash-icons` | ✅ |
-| Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |
-| Rust icon+text component geometry | `ash-ui-components::IconLabel` | ✅ |
-| Product command 与 icon selection | 各 product host | ✅ |
-| Seti file-extension/theme resolution | `app-ts/src/ash/platform/theme/browser` | ✅，浏览器主题能力 |
-| Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu` | ✅ |
+| 能力                                                   | 当前 owner                                   | 状态                 |
+| ------------------------------------------------------ | -------------------------------------------- | -------------------- |
+| Canonical first-party SVG artwork                      | `resources/icons`                            | ✅                   |
+| Desktop generated SVG factories                        | `app-ts/src/ash/base/common/productIcons.ts` | ✅                   |
+| Desktop built-in SVG catalog                           | `base/common/lxicons.ts` / `lxiconsUtil.ts`  | ✅                   |
+| Desktop semantic registration与resolution              | `platform/theme/common/iconRegistry.ts`      | ✅                   |
+| Desktop SVG creation and display                       | `base/browser/ui/lxicons`                    | ✅                   |
+| Desktop searchable SVG icon selector                   | `base/browser/ui/icons/iconSelectBox.ts`     | ✅，等待产品调用入口 |
+| Desktop product SVG theme selection                    | `workbench/services/themes`                  | ✅                   |
+| Rust semantic identity、definition 与 rendering mode   | `ash-icons`                                  | ✅                   |
+| Rust logical placement、tint 与 clip scene contract    | `zui::PaintIcon`                             | ✅                   |
+| Rust icon+text component geometry                      | `ash-ui-components::IconLabel`               | ✅                   |
+| Product command 与 icon selection                      | 各 product host                              | ✅                   |
+| Seti file-extension/theme resolution                   | `app-ts/src/ash/platform/theme/browser`      | ✅，浏览器主题能力   |
+| Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu`                                   | ✅                   |
 
 `ash-icons` 不依赖 `zui` 或 `ash-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。

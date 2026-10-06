@@ -31,19 +31,22 @@ test('custom editor tabs retain source identity and survive working-set serializ
 test('packaged Markdown extension activates Chinese labels and renders the supplied unsaved document', async () => {
 	const bundle = JSON.parse(await readFile(resolve(process.cwd(), 'src/ash/platform/extensions/common/generated/browser.json'), 'utf8'));
 	const entry = bundle.resources['vscode.markdown-language-features']['src/extension.js'];
-	const extension = await import(`data:text/javascript;base64,${entry}`) as { activate(context: unknown): void };
+	const extension = await import(`data:text/javascript;base64,${entry}`) as { activate(context: unknown): void; };
 	const registrations: ExtensionHostRegistration[] = [];
 	const handlers = new Map<string, Handler>();
 	const commands: unknown[][] = [];
-	extension.activate({ language: 'zh-CN',
+	extension.activate({
+		language: 'zh-CN',
 		register: (registration: ExtensionHostRegistration, handler: Handler) => { registrations.push(registration); handlers.set(registration.registrationId, handler); },
 		executeCommand: async (...args: unknown[]) => { commands.push(args); },
 	});
-	const normalized = normalizeExtensionHostSnapshot({ generation: 1, extensions: [{
-		id: 'vscode.markdown-language-features', activationGeneration: 1, incarnation: 1, lifecycle: 'ready',
-		version: '1.0.0', packageDigest: `sha256:${'b'.repeat(64)}`, runtimeApiVersion: 1,
-		stderr: '', failure: null, registrations, outputEvents: [],
-	}] });
+	const normalized = normalizeExtensionHostSnapshot({
+		generation: 1, extensions: [{
+			id: 'vscode.markdown-language-features', activationGeneration: 1, incarnation: 1, lifecycle: 'ready',
+			version: '1.0.0', packageDigest: `sha256:${'b'.repeat(64)}`, runtimeApiVersion: 1,
+			stderr: '', failure: null, registrations, outputEvents: [],
+		}]
+	});
 	const provider = normalized.extensions[0]!.registrations.find(registration => registration.kind === 'customTextEditor');
 	assert.equal(provider?.kind === 'customTextEditor' && provider.displayName, 'Markdown 预览');
 	const previewCommand = registrations.find(registration => registration.kind === 'command' && registration.command === 'markdown.showPreview');
@@ -51,7 +54,7 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 	const signal = new AbortController().signal;
 	const result = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', {
 		document: { uri: 'untitled:/draft.md', text: '# Unsaved\n\n**bold**\n\n<script>alert(1)</script>', languageId: 'markdown' },
-	}, signal) as { html: string };
+	}, signal) as { html: string; };
 	assert.match(result.html, /<h1>Unsaved<\/h1>/u);
 	assert.match(result.html, /<strong>bold<\/strong>/u);
 	assert.doesNotMatch(result.html, /alert\(1\)/u);

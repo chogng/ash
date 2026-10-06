@@ -31,7 +31,7 @@ export class DiffEditorCommandsService implements IDiffEditorCommandsService {
 		@IEditorPart private readonly editorPart: IEditorPart,
 		@IEditorService private readonly editorService: IEditorService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-	) {}
+	) { }
 
 	async toggleRenderSideBySide(): Promise<void> {
 		if (!this.activeControl()) return;

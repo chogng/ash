@@ -38,7 +38,7 @@ export class StableEditorScrollState {
 		private readonly _visiblePosition: Position | null,
 		private readonly _visiblePositionScrollDelta: number,
 		private readonly _cursorPosition: Position | null,
-	) {}
+	) { }
 
 	/** Restores the captured top-row offset after the viewport layout changes. */
 	public restore(editor: ICodeEditor): void {
@@ -107,7 +107,7 @@ export class StableEditorBottomScrollState {
 		private readonly _initialContentHeight: number,
 		private readonly _visiblePosition: Position | null,
 		private readonly _visiblePositionScrollDelta: number,
-	) {}
+	) { }
 
 	/** Restores the captured bottom-row offset after the viewport layout changes. */
 	public restore(editor: ICodeEditor): void {

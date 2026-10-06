@@ -314,7 +314,7 @@ class WordHighlightCoordinator {
 	private readonly controllers = new Set<WordHighlighter>();
 	private readonly clearTimer = new TimeoutTimer();
 
-	constructor(private readonly service: ILanguageFeaturesService) {}
+	constructor(private readonly service: ILanguageFeaturesService) { }
 
 	add(controller: WordHighlighter): void {
 		this.controllers.add(controller);

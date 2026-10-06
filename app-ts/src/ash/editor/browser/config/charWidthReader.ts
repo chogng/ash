@@ -11,7 +11,7 @@ export const enum CharWidthRequestType {
 export class CharWidthRequest {
 	width = 0;
 
-	constructor(readonly chr: string, readonly type: CharWidthRequestType) {}
+	constructor(readonly chr: string, readonly type: CharWidthRequestType) { }
 
 	fulfill(width: number): void {
 		this.width = width;

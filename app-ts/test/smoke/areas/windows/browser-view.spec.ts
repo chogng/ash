@@ -35,8 +35,8 @@ test('downloads report completion and cancellation and closing a page releases t
 			// Simulate choosing the test directory in Electron's save-location dialog.
 			view.webContents.session.once('will-download', (_event, item) => {
 				item.setSavePath(filename);
-				(globalThis as unknown as { browserDownloadState: string }).browserDownloadState = 'progressing';
-				item.once('done', (_event, state) => { (globalThis as unknown as { browserDownloadState: string }).browserDownloadState = state; });
+				(globalThis as unknown as { browserDownloadState: string; }).browserDownloadState = 'progressing';
+				item.once('done', (_event, state) => { (globalThis as unknown as { browserDownloadState: string; }).browserDownloadState = state; });
 			});
 			await view.webContents.executeJavaScript(`(() => { const link = document.createElement('a'); link.href = ${JSON.stringify(path)}; link.click(); })()`, true);
 		}, { url, path, filename });
@@ -52,7 +52,7 @@ test('downloads report completion and cancellation and closing a page releases t
 		await start('/pending', join(testWorkspace.directory, 'closed.txt'));
 		await expect(progress).toContainText('downloading');
 		await page.getByRole('button', { name: 'Close Download fixture', exact: true }).click();
-		await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserDownloadState: string }).browserDownloadState)).toBe('cancelled');
+		await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserDownloadState: string; }).browserDownloadState)).toBe('cancelled');
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>(resolve => server.close(() => resolve()));
@@ -74,11 +74,11 @@ test('website permission dialogs allow, remember, reset and deny the requesting 
 	const original = await electron.evaluateHandle(({ dialog }) => dialog.showMessageBox);
 	await electron.evaluate(({ dialog }) => {
 		const prompts: BrowserPrompt[] = [];
-		(globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts = prompts;
+		(globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts = prompts;
 		dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => new Promise<Electron.MessageBoxReturnValue>(respond => prompts.push({ options: args.at(-1) as Electron.MessageBoxOptions, respond }))) as typeof dialog.showMessageBox;
 	});
-	const prompt = () => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.map(item => item.options));
-	const answer = (response: number) => electron.evaluate((_electron, response) => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.shift()!.respond({ response, checkboxChecked: false }), response);
+	const prompt = () => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.map(item => item.options));
+	const answer = (response: number) => electron.evaluate((_electron, response) => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.shift()!.respond({ response, checkboxChecked: false }), response);
 	try {
 		await workbench.quickaccess.runCommand('ash.browser.open');
 		const editor = page.locator('.ash-browser-editor');
@@ -115,11 +115,11 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.browser.open');
 	const info = await page.evaluate(async () => {
-		const views = await (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke('ash:browser-view:list') as IBrowserViewInfo[];
+		const views = await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-view:list') as IBrowserViewInfo[];
 		return views.find(view => view.owner.type === 'user')!;
 	});
 	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
 	}, { method, params });
 	const observe = { threadId: 'share-test-thread', targetId: info.id, includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
 	await expect(call('observe', observe)).rejects.toThrow(/BrowserTargetAccessDenied/);
@@ -131,13 +131,13 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 		const original = await electron.evaluateHandle(({ dialog }) => dialog.showMessageBox);
 		await electron.evaluate(({ dialog }) => {
 			const prompts: BrowserPrompt[] = [];
-			(globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts = prompts;
+			(globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts = prompts;
 			dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => new Promise<Electron.MessageBoxReturnValue>(respond => prompts.push({ options: args.at(-1) as Electron.MessageBoxOptions, respond }))) as typeof dialog.showMessageBox;
 		});
 		try {
 			await page.getByRole('button', { name: 'Share with Agent', exact: true }).click();
-			await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.map(prompt => prompt.options))).toMatchObject([{ title: 'Share with Agent', detail: 'This page is currently shared.', buttons: ['Revoke all access', 'Cancel'] }]);
-			await electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[] }).browserPrompts.shift()!.respond({ response: 0, checkboxChecked: false }));
+			await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.map(prompt => prompt.options))).toMatchObject([{ title: 'Share with Agent', detail: 'This page is currently shared.', buttons: ['Revoke all access', 'Cancel'] }]);
+			await electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.shift()!.respond({ response: 0, checkboxChecked: false }));
 			await expect(page.locator('.ash-browser-editor').getByRole('status')).toHaveText('This page is private.');
 		} finally {
 			await electron.evaluate(({ dialog }, original) => { dialog.showMessageBox = original; }, original);
@@ -156,7 +156,7 @@ test('browser automation runs in one separate process and its crash retains manu
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	const invoke = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'crash-test-thread', ...params } });
+		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'crash-test-thread', ...params } });
 	}, { method, params });
 	const created = decodeAppServerServerRequestResult('browser/create', await invoke('create', { url: 'about:blank' }));
 	const options = { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false };
@@ -244,7 +244,7 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 	const page = workbench.page;
 	const electron = application as ElectronApplication;
 	const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
+		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
 	}, { method, params });
 	try {
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
@@ -253,7 +253,7 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 		const initial = await observe(true);
 		expect({ url: initial.url, title: initial.title, loading: initial.loading }).toEqual({ url, title: 'Agent fixture', loading: false });
 		expect(Buffer.from(initial.screenshot!.dataBase64, 'base64').subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-		const tree = JSON.parse(initial.accessibilityTree!) as { nodes: { role?: { value: string }; name?: { value: string }; backendDOMNodeId?: number }[] };
+		const tree = JSON.parse(initial.accessibilityTree!) as { nodes: { role?: { value: string; }; name?: { value: string; }; backendDOMNodeId?: number; }[]; };
 		const nodeId = (role: string, name: string): string => {
 			const node = tree.nodes.find(node => node.role?.value === role && node.name?.value === name);
 			if (!node?.backendDOMNodeId) { throw new Error(`Missing observed element: ${name}`); }
@@ -378,7 +378,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(0);
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).map(view => view.url)).toEqual([]);
 		const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-			const bridge = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
+			const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
 			return bridge.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
 		}, { method, params });
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
@@ -387,7 +387,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		let nodeId: string | undefined;
 		await expect.poll(async () => {
 			const observation = decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false }));
-			const tree = JSON.parse(observation.accessibilityTree ?? '{}') as { nodes?: { role?: { value: string }; name?: { value: string }; backendDOMNodeId?: number }[] };
+			const tree = JSON.parse(observation.accessibilityTree ?? '{}') as { nodes?: { role?: { value: string; }; name?: { value: string; }; backendDOMNodeId?: number; }[]; };
 			const input = tree.nodes?.find(node => node.role?.value === 'textbox' && node.name?.value === 'Page input');
 			nodeId = input?.backendDOMNodeId === undefined ? undefined : String(input.backendDOMNodeId);
 			return nodeId !== undefined;
@@ -401,10 +401,10 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		const slow = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url: 'about:blank' }));
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 		const pending = page.evaluate(({ id, url, targetId }) => {
-			return (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke('ash:browser-host:perform', { id, params: { threadId: 'browser-smoke-thread', action: { type: 'navigate', targetId, url } } }).then(() => 'completed', () => 'cancelled');
+			return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:perform', { id, params: { threadId: 'browser-smoke-thread', action: { type: 'navigate', targetId, url } } }).then(() => 'completed', () => 'cancelled');
 		}, { id: requestId, url: `${url}slow`, targetId: slow.targetId });
 		await expect.poll(() => finishSlowLoad !== undefined).toBe(true);
-		await page.evaluate(id => (globalThis as unknown as { ash: ISandboxGlobals }).ash.ipcRenderer.invoke('ash:browser-host:cancel', { id }), requestId);
+		await page.evaluate(id => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:cancel', { id }), requestId);
 		expect(await pending).toBe('cancelled');
 		finishSlowLoad!();
 		await hostCall('close', { targetId: slow.targetId });

@@ -24,7 +24,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: options => { shownActions = options.getActions?.() ?? []; },
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	try {
 		const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
@@ -39,7 +39,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		const overrides = outputResources.add(outputScope.createChild());
 		overrides.registerInstance(IContextMenuService, contextMenus);
 		const services = createCodeEditorServices(outputResources, overrides);
-		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => {}), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {} });
+		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
 		using pane = services.createInstance(OutputViewPane, browser.window.document.body, { id: 'ash.output.test', title: 'Output' });
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
@@ -77,12 +77,12 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 		onDidStartTask: Event.None,
 		onDidChangeTaskRun: Event.None,
 		registerTaskProvider: () => toDisposable(() => undefined),
-		registerTaskProviders: () => ({ replace() {}, dispose() {}, [Symbol.dispose]() {} }),
+		registerTaskProviders: () => ({ replace() { }, dispose() { }, [Symbol.dispose]() { } }),
 		refresh: async () => { refreshCount += 1; return []; },
 		run: async () => { throw new Error("Task execution is not expected"); },
 		terminate: async () => undefined,
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	} as ITaskService;
 	const views = { openView: async () => null, focusView: async () => false, getViewWithId: () => null } as unknown as IViewsService;
 	const terminals = { instances: [] } as unknown as ITerminalService;
@@ -129,7 +129,7 @@ function installDomGlobals(browser: JSDOM): IDisposable {
 		InputEvent: browser.window.InputEvent,
 		NodeFilter: browser.window.NodeFilter,
 		PointerEvent: browser.window.MouseEvent,
-		ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+		ResizeObserver: class { observe() { } unobserve() { } disconnect() { } },
 	};
 	return installEditorTestGlobals(globals);
 }

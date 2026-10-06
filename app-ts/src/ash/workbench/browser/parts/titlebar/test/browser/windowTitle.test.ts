@@ -203,7 +203,7 @@ class TestEditorService extends Disposable implements IEditorGroupsContainer {
 	public get hasListeners(): boolean { return this.activeChanged.hasListeners(); }
 	public async openEditor(input: EditorInput): Promise<void> { this.activeEditor = input; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
 	public close(): void { this.activeEditor = undefined; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
-	public focusActiveEditor(): void {}
+	public focusActiveEditor(): void { }
 }
 
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
@@ -217,8 +217,8 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	constructor(public readonly resource: URI) { super(); }
 	public setDirty(value: boolean): void { this.isDirty = value; this.dirtyChanged.fire(); }
 	public backup(): string { return ''; }
-	public restoreBackup(): void {}
+	public restoreBackup(): void { }
 	public async save(_signal: AbortSignal): Promise<void> { this.setDirty(false); }
-	public async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> {}
+	public async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> { }
 	public async revert(_signal: AbortSignal): Promise<void> { this.setDirty(false); }
 }

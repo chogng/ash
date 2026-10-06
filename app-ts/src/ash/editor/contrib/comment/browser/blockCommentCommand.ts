@@ -14,7 +14,7 @@ export class BlockCommentCommand implements ICommand {
 		private readonly selection: Selection,
 		private readonly insertSpace: boolean,
 		private readonly languageConfigurationService: ILanguageConfigurationService,
-	) {}
+	) { }
 
 	public static _haystackHasNeedleAtOffset(haystack: string, needle: string, offset: number): boolean {
 		if (offset < 0 || offset + needle.length > haystack.length) return false;

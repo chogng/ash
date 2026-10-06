@@ -92,7 +92,7 @@ class AgentSessionRow extends Disposable {
 	private readonly button: HTMLButtonElement;
 	private readonly title: HTMLSpanElement;
 	private readonly description: HTMLSpanElement;
-	private open: () => void = () => {};
+	private open: () => void = () => { };
 
 	constructor(document: Document) {
 		super();

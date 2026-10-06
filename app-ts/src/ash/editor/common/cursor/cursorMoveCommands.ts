@@ -281,9 +281,9 @@ export namespace CursorMove {
 		ViewPortTop: 'viewPortTop', ViewPortCenter: 'viewPortCenter', ViewPortBottom: 'viewPortBottom', ViewPortIfOutside: 'viewPortIfOutside',
 	} as const;
 	export const RawUnit = { Line: 'line', WrappedLine: 'wrappedLine', Character: 'character', HalfLine: 'halfLine', FoldedLine: 'foldedLine' } as const;
-	export interface RawArguments { to: string; select?: boolean; by?: string; value?: number; noHistory?: boolean }
-	export interface ParsedArguments { direction: Direction; unit: Unit; select: boolean; value: number; noHistory: boolean }
-	export interface SimpleMoveArguments { direction: SimpleMoveDirection; unit: Unit; select: boolean; value: number }
+	export interface RawArguments { to: string; select?: boolean; by?: string; value?: number; noHistory?: boolean; }
+	export interface ParsedArguments { direction: Direction; unit: Unit; select: boolean; value: number; noHistory: boolean; }
+	export interface SimpleMoveArguments { direction: SimpleMoveDirection; unit: Unit; select: boolean; value: number; }
 
 	function isCursorMoveArgs(value: unknown): boolean {
 		if (!types.isObject(value)) return false;
@@ -295,12 +295,14 @@ export namespace CursorMove {
 
 	export const metadata: ICommandMetadata = {
 		description: 'Move the cursor to a logical editor position',
-		args: [{ name: 'Cursor move arguments', constraint: isCursorMoveArgs, schema: {
-			type: 'object', required: ['to'], properties: {
-				to: { type: 'string', enum: Object.values(RawDirection) }, by: { type: 'string', enum: Object.values(RawUnit) },
-				value: { type: 'number', default: 1 }, select: { type: 'boolean', default: false }, noHistory: { type: 'boolean', default: false },
-			},
-		} }],
+		args: [{
+			name: 'Cursor move arguments', constraint: isCursorMoveArgs, schema: {
+				type: 'object', required: ['to'], properties: {
+					to: { type: 'string', enum: Object.values(RawDirection) }, by: { type: 'string', enum: Object.values(RawUnit) },
+					value: { type: 'number', default: 1 }, select: { type: 'boolean', default: false }, noHistory: { type: 'boolean', default: false },
+				},
+			}
+		}],
 	};
 
 	export function parse(args: Partial<RawArguments>): ParsedArguments | null {

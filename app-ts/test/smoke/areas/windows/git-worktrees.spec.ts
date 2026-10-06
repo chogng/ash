@@ -69,7 +69,7 @@ test('Git open worktree uses the resolved folder for the desktop workspace', asy
 		await permission.getByRole('button', { name: 'Open Read Only', exact: true }).click();
 		await expect.poll(async () => {
 			const workspace = await page.evaluate(() => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash.ipcRenderer;
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 				return ipc.invoke('ash:workspace:context:read');
 			});
 			return parseWorkspace(workspace).folders[0]?.uri.fsPath;

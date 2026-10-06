@@ -38,15 +38,15 @@ function createServices(resources: DisposableStore): {
 	const catalogChanged = resources.add(new Emitter<ExtensionCatalog>());
 	let catalog: ExtensionCatalog = { generation: 0, extensions: [], diagnostics: [] };
 	resources.add(catalogChanged.event(next => { catalog = next; }));
-	const extensions: IExtensionService = Object.assign(toDisposable(() => {}), {
+	const extensions: IExtensionService = Object.assign(toDisposable(() => { }), {
 		currentCatalog: catalog,
 		themes: { currentCatalog: { revision: 0, themes: [] }, onDidChange: Event.None },
 		fileTemplates: { currentCatalog: { revision: 0, templates: [] }, onDidChange: Event.None },
 		debugAdapters: { definitions: [], onDidChange: Event.None, get: () => undefined },
 		onDidChange: catalogChanged.event,
 		onDidFail: Event.None,
-		start: async () => {},
-		reload: async () => {},
+		start: async () => { },
+		reload: async () => { },
 	});
 	Object.defineProperty(extensions, 'currentCatalog', { get: () => catalog });
 	resources.add(extensions);
@@ -88,7 +88,7 @@ test('changing the default folding provider cancels pending results and refreshe
 	await configuration.updateValue(configName, 'test.pending');
 	using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.folding']);
 	host.advance(WorkbenchPhase.AfterRestored);
-	const pending: { signal: AbortSignal; resolve: (ranges: { startLineIndex: number; endLineIndex: number }[]) => void }[] = [];
+	const pending: { signal: AbortSignal; resolve: (ranges: { startLineIndex: number; endLineIndex: number; }[]) => void; }[] = [];
 	let readyRequests = 0;
 	resources.add(features.foldingRangeProvider.register('plaintext', {
 		id: 'test.pending',

@@ -22,7 +22,7 @@ export class ChatModelsViewModel extends Disposable {
 	private configuration: CustomModelProvider;
 	private saved: string;
 	private writes: Promise<void> = Promise.resolve();
-	private discovered: readonly { id: string; name: string; contextWindow?: number }[] = [];
+	private discovered: readonly { id: string; name: string; contextWindow?: number; }[] = [];
 	private items: ProviderModelItem[] = [];
 	private generation = 0;
 	private _busy = false;
@@ -134,7 +134,7 @@ export class ChatModelsViewModel extends Disposable {
 			this.saved = fingerprint;
 			await this.models.refreshModels();
 		});
-		this.writes = operation.catch(() => {});
+		this.writes = operation.catch(() => { });
 		return operation;
 	}
 

@@ -8,7 +8,7 @@ import { Selection } from '../../../common/core/selection.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 
 class CursorState {
-	constructor(readonly selections: readonly Selection[]) {}
+	constructor(readonly selections: readonly Selection[]) { }
 
 	equals(other: CursorState): boolean {
 		return this.selections.length === other.selections.length
@@ -21,7 +21,7 @@ class StackElement {
 		readonly cursorState: CursorState,
 		readonly scrollTop: number,
 		readonly scrollLeft: number,
-	) {}
+	) { }
 }
 
 /** Owns bounded cursor-only undo and redo for one editor instance. */

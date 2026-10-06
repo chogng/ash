@@ -15,7 +15,7 @@ import { ChildProcessJsonlTransport, DEFAULT_MAX_JSONL_FRAME_BYTES } from '../no
 
 /** Owns one renderer's connection carrier; the carrier connects to the shared profile daemon. */
 export class AppServerConnectionRelay extends Disposable {
-	private connectionOptions: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher };
+	private connectionOptions: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; };
 	private readonly transport = this._register(new MutableDisposable<ChildProcessJsonlTransport>());
 	private readonly portResources = this._register(new MutableDisposable<IDisposable>());
 	private readonly changes = this._register(new Emitter<AppServerConnectionState>());
@@ -30,13 +30,13 @@ export class AppServerConnectionRelay extends Disposable {
 	private navigationGeneration = 0;
 	private startPromise: CancelablePromise<void> | undefined;
 
-	constructor(options: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher }) {
+	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }) {
 		super();
 		this.connectionOptions = options;
 		this._register(toDisposable(() => this.startPromise?.cancel()));
 	}
 
-	public get options(): { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher } { return this.connectionOptions; }
+	public get options(): { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; } { return this.connectionOptions; }
 
 	public replaceProcessLauncher(processLauncher: IAppServerProcessLauncher): void {
 		if (!this.options.enabled || this.state !== 'stopped') throw new Error('App Server launcher can only change while stopped');
@@ -116,7 +116,7 @@ export class AppServerConnectionRelay extends Disposable {
 
 	public diagnostics(): string { return this.transport.value?.diagnostics() ?? this.diagnostic; }
 
-	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string }): readonly IpcRoute<unknown, unknown>[] {
+	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string; }): readonly IpcRoute<unknown, unknown>[] {
 		this.renderer = renderer;
 		const processLauncher = (): IAppServerProcessLauncher | undefined => this.options.enabled ? this.options.processLauncher : undefined;
 		const reset = (): void => { void this.stop(); };

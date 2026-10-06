@@ -262,8 +262,8 @@ test('Diff pane releases both references when loading is cancelled after acquisi
 					}
 					return reference;
 				},
-				dispose() {},
-				[Symbol.dispose]() {},
+				dispose() { },
+				[Symbol.dispose]() { },
 			},
 			createComputationService: () => new PaneTestDiffComputationService(),
 		});
@@ -453,7 +453,7 @@ test('Diff pane updates hidden unchanged regions when settings change', async ()
 });
 
 class BootstrapTextFiles implements ITextFileService {
-	readonly onDidChangeFiles = () => ({ dispose() {}, [Symbol.dispose]() {} });
+	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
 		return {
@@ -465,14 +465,14 @@ class BootstrapTextFiles implements ITextFileService {
 		};
 	}
 
-	async save(): Promise<{ readonly revision: string | undefined }> {
+	async save(): Promise<{ readonly revision: string | undefined; }> {
 		return { revision: undefined };
 	}
 }
 
 class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
-	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) {}
+	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) { }
 
 	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
@@ -481,7 +481,7 @@ class PaneTestDiffComputationService implements IDocumentDiffProvider {
 		return { identical: original.getValue() === modified.getValue(), quitEarly: result.hitTimeout, changes: result.changes, moves: result.moves };
 	}
 
-	dispose(): void {}
+	dispose(): void { }
 
 	[Symbol.dispose](): void {
 		this.dispose();

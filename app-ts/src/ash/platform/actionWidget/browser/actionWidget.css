@@ -1,60 +1,63 @@
 .ash-action-widget {
-  box-sizing: border-box;
-  min-width: 240px;
-  max-width: min(520px, calc(100vw - 16px));
-  max-height: inherit;
-  overflow: auto;
-  color: var(--ash-foreground);
-  background: var(--ash-editor-background);
-  border: var(--ash-stroke-thickness) solid var(--ash-border);
-  border-radius: var(--ash-corner-radius-large);
-  box-shadow: var(--ash-shadow-lg);
-  font-size: var(--ash-font-size-body1);
-  font-weight: var(--ash-font-weight-regular);
+	box-sizing: border-box;
+	min-width: 240px;
+	max-width: min(520px, calc(100vw - 16px));
+	max-height: inherit;
+	overflow: auto;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-large);
+	box-shadow: var(--ash-shadow-lg);
+	font-size: var(--ash-font-size-body1);
+	font-weight: var(--ash-font-weight-regular);
 }
 
 [data-color-scheme="high-contrast-dark"] .ash-action-widget,
 [data-color-scheme="high-contrast-light"] .ash-action-widget {
-  border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrast-border);
 }
 
 .ash-action-widget-filter,
 .ash-action-widget-preview {
-  padding: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
 }
 
 .ash-action-widget-items {
-  min-width: 0;
+	min-width: 0;
 }
 
 .ash-action-widget-menu.ash-menu .ash-button {
-  position: relative;
-  padding-right: var(--ash-spacing-size280);
+	position: relative;
+	padding-right: var(--ash-spacing-size280);
 }
 
 .ash-action-widget-menu .ash-menu-leading-check > .ash-icon {
-  position: absolute;
-  right: var(--ash-spacing-size80);
+	position: absolute;
+	right: var(--ash-spacing-size80);
 }
 
-.ash-action-widget-menu.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
-  display: inline-flex;
+.ash-action-widget-menu.ash-menu
+	.ash-button.checked
+	> .ash-menu-leading-check
+	> .ash-icon-label-icon {
+	display: inline-flex;
 }
 
 .ash-action-widget-header {
-  padding: var(--ash-spacing-size80);
-  color: var(--ash-description-foreground);
-  font-size: var(--ash-font-size-label1);
-  font-weight: var(--ash-font-weight-semi-bold);
-  white-space: normal;
-  overflow-wrap: anywhere;
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
+	font-weight: var(--ash-font-weight-semi-bold);
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 .ash-action-widget-status {
-  padding: 0 var(--ash-spacing-size80);
-  color: var(--ash-description-foreground);
+	padding: 0 var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
 }
 
 .ash-action-widget-status:empty {
-  display: none;
+	display: none;
 }

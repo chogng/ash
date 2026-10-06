@@ -436,33 +436,33 @@ test('Model provider key entry uses the App Server and shows only saved status',
 
 
 test('Model connections support Chinese labels and keyboard navigation', async ({ target, workbench, restartWorkbench }) => {
-    test.skip(target.appServerMode !== 'required', 'Model connections require the product backend.');
-    let page = workbench.page;
-    if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-        await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-    }
-    await page.keyboard.press('F1');
-    let picker = page.locator('.ash-quick-pick');
-    await picker.getByRole('combobox').fill('Configure Display Language');
-    await picker.getByRole('combobox').press('Enter');
-    picker = page.getByRole('dialog', { name: 'Select Display Language' });
-    await picker.getByRole('combobox').fill('简体中文');
-    await picker.getByRole('combobox').press('Enter');
+	test.skip(target.appServerMode !== 'required', 'Model connections require the product backend.');
+	let page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	await page.keyboard.press('F1');
+	let picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('Configure Display Language');
+	await picker.getByRole('combobox').press('Enter');
+	picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
 	picker = page.locator('.ash-quick-pick');
-    const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
-    await input.focus();
-    await page.keyboard.insertText('/config');
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Enter');
-    picker = page.locator('.ash-quick-pick');
-    await picker.getByRole('combobox').fill('管理模型接入');
-    await picker.getByRole('combobox').press('Enter');
-    const connections = page.getByRole('dialog', { name: '模型接入', exact: true });
-    await expect(connections).toBeVisible();
-    await expect(connections.getByRole('combobox')).toBeFocused();
-    await expect(connections).toContainText('OpenAI');
-    await page.keyboard.press('Escape');
-    await expect(connections).toBeHidden();
+	const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.insertText('/config');
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Enter');
+	picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('管理模型接入');
+	await picker.getByRole('combobox').press('Enter');
+	const connections = page.getByRole('dialog', { name: '模型接入', exact: true });
+	await expect(connections).toBeVisible();
+	await expect(connections.getByRole('combobox')).toBeFocused();
+	await expect(connections).toContainText('OpenAI');
+	await page.keyboard.press('Escape');
+	await expect(connections).toBeHidden();
 });

@@ -26,7 +26,7 @@ export interface IIconRegistry {
 class IconRegistry extends Disposable implements IIconRegistry {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
-	private readonly groups = new Map<symbol, { ids: readonly string[]; fonts: readonly IconFontDefinition[] }>();
+	private readonly groups = new Map<symbol, { ids: readonly string[]; fonts: readonly IconFontDefinition[]; }>();
 	private readonly contributions = new Map<string, IconContribution>();
 
 	constructor() {

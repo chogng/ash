@@ -9,17 +9,17 @@
 
 ## 资源与接口
 
-| Owner | 职责 |
-| --- | --- |
-| [resources/catalog.json](resources/catalog.json) | Rust 自有颜色默认值、别名与尺寸定义；直接编辑 |
-| [resources/entries.json](resources/entries.json) | Rust GUI 的内置主题入口和覆盖 |
-| [resources/color-theme.schema.json](resources/color-theme.schema.json) | 用户主题文档结构 |
-| [resources/color-theme.template.json](resources/color-theme.template.json) | 可安装的用户主题示例 |
-| `ThemeCatalog` | 校验自有目录并解析完整快照 |
-| `ThemeDocument` | 严格解析最多 1 MiB、512 项覆盖的用户 JSON |
-| `ThemeLoader::preview` | 根据 GUI 传入的选择值解析主题，不读取或保存选择配置 |
-| `ThemeLoadOptions` | 宿主提供 profile root、系统明暗方案和默认入口 |
-| `tokens.rs` | Rust 调用方使用的语义 ID 常量 |
+| Owner                                                                      | 职责                                                |
+| -------------------------------------------------------------------------- | --------------------------------------------------- |
+| [resources/catalog.json](resources/catalog.json)                           | Rust 自有颜色默认值、别名与尺寸定义；直接编辑       |
+| [resources/entries.json](resources/entries.json)                           | Rust GUI 的内置主题入口和覆盖                       |
+| [resources/color-theme.schema.json](resources/color-theme.schema.json)     | 用户主题文档结构                                    |
+| [resources/color-theme.template.json](resources/color-theme.template.json) | 可安装的用户主题示例                                |
+| `ThemeCatalog`                                                             | 校验自有目录并解析完整快照                          |
+| `ThemeDocument`                                                            | 严格解析最多 1 MiB、512 项覆盖的用户 JSON           |
+| `ThemeLoader::preview`                                                     | 根据 GUI 传入的选择值解析主题，不读取或保存选择配置 |
+| `ThemeLoadOptions`                                                         | 宿主提供 profile root、系统明暗方案和默认入口       |
+| `tokens.rs`                                                                | Rust 调用方使用的语义 ID 常量                       |
 
 GUI 从 `[gui].theme` 取得选择值；本 crate 不解释 `[gui]`、`[tui]` 或 Desktop 的 `workbench.colorTheme`。
 本 crate 内的 `palette.rs` 将快照转换为组件颜色和尺寸；组件不读主题文件。

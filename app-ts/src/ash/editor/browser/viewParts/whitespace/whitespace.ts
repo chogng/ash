@@ -58,37 +58,37 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		const projection = this.readVisualProjection();
 		const textLeft = this.readTextLeft();
 		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
-		for (const [visualLineIndex, row] of rows) {
-			if (this.mode === 'none') {
-				continue;
+			for (const [visualLineIndex, row] of rows) {
+				if (this.mode === 'none') {
+					continue;
+				}
+				const visualLine = projection.lineAt(visualLineIndex);
+				if (!visualLine) {
+					continue;
+				}
+				const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
+				const trailingStart = text.search(/\s*$/u);
+				for (let index = 0; index < text.length; index += 1) {
+					const character = text[index];
+					if (character !== ' ' && character !== '\t') {
+						continue;
+					}
+					if (this.mode === 'trailing' && index < trailingStart) {
+						continue;
+					}
+					if (this.mode === 'boundary' && index > 0 && index < trailingStart) {
+						continue;
+					}
+					if (this.mode === 'selection' && !this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)) {
+						continue;
+					}
+					const marker = h(row.ownerDocument, 'span');
+					marker.className = 'mwh stanza-editor-whitespace';
+					marker.textContent = character === '\t' ? '→' : '·';
+					marker.style.left = `${textLeft + this.textMeasurer.measureLineWidth(text.slice(0, index))}px`;
+					row.append(marker);
+				}
 			}
-			const visualLine = projection.lineAt(visualLineIndex);
-			if (!visualLine) {
-				continue;
-			}
-			const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
-			const trailingStart = text.search(/\s*$/u);
-			for (let index = 0; index < text.length; index += 1) {
-				const character = text[index];
-				if (character !== ' ' && character !== '\t') {
-					continue;
-				}
-				if (this.mode === 'trailing' && index < trailingStart) {
-					continue;
-				}
-				if (this.mode === 'boundary' && index > 0 && index < trailingStart) {
-					continue;
-				}
-				if (this.mode === 'selection' && !this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)) {
-					continue;
-				}
-				const marker = h(row.ownerDocument, 'span');
-				marker.className = 'mwh stanza-editor-whitespace';
-				marker.textContent = character === '\t' ? '→' : '·';
-				marker.style.left = `${textLeft + this.textMeasurer.measureLineWidth(text.slice(0, index))}px`;
-				row.append(marker);
-			}
-		}
 		});
 	}
 

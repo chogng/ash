@@ -26,18 +26,18 @@
 
 多个独立 Session 的根 Thread 之间不存在父子关系，不属于本文协调器，也不建立另一套跨 Session 工作图。需要共同完成一个目标时，由一个 Session 的根 Agent 创建同一 Agent tree 内的子 Thread。
 
-| 读者首先会问 | 直接答案 | 深入阅读 |
-| --- | --- | --- |
-| “主 Agent”和“子 Agent”是不同类型吗？ | 不是；它们只是会话入口运行和委托运行在树中的相对位置 | [`agents.md`](agents.md) |
-| 被委托 Agent 在系统中是什么？ | 一个拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread | [身份与聚合边界](#2-身份与聚合边界) |
-| 调用方与被委托方共享历史或模型状态吗？ | 不共享可变状态；只通过明确的种子、消息和结果传递信息 | [上下文隔离](#11-上下文隔离) |
-| 创建、分叉和生成有什么区别？ | 创建建立新 Thread，分叉固定已有序列点，生成额外记录委托关系 | [创建、分叉与生成](#4-创建create分叉fork与生成spawn) |
-| 被委托 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
-| 取消父 Agent 会发生什么？ | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling | [取消与终态语义](#9-取消与终态语义) |
-| 多个 Agent 的代码结果如何避免互相破坏？ | 根 Agent 通过明确任务范围和依赖安排子 Agent；每个 Thread 使用自己的受管目录与 Turn ChangeSet，最终验证和提交仍走 Git/Turn Changes | [`chat-session-inspector.md`](chat-session-inspector.md) |
-| 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.ash/agents`；会话、委托和工作流共用一种契约 | [`agents.md`](agents.md) |
-| Team 与 Agent 树是什么关系？ | Team 跨任务保存成员关系；每次 Team 工作关联一个 Session 内的协调 Thread 及其委托后代。当前 `/team` 只实现了一次任务内的协作 | [Agent Team](../ash-rs/docs/agent-teams.md) |
-| 多个独立 Session 如何协作？ | 不建立隐式协作；需要共同目标时回到一个 Session 的 Agent tree | [系统边界](#2-系统边界) |
+| 读者首先会问                                       | 直接答案                                                                                                                          | 深入阅读                                                 |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| “主 Agent”和“子 Agent”是不同类型吗？               | 不是；它们只是会话入口运行和委托运行在树中的相对位置                                                                              | [`agents.md`](agents.md)                                 |
+| 被委托 Agent 在系统中是什么？                      | 一个拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread                                                                            | [身份与聚合边界](#2-身份与聚合边界)                      |
+| 调用方与被委托方共享历史或模型状态吗？             | 不共享可变状态；只通过明确的种子、消息和结果传递信息                                                                              | [上下文隔离](#11-上下文隔离)                             |
+| 创建、分叉和生成有什么区别？                       | 创建建立新 Thread，分叉固定已有序列点，生成额外记录委托关系                                                                       | [创建、分叉与生成](#4-创建create分叉fork与生成spawn)     |
+| 被委托 Agent 如何回传结果？                        | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用                                                                          | [结果与汇合](#8-结果与汇合)                              |
+| 取消父 Agent 会发生什么？                          | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling                     | [取消与终态语义](#9-取消与终态语义)                      |
+| 多个 Agent 的代码结果如何避免互相破坏？            | 根 Agent 通过明确任务范围和依赖安排子 Agent；每个 Thread 使用自己的受管目录与 Turn ChangeSet，最终验证和提交仍走 Git/Turn Changes | [`chat-session-inspector.md`](chat-session-inspector.md) |
+| 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.ash/agents`；会话、委托和工作流共用一种契约                                              | [`agents.md`](agents.md)                                 |
+| Team 与 Agent 树是什么关系？                       | Team 跨任务保存成员关系；每次 Team 工作关联一个 Session 内的协调 Thread 及其委托后代。当前 `/team` 只实现了一次任务内的协作       | [Agent Team](../ash-rs/docs/agent-teams.md)              |
+| 多个独立 Session 如何协作？                        | 不建立隐式协作；需要共同目标时回到一个 Session 的 Agent tree                                                                      | [系统边界](#2-系统边界)                                  |
 
 ## 1. 结论
 
@@ -171,11 +171,11 @@ child 和等待 delivery receipt 都在 Thread writer 之外。
 
 三种操作语义不同：
 
-| 操作 | 目的 | parent 关系 | context |
-| --- | --- | --- | --- |
-| Create | 新建独立 Thread | 无 | fresh |
-| Fork | 创建产品历史分支 | immutable lineage anchor | 明确 fork selection |
-| Spawn | 创建一次 Agent 委托运行 | delegation + parent anchor | 明确 AgentContextSeed |
+| 操作   | 目的                    | parent 关系                | context               |
+| ------ | ----------------------- | -------------------------- | --------------------- |
+| Create | 新建独立 Thread         | 无                         | fresh                 |
+| Fork   | 创建产品历史分支        | immutable lineage anchor   | 明确 fork selection   |
+| Spawn  | 创建一次 Agent 委托运行 | delegation + parent anchor | 明确 AgentContextSeed |
 
 Fork 不自动产生委托关系。用户可以 fork side conversation；Agent 也可以在 fresh context 下
 创建委托运行。

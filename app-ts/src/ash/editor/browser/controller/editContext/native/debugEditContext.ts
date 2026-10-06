@@ -1,7 +1,7 @@
 import { text, h } from '../../../../../base/browser/dom.js';
 import { EditContext } from './editContextFactory.js';
 
-type DebugMarker = { readonly dispose: () => void };
+type DebugMarker = { readonly dispose: () => void; };
 type EventHandler = (this: unknown, event: Event) => unknown;
 
 interface EditContextInit {
@@ -217,7 +217,7 @@ export class DebugEditContext {
 class HandlerSlot {
 	private handler: EventHandler | null = null;
 
-	constructor(private readonly type: keyof EditContextEventHandlersEventMap, private readonly target: DebugEditContext) {}
+	constructor(private readonly type: keyof EditContextEventHandlersEventMap, private readonly target: DebugEditContext) { }
 
 	get value(): EventHandler | null { return this.handler; }
 	set value(handler: EventHandler | null) {

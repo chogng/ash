@@ -13,9 +13,9 @@ export interface GitUpstream {
 }
 
 export type GitHead =
-	| { readonly type: "branch"; readonly name: string; readonly objectId: string; readonly upstream: GitUpstream | undefined }
-	| { readonly type: "detached"; readonly objectId: string }
-	| { readonly type: "unborn"; readonly name: string };
+	| { readonly type: "branch"; readonly name: string; readonly objectId: string; readonly upstream: GitUpstream | undefined; }
+	| { readonly type: "detached"; readonly objectId: string; }
+	| { readonly type: "unborn"; readonly name: string; };
 
 export interface GitSubmoduleState {
 	readonly isSubmodule: boolean;
@@ -55,7 +55,7 @@ export interface GitCommitDetails {
 	readonly authorEmail: string;
 	readonly timestampSeconds: number;
 	readonly message: string;
-	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number; };
 }
 
 export interface GitRepository {
@@ -122,9 +122,9 @@ export interface GitCommitChanges {
 }
 
 export type GitCommitFileContent =
-	| { readonly kind: "missing" }
-	| { readonly kind: "binary" }
-	| { readonly kind: "text"; readonly text: string };
+	| { readonly kind: "missing"; }
+	| { readonly kind: "binary"; }
+	| { readonly kind: "text"; readonly text: string; };
 
 export interface GitCommitFile {
 	readonly original: GitCommitFileContent;
@@ -147,7 +147,7 @@ export interface GitConflictFile {
 	readonly result: GitCommitFileContent;
 }
 
-export type GitConflictResolution = { readonly kind: 'edited'; readonly text: string } | { readonly kind: 'current' } | { readonly kind: 'incoming' };
+export type GitConflictResolution = { readonly kind: 'edited'; readonly text: string; } | { readonly kind: 'current'; } | { readonly kind: 'incoming'; };
 
 /** Describes one bounded page of Git graph history requested by a frontend consumer. */
 export interface GraphQuery {
@@ -175,25 +175,25 @@ export type GitIntegration = 'merge' | 'rebase' | 'cherryPick';
 
 /** Finite repository intents owned by the frontend Git domain. */
 export type GitCommand =
-	| { readonly kind: 'createBranchAt'; readonly name: string; readonly objectId: string }
-	| { readonly kind: 'checkoutDetached'; readonly objectId: string }
-	| { readonly kind: 'checkoutRemoteBranch'; readonly name: string; readonly reference: string }
-	| { readonly kind: 'renameBranch'; readonly name: string; readonly newName: string }
-	| { readonly kind: 'deleteRemoteBranch'; readonly remote: string; readonly name: string }
-	| { readonly kind: 'merge' | 'rebase'; readonly reference: string }
-	| { readonly kind: 'cherryPick'; readonly reference: string; readonly mainline?: number }
-	| { readonly kind: 'continue' | 'abort'; readonly operation: GitIntegration }
-	| { readonly kind: 'stash'; readonly message: string; readonly mode: 'tracked' | 'includeUntracked' }
-	| { readonly kind: 'applyStash' | 'popStash' | 'dropStash'; readonly objectId: string }
-	| { readonly kind: 'createTag'; readonly name: string; readonly reference: string }
-	| { readonly kind: 'deleteTag' | 'removeRemote'; readonly name: string }
-	| { readonly kind: 'addRemote'; readonly name: string; readonly url: string }
-	| { readonly kind: 'amend'; readonly message: string }
-	| { readonly kind: 'undoCommit'; readonly expectedHead: string };
+	| { readonly kind: 'createBranchAt'; readonly name: string; readonly objectId: string; }
+	| { readonly kind: 'checkoutDetached'; readonly objectId: string; }
+	| { readonly kind: 'checkoutRemoteBranch'; readonly name: string; readonly reference: string; }
+	| { readonly kind: 'renameBranch'; readonly name: string; readonly newName: string; }
+	| { readonly kind: 'deleteRemoteBranch'; readonly remote: string; readonly name: string; }
+	| { readonly kind: 'merge' | 'rebase'; readonly reference: string; }
+	| { readonly kind: 'cherryPick'; readonly reference: string; readonly mainline?: number; }
+	| { readonly kind: 'continue' | 'abort'; readonly operation: GitIntegration; }
+	| { readonly kind: 'stash'; readonly message: string; readonly mode: 'tracked' | 'includeUntracked'; }
+	| { readonly kind: 'applyStash' | 'popStash' | 'dropStash'; readonly objectId: string; }
+	| { readonly kind: 'createTag'; readonly name: string; readonly reference: string; }
+	| { readonly kind: 'deleteTag' | 'removeRemote'; readonly name: string; }
+	| { readonly kind: 'addRemote'; readonly name: string; readonly url: string; }
+	| { readonly kind: 'amend'; readonly message: string; }
+	| { readonly kind: 'undoCommit'; readonly expectedHead: string; };
 
 export interface GitCatalog {
-	readonly tags: readonly { readonly name: string; readonly objectId: string }[];
-	readonly stashes: readonly { readonly objectId: string; readonly subject: string }[];
+	readonly tags: readonly { readonly name: string; readonly objectId: string; }[];
+	readonly stashes: readonly { readonly objectId: string; readonly subject: string; }[];
 	readonly remotes: readonly string[];
 	readonly operation: GitIntegration | undefined;
 }
@@ -204,12 +204,12 @@ export interface GitCommandResult {
 	readonly operation: GitIntegration | undefined;
 }
 
-export type GitIndexSelection = { readonly kind: 'hunk'; readonly index: number } | { readonly kind: 'lines'; readonly start: number; readonly end: number };
+export type GitIndexSelection = { readonly kind: 'hunk'; readonly index: number; } | { readonly kind: 'lines'; readonly start: number; readonly end: number; };
 
 export interface GitIndexDiff {
 	readonly original: string | null;
 	readonly modified: string | null;
-	readonly hunks: readonly { readonly index: number; readonly oldStart: number; readonly oldCount: number; readonly newStart: number; readonly newCount: number; readonly preview: string }[];
+	readonly hunks: readonly { readonly index: number; readonly oldStart: number; readonly oldCount: number; readonly newStart: number; readonly newCount: number; readonly preview: string; }[];
 }
 
 export class GitWorkspaceError extends Error {

@@ -1,190 +1,191 @@
 .ash-terminal-view {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
 }
 
 .ash-terminal-title-toolbar {
-  gap: 2px;
+	gap: 2px;
 }
 
 .ash-terminal-active-action .ash-action-label-text {
-  max-width: 170px;
+	max-width: 170px;
 }
 
 .ash-terminal-status {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  color: var(--ash-error-foreground);
-  font-size: 12px;
+	flex: 0 0 auto;
+	padding: 4px 8px;
+	color: var(--ash-error-foreground);
+	font-size: 12px;
 }
 
 .ash-terminal-content {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  overflow: hidden;
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .ash-terminal-tabs-layout {
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
 }
 
 .ash-terminal-tabs {
-  min-width: 0;
-  min-height: 0;
-  border-left: var(--ash-stroke-thickness) solid color-mix(in srgb, currentColor 12%, transparent);
+	min-width: 0;
+	min-height: 0;
+	border-left: var(--ash-stroke-thickness) solid
+		color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .ash-terminal-tabs .ash-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  flex: 0 0 auto;
+	position: relative;
+	display: flex;
+	align-items: center;
+	width: 100%;
+	flex: 0 0 auto;
 }
 
 .ash-terminal-tabs .ash-tab.checked {
-  background: color-mix(in srgb, currentColor 8%, transparent);
+	background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .ash-terminal-tabs .ash-tab.checked::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 1px;
-  background: currentColor;
-  content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 1px;
+	background: currentColor;
+	content: "";
 }
 
 .ash-terminal-tabs .ash-tab-label {
-  display: flex;
-  overflow: hidden;
-  align-items: center;
-  min-width: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
+	display: flex;
+	overflow: hidden;
+	align-items: center;
+	min-width: 0;
+	height: 100%;
+	flex: 1 1 auto;
+	border: 0;
+	color: inherit;
+	background: transparent;
+	text-align: left;
+	cursor: pointer;
 }
 
 .ash-terminal-tabs .ash-tab-label:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-terminal-tabs .ash-tab-actions {
-  padding-right: 4px;
+	padding-right: 4px;
 }
 
 .ash-terminal-tabs-narrow .ash-icon-label-text {
-  display: none;
+	display: none;
 }
 
 .ash-terminal-tabs-narrow .ash-tab-label {
-  justify-content: center;
-  padding-right: 4px;
-  padding-left: 4px;
+	justify-content: center;
+	padding-right: 4px;
+	padding-left: 4px;
 }
 
 .ash-terminal-tabs .ash-tab[data-state="disconnected"],
 .ash-terminal-tabs .ash-tab[data-state="error"] {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-terminal-tabs .ash-tab[data-state="reconnecting"] {
-  color: var(--ash-description-foreground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-terminal-widgets {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  padding: 6px 8px 4px;
-  overflow: hidden;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	padding: 6px 8px 4px;
+	overflow: hidden;
 }
 
 .ash-terminal-instance {
-  --ash-terminal-command-gutter-width: 10px;
+	--ash-terminal-command-gutter-width: 10px;
 
-  position: relative;
-  box-sizing: border-box;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  padding-left: var(--ash-terminal-command-gutter-width);
+	position: relative;
+	box-sizing: border-box;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	padding-left: var(--ash-terminal-command-gutter-width);
 }
 
 .ash-terminal-instance .xterm {
-  height: 100%;
+	height: 100%;
 }
 
 .ash-terminal-command-status {
-  display: flex !important;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: center;
-  width: var(--ash-terminal-command-gutter-width) !important;
-  color: var(--ash-muted-foreground);
-  pointer-events: none;
-  transform: translateX(calc(-1 * var(--ash-terminal-command-gutter-width)));
+	display: flex !important;
+	box-sizing: border-box;
+	align-items: center;
+	justify-content: center;
+	width: var(--ash-terminal-command-gutter-width) !important;
+	color: var(--ash-muted-foreground);
+	pointer-events: none;
+	transform: translateX(calc(-1 * var(--ash-terminal-command-gutter-width)));
 }
 
 .ash-terminal-command-status::before {
-  box-sizing: border-box;
-  width: 6px;
-  height: 6px;
-  border: var(--ash-stroke-thickness) solid currentColor;
-  border-radius: 50%;
-  content: "";
+	box-sizing: border-box;
+	width: 6px;
+	height: 6px;
+	border: var(--ash-stroke-thickness) solid currentColor;
+	border-radius: 50%;
+	content: "";
 }
 
 .ash-terminal-command-status.running {
-  color: var(--ash-focus-border);
+	color: var(--ash-focus-border);
 }
 
 .ash-terminal-command-status.running::before {
-  border-color: currentColor;
-  background: currentColor;
-  animation: ash-terminal-command-status-breathe 1400ms ease-in-out infinite;
+	border-color: currentColor;
+	background: currentColor;
+	animation: ash-terminal-command-status-breathe 1400ms ease-in-out infinite;
 }
 
 .ash-terminal-command-status.completed::before,
 .ash-terminal-command-status.succeeded::before,
 .ash-terminal-command-status.failed::before {
-  background: currentColor;
+	background: currentColor;
 }
 
 .ash-terminal-command-status.succeeded {
-  color: var(--ash-success-foreground);
+	color: var(--ash-success-foreground);
 }
 
 .ash-terminal-command-status.failed {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-terminal-command-status.canceled {
-  color: var(--ash-warning-foreground);
+	color: var(--ash-warning-foreground);
 }
 
 @keyframes ash-terminal-command-status-breathe {
-  50% {
-    opacity: 0.45;
-    transform: scale(0.72);
-  }
+	50% {
+		opacity: 0.45;
+		transform: scale(0.72);
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ash-terminal-command-status.running::before {
-    animation: none;
-  }
+	.ash-terminal-command-status.running::before {
+		animation: none;
+	}
 }

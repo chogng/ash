@@ -101,9 +101,11 @@ window.ashGpuTextIntegration = {
 	},
 	prepareSemanticText: () => {
 		disposables.add(stanzaApi.languages.registerDocumentSemanticTokensProvider('typescript', {
-			provideSemanticTokens: request => request.model === model ? { tokens: [{
-				range: new stanzaApi.Range(1, 1, 1, 7), tokenType: 'variable', modifiers: ['readonly'],
-			}] } : undefined,
+			provideSemanticTokens: request => request.model === model ? {
+				tokens: [{
+					range: new stanzaApi.Range(1, 1, 1, 7), tokenType: 'variable', modifiers: ['readonly'],
+				}]
+			} : undefined,
 		}));
 		StandaloneServices.get(IStandaloneThemeService).setColorTheme(createColorTheme({
 			id: 'gpu-semantic', label: 'GPU semantic', colorScheme: stanzaApi.ColorScheme.Dark,

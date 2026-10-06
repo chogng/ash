@@ -15,8 +15,8 @@ export class RemoteConnectionRecoveryCoordinator {
 	constructor(
 		private readonly host: RemoteConnectionRecoveryHost,
 		private readonly launcher: RemoteAppServerProcessLauncher,
-		private readonly prepareForConnectionReplacement: () => void = () => {},
-	) {}
+		private readonly prepareForConnectionReplacement: () => void = () => { },
+	) { }
 
 	reconnect(): Promise<RemoteAgentReconnectResult> {
 		return this.runExclusive(() => this.performReconnect());

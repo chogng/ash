@@ -41,19 +41,19 @@ export interface EditorPartState {
 export type EditorCloseReason = 'close' | 'move' | 'replace' | 'previewReplace' | 'reset';
 
 export type EditorGroupChangeEvent =
-	| { readonly kind: 'editorOpened'; readonly editor: EditorInstanceState }
-	| { readonly kind: 'editorClosed'; readonly editor: EditorInstanceState; readonly reason: EditorCloseReason }
-	| { readonly kind: 'activeEditorChanged'; readonly editor: EditorInstanceState | undefined }
-	| { readonly kind: 'editorMoved'; readonly editor: EditorInstanceState; readonly previousIndex: number }
-	| { readonly kind: 'editorStateChanged'; readonly editor: EditorInstanceState };
+	| { readonly kind: 'editorOpened'; readonly editor: EditorInstanceState; }
+	| { readonly kind: 'editorClosed'; readonly editor: EditorInstanceState; readonly reason: EditorCloseReason; }
+	| { readonly kind: 'activeEditorChanged'; readonly editor: EditorInstanceState | undefined; }
+	| { readonly kind: 'editorMoved'; readonly editor: EditorInstanceState; readonly previousIndex: number; }
+	| { readonly kind: 'editorStateChanged'; readonly editor: EditorInstanceState; };
 
 export type EditorPartChangeEvent =
-	| { readonly kind: 'groupAdded'; readonly group: EditorGroupState }
-	| { readonly kind: 'groupRemoved'; readonly groupId: EditorGroupId }
-	| { readonly kind: 'activeGroupChanged'; readonly groupId: EditorGroupId }
-	| { readonly kind: 'groupVisibilityChanged'; readonly groupId: EditorGroupId; readonly visible: boolean }
-	| { readonly kind: 'modalEditorChanged'; readonly visible: boolean }
-	| { readonly kind: 'groupChanged'; readonly groupId: EditorGroupId; readonly event: EditorGroupChangeEvent };
+	| { readonly kind: 'groupAdded'; readonly group: EditorGroupState; }
+	| { readonly kind: 'groupRemoved'; readonly groupId: EditorGroupId; }
+	| { readonly kind: 'activeGroupChanged'; readonly groupId: EditorGroupId; }
+	| { readonly kind: 'groupVisibilityChanged'; readonly groupId: EditorGroupId; readonly visible: boolean; }
+	| { readonly kind: 'modalEditorChanged'; readonly visible: boolean; }
+	| { readonly kind: 'groupChanged'; readonly groupId: EditorGroupId; readonly event: EditorGroupChangeEvent; };
 
 /** Read-only state surface shared by editor services and browser hosts. */
 export interface IEditorStateSource {

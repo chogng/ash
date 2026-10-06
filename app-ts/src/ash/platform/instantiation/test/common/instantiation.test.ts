@@ -29,7 +29,7 @@ test('refined service contracts share registration and constructor injection', (
 	const IBase = createDecorator<IBase>('test.refined');
 	const IExtended = refineServiceDecorator<IBase, IExtended>(IBase);
 	class Consumer {
-		constructor(@IBase readonly base: IBase, @IExtended readonly extended: IExtended) {}
+		constructor(@IBase readonly base: IBase, @IExtended readonly extended: IExtended) { }
 	}
 	using services = new InstantiationService();
 	const instance: IExtended = { name: 'shared', enabled: true };
@@ -48,9 +48,9 @@ test('service identifiers with the same name share registrations', () => {
 });
 
 test('a live service collection resolves descriptors added after scope creation', () => {
-	const IValue = createDecorator<{ value: string }>('test.live');
+	const IValue = createDecorator<{ value: string; }>('test.live');
 	const IMessage = createDecorator<string>('test.live.message');
-	class Value { constructor(@IMessage readonly value: string) {} }
+	class Value { constructor(@IMessage readonly value: string) { } }
 	const collection = new ServiceCollection([IMessage, 'ready']);
 	using services = new InstantiationService(collection);
 	collection.set(IValue, new SyncDescriptor(Value));
@@ -99,8 +99,8 @@ test('missing transitive dependencies of delayed services fail before a consumer
 	const IDependency = createDecorator<Dependency>('test.delayed.dependency');
 	const IService = createDecorator<Service>('test.delayed.required');
 	let created = 0;
-	class Dependency { constructor(@IMissing readonly missing: object) {} }
-	class Service { constructor(@IDependency readonly dependency: Dependency) {} }
+	class Dependency { constructor(@IMissing readonly missing: object) { } }
+	class Service { constructor(@IDependency readonly dependency: Dependency) { } }
 	class Consumer { constructor(@IService service: Service) { created++; } }
 	using services = new InstantiationService(new ServiceCollection(
 		[IDependency, new SyncDescriptor(Dependency, [], true)],
@@ -112,8 +112,8 @@ test('missing transitive dependencies of delayed services fail before a consumer
 
 test('parent services resolve dependencies from their owner when requested by a child', () => {
 	const IMessage = createDecorator<string>('test.scope.message');
-	const IService = createDecorator<{ message: string }>('test.scope.owner');
-	class Service { constructor(@IMessage readonly message: string) {} }
+	const IService = createDecorator<{ message: string; }>('test.scope.owner');
+	class Service { constructor(@IMessage readonly message: string) { } }
 	using parent = new InstantiationService(new ServiceCollection([IMessage, 'parent'], [IService, new SyncDescriptor(Service)]));
 	using child = parent.createChild(new ServiceCollection([IMessage, 'child']));
 	assert.equal(child.get(IService).message, 'parent');
@@ -177,7 +177,7 @@ test('constructor services resolve from the creating scope after explicit argume
 			readonly label: string,
 			@IMessage readonly message: string,
 			@IInstantiationService readonly services: IInstantiationService,
-		) {}
+		) { }
 	}
 	using parent = new InstantiationService();
 	parent.registerInstance(IMessage, 'parent');
@@ -191,8 +191,8 @@ test('constructor services resolve from the creating scope after explicit argume
 test('constructor service metadata is inherited without changing the base class', () => {
 	const IMessage = createDecorator<string>('test.constructor.inheritance');
 	const IOther = createDecorator<string>('test.constructor.other');
-	class Base { constructor(@IMessage readonly message: string) {} }
-	class Inherited extends Base {}
+	class Base { constructor(@IMessage readonly message: string) { } }
+	class Inherited extends Base { }
 	class Overridden extends Base { constructor(@IOther message: string) { super(message); } }
 	using services = new InstantiationService();
 	services.registerInstance(IMessage, 'base');
@@ -264,7 +264,7 @@ test("invocation accessors cannot escape their call", () => {
 });
 
 test("singleton factories are delayed and resolved once", () => {
-	const serviceId = createServiceIdentifier<{ id: number }>("test.singleton");
+	const serviceId = createServiceIdentifier<{ id: number; }>("test.singleton");
 	const container = new InstantiationService();
 	let created = 0;
 	container.registerSingleton(serviceId, () => ({ id: ++created }));
@@ -355,7 +355,7 @@ test("ServiceCollection transfers explicit instances into a container", () => {
 });
 
 test("global singleton descriptors remain explicit until a container adopts them", () => {
-	const serviceId = createServiceIdentifier<{ readonly created: number }>("test.global-singleton");
+	const serviceId = createServiceIdentifier<{ readonly created: number; }>("test.global-singleton");
 	let created = 0;
 	class RegisteredService { readonly created = ++created; }
 	registerSingleton(serviceId, RegisteredService, InstantiationType.Delayed);

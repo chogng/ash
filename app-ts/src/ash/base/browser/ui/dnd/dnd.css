@@ -1,16 +1,16 @@
 .ash-dnd-draggable {
-  cursor: grab;
+	cursor: grab;
 }
 
 .ash-dnd-draggable:active {
-  cursor: grabbing;
+	cursor: grabbing;
 }
 
 .ash-dnd-dragging {
-  opacity: .5;
+	opacity: 0.5;
 }
 
 .ash-dnd-drop-target {
-  outline: 2px solid var(--ash-focus-border);
-  outline-offset: -2px;
+	outline: 2px solid var(--ash-focus-border);
+	outline-offset: -2px;
 }

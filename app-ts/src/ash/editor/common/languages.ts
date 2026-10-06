@@ -39,7 +39,7 @@ export interface WorkspaceEdit {
 
 export type WorkspaceEditEntry = {
 	readonly resource: URI;
-	readonly textEdit: TextEdit & { readonly insertAsSnippet?: boolean; readonly keepWhitespace?: boolean };
+	readonly textEdit: TextEdit & { readonly insertAsSnippet?: boolean; readonly keepWhitespace?: boolean; };
 	readonly versionId?: number;
 } | {
 	readonly oldResource?: URI;
@@ -52,14 +52,14 @@ export type WorkspaceEditEntry = {
 	};
 };
 
-export type DropYieldTo = { readonly kind: HierarchicalKind } | { readonly mimeType: string };
+export type DropYieldTo = { readonly kind: HierarchicalKind; } | { readonly mimeType: string; };
 
 export interface DocumentPasteEdit {
 	readonly title: string;
 	readonly kind: HierarchicalKind;
 	readonly handledMimeType?: string;
 	readonly yieldTo?: readonly DropYieldTo[];
-	insertText: string | { readonly snippet: string };
+	insertText: string | { readonly snippet: string; };
 	additionalEdit?: WorkspaceEdit;
 }
 
@@ -93,7 +93,7 @@ export interface DocumentDropEdit {
 	readonly kind: HierarchicalKind | undefined;
 	readonly handledMimeType?: string;
 	readonly yieldTo?: readonly DropYieldTo[];
-	insertText: string | { readonly snippet: string };
+	insertText: string | { readonly snippet: string; };
 	additionalEdit?: WorkspaceEdit;
 }
 
@@ -569,7 +569,7 @@ export interface LanguageReferenceProvider {
 	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export type LanguageHoverContent = string | { readonly value: string; readonly language?: string };
+export type LanguageHoverContent = string | { readonly value: string; readonly language?: string; };
 
 export interface LanguageHover {
 	readonly range?: Range;
@@ -587,7 +587,7 @@ export interface LanguageHoverProvider {
 
 export type LanguageInlayHintKind = "type" | "parameter" | "other";
 
-export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range }[];
+export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range; }[];
 
 export interface LanguageInlayHint {
 	readonly position: Position;
@@ -650,7 +650,7 @@ export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
 }
 
 export type LanguageParameterHintsContext = (
-	{ readonly kind: 'invoke' } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string } | { readonly kind: 'contentChange' }
+	{ readonly kind: 'invoke'; } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string; } | { readonly kind: 'contentChange'; }
 ) & {
 	readonly isRetrigger?: boolean;
 	readonly activeSignatureHelp?: LanguageParameterHints;
@@ -925,9 +925,9 @@ export function languageCompletionProviderMatches(provider: LanguageCompletionPr
 		provider.languageIds.includes("*") ||
 		provider.languageIds.includes(languageId)
 	) && (
-		context.kind !== LanguageCompletionTriggerKind.TriggerCharacter ||
-		provider.triggerCharacters.includes(context.triggerCharacter)
-	);
+			context.kind !== LanguageCompletionTriggerKind.TriggerCharacter ||
+			provider.triggerCharacters.includes(context.triggerCharacter)
+		);
 }
 
 const INVOKE_CONTEXT = Object.freeze({
@@ -1024,7 +1024,7 @@ function assertTriggerCharacter(value: unknown): asserts value is string {
 export interface SyntaxRequest {
 	readonly languageId: string;
 	/** Hypothetical lines, starting in the lexical state of the real document. */
-	readonly tokenize?: { readonly lineNumber: number; readonly lines: readonly string[] };
+	readonly tokenize?: { readonly lineNumber: number; readonly lines: readonly string[]; };
 }
 
 export interface SyntaxProviderRequest extends SyntaxRequest {

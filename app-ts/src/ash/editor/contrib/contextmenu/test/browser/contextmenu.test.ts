@@ -18,7 +18,7 @@ const environment = new JSDOM('<!doctype html><body></body>');
 const installedGlobals = installEditorTestDom(environment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent',
 ], {
-	ResizeObserver: class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} },
+	ResizeObserver: class TestResizeObserver { observe(): void { } unobserve(): void { } disconnect(): void { } },
 });
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -41,7 +41,7 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: request => { requests.push(request); },
-		hideContextMenu() {},
+		hideContextMenu() { },
 	};
 	using services = new InstantiationService();
 	services.registerInstance(IContextMenuService, contextMenuService);

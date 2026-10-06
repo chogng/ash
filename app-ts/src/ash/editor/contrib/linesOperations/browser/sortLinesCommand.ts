@@ -11,7 +11,7 @@ export class SortLinesCommand implements ICommand {
 	constructor(
 		private readonly selection: Selection,
 		private readonly descending: boolean,
-	) {}
+	) { }
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		this.selectionId = builder.trackSelection(this.selection);

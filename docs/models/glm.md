@@ -4,14 +4,14 @@ BigModel 和 Z.AI 各有 Coding Plan、Start Plan 与开发者 API 三种接入�
 
 ## 连接与请求目标
 
-| 入口 | 连接 ID | 请求目标 |
-| --- | --- | --- |
-| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4` |
-| Z.AI Coding Plan | `zai-coding-plan` | `https://api.z.ai/api/coding/paas/v4` |
-| BigModel Start Plan | `bigmodel-start-plan` | `https://zcode.z.ai/api/v1/zcode-plan/anthropic`，Anthropic Messages |
-| Z.AI Start Plan | `zai-start-plan` | 同一 Start Plan 服务，使用 Z.AI 账户 |
-| BigModel API | `bigmodel` | BigModel 标准 API 端点 |
-| Z.AI API | `zai` | Z.AI 标准 API 端点 |
+| 入口                 | 连接 ID                | 请求目标                                                             |
+| -------------------- | ---------------------- | -------------------------------------------------------------------- |
+| BigModel Coding Plan | `bigmodel-coding-plan` | `https://open.bigmodel.cn/api/coding/paas/v4`                        |
+| Z.AI Coding Plan     | `zai-coding-plan`      | `https://api.z.ai/api/coding/paas/v4`                                |
+| BigModel Start Plan  | `bigmodel-start-plan`  | `https://zcode.z.ai/api/v1/zcode-plan/anthropic`，Anthropic Messages |
+| Z.AI Start Plan      | `zai-start-plan`       | 同一 Start Plan 服务，使用 Z.AI 账户                                 |
+| BigModel API         | `bigmodel`             | BigModel 标准 API 端点                                               |
+| Z.AI API             | `zai`                  | Z.AI 标准 API 端点                                                   |
 
 ZCode 登录保存在其用户目录的 `~/.zcode/v2/credentials.json`，Ash 每次调用前直接读取当前账号和请求密钥，不复制到 Ash，也不修改 ZCode 文件；若设置了 `ZCODE_DATA_BASE_DIR`，则读取该目录下的 `.zcode/v2/credentials.json`。Ash 自己发起的登录分别保存账户和内部请求凭据。两个开发者 API 连接各自保存用户输入的密钥。模型引用统一使用 `glm` 厂商 ID；六条连接按 BigModel Coding Plan > Z.AI Coding Plan > BigModel Start Plan > Z.AI Start Plan > BigModel API > Z.AI API 选择已就绪的一条。已有的 Z.AI API 密钥不会自动用于 Coding Plan。选择与请求规则见[供应商凭据边界](../model-provider.md#6-供应商凭据边界)。
 

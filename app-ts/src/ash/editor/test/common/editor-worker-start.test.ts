@@ -6,7 +6,7 @@ import { start, type StanzaWorkerPort } from "../../editor.worker.start.js";
 test("Stanza worker bootstrap owns one structured-clone port lifecycle", () => {
 	const port = new FakeWorkerPort();
 	let received: unknown;
-	let resources: { dispose(): void } | undefined;
+	let resources: { dispose(): void; } | undefined;
 
 	start(context => {
 		resources = context.resources;

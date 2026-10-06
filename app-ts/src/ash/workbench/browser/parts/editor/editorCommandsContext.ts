@@ -11,7 +11,7 @@ export interface IEditorCommandsContext {
 }
 
 export interface IResolvedEditorCommandsContext {
-	readonly groupedEditors: readonly { readonly group: IEditorGroup; readonly editors: readonly EditorInput[] }[];
+	readonly groupedEditors: readonly { readonly group: IEditorGroup; readonly editors: readonly EditorInput[]; }[];
 	readonly preserveFocus: boolean;
 }
 
@@ -49,7 +49,7 @@ export function resolveCommandsContext(commandArgs: readonly unknown[], editorGr
 	};
 }
 
-function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: EditorInput; preserveFocus: boolean } | undefined {
+function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: EditorInput; preserveFocus: boolean; } | undefined {
 	if (argument instanceof URI) {
 		for (const group of editorGroups.groups) {
 			const editor = group.inputs.find(input => extUri.isEqual(input.resource, argument));

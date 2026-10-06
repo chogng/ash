@@ -79,14 +79,14 @@ interface IntegrationHarness {
 	hasClipboardContribution(): boolean;
 	hasPlaceholderContribution(): boolean;
 	switchToOther(): Promise<WorkbenchSwitchResult>;
-	getSelection(): { readonly startLineIndex: number; readonly startColumnIndex: number; readonly endLineIndex: number; readonly endColumnIndex: number };
-	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
+	getSelection(): { readonly startLineIndex: number; readonly startColumnIndex: number; readonly endLineIndex: number; readonly endColumnIndex: number; };
+	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number; }[], primaryIndex?: number): void;
 	revealPosition(lineIndex: number, columnIndex: number): void;
 	setScrollLeft(scrollLeft: number): void;
 	setScrollbar(options: IEditorScrollbarOptions): void;
 	updateOptions(options: IEditorOptions): void;
 	runWorkbenchCommand(id: string): Promise<void>;
-	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string; readonly wordWrapOverride: string; readonly wrappingColumn: number };
+	getViewSettings(): { readonly minimap: boolean; readonly renderWhitespace: string; readonly renderControlCharacters: boolean; readonly wordWrap: string; readonly wordWrapOverride: string; readonly wrappingColumn: number; };
 	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
 	setSyntaxColor(color: string): void;
 	setSelectionColors(colors: Record<string, string>): void;
@@ -130,8 +130,8 @@ const models = disposables.add(new BrowserTextModelService(resourceStore, {
 let syntaxAnalysisCount = 0;
 disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 	generation: 1,
-	open: async () => {},
-	update: async () => {},
+	open: async () => { },
+	update: async () => { },
 	analyze: async params => {
 		syntaxAnalysisCount += 1;
 		return {
@@ -152,7 +152,7 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 		};
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
-	close: async () => {},
+	close: async () => { },
 }));
 let editorPart: ReturnType<typeof createBrowserEditorPart> | undefined;
 let viewZoneId: string | undefined;
@@ -278,7 +278,7 @@ window.ashTextModelIntegration = {
 				container.append(button);
 			}
 
-			protected override _doLayout(): void {}
+			protected override _doLayout(): void { }
 		}(requiredEditorPart(), { isAccessible: true, showFrame: false, showArrow: false }));
 		widget.create();
 		widget.show(new Position(2, 1), 1);

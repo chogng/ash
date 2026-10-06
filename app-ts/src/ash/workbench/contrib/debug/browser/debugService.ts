@@ -360,7 +360,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.configurationsEmitter.fire(configurations);
 	}
 
-	private acceptBreakpointUpdates(updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[]): void {
+	private acceptBreakpointUpdates(updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[]): void {
 		if (updates.length === 0) return;
 		const byId = new Map(updates.map(update => [update.id, update]));
 		this.currentBreakpoints = Object.freeze(this.currentBreakpoints.map(breakpoint => {
@@ -530,11 +530,11 @@ function parsePersistedDataBreakpoint(value: unknown): IDataBreakpoint {
 	});
 }
 
-function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint } {
+function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint; } {
 	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Breakpoint state must be an object");
 	const input = value as Record<string, unknown>;
 	if (typeof input.enabled !== "boolean") throw new TypeError("Breakpoint enabled state must be a boolean");
-	const expressions: { condition?: string; hitCondition?: string } = {};
+	const expressions: { condition?: string; hitCondition?: string; } = {};
 	for (const field of ["condition", "hitCondition"] as const) {
 		if (input[field] === undefined) continue;
 		if (typeof input[field] !== "string") throw new TypeError(`${field} must be a string`);
@@ -549,7 +549,7 @@ function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreak
 	const resource = normalizePersistedString(input.resource, `breakpoints[${index}].resource`, 16_384);
 	URI.parse(resource);
 	if (!Number.isSafeInteger(input.lineNumber) || (input.lineNumber as number) <= 0 || typeof input.enabled !== "boolean") throw new TypeError(`breakpoints[${index}] is malformed`);
-	const expressions: { condition?: string; hitCondition?: string; logMessage?: string } = {};
+	const expressions: { condition?: string; hitCondition?: string; logMessage?: string; } = {};
 	for (const field of ["condition", "hitCondition", "logMessage"] as const) {
 		if (input[field] === undefined) continue;
 		if (typeof input[field] !== "string") throw new TypeError(`breakpoints[${index}].${field} must be a string`);
@@ -597,7 +597,7 @@ interface RunInTerminalArguments {
 }
 
 /** Launches a DAP-requested debuggee through the existing integrated terminal boundary. */
-async function runDebuggeeInTerminal(terminalService: ITerminalService, value: unknown, dirId?: string): Promise<Readonly<{ shellProcessId: number }>> {
+async function runDebuggeeInTerminal(terminalService: ITerminalService, value: unknown, dirId?: string): Promise<Readonly<{ shellProcessId: number; }>> {
 	const request = parseRunInTerminalArguments(value);
 	if (request.kind === "external") throw new Error("External debug terminals are not supported; use an integrated terminal");
 	const profiles = await terminalService.getProfiles();

@@ -39,8 +39,8 @@ test('failed menubar updates retain the last installed revision', async () => {
 	const menu = {
 		onDidChange: changes.event,
 		getActions: () => [['navigation', [new SubmenuAction('file', 'File', [primary])]]] as const,
-		dispose() {},
-		[Symbol.dispose]() {},
+		dispose() { },
+		[Symbol.dispose]() { },
 	};
 	const menuService = {
 		createMenu: (id: MenuId) => id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] },

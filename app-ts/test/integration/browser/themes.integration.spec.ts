@@ -221,11 +221,11 @@ test('extension file icons load a real font and update existing labels on theme 
 		root.append(element);
 	});
 	const suggestionStyle = async () => suggestionIcon.evaluate(element => ({
-			labelSize: getComputedStyle(element).fontSize,
-			iconContent: getComputedStyle(element, '::before').content,
-			iconColor: getComputedStyle(element, '::before').color,
-			iconFont: getComputedStyle(element, '::before').fontFamily,
-		}));
+		labelSize: getComputedStyle(element).fontSize,
+		iconContent: getComputedStyle(element, '::before').content,
+		iconColor: getComputedStyle(element, '::before').color,
+		iconFont: getComputedStyle(element, '::before').fontFamily,
+	}));
 	const darkSuggestion = await suggestionStyle();
 	expect(darkSuggestion.labelSize).toBe('0px');
 	expect(darkSuggestion.iconContent).not.toBe('none');

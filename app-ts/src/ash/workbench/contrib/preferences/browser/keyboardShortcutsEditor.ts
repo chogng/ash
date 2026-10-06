@@ -303,7 +303,7 @@ class KeyboardShortcutRow extends Disposable {
 	private readonly when: HTMLSpanElement;
 	private readonly source: HTMLSpanElement;
 
-	constructor(container: HTMLElement, item: KeyboardShortcutItem, callbacks: { readonly onEdit: (item: KeyboardShortcutItem) => void; readonly onRemove: (item: KeyboardShortcutItem) => void }) {
+	constructor(container: HTMLElement, item: KeyboardShortcutItem, callbacks: { readonly onEdit: (item: KeyboardShortcutItem) => void; readonly onRemove: (item: KeyboardShortcutItem) => void; }) {
 		super();
 		this.item = item;
 		const ownerDocument = container.ownerDocument;

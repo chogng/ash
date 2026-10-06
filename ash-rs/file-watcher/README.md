@@ -63,10 +63,10 @@ notify callback
 
 ### Event 语义
 
-| Event | 含义 | Consumer obligation |
-| --- | --- | --- |
-| `PathsChanged { paths }` | backend 观察到这些 subscriber-visible path 附近发生 mutation | 对受影响 scope 重新扫描并校验 |
-| `RescanRequired { watched_paths }` | backend 报错，事件可能丢失 | 对列出的已注册 roots 做 scoped full rescan |
+| Event                              | 含义                                                         | Consumer obligation                        |
+| ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------ |
+| `PathsChanged { paths }`           | backend 观察到这些 subscriber-visible path 附近发生 mutation | 对受影响 scope 重新扫描并校验              |
+| `RescanRequired { watched_paths }` | backend 报错，事件可能丢失                                   | 对列出的已注册 roots 做 scoped full rescan |
 
 两种 event 都是 hint。`PathsChanged` 不证明路径仍存在、内容有效或 mutation 已稳定；rename 也可能
 产生多个 backend event。`RescanRequired` 会覆盖同一 receiver 中尚未消费的 path-level hints。
@@ -109,13 +109,13 @@ Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所
 
 ## 内部接口地图
 
-| Symbol | 拥有 | 架构漂移信号 |
-| --- | --- | --- |
-| `WatchState` / `PathWatchCounts` | subscriber state 与共享 backend scope ref-count | 开始保存 consumer snapshot/content |
-| `actual_watch_path` / `changed_path_for_event` | fallback、canonical matching 与请求 namespace 恢复 | 开始解释 catalog 或 directory 业务语义 |
-| `FileWatcher::notify_subscribers` | raw mutation 到 subscriber hint 的 routing | 直接发布 App Server/product event |
-| `WatchSender` / `PendingEvent` | 每个 subscriber 的去重 pending 状态 | 引入 durable queue/replay contract |
-| throttle/debounce wrappers | delivery cadence | 决定 manager 的扫描或 snapshot generation |
+| Symbol                                         | 拥有                                               | 架构漂移信号                              |
+| ---------------------------------------------- | -------------------------------------------------- | ----------------------------------------- |
+| `WatchState` / `PathWatchCounts`               | subscriber state 与共享 backend scope ref-count    | 开始保存 consumer snapshot/content        |
+| `actual_watch_path` / `changed_path_for_event` | fallback、canonical matching 与请求 namespace 恢复 | 开始解释 catalog 或 directory 业务语义    |
+| `FileWatcher::notify_subscribers`              | raw mutation 到 subscriber hint 的 routing         | 直接发布 App Server/product event         |
+| `WatchSender` / `PendingEvent`                 | 每个 subscriber 的去重 pending 状态                | 引入 durable queue/replay contract        |
+| throttle/debounce wrappers                     | delivery cadence                                   | 决定 manager 的扫描或 snapshot generation |
 
 如果需要 ignore rules、fuzzy index 或文件内容检索，应分别由 consumer、`ash-file-search` 或
 `ash-shell-command`/`rg` 负责，不应扩张本 crate。

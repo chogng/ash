@@ -1,8 +1,8 @@
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type AutomationSchedule = { readonly type: 'once'; readonly at: number } | { readonly type: 'interval'; readonly anchor: number; readonly minutes: number } | { readonly type: 'weekly'; readonly timezone: string; readonly weekdays: readonly number[]; readonly hour: number; readonly minute: number };
-export type AutomationSession = { readonly type: 'new' } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string };
+export type AutomationSchedule = { readonly type: 'once'; readonly at: number; } | { readonly type: 'interval'; readonly anchor: number; readonly minutes: number; } | { readonly type: 'weekly'; readonly timezone: string; readonly weekdays: readonly number[]; readonly hour: number; readonly minute: number; };
+export type AutomationSession = { readonly type: 'new'; } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string; };
 export type AutomationStatus = 'enabled' | 'paused';
 export type AutomationRunStatus = 'pending' | 'running' | 'needsInput' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'skipped';
 

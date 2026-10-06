@@ -52,7 +52,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory());
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
-	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>());
+	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
 	public readonly onModelAdded = this.modelAdded.event;
 	public readonly onModelRemoved = this.modelRemoved.event;
 	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
@@ -98,13 +98,13 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			languageId: languageSelection?.languageId ?? input.languageId,
 			maintenance: this.options.maintenance,
 			...(this.options.languageService && this.options.languageFeaturesService ? {
-					tokenization: {
-						languageIdCodec: this.options.languageService.languageIdCodec,
-						syntaxProviderRegistry: this.options.languageFeaturesService.syntaxProvider,
-						documentSemanticTokensProvider: this.options.languageFeaturesService.documentSemanticTokensProvider,
-						...(this.options.syntaxService ? { syntaxService: this.options.syntaxService } : {}),
-						...(this.options.onDidChangeLanguageSupport ? { onDidChangeLanguageSupport: this.options.onDidChangeLanguageSupport } : {}),
-					},
+				tokenization: {
+					languageIdCodec: this.options.languageService.languageIdCodec,
+					syntaxProviderRegistry: this.options.languageFeaturesService.syntaxProvider,
+					documentSemanticTokensProvider: this.options.languageFeaturesService.documentSemanticTokensProvider,
+					...(this.options.syntaxService ? { syntaxService: this.options.syntaxService } : {}),
+					...(this.options.onDidChangeLanguageSupport ? { onDidChangeLanguageSupport: this.options.onDidChangeLanguageSupport } : {}),
+				},
 			} : {}),
 		});
 		if (languageSelection) model.setLanguage(languageSelection);

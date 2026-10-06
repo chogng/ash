@@ -13,7 +13,7 @@ export enum ConfigurationScope {
 export interface IConfigurationPropertySchema extends JsonSchema {
 	readonly scope?: ConfigurationScope;
 	readonly included?: boolean;
-	readonly agentsWindow?: { readonly default: JsonValue; readonly readOnly?: boolean };
+	readonly agentsWindow?: { readonly default: JsonValue; readonly readOnly?: boolean; };
 }
 
 interface IConfigurationSettingSchemaBase {
@@ -34,7 +34,7 @@ export interface INumberConfigurationSettingSchema extends IConfigurationSetting
 
 export interface ISelectConfigurationSettingSchema<T extends string | boolean = string> extends IConfigurationSettingSchemaBase {
 	readonly valueType: 'select';
-	readonly options: readonly { readonly value: T; readonly label: string }[];
+	readonly options: readonly { readonly value: T; readonly label: string; }[];
 }
 
 export interface ITextConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
@@ -57,11 +57,11 @@ export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | I
 
 export type ConfigurationSettingSchemaFor<T> =
 	[T] extends [boolean] ? IBooleanConfigurationSettingSchema
-		: [T] extends [number] ? INumberConfigurationSettingSchema
-			: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
-				: [T] extends [string | boolean] ? ISelectConfigurationSettingSchema<T & (string | boolean)>
-					: [T] extends [Record<string, unknown>] ? IStringMapConfigurationSettingSchema
-						: never;
+	: [T] extends [number] ? INumberConfigurationSettingSchema
+	: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
+	: [T] extends [string | boolean] ? ISelectConfigurationSettingSchema<T & (string | boolean)>
+	: [T] extends [Record<string, unknown>] ? IStringMapConfigurationSettingSchema
+	: never;
 
 export interface IRegisteredConfiguration<T = unknown> {
 	readonly key: string;
@@ -71,7 +71,7 @@ export interface IRegisteredConfiguration<T = unknown> {
 	readonly setting?: IConfigurationSettingSchema;
 	readonly scope?: ConfigurationScope;
 	readonly schema?: JsonSchema;
-	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean };
+	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean; };
 }
 
 export interface IConfigurationKeyDefinition<T> {
@@ -83,7 +83,7 @@ export interface IConfigurationKeyDefinition<T> {
 	readonly scope?: ConfigurationScope;
 	readonly schema?: JsonSchema;
 	/** Window defaults affect resolution only; the user document remains shared. */
-	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean };
+	readonly agentsWindow?: { readonly default: T; readonly readOnly?: boolean; };
 }
 
 export interface IConfigurationRegistry {

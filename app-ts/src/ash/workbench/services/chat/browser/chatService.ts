@@ -30,7 +30,7 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidChangeSkills = this._register(new Emitter<void>());
 	private readonly _onDidUpdateTurnChanges = this._register(new Emitter<TurnChangesUpdate>());
 	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
-	private readonly threadSubscriptions = new Map<string, { owners: Set<object>; pending: Set<Promise<ThreadSubscription>> }>();
+	private readonly threadSubscriptions = new Map<string, { owners: Set<object>; pending: Set<Promise<ThreadSubscription>>; }>();
 
 	readonly onDidUpdateThread = this._onDidUpdateThread.event;
 	readonly onDidUpdateThreadTranscript = this._onDidUpdateThreadTranscript.event;
@@ -83,7 +83,7 @@ export class ChatService extends Disposable implements IChatService {
 			}));
 	}
 
-	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot }> {
+	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {
 		const result = await this.options.threadApi.read({ sessionId, threadId });
 		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript) };
 	}

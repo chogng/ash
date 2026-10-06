@@ -5,7 +5,7 @@ import { type IEditorService } from "../../../services/editor/common/editorServi
 import { type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 
 /** Opens a Workspace Symbol only after a local index result still matches current file content. */
-export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService, editor: IEditorService, quickPick: { hide(): void }, refresh: () => void): Promise<void> {
+export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService, editor: IEditorService, quickPick: { hide(): void; }, refresh: () => void): Promise<void> {
 	const revision = localSymbolRevision(symbol);
 	if (revision) {
 		try {
@@ -37,6 +37,6 @@ async function currentSourceRevision(symbol: LanguageWorkspaceSymbol, files: IFi
 
 function localSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {
 	if (!symbol.data || typeof symbol.data !== "object") return undefined;
-	const data = symbol.data as { source?: unknown; sourceRevision?: unknown };
+	const data = symbol.data as { source?: unknown; sourceRevision?: unknown; };
 	return data.source === "codebaseSymbols" && typeof data.sourceRevision === "string" && data.sourceRevision.startsWith("sha256:") ? data.sourceRevision : undefined;
 }

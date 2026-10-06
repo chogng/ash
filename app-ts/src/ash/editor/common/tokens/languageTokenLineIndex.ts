@@ -324,7 +324,7 @@ function buildState(tokens: readonly LanguageToken[]): LanguageTokenIndexState {
 	return createState(tokens.length, built.states, built.ranges);
 }
 
-function buildLineStates(tokens: readonly LanguageToken[], startItemIndex: number, endItemIndex: number): { readonly states: readonly LanguageTokenLineState[]; readonly ranges: readonly LanguageTokenLineItemRange[] } {
+function buildLineStates(tokens: readonly LanguageToken[], startItemIndex: number, endItemIndex: number): { readonly states: readonly LanguageTokenLineState[]; readonly ranges: readonly LanguageTokenLineItemRange[]; } {
 	const states: LanguageTokenLineState[] = [];
 	const ranges: LanguageTokenLineItemRange[] = [];
 	for (let index = startItemIndex; index < endItemIndex;) {

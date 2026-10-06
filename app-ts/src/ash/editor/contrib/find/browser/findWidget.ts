@@ -273,11 +273,11 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	public getPosition(): IOverlayWidgetPosition | null {
 		return this.state.isRevealed ? { preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER } : null;
 	}
-	public getViewState(): { widgetViewZoneVisible: boolean; scrollTop: number } {
+	public getViewState(): { widgetViewZoneVisible: boolean; scrollTop: number; } {
 		const scrollTop = this.editor.getScrollTop();
 		return { widgetViewZoneVisible: this.viewZoneId !== null && scrollTop < 33, scrollTop };
 	}
-	public setViewState(viewState?: { widgetViewZoneVisible: boolean; scrollTop: number }): void {
+	public setViewState(viewState?: { widgetViewZoneVisible: boolean; scrollTop: number; }): void {
 		if (!viewState?.widgetViewZoneVisible || !this.state.isRevealed) return;
 		this.updateViewZone();
 		this.editor.setScrollTop(viewState.scrollTop);

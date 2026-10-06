@@ -6,17 +6,17 @@
 
 完成 [环境初始化](../docs/build.md#初始化) 后，在仓库根目录选择启动方式：
 
-| 用途 | 命令 | F5 配置 |
-| --- | --- | --- |
-| 完整 Electron 桌面端，监听前后端变化 | `pnpm dev:desktop`，等同于 `just ash-desktop` | `Ash (Electron)` |
-| 直接开发 Agents 窗口，监听前后端变化 | `pnpm --dir app-ts dev:agents` | `Ash (Electron, Agents)` |
-| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected` | `Ash (Electron, Frontend Watch Only)` |
-| Electron 界面，不构建或启动后端 | `pnpm dev:desktop:ui` | — |
-| 浏览器工作台、本地文件编辑，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome)` |
-| 浏览器与真实 App Server，监听前后端变化 | `pnpm dev:web:full` | — |
-| 直接开发 Sessions Web，监听前后端变化 | `pnpm dev:web:agents` | `Ash Sessions Web (Chrome)` |
-| Sessions Web 界面，不构建或启动后端 | `pnpm dev:web:agents:ui` | `Ash Sessions Web (Chrome, UI Only)` |
-| 独立 Stanza 编辑器 | `pnpm dev:stanza` | `Stanza Editor - Standalone` |
+| 用途                                                 | 命令                                          | F5 配置                               |
+| ---------------------------------------------------- | --------------------------------------------- | ------------------------------------- |
+| 完整 Electron 桌面端，监听前后端变化                 | `pnpm dev:desktop`，等同于 `just ash-desktop` | `Ash (Electron)`                      |
+| 直接开发 Agents 窗口，监听前后端变化                 | `pnpm --dir app-ts dev:agents`                | `Ash (Electron, Agents)`              |
+| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected`          | `Ash (Electron, Frontend Watch Only)` |
+| Electron 界面，不构建或启动后端                      | `pnpm dev:desktop:ui`                         | —                                     |
+| 浏览器工作台、本地文件编辑，不构建或启动后端         | `pnpm dev:web`                                | `Ash Web (Chrome)`                    |
+| 浏览器与真实 App Server，监听前后端变化              | `pnpm dev:web:full`                           | —                                     |
+| 直接开发 Sessions Web，监听前后端变化                | `pnpm dev:web:agents`                         | `Ash Sessions Web (Chrome)`           |
+| Sessions Web 界面，不构建或启动后端                  | `pnpm dev:web:agents:ui`                      | `Ash Sessions Web (Chrome, UI Only)`  |
+| 独立 Stanza 编辑器                                   | `pnpm dev:stanza`                             | `Stanza Editor - Standalone`          |
 
 `Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
@@ -48,12 +48,12 @@ F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口�
 
 ### 开发态热更新
 
-| 改动 | 更新方式 |
-| --- | --- |
-| Renderer 与 CSS | Vite 热更新；符合条件的 UI 方法修改保留现有实例 |
-| Electron Main / Preload | 编译和 preload 沙箱依赖校验通过后重启 Electron |
-| Rust 后端 | 完整桌面开发命令监听后端，增量编译后发布开发运行目录，所有本地窗口共用一次后端重启 |
-| Web Rust 后端 | 完整 Web 开发命令监听后端，编译并发布独立 Node 开发包后切换后端，保留页面与浏览器授权 |
+| 改动                    | 更新方式                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| Renderer 与 CSS         | Vite 热更新；符合条件的 UI 方法修改保留现有实例                                       |
+| Electron Main / Preload | 编译和 preload 沙箱依赖校验通过后重启 Electron                                        |
+| Rust 后端               | 完整桌面开发命令监听后端，增量编译后发布开发运行目录，所有本地窗口共用一次后端重启    |
+| Web Rust 后端           | 完整 Web 开发命令监听后端，编译并发布独立 Node 开发包后切换后端，保留页面与浏览器授权 |
 
 Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/app_ts/vite/hotReloadPlugin.ts`。
 
@@ -132,20 +132,20 @@ iframe 仅通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来
 
 以下命令均在仓库根目录执行；仓库通用 Rust、Python 和构建工具验证见 [构建指南](../docs/build.md#测试)。
 
-| 命令 | 覆盖范围 |
-| --- | --- |
-| `pnpm build:desktop` | Electron Main、Preload 和 Renderer |
-| `pnpm build:stanza` | 独立编辑器 |
-| `pnpm --dir app-ts typecheck:renderer` | Renderer 类型检查 |
-| `pnpm --dir app-ts test:main` | 构建工具和前端单测 |
-| `pnpm test:integration` | 浏览器集成测试 |
-| `pnpm test:web` | 浏览器生产资源与本地文件操作，无 App Server |
-| `pnpm test:web:dev` | 同一 Browser UI 项目，运行 Vite 开发资源 |
-| `pnpm test:web-integration` | 浏览器与真实 App Server |
-| `pnpm test:desktop:smoke:ui` | Electron UI，无 App Server |
-| `pnpm run smoketest` | 准备并运行 Electron 与真实 App Server 冒烟测试 |
-| `pnpm run smoketest-no-compile` | 运行已准备好的同一套冒烟测试 |
-| `pnpm test:desktop:app` | Code 模式的 Electron 编辑器应用测试 |
+| 命令                                   | 覆盖范围                                       |
+| -------------------------------------- | ---------------------------------------------- |
+| `pnpm build:desktop`                   | Electron Main、Preload 和 Renderer             |
+| `pnpm build:stanza`                    | 独立编辑器                                     |
+| `pnpm --dir app-ts typecheck:renderer` | Renderer 类型检查                              |
+| `pnpm --dir app-ts test:main`          | 构建工具和前端单测                             |
+| `pnpm test:integration`                | 浏览器集成测试                                 |
+| `pnpm test:web`                        | 浏览器生产资源与本地文件操作，无 App Server    |
+| `pnpm test:web:dev`                    | 同一 Browser UI 项目，运行 Vite 开发资源       |
+| `pnpm test:web-integration`            | 浏览器与真实 App Server                        |
+| `pnpm test:desktop:smoke:ui`           | Electron UI，无 App Server                     |
+| `pnpm run smoketest`                   | 准备并运行 Electron 与真实 App Server 冒烟测试 |
+| `pnpm run smoketest-no-compile`        | 运行已准备好的同一套冒烟测试                   |
+| `pnpm test:desktop:app`                | Code 模式的 Electron 编辑器应用测试            |
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
 
@@ -172,15 +172,15 @@ pnpm dev:desktop
 
 ## 继续阅读
 
-| 内容 | 文档 |
-| --- | --- |
-| 前端领域 Service、协议客户端与 Main 分工 | [前端连接边界](docs/frontend-app-server-boundary.md) |
-| Desktop 进程、窗口与 Renderer 架构 | [Desktop 架构](../docs/ash-desktop-architecture.md) |
-| Workbench 模式和 contribution 装配 | [Workbench 模式](../docs/workbench-modes.md) |
-| DOM 与通用浏览器组件 | [Browser foundation](docs/browser-foundation.md) |
-| 控件、Part 与 CSS 所有权 | [UI 样式职责](../docs/ui-styling-ownership.md) |
-| Pane、CompositeBar 与生命周期 | [Workbench 面板](../docs/workbench-pane-composite-design.md) |
-| Command、MenuId、Context Key 与 Toolbar | [菜单系统](../docs/menu-system.md) |
+| 内容                                     | 文档                                                         |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| 前端领域 Service、协议客户端与 Main 分工 | [前端连接边界](docs/frontend-app-server-boundary.md)         |
+| Desktop 进程、窗口与 Renderer 架构       | [Desktop 架构](../docs/ash-desktop-architecture.md)          |
+| Workbench 模式和 contribution 装配       | [Workbench 模式](../docs/workbench-modes.md)                 |
+| DOM 与通用浏览器组件                     | [Browser foundation](docs/browser-foundation.md)             |
+| 控件、Part 与 CSS 所有权                 | [UI 样式职责](../docs/ui-styling-ownership.md)               |
+| Pane、CompositeBar 与生命周期            | [Workbench 面板](../docs/workbench-pane-composite-design.md) |
+| Command、MenuId、Context Key 与 Toolbar  | [菜单系统](../docs/menu-system.md)                           |
 
 ## 第三方许可证
 

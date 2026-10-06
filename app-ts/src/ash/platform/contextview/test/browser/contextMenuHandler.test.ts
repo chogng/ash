@@ -16,7 +16,7 @@ test("context menus focus the container unless first-item selection is requested
 	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
 	Object.defineProperty(globalThis, "Node", { configurable: true, value: dom.window.Node });
 	Object.defineProperty(dom.window.Element.prototype, "getClientRects", { value: () => [{}] });
-	Object.defineProperty(dom.window.Element.prototype, "scrollTo", { value(): void {} });
+	Object.defineProperty(dom.window.Element.prototype, "scrollTo", { value(): void { } });
 	try {
 		const { ContextMenuHandler } = await import("../../browser/contextMenuHandler.js");
 		let options: ContextViewOptions | undefined;
@@ -24,7 +24,7 @@ test("context menus focus the container unless first-item selection is requested
 			container: dom.window.document.body,
 			show(value) { options = value; return true; },
 			hide() { options?.onHide?.(ContextViewHideReason.Programmatic); options = undefined; },
-			layout() {},
+			layout() { },
 		};
 		using handler = new ContextMenuHandler(contextView, {
 			lookupKeybinding() { return undefined; },
@@ -34,7 +34,7 @@ test("context menus focus the container unless first-item selection is requested
 		for (const autoSelectFirstItem of [undefined, false, true]) {
 			handler.showContextMenu({
 				getAnchor: () => dom.window.document.body,
-				getActions: () => [{ id: "run", label: "Run", tooltip: "Run", enabled: true, run() {} }],
+				getActions: () => [{ id: "run", label: "Run", tooltip: "Run", enabled: true, run() { } }],
 				autoSelectFirstItem,
 			});
 			const menu = dom.window.document.querySelector<HTMLElement>('[role="menu"]')!;
@@ -63,8 +63,8 @@ test("a context menu that cannot be shown releases its execution resources", asy
 	const contextView = {
 		container: dom.window.document.body,
 		show() { return false; },
-		hide() {},
-		layout() {},
+		hide() { },
+		layout() { },
 	} as IContextViewService;
 	const keybindings = {
 		inChordMode: false,
@@ -84,7 +84,7 @@ test("a context menu that cannot be shown releases its execution resources", asy
 	for (let index = 0; index < 3; index++) {
 		assert.equal(handler.showContextMenu({
 			getAnchor: () => ({ x: 10, y: 20, targetWindow: dom.window as unknown as Window }),
-			getActions: () => [{ id: "run", label: "Run", tooltip: "Run", enabled: true, run() {} }],
+			getActions: () => [{ id: "run", label: "Run", tooltip: "Run", enabled: true, run() { } }],
 			onHide: (cancelled) => {
 				assert.equal(cancelled, true);
 				hideCount++;

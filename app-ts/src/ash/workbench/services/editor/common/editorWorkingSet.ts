@@ -27,7 +27,7 @@ export interface EditorGroupWorkingSet {
 export type EditorWorkingSetLayout =
 	| {
 		readonly type: 'leaf';
-		readonly data: { readonly groupId: string };
+		readonly data: { readonly groupId: string; };
 		readonly size: number;
 		readonly visible: boolean;
 		readonly priority: 'low' | 'normal' | 'high';

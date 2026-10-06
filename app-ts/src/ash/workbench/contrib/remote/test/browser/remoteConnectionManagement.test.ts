@@ -114,7 +114,7 @@ class TestRemoteConnectionService implements IRemoteConnectionService {
 	readonly removed: string[] = [];
 	saveError: Error | undefined;
 
-	constructor(private readonly connections: readonly RemoteConnectionDefinition[]) {}
+	constructor(private readonly connections: readonly RemoteConnectionDefinition[]) { }
 
 	async list(): Promise<readonly RemoteConnectionDefinition[]> { return this.connections; }
 	async save(connection: RemoteConnectionDefinition): Promise<RemoteConnectionDefinition> {
@@ -130,7 +130,7 @@ class TestRemoteConnectionService implements IRemoteConnectionService {
 		this.removed.push(name);
 		return this.connections.find(connection => connection.name === name);
 	}
-	async connect(): Promise<void> {}
+	async connect(): Promise<void> { }
 }
 
 class TestQuickInputService implements IQuickInputService {
@@ -193,11 +193,11 @@ class TestDialogService implements IDialogService {
 	confirmResult = true;
 
 	async showMessage(options: IMessageDialogOptions): Promise<void> { this.messages.push(options); }
-	async info(): Promise<void> {}
-	async warn(): Promise<void> {}
-	async error(): Promise<void> {}
+	async info(): Promise<void> { }
+	async warn(): Promise<void> { }
+	async error(): Promise<void> { }
 	async about(): Promise<void> { throw new Error('Unexpected about dialog'); }
-	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean }> {
+	async confirm(options: IConfirmationDialogOptions): Promise<{ confirmed: boolean; }> {
 		this.confirmations.push(options);
 		return { confirmed: this.confirmResult };
 	}

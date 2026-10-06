@@ -183,7 +183,7 @@ export class ScrollableElement extends Disposable {
 		));
 		this._register(addDisposableListener(viewport, "wheel", (event: WheelEvent) =>
 			this.handleWheel(event),
-		{ passive: false }));
+			{ passive: false }));
 		this._register(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
 			this.handleContainerKeydown(event),
 		));
@@ -533,12 +533,12 @@ export class ScrollableElement extends Disposable {
 		const horizontalTrackSize = Math.max(
 			0,
 			this._state.width -
-				(verticalRendered ? this.options.scrollbarSize : 0),
+			(verticalRendered ? this.options.scrollbarSize : 0),
 		);
 		const verticalTrackSize = Math.max(
 			0,
 			this._state.height -
-				(horizontalRendered ? this.options.scrollbarSize : 0),
+			(horizontalRendered ? this.options.scrollbarSize : 0),
 		);
 		this.horizontal.render(
 			createScrollbarAxisMetrics(
@@ -685,7 +685,7 @@ export class SmoothScrollableElement extends Disposable {
 	private focused = false;
 	private scrolling = false;
 	private readonly activity: RunOnceScheduler;
-	private readonly arrows: { button: HTMLButtonElement; axis: ScrollbarAxis; direction: number }[] = [];
+	private readonly arrows: { button: HTMLButtonElement; axis: ScrollbarAxis; direction: number; }[] = [];
 	private readonly arrowPress = this._register(new DisposableStore());
 	private readonly inertia = this._register(new MutableDisposable<IDisposable>());
 	private applyingInertia = false;
@@ -836,7 +836,7 @@ export class SmoothScrollableElement extends Disposable {
 		if (!this.options.lazyRender) this.renderNow();
 	}
 
-	public setScrollPosition(position: INewScrollPosition & { reuseAnimation?: boolean }): void {
+	public setScrollPosition(position: INewScrollPosition & { reuseAnimation?: boolean; }): void {
 		this.inertia.clear();
 		this.scrollable.setScrollPositionSmooth(position, position.reuseAnimation);
 	}

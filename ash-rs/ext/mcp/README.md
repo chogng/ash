@@ -12,16 +12,16 @@ Plugin 安装 authority、Connector 账号 authority、Core durable Thread 状�
 
 ## Crate 边界与模块
 
-| 模块 | 当前职责 | 不得承担 |
-| --- | --- | --- |
-| `composition.rs` | declaration materialization、运行时构造、Core 工具/策略适配、调用 authority fence | OAuth provider wire、Plugin 安装、Core durable event |
-| `runtime.rs` | 在专用 Tokio worker 上拥有 `ash-mcp` runtime，并桥接同步工具调用 | 产品配置或审批决策 |
-| `connector.rs` | Connector/Plugin server publication 与运行时 invocation fence 契约 | Connector 登录状态机 |
-| `plugin.rs` | 从 exact active package 构造 package-rooted MCP/Connector server | package 下载、grant 或 enablement mutation |
-| `auth.rs`、`auth/*` | 独立 Config MCP 的 PKCE/state、一次性 callback、凭据 envelope、refresh/revoke 编排 | provider discovery、client registration、scope 或 token wire parsing |
-| `elicitation.rs` | MCP form schema 与 Core `RequestUserInput` 的有界双向转换 | UI、durable interaction ownership 或 URL elicitation |
-| `updates.rs` | `tools/list_changed` reconcile hint 与当前工具调用的 task-local interaction binding | 全局 interaction registry |
-| `status.rs` | redacted runtime snapshot 与 process-local connect/disconnect intent | durable desired config |
+| 模块                | 当前职责                                                                            | 不得承担                                                             |
+| ------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `composition.rs`    | declaration materialization、运行时构造、Core 工具/策略适配、调用 authority fence   | OAuth provider wire、Plugin 安装、Core durable event                 |
+| `runtime.rs`        | 在专用 Tokio worker 上拥有 `ash-mcp` runtime，并桥接同步工具调用                    | 产品配置或审批决策                                                   |
+| `connector.rs`      | Connector/Plugin server publication 与运行时 invocation fence 契约                  | Connector 登录状态机                                                 |
+| `plugin.rs`         | 从 exact active package 构造 package-rooted MCP/Connector server                    | package 下载、grant 或 enablement mutation                           |
+| `auth.rs`、`auth/*` | 独立 Config MCP 的 PKCE/state、一次性 callback、凭据 envelope、refresh/revoke 编排  | provider discovery、client registration、scope 或 token wire parsing |
+| `elicitation.rs`    | MCP form schema 与 Core `RequestUserInput` 的有界双向转换                           | UI、durable interaction ownership 或 URL elicitation                 |
+| `updates.rs`        | `tools/list_changed` reconcile hint 与当前工具调用的 task-local interaction binding | 全局 interaction registry                                            |
+| `status.rs`         | redacted runtime snapshot 与 process-local connect/disconnect intent                | durable desired config                                               |
 
 依赖方向保持为：
 
@@ -38,15 +38,15 @@ App Server composition
 
 ## 公共契约
 
-| API | 调用者 | 契约 |
-| --- | --- | --- |
-| `compose_mcp_tools*` | App Server composition | 完整构造一个不可变 generation；失败时不发布半成品 runtime |
-| `McpToolComposition` | App Server tool composition | 同时返回 Tool service、policy、status 和保持 session 存活的 owner |
-| `ConnectorMcpRuntimeProvider` | Connector/Plugin host adapter | 只发布当前 authority 允许的 server definition 与 invocation fence |
-| `PluginConnectorMcpRuntimeProvider` | local Plugin composition | 从 exact activation 和 manifest permission 解析 package-rooted contribution |
-| `McpOAuthProvider` | 具体产品/provider adapter | 拥有 discovery、endpoint allowlist、client identity、scope、token parsing、audience、refresh 与 remote revoke |
-| `McpOAuthService` | App Server OAuth RPC | 只编排 PKCE/state、exact target binding、SecretStore persistence 和 lifecycle operation |
-| `McpRuntimeStatusSnapshot` | App Server status projection | 仅暴露 redacted state、generation、tool count 和安全诊断 |
+| API                                 | 调用者                        | 契约                                                                                                          |
+| ----------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `compose_mcp_tools*`                | App Server composition        | 完整构造一个不可变 generation；失败时不发布半成品 runtime                                                     |
+| `McpToolComposition`                | App Server tool composition   | 同时返回 Tool service、policy、status 和保持 session 存活的 owner                                             |
+| `ConnectorMcpRuntimeProvider`       | Connector/Plugin host adapter | 只发布当前 authority 允许的 server definition 与 invocation fence                                             |
+| `PluginConnectorMcpRuntimeProvider` | local Plugin composition      | 从 exact activation 和 manifest permission 解析 package-rooted contribution                                   |
+| `McpOAuthProvider`                  | 具体产品/provider adapter     | 拥有 discovery、endpoint allowlist、client identity、scope、token parsing、audience、refresh 与 remote revoke |
+| `McpOAuthService`                   | App Server OAuth RPC          | 只编排 PKCE/state、exact target binding、SecretStore persistence 和 lifecycle operation                       |
+| `McpRuntimeStatusSnapshot`          | App Server status projection  | 仅暴露 redacted state、generation、tool count 和安全诊断                                                      |
 
 `McpOAuthProvider` 的实现必须返回不含凭据的稳定错误。把 provider-specific discovery、HTTP token
 response 或 client secret 放入 `McpOAuthService`，意味着 provider ownership 已发生漂移。

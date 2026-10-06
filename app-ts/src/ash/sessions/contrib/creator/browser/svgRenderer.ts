@@ -17,7 +17,7 @@ export function renderDesignShape(shape: DesignShape, previous?: SVGGraphicsElem
 	if (shape.kind === 'ellipse') {
 		for (const [key, value] of Object.entries({ cx: shape.x + shape.width / 2, cy: shape.y + shape.height / 2, rx: shape.width / 2, ry: shape.height / 2 })) { element.setAttribute(key, `${value}`); }
 	} else if (shape.kind === 'path') {
-		const point = (p: { x: number; y: number }): string => `${shape.x + p.x * shape.width} ${shape.y + p.y * shape.height}`;
+		const point = (p: { x: number; y: number; }): string => `${shape.x + p.x * shape.width} ${shape.y + p.y * shape.height}`;
 		let path = `M ${point(shape.nodes[0])}`;
 		const count = shape.closed ? shape.nodes.length : shape.nodes.length - 1;
 		for (let index = 0; index < count; index++) {
@@ -103,7 +103,7 @@ export function exportDesignSvg(document: DesignDocument, images: ReadonlyMap<st
 }
 
 /** Unclipped containers include overflowing content in exports without changing their editable geometry. */
-export function getDesignRenderBounds(shapes: readonly DesignShape[]): { x: number; y: number; width: number; height: number } {
+export function getDesignRenderBounds(shapes: readonly DesignShape[]): { x: number; y: number; width: number; height: number; } {
 	return designBounds(shapes.flatMap(shape => {
 		if ((shape.kind !== 'frame' && shape.kind !== 'group') || (shape.kind === 'frame' && shape.clip) || shape.children.length === 0) { return [shape]; }
 		const child = getDesignRenderBounds(shape.children);

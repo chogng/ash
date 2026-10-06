@@ -61,6 +61,8 @@
 [data-color-scheme="high-contrast-dark"] .stanza-accessible-diff-toolbar button,
 [data-color-scheme="high-contrast-light"] .stanza-accessible-diff-viewer,
 [data-color-scheme="high-contrast-light"] .stanza-accessible-diff-toolbar,
-[data-color-scheme="high-contrast-light"] .stanza-accessible-diff-toolbar button {
+[data-color-scheme="high-contrast-light"]
+	.stanza-accessible-diff-toolbar
+	button {
 	border-color: var(--ash-contrast-border);
 }

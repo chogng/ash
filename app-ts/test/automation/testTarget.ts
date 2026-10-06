@@ -2,13 +2,13 @@ export type AppServerTestMode = "disabled" | "required";
 
 export type PlaywrightTarget =
 	| {
-			readonly kind: "browser";
-			readonly appServerMode: AppServerTestMode;
-		}
+		readonly kind: "browser";
+		readonly appServerMode: AppServerTestMode;
+	}
 	| {
-			readonly kind: "electron";
-			readonly appServerMode: AppServerTestMode;
-		};
+		readonly kind: "electron";
+		readonly appServerMode: AppServerTestMode;
+	};
 
 export function playwrightTargetForProject(projectName: string): PlaywrightTarget {
 	switch (projectName) {

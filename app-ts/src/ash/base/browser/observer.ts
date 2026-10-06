@@ -50,8 +50,8 @@ export function observeElementSize(
 		const size = box === "content-box"
 			? entry.contentBoxSize?.[0]
 			: box === "device-pixel-content-box"
-			? entry.devicePixelContentBoxSize?.[0]
-			: entry.borderBoxSize?.[0];
+				? entry.devicePixelContentBoxSize?.[0]
+				: entry.borderBoxSize?.[0];
 		listener(new Dimension(
 			size?.inlineSize ?? entry.contentRect.width,
 			size?.blockSize ?? entry.contentRect.height,
@@ -65,7 +65,7 @@ export function observeMutations(
 	options: MutationObserverInit,
 ): IDisposable {
 	const Observer = getObserverWindow(target)?.MutationObserver;
-	if (!Observer) return toDisposable(() => {});
+	if (!Observer) return toDisposable(() => { });
 	const observer = new Observer(records => listener(records));
 	observer.observe(target, options);
 	return toDisposable(() => observer.disconnect());
@@ -77,7 +77,7 @@ export function observeIntersection(
 	options?: IntersectionObserverInit,
 ): IDisposable {
 	const Observer = getObserverWindow(target)?.IntersectionObserver;
-	if (!Observer) return toDisposable(() => {});
+	if (!Observer) return toDisposable(() => { });
 	const observer = new Observer(([entry]) => {
 		if (entry) listener(entry);
 	}, options);

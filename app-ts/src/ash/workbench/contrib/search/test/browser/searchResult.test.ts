@@ -15,14 +15,18 @@ test('Search results keep same-path files in different roots and every occurrenc
 	result.add([{ ...line, dirId: 'first' }]);
 	assert.equal(result.count, 4);
 	assert.deepEqual(result.files.map(file => ({ resource: file.resource.toString(), name: file.name, ranges: file.matches.map(match => ({ ...match.range })) })), [
-		{ resource: URI.file('/first/src/中文.ts').toString(), name: '中文.ts', ranges: [
-			{ startLineNumber: 3, startColumn: 6, endLineNumber: 3, endColumn: 12 },
-			{ startLineNumber: 3, startColumn: 13, endLineNumber: 3, endColumn: 19 },
-		] },
-		{ resource: URI.parse('ssh://host/second/src/中文.ts').toString(), name: '中文.ts', ranges: [
-			{ startLineNumber: 3, startColumn: 6, endLineNumber: 3, endColumn: 12 },
-			{ startLineNumber: 3, startColumn: 13, endLineNumber: 3, endColumn: 19 },
-		] },
+		{
+			resource: URI.file('/first/src/中文.ts').toString(), name: '中文.ts', ranges: [
+				{ startLineNumber: 3, startColumn: 6, endLineNumber: 3, endColumn: 12 },
+				{ startLineNumber: 3, startColumn: 13, endLineNumber: 3, endColumn: 19 },
+			]
+		},
+		{
+			resource: URI.parse('ssh://host/second/src/中文.ts').toString(), name: '中文.ts', ranges: [
+				{ startLineNumber: 3, startColumn: 6, endLineNumber: 3, endColumn: 12 },
+				{ startLineNumber: 3, startColumn: 13, endLineNumber: 3, endColumn: 19 },
+			]
+		},
 	]);
 	assert.deepEqual(result.children.map(folder => ({ name: folder.name, children: [...folder.children.values()].map(child => child.name) })), [
 		{ name: 'first', children: ['src'] }, { name: 'second', children: ['src'] },

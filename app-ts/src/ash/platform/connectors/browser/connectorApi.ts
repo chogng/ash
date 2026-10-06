@@ -12,8 +12,8 @@ export interface BrowserConnectorHostServices {
 	readonly externalOpener: IExternalOpener;
 	readonly clipboardService: IClipboardService;
 	readonly callbackHost?: {
-		listen(): Promise<{ readonly id: string; readonly redirectUri: string }>;
-		wait(id: string): Promise<{ readonly state: string; readonly code: string }>;
+		listen(): Promise<{ readonly id: string; readonly redirectUri: string; }>;
+		wait(id: string): Promise<{ readonly state: string; readonly code: string; }>;
 		close(id: string): Promise<void>;
 	};
 }
@@ -58,7 +58,7 @@ async function connectDeviceOAuth(connection: AppServerProtocolClient, params: P
 		await hostServices.externalOpener.openExternal(started.verificationUri, { sourceUri: URI.parse(started.verificationUri) }, CancellationToken.None);
 		await hostServices.clipboardService.writeText(started.userCode);
 		let waitSeconds = started.pollIntervalSeconds;
-		for (;;) {
+		for (; ;) {
 			await timeout(Math.min(waitSeconds, 30) * 1_000);
 			const result = await appServerRequest(connection, "connector/connect/oauth/device/poll", { flowId: started.flowId });
 			if (result.status === "connected") {

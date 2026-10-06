@@ -11,14 +11,14 @@ Directory、Plugin 和 Marketplace 动态 source，应用启用状态与兼容�
 
 ## 所有权
 
-| Symbol | 当前职责 |
-| --- | --- |
-| `SkillRuntime` | catalog generation、source composition、exact activation 和 watcher lifecycle |
-| `SkillActivationContributor` 实现 | 先冻结显式 `UserInput::Skill`，再对剩余 verified built-in 做唯一高置信 metadata 选择 |
-| `TurnInputContributor` 实现 | 输出 metadata-only `catalog_prompt` 和 exact frozen activation fragment |
-| `SkillToolContributor` | 注册 `SkillReadTool`，不依赖 App Server |
-| `SkillReadTool` | 解析 exact `source + name`，通过 tagged target 读取完整说明或 digest-pinned package-relative text resource |
-| `SkillRuntimeEventSink` | public catalog generation 改变后通知安装它的 host |
+| Symbol                            | 当前职责                                                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `SkillRuntime`                    | catalog generation、source composition、exact activation 和 watcher lifecycle                              |
+| `SkillActivationContributor` 实现 | 先冻结显式 `UserInput::Skill`，再对剩余 verified built-in 做唯一高置信 metadata 选择                       |
+| `TurnInputContributor` 实现       | 输出 metadata-only `catalog_prompt` 和 exact frozen activation fragment                                    |
+| `SkillToolContributor`            | 注册 `SkillReadTool`，不依赖 App Server                                                                    |
+| `SkillReadTool`                   | 解析 exact `source + name`，通过 tagged target 读取完整说明或 digest-pinned package-relative text resource |
+| `SkillRuntimeEventSink`           | public catalog generation 改变后通知安装它的 host                                                          |
 
 `ash-skills` 仍是底层文件和 catalog authority。Core 只调用通用 extension lifecycle contract。
 App Server 可以提供配置、事件 adapter 和 list DTO，但不得选择、激活、加载、缓存或渲染 Skill

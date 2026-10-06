@@ -98,7 +98,7 @@ test('browser Save As selects a directory and reads the file name from a dialog'
 		async registerDirectoryHandle() { return URI.file('/@browser/notes'); },
 	} as unknown as HTMLFileSystemProvider;
 	const dialogs = {
-		async input(options: { readonly inputs: readonly { readonly value?: string }[] }) {
+		async input(options: { readonly inputs: readonly { readonly value?: string; }[]; }) {
 			inputs.push(options.inputs[0]?.value ?? '');
 			return { confirmed: true, values: ['draft with spaces.txt'] };
 		},
@@ -188,7 +188,7 @@ test('browser Open File browses the current workspace and returns the chosen fil
 		createQuickPick() {
 			const accepted = new Emitter<IQuickPickItem>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
 				items: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
@@ -223,7 +223,7 @@ test('browser file dialog filters files and returns every selected file from the
 		createQuickPick() {
 			const accepted = new Emitter<IQuickPickItem>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
 				items: [] as IQuickPickItem[],
 				onDidAccept: accepted.event,
@@ -265,7 +265,7 @@ test('server folder dialog selects folders across directory navigation', async (
 		createQuickPick() {
 			const accepted = new Emitter<IQuickPickItem>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
 				items: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
 				show() {
@@ -278,9 +278,11 @@ test('server folder dialog selects folders across directory navigation', async (
 			};
 		},
 	} as unknown as IQuickInputService;
-	const client = { list: async (path: string) => path === '' || path === '/work'
-		? { path: '/work', parent: null, directories: [{ path: '/work/other', name: 'other' }] }
-		: { path: '/work/other', parent: '/work', directories: [] }, authorize: async () => { throw new Error('Not needed'); } } as IWebWorkspaceClient;
+	const client = {
+		list: async (path: string) => path === '' || path === '/work'
+			? { path: '/work', parent: null, directories: [{ path: '/work/other', name: 'other' }] }
+			: { path: '/work/other', parent: '/work', directories: [] }, authorize: async () => { throw new Error('Not needed'); }
+	} as IWebWorkspaceClient;
 	const service = new FileDialogService({ kind: 'server', client, quickInput: () => quickInput, fileService: () => { throw new Error('No file service expected'); }, workspaceRoot: () => undefined }, () => { throw new Error('No message expected'); });
 	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true }), [URI.file('/work'), URI.file('/work/other')]);
 	assert.ok(shown[3]?.includes('Done (2)'));
@@ -290,12 +292,12 @@ test('browser Save As applies the chosen filter and custom dialog labels', async
 	const messages: string[] = [];
 	let inputs = 0;
 	const dialogs = {
-		input: async (options: { title?: string; primaryButton?: string }) => {
+		input: async (options: { title?: string; primaryButton?: string; }) => {
 			assert.equal(options.title, 'Export');
 			assert.equal(options.primaryButton, 'Write');
 			return { confirmed: true, values: [inputs++ === 0 ? 'report.txt' : 'report.md'] };
 		},
-		showMessage: async (options: { message: string }) => { messages.push(options.message); },
+		showMessage: async (options: { message: string; }) => { messages.push(options.message); },
 	} as unknown as IDialogService;
 	const service = new FileDialogService({
 		kind: 'server', client: {} as IWebWorkspaceClient,
@@ -325,7 +327,7 @@ test('browser document open chooses an authorized folder without replacing the w
 		createQuickPick() {
 			const accepted = new Emitter<IQuickPickItem>();
 			const hidden = new Emitter<void>();
-			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string } }>();
+			const triggered = new Emitter<{ item: IQuickPickItem; button: { id: string; label: string; }; }>();
 			return {
 				items: [] as IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
 				show() { accepted.fire(this.items[0]); },

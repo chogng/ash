@@ -1,136 +1,136 @@
 .ash-remote-ports {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 8px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: 8px;
 }
 
 .ash-remote-ports-form {
-  display: grid;
-  grid-template-columns: auto minmax(84px, 120px) auto auto;
-  gap: 6px;
-  align-items: center;
+	display: grid;
+	grid-template-columns: auto minmax(84px, 120px) auto auto;
+	gap: 6px;
+	align-items: center;
 }
 
 .ash-remote-ports-label {
-  color: var(--ash-description-foreground);
-  font-size: 12px;
+	color: var(--ash-description-foreground);
+	font-size: 12px;
 }
 
 .ash-remote-ports-input {
-  min-width: 0;
-  padding: 4px 6px;
-  border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-  border-radius: var(--ash-corner-radius-small);
-  color: var(--ash-input-foreground);
-  background: var(--ash-input-background);
-  font: inherit;
+	min-width: 0;
+	padding: 4px 6px;
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	font: inherit;
 }
 
 .ash-remote-ports-forward,
 .ash-remote-ports-stop-all,
 .ash-remote-port-stop {
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--ash-corner-radius-small);
-  color: inherit;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-  font: inherit;
-  cursor: pointer;
+	padding: 4px 8px;
+	border: 0;
+	border-radius: var(--ash-corner-radius-small);
+	color: inherit;
+	background: color-mix(in srgb, currentColor 8%, transparent);
+	font: inherit;
+	cursor: pointer;
 }
 
 .ash-remote-ports-forward:hover:not(:disabled),
 .ash-remote-ports-stop-all:hover:not(:disabled),
 .ash-remote-port-stop:hover:not(:disabled) {
-  background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-remote-ports-input:focus-visible,
 .ash-remote-ports-forward:focus-visible,
 .ash-remote-ports-stop-all:focus-visible,
 .ash-remote-port-stop:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-remote-ports-forward:disabled,
 .ash-remote-ports-stop-all:disabled,
 .ash-remote-port-stop:disabled,
 .ash-remote-ports-input:disabled {
-  cursor: default;
-  opacity: 0.55;
+	cursor: default;
+	opacity: 0.55;
 }
 
 .ash-remote-ports-status {
-  min-height: 18px;
-  padding: 6px 2px;
-  color: var(--ash-description-foreground);
-  font-size: 12px;
+	min-height: 18px;
+	padding: 6px 2px;
+	color: var(--ash-description-foreground);
+	font-size: 12px;
 }
 
 .ash-remote-ports-status.error,
 .ash-remote-port.failed .ash-remote-port-state {
-  color: var(--ash-error-foreground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-remote-ports-list {
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  list-style: none;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	list-style: none;
 }
 
 .ash-remote-port {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
-  gap: 10px;
-  align-items: center;
-  padding: 6px 8px;
-  border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	display: grid;
+	grid-template-columns: minmax(220px, 1fr) auto auto;
+	gap: 10px;
+	align-items: center;
+	padding: 6px 8px;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
 }
 
 .ash-remote-port-endpoints {
-  display: flex;
-  min-width: 0;
-  gap: 8px;
-  align-items: center;
+	display: flex;
+	min-width: 0;
+	gap: 8px;
+	align-items: center;
 }
 
 .ash-remote-port-local,
 .ash-remote-port-remote {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-remote-port-arrow,
 .ash-remote-port-state {
-  color: var(--ash-description-foreground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-remote-port-state {
-  font-size: 12px;
+	font-size: 12px;
 }
 
 .ash-remote-port.recovering .ash-remote-port-state {
-  color: var(--ash-warning-foreground, var(--ash-description-foreground));
+	color: var(--ash-warning-foreground, var(--ash-description-foreground));
 }
 
 @media (max-width: 620px) {
-  .ash-remote-ports-form {
-    grid-template-columns: auto minmax(72px, 1fr) auto;
-  }
+	.ash-remote-ports-form {
+		grid-template-columns: auto minmax(72px, 1fr) auto;
+	}
 
-  .ash-remote-ports-stop-all {
-    grid-column: 3;
-  }
+	.ash-remote-ports-stop-all {
+		grid-column: 3;
+	}
 
-  .ash-remote-port {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
+	.ash-remote-port {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
 
-  .ash-remote-port-state {
-    display: none;
-  }
+	.ash-remote-port-state {
+		display: none;
+	}
 }

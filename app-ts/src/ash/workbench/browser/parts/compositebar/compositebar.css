@@ -1,147 +1,159 @@
 .ash-composite-bar {
-  box-sizing: border-box;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
+	box-sizing: border-box;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .ash-composite-bar > .ash-action-bar {
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 2px;
-  padding: 0 var(--ash-composite-bar-content-inset);
-  overflow: hidden;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 2px;
+	padding: 0 var(--ash-composite-bar-content-inset);
+	overflow: hidden;
 }
 
 .ash-composite-bar-overflow {
-  display: flex;
-  align-items: center;
-  flex: 0 0 var(--ash-toolbar-action-size);
+	display: flex;
+	align-items: center;
+	flex: 0 0 var(--ash-toolbar-action-size);
 }
 
 .ash-composite-bar-overflow > .ash-composite-bar-action {
-  width: var(--ash-toolbar-action-size);
-  min-width: var(--ash-toolbar-action-size);
-  height: var(--ash-toolbar-action-size);
-  min-height: var(--ash-toolbar-action-size);
-  padding: 0;
-  border: 0;
-  color: var(--ash-composite-bar-inactive-foreground);
+	width: var(--ash-toolbar-action-size);
+	min-width: var(--ash-toolbar-action-size);
+	height: var(--ash-toolbar-action-size);
+	min-height: var(--ash-toolbar-action-size);
+	padding: 0;
+	border: 0;
+	color: var(--ash-composite-bar-inactive-foreground);
 }
 
 .ash-composite-bar-overflow > .ash-composite-bar-action .ash-icon {
-  width: 16px;
-  height: 16px;
+	width: 16px;
+	height: 16px;
 }
 
 .ash-composite-bar-overflow .ash-icon-label-container {
-  display: none;
+	display: none;
 }
 
 .ash-composite-bar > .ash-action-bar > .ash-composite-bar-item {
-  position: relative;
-  flex: 0 0 auto;
-  height: var(--ash-tab-height);
-  min-height: var(--ash-tab-height);
-  border: 0;
-  border-radius: 0;
-  color: var(--ash-composite-bar-inactive-foreground);
-  cursor: pointer;
+	position: relative;
+	flex: 0 0 auto;
+	height: var(--ash-tab-height);
+	min-height: var(--ash-tab-height);
+	border: 0;
+	border-radius: 0;
+	color: var(--ash-composite-bar-inactive-foreground);
+	cursor: pointer;
 }
 
 .ash-composite-bar-item.ash-dnd-draggable:active {
-  cursor: grabbing;
+	cursor: grabbing;
 }
 
 .ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
-  width: 24px;
-  min-width: 24px;
-  padding: 0;
+	width: 24px;
+	min-width: 24px;
+	padding: 0;
 }
 
 .ash-composite-bar-label > .ash-action-bar {
-  font-size: var(--ash-font-size-body1);
-  line-height: 20px;
+	font-size: var(--ash-font-size-body1);
+	line-height: 20px;
 }
 
 .ash-composite-bar-label > .ash-action-bar > .ash-composite-bar-item {
-  width: auto;
-  min-width: 0;
+	width: auto;
+	min-width: 0;
 }
 
 .ash-composite-bar-item:hover > .ash-composite-bar-action,
 .ash-composite-bar-item.checked > .ash-composite-bar-action {
-  opacity: 1;
+	opacity: 1;
 }
 
 .ash-composite-bar-item.checked {
-  color: var(--ash-composite-bar-foreground);
-  background: var(--ash-tab-list-active-background);
+	color: var(--ash-composite-bar-foreground);
+	background: var(--ash-tab-list-active-background);
 }
 
 .ash-composite-bar-action {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  outline: none;
-  color: inherit;
-  background: transparent;
-  text-decoration: none;
-  opacity: 0.6;
-  cursor: inherit;
-  font: inherit;
-  font-weight: var(--ash-font-weight-semi-bold);
+	display: flex;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	border: 0;
+	outline: none;
+	color: inherit;
+	background: transparent;
+	text-decoration: none;
+	opacity: 0.6;
+	cursor: inherit;
+	font: inherit;
+	font-weight: var(--ash-font-weight-semi-bold);
 }
 
 .ash-composite-bar-item:focus-visible {
-  outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-  outline-offset: -1px;
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
 
 .ash-composite-bar-icon .ash-composite-bar-item.icon .ash-icon-label-container {
-  display: none;
+	display: none;
 }
 
 .ash-composite-bar-icon .ash-composite-bar-action {
-  padding: 0;
+	padding: 0;
 }
 
 .ash-composite-bar-label .ash-composite-bar-action {
-  width: auto;
+	width: auto;
 }
 
 .ash-composite-bar-label .ash-icon-label-text {
-  display: block;
-  white-space: nowrap;
+	display: block;
+	white-space: nowrap;
 }
 
 .ash-composite-bar-action .ash-icon {
-  width: 16px;
-  height: 16px;
+	width: 16px;
+	height: 16px;
 }
 
 .ash-composite-bar-icon .ash-composite-bar-badge {
-  color: var(--ash-activity-bar-badge-foreground);
-  background: var(--ash-activity-bar-badge-background);
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-  pointer-events: none;
+	color: var(--ash-activity-bar-badge-foreground);
+	background: var(--ash-activity-bar-badge-background);
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	z-index: 2;
+	pointer-events: none;
 }
 
 /* Anchor the overlay to the icon while keeping it inside every rail item size. */
 .ash-composite-bar-vertical .ash-composite-bar-badge {
-  right: max(var(--ash-spacing-size20), calc((100% - var(--ash-activity-bar-icon-size)) / 2 - var(--ash-spacing-size40)));
-  bottom: max(var(--ash-spacing-size20), calc((100% - var(--ash-activity-bar-icon-size)) / 2 - var(--ash-spacing-size40)));
+	right: max(
+		var(--ash-spacing-size20),
+		calc(
+			(100% - var(--ash-activity-bar-icon-size)) / 2 -
+				var(--ash-spacing-size40)
+		)
+	);
+	bottom: max(
+		var(--ash-spacing-size20),
+		calc(
+			(100% - var(--ash-activity-bar-icon-size)) / 2 -
+				var(--ash-spacing-size40)
+		)
+	);
 }
 
 .ash-composite-bar-vertical {
@@ -154,7 +166,9 @@
 	height: var(--ash-activity-bar-icon-size);
 }
 
-.ash-composite-bar-vertical .ash-composite-bar-overflow > .ash-composite-bar-action {
+.ash-composite-bar-vertical
+	.ash-composite-bar-overflow
+	> .ash-composite-bar-action {
 	width: 100%;
 	height: 100%;
 }
@@ -169,7 +183,9 @@
 	overflow-y: hidden;
 }
 
-.ash-composite-bar-vertical.ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
+.ash-composite-bar-vertical.ash-composite-bar-icon
+	> .ash-action-bar
+	> .ash-composite-bar-item {
 	width: 100%;
 	min-width: 0;
 	height: 48px;
@@ -192,53 +208,63 @@
 	left: 0;
 	width: 2px;
 	height: 100%;
-	content: '';
+	content: "";
 	background: var(--ash-focus-border);
 }
 
-.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-before::before,
-.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-after::before {
+.ash-composite-bar-vertical
+	> .ash-action-bar.ash-action-bar-dnd.vertical
+	> .ash-composite-bar-item.ash-dnd-drop-before::before,
+.ash-composite-bar-vertical
+	> .ash-action-bar.ash-action-bar-dnd.vertical
+	> .ash-composite-bar-item.ash-dnd-drop-after::before {
 	left: 0;
 	width: 100%;
 	height: 2px;
 }
 
-.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-before::before {
+.ash-composite-bar-vertical
+	> .ash-action-bar.ash-action-bar-dnd.vertical
+	> .ash-composite-bar-item.ash-dnd-drop-before::before {
 	top: 0;
 }
 
-.ash-composite-bar-vertical > .ash-action-bar.ash-action-bar-dnd.vertical > .ash-composite-bar-item.ash-dnd-drop-after::before {
+.ash-composite-bar-vertical
+	> .ash-action-bar.ash-action-bar-dnd.vertical
+	> .ash-composite-bar-item.ash-dnd-drop-after::before {
 	top: auto;
 	bottom: 0;
 }
 
 /* Keep the visual gap inside a Composite action's native drop hit area. */
-.ash-composite-bar > .ash-action-bar.ash-action-bar-dnd.horizontal > .ash-composite-bar-item:not(:last-child)::after {
-  position: absolute;
-  top: 0;
-  left: 100%;
-  width: var(--ash-action-bar-gap);
-  height: 100%;
-  content: "";
-  pointer-events: auto;
+.ash-composite-bar
+	> .ash-action-bar.ash-action-bar-dnd.horizontal
+	> .ash-composite-bar-item:not(:last-child)::after {
+	position: absolute;
+	top: 0;
+	left: 100%;
+	width: var(--ash-action-bar-gap);
+	height: 100%;
+	content: "";
+	pointer-events: auto;
 }
 
 .ash-composite-bar-item.ash-dnd-drop-before::before,
 .ash-composite-bar-item.ash-dnd-drop-after::before {
-  position: absolute;
-  top: 0;
-  z-index: 1;
-  width: 2px;
-  height: 100%;
-  content: "";
-  pointer-events: none;
-  background: var(--ash-focus-border);
+	position: absolute;
+	top: 0;
+	z-index: 1;
+	width: 2px;
+	height: 100%;
+	content: "";
+	pointer-events: none;
+	background: var(--ash-focus-border);
 }
 
 .ash-composite-bar-item.ash-dnd-drop-before::before {
-  left: -2px;
+	left: -2px;
 }
 
 .ash-composite-bar-item.ash-dnd-drop-after::before {
-  right: -2px;
+	right: -2px;
 }

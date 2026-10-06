@@ -86,11 +86,11 @@ services.registerInstance(ILanguageModelsService, {
 	onDidChangeModels: Event.None,
 	listModels: async () => [], listModelCatalog: async () => [], refreshModels: async () => [],
 	listAdvisorModels: async () => [], listModelProviders: async () => [], listCustomModelProviders: async () => [],
-	getDefaultNewChatModel: () => undefined, rememberSelectedModel: () => {}, isModelVisible: () => true,
-	setModelVisible: async () => {}, setModelPreferences: async () => {},
-	readApprovalReviewModel: async () => ({ type: 'automatic' }), setApprovalReviewModel: async () => {},
-	saveCustomModelProvider: async () => {}, testProviderModel: async () => ({ type: 'passed' }),
-	setModelProviderApiKey: async () => {}, removeModelProviderApiKey: async () => {}, discoverProviderModels: async () => [],
+	getDefaultNewChatModel: () => undefined, rememberSelectedModel: () => { }, isModelVisible: () => true,
+	setModelVisible: async () => { }, setModelPreferences: async () => { },
+	readApprovalReviewModel: async () => ({ type: 'automatic' }), setApprovalReviewModel: async () => { },
+	saveCustomModelProvider: async () => { }, testProviderModel: async () => ({ type: 'passed' }),
+	setModelProviderApiKey: async () => { }, removeModelProviderApiKey: async () => { }, discoverProviderModels: async () => [],
 });
 const changed = resources.add(new Emitter<void>());
 let models: ILocalTranscriptionModelSnapshot[] = [
@@ -115,7 +115,7 @@ const backend: ILocalTranscriptionService = {
 	prepareModel: model => {
 		operations.push(`install:${model}`);
 		publish({ state: LocalTranscriptionModelState.Checking });
-		return { completed: new Promise(resolve => { finish = resolve; }), cancel: async () => backend.cancelModel(model), dispose() {}, [Symbol.dispose]() {} };
+		return { completed: new Promise(resolve => { finish = resolve; }), cancel: async () => backend.cancelModel(model), dispose() { }, [Symbol.dispose]() { } };
 	},
 	importModel: () => { throw new Error('Unused in this scenario'); },
 	cancelModel: async model => {
@@ -128,7 +128,7 @@ const backend: ILocalTranscriptionService = {
 		models = models.filter(value => value.model !== model);
 		changed.fire();
 	},
-	start: async () => {}, stop: async () => '', cancel: async () => {}, dispose() {}, [Symbol.dispose]() {},
+	start: async () => { }, stop: async () => '', cancel: async () => { }, dispose() { }, [Symbol.dispose]() { },
 };
 services.registerInstance(ILocalTranscriptionService, backend);
 const root = document.getElementById('models')!;
@@ -152,12 +152,12 @@ let captureReady = Promise.resolve();
 let releaseCapture!: () => void;
 let transcript!: (text: string, final: boolean) => void;
 services.registerInstance(IDictationService, {
-	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => {}, cancelPreparation: async () => {},
+	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { },
 	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; } }; },
 });
 services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
-services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
+services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const codeContainer = document.createElement('div');
@@ -169,7 +169,7 @@ codeEditor.setModel(codeModel);
 codeEditor.layout({ width: 600, height: 220 });
 services.get(IKeybindingService);
 
-const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => {}));
+const dictationSession = resources.add(services.createInstance(DictationSession, editor, preview, () => true, async () => { }));
 const contextViews = services.get(IContextViewService);
 const notifications = resources.add(new NotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {

@@ -41,7 +41,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		off(event, listener) { listeners.get(event)?.delete(listener); },
 		send(event, payload) {
 			if (event === WEB_APP_SERVER_CONNECT_EVENT) emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'turn-selection', workspaceRoot: testWorkspace.directory });
-			else if (event === WEB_APP_SERVER_FRAME_EVENT) { void frames.send((payload as { frame: string }).frame); }
+			else if (event === WEB_APP_SERVER_FRAME_EVENT) { void frames.send((payload as { frame: string; }).frame); }
 			else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT) throw new Error(`Unexpected transport event ${event}`);
 		},
 	});
@@ -49,7 +49,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await client.connect();
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], { commandId: 'allow-turn-selection-shell', expectedRevision: config.revision, rule: { id: 'turn-selection-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'The scenario writes only to its isolated temporary repositories.' } });
-		const create = async (name: string, command: string): Promise<{ sessionId: string; threadId: string }> => {
+		const create = async (name: string, command: string): Promise<{ sessionId: string; threadId: string; }> => {
 			const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const thread = await client.request(APP_SERVER_METHODS['session/request'], { commandId: `thread-${name}`, sessionId: session.session.sessionId, request: { type: 'createThread', title: name } });
 			if (thread.type !== 'thread') throw new Error('Expected a Thread');

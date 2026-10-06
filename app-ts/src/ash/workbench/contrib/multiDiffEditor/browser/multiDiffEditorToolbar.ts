@@ -60,7 +60,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private createSourceToolbar(container: HTMLElement): void {
 		const primary = new ToolbarAction('multiDiff.source', sourceLabel(this.options.input.source), 'Select change source', undefined, this.options.editorService !== undefined, () => this.selectCurrentSource());
-		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', Lxicon.chevronDown, true, () => {});
+		const dropdown = new ToolbarAction('multiDiff.source.menu', 'Select Changes', 'Select Changes', Lxicon.chevronDown, true, () => { });
 		const actions: readonly IAction[] = [
 			...this.sourceResolvers.sourceActions().map(action => this.wrapExternalAction(action, 'Loading changes…')),
 			new ToolbarAction('multiDiff.source.staged', 'Stage', 'Show staged changes', undefined, this.canOpenGit(), () => this.openGitSource('staged')),
@@ -84,8 +84,8 @@ export class MultiDiffEditorToolbar extends Disposable {
 			? this.wrapExternalAction(contributedPrimary, 'Committing…')
 			: isMain
 				? new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.canModifyGit(), () => this.showCommitEditor(false))
-			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => {});
-		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => {});
+				: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => { });
+		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => { });
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
 		const files = new ToolbarAction('multiDiff.files', 'Files', 'Open Files', Lxicon.files, this.options.viewsService !== undefined, () => this.options.viewsService?.focusView(VIEW_ID));
 		const secondary = [
@@ -120,10 +120,10 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 	private pullRequestActions(): readonly IAction[] {
 		return [
-			new ToolbarAction('multiDiff.pullRequest.autoMerge', 'Auto Merge', 'Pull request provider is not connected', undefined, false, () => {}),
-			new ToolbarAction('multiDiff.pullRequest.autoSquash', 'Auto Squash', 'Pull request provider is not connected', undefined, false, () => {}),
-			new ToolbarAction('multiDiff.pullRequest.autoRebase', 'Auto Rebase', 'Pull request provider is not connected', undefined, false, () => {}),
-			new ToolbarAction('multiDiff.pullRequest.draft', 'Create Draft PR', 'Pull request provider is not connected', undefined, false, () => {}),
+			new ToolbarAction('multiDiff.pullRequest.autoMerge', 'Auto Merge', 'Pull request provider is not connected', undefined, false, () => { }),
+			new ToolbarAction('multiDiff.pullRequest.autoSquash', 'Auto Squash', 'Pull request provider is not connected', undefined, false, () => { }),
+			new ToolbarAction('multiDiff.pullRequest.autoRebase', 'Auto Rebase', 'Pull request provider is not connected', undefined, false, () => { }),
+			new ToolbarAction('multiDiff.pullRequest.draft', 'Create Draft PR', 'Pull request provider is not connected', undefined, false, () => { }),
 		];
 	}
 
@@ -326,7 +326,7 @@ class ToolbarAction implements IAction {
 		readonly icon: IAction['icon'],
 		readonly enabled: boolean,
 		private readonly execute: () => unknown,
-	) {}
+	) { }
 
 	run(): unknown {
 		return this.execute();

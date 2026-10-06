@@ -1,8 +1,17 @@
-.ash-view-pane-container { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
-.ash-view-pane-container[hidden] { display: none; }
+.ash-view-pane-container {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+	overflow: hidden;
+}
+.ash-view-pane-container[hidden] {
+	display: none;
+}
 .ash-view-pane-placeholder {
-  margin: 0;
-  padding: 8px;
-  color: color-mix(in srgb, currentColor 70%, transparent);
-  font-size: 12px;
+	margin: 0;
+	padding: 8px;
+	color: color-mix(in srgb, currentColor 70%, transparent);
+	font-size: 12px;
 }

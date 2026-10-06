@@ -9,7 +9,7 @@ environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: environment.window, document: environment.window.document,
 	Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement,
-	ResizeObserver: class { observe(): void {} unobserve(): void {} disconnect(): void {} },
+	ResizeObserver: class { observe(): void { } unobserve(): void { } disconnect(): void { } },
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }

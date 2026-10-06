@@ -6,12 +6,12 @@
 
 Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有可装配功能，`test` 保存内核级回归测试。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
 
-| 产品或调用方式 | 加载入口 | 得到的能力 |
-| --- | --- | --- |
-| 完整编辑能力 | `editor.all.ts` | 行式与富文档 contribution 集合；不注册 Workbench pane |
-| Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
-| 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`editor.addCommand/addEditorAction/addKeybindingRule/addKeybindingRules`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
-| 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整编辑 contribution，再导出 `editor.api.ts` |
+| 产品或调用方式       | 加载入口             | 得到的能力                                                                                                                                                                                                                                                                                     |
+| -------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 完整编辑能力         | `editor.all.ts`      | 行式与富文档 contribution 集合；不注册 Workbench pane                                                                                                                                                                                                                                          |
+| Code 功能实现        | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane                                                                                                                                                                                                                                        |
+| 程序化调用           | `editor.api.ts`      | `editor.create/createModel`、`editor.addCommand/addEditorAction/addKeybindingRule/addKeybindingRules`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
+| 完整 standalone 入口 | `editor.main.ts`     | 先加载 `editor.all.ts` 的完整编辑 contribution，再导出 `editor.api.ts`                                                                                                                                                                                                                         |
 
 Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；Code Action 控制器拥有请求取消、解析和编辑提交，动作菜单的 DOM、键盘导航与关闭生命周期由 `platform/actionWidget` 统一管理。Hover 与 Sticky Scroll 控制器继续拥有各自的界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
 
@@ -25,34 +25,33 @@ Standalone 的 F1 快捷入口支持直接筛选命令，也支持 `>` 命令、
 
 Editor 维护以下核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
 
-| 文档 | Canonical responsibility | 不负责 |
-| --- | --- | --- |
-| [`README.md`](./README.md) | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配 | 单套功能实现的完整行为和实现台账 |
-| [`text-engine.md`](./text-engine.md) | 行式文本内核、view 架构、input、Contribution、当前状态和演进 | Workbench pane、文件协议和 App Server transport |
+| 文档                                                   | Canonical responsibility                                                                                                              | 不负责                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| [`README.md`](./README.md)                             | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配                                                                               | 单套功能实现的完整行为和实现台账                 |
+| [`text-engine.md`](./text-engine.md)                   | 行式文本内核、view 架构、input、Contribution、当前状态和演进                                                                          | Workbench pane、文件协议和 App Server transport  |
 | [`text-engine-geometry.md`](./text-engine-geometry.md) | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
-| [`document-engine.md`](./document-engine.md) | Schema-backed Block、transaction、browser projection、profile 和 collaboration | TextBuffer 语义和产品 pane 生命周期 |
-| [`api-alignment-status.md`](./api-alignment-status.md) | 全量 VS Code API/owner 扫描结果、已清除的误导性同名职责和真实能力缺口 | 不把尚未实现的上游能力标记为已完成 |
+| [`document-engine.md`](./document-engine.md)           | Schema-backed Block、transaction、browser projection、profile 和 collaboration                                                        | TextBuffer 语义和产品 pane 生命周期              |
+| [`api-alignment-status.md`](./api-alignment-status.md) | 全量 VS Code API/owner 扫描结果、已清除的误导性同名职责和真实能力缺口                                                                 | 不把尚未实现的上游能力标记为已完成               |
 
 跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
 
 ## 所有权与依赖方向
 
-| 目录 | 允许依赖 | 拥有 | 不得拥有 |
-| --- | --- | --- | --- |
-| `common/core` | `base/common` | 文本坐标、文档坐标、selection、纯变换算法 | DOM、Workbench service、App Server DTO |
-| `common/model` | `common/core`、`base/common` | `TextModel`、`ITextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
-| `common/services` | `common/languages`、编辑器公共契约、`base/common`、`platform/common` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合 | contribution-owned 契约或实现、App Server DTO、产品 provider、Workbench adapter |
-| `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
-| `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
-| `standalone/common`、`standalone/browser` | `editor/browser`、`editor/common`、`platform` | 单窗口 services、命名主题、URI/language model registry、`editor.create/createModel` 生命周期 | 用户主题持久化、文件 dirty/save/revert、Workbench service 或 pane |
-| `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
-| `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
-| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
+| 目录                                                                     | 允许依赖                                                             | 拥有                                                                                                                         | 不得拥有                                                                        |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `common/core`                                                            | `base/common`                                                        | 文本坐标、文档坐标、selection、纯变换算法                                                                                    | DOM、Workbench service、App Server DTO                                          |
+| `common/model`                                                           | `common/core`、`base/common`                                         | `TextModel`、`ITextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile                                            |
+| `common/services`                                                        | `common/languages`、编辑器公共契约、`base/common`、`platform/common` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合                                         | contribution-owned 契约或实现、App Server DTO、产品 provider、Workbench adapter |
+| `common/cursor`、`common/viewModel`、`common/viewLayout`                 | 文本内核与 `base/common`                                             | 行式编辑器实例状态和纯布局投影                                                                                               | DOM 和产品判断                                                                  |
+| `browser`                                                                | `common`、`base/browser` 和显式前端 service contract                 | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter                 | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择            |
+| `standalone/common`、`standalone/browser`                                | `editor/browser`、`editor/common`、`platform`                        | 单窗口 services、命名主题、URI/language model registry、`editor.create/createModel` 生命周期                                 | 用户主题持久化、文件 dirty/save/revert、Workbench service 或 pane               |
+| `contrib/<feature>`                                                      | 对应 engine 的最小 contract                                          | 可移除的编辑能力及其命令、状态和投影                                                                                         | 第二套 model、产品级 `if code/academic`                                         |
+| `editor.*.all.ts`                                                        | contribution entry                                                   | 静态 editor 能力装配                                                                                                         | Workbench pane/input 注册、模型或功能实现                                       |
+| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | Editor 与 Workbench contract                                         | pane/input、产品 profile、factory 注入和服务接线                                                                             | 编辑事务、selection、viewport 或 feature controller                             |
 
 顶层依赖遵循[代码组织规范](../../../../.github/instructions/source-code-organization.instructions.md)：`workbench → editor → platform → base`。因此 Editor 可以依赖 Base 和 Platform；反向依赖禁止。Editor 内部由贡献消费公共契约，公共契约与 registry 不反向依赖贡献，即使只是类型导入。`common` 不使用 DOM 是运行环境限制，不是文件归属标准。每个 `TextModel` 原生拥有有序逻辑行和稳定 `LineId`；Code 使用只有行与文档 metadata 的受限 profile，Academic 额外使用 mark、atom、facet、region 与 relation。浏览器投影和 Workbench 不得为代码区域或其他语义对象再创建隐藏模型。
 
 语言提供者、请求及返回值统一声明在 `common/languages.ts`；`ILanguageFeaturesService` 与 `LanguageFeaturesService` 只依赖该公共契约。Standalone、Workbench 和扩展适配器直接注册这些类型；贡献中的 service / controller 继续持有提供者选择、版本检查、取消与结果应用。共享 registry 不导入贡献文件，也不替功能保存请求状态。
-
 
 内容主轴只有 `TextModel → LineSequence → ModelLine`。持久语义通过互相正交的 `RangeStore`、`PointStore`、`LineFacetStore`、`RegionStore` 与 `RelationStore` 引用 `LineId`；字符仍由 TextModel 私有拥有的 `ITextBuffer` 保存。buffer 当前由 Builder 构建的红黑树 `PieceTreeTextBuffer` 实现，PieceTree 不属于公开模型拓扑。
 
@@ -60,7 +59,7 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 
 Stanza 是整个编辑器的名称。代码编辑器组合行式命令、语言能力与 diff；通用文档编辑器组合 group、typed block、document transaction 和 formatting。Academic 通过文档配置添加论文结构、citation、节点视图与工具栏。Code 工作台同时注册代码和文档 pane，资源类型决定使用哪个视图。
 
- Academic 代码区域是当前 `TextModel` 中一个带类型和连续行范围的 projection。`RichTextEditorWidget` 直接编辑这段行范围；它不创建嵌套 `TextModel`，也不启动 Code pane 或 Code contribution bundle。
+Academic 代码区域是当前 `TextModel` 中一个带类型和连续行范围的 projection。`RichTextEditorWidget` 直接编辑这段行范围；它不创建嵌套 `TextModel`，也不启动 Code pane 或 Code contribution bundle。
 
 ## 一个同步内核，两套投影
 
@@ -123,20 +122,20 @@ Workbench 启动装配共同编辑能力。`documentEditor.contribution.ts` 只�
 
 ## 关键实现符号
 
-| 符号 | 责任 | 修改时必须同步检查 |
-| --- | --- | --- |
-| `TextModel` | TextBuffer、LineId、version、history、line snapshot | cursor、selection、language result version gate、model tests |
-| `LineDocumentSnapshot` | 有序逻辑行与 mark/atom/facet/region/relation 的单版本只读视图 | schema projection、codec、renderer、model tests |
-| `ITextBuffer` | `common/model.ts` 拥有的字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
-| `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
-| `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `StandaloneThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
-| `StandaloneEditor` | `standaloneCodeEditor.ts` 的独立编辑器 owner；绑定主题、决定 model 所有权，并让 `create`、创建事件与 editor registry 共享同一对象身份 | `standaloneEditor.ts`、model/editor 生命周期测试 |
-| `StandaloneThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineNamedTheme/setTheme`、主题服务测试 |
-| `CodeEditorContributions` | 每次模型挂载的贡献创建、延迟调度与释放；Quick Diff 也走同一创建路径 | 模型切换、首次交互、失败后仍可渲染、显式获取贡献 |
-| `registerEditorContribution` | 编辑器贡献的统一注册；构造器、视图前配置、视图后安装共用 ID 和注册顺序 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
-| `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
-| `EditorProfile` | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合 | Academic bundle、持久格式兼容性、协作房间兼容性 |
-| Workbench `registerEditorPane` | Workbench pane descriptor 注册 | 模式入口、editor ID 唯一性、pane matching 顺序；不得从 `editor` bundle 调用 |
+| 符号                           | 责任                                                                                                                                                                                 | 修改时必须同步检查                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `TextModel`                    | TextBuffer、LineId、version、history、line snapshot                                                                                                                                  | cursor、selection、language result version gate、model tests                                          |
+| `LineDocumentSnapshot`         | 有序逻辑行与 mark/atom/facet/region/relation 的单版本只读视图                                                                                                                        | schema projection、codec、renderer、model tests                                                       |
+| `ITextBuffer`                  | `common/model.ts` 拥有的字符与物理行存储 contract；PieceTree 是当前私有实现                                                                                                          | TextModel edit、snapshot、worker mirror、maintenance                                                  |
+| `CodeEditorWidget`             | Code 模式的行式 DOM projection 与 input/navigation surface                                                                                                                           | viewport、accessibility、contributed controllers                                                      |
+| `StandaloneServices`           | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `StandaloneThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口                                                    |
+| `StandaloneEditor`             | `standaloneCodeEditor.ts` 的独立编辑器 owner；绑定主题、决定 model 所有权，并让 `create`、创建事件与 editor registry 共享同一对象身份                                                | `standaloneEditor.ts`、model/editor 生命周期测试                                                      |
+| `StandaloneThemeService`       | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置                                                                                                      | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineNamedTheme/setTheme`、主题服务测试 |
+| `CodeEditorContributions`      | 每次模型挂载的贡献创建、延迟调度与释放；Quick Diff 也走同一创建路径                                                                                                                  | 模型切换、首次交互、失败后仍可渲染、显式获取贡献                                                      |
+| `registerEditorContribution`   | 编辑器贡献的统一注册；构造器、视图前配置、视图后安装共用 ID 和注册顺序                                                                                                               | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序                                           |
+| `RichTextEditorWidget`         | 结构化节点、marks、selection 与 node-view lifecycle                                                                                                                                  | schema profile、clipboard、collaboration decoration                                                   |
+| `EditorProfile`                | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合                                                                                             | Academic bundle、持久格式兼容性、协作房间兼容性                                                       |
+| Workbench `registerEditorPane` | Workbench pane descriptor 注册                                                                                                                                                       | 模式入口、editor ID 唯一性、pane matching 顺序；不得从 `editor` bundle 调用                           |
 
 如果 common model 开始 import Workbench/generated DTO、contribution 开始拥有第二套 model state、或产品 ID 出现在 feature/controller 中，即表示所有权已经漂移。
 

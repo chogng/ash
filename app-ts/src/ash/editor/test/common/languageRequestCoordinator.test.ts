@@ -31,7 +31,7 @@ interface PendingWorkerRequest {
 
 class ControlledLanguageWorker implements LanguageWorker<TestLane, TestPayload, TestResult>, LanguageWorkerResultSettler {
 	readonly requests: PendingWorkerRequest[] = [];
-	readonly settlements: Array<{ readonly requestId: number; readonly disposition: LanguageWorkerResultDisposition }> = [];
+	readonly settlements: Array<{ readonly requestId: number; readonly disposition: LanguageWorkerResultDisposition; }> = [];
 	readonly synchronizedChanges: TextModelChange[] = [];
 	readonly synchronizedAfterCancellation: boolean[] = [];
 	disposed = false;

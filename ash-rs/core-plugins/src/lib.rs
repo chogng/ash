@@ -1,10 +1,10 @@
 //! Product owner for Plugin discovery, installation, activation, and Marketplace sources.
 
-mod manager;
 mod editor_extension_policy;
-mod open_vsx;
+mod manager;
 mod marketplace_activation;
 mod marketplace_store;
+mod open_vsx;
 mod plugin_activation;
 mod plugin_authority;
 mod plugin_discovery;
@@ -25,11 +25,11 @@ use ash_plugin::PluginPackageSource;
 use ash_plugin::PluginPath;
 use ash_plugin::PluginVersion;
 
-pub use manager::LocalCapabilitySource;
 pub use editor_extension_policy::EditorExtensionPolicy;
 pub use editor_extension_policy::EditorExtensionPolicyAction;
 pub use editor_extension_policy::EditorExtensionPolicyError;
 pub use editor_extension_policy::EditorExtensionPolicySnapshot;
+pub use manager::LocalCapabilitySource;
 pub use manager::PluginsManager;
 pub use open_vsx::OpenVsxClient;
 pub use open_vsx::OpenVsxConfig;

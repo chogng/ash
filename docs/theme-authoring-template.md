@@ -26,14 +26,14 @@ Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-de
 }
 ```
 
-| 内容 | 规则 |
-| --- | --- |
-| 身份 | 来自文件名，改 name 不改变选择值；扩展主题身份来自清单 |
-| name | 显示名称，可省略；省略时显示文件身份 |
-| type | dark、light、hcDark、hcLight；省略时为 dark，扩展由清单 uiTheme 决定 |
-| colors | 十六进制颜色；保留 Ash 颜色标识；未注册的扩展颜色不应用 |
-| tokenColors | 内联 TextMate scope/settings 数组，用户主题和扩展主题走相同生效链 |
-| 语法 | 接受注释与尾随逗号；不含 version、id、label、colorScheme |
+| 内容        | 规则                                                                 |
+| ----------- | -------------------------------------------------------------------- |
+| 身份        | 来自文件名，改 name 不改变选择值；扩展主题身份来自清单               |
+| name        | 显示名称，可省略；省略时显示文件身份                                 |
+| type        | dark、light、hcDark、hcLight；省略时为 dark，扩展由清单 uiTheme 决定 |
+| colors      | 十六进制颜色；保留 Ash 颜色标识；未注册的扩展颜色不应用              |
+| tokenColors | 内联 TextMate scope/settings 数组，用户主题和扩展主题走相同生效链    |
+| 语法        | 接受注释与尾随逗号；不含 version、id、label、colorScheme             |
 
 文件不接受颜色别名和变换对象。注册表内部仍可使用这些能力；导出时转换成具体颜色。未覆盖颜色由对应明暗注册表默认值补齐。Schema 由主题服务注册，颜色提示从当前颜色注册表生成。
 
@@ -45,14 +45,14 @@ Desktop 用户主题与根部 [extensions/theme-defaults](../extensions/theme-de
 
 配置保存在 Desktop profile 的 settings.json，支持注释和尾随逗号。主题服务负责选择主题、解析主题资源和应用覆盖；编辑器消费最终颜色与 token 样式。
 
-| 设置 | 内容 |
-| --- | --- |
-| workbench.colorCustomizations | 界面颜色，包括 editor.selectionBackground、editor.inactiveSelectionBackground 和 editor.selectionForeground；default 恢复注册表默认值 |
-| editor.tokenColorCustomizations | comments、strings 等语法分组，以及 textMateRules |
-| editor.semanticTokenColorCustomizations | enabled 和 rules；规则可分别覆盖 foreground、bold、italic、underline、strikethrough |
-| window.autoDetectColorScheme | 根据系统外观使用首选浅色或深色主题 |
-| window.autoDetectHighContrast | 系统开启高对比度时使用首选高对比度主题 |
-| workbench.preferred*ColorTheme | 分别指定浅色、深色、高对比度浅色、高对比度深色的主题 |
+| 设置                                    | 内容                                                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| workbench.colorCustomizations           | 界面颜色，包括 editor.selectionBackground、editor.inactiveSelectionBackground 和 editor.selectionForeground；default 恢复注册表默认值 |
+| editor.tokenColorCustomizations         | comments、strings 等语法分组，以及 textMateRules                                                                                      |
+| editor.semanticTokenColorCustomizations | enabled 和 rules；规则可分别覆盖 foreground、bold、italic、underline、strikethrough                                                   |
+| window.autoDetectColorScheme            | 根据系统外观使用首选浅色或深色主题                                                                                                    |
+| window.autoDetectHighContrast           | 系统开启高对比度时使用首选高对比度主题                                                                                                |
+| workbench.preferred*ColorTheme          | 分别指定浅色、深色、高对比度浅色、高对比度深色的主题                                                                                  |
 
 三个覆盖设置都支持以主题显示名称或 ID 编写的方括号块，也支持通配符和多个名称，例如 "[Ash Dark][Ash Light]"。匹配块按声明顺序覆盖全局配置，未指定的属性继续继承。TextMate 规则按 scope 的具体程度逐项匹配，相同具体程度时后声明的值生效；无 scope 的规则提供全局 token 样式。
 

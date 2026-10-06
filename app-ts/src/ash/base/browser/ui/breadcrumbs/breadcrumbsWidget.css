@@ -2,7 +2,10 @@
 	height: 100%;
 	width: 100%;
 	min-width: 0;
-	color: var(--ash-breadcrumbs-widget-foreground, var(--ash-description-foreground));
+	color: var(
+		--ash-breadcrumbs-widget-foreground,
+		var(--ash-description-foreground)
+	);
 	background: var(--ash-breadcrumbs-widget-background, transparent);
 }
 

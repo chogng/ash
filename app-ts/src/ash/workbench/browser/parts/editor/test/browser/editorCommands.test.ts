@@ -83,7 +83,7 @@ test('Close Workspace delegates an empty window to the host and follows workspac
 	const menus = new MenuService(commands, contextKeys);
 	const requests: unknown[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => {}, openWindow: async options => { requests.push(options); } });
+	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async options => { requests.push(options); } });
 	const closeMenu = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => action.id === CloseWorkspaceAction.ID).map(action => ({ label: action.label, enabled: action.enabled }));
 	assert.deepEqual(closeMenu(), [{ label: 'Close Folder', enabled: true }]);
 	await commands.executeCommand(CloseWorkspaceAction.ID);
@@ -121,7 +121,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		const closedInputs: typeof activeInput[] = [];
 		let cancelClose = false;
 		const activeGroup = {
-			openEditor: async (_input: unknown, options: { preferredEditorId: string }) => { chosen = options.preferredEditorId; },
+			openEditor: async (_input: unknown, options: { preferredEditorId: string; }) => { chosen = options.preferredEditorId; },
 			id: "main",
 			inputs: [activeInput],
 			selectedInputs: [activeInput],

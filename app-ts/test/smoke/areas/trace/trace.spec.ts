@@ -104,7 +104,7 @@ test('developer trace viewer connects to App Server, filters, exports and releas
 		if ('windows' in application) {
 			exportedPath = join(profile, 'exported-traces.json');
 			await application.evaluate(({ BrowserWindow }, path) => {
-				const state = globalThis as typeof globalThis & { traceDownloadState?: string };
+				const state = globalThis as typeof globalThis & { traceDownloadState?: string; };
 				state.traceDownloadState = 'pending';
 				BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) => {
 					item.setSavePath(path);
@@ -112,7 +112,7 @@ test('developer trace viewer connects to App Server, filters, exports and releas
 				});
 			}, exportedPath);
 			await viewer.getByRole('button', { name: 'Export filtered OTLP' }).click();
-			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { traceDownloadState?: string }).traceDownloadState)).toBe('completed');
+			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { traceDownloadState?: string; }).traceDownloadState)).toBe('completed');
 		} else {
 			const downloadPromise = page.waitForEvent('download');
 			await viewer.getByRole('button', { name: 'Export filtered OTLP' }).click();

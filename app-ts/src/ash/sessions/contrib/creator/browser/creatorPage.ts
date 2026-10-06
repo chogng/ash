@@ -27,8 +27,8 @@ export class CreatorEditorPane extends Disposable implements IEditorPane {
 		parent.append(this.page.domNode);
 		this.page.initialize();
 	}
-	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> {}
-	public clearInput(): void {}
+	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	public clearInput(): void { }
 	public setVisible(visibility: EditorPaneVisibility): void { this.page.setVisible(visibility === EditorPaneVisibility.Visible); }
 	public layout(dimension: IDimension): void { this.page.layout(dimension); }
 	public focus(): void { this.page.focus(); }

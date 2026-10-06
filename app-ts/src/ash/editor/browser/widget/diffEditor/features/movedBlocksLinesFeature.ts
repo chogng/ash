@@ -16,7 +16,7 @@ export class MovedBlocksLinesFeature extends Disposable {
 	private readonly comparisonLabel: HTMLSpanElement;
 	private readonly closeButton: Button;
 	private readonly controls = this._register(new DisposableStore());
-	private readonly links: { move: MovedText; path: SVGPathElement; button: HTMLElement }[] = [];
+	private readonly links: { move: MovedText; path: SVGPathElement; button: HTMLElement; }[] = [];
 	private readonly originalDecorations;
 	private readonly modifiedDecorations;
 	private enabled = false;
@@ -99,9 +99,11 @@ export class MovedBlocksLinesFeature extends Disposable {
 			host.className = 'ash-diff-moved-action';
 			this.domNode.append(host);
 			this.controls.add(toDisposable(() => host.remove()));
-			this.controls.add(new Button(host, { label, icon: Lxicon.arrowRight, iconOnly: true, size: 'small', onClick: () => {
-				this.compare(move === this.selectedMove ? undefined : move);
-			} }));
+			this.controls.add(new Button(host, {
+				label, icon: Lxicon.arrowRight, iconOnly: true, size: 'small', onClick: () => {
+					this.compare(move === this.selectedMove ? undefined : move);
+				}
+			}));
 			this.links.push({ move, path, button: host });
 		}
 		this.positionLinks();

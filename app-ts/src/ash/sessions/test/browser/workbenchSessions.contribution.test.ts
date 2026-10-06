@@ -41,10 +41,10 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	const api = {
 		session: {
 			async subscribeCatalog() { catalogLoads++; return { sessions: [] }; },
-			async unsubscribeCatalog() {},
+			async unsubscribeCatalog() { },
 		},
 		model: { async readModel() { return null; } },
-		events: { subscribe() { subscriptions++; return { dispose() {} }; } },
+		events: { subscribe() { subscriptions++; return { dispose() { } }; } },
 	} as unknown as IRendererHost;
 	using services = new InstantiationService();
 	services.registerInstance(IRendererHostService, api);
@@ -76,7 +76,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 test('Open in Agents uses the visible untitled chat instead of an older active session', () => {
 	const selection = {
 		active: { session: { sessionId: 'older-session' }, threadId: 'older-thread' },
-		activeUntitledSession: undefined as { readonly untitledSessionId: string } | undefined,
+		activeUntitledSession: undefined as { readonly untitledSessionId: string; } | undefined,
 	};
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, selection as unknown as ISessionsManagementService);
@@ -125,7 +125,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	services.registerInstance(ISessionsManagementService, {
 		active: { session, threadId: 'thread' },
 		sessions: [session],
-		initialize: async () => {},
+		initialize: async () => { },
 	} as unknown as ISessionsManagementService);
 	const resolvers = new MultiDiffSourceResolverService();
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);

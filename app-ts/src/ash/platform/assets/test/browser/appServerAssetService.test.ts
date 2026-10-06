@@ -9,13 +9,13 @@ import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_S
 import { createTestInitializeResult } from '../../../app-server/test/common/testAppServerProtocol.js';
 
 class Transport implements AppServerTransport {
-	public readonly requests: { method: string; params: Record<string, unknown> }[] = [];
+	public readonly requests: { method: string; params: Record<string, unknown>; }[] = [];
 	public failWrite = false;
 	public invalidImage = false;
 	public supportsAssets = true;
 	public favorite = false;
 	public collectionIds: string[] = [];
-	public collections: { id: string; name: string }[] = [];
+	public collections: { id: string; name: string; }[] = [];
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
 	private bytes = Buffer.alloc(0);
 	private version: Record<string, unknown> = {};
@@ -27,7 +27,7 @@ class Transport implements AppServerTransport {
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'test', workspaceRoot: '/test' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string }).frame) as { id?: number; method: string; params: Record<string, unknown> };
+		const request = JSON.parse((payload as { frame: string; }).frame) as { id?: number; method: string; params: Record<string, unknown>; };
 		if (request.id === undefined) { return; }
 		this.requests.push(request);
 		const params = request.params;
@@ -42,7 +42,7 @@ class Transport implements AppServerTransport {
 			}
 			case 'asset/catalog': result = { entries: this.version.assetId ? [{ version: this.version, addedAt: 1700000000000, favorite: this.favorite, collectionIds: this.collectionIds }] : [], collections: this.collections }; break;
 			case 'asset/catalog/update': this.favorite = params.favorite as boolean; this.collectionIds = params.collectionIds as string[]; result = null; break;
-			case 'asset/collection/create': this.collections.push(params as { id: string; name: string }); result = null; break;
+			case 'asset/collection/create': this.collections.push(params as { id: string; name: string; }); result = null; break;
 			case 'asset/collection/delete': this.collections = this.collections.filter(collection => collection.id !== params.id); result = null; break;
 			case 'asset/import/start':
 				this.bytes = Buffer.alloc(0);
@@ -122,14 +122,14 @@ test('Asset catalog adapts generated metadata and sends durable organization ope
 	const transport = new Transport();
 	const client = new AppServerProtocolClient(transport);
 	try {
-	await client.connect();
-	const service = new AppServerAssetService(client);
-	const version = await service.importImage(request);
-	const collection = { id: '33333333-3333-4333-8333-333333333333', name: 'Brand' };
-	await service.createCollection(collection);
-	await service.updateEntry(version.assetId, true, [collection.id]);
-	assert.deepEqual(await service.getCatalog(), { entries: [{ version, addedAt: 1700000000000, favorite: true, collectionIds: [collection.id] }], collections: [collection] });
-	await service.deleteCollection(collection.id);
-	assert.equal((await service.getCatalog()).collections.length, 0);
+		await client.connect();
+		const service = new AppServerAssetService(client);
+		const version = await service.importImage(request);
+		const collection = { id: '33333333-3333-4333-8333-333333333333', name: 'Brand' };
+		await service.createCollection(collection);
+		await service.updateEntry(version.assetId, true, [collection.id]);
+		assert.deepEqual(await service.getCatalog(), { entries: [{ version, addedAt: 1700000000000, favorite: true, collectionIds: [collection.id] }], collections: [collection] });
+		await service.deleteCollection(collection.id);
+		assert.equal((await service.getCatalog()).collections.length, 0);
 	} finally { client.dispose(); }
 });

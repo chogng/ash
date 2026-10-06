@@ -207,6 +207,6 @@ export interface SemanticTokenSource {
 export interface SemanticTokenModelSource {
 	readonly textModel: TextModel;
 	readonly onDidChange: (listener: () => void) => IDisposable;
-	readonly lines: readonly { readonly lineIndex: number; readonly tokens: readonly LanguageToken[] }[];
+	readonly lines: readonly { readonly lineIndex: number; readonly tokens: readonly LanguageToken[]; }[];
 	getLineTokens(lineIndex: number): readonly LanguageToken[];
 }

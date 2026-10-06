@@ -9,7 +9,7 @@ export class TeamsManagementService implements ITeamsManagementService {
 	private readonly currentTeams = observableValue<readonly Team[]>('teams', []);
 	readonly teams: IObservable<readonly Team[]> = this.currentTeams;
 
-	constructor(private readonly provider: ITeamsProvider) {}
+	constructor(private readonly provider: ITeamsProvider) { }
 
 	async refresh(): Promise<void> {
 		this.currentTeams.set(await this.provider.list());

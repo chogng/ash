@@ -162,9 +162,9 @@ export class EditorFoldingModel extends Disposable {
 	toggleContainingLine(lineIndex: number): EditorFoldingRegion | undefined {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
 		const record = this.findRecord(candidate => {
-				const range = candidate.range.range;
-				return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
-			});
+			const range = candidate.range.range;
+			return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
+		});
 		if (!record) return undefined;
 		record.collapsed = !record.collapsed;
 		const region = this.toRegion(record);
@@ -176,7 +176,7 @@ export class EditorFoldingModel extends Disposable {
 	setContainingLinesCollapsed(
 		lineIndexes: readonly number[],
 		collapsed: boolean,
-		options?: { levels: number; direction: 'up' | 'down' },
+		options?: { levels: number; direction: 'up' | 'down'; },
 	): void {
 		if (typeof collapsed !== "boolean") throw new TypeError("Folding collapse state must be boolean");
 		const targets = new Set<EditorFoldingRegionRecord>();

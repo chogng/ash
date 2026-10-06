@@ -186,7 +186,7 @@ export class BracketPairsTree extends Disposable {
 
 function getFirstBracketBefore(node: AstNode, nodeOffsetStart: Length, nodeOffsetEnd: Length, position: Length): IFoundBracket | null {
 	if (node.kind === AstNodeKind.List || node.kind === AstNodeKind.Pair) {
-		const lengths: { nodeOffsetStart: Length; nodeOffsetEnd: Length }[] = [];
+		const lengths: { nodeOffsetStart: Length; nodeOffsetEnd: Length; }[] = [];
 		for (const child of node.children) {
 			nodeOffsetEnd = lengthAdd(nodeOffsetStart, child.length);
 			lengths.push({ nodeOffsetStart, nodeOffsetEnd });

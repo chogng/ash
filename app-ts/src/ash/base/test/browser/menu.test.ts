@@ -57,7 +57,7 @@ test("Menu renders action badges as trailing metadata", async () => {
 			tooltip: "Model",
 			badge: "Subscription",
 			enabled: true,
-			run(): void {},
+			run(): void { },
 		}],
 	});
 
@@ -87,7 +87,7 @@ test("Menu items keep accessible names without installing action tooltips", asyn
 			label: "Plan",
 			tooltip: "Use Plan mode",
 			enabled: true,
-			run(): void {},
+			run(): void { },
 		}],
 	});
 	const item = menu.element.querySelector<HTMLButtonElement>("[role='menuitem']");
@@ -114,7 +114,7 @@ test("Menu projects one focused item for keyboard and pointer navigation", async
 			label: id,
 			tooltip: id,
 			enabled: true,
-			run(): void {},
+			run(): void { },
 		})),
 	});
 	dom.window.document.body.append(menu.element);
@@ -129,7 +129,7 @@ test("Menu projects one focused item for keyboard and pointer navigation", async
 	}
 	Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 
 	menu.focus(false);
@@ -193,7 +193,7 @@ test("Menu delays pointer expansion and switches the expanded submenu", async ()
 	mock.timers.enable({ apis: ["setTimeout"] });
 	Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(globalThis, "window", {
 		configurable: true,
@@ -214,14 +214,14 @@ test("Menu delays pointer expansion and switches the expanded submenu", async ()
 				label: "First child",
 				tooltip: "First child",
 				enabled: true,
-				run(): void {},
+				run(): void { },
 			}]),
 			new SubmenuAction("second", "Second", [{
 				id: "second.child",
 				label: "Second child",
 				tooltip: "Second child",
 				enabled: true,
-				run(): void {},
+				run(): void { },
 			}]),
 		],
 	});
@@ -277,7 +277,7 @@ test("Menu opens immediate root submenus only on movement without changing neste
 	mock.timers.enable({ apis: ["setTimeout"] });
 	Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(globalThis, "window", {
 		configurable: true,
@@ -299,7 +299,7 @@ test("Menu opens immediate root submenus only on movement without changing neste
 					label: "Child",
 					tooltip: "Child",
 					enabled: true,
-					run(): void {},
+					run(): void { },
 				}]),
 			]),
 			new SubmenuAction("second", "Second", []),
@@ -360,7 +360,7 @@ test("Menu preserves submenu focus and closes after focus leaves or the parent s
 	mock.timers.enable({ apis: ["setTimeout"] });
 	Object.defineProperty(dom.window.Element.prototype, "scrollTo", {
 		configurable: true,
-		value(): void {},
+		value(): void { },
 	});
 	Object.defineProperty(globalThis, "window", {
 		configurable: true,
@@ -381,14 +381,14 @@ test("Menu preserves submenu focus and closes after focus leaves or the parent s
 				label: "Child",
 				tooltip: "Child",
 				enabled: true,
-				run(): void {},
+				run(): void { },
 			}]),
 			{
 				id: "leaf",
 				label: "Leaf",
 				tooltip: "Leaf",
 				enabled: true,
-				run(): void {},
+				run(): void { },
 			},
 		],
 	});

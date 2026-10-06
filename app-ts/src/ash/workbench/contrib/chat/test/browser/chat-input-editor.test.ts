@@ -111,6 +111,6 @@ class FakeChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.focus();
 	}
 
-	layout(): void {}
+	layout(): void { }
 	public insertText(text: string): void { this.value += text; this._onDidChange.fire(this.value); }
 }

@@ -107,7 +107,7 @@ test("LineWidthIndex bounds initial work and measures later visible lines on dem
 });
 
 class ManualMeasurementScheduler {
-	private readonly pending: { readonly callback: () => void; cancelled: boolean }[] = [];
+	private readonly pending: { readonly callback: () => void; cancelled: boolean; }[] = [];
 
 	schedule(callback: () => void) {
 		const entry = { callback, cancelled: false };

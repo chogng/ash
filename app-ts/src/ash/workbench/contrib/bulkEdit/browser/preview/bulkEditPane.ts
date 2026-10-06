@@ -136,11 +136,13 @@ export class BulkEditPane extends ViewPane {
 		this.render();
 		return await new Promise<ResourceEdit[] | undefined>(resolve => {
 			const abortListener = addDisposableListener(signal, 'abort', () => this.discard(), { once: true });
-			this.activePreview = { resolve: value => {
-				abortListener.dispose();
-				if (isHTMLElement(previousFocus) && previousFocus.isConnected && !this.element.contains(previousFocus)) { previousFocus.focus(); }
-				resolve(value);
-			} };
+			this.activePreview = {
+				resolve: value => {
+					abortListener.dispose();
+					if (isHTMLElement(previousFocus) && previousFocus.isConnected && !this.element.contains(previousFocus)) { previousFocus.focus(); }
+					resolve(value);
+				}
+			};
 			this.listElement.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus();
 		});
 	}
@@ -413,7 +415,7 @@ export class BulkEditPane extends ViewPane {
 	}
 }
 
-function resourceLabel(resource: { readonly path: string }): string {
+function resourceLabel(resource: { readonly path: string; }): string {
 	const path = resource.path.replaceAll("\\", "/");
 	return path.split("/").filter(Boolean).pop() ?? path;
 }

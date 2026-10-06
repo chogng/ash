@@ -99,7 +99,7 @@ export class QuickInputController extends Disposable {
 	}
 
 	/** The caller owns container geometry; the overlay only consumes its top offset. */
-	public layout(_dimension: { readonly width: number; readonly height: number }, titleBarOffset: number): void {
+	public layout(_dimension: { readonly width: number; readonly height: number; }, titleBarOffset: number): void {
 		this.host.style.paddingTop = `${titleBarOffset + 8}px`;
 		if (this.active instanceof QuickPick) this.active.layout();
 	}

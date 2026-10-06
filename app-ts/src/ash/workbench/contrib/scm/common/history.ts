@@ -4,7 +4,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { ISCMRepository } from './scm.js';
 
 /** A history provider cannot serve the current workspace until its repository appears. */
-export class SCMHistoryUnavailableError extends Error {}
+export class SCMHistoryUnavailableError extends Error { }
 
 export interface ISCMHistoryOptions {
 	readonly skip?: number;
@@ -31,7 +31,7 @@ export interface ISCMHistoryItem {
 	readonly displayId?: string;
 	readonly timestamp?: number;
 	readonly references?: readonly ISCMHistoryItemRef[];
-	readonly remoteLinks?: readonly { readonly name: string; readonly uri: URI }[];
+	readonly remoteLinks?: readonly { readonly name: string; readonly uri: URI; }[];
 }
 
 export interface ISCMHistoryItemDetails {
@@ -39,7 +39,7 @@ export interface ISCMHistoryItemDetails {
 	readonly authorEmail: string;
 	readonly timestamp: number;
 	readonly message: string;
-	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number; };
 }
 
 export interface ISCMHistoryItemGraphNode {
@@ -82,8 +82,8 @@ export interface SCMHistoryItemChangeViewModelTreeElement {
 }
 
 export type ISCMHistoryItemContent =
-	| { readonly kind: 'text'; readonly text: string }
-	| { readonly kind: 'missing' | 'binary' };
+	| { readonly kind: 'text'; readonly text: string; }
+	| { readonly kind: 'missing' | 'binary'; };
 
 export interface ISCMHistoryItemChangeContents {
 	readonly parentId: string | undefined;

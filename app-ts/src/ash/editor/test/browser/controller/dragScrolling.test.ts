@@ -38,7 +38,7 @@ test('DragScrolling reuses one operation for pointer updates and stops its frame
 		{} as ViewContext,
 		{} as IPointerHandlerHelper,
 		{} as MouseTargetFactory,
-		(_target: IMouseTarget, _inSelectionMode: boolean, _revealType: NavigationCommandRevealType) => {},
+		(_target: IMouseTarget, _inSelectionMode: boolean, _revealType: NavigationCommandRevealType) => { },
 	);
 	const event = new EditorMouseEvent(new dom.window.MouseEvent('pointermove', { clientX: 10, clientY: 10, view: dom.window as unknown as Window }), true, element);
 	const above = MouseTarget.createOutsideEditor(1, new Position(1, 1), 'above', 10);

@@ -9,7 +9,9 @@
 	outline: none;
 }
 
-.ash-sessions-design-view[hidden] { display: none; }
+.ash-sessions-design-view[hidden] {
+	display: none;
+}
 
 .ash-sessions-design-stage {
 	position: relative;

@@ -121,8 +121,8 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 			},
 			copy: async () => { throw new Error('not used'); },
 			pasteSystemFiles: async () => false,
-			rename: async () => {},
-			delete: async () => {},
+			rename: async () => { },
+			delete: async () => { },
 		},
 		resourceApi: {
 			metadata: async () => { throw new Error("not used"); },
@@ -300,7 +300,7 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 		],
 		configuration: URI.parse("file:///C:/project.code-workspace"),
 	});
-	const requests: { readonly dirId?: string; readonly path: string }[] = [];
+	const requests: { readonly dirId?: string; readonly path: string; }[] = [];
 	const copies: unknown[] = [];
 	const pastes: unknown[] = [];
 	const service = new BrowserFileService({

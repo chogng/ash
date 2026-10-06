@@ -51,7 +51,7 @@ export class AppServerDirPermissionsService extends Disposable implements IDirPe
 	}
 }
 
-function projectCommandResult(result: { revision: number; generation: number; disposition: "updated" | "replayed" }): DirPermissionsCommandResult {
+function projectCommandResult(result: { revision: number; generation: number; disposition: "updated" | "replayed"; }): DirPermissionsCommandResult {
 	return { revision: result.revision, generation: result.generation, disposition: result.disposition };
 }
 

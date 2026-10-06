@@ -53,8 +53,8 @@ class TestStateService implements IStateService {
 
 test('window session state owner persists active Workbench and Agents windows and the last closed window', async () => {
 	type Entry =
-		| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
-		| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier };
+		| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier; }
+		| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; };
 	const isEntry = (entry: IWindowSessionEntry): entry is Entry => entry.kind === 'workbench' || entry.kind === 'sessions';
 	const workbench: Entry = { kind: 'workbench', workspace: folderWorkspace };
 	const agents: Entry = { kind: 'sessions', workspace: multiRootWorkspace };
@@ -239,10 +239,12 @@ test('new windows apply each dimension policy to normal bounds and retain their 
 
 test('default placement avoids every existing window sharing either coordinate', () => {
 	const handler = createHandler(new TestStateService(), folderWorkspace);
-	assert.deepEqual(handler.getNewWindowState({ ...defaultOptions, existingWindows: [
-		{ x: 360, y: 10, width: 500, height: 500 },
-		{ x: 10, y: 170, width: 500, height: 500 },
-	] }), {
+	assert.deepEqual(handler.getNewWindowState({
+		...defaultOptions, existingWindows: [
+			{ x: 360, y: 10, width: 500, height: 500 },
+			{ x: 10, y: 170, width: 500, height: 500 },
+		]
+	}), {
 		mode: WindowMode.Normal, x: 420, y: 200, width: 1200, height: 800, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 	});
 });
@@ -748,7 +750,7 @@ test("empty windows keep independent placement by workspace ID", async () => {
 	await first.saveWindowState(firstWindow);
 	await second.saveWindowState(secondWindow);
 
-	const state = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly emptyWorkspaceId?: string }> };
+	const state = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly emptyWorkspaceId?: string; }>; };
 	assert.deepEqual(state.openedWindows.map(record => record.emptyWorkspaceId), [secondWorkspace.id, firstWorkspace.id]);
 	assert.equal(createHandler(stateService, firstWorkspace).getNewWindowState(defaultOptions).x, 120);
 	assert.equal(createHandler(stateService, secondWorkspace).getNewWindowState(defaultOptions).x, 320);
@@ -775,11 +777,11 @@ test("dedicated windows keep known placement separate and share first-window pla
 	});
 	const mainWindow = new TestWindow();
 	await main.saveWindowState(mainWindow);
-	const mainState = stateService.getItem('windowsState') as { openedWindows: unknown[] };
+	const mainState = stateService.getItem('windowsState') as { openedWindows: unknown[]; };
 	const dedicatedWindow = new TestWindow();
 	dedicatedWindow.bounds = { x: 180, y: 140, width: 1180, height: 780 };
 	await dedicated.saveWindowState(dedicatedWindow);
-	assert.deepEqual((stateService.getItem('windowsState') as { openedWindows: unknown[] }).openedWindows, mainState.openedWindows);
+	assert.deepEqual((stateService.getItem('windowsState') as { openedWindows: unknown[]; }).openedWindows, mainState.openedWindows);
 	assert.deepEqual(createHandler(stateService, { id: 'new-empty' }).getNewWindowState(defaultOptions), {
 		mode: WindowMode.Normal, x: 180, y: 140, width: 1180, height: 780, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 	});
@@ -799,7 +801,7 @@ test("independent handlers merge exact Workspace window state instead of overwri
 	await folderHandler.saveWindowState(folderWindow);
 	await workspaceHandler.saveWindowState(workspaceWindow);
 
-	const state = stateService.getItem("windowsState") as { readonly openedWindows: readonly unknown[] };
+	const state = stateService.getItem("windowsState") as { readonly openedWindows: readonly unknown[]; };
 	assert.equal(state.openedWindows.length, 2);
 	assert.deepEqual(state.openedWindows.map(record => Object.keys(record as object).sort()), [
 		["uiState", "workspaceIdentifier"],
@@ -808,7 +810,7 @@ test("independent handlers merge exact Workspace window state instead of overwri
 
 	folderWindow.bounds = { x: 300, y: 160, width: 1440, height: 900 };
 	await folderHandler.saveWindowState(folderWindow);
-	const updated = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly folder?: string; readonly uiState: { readonly bounds: { readonly x: number } } }> };
+	const updated = stateService.getItem("windowsState") as { readonly openedWindows: ReadonlyArray<{ readonly folder?: string; readonly uiState: { readonly bounds: { readonly x: number; }; }; }>; };
 	assert.equal(updated.openedWindows.length, 2);
 	assert.equal(updated.openedWindows[0]?.folder, folderWorkspace.uri.toString());
 	assert.equal(updated.openedWindows[0]?.uiState.bounds.x, 300);
@@ -956,9 +958,11 @@ test('display changes preserve fullscreen mode and normal bounds for leaving ful
 test('invalid persisted work areas are rejected at the storage boundary', () => {
 	for (const workArea of [null, { x: 0, y: 0, width: 0, height: 1040 }, { x: 0, y: 0, width: '1920', height: 1040 }]) {
 		const stateService = new TestStateService();
-		stateService.setItem('windowsState', { version: 1, openedWindows: [{
-			folder: folderWorkspace.uri.toString(), uiState: { mode: WindowMode.Normal, bounds: { x: 120, y: 80, width: 1100, height: 760 }, workArea },
-		}] });
+		stateService.setItem('windowsState', {
+			version: 1, openedWindows: [{
+				folder: folderWorkspace.uri.toString(), uiState: { mode: WindowMode.Normal, bounds: { x: 120, y: 80, width: 1100, height: 760 }, workArea },
+			}]
+		});
 		assert.deepEqual(createHandler(stateService, folderWorkspace).getNewWindowState(defaultOptions), {
 			...defaultWindowState(WorkbenchState.FOLDER), x: 360, y: 140, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea,
 		});

@@ -76,7 +76,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 	}
 
 	/** Nested hosts use the same inset calculation as the Part they are mounted inside. */
-	getContentSize(dimension: { readonly width: number; readonly height: number }): Dimension {
+	getContentSize(dimension: { readonly width: number; readonly height: number; }): Dimension {
 		return new Dimension(
 			Math.max(0, dimension.width - this.frameInsets.left - this.frameInsets.right),
 			Math.max(0, dimension.height - this.frameInsets.top - this.frameInsets.bottom),

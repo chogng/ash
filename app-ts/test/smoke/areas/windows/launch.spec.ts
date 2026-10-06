@@ -73,7 +73,7 @@ test('desktop launch opens files, positions the caret and distinguishes new and 
 	await expect(workbench.page.getByText('Ln 2, Col 4', { exact: true })).toBeVisible();
 	expect(application.windows()).toHaveLength(1);
 	const firstWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()!.id);
-	await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() {} }, url); }, `ash://file${pathToFileURL(file).pathname}:3:2?windowId=${firstWindowId}`);
+	await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() { } }, url); }, `ash://file${pathToFileURL(file).pathname}:3:2?windowId=${firstWindowId}`);
 	await expect(workbench.page.getByText('Ln 3, Col 2', { exact: true })).toBeVisible();
 	const opened = application.waitForEvent('window');
 	await launch(['--new-window', file]);
@@ -92,14 +92,14 @@ test('desktop launch opens files, positions the caret and distinguishes new and 
 		await newPage.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
 		try {
 			await expect.poll(() => newPage.evaluate(() => {
-				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: { uri: string }[] }> } } }).ash.ipcRenderer;
+				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: { uri: string; }[]; }>; }; }; }).ash.ipcRenderer;
 				return ipc.invoke('ash:workspace:context:read').then(value => value.folders[0]?.uri);
 			})).toBe(pathToFileURL(folder).href);
 		} catch (error) {
 			throw new Error(`Workspace reuse failed:\n${diagnostics.join('\n')}\n${await newPage.locator('body').innerText()}`, { cause: error });
 		}
 		expect(application.windows()).toHaveLength(2);
-		await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() {} }, url); }, `ash://file${pathToFileURL(file).pathname}`);
+		await application.evaluate(({ app }, url) => { app.emit('open-url', { preventDefault() { } }, url); }, `ash://file${pathToFileURL(file).pathname}`);
 		await expect(newPage.getByRole('tab').filter({ hasText: 'launch file.txt' })).toHaveCount(1);
 	} finally {
 		if (!newPage.isClosed()) {
@@ -176,7 +176,7 @@ test('product URL callbacks create a requested window and leave unhandled callba
 	}
 	const opened = application.waitForEvent('window');
 	await application.evaluate(({ app }) => {
-		app.emit('open-url', { preventDefault() {} }, 'ash://publisher.extension/callback?code=a%26b&windowId=_blank');
+		app.emit('open-url', { preventDefault() { } }, 'ash://publisher.extension/callback?code=a%26b&windowId=_blank');
 	});
 	const page = await opened;
 	try {

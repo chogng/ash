@@ -1,4 +1,16 @@
-.ash-terminal-dictation { flex: 0 0 auto; color: var(--ash-foreground); }
-.ash-terminal-dictation-controls { display: flex; gap: var(--ash-spacing-size80); padding: var(--ash-spacing-size80); }
-.ash-terminal-dictation-controls[hidden] { display: none; }
-.ash-terminal-dictation p { margin: 0; padding-inline: var(--ash-spacing-size80); }
+.ash-terminal-dictation {
+	flex: 0 0 auto;
+	color: var(--ash-foreground);
+}
+.ash-terminal-dictation-controls {
+	display: flex;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+}
+.ash-terminal-dictation-controls[hidden] {
+	display: none;
+}
+.ash-terminal-dictation p {
+	margin: 0;
+	padding-inline: var(--ash-spacing-size80);
+}

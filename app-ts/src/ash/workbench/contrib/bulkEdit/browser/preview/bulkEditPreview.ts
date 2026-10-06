@@ -81,7 +81,7 @@ export class BulkFileOperations extends Disposable {
 			model.snapshot = await createBulkEditPreview(edit, { files: model.files, models: model.models, workingCopies: model.workingCopies }, signal);
 			let fileIndex = 0;
 			const fileEdits = bulkEdit.filter(edit => !(edit instanceof ResourceTextEdit));
-			const textEdits = new Map<string, Map<TextEdit, { edits: ResourceTextEdit[]; next: number }>>();
+			const textEdits = new Map<string, Map<TextEdit, { edits: ResourceTextEdit[]; next: number; }>>();
 			for (const edit of bulkEdit) {
 				if (!(edit instanceof ResourceTextEdit)) { continue; }
 				const key = edit.resource.toString();
@@ -225,7 +225,7 @@ async function previewEntry(entry: LanguageWorkspaceEditEntry, index: number, de
 	}
 }
 
-async function previewTextDocument(entry: Extract<LanguageWorkspaceEditEntry, { kind: "textDocument" }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>, signal: AbortSignal): Promise<BulkEditPreviewEntry> {
+async function previewTextDocument(entry: Extract<LanguageWorkspaceEditEntry, { kind: "textDocument"; }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>, signal: AbortSignal): Promise<BulkEditPreviewEntry> {
 	const state: FileState = states.get(entry.resource.toString()) ?? (dependencies.workingCopies.get(entry.resource).length > 0
 		? { exists: true, kind: FileKind.File }
 		: await getFileState(entry.resource, dependencies.files, states));
@@ -244,7 +244,7 @@ async function previewTextDocument(entry: Extract<LanguageWorkspaceEditEntry, { 
 	return { index, kind: entry.kind, resource: entry.resource, detail: localize('bulkEdit.textEditSummary', '{0} text edits · {1}', entry.edits.length, textChangeSummary(before, after)), before, after };
 }
 
-async function previewCreate(entry: Extract<LanguageWorkspaceEditEntry, { kind: "create" }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>): Promise<BulkEditPreviewEntry> {
+async function previewCreate(entry: Extract<LanguageWorkspaceEditEntry, { kind: "create"; }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>): Promise<BulkEditPreviewEntry> {
 	const error = openResourceError(entry.resource, "create", dependencies.workingCopies);
 	if (error) return { index, kind: entry.kind, resource: entry.resource, detail: localize('bulkEdit.create', "Create file"), error };
 	const state = await getFileState(entry.resource, dependencies.files, states);
@@ -254,7 +254,7 @@ async function previewCreate(entry: Extract<LanguageWorkspaceEditEntry, { kind: 
 	return { index, kind: entry.kind, resource: entry.resource, detail: state.exists ? localize('bulkEdit.createExisting', 'Create file · {0}', existingLabel(entry.existing)) : localize('bulkEdit.create', "Create file"), before: state.text ?? '', after: state.exists && entry.existing === 'ignore' ? state.text : entry.contents ?? '' };
 }
 
-async function previewRename(entry: Extract<LanguageWorkspaceEditEntry, { kind: "rename" }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>): Promise<BulkEditPreviewEntry> {
+async function previewRename(entry: Extract<LanguageWorkspaceEditEntry, { kind: "rename"; }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>): Promise<BulkEditPreviewEntry> {
 	const sourceError = openResourceError(entry.source, "rename", dependencies.workingCopies) ?? openResourceError(entry.target, "rename", dependencies.workingCopies);
 	if (sourceError) return { index, kind: entry.kind, resource: entry.source, secondaryResource: entry.target, detail: localize('bulkEdit.rename', "Rename"), error: sourceError };
 	const source = await getFileState(entry.source, dependencies.files, states);
@@ -269,7 +269,7 @@ async function previewRename(entry: Extract<LanguageWorkspaceEditEntry, { kind: 
 	return { index, kind: entry.kind, resource: entry.source, secondaryResource: entry.target, detail: target.exists ? localize('bulkEdit.renameExisting', 'Rename · {0}', existingLabel(entry.existing)) : localize('bulkEdit.rename', "Rename"), before: source.text, after: source.text };
 }
 
-async function previewDelete(entry: Extract<LanguageWorkspaceEditEntry, { kind: "delete" }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>): Promise<BulkEditPreviewEntry> {
+async function previewDelete(entry: Extract<LanguageWorkspaceEditEntry, { kind: "delete"; }>, index: number, dependencies: PreviewDependencies, states: Map<string, FileState>): Promise<BulkEditPreviewEntry> {
 	const error = openResourceError(entry.resource, "delete", dependencies.workingCopies);
 	if (error) return { index, kind: entry.kind, resource: entry.resource, detail: localize('bulkEdit.delete', "Delete"), error };
 	const state = await getFileState(entry.resource, dependencies.files, states);

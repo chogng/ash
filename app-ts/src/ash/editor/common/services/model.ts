@@ -17,5 +17,5 @@ export interface IModelService {
 	getCreationOptions(language: string, resource: URI, isForSimpleWidget: boolean): ITextModelCreationOptions;
 	readonly onModelAdded: Event<ITextModel>;
 	readonly onModelRemoved: Event<ITextModel>;
-	readonly onModelLanguageChanged: Event<{ readonly model: ITextModel; readonly oldLanguageId: string }>;
+	readonly onModelLanguageChanged: Event<{ readonly model: ITextModel; readonly oldLanguageId: string; }>;
 }

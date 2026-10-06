@@ -9,7 +9,7 @@ import { localize } from '../../../nls.js';
 /** Reads complete package snapshots prepared by the browser build, without server transport. */
 export function createBrowserExtensionApi(): IExtensionApi {
 	// Package bytes are a static asset, not JavaScript imported into every renderer entry.
-	let snapshot: Promise<{ catalog: ReturnType<typeof normalizeExtensionCatalog>; resources: Readonly<Record<string, Readonly<Record<string, string>>>> }> | undefined;
+	let snapshot: Promise<{ catalog: ReturnType<typeof normalizeExtensionCatalog>; resources: Readonly<Record<string, Readonly<Record<string, string>>>>; }> | undefined;
 	const load = () => snapshot ??= (async () => {
 		const response = await fetch(new URL('../common/generated/browser.json', import.meta.url));
 		if (!response.ok) { throw new Error(localize('extensions.browser.catalogFailure', 'Cannot load browser extension catalog: HTTP {0}', response.status)); }

@@ -6,14 +6,14 @@ signs, and distributes product-independent static locale payloads.
 
 ## Ownership
 
-| Surface | Owner | Contract |
-| --- | --- | --- |
-| Built-in English and Simplified Chinese | `workbench/services/localization/common/localizationCatalogs.ts` | Always available without Marketplace access |
-| Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks` | `ILanguagePackService`; Marketplace `packageType: "localization"` |
-| Locale selection and persistence | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale` |
-| Message lookup and NLS projection | `workbench/services/localization` + `app-ts/src/ash/nls.ts` | Selected catalog → English catalog → caller fallback |
-| Remote package discovery and distribution | `../marketplace` | `packageType: "localization"` and `localization/package.json` |
-| Installed package lease and resource reads | Ash Marketplace Manager | A localization capability exposes one static JSON catalog |
+| Surface                                                              | Owner                                                                           | Contract                                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Built-in English and Simplified Chinese                              | `workbench/services/localization/common/localizationCatalogs.ts`                | Always available without Marketplace access                       |
+| Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Marketplace `packageType: "localization"` |
+| Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`                |
+| Message lookup and NLS projection                                    | `workbench/services/localization` + `app-ts/src/ash/nls.ts`                     | Selected catalog → English catalog → caller fallback              |
+| Remote package discovery and distribution                            | `../marketplace`                                                                | `packageType: "localization"` and `localization/package.json`     |
+| Installed package lease and resource reads                           | Ash Marketplace Manager                                                         | A localization capability exposes one static JSON catalog         |
 
 The Marketplace does not know Ash bundle IDs, does not execute localization packages, and does not
 install them into the renderer. The App Server/Marketplace Manager acquires and leases the validated

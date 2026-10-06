@@ -8,12 +8,12 @@
 
 Session Inspector 始终跟随 Chat 当前选中的 `Session + Thread`，正式提供四个区块：
 
-| 区块 | 内容 |
-| --- | --- |
-| Plan | 当前 Thread 最近一个结构化 Plan |
-| Threads | 当前 Session 的父子 Thread 拓扑，可切换 Thread |
-| Activity | 当前 Thread 最近的 Turn 状态与工具数量 |
-| Changes | 按 Turn、仓库列出的不可变 ChangeSet、提交信息与后台提交状态 |
+| 区块     | 内容                                                        |
+| -------- | ----------------------------------------------------------- |
+| Plan     | 当前 Thread 最近一个结构化 Plan                             |
+| Threads  | 当前 Session 的父子 Thread 拓扑，可切换 Thread              |
+| Activity | 当前 Thread 最近的 Turn 状态与工具数量                      |
+| Changes  | 按 Turn、仓库列出的不可变 ChangeSet、提交信息与后台提交状态 |
 
 它与 transcript 共用 `ChatWidgetModel` 已有的 `thread/read + subscribe + cursor`，不会为 Inspector
 再开一条 Thread 订阅。旧的 Chat 私有 Agent Sidebar ViewContainer、View 和全局开关已经移除；
@@ -23,16 +23,16 @@ Workbench 通用 Agent Sidebar 不受影响。
 
 “一条消息”不自动等于一个 Turn，边界以 Core 真正开始和结束一次执行为准：
 
-| 事件 | Turn 语义 |
-| --- | --- |
-| Thread 空闲时发送用户消息 | 创建新 Turn |
-| Turn 运行中补充消息（steering） | 仍属于当前 Turn，并进入该 Turn 的摘要上下文 |
-| Goal 自动续跑 | 创建新的 Turn |
-| shell Turn | 独立 Turn；读取范围按不透明操作保守处理 |
-| failed / interrupted | 仍封存 ChangeSet，界面显示 terminal 警告 |
-| 子 Agent spawn | Git 子 Thread 从 provision 时捕获的父 worktree tree 创建；非 Git 子 Thread 复制当时的父目录 |
-| Fork | Git Thread 从 `parentSequence` 对应的最后一个封存检查点创建；非 Git Thread 复制当时的父目录 |
-| Rewind | Git Thread 从目标 Turn 的 before 检查点创建；非 Git Thread 没有 ChangeSet，因此不提供 Rewind |
+| 事件                            | Turn 语义                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| Thread 空闲时发送用户消息       | 创建新 Turn                                                                                  |
+| Turn 运行中补充消息（steering） | 仍属于当前 Turn，并进入该 Turn 的摘要上下文                                                  |
+| Goal 自动续跑                   | 创建新的 Turn                                                                                |
+| shell Turn                      | 独立 Turn；读取范围按不透明操作保守处理                                                      |
+| failed / interrupted            | 仍封存 ChangeSet，界面显示 terminal 警告                                                     |
+| 子 Agent spawn                  | Git 子 Thread 从 provision 时捕获的父 worktree tree 创建；非 Git 子 Thread 复制当时的父目录  |
+| Fork                            | Git Thread 从 `parentSequence` 对应的最后一个封存检查点创建；非 Git Thread 复制当时的父目录  |
+| Rewind                          | Git Thread 从目标 Turn 的 before 检查点创建；非 Git Thread 没有 ChangeSet，因此不提供 Rewind |
 
 Git Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具；Turn terminal event、Hook 和执行任务
 结束后才封存 after 检查点。封存失败时现场保留，提交不可用。
@@ -54,11 +54,11 @@ Git Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写�
 
 每个 Turn、每个捕获目标形成一个 ChangeSet。三个状态轴互不折叠：
 
-| 状态轴 | 值 |
-| --- | --- |
-| `captureState` | `open / sealed / incomplete / discarded` |
-| `messageState` | `unconfigured / queued / generating / ready / failed` |
-| `commitState` | `idle / partiallyCommitted / queued / committing / committed / conflict / failed` |
+| 状态轴         | 值                                                                                |
+| -------------- | --------------------------------------------------------------------------------- |
+| `captureState` | `open / sealed / incomplete / discarded`                                          |
+| `messageState` | `unconfigured / queued / generating / ready / failed`                             |
+| `commitState`  | `idle / partiallyCommitted / queued / committing / committed / conflict / failed` |
 
 `open` 实时显示变化；只有归属完整的 `sealed` 文件可进入提交选择。`incomplete` 表示工具生命周期
 之外的写入或未知写入结果，禁止提交。执行 failed/interrupted 与捕获完整性独立，已完整封存的变化仍可选择。

@@ -34,42 +34,42 @@ request/response domain model。
 
 ## 公共契约
 
-| Symbol | 职责 | 不负责 |
-| --- | --- | --- |
-| `ApiEndpoint` | 指定 concrete endpoint family 并 dispatch codec | provider 或 model selection |
-| `ApiProtocol` | 暴露 endpoint 使用的 normalized protocol family | URL/provider 推断 |
-| `ApiEndpoint::complete_with_client` | 校验 canonical request，执行 unary encode/call/decode | retry、credential refresh |
-| `ApiEndpoint::count_input_tokens_with_client` | dispatch OpenAI Responses / Anthropic token-count codec | 准确度解释、调用频率、预算策略 |
-| `InputTokenCountEndpoint` | dispatch concrete provider preflight codec | model eligibility、exact/estimated 判断、保守余量 |
-| `ResponsesEventDecoder` | Responses SSE／WebSocket 事件与终态解码 | SSE 分帧、重连 |
-| `ResponsesWebSocketSession` | 顺序请求、预热、前缀校验与增量续接 | 持久化历史、全局连接池 |
-| `RealtimeSession` | GA 文本／音频／工具事件、取消与会话状态 | 音频采集、播放、工具执行 |
-| `TranscriptionSession` | OpenAI Realtime 听写事件、音频提交与最终文本 | 麦克风采集、凭据选择 |
-| `XaiTranscriptionSession` | xAI STT 二进制 PCM、短语事件与最终文本 | 麦克风采集、凭据选择 |
-| `AnthropicMessagesSseDecoder` | Messages content-block lifecycle 与 canonical delta | transport liveness、tool JSON accumulation |
-| `ApiError` | request、transport、status 与 response codec failure | provider selection error |
+| Symbol                                        | 职责                                                    | 不负责                                            |
+| --------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| `ApiEndpoint`                                 | 指定 concrete endpoint family 并 dispatch codec         | provider 或 model selection                       |
+| `ApiProtocol`                                 | 暴露 endpoint 使用的 normalized protocol family         | URL/provider 推断                                 |
+| `ApiEndpoint::complete_with_client`           | 校验 canonical request，执行 unary encode/call/decode   | retry、credential refresh                         |
+| `ApiEndpoint::count_input_tokens_with_client` | dispatch OpenAI Responses / Anthropic token-count codec | 准确度解释、调用频率、预算策略                    |
+| `InputTokenCountEndpoint`                     | dispatch concrete provider preflight codec              | model eligibility、exact/estimated 判断、保守余量 |
+| `ResponsesEventDecoder`                       | Responses SSE／WebSocket 事件与终态解码                 | SSE 分帧、重连                                    |
+| `ResponsesWebSocketSession`                   | 顺序请求、预热、前缀校验与增量续接                      | 持久化历史、全局连接池                            |
+| `RealtimeSession`                             | GA 文本／音频／工具事件、取消与会话状态                 | 音频采集、播放、工具执行                          |
+| `TranscriptionSession`                        | OpenAI Realtime 听写事件、音频提交与最终文本            | 麦克风采集、凭据选择                              |
+| `XaiTranscriptionSession`                     | xAI STT 二进制 PCM、短语事件与最终文本                  | 麦克风采集、凭据选择                              |
+| `AnthropicMessagesSseDecoder`                 | Messages content-block lifecycle 与 canonical delta     | transport liveness、tool JSON accumulation        |
+| `ApiError`                                    | request、transport、status 与 response codec failure    | provider selection error                          |
 
 `ApiEndpoint` 是 wire contract，不是 vendor identity。同一 provider 可以暴露多个 profile；相同
 compatible profile 也不能据此假设 cache、usage、error 或 streaming 语义完全相同。
 
 ## 内部接口地图
 
-| Symbol | 可见性 | 当前职责 | 方向约束 |
-| --- | --- | --- | --- |
-| `ApiEndpoint::method` | crate-private | 当前所有 endpoint 使用 `POST` | transport method 不由 provider adapter 重写 |
-| `ApiEndpoint::relative_path` | crate-private | `responses`、`chat/completions`、`v1/messages` | path 属于 endpoint protocol |
-| `ApiEndpoint::headers` | crate-private | 按端点组装版本和会话路由头 | 不读凭据存储，不按 URL 推断通道 |
-| `headers::build` | private | JSON/SSE 媒体类型、大小写去重、冲突与非法字符检查 | 不修改调用者 target，不在错误中输出值 |
-| `validate_request` | private | 拒绝空 model/input 与零 max tokens | 在任何 transport 调用前执行 |
-| `requests::post_json` | crate-private | JSON serialization、`ClientRequest`、status 与 JSON parse | 不选择 retry policy或 codec |
-| `requests::require_materialized_images` | crate-private | 在 codec 前拒绝未经过 attachment authority 物化的 durable 引用 | 不读取附件 store 或本地路径 |
-| `endpoint::*::complete` | crate-private | 对应 endpoint 的 build/call/parse pipeline | endpoint dispatch 的唯一 codec target |
-| `requests::{google_count_tokens,kimi_estimate_tokens,zai_tokenizer}` | crate-private | provider count request/response JSON | 不声明准确度或调用频率 |
-| `endpoint::*::build_request` | private | canonical input → endpoint JSON | 不读取 provider config |
-| `endpoint::*::parse_response` | private | endpoint JSON → canonical output/usage/stop reason | malformed response fail closed |
-| `ResponsesEventDecoder::decode_event` | private | event type dispatch、delta extraction、terminal transition | 不解释 raw SSE bytes |
-| `AnthropicMessagesSseDecoder::{start_message,start_block,decode_block_delta,stop_block,stop_message}` | private | enforce message/block state machine | lifecycle 不能下沉到 UI |
-| `ContentBlockKind` | private | 将 block kind 与允许的 delta kind 绑定 | unknown block 可以忽略，known mismatch 必须拒绝 |
+| Symbol                                                                                                | 可见性        | 当前职责                                                       | 方向约束                                        |
+| ----------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| `ApiEndpoint::method`                                                                                 | crate-private | 当前所有 endpoint 使用 `POST`                                  | transport method 不由 provider adapter 重写     |
+| `ApiEndpoint::relative_path`                                                                          | crate-private | `responses`、`chat/completions`、`v1/messages`                 | path 属于 endpoint protocol                     |
+| `ApiEndpoint::headers`                                                                                | crate-private | 按端点组装版本和会话路由头                                     | 不读凭据存储，不按 URL 推断通道                 |
+| `headers::build`                                                                                      | private       | JSON/SSE 媒体类型、大小写去重、冲突与非法字符检查              | 不修改调用者 target，不在错误中输出值           |
+| `validate_request`                                                                                    | private       | 拒绝空 model/input 与零 max tokens                             | 在任何 transport 调用前执行                     |
+| `requests::post_json`                                                                                 | crate-private | JSON serialization、`ClientRequest`、status 与 JSON parse      | 不选择 retry policy或 codec                     |
+| `requests::require_materialized_images`                                                               | crate-private | 在 codec 前拒绝未经过 attachment authority 物化的 durable 引用 | 不读取附件 store 或本地路径                     |
+| `endpoint::*::complete`                                                                               | crate-private | 对应 endpoint 的 build/call/parse pipeline                     | endpoint dispatch 的唯一 codec target           |
+| `requests::{google_count_tokens,kimi_estimate_tokens,zai_tokenizer}`                                  | crate-private | provider count request/response JSON                           | 不声明准确度或调用频率                          |
+| `endpoint::*::build_request`                                                                          | private       | canonical input → endpoint JSON                                | 不读取 provider config                          |
+| `endpoint::*::parse_response`                                                                         | private       | endpoint JSON → canonical output/usage/stop reason             | malformed response fail closed                  |
+| `ResponsesEventDecoder::decode_event`                                                                 | private       | event type dispatch、delta extraction、terminal transition     | 不解释 raw SSE bytes                            |
+| `AnthropicMessagesSseDecoder::{start_message,start_block,decode_block_delta,stop_block,stop_message}` | private       | enforce message/block state machine                            | lifecycle 不能下沉到 UI                         |
+| `ContentBlockKind`                                                                                    | private       | 将 block kind 与允许的 delta kind 绑定                         | unknown block 可以忽略，known mismatch 必须拒绝 |
 
 ## Unary 调用图
 
@@ -149,17 +149,17 @@ Anthropic request builder 在 wire clone 上为最后一个 tool、system conten
 
 ## 错误语义
 
-| Condition | `ApiError` |
-| --- | --- |
-| canonical request 不满足基本 invariant | `InvalidRequest` |
-| `OperationClient` transport/operation failure | `Transport` |
-| HTTP 400 或供应商错误体中的 `invalid_request` | `InvalidRequest` |
-| HTTP 401/403 或供应商错误体中的认证失败 | `AuthFailed` |
-| 供应商错误体中的上下文上限 | `ContextOverflow` |
-| HTTP 429 | `RateLimited { retry_at }`，保存响应头到达时计算的单调时钟截止时间 |
-| HTTP 5xx/529 或供应商错误体中的过载 | `Overloaded` |
-| 其他非 2xx | `HttpStatus(status)` |
-| response JSON、field 或 stream lifecycle 无效 | `InvalidResponse` |
+| Condition                                     | `ApiError`                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| canonical request 不满足基本 invariant        | `InvalidRequest`                                                   |
+| `OperationClient` transport/operation failure | `Transport`                                                        |
+| HTTP 400 或供应商错误体中的 `invalid_request` | `InvalidRequest`                                                   |
+| HTTP 401/403 或供应商错误体中的认证失败       | `AuthFailed`                                                       |
+| 供应商错误体中的上下文上限                    | `ContextOverflow`                                                  |
+| HTTP 429                                      | `RateLimited { retry_at }`，保存响应头到达时计算的单调时钟截止时间 |
+| HTTP 5xx/529 或供应商错误体中的过载           | `Overloaded`                                                       |
+| 其他非 2xx                                    | `HttpStatus(status)`                                               |
+| response JSON、field 或 stream lifecycle 无效 | `InvalidResponse`                                                  |
 
 `requests::response_error` 与 `requests::stream_error` 在 HTTP 和 SSE 边界识别 OpenAI、Anthropic 与 Google 的已知错误码和消息。供应商错误体最多保留 4 KiB，且不包含凭据请求头；产品边界只把原始详情写入受控诊断日志，并在生成持久化 Turn 错误前移除。`From<ash_client::ClientError>` 将分帧失败映射为 `InvalidResponse`，其余客户端失败映射为 `Transport`。
 

@@ -8,13 +8,13 @@
 
 三端共享“按键序列如何匹配命令”的规则，但各自在本地把平台事件转换成标准按键；原始按键不发送给 App Server，也不要求三个产品共享同一份命令表。
 
-| 用户场景 | Ash | App | Ash Code |
-| --- | --- | --- | --- |
-| 输入普通文字 | 浏览器、IME 与编辑器处理 | 窗口输入法或终端面板处理 | 终端与 Crossterm 处理 |
-| 触发快捷键 | TypeScript Resolver 根据焦点和 ContextKey 解析 | Rust Resolver 根据窗口 context 解析 | 精简 Rust Keymap 根据 TUI 焦点解析 |
-| 系统键盘布局变化 | 重新加载系统布局和 Mapper | `winit` 提供标准化逻辑键与物理键 | 不检测；终端已经完成布局转换 |
-| 修改快捷键 | profile `keybindings.json` | 设置浮层写入 `config.toml` 的 `[gui].keybindings`；配置变化后重读 `[gui]` | `/shortcuts` 写入 `config.toml` 的 `[tui].keybindings`；配置变化后重读 `[tui]` |
-| 执行命令 | Renderer 内执行命令或产生编辑意图 | App host 执行 `AppCommandId` | TUI 主循环执行 `AppCommand` 或局部 component intent |
+| 用户场景         | Ash                                            | App                                                                       | Ash Code                                                                       |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 输入普通文字     | 浏览器、IME 与编辑器处理                       | 窗口输入法或终端面板处理                                                  | 终端与 Crossterm 处理                                                          |
+| 触发快捷键       | TypeScript Resolver 根据焦点和 ContextKey 解析 | Rust Resolver 根据窗口 context 解析                                       | 精简 Rust Keymap 根据 TUI 焦点解析                                             |
+| 系统键盘布局变化 | 重新加载系统布局和 Mapper                      | `winit` 提供标准化逻辑键与物理键                                          | 不检测；终端已经完成布局转换                                                   |
+| 修改快捷键       | profile `keybindings.json`                     | 设置浮层写入 `config.toml` 的 `[gui].keybindings`；配置变化后重读 `[gui]` | `/shortcuts` 写入 `config.toml` 的 `[tui].keybindings`；配置变化后重读 `[tui]` |
+| 执行命令         | Renderer 内执行命令或产生编辑意图              | App host 执行 `AppCommandId`                                              | TUI 主循环执行 `AppCommand` 或局部 component intent                            |
 
 后续章节依次说明[一次按键的流程](#2-端到端流程)、[所有权](#3-所有权与依赖方向)、[一致性边界](#5-跨语言一致性)和[当前状态与演进](#8-当前状态与演进)。
 
@@ -58,17 +58,17 @@ flowchart LR
 
 ## 3. 所有权与依赖方向
 
-| 组件 | 拥有 | 明确不拥有 |
-| --- | --- | --- |
-| `ash-keybinding` | `KeyStroke`、Chord、Parser、Context expression、来源、优先级、冲突和 Resolver | `winit`、Crossterm、DOM、UI、定时器、文件、产品命令 |
-| `ash-keybinding::user` | 严格配置 shape、平台覆盖、命令/条件回调编译和重复规则诊断 | profile 路径、文件轮询、产品命令 catalog、设置 UI |
-| Ash Keyboard Layout | ScanCode、KeyCode、AltGr、死键、系统布局、浏览器映射 | Rust Keymap、后台命令执行 |
-| Ash Keybinding Service | ContextKey、Chord lifecycle、浏览器事件阻止和命令执行 | 系统布局采集、App Server 状态 |
-| `ash-keybindings-host` | `zui` 输入适配、Chord timeout、用户配置校验 | App UI、配置读写、产品命令副作用 |
-| App Keymap | `AppCommandId`、内建规则和窗口 context | 通用 Parser、设置组件绘制 |
-| App 快捷键 UI | 录制生命周期、设置浮层、诊断展示、`[gui].keybindings` 解释与写入 | Resolver、App Server 持久化实现、命令执行 |
-| Ash Code `AppKeymap` | Crossterm 适配、应用级 action、Chord lifecycle 和局部 context | component 编辑/导航、键盘布局、物理 ScanCode、App Server authority |
-| App Server | 按 revision 持久化前端传入的 `[gui]`、`[tui]` 值，发送配置变化通知 | 快捷键字段含义、命令表、原始按键、焦点、IME 和 Chord |
+| 组件                   | 拥有                                                                          | 明确不拥有                                                         |
+| ---------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `ash-keybinding`       | `KeyStroke`、Chord、Parser、Context expression、来源、优先级、冲突和 Resolver | `winit`、Crossterm、DOM、UI、定时器、文件、产品命令                |
+| `ash-keybinding::user` | 严格配置 shape、平台覆盖、命令/条件回调编译和重复规则诊断                     | profile 路径、文件轮询、产品命令 catalog、设置 UI                  |
+| Ash Keyboard Layout    | ScanCode、KeyCode、AltGr、死键、系统布局、浏览器映射                          | Rust Keymap、后台命令执行                                          |
+| Ash Keybinding Service | ContextKey、Chord lifecycle、浏览器事件阻止和命令执行                         | 系统布局采集、App Server 状态                                      |
+| `ash-keybindings-host` | `zui` 输入适配、Chord timeout、用户配置校验                                   | App UI、配置读写、产品命令副作用                                   |
+| App Keymap             | `AppCommandId`、内建规则和窗口 context                                        | 通用 Parser、设置组件绘制                                          |
+| App 快捷键 UI          | 录制生命周期、设置浮层、诊断展示、`[gui].keybindings` 解释与写入              | Resolver、App Server 持久化实现、命令执行                          |
+| Ash Code `AppKeymap`   | Crossterm 适配、应用级 action、Chord lifecycle 和局部 context                 | component 编辑/导航、键盘布局、物理 ScanCode、App Server authority |
+| App Server             | 按 revision 持久化前端传入的 `[gui]`、`[tui]` 值，发送配置变化通知            | 快捷键字段含义、命令表、原始按键、焦点、IME 和 Chord               |
 
 依赖方向固定为：
 
@@ -130,11 +130,11 @@ Rust 与 TypeScript 都显式按“来源、同来源内优先级、注册顺序
 
 ### 6.1 资源位置
 
-| 产品 | Current 资源 | 原因 |
-| --- | --- | --- |
-| Ash | `<profile>/keybindings.json` | Workbench command catalog 与 Renderer settings UI 的 authority |
-| App | 当前连接对应 `config.toml` 的 `[gui].keybindings` | App 拥有命令表和设置浮层；App Server 只保存 `[gui]` |
-| Ash Code | 当前连接对应 `config.toml` 的 `[tui].keybindings` | TUI 拥有命令表和 `/shortcuts`；App Server 只保存 `[tui]` |
+| 产品     | Current 资源                                      | 原因                                                           |
+| -------- | ------------------------------------------------- | -------------------------------------------------------------- |
+| Ash      | `<profile>/keybindings.json`                      | Workbench command catalog 与 Renderer settings UI 的 authority |
+| App      | 当前连接对应 `config.toml` 的 `[gui].keybindings` | App 拥有命令表和设置浮层；App Server 只保存 `[gui]`            |
+| Ash Code | 当前连接对应 `config.toml` 的 `[tui].keybindings` | TUI 拥有命令表和 `/shortcuts`；App Server 只保存 `[tui]`       |
 
 `ASH_HOME` 是 Ash 自己的 profile authority。App 和 Ash Code 都通过 `config/read`、`config/update` 与 `config/changed` 访问当前连接对应的配置；连接远端时读写远端 `config.toml`，不会回头读取本机的 App/TUI 键位文件。
 
@@ -177,15 +177,15 @@ Ash Code 桌面版可以在 profile 的 `keybindings.json` 中为打开 Agents �
 
 Ash Code 当前可配置 command ID：
 
-| Command ID | 行为 |
-| --- | --- |
-| `ashCode.action.cycleApprovalMode` | 切换下一次提交的权限模式 |
-| `ashCode.action.openRewind` | 直接打开 Rewind picker；不模拟 `Esc Esc` |
-| `ashCode.action.attachClipboardImage` | 从本机剪贴板附加图片 |
-| `ashCode.action.interrupt` | 中断正在运行的任务，默认 Esc；空闲时不退出 |
-| `ashCode.action.interruptOrQuit` | 工作时中断，空闲时退出 |
-| `ashCode.action.copyLastResponse` | 复制最近一条 Agent response |
-| `ashCode.action.suspend` | Unix suspend/resume 流程 |
+| Command ID                            | 行为                                       |
+| ------------------------------------- | ------------------------------------------ |
+| `ashCode.action.cycleApprovalMode`    | 切换下一次提交的权限模式                   |
+| `ashCode.action.openRewind`           | 直接打开 Rewind picker；不模拟 `Esc Esc`   |
+| `ashCode.action.attachClipboardImage` | 从本机剪贴板附加图片                       |
+| `ashCode.action.interrupt`            | 中断正在运行的任务，默认 Esc；空闲时不退出 |
+| `ashCode.action.interruptOrQuit`      | 工作时中断，空闲时退出                     |
+| `ashCode.action.copyLastResponse`     | 复制最近一条 Agent response                |
+| `ashCode.action.suspend`              | Unix suspend/resume 流程                   |
 
 Ash Code 当前 ContextKey 为 `inputFocus`、`composerEmpty`、`selectionVisible` 和 `keyEventPress`。未知 command、字段或 ContextKey 会拒绝整个新快照，避免用户以为规则已生效。
 
@@ -199,13 +199,13 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 
 ### 6.4 设置界面与后续边界
 
-| 阶段 | 状态 | 退出条件 |
-| --- | --- | --- |
-| 严格规则 schema、User 覆盖/blocker、平台覆盖、`when`、Chord 与配置刷新 | Current | Ash Code、App 和共享 core 测试持续覆盖完整替换 |
-| Ash Code 可搜索的 Keymap editor | Current | `/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和配置位置可见，可配置项只消费 `AppKeymap` snapshot |
-| Ash Code 录制与保存 | Current | 单键/两段 Chord 录制只在 Keymap editor 的 `KeyCapture` 中截获输入；配置 revision 过期时拒绝保存，完整编译成功后才更新配置和运行时规则 |
-| 目录提供的键位 | Not accepted | `DirConfigDocument` 不接受键位声明；如需支持必须先定义独立来源 capability 与显式启用 |
-| OS `systemWide` 热键 | Ash Code 桌面版 Current；App/TUI Not accepted | Ash 只为显式启用的 `workbench.action.openAgentsWindow` 用户规则注册；TUI 不支持 |
+| 阶段                                                                   | 状态                                          | 退出条件                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 严格规则 schema、User 覆盖/blocker、平台覆盖、`when`、Chord 与配置刷新 | Current                                       | Ash Code、App 和共享 core 测试持续覆盖完整替换                                                                                                                                      |
+| Ash Code 可搜索的 Keymap editor                                        | Current                                       | `/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和配置位置可见，可配置项只消费 `AppKeymap` snapshot |
+| Ash Code 录制与保存                                                    | Current                                       | 单键/两段 Chord 录制只在 Keymap editor 的 `KeyCapture` 中截获输入；配置 revision 过期时拒绝保存，完整编译成功后才更新配置和运行时规则                                               |
+| 目录提供的键位                                                         | Not accepted                                  | `DirConfigDocument` 不接受键位声明；如需支持必须先定义独立来源 capability 与显式启用                                                                                                |
+| OS `systemWide` 热键                                                   | Ash Code 桌面版 Current；App/TUI Not accepted | Ash 只为显式启用的 `workbench.action.openAgentsWindow` 用户规则注册；TUI 不支持                                                                                                     |
 
 ## 7. 可靠性、隐私和兼容性
 
@@ -217,16 +217,16 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 
 ## 8. 当前状态与演进
 
-| 阶段 | 状态 | 退出条件 |
-| --- | --- | --- |
-| Ash TypeScript layout、Mapper、Resolver 和 profile resource | Current | 浏览器与 Electron 测试持续覆盖布局和快捷键 |
-| App Rust Resolver、输入 adapter、`[gui].keybindings` 与设置 UI | Current | 配置通知、完整替换、坏更新保留旧规则和录制写入持续通过测试 |
-| 提升无 UI 的 `ash-keybinding` 到 `ash-rs/keybinding` | Current | crate 不含产品/UI/platform 依赖，App 继续通过测试 |
-| Ash Code 应用级固定 Keymap 与 Chord lifecycle | Current | 现有 Ctrl/BackTab/Esc 行为由共享 Resolver 驱动；pending/超时/取消/提示完整，局部 component key 不上移 |
-| TS/Rust parser conformance fixtures | Current | 两个实现读取同一 fixture 并通过 |
-| TS/Rust Resolver precedence fixtures | Current | Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture |
-| Ash Code 用户可配置 Keymap | Current | `[tui].keybindings`、User precedence/blocker、`when`、平台覆盖、Chord、配置刷新和坏更新恢复持续通过测试 |
-| Ash Code Keymap editor 与录制保存 | Current | 可搜索、来源/诊断可见；保存后直接安装同一份已校验规则，不建立第二套 Resolver |
+| 阶段                                                           | 状态    | 退出条件                                                                                                |
+| -------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| Ash TypeScript layout、Mapper、Resolver 和 profile resource    | Current | 浏览器与 Electron 测试持续覆盖布局和快捷键                                                              |
+| App Rust Resolver、输入 adapter、`[gui].keybindings` 与设置 UI | Current | 配置通知、完整替换、坏更新保留旧规则和录制写入持续通过测试                                              |
+| 提升无 UI 的 `ash-keybinding` 到 `ash-rs/keybinding`           | Current | crate 不含产品/UI/platform 依赖，App 继续通过测试                                                       |
+| Ash Code 应用级固定 Keymap 与 Chord lifecycle                  | Current | 现有 Ctrl/BackTab/Esc 行为由共享 Resolver 驱动；pending/超时/取消/提示完整，局部 component key 不上移   |
+| TS/Rust parser conformance fixtures                            | Current | 两个实现读取同一 fixture 并通过                                                                         |
+| TS/Rust Resolver precedence fixtures                           | Current | Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture      |
+| Ash Code 用户可配置 Keymap                                     | Current | `[tui].keybindings`、User precedence/blocker、`when`、平台覆盖、Chord、配置刷新和坏更新恢复持续通过测试 |
+| Ash Code Keymap editor 与录制保存                              | Current | 可搜索、来源/诊断可见；保存后直接安装同一份已校验规则，不建立第二套 Resolver                            |
 
 当前 Rust 路径只有一套纯 core：App 的快捷键设置页面由 `ash-settings` 管，工作界面的组合键提示由 `ash-workbench` 管，Ash Code 根级 Keymap 直接接入共享 Resolver。adapter 只做单向转换，不保留第二套 Resolver。
 

@@ -160,7 +160,7 @@ export class ViewportRenderStrategy extends BaseRenderStrategy {
 		];
 	}
 
-	constructor(context: ViewContext, viewGpuContext: ViewGpuContext, device: GPUDevice, glyphRasterizer: { value: GlyphRasterizer }) {
+	constructor(context: ViewContext, viewGpuContext: ViewGpuContext, device: GPUDevice, glyphRasterizer: { value: GlyphRasterizer; }) {
 		super(context, viewGpuContext, device, glyphRasterizer);
 		this._scrollOffsetBindBuffer = this._register(GPULifecycle.createBuffer(device, {
 			label: 'Ash viewport GPU scroll offset',

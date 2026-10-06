@@ -37,7 +37,7 @@ class FakeDebugConsoleService extends Disposable implements IDebugConsoleService
 	readonly onDidChange = this.changeEmitter.event;
 	get sessions(): readonly IDebugConsoleSession[] { return Object.freeze([this.snapshot()]); }
 	get activeSession(): IDebugConsoleSession { return this.snapshot(); }
-	selectSession() {}
+	selectSession() { }
 	clear(): void { this.output = ""; this.changeEmitter.fire(); }
 	async evaluate(expression: string): Promise<void> { this.output += `> ${expression}\n42\n`; this.changeEmitter.fire(); }
 	private snapshot(): IDebugConsoleSession { return Object.freeze({ id: "one", label: "One", state: "stopped", output: this.output, canEvaluate: true }); }

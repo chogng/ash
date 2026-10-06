@@ -26,6 +26,6 @@ export namespace GPULifecycle {
 	}
 }
 
-function wrapDestroyableInDisposable<T extends { destroy(): void }>(object: T): IReference<T> {
+function wrapDestroyableInDisposable<T extends { destroy(): void; }>(object: T): IReference<T> {
 	return Object.assign(toDisposable(() => object.destroy()), { object });
 }

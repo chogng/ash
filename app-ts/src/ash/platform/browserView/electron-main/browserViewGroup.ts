@@ -9,7 +9,7 @@ import type { CDPEvent, CDPRequest, CDPResponse, CDPTargetInfo } from '../common
 import type { BrowserView } from './browserView.js';
 import { IBrowserViewMainService } from './browserViewMainService.js';
 
-type Session = { type: 'browser' } | { type: 'page'; viewId: string; parent?: string; actual?: string; autoAttach: boolean; automatic?: boolean };
+type Session = { type: 'browser'; } | { type: 'page'; viewId: string; parent?: string; actual?: string; autoAttach: boolean; automatic?: boolean; };
 
 /** A logical CDP browser references pages selected by Main; it never owns their lifetime. */
 export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {

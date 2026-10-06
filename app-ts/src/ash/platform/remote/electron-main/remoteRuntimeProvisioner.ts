@@ -50,7 +50,7 @@ export class RemoteRuntimeProvisioner {
 	}
 
 	private async probeTarget(host: string, signal: AbortSignal | undefined): Promise<string> {
-		const result = await this.runCommand(this.options.remoteExecutable, ["probe", "--host", host, "--ssh", this.options.sshExecutable], this.options.environment, signal === undefined ? undefined : { onStderrData: () => {}, signal });
+		const result = await this.runCommand(this.options.remoteExecutable, ["probe", "--host", host, "--ssh", this.options.sshExecutable], this.options.environment, signal === undefined ? undefined : { onStderrData: () => { }, signal });
 		if (result.exitCode !== 0) {
 			const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? "unknown"}`;
 			throw new Error(`Remote platform probe failed: ${diagnostic}`);

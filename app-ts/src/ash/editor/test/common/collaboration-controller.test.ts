@@ -154,7 +154,7 @@ test("Stanza collaboration publishes local selections without versioning them an
 	using model = TextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
-	const received: (readonly { readonly clientId: string }[])[] = [];
+	const received: (readonly { readonly clientId: string; }[])[] = [];
 	controller.onDidChangePresence(change => received.push(change.presences));
 
 	const local = textSelection({ nodeId: "text-1", offset: 1 });

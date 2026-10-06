@@ -121,7 +121,7 @@ window.ashDialogIntegration = {
 		const picker = {
 			items: [] as readonly IQuickPickItem[],
 			onDidAccept: accept.event,
-			hide() {},
+			hide() { },
 		} as unknown as IQuickPick<IQuickPickItem>;
 		commandResources.add(provider.provide(picker));
 		const item = picker.items.find(candidate => candidate.label === 'Failing command');

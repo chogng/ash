@@ -507,7 +507,7 @@ test("workspace transition routes Busy without committing and accepts a later ba
 test("App Server workspace adapter routes only connection recovery into a retry", async () => {
 	let state: ReturnType<IAppServerWorkspaceTransitionHost["getState"]> = "ready";
 	const listeners = new Set<Parameters<IAppServerWorkspaceTransitionHost["onStateChange"]>[0]>();
-	const switched: { root: string; workspaceId: string; previousWorkspaceId: string }[] = [];
+	const switched: { root: string; workspaceId: string; previousWorkspaceId: string; }[] = [];
 	const host: IAppServerWorkspaceTransitionHost = {
 		getState: () => state,
 		async switchWorkspace(root, _grant, workspaceId, previousWorkspaceId) {
