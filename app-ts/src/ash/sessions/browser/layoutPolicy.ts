@@ -1,6 +1,6 @@
 import type { SessionsLayoutStyle } from '../common/configuration.js';
 import { SESSION_SIDEBAR_DEFAULT_WIDTH, SESSION_AUXILIARYBAR_DEFAULT_WIDTH } from '../common/layoutConstants.js';
-import { EDITOR_PART_DEFAULT_WIDTH } from './parts/editorPartSizing.js';
+import { EDITOR_PART_DEFAULT_WIDTH } from './parts/editor/editorPartSizing.js';
 
 /** Appearance geometry shared by every Sessions page; page identity never changes these metrics. */
 export class SessionsLayoutPolicy {

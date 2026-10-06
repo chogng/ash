@@ -1,4 +1,5 @@
 import { WorkbenchWindowBarHeight } from '../../../workbenchPartDimensions.js';
+import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
 import { Dimension } from '../../../../../../base/browser/dom.js';
 import { createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
@@ -929,6 +930,42 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 
 	editor.dispose();
 	assert.equal(editor.domNode.querySelectorAll(".ash-editor-pane-host").length, 0);
+	dom.window.close();
+});
+
+test('working-set restoration retains excluded live groups and hidden pane state', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const panes: TestEditorPane[] = [];
+	const registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.retained', '.ts', () => trackPane(panes, 'ash.test.retained')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	using editors = new BrowserEditorService(editor);
+	editor.layout(new Dimension(1000, 600));
+	const document = input('C:/project/document.ts');
+	await editors.openEditor(document);
+	const documentPane = editor.activePane as TestEditorPane;
+	const retained = editor.addGroup(editor.activeGroup.id, Direction.Right);
+	const page = input('C:/project/page.ts');
+	await editors.openEditor(page, { pinned: true }, { groupId: retained.id });
+	const pane = retained.activePane as TestEditorPane;
+	editor.setGroupVisible(retained.id, false);
+	assert.equal(pane.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	assert.deepEqual(editors.visibleEditors, [document]);
+	editor.setContentRightInset(240);
+	editor.layout(new Dimension(120, 600));
+	assert.equal(documentPane.dimension!.width, 0);
+	editor.layout(new Dimension(1000, 600));
+	const saved = editor.saveWorkingSet('documents', [retained.id]);
+	assert.equal(saved.groups.length, 1);
+	await editor.applyWorkingSet(saved, { preserveGroups: [retained.id], preserveFocus: true });
+	assert.equal(editor.groups.find(group => group.id === retained.id), retained);
+	assert.equal(retained.activePane, pane);
+	assert.equal(pane.disposed, false);
+	assert.equal(pane.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	assert.deepEqual(editors.visibleEditors.map(input => input.resource.toString()), [document.resource.toString()]);
+	editor.setGroupVisible(retained.id, true);
+	assert.equal(pane.visibilities.at(-1), EditorPaneVisibility.Visible);
+	assert.equal(retained.activePane, pane);
 	dom.window.close();
 });
 

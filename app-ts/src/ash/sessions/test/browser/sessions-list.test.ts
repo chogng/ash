@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import { SessionsList } from "../../browser/parts/sessionsList.js";
+import { SessionsList } from "../../browser/parts/sidebar/sessionsList.js";
 
 test("SessionsList keeps session buttons and focus while refreshing", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

@@ -17,7 +17,7 @@ import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.
 import { Workbench, type IWorkbenchOptions, type IAgentWorkbenchLayoutService, type SessionsPartVisibilityChangeEvent } from './workbench.js';
 import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
-import { EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
+import { EDITOR_PART_MINIMUM_WIDTH } from './parts/editor/editorPartSizing.js';
 
 /** Selects the desktop layout while the shared Workbench owns window services and Parts. */
 export class DesktopWorkbench extends Workbench {
@@ -209,8 +209,6 @@ function createSessionsWorkbenchGridDescriptor(
 								priority: SESSIONS_LAYOUT_PRIORITY,
 								children: [
 									leaf('sessions', sessionsWidth, true, SESSIONS_LAYOUT_PRIORITY),
-									leaf('library', mainWidth, false, SESSIONS_LAYOUT_PRIORITY),
-									leaf('creator', mainWidth, false, SESSIONS_LAYOUT_PRIORITY),
 									leaf('editor', state.editor.visible ? state.editor.width : state.auxiliarybar.width, state.editor.visible || state.auxiliarybar.visible),
 									leaf('auxiliarybar', state.auxiliarybar.width, false),
 								],
@@ -233,7 +231,7 @@ function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDim
 }
 
 function parseSessionsPartId(value: unknown): SessionsPartId {
-	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'library' || value === 'creator' || value === 'editor' || value === 'auxiliarybar' || value === 'panel') return value;
+	if (value === 'titlebar' || value === 'activitybar' || value === 'sidebar' || value === 'sessions' || value === 'editor' || value === 'auxiliarybar' || value === 'panel') return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
 
@@ -273,7 +271,7 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 		return this.partId === 'sidebar' || this.partId === 'auxiliarybar' ? this.part.preferredWidth : super.preferredWidth;
 	}
 	public get priority(): 'high' | 'normal' {
-		return this.partId === 'sessions' || this.partId === 'library' || this.partId === 'creator' ? 'high' : 'normal';
+		return this.partId === 'sessions' || (this.partId === 'editor' && this.isEditorPrimary()) ? 'high' : 'normal';
 	}
 
 	public override layout(bounds: IPositionedRectangle): void {
@@ -287,7 +285,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private grid!: SerializableGrid<SessionsWorkbenchPartView>;
 	private partUpdateDepth = 0;
 	private readonly unavailableParts = new Set<SessionsPartId>();
-	private readonly desiredVisibility: { sessions: boolean; library: boolean; creator: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean };
+	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean };
 	private titlebarHeight = 0;
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
@@ -323,9 +321,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		const state = this.stateModel.state;
 		this.sidePaneWidth = state.editor.width;
 		this.detailsWidth = state.auxiliarybar.width;
-		this.desiredVisibility = { sessions: true, library: true, creator: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: state.editor.visible, panel: state.panel.visible };
-		this.unavailableParts.add('library');
-		this.unavailableParts.add('creator');
+		this.desiredVisibility = { sessions: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: state.editor.visible, panel: state.panel.visible };
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
@@ -352,7 +348,10 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 		));
 		this._register(this.grid.onDidChange(() => {
-			if (this.partUpdateDepth === 0) { this.saveState(); }
+			if (this.partUpdateDepth === 0) {
+				if (!this.isDocked && this.grid.isViewVisible(this.view('auxiliarybar'))) { this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width; }
+				this.saveState();
+			}
 		}));
 		this.dockedAuxiliaryBar = this._register(new DockedAuxiliaryBarController(
 			requiredPart(parts, 'editor') as EditorPart,
@@ -373,7 +372,8 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			version: 1,
 			sidebar: { width: this.getPartSize('sidebar').width, visible: this.desiredVisibility.sidebar },
 			auxiliarybar: {
-				width: this.getPartSize('auxiliarybar').width,
+				// The same user width survives independent and docked hosts, including hidden Grid caches.
+				width: this.detailsWidth,
 				visible: this.desiredVisibility.auxiliarybar,
 			},
 			editor: {
@@ -450,8 +450,8 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 	resizePart(partId: SessionsPartId, dimension: IDimension): void {
 		assertDimension(dimension);
+		if (partId === 'auxiliarybar') { this.detailsWidth = dimension.width; }
 		if (this.isDocked && partId === 'auxiliarybar') {
-			this.detailsWidth = dimension.width;
 			if (!this.desiredVisibility.editor) this.grid.resizeView(this.view('editor'), new Dimension(this.detailsWidth, this.grid.getViewSize(this.view('editor')).height));
 			this.layout(new Dimension(this.grid.width, this.grid.height));
 			return;
@@ -473,7 +473,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
-	public setPartAvailable(partId: 'sessions' | 'library' | 'creator' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void {
+	public setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void {
 		if (available === !this.unavailableParts.has(partId)) {
 			return;
 		}
@@ -530,18 +530,14 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		const contentLeftEdge = this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge;
 		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: rightEdge, left: contentLeftEdge });
 		this.view('sessions').setFrameInsets({ top: 0, right: auxiliarybarVisible || editorVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
-		this.view('library').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: contentLeftEdge });
-		this.view('creator').setFrameInsets({ top: 0, right: auxiliarybarVisible ? 0 : rightEdge, bottom: rightEdge, left: sidebarVisible ? 0 : contentLeftEdge });
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: rightEdge, bottom: rightEdge, left: 0 });
 		this.view('editor').setFrameInsets({ top: 0, right: this.isDocked || !auxiliarybarVisible ? rightEdge : 0, bottom: rightEdge, left: !sidebarVisible && !sessionsVisible ? contentLeftEdge : 0 });
-		let mainPart: SessionsPartId = 'sessions';
-		if (this.desiredVisibility.library && !this.unavailableParts.has('library')) { mainPart = 'library'; }
-		if (this.desiredVisibility.creator && !this.unavailableParts.has('creator')) { mainPart = 'creator'; }
+		const mainPart: SessionsPartId = sessionsVisible ? 'sessions' : 'editor';
 		const firstPart = sidebarVisible ? 'sidebar' : mainPart;
 		let lastPart: SessionsPartId = mainPart;
 		if (editorVisible) lastPart = 'editor';
 		if (auxiliarybarVisible) lastPart = this.isDocked ? 'editor' : 'auxiliarybar';
-		for (const partId of ['sidebar', 'sessions', 'library', 'creator', 'editor', 'auxiliarybar'] as const) {
+		for (const partId of ['sidebar', 'sessions', 'editor', 'auxiliarybar'] as const) {
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-start', partId === firstPart);
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-end', partId === lastPart);
 		}

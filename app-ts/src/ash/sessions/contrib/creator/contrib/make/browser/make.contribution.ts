@@ -7,7 +7,7 @@ import { IInstantiationService } from '../../../../../../platform/instantiation/
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { CreatorModes } from '../../../browser/creatorWorkspace.js';
+import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
 import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
 import { DesignMode } from '../../../common/config/editorConfiguration.js';
 import { generateDesignCode } from '../../code/browser/designCodeGenerator.js';
@@ -44,7 +44,7 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 	}
 }
 
-CreatorModes.set(CreatorMode.Make, {
+registerCreatorMode({
 	id: CreatorMode.Make,
 	title: getCreatorModeTitle(CreatorMode.Make),
 	description: localize('sessions.creator.make.description', 'View generated code, run a preview and continue with an Agent.'),

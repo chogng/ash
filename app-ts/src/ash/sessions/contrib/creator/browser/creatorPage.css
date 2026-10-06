@@ -63,3 +63,11 @@
 	min-width: 0;
 	min-height: 0;
 }
+.ash-creator-navigation {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size160);
+	overflow: auto;
+}
+.ash-creator-navigation > .ash-button { justify-content: flex-start; }

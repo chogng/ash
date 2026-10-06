@@ -53,4 +53,6 @@ export type EditorWorkingSetTarget = EditorWorkingSet | 'empty';
 
 export interface ApplyEditorWorkingSetOptions {
 	readonly preserveFocus?: boolean;
+	/** Retained groups stay alive while the remaining groups restore their document working set. */
+	readonly preserveGroups?: readonly string[];
 }

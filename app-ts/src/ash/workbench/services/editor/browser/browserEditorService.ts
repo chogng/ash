@@ -45,7 +45,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	get visibleEditors(): readonly EditorInput[] {
 		const state = this.editorPart.getEditorState();
-		const editors = this.editorPart.groups.flatMap(group => group.activeInput ? [group.activeInput] : []);
+		const editors = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []);
 		if (state.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
 		return Object.freeze(editors);
 	}
@@ -102,6 +102,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	private getVisibleEditorSignature(): string {
 		const state = this.editorPart.getEditorState();
 		const visible = this.editorPart.groups.flatMap(group => {
+			if (!this.editorPart.isGroupVisible(group.id)) return [];
 			const groupState = group.getEditorState();
 			const active = groupState.editors.find(editor => editor.instanceId === groupState.activeEditorInstanceId);
 			return active ? [`${active.instanceId}:${active.paneId}`] : [];

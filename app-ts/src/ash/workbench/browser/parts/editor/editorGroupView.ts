@@ -786,7 +786,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			children.push(...this.entries.map(entry => entry.paneInstance.domNode));
 		}
 		if (this.panes.pendingPane) children.push(this.panes.pendingPane.domNode);
-		this.contentDomNode.replaceChildren(...children);
+		// Retained pane hosts keep their browsing contexts; tab order does not determine content order.
+		for (const child of [...this.contentDomNode.children]) {
+			if (!children.includes(child)) { child.remove(); }
+		}
+		for (const child of children) {
+			if (child.parentElement !== this.contentDomNode) { this.contentDomNode.append(child); }
+		}
 	}
 
 	private renderChrome(): void {

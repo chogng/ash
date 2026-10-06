@@ -7,7 +7,7 @@
   background: var(--ash-button-background, var(--ash-input-background));
   box-shadow: 0 1px 1px color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--ash-font-size-label1);
   font-weight: var(--ash-font-weight-semi-bold, 600);
 }
 

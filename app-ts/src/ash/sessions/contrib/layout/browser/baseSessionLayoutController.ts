@@ -136,7 +136,7 @@ export abstract class BaseLayoutController extends Disposable {
 			if (selection && selected.visibleSelections.length === 1 && this.layout.isPartVisible('panel')) {
 				void this.panes.openPaneComposite(this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal, ViewContainerLocation.Panel).catch(error => this.notifications.error(String(error)));
 			}
-			if (!selection || selected.visibleSelections.length !== 1 || !this.layout.isPartVisible('sessions') || this.scheduledRevision === this.revision) {
+			if (!selection || selected.visibleSelections.length !== 1 || !this.canRestoreSessionEditors() || this.scheduledRevision === this.revision) {
 				return;
 			}
 			// Workspace switching precedes editor deserialization; file inputs must use the incoming directory.
@@ -179,7 +179,7 @@ export abstract class BaseLayoutController extends Disposable {
 	}
 
 	protected captureEditors(): void {
-		if (this.editorSession && this.layout.isPartVisible('sessions') && !this.isEditorAutoVisibilitySuppressed()) {
+		if (this.editorSession && this.canRestoreSessionEditors() && !this.isEditorAutoVisibilitySuppressed()) {
 			this.workingSets.set(this.editorSession, this.getWorkingSet(this.editorSession));
 		}
 	}
@@ -187,6 +187,8 @@ export abstract class BaseLayoutController extends Disposable {
 	protected getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key); }
 	protected isEditorAutoVisibilitySuppressed(): boolean { return this.restoring; }
 	protected shouldShowEditor(): boolean { return this.editors.visibleEditors.length > 0 || !this.layout.isPartVisible('sessions'); }
+	protected canRestoreSessionEditors(): boolean { return this.layout.isPartVisible('sessions'); }
+	protected applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> { return this.editor.applyWorkingSet(saved, { preserveFocus: true }); }
 	protected async onSessionRestored(_selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {}
 	protected onSessionIdentityChanged(_from: string, _to: string): void {}
 
@@ -219,7 +221,7 @@ export abstract class BaseLayoutController extends Disposable {
 		}
 		this.restoring = true;
 		try {
-			await this.editor.applyWorkingSet(saved ?? 'empty', { preserveFocus: true });
+			await this.applyWorkingSet(saved ?? 'empty');
 			if (!this.isDisposed) {
 				this.editorSession = this.sessionKey(selection);
 			}

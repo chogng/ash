@@ -74,6 +74,10 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent>;
 	readonly groups: readonly IEditorGroupView[];
 	readonly activeGroup: IEditorGroupView;
+	addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView;
+	activateGroup(id: EditorGroupId): void;
+	isGroupVisible(id: EditorGroupId): boolean;
+	setGroupVisible(id: EditorGroupId, visible: boolean): void;
 	toggleActiveGroupLock(): boolean;
 	readonly activeInput: EditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
@@ -100,7 +104,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	getEditorPaneChoices(input?: EditorInput): readonly IEditorPaneDescriptor[];
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined>;
 	reopenClosedEditor(): Promise<boolean>;
-	saveWorkingSet(id: string): EditorWorkingSet;
+	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet;
 	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void>;
 	layout(dimension: IDimension): void;
 	focus(): void;
@@ -296,6 +300,28 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		return this._activeGroup;
 	}
 
+	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
+		return this.insertGroup(this.groupHosts.get(reference)!.group, direction).group;
+	}
+
+	public activateGroup(id: EditorGroupId): void {
+		this.setActiveGroup(this.groupHosts.get(id)!.group);
+	}
+
+	public isGroupVisible(id: EditorGroupId): boolean {
+		return this.editorGrid.isViewVisible(this.groupHosts.get(id)!.view);
+	}
+
+	public setGroupVisible(id: EditorGroupId, visible: boolean): void {
+		const host = this.groupHosts.get(id)!;
+		if (this.editorGrid.isViewVisible(host.view) === visible) return;
+		host.group.setEditorContentVisible(visible);
+		this.editorGrid.setViewVisible(host.view, visible);
+		this.layoutEditorContent();
+		this.notifyConstraintsChanged();
+		this.editorChangeEmitter.fire({ kind: 'groupVisibilityChanged', groupId: id, visible });
+	}
+
 	private get editorGrid(): SerializableGrid<EditorGroupGridView> {
 		const grid = this.gridSlot.value;
 		if (!grid) throw new Error("Editor Grid is unavailable");
@@ -344,6 +370,12 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			return pane;
 		}
 		if (!await this.closeActiveModalEditor()) throw new CancellationError("Opening the editor was cancelled");
+		if (typeof target === 'object') {
+			const group = this.groupHosts.get(target.groupId)!.group;
+			const pane = await group.openEditor(input, options);
+			if (!options.preserveFocus) this.setActiveGroup(group);
+			return pane;
+		}
 		if (target === undefined && this._groups.length > 1 && this._activeGroup.isLocked && !this._activeGroup.inputs.some(candidate => editorInputKey(candidate) === editorInputKey(input))) {
 			const unlocked = this._groups.find(({ group }) => !group.isLocked);
 			const host = unlocked ?? this.insertGroup(this._activeGroup, Direction.Right);
@@ -629,17 +661,19 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 	private layoutEditorContent(): void {
 		// A single group keeps its tabs across the shared column. Split groups reserve
 		// Details once at the grid boundary, rather than subtracting it from every pane.
+		const visibleGroups = this._groups.filter(host => this.editorGrid.isViewVisible(host.view));
+		const inset = Math.min(this.contentRightInset, this.dimension.width);
 		for (const host of this._groups) {
-			host.group.setContentRightInset(this._groups.length === 1 ? this.contentRightInset : 0);
-			host.group.setEditorContentVisible(this.editorContentVisible);
+			host.group.setContentRightInset(visibleGroups.length === 1 ? inset : 0);
+			host.group.setEditorContentVisible(this.editorContentVisible && this.editorGrid.isViewVisible(host.view));
 		}
-		this.editorGrid.layout(this.dimension.width - (this._groups.length > 1 ? this.contentRightInset : 0), this.dimension.height);
+		this.editorGrid.layout(this.dimension.width - (visibleGroups.length > 1 ? inset : 0), this.dimension.height);
 	}
 
 	public setEditorContentVisible(visible: boolean): void {
 		this.editorContentVisible = visible;
 		for (const host of this._groups) {
-			host.group.setEditorContentVisible(visible);
+			host.group.setEditorContentVisible(visible && this.editorGrid.isViewVisible(host.view));
 		}
 	}
 
@@ -735,10 +769,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		return { host: this.insertGroup(source, direction), created: true };
 	}
 
-	private insertGroup(source: EditorGroupView, direction: GridDirection): EditorGroupHost {
+	protected insertGroup(source: IEditorGroupView, direction: GridDirection, id?: EditorGroupId): EditorGroupHost {
 		const sourceIndex = this.groupIndex(source);
 		const sourceHost = this._groups[sourceIndex]!;
-		const created = this.createGroup();
+		const created = this.createGroup(id);
 		const targetIndex = sourceIndex + 1;
 		this._groups.splice(targetIndex, 0, created);
 		this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction);
@@ -763,7 +797,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		this.groupHosts.deleteAndDispose(host.group.id);
 	}
 
-	private groupIndex(group: EditorGroupView): number {
+	private groupIndex(group: IEditorGroupView): number {
 		const index = this._groups.findIndex((host) => host.group === group);
 		if (index < 0) throw new Error("EditorGroupView is not owned by EditorPart");
 		return index;
@@ -802,14 +836,14 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			});
 	}
 
-	saveWorkingSet(id: string): EditorWorkingSet {
+	saveWorkingSet(id: string, excludedGroups: readonly EditorGroupId[] = []): EditorWorkingSet {
 		if (!id.trim()) throw new TypeError("Editor working set requires a non-empty ID");
 		const areas = this._groups.map(({ view }) => {
 			const size = this.editorGrid.getViewSize(view);
 			return size.width * size.height;
 		});
 		const totalArea = areas.reduce((sum, area) => sum + area, 0);
-		return Object.freeze({
+		const state: EditorWorkingSet = Object.freeze({
 			id,
 			activeGroupIndex: this._groups.findIndex(({ group }) => group === this._activeGroup),
 			groups: Object.freeze(this._groups.map(({ group }, index) => Object.freeze({
@@ -829,6 +863,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			}))),
 			layout: this.editorGrid.serialize() as EditorWorkingSetLayout,
 		});
+		if (excludedGroups.length === 0) return state;
+		const groups = state.groups.filter(group => !excludedGroups.includes(group.id!));
+		if (groups.length === 0) throw new Error('An editor working set must include a group');
+		const active = state.groups[state.activeGroupIndex]!;
+		return { ...state, groups, activeGroupIndex: Math.max(0, groups.indexOf(active)), layout: filterWorkingSetLayout(state.layout!, new Set(groups.map(group => group.id!)))! };
 	}
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
@@ -838,11 +877,22 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			inputs: group.editors.map(editor => this.inputSerializers.deserialize(editor.input)),
 		}));
 		const hadEditorFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
-		if (!await this.closeAllEditors({ reason: "reset" })) throw new CancellationError("Applying the editor working set was cancelled");
-		this.rebuildGroups(groups, target.layout, target.activeGroupIndex);
+		if (!await this.closeActiveModalEditor()) throw new CancellationError('Applying the editor working set was cancelled');
+		const retained = (options.preserveGroups ?? []).map(id => this.groupHosts.get(id)!);
+		const retainedLayout = retained.length ? filterWorkingSetLayout(this.editorGrid.serialize() as EditorWorkingSetLayout, new Set(retained.map(host => host.group.id))) : undefined;
+		const closing = this._groups.filter(host => !retained.includes(host));
+		for (const { group } of closing) {
+			for (const input of group.inputs) {
+				if (!await group.confirmCloseEditor(input, closing.map(host => host.group.id))) throw new CancellationError('Applying the editor working set was cancelled');
+			}
+		}
+		for (const { group } of closing) {
+			for (const input of [...group.inputs]) await group.closeEditor(input, { reason: 'reset', skipConfirmation: true });
+		}
+		this.rebuildGroups(groups, target.layout, target.activeGroupIndex, retained, retainedLayout);
 		for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
 			const state = groups[groupIndex]!;
-			const group = this._groups[groupIndex]!.group;
+			const group = this._groups[retained.length + groupIndex]!.group;
 			for (let inputIndex = 0; inputIndex < state.inputs.length; inputIndex += 1) {
 				const input = state.inputs[inputIndex]!;
 				await group.openEditor(input, {
@@ -857,7 +907,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			if (activeInput) group.activateEditor(activeInput);
 			group.setLocked(state.locked === true);
 		}
-		const activeGroup = this._groups[target.activeGroupIndex] ?? this._groups[0]!;
+		const activeGroup = this._groups[retained.length + target.activeGroupIndex]!;
 		this.setActiveGroup(activeGroup.group);
 		this.layoutEditorContent();
 		if (!options.preserveFocus && hadEditorFocus) this._activeGroup.focus();
@@ -867,18 +917,23 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		groups: readonly { readonly id?: string; readonly size: number }[],
 		layout: EditorWorkingSetLayout | undefined,
 		activeGroupIndex: number,
+		retained: readonly EditorGroupHost[] = [],
+		retainedLayout?: EditorWorkingSetLayout,
 	): void {
 		const previous = this._groups.splice(0);
 		this.gridSlot.clear();
 		for (const host of previous) {
+			if (retained.includes(host)) continue;
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupRemoved", groupId: host.group.id }));
 			this.groupHosts.deleteAndDispose(host.group.id);
 		}
 		const hosts = groups.map(group => this.createGroup(group.id));
-		this._groups.push(...hosts);
-		const hostById = new Map(hosts.map(host => [host.group.id, host]));
-		const grid = layout
-			? SerializableGrid.deserialize<EditorGroupGridView>(this.contentDomNode, layout, {
+		this._groups.push(...retained, ...hosts);
+		const hostById = new Map(this._groups.map(host => [host.group.id, host]));
+		const documentLayout = layout ?? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: hosts.map((host, index) => ({ type: 'leaf' as const, data: { groupId: host.group.id }, size: groups[index]!.size * this.dimension.width, visible: true, priority: 'normal' as const })) };
+		const combinedLayout = retainedLayout ? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: [retainedLayout, documentLayout].flatMap(child => child.type === 'branch' && child.orientation === 'horizontal' ? child.children : [child]) } : layout;
+		const grid = combinedLayout
+			? SerializableGrid.deserialize<EditorGroupGridView>(this.contentDomNode, combinedLayout, {
 				fromJSON: data => {
 					const groupId = editorGroupIdFromGridData(data);
 					const host = hostById.get(groupId);
@@ -888,7 +943,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 			}, { styles: EDITOR_GROUP_GRID_STYLES })
 			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension), { styles: EDITOR_GROUP_GRID_STYLES });
 		this.gridSlot.value = grid;
-		this._activeGroup = hosts[activeGroupIndex]?.group ?? hosts[0]!.group;
+		this._activeGroup = hosts[activeGroupIndex]!.group;
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		for (const host of hosts) {
@@ -926,6 +981,15 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 		if (!editor) return undefined;
 		return Object.freeze({ groupId: editor.groupId, instanceId: editor.instanceId, paneId: editor.paneId, input: editor.input });
 	}
+}
+
+/** Pruning a working set preserves the exact geometry of the selected group subtree. */
+function filterWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlySet<string>): EditorWorkingSetLayout | undefined {
+	if (layout.type === 'leaf') return groups.has(layout.data.groupId) ? layout : undefined;
+	const children = layout.children.map(child => filterWorkingSetLayout(child, groups)).filter((child): child is EditorWorkingSetLayout => child !== undefined).flatMap(child => child.type === 'branch' && child.orientation === layout.orientation ? child.children : [child]);
+	if (children.length === 0) return undefined;
+	if (children.length === 1) return { ...children[0]!, size: layout.size };
+	return { ...layout, children };
 }
 
 function emptyWorkingSet(): EditorWorkingSet {

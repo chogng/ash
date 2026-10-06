@@ -358,34 +358,47 @@ test('Design replaces Sessions with a flexible page and preserves both side pane
 	const sidebarWidth = layout.getPartSize('sidebar').width;
 	const auxiliaryWidth = layout.getPartSize('auxiliarybar').width;
 	layout.updateParts(() => {
-		layout.setPartAvailable('editor', false);
+		layout.showPart('editor');
 		layout.setPartAvailable('sessions', false);
-		layout.setPartAvailable('creator', true);
 	});
 	assert.equal(layout.isPartVisible('sessions'), false);
-	assert.equal(layout.isPartVisible('editor'), false);
-	assert.equal(layout.isPartVisible('creator'), true);
-	assert.equal(layout.isPartVisible('library'), false);
+	assert.equal(layout.isPartVisible('editor'), true);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
-	const pageWidth = layout.getPartSize('creator').width;
+	assert.equal(layout.state.auxiliarybar.width, auxiliaryWidth);
+	layout.hidePart('auxiliarybar');
+	assert.equal(layout.state.auxiliarybar.width, auxiliaryWidth);
+	layout.showPart('auxiliarybar');
+	const pageWidth = layout.getPartSize('editor').width;
 	layout.layout(new Dimension(1600, 900));
-	assert.equal(layout.getPartSize('creator').width, pageWidth + 200);
+	assert.equal(layout.getPartSize('editor').width, pageWidth + 200);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
 	layout.hidePart('sidebar');
-	assert.equal(parts.get('creator')!.domNode.classList.contains('ash-sessions-frame-start'), true);
+	assert.equal(parts.get('editor')!.domNode.classList.contains('ash-sessions-frame-start'), true);
 	layout.showPart('sidebar');
 	layout.updateParts(() => {
-		layout.setPartAvailable('creator', false);
 		layout.setPartAvailable('sessions', true);
-		layout.setPartAvailable('editor', true);
+		layout.hidePart('editor');
 	});
 	assert.equal(layout.isPartVisible('sessions'), true);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
 	assert.equal(layout.getPartSize('auxiliarybar').width, auxiliaryWidth);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
+});
+
+test('Sessions product page group survives legacy document group restoration', async () => {
+	const { EditorPart } = await import('../../browser/parts/editor/editorPart.js');
+	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
+	using services = createTestEditorServices();
+	using editor = services.createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
+	await editor.applyWorkingSet({ id: 'legacy', activeGroupIndex: 1, groups: [1, 2].map(id => ({ id: 'editor-group-' + id, editors: [], activeEditorIndex: -1, size: 0.5 })) }, { preserveGroups: [pages.id] });
+	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
+	assert.equal(editor.isGroupVisible(pages.id), false);
+	assert.equal(editor.activeGroup.id, 'editor-group-2');
+	assert.equal(editor.groups.length, 3);
 });
 
 test('Sessions layout creation requires the registered storage service', () => {

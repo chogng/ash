@@ -64,6 +64,7 @@ export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'displa
 		supportedReasoningEfforts: [],
 		modelReasoningEffort: null,
 		defaultPersonality: null,
+		settings: { inputModalities: null, verbosity: 'unknown', defaultVerbosity: null, reasoningSummary: 'unknown', defaultReasoningSummary: null, serviceTiers: null, defaultServiceTier: null, toolOutputLimit: null },
 		...entry,
 	};
 }

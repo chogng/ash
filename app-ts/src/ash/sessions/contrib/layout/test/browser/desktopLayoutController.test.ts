@@ -242,7 +242,7 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(DesktopLayoutController, undefined as unknown as import('../../../../browser/parts/sidebarPart.js').SidebarPart, undefined as unknown as import('../../../library/browser/libraryPage.js').LibraryPart, undefined as unknown as import('../../../creator/browser/creatorPage.js').CreatorPart), /paneCompositePartService/);
+		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /paneCompositePartService/);
 	});
 });
 

@@ -3,6 +3,9 @@ import type { Icon } from '../../../../base/common/icon.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { CreatorMode } from '../common/creator.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { SessionsViewRegistry } from '../../../common/views.js';
+import { CreatorWorkspaceView } from './creatorViews.js';
 
 export interface ICreatorWorkspace extends IDisposable {
 	readonly domNode: HTMLElement;
@@ -23,5 +26,17 @@ export interface CreatorModeContribution {
 	create(instantiation: IInstantiationService, ownerDocument: Document): ICreatorWorkspace;
 }
 
-/** Modes register at the product entry; the page consumes contracts without importing mode implementations. */
+export const CREATOR_NAVIGATION_CONTAINER_ID = 'sessions.creator.navigation';
+
+/** Workspace content is created lazily; entries are registered before the editor opens. */
 export const CreatorModes = new Map<CreatorMode, CreatorModeContribution>();
+
+export function registerCreatorMode(contribution: CreatorModeContribution): void {
+	CreatorModes.set(contribution.id, contribution);
+	SessionsViewRegistry.registerStaticViews(CREATOR_NAVIGATION_CONTAINER_ID, [{
+		id: `${CREATOR_NAVIGATION_CONTAINER_ID}.${contribution.id}`,
+		title: contribution.title,
+		ctorDescriptor: new SyncDescriptor(CreatorWorkspaceView, [contribution]),
+		canToggleVisibility: false,
+	}]);
+}

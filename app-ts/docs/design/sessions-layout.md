@@ -1,66 +1,48 @@
 # Sessions 共用布局
 
-Code 的目标布局由 Titlebar、Activity Bar、Sidebar、Sessions 和 Auxiliary Bar 五个 Part 组成。Chat 与 Code 页面共用窗口布局和会话分屏机制，各页面保留自己的会话选择、草稿与界面实例。其他页面按自己的内容需求使用这些区域。
+Sessions 复用 Workbench 的 Part、编辑器和 ViewContainer 基座。Creator 聚合各贡献的创作入口；Library 是统一的分类文件和素材仓库，其分类、收藏、集合和搜索属于库内浏览状态。各功能向 Sessions 布局服务提供容器 ID 和中央内容，窗口布局负责共享宿主的尺寸与显隐。DesktopLayoutController 负责会话文档恢复及 Editor／Details 行为。窗口始终保留 SessionsPart，用于 Agent 对话和会话分屏。
 
-本文件单独说明这套布局的职责、状态和扩展边界。它以当前五个 Part 的产品决定为基础；不把 VS Code 的 Editor、Panel 或手机布局视为 Code 的待补区域。`src/ash/sessions/` 下既有文档在本次改动中保持原样，其中描述的其他布局需要分别核对实现状态。
+本文概括边界。完整契约见 [LAYOUT.md](../../src/ash/sessions/LAYOUT.md)，会话工作集和入口存储见 [LAYOUT_CONTROLLER.md](../../src/ash/sessions/LAYOUT_CONTROLLER.md)。
 
-## 职责与文件
+## 职责与目录
 
 | 负责方 | 文件 | 契约 |
 | --- | --- | --- |
-| 窗口装配 | [Workbench](../../src/ash/sessions/browser/workbench.ts) | 创建服务与 Parts，装配页面内容，管理窗口生命周期 |
-| 窗口布局 | 同文件中的 `SessionsWorkbenchLayout` | 唯一负责容器尺寸、五个 Part 的 Grid、显隐、拖动、边界留白与窗口布局存储 |
-| 共用区域身份与默认尺寸 | [layoutConstants.ts](../../src/ash/sessions/common/layoutConstants.ts) | 提供当前产品的区域集合与默认宽度，不拥有可变状态 |
-| 外观几何政策 | [layoutPolicy.ts](../../src/ash/sessions/browser/layoutPolicy.ts) | 提供 modern／flat 的窗口边界尺度，不判断页面身份 |
-| 会话分屏几何 | [sessionGridLayout.ts](../../src/ash/sessions/browser/parts/sessionGridLayout.ts) | 保存和恢复分栏宽度、更新排列、保持未受影响的尺寸和活动内容焦点，不创建或销毁会话组件 |
-| 页面内容与组件生命周期 | [SessionsChatView](../../src/ash/sessions/browser/parts/sessionsChatView.ts)、[SessionsPart](../../src/ash/sessions/browser/parts/sessionsPart.ts) | 管理 retained ChatWidget、内容更新、草稿和页面显示 |
-| 页面选择与会话身份 | [SessionsService](../../src/ash/sessions/services/sessions/browser/sessionsService.ts) | 保存和恢复每页的可见会话、顺序和活动身份；维护窗口内导航历史 |
+| 窗口装配 | [workbench.ts](../../src/ash/sessions/browser/workbench.ts) | 创建服务、保留 Parts，管理窗口生命周期 |
+| 桌面布局 | [desktopWorkbench.ts](../../src/ash/sessions/browser/desktopWorkbench.ts) | 拥有窗口 Grid、Part 位置、显隐映射、尺寸和存储 |
+| 入口布局 | [sessionsLayoutService.ts](../../src/ash/sessions/contrib/layout/browser/sessionsLayoutService.ts) | 接收功能提供的容器和中央内容，串行打开并保存布局偏好，不按产品名字分支 |
+| 会话文档与详情 | [desktopLayoutController.ts](../../src/ash/sessions/contrib/layout/browser/desktopLayoutController.ts) | 恢复会话工作集，管理 Editor／Details 操作 |
+| 对话区域 | [parts/sessions/](../../src/ash/sessions/browser/parts/sessions/) | SessionsPart、SessionsChatView、SessionGridLayout 及其 media；保留 ChatWidget、草稿和分屏几何 |
+| 编辑区域 | [parts/editor/](../../src/ash/sessions/browser/parts/editor/) | 复用 Workbench EditorPart，保留产品页面编辑组；会话文档组独立恢复 |
+| 底部工具 | [parts/panel/](../../src/ash/sessions/browser/parts/panel/) | 使用共享 PanelPart 和工具 ViewContainer |
+| 左侧区域 | [parts/sidebar/](../../src/ash/sessions/browser/parts/sidebar/) | 使用共享 SidebarPart，挂载会话、团队、Library、Creator 的 ViewContainer |
+| 会话身份 | [sessionsService.ts](../../src/ash/sessions/services/sessions/browser/sessionsService.ts) | 窗口唯一的活动会话、可见排列和导航历史 |
 
-Sessions 可以使用 Workbench 和更低层的机制，Workbench 不依赖 Sessions。模式入口负责内容和可用能力，不能另建一套窗口尺寸监听、拖动或布局存储。通用 Grid 和 Part 不读取产品页面。
+每个 Part 按文件夹归属，其组件和样式跟随所属 Part。模式页面放在 contrib，由 EditorInput / EditorPane 或 ViewPane 注册提供内容；页面名不产生新的窗口 Part。Workbench 和更低层不依赖 Sessions。
 
-## 布局与生命周期
+## 中间区域与模式
 
-窗口先创建并注册 `IAgentWorkbenchLayoutService`，浮层与 Quick Input 取得同一个容器布局服务。Parts 完成创建后，通过 `createWorkbenchLayout` 一次性接入 Grid。服务由窗口实例化容器创建，存储是必需的构造依赖。
+| 模式 | 左侧 | 中间 | 右侧 |
+| --- | --- | --- | --- |
+| Chat | 会话 ViewContainer | SessionsPart | 按该模式的显隐偏好 |
+| Code | 会话 ViewContainer | SessionsPart 与文档 EditorPart | Files / Changes，按活动文档选择 |
+| Collaboration | 团队 ViewContainer | SessionsPart | 按该模式的显隐偏好 |
+| Library | 分类 ViewContainer | LibraryEditorPane | 素材详情 ViewContainer |
+| Creator 画布 | Layers ViewContainer | CreatorEditorPane 保留的工作空间 | Shape properties ViewContainer |
+| Creator 首页 / Make | Creator 导航 ViewContainer | CreatorEditorPane | 默认收起属性 |
 
-一次窗口布局依次完成 Grid、Parts 和内部内容，再发布容器布局完成事件。事件订阅者读取到的是已经完成的区域尺寸。拖动使用 Grid 自身的布局链；显隐和外观变化也经过同一入口。
+Sidebar 在每种桌面模式中都可用。用户显隐偏好按入口保存。Code 的 Panel 在其他模式不可用，回到 Code 恢复原显隐及工具视图。聚焦 Code 内的对话不改变模式；激活已打开的产品标签时恢复其对应的入口布局。
 
-Parts 声明自身尺寸约束，窗口布局分配区域空间。Sidebar 与 Auxiliary Bar 保持用户宽度，Sessions 吸收窗口及区域显隐引起的空间变化。会话分栏使用独立 Grid，新分栏切分相邻区域，保留不受影响的分栏尺寸。分栏身份变化或内容更新不重建保留的 ChatWidget。
+## 状态与生命周期
 
-modern／flat 的边界留白由窗口布局计算，CSS 负责表面外观。区域宽度包含布局边界，内容布局接收扣除留白后的尺寸。
+窗口布局负责 Part 宽度、Grid 和实际尺寸。会话分屏由 SessionsPart 的独立 Grid 管理；文档编辑组仍使用 Workbench 编辑组能力。模式切换保留这些实例，不创建另一份会话选择、文档或选区。
 
-## 显隐与存储
+会话工作集只保存和恢复文档编辑组，产品页面编辑组排除在外且保持存活。隐藏编辑内容、收起整个 Code 侧面区域和切换模式都保留普通标签与未保存文档。实际关闭、文件替换和窗口退出继续检查保存、放弃或取消。
 
-用户选择和页面可用性是两个状态。实际显示需要同时满足用户选择显示和当前页面使用该区域。
+CreatorPage 拥有工作空间实例，文档内容和工作副本仍由各模式的原有服务拥有。LibraryService 拥有共享的可观察浏览状态；LibraryEditorPane、分类 View 和详情 View 分别创建并管理自己的界面。容器与 View 在 contribution 中注册，不依赖编辑器先创建。各区域隐藏时释放自己持有的预览资源，返回时保留搜索、视图模式和选择。
 
-当前 Chat 与 Code 使用 Sidebar 和 Auxiliary Bar；Collaboration 和 Library 暂时隐藏两者。页面通过 `setPartAvailable` 请求区域可用性，不把这种隐藏写成用户关闭。用户主动关闭区域后，页面切换不能重新打开它。
-
-| 状态 | 所有者与保存范围 | 当前实现 |
-| --- | --- | --- |
-| Sidebar、Auxiliary Bar 宽度与用户显隐 | 窗口布局；Sessions profile storage | 已持久保存与恢复，沿用现有存储键 |
-| 页面暂时隐藏区域 | 窗口布局；当前页面运行状态 | 不持久保存；恢复页面内容后重新决定可用性 |
-| Chat／Code 的会话顺序与活动选择 | SessionsService；Sessions workspace storage | `sessions.viewState` 保存两个页面的独立排列；未发送会话保存本地身份、标题、工作区、模型与 Agent 选择，已创建会话只保存会话和 Thread 身份 |
-| Chat／Code 的分栏宽度 | SessionGridLayout；Sessions workspace storage | `sessions.gridState.chat`、`sessions.gridState.code` 按分栏身份保存宽度；重启时按可用空间恢复比例，并遵守组件尺寸约束 |
-| 页面导航历史 | SessionsService；窗口内 | 不持久保存，重启后的历史从恢复的活动选择开始 |
-| 输入草稿和附件 | 对应 ChatWidget 与草稿存储；Sessions workspace storage | 每页、每个未发送分栏和 Thread 分开保存，关闭流程等待附件内容解析完成 |
-
-隐藏区域仍保留 Grid 缓存宽度。窗口保存时写入用户显隐选择，避免在临时隐藏页面关闭窗口后丢失布局。关闭时先保存布局，再释放 Grid 和 Parts；存储 flush 继续参加窗口的 shutdown 流程。
-
-排列恢复先等待会话目录初始化，再由 SessionsService 解析会话引用，交给页面创建内容，最后由 SessionGridLayout 恢复宽度。没有足够尺寸的隐藏页面保留待恢复几何，首次显示时再应用。已删除或归档的会话、Thread 不重新打开，剩余分栏使用可用空间。目录加载失败不能证明会话已删除，未解析的会话引用继续保留，本地未发送分栏仍可恢复。启动期间用户已经选择的页面使用其新排列，其他页面继续恢复保存的排列。
-
-未发送草稿使用 `untitled:<id>` 区分分栏，首次发送后改用 Thread 身份，并移除已消费的草稿。用户关闭未发送分栏时删除对应草稿，正在解析附件的旧写入不能重新生成它。旧的页面草稿由第一个未发送分栏迁移一次，目标和源有冲突时明确报错，两者保留。迁移写入与源删除位于同一个 workspace 状态文档，由同一次 flush 提交。正常读写只使用分栏或 Thread 身份。
-
-排列和宽度是有版本的界面状态。读取时校验引用种类、身份、重复分栏、活动索引、工作区选择以及有限正宽度；不合法的数据拒绝加载。它们不进入用户设置，也不改变后端会话或执行状态。窗口仍从 Chat 页面启动，保存的 Code 排列在切换到 Code 时显示。
-
-## 后续模式的接入边界
-
-新页面首先明确 Sidebar、主区域和 Auxiliary Bar 的内容、可用性及初始组合。相同区域关系使用同一布局实现；不同内容不构成另建布局的理由。产品模式、页面选择、外观和设备交互分别管理。
-
-手机交互和新增区域尚未实现。接入这些能力时，需要真实调用方、对应状态所有者和行为测试；不预先添加空的控制器或页面。新增区域关系应同步扩展布局契约，页面仍不接管 Grid 的尺寸计算。
-
-VS Code 的同职责文件用于核对边界和行为。Ash 使用自己的五区域组合、会话状态、DOM 与 Grid 实现；本次补齐的是当前调用链所需的职责，不宣称具备上游全部布局 API。
+窗口布局按顺序完成 Grid、Parts 和内部内容，再通知容器布局完成。隐藏区域保留 Grid 缓存尺寸。窗口关闭等待布局切换、会话工作集和草稿保存结束，再释放 Parts 和存储。
 
 ## 验证
 
-窗口布局单测覆盖五区域组合、显隐与缓存宽度、存储恢复、布局事件时机和服务装配。会话分屏和选择服务单测覆盖独立页面排列、活动选择、首次发送、失效引用、目录不可用、启动期间用户选择、宽度恢复、身份变化保留几何、输入焦点和草稿迁移。
-
-Playwright 的 [sessions-layout.spec.ts](../../test/smoke/areas/sessions/sessions-layout.spec.ts) 从实际 Sessions 入口执行拖动、Chat／Code／其他页面切换、窗口 resize 与 reload，检查区域尺寸、草稿、组件身份和运行错误。既有页面切换测试继续覆盖键盘、附件、导航历史与关闭分栏。Web、Electron UI 和连接 App Server 的 Electron 使用同一语义流程。
+相关单测覆盖 Part 装配、布局尺寸、会话草稿、分屏保留和工作集恢复时保留产品编辑组。Playwright 的 [sessions-layout.spec.ts](../../test/smoke/areas/sessions/sessions-layout.spec.ts)、[sessions-navigation.spec.ts](../../test/smoke/areas/sessions/sessions-navigation.spec.ts) 和 Creator / Library / Code 场景覆盖真实切换、编辑器标签、键盘帮助、DOM 实例、未保存文档、窗口 resize 和 reload。Web、Electron UI 和连接 App Server 的 Electron 使用同一语义流程。

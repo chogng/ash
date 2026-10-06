@@ -59,7 +59,7 @@ SidebarPart | EditorPart | AuxiliaryBarPart
 
 `IWorkingCopyService` 只登记工作副本，不自动合并同一 URI 的内容，也不提供共享撤销。内容领域需要按资源取得和释放模型引用；同一资源的多个编辑器使用同一模型及保存状态。现有文本模型引用服务绑定 TextModel，空间文档不能直接冒用该类型。
 
-Creator 使用共享 EditorPart 是目标设计。当前 Sessions 的 Editor 位于 Code 的侧边区域，绑定每个会话的工作集，并关闭了多编辑组布局；Creator 另有保留页面。实现时必须同步调整窗口布局与编辑服务装配，将创作文件接入同一个 EditorPart，其资源恢复按创作工作区管理，原 CreatorPart 的作品承载职责退场。会话切换不能替换或关闭 Creator 正在编辑的作品，也不能将作品放进某个聊天的 Code 工作集。涉及的现有契约见 [LAYOUT.md](LAYOUT.md) 和 [LAYOUT_CONTROLLER.md](LAYOUT_CONTROLLER.md)，本次文档不改变它们描述的当前行为。
+当前 CreatorEditorPane 已在共享 EditorPart 的保留产品编辑组中承载 CreatorPage，各模式工作空间与其文档保持原有独立生命周期。图层与属性使用左右 ViewContainer；会话工作集恢复保留产品编辑组。按网站文件身份打开多个编辑器、共享同一网站文档模型和资源恢复仍属于 Sites 的目标能力。涉及的窗口契约见 [LAYOUT.md](LAYOUT.md) 和 [LAYOUT_CONTROLLER.md](LAYOUT_CONTROLLER.md)。
 
 ## 职责与数据归属
 

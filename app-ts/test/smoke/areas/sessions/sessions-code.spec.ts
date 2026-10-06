@@ -99,10 +99,8 @@ test('Code panel stays below the main region and retains its views across sessio
 	expect(await sidebar.boundingBox()).toEqual(sidebarBefore);
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
-	await expect(toggle).toBeVisible();
+	await expect(toggle).toHaveCount(0);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(panel).toBeHidden();
-	await toggle.click();
 	await expect(panel).toBeVisible();
 	expect((await panel.boundingBox())?.height).toBe(panelBefore?.height);
 	page = await workbench.reopenAgentsWindow(application, page);
@@ -112,12 +110,10 @@ test('Code panel stays below the main region and retains its views across sessio
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(panel).toBeHidden();
-	await toggle.click();
 	await expect(panel).toBeVisible();
 	await toggle.click();
 	await expect(panel).toBeHidden();
-	await navigation.getByRole('button', { name: 'Design', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
 });
@@ -127,8 +123,8 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = page.locator('[data-part="editor"]');
-	const title = editor.locator('.ash-editor-title-control');
-	const content = editor.locator('.ash-editor-group-content');
+	const title = editor.locator('.ash-editor-title-control:visible');
+	const content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
 	const panel = page.locator('[data-part="panel"]');
 	const menuButton = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true });
 	const usesSystemMenu = 'windows' in application && process.platform === 'darwin';
@@ -153,6 +149,13 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 			await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
 		}
 	};
+	await expect(content).toBeHidden();
+	await selectViewAction('Toggle details', true);
+	await expect(content).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	await selectViewAction('Toggle details', true);
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await selectViewAction('Hide editor');
 	await expect(content).toBeHidden();
 	await selectViewAction('Show editor');
 	await expect(content).toBeVisible();
@@ -196,11 +199,11 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 	const codeActions = ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab'];
 	if (usesSystemMenu) {
 		const items = await captureElectronMenu(application, () => menuButton.click());
-		expect(items.find(item => item.label === 'View')!.submenu!.filter(item => codeActions.includes(item.label)).map(item => item.label)).toEqual(expect.arrayContaining(['Toggle Code panel', 'Open Files tab', 'Open Changes tab']));
+		expect(items.find(item => item.label === 'View')!.submenu!.filter(item => codeActions.includes(item.label))).toEqual([]);
 		await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
 	} else {
 		await openViewMenu();
-		for (const name of ['Toggle Code panel', 'Open Files tab', 'Open Changes tab']) await expect(page.getByRole('menu').getByText(name, { exact: true })).toBeVisible();
+		for (const name of codeActions) await expect(page.getByRole('menu').getByText(name, { exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 	}
 });
@@ -209,8 +212,8 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	let editor = page.locator('[data-part="editor"]');
-	let title = editor.locator('.ash-editor-title-control');
-	let content = editor.locator('.ash-editor-group-content');
+	let title = editor.locator('.ash-editor-title-control:visible');
+	let content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
 	let details = page.locator('[data-part="auxiliarybar"]');
 	const files = title.getByRole('tab', { name: 'Files', exact: true });
 	let changes = title.getByRole('tab', { name: 'Changes', exact: true });
@@ -250,8 +253,8 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await expect(details.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
 	page = await workbench.reopenAgentsWindow(application, page);
 	editor = page.locator('[data-part="editor"]');
-	title = editor.locator('.ash-editor-title-control');
-	content = editor.locator('.ash-editor-group-content');
+	title = editor.locator('.ash-editor-title-control:visible');
+	content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
 	details = page.locator('[data-part="auxiliarybar"]');
 	changes = title.getByRole('tab', { name: 'Changes', exact: true });
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
@@ -269,7 +272,7 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	await expect(title.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await title.getByRole('button', { name: 'Hide editor', exact: true }).click();
 	await expect(content).toBeHidden();
-	await expect(title.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveCount(0);
+	await expect(title.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	await expect(content).toBeVisible();
 	await expect(title.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
@@ -303,8 +306,8 @@ test.describe('Sessions from an Electron Workbench', () => {
 		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(auxiliary).toBeVisible();
 		await expect(editors).toBeVisible();
-		await expect(editors.locator('.ash-editor-group-content')).toBeHidden();
-		const title = editors.locator('.ash-editor-title-control');
+		await expect(editors.locator('.ash-editor-group:visible > .ash-editor-group-content')).toBeHidden();
+		const title = editors.locator('.ash-editor-title-control:visible');
 		const files = title.getByRole('tab', { name: 'Files', exact: true });
 		const changes = title.getByRole('tab', { name: 'Changes', exact: true });
 		await expect(files).toHaveAttribute('aria-selected', 'true');

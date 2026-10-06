@@ -3,7 +3,7 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
 import { CreatorFrameNavigator } from '../../../browser/creatorFrameNavigator.js';
-import { CreatorModes } from '../../../browser/creatorWorkspace.js';
+import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
 import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
 import { documentFromShapes } from '../../../common/model/document.js';
 import { exportDesignSvg } from '../../../browser/svgRenderer.js';
@@ -30,7 +30,7 @@ class SitesWorkspace extends CreatorCanvasWorkspace {
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.pages.setVisible(visible); }
 }
 
-CreatorModes.set(CreatorMode.Sites, {
+registerCreatorMode({
 	id: CreatorMode.Sites,
 	title: getCreatorModeTitle(CreatorMode.Sites),
 	description: localize('sessions.creator.sites.description', 'Design web pages, preview them and export a website.'),

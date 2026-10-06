@@ -3,7 +3,7 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { CreatorModes } from '../../../browser/creatorWorkspace.js';
+import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
 import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
 import { DesignMode } from '../../../common/config/editorConfiguration.js';
 import { getDesignShapeEntries } from '../../../common/model/hitTest.js';
@@ -38,7 +38,7 @@ class WhiteboardWorkspace extends CreatorCanvasWorkspace {
 	}
 }
 
-CreatorModes.set(CreatorMode.Whiteboard, {
+registerCreatorMode({
 	id: CreatorMode.Whiteboard,
 	title: getCreatorModeTitle(CreatorMode.Whiteboard),
 	description: localize('sessions.creator.whiteboard.description', 'Sketch ideas, arrange notes and connect your thinking.'),

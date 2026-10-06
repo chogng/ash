@@ -1,8 +1,8 @@
-import { Direction, Grid, Sizing, type IView } from '../../../base/browser/ui/grid/grid.js';
-import { scheduleAtNextAnimationFrame } from '../../../base/browser/dom.js';
-import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { isRecord } from '../../../base/common/types.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { Direction, Grid, Sizing, type IView } from '../../../../base/browser/ui/grid/grid.js';
+import { scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { isRecord } from '../../../../base/common/types.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
 export interface ISessionGridEntry {
 	readonly id: string;

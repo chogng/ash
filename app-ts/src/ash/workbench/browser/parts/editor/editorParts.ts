@@ -175,7 +175,25 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+		if (typeof target === 'object') {
+			return this.parts.find(part => part.groups.some(group => group.id === target.groupId))!.openEditor(input, options, target);
+		}
 		return this._activePart.openEditor(input, options, target);
+	}
+
+	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
+		return this.parts.find(part => part.groups.some(group => group.id === reference))!.addGroup(reference, direction);
+	}
+	public activateGroup(id: EditorGroupId): void {
+		const part = this.parts.find(part => part.groups.some(group => group.id === id))!;
+		this.setActivePart(part);
+		part.activateGroup(id);
+	}
+	public isGroupVisible(id: EditorGroupId): boolean {
+		return this.parts.find(part => part.groups.some(group => group.id === id))!.isGroupVisible(id);
+	}
+	public setGroupVisible(id: EditorGroupId, visible: boolean): void {
+		this.parts.find(part => part.groups.some(group => group.id === id))!.setGroupVisible(id, visible);
 	}
 
 	activateEditor(input: EditorInput): IEditorPane {
@@ -255,7 +273,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	getEditorPaneChoices(input?: EditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> { return this._activePart.reopenActiveEditorWith(preferredEditorId); }
 	reopenClosedEditor(): Promise<boolean> { return this._activePart.reopenClosedEditor(); }
-	saveWorkingSet(id: string): EditorWorkingSet { return this._activePart.saveWorkingSet(id); }
+	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet { return this._activePart.saveWorkingSet(id, excludedGroups); }
 	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void> { return this._activePart.applyWorkingSet(workingSet, options); }
 	layout(dimension: IDimension): void { this.mainPart.layout(dimension); }
 	focus(): void { this._activePart.focus(); }

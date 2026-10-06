@@ -1,5 +1,4 @@
-import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
-import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { isDiffEditorInput } from '../../../../../workbench/common/editor/diffEditorInput.js';
 import { isMultiDiffEditorInput } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -11,7 +10,7 @@ import { CHANGES_VIEW_CONTAINER_ID } from '../../../changes/browser/changes.cont
 /** Active tabs choose detail content; an explicit hide remains authoritative until another tab is selected. */
 export class DesktopDetailPanelCoordinator {
 	constructor(
-		@IPaneCompositePartService private readonly panes: IPaneCompositePartService,
+		@IViewsService private readonly views: IViewsService,
 		@IEditorService private readonly editors: IEditorService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
 	) {}
@@ -31,6 +30,6 @@ export class DesktopDetailPanelCoordinator {
 		}
 		// Hidden detail content is selected when explicitly opened; background updates must not resize the session grid.
 		if (!reveal && !this.layout.isPartVisible('auxiliarybar')) { return; }
-		await this.panes.openPaneComposite(changes ? CHANGES_VIEW_CONTAINER_ID : SESSIONS_FILES_CONTAINER_ID, ViewContainerLocation.AuxiliaryBar);
+		await this.views.openViewContainer(changes ? CHANGES_VIEW_CONTAINER_ID : SESSIONS_FILES_CONTAINER_ID);
 	}
 }

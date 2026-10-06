@@ -6,14 +6,14 @@ This document enumerates the user-facing scenarios, states, and transitions for 
 
 - All non-phone Agents windows use the desktop layout described here. The workbench selection is fixed at startup and published as `IAgentWorkbenchLayoutService.agentWorkbenchLayout` (read by imperative code) and the `DesktopLayoutContext` context key (read only by declarative `when` clauses). Features must gate on those rather than inferring the selected workbench.
 - Phone viewports use the dedicated mobile layout instead.
-- The main Editor supports exactly one editor group. Editor split/grid commands, keybindings, menus, open-to-side requests, and split drop targets are disabled; programmatic group creation and multi-group layout requests are rejected. This restriction does not apply to the separate chat grid.
+- EditorPart supports document editor groups and retains a separate product-page group. Code defaults to one visible document group with Details beside it; additional document groups use shared editor split behavior. The conversation grid remains independent in SessionsPart.
 - Companion specs: [Editor presentation](LAYOUT.md#editor-presentation) and [LAYOUT_CONTROLLER.md](LAYOUT_CONTROLLER.md).
 
 ---
 
 ## 1. The three regions
 
-The third pane is a single visual card containing three regions:
+The default Code side pane contains three regions. A single visible document group keeps one tab strip across its editor and detail column; split document groups keep their own titles and reserve Details once at the grid boundary. Hidden product-page groups do not affect this calculation.
 
 | Region | What it is | Owner |
 |--------|-----------|-------|
@@ -32,11 +32,11 @@ Let **E** = editor content visible, **D** = detail panel visible. The pane suppo
 | State | E | D | Meaning |
 |-------|---|---|---------|
 | **Editor + Detail** | ✅ | ✅ | Normal working state: editor content on the left, detail on the right, tab bar across the top. |
-| **Detail only** | ❌ | ✅ | Editor content collapsed (Hide Editor); tab bar + detail shown; the chat reclaims the freed editor width. The detail **keeps its width** (it does not stretch to fill the pane). **Entering this state closes every non-docked editor tab** (keeping only the docked Changes/Files tabs); reopenable ones are captured and restored when the editor area is shown again, non-restorable ones (e.g. a dirty untitled Search editor) are dropped. |
+| **Detail only** | ❌ | ✅ | Editor content collapsed (Hide Editor); tab bar + detail shown; the chat reclaims the freed editor width. The detail **keeps its width** (it does not stretch to fill the pane). **Entering this state retains ordinary editor tabs, panes and dirty documents.** Only actual close or document replacement invokes unsaved-file confirmation; managed Changes/Files tabs remain protected while Details is the sole content. |
 | **Editor only** | ✅ | ❌ | Detail toggled off; editor content fills the pane; tab bar across the top. |
-| **Side pane closed** | ❌ | ❌ | The whole third pane is closed (chat-only). Reached via **Toggle Side Panel** or when the last editor tab closes; never via the detail toggle. **Closing the whole side pane does NOT close editors** — only a *Detail-only* collapse (editor hidden while the detail stays open) closes them; when both parts hide the editors are left intact so they return when the side pane is reopened. |
+| **Side pane closed** | ❌ | ❌ | The whole third pane is closed (chat-only). Reached via **Toggle Side Panel** or when the last editor tab closes; never via the detail toggle. **Closing the whole side pane retains editors**, as does Detail-only, so they return when content is shown again. |
 
-Only **Existing Sessions** share a persisted Editor/Details visibility profile. A New Session does not apply or capture that profile; on entry it hides Editor once only when the restored editor set contains no input other than the managed Changes and Empty Files inputs. Submit seeds the Existing profile. The active editor selects the detail content: every diff editor selects Changes and every file editor selects Files.
+Code shares one per-mode Editor/Details visibility preference across session navigation. On first entering Code with only managed inputs, Editor content starts hidden and Details remains visible. Session submission keeps the current composition. The active editor selects the detail content: every diff editor selects Changes and every file editor selects Files.
 
 **Size distribution when opening the side pane.** Opening the side pane from *closed* (e.g. clicking **Changes** while the chat is full-width) reveals the editor with `Sizing.Distribute`. The grid uses the revealed view's location to distribute its containing split. The Sessions part and side pane therefore receive equal space without either part computing a width. After that, side-pane sizes are **workbench-level, not per session**: the editor grid node width is owned by the workbench grid and persisted globally (`workbench.sessions.partSizes`), so once the user resizes the side pane it keeps that width — including across **session switches** (switching sessions does not change the side-pane width) and across reloads.
 
@@ -52,7 +52,7 @@ Only **Existing Sessions** share a persisted Editor/Details visibility profile. 
 |---------|----------|--------|
 | **Toggle Details** (`≡`) | Editor header layout toolbar, after the actions overflow and a separator | Shows/hides the detail panel (default keybinding **`⌥⌘L`**). Hiding the detail **while the editor is hidden reveals the editor** (→ *Editor only*), so the pane is never left empty. It never changes the Sessions sidebar; that remains under explicit user control. Its `toggled` state (`AuxiliaryBarVisibleContext`) is kept **in sync with the actual rendering**. Shown **only** when the active tab is **Changes or Files** (not Browser or Search, which have no detail). |
 | **Maximize / Restore** | Editor title bar, primary inline | Maximizes the editor area (forces the Changes detail while maximized; restores on un-maximize). Default keybinding **`⌥⌘E`** toggles maximize/restore while the editor area is visible. |
-| **Hide Editor** (`right-panel-hide`) | Editor title bar (tab strip), after Maximize/Restore | Closes the editor content and keeps the detail (→ *Detail only*). The docked side pane shrinks to the detail width so the freed editor width goes to the **chat**, not the detail. Always shown and always enabled, regardless of whether a detail panel is currently visible. |
+| **Hide Editor** (`right-panel-hide`) | Editor title bar (tab strip), after Maximize/Restore | Hides the editor content and keeps the detail (→ *Detail only*). The docked side pane shrinks to the detail width so the freed editor width goes to the **chat**, not the detail. Always shown and always enabled, regardless of whether a detail panel is currently visible. |
 | **Show Editor** (`right-panel-show`) | Editor title bar (tab strip), same slot as Hide Editor | Reveals the (possibly empty) editor content again. Always shown whenever the editor area is closed, regardless of the active tab's detail support. |
 | **Collapse All Diffs** | Changes editor header, primary inline | Collapses every file in the Changes multi-diff (`SessionChangesEditor.collapseAllDiffs`). |
 | **`+` Add Tab** | End of the tab strip | Opens the Add Tab menu (Browser `⇧⌘K B`; Search `⌘K S` for workspace-backed sessions; a **Changes** entry when the Changes editor tab is absent, and a **Files** entry `⌘K B` when the Files tab is absent — both for any workspace session). Restored managed Changes/Files tabs are inserted at the **end** of the tab strip. Search opens a new Search editor and is unavailable for Quick Chats. **Hidden when the editor area is closed.** |
@@ -171,4 +171,4 @@ Concrete transitions and regressions belong in the layout-controller and desktop
 
 ## 9. Implementation
 
-The workbench composition lives under `browser/`. Desktop strategies and their tests live under `contrib/layout/browser/desktop/` and `contrib/layout/test/browser/`.
+The workbench composition lives under `browser/`. Part implementations and their owned components/styles are grouped in `browser/parts/sessions/`, `editor/`, `panel/`, `sidebar/` and the existing Activity Bar, Auxiliary Bar and Title Bar folders. Desktop strategies and their tests live under `contrib/layout/browser/desktop/` and `contrib/layout/test/browser/`.

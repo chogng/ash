@@ -115,7 +115,8 @@ import { BrowserTextMateService } from '../../workbench/services/textMate/browse
 import { ITextMateService } from '../../workbench/services/textMate/common/textMateService.js';
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
-import { EditorPart, IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
+import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
+import { EditorPart } from './parts/editor/editorPart.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
@@ -188,9 +189,9 @@ import { SessionsConfiguration, type SessionsLayoutStyle } from '../common/confi
 import { SessionsManagementService } from "../services/sessions/browser/sessionsManagementService.js";
 import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
+import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
 import { registerLayoutActions } from './layoutActions.js';
-import { DesktopLayoutController } from '../contrib/layout/browser/desktopLayoutController.js';
-import { PanelPart } from './parts/panelPart.js';
+import { PanelPart } from './parts/panel/panelPart.js';
 import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
 import { installWorkbenchServiceContributions } from '../../workbench/browser/workbenchServiceContributions.js';
 import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
@@ -199,11 +200,9 @@ import { ActivityBarPart } from './parts/activitybar/activityBarPart.js';
 import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompositePart.js';
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
-import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
-import { LibraryPart } from '../contrib/library/browser/libraryPage.js';
-import { CreatorPart } from '../contrib/creator/browser/creatorPage.js';
+import { SessionsPart, type SessionsPartOptions } from "./parts/sessions/sessionsPart.js";
 import { CreatorMode } from '../contrib/creator/common/creator.js';
-import { SidebarPart } from "./parts/sidebarPart.js";
+import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebarPart.js";
 import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
@@ -475,14 +474,11 @@ export abstract class Workbench extends Disposable {
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
-		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode, sessions, view, teams, quickInputService, async () => {
+		this._register(registerSessionsNavigation(async () => {
 			const catalog = await options.api.session.listAgents();
-			return catalog.agents.map(agent => ({
-				name: agent.name,
-				description: agent.description,
-				role: { type: 'exact' as const, name: agent.name, source: agent.source },
-			}));
+			return catalog.agents.map(agent => ({ name: agent.name, description: agent.description, role: { type: 'exact' as const, name: agent.name, source: agent.source } }));
 		}));
+		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode));
 		const recoveredDrafts = migrateNewChatDraftState(storage);
 		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
 			const version = value as AssetVersion;
@@ -621,15 +617,11 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		const library = this._register(services.createInstance(LibraryPart, this.domNode));
-		const creator = this._register(services.createInstance(CreatorPart, this.domNode));
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			['activitybar', activitybar],
 			["sidebar", sidebar],
 			["sessions", sessionsPart],
-			['library', library],
-			['creator', creator],
 			['editor', editor],
 			["auxiliarybar", auxiliarybar],
 			['panel', panel],
@@ -640,8 +632,6 @@ export abstract class Workbench extends Disposable {
 				void views.openViewContainer(event.compositeId, true).catch(error => notificationService.error(String(error)));
 			}));
 		}
-		const layoutController = this._register(services.createInstance(DesktopLayoutController, sidebar, library, creator));
-		layoutController.start();
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
 		}));
@@ -661,8 +651,9 @@ export abstract class Workbench extends Disposable {
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
+		const entryLayout = services.get(ISessionsLayoutService);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.whenRestored = Promise.all([keybindingsReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, layoutController, contributions, storage, commandService, recoveredDrafts));
+		this.whenRestored = Promise.all([keybindingsReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
@@ -685,7 +676,7 @@ export abstract class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, configurationService: ConfigurationService, ownerWindow: Window, layoutController: DesktopLayoutController, contributions: WorkbenchContributionHost, storage: IStorageService, commands: ICommandService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
+	private async initialize(view: SessionsService, configurationService: ConfigurationService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
 		await configurationService.reloadConfiguration();
 		await view.initialize();
 		if (this.isDisposed) return;
@@ -698,14 +689,7 @@ export abstract class Workbench extends Disposable {
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
 		view.activateSelection(selected);
-		const previousActivity = storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE);
-		if (previousActivity === 'design') { await commands.executeCommand('sessions.creator.openMode', CreatorMode.Design); }
-		if (previousActivity === 'library' || previousActivity === 'creator' || previousActivity === 'colab') {
-			await commands.executeCommand(`sessions.open.${previousActivity === 'colab' ? 'teams' : previousActivity}`);
-		}
-		storage.remove('sessions.activityBar.activePage', StorageScope.WORKSPACE);
-		await layoutController.whenSettled();
-		await layoutController.restorePrimaryPage();
+		await entryLayout.restore();
 		if (this.isDisposed) return;
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
@@ -735,7 +719,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setLayoutStyle(style: SessionsLayoutStyle): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
-	setPartAvailable(partId: 'sessions' | 'library' | 'creator' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;
+	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;
 	updateParts(update: () => void): void;
 	showPart(partId: SessionsPartId): void;
 	hidePart(partId: SessionsPartId): void;

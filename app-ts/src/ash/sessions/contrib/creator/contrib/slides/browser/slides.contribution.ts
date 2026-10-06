@@ -3,7 +3,7 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
 import { CreatorFrameNavigator } from '../../../browser/creatorFrameNavigator.js';
-import { CreatorModes } from '../../../browser/creatorWorkspace.js';
+import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
 import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
 
 class SlidesWorkspace extends CreatorCanvasWorkspace {
@@ -35,7 +35,7 @@ class SlidesWorkspace extends CreatorCanvasWorkspace {
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.pages.setVisible(visible); }
 }
 
-CreatorModes.set(CreatorMode.Slides, {
+registerCreatorMode({
 	id: CreatorMode.Slides,
 	title: getCreatorModeTitle(CreatorMode.Slides),
 	description: localize('sessions.creator.slides.description', 'Build a slide deck, arrange pages and present your work.'),

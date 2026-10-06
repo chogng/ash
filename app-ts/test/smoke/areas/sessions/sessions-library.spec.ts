@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0, 0, 0, 244, 34, 127, 138, 0, 0, 0, 14, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 4, 1, 16, 248, 3, 253, 78, 149, 193, 111, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
 const longName = 'library-secondary-product-photography-for-the-autumn-brand-campaign-and-design-reference.png';
 
-test('Sessions Library opens a retained page with accessible browsing controls', async ({ application, target, workbench }) => {
+test('Sessions Library coordinates independent container Views and a retained browsing editor', async ({ application, target, workbench }) => {
 	let page = workbench.page;
 	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
 	else {
@@ -16,10 +16,15 @@ test('Sessions Library opens a retained page with accessible browsing controls',
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	const library = page.locator('.ash-library');
 	await expect(library).toBeVisible();
-	await expect(page.locator('[data-part="editor"]')).toBeHidden();
-	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toHaveCount(0);
+	await expect(page.locator('[data-part="editor"]')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"] [data-view-id="sessions.library.navigation.view"]')).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"] [data-view-id="sessions.library.details.view"]')).toBeVisible();
+	await expect(library.locator('.ash-library-sidebar, .ash-library-details')).toHaveCount(0);
+	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toHaveCount(1);
+	await expect(page.locator('[data-part="library"], [data-part="creator"]')).toHaveCount(0);
 	await expect(library.getByRole('heading', { name: 'All', exact: true })).toBeVisible();
-	const categories = library.getByRole('navigation', { name: 'Library categories' });
+	const categories = page.locator('[data-part="sidebar"]').getByRole('navigation', { name: 'Library categories' });
 	await categories.getByRole('button', { name: 'All', exact: true }).focus();
 	await page.keyboard.press('ArrowDown');
 	await expect(categories.getByRole('button', { name: 'Favorites', exact: true })).toBeFocused();
@@ -50,7 +55,7 @@ test('Sessions Library opens a retained page with accessible browsing controls',
 		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'))!.setSize(640, 780); });
 	}
 	await expect(library).toHaveClass(/narrow/);
-	await expect.poll(() => library.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+	await expect.poll(() => library.evaluate(element => [...element.querySelectorAll<HTMLElement>('*')].filter(child => child.scrollWidth > child.clientWidth && getComputedStyle(child).overflowX === 'visible').map(child => ({ className: child.className, width: child.clientWidth, contentWidth: child.scrollWidth })))).toEqual([]);
 	if (target.appServerMode === 'disabled') {
 		await expect(library.getByRole('status')).toContainText('Could not load the library');
 		await library.getByRole('button', { name: 'Refresh', exact: true }).click();
@@ -80,7 +85,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await expect.poll(() => library.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 	await expect.poll(() => item.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
 	await item.click();
-	const details = library.getByRole('complementary', { name: 'Asset details' });
+	const details = page.locator('[data-part="auxiliarybar"]').getByRole('complementary', { name: 'Asset details' });
 	await expect(details).toContainText('file-upload:/library-product.png');
 	await details.getByRole('button', { name: 'Add to favorites', exact: true }).click();
 	await expect(details.getByRole('button', { name: 'Remove from favorites', exact: true })).toBeEnabled();
@@ -93,7 +98,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await membership.check();
 	await expect(membership).toBeChecked();
 	await expect(membership).toBeEnabled();
-	await library.getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
+	await page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
 	await expect(library.getByRole('listitem')).toHaveCount(1);
 	await library.getByRole('searchbox').fill('no match');
 	await expect(library.getByRole('listitem')).toHaveCount(0);
@@ -103,10 +108,11 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await page.reload();
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await expect(library).toHaveClass(/list-view/);
-	await library.getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
+	await page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
 	await expect(item).toBeVisible();
 	await item.focus();
 	await page.keyboard.press('Enter');
+	await expect(item).toBeFocused();
 	await expect(details.getByRole('button', { name: 'Remove from favorites', exact: true })).toBeEnabled();
 	await page.keyboard.press('Alt+F2');
 	const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
@@ -115,7 +121,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await page.keyboard.press('Escape');
 	await expect(item).toBeFocused();
 	await library.getByRole('button', { name: 'Delete collection', exact: true }).click();
-	await expect(library.getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true })).toHaveCount(0);
+	await expect(page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true })).toHaveCount(0);
 	await expect(item).toBeVisible();
 	await item.click();
 	await details.getByRole('button', { name: 'Add to conversation', exact: true }).click();

@@ -2,7 +2,7 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { CreatorModes } from '../../../browser/creatorWorkspace.js';
+import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
 import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
 
 class DesignWorkspace extends CreatorCanvasWorkspace {
@@ -14,7 +14,7 @@ class DesignWorkspace extends CreatorCanvasWorkspace {
 	}
 }
 
-CreatorModes.set(CreatorMode.Design, {
+registerCreatorMode({
 	id: CreatorMode.Design,
 	title: getCreatorModeTitle(CreatorMode.Design),
 	description: localize('sessions.creator.design.description', 'Design interfaces, components and vector artwork.'),

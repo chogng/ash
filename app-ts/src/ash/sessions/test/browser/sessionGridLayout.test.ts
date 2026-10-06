@@ -5,7 +5,7 @@ import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import { getWindowById } from '../../../base/browser/window.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
-import { SessionGridLayout } from '../../browser/parts/sessionGridLayout.js';
+import { SessionGridLayout } from '../../browser/parts/sessions/sessionGridLayout.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';

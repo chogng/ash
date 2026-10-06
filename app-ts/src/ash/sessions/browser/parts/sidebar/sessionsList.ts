@@ -1,12 +1,12 @@
 import "./media/sessionsControls.css";
 import "./media/sessionsList.css";
-import { addDisposableListener, h } from "../../../base/browser/dom.js";
-import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
-import { Lxicon } from '../../../base/common/lxicons.js';
-import { localize } from '../../../nls.js';
-import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../base/common/lifecycle.js";
-import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { localize } from '../../../../nls.js';
+import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
+import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends Disposable {

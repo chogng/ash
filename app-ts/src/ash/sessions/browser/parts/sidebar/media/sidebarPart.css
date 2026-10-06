@@ -3,19 +3,20 @@
   background: var(--ash-side-bar-background);
 }
 
-.ash-workbench-sidebar > .ash-workbench-part-content > .ash-sessions-list {
+.ash-sessions-navigation-view {
+  display: flex;
+  flex-direction: column;
+}
+.ash-sessions-navigation-view > .ash-sessions-list,
+.ash-sessions-navigation-view > .ash-teams-panel {
   min-height: 0;
   flex: 1 1 auto;
 }
-
-.ash-workbench-sidebar > .ash-workbench-part-content > .ash-sessions-list[hidden] { display: none; }
 
 .ash-sessions-window .ash-workbench-sidebar > .ash-workbench-part-content > .ash-pane-composite {
 	flex: 1;
 	min-height: 0;
 }
-
-.ash-workbench-sidebar > .ash-workbench-part-content.empty-page > :not(.ash-sessions-activity-host) { visibility: hidden; }
 
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host {
 	flex: 0 0 auto;

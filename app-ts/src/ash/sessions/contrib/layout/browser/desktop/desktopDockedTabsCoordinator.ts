@@ -16,7 +16,7 @@ export class DesktopDockedTabsCoordinator {
 				await group.replaceEditor(input, changes);
 			}
 		}
-		const inputs = this.editor.groups.flatMap(group => group.inputs);
+		const inputs = this.editor.groups.flatMap(group => group.inputs).filter(input => input.resource.scheme !== 'ash-creator' && input.resource.scheme !== 'ash-library');
 		if (inputs.length === 0 || detailsOnly) {
 			if (!inputs.some(input => input.resource.scheme === 'ash-sessions-files')) {
 				const files = new EmptyFileEditorInput();

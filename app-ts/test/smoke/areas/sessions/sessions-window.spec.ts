@@ -300,7 +300,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await openDesign();
 	await expect(canvas).toBeVisible();
 	await expect(canvas).toHaveCSS('display', 'flex');
-	await expect(page.locator('[data-part="creator"]').getByRole('region', { name: 'Design canvas' })).toBeVisible();
+	await expect(page.locator('[data-part="editor"]').getByRole('region', { name: 'Design canvas' })).toBeVisible();
 	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 	await expect(page.locator('[data-part="sidebar"]').getByRole('tree', { name: 'Layers' })).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
@@ -400,7 +400,7 @@ test('Sessions Design floating tools draw, edit motion and expose reusable code'
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const tools = canvas.locator('.ash-design-tools-widget');
-	const codeTabs = page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { includeHidden: true });
+	const codeTabs = page.locator('[data-part="editor"] .ash-editor-group:not(.ash-editor-group-locked) .ash-editor-title-control').getByRole('tab', { includeHidden: true });
 	const codeTabsBefore = await codeTabs.allTextContents();
 	const viewport = canvas.locator('.ash-canvas-viewport');
 	const viewportBounds = (await viewport.boundingBox())!;
@@ -1017,7 +1017,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('design.ash-design');
 		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 	}
-	await expect(page.locator('[data-part="editor"] [role="tab"]')).toContainText('design.ash-design');
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design');
 	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
 	const saved = await readFile(join(directory, 'design.ash-design/manifest.json'), 'utf8');
 	const designDocument = parseDesignDocument(saved);
@@ -1178,7 +1178,7 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 	await canvas.focus(); await page.keyboard.press('ControlOrMeta+s');
 	await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('migrated.ash-design');
 	await dialog.getByRole('button', { name: 'OK', exact: true }).click();
-	await expect(page.locator('[data-part="editor"] [role="tab"]')).toContainText('migrated.ash-design');
+	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved migrated.ash-design');
 	const migrated = await page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		const design = await folder.getDirectoryHandle('migrated.ash-design');
@@ -1595,7 +1595,8 @@ test('Sessions new session keeps the welcome composer stable across frames', asy
 		await page.setViewportSize([{ width: 1793, height: 1333 }, { width: 1280, height: 800 }, { width: 760, height: 600 }][session]!);
 		const navigation = page.locator('.ash-sessions-activity-content');
 		if (session === 2) {
-			await navigation.getByRole('button', { name: 'Design', exact: true }).click();
+			await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
+			await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 		}
 		await navigation.getByRole('button', { name: session === 1 ? 'Code' : /^Chat(?:\.|$)/u, exact: true }).click();
 		const chat = page.locator('.ash-sessions-chat-slot .ash-chat:visible').first();
@@ -1707,7 +1708,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(chat.locator('.chat-composer')).toBeVisible();
-	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
+	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
 
 test('Sessions input card keeps a visible border without shadow or focus outline in high contrast', async ({ application, target, workbench }) => {
@@ -1933,8 +1934,9 @@ test('Browser Code Sessions Activity Bar centers icons and changes size and posi
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-	const design = activityBar.getByRole('button', { name: 'Design' });
+	const design = activityBar.getByRole('button', { name: 'Creator', exact: true });
 	await design.click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(design.locator('svg')).toHaveAttribute('data-ash-icon-id', 'symbol-color-filled');
 	await expect(design).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();

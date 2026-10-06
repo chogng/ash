@@ -300,7 +300,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	const services = new InstantiationService();
-	let preferencesEditorTarget: string | undefined;
+	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	using keybindingFiles = new KeybindingTestServices();
@@ -2071,12 +2071,12 @@ test('A manual model choice stays with its chat while later new chats use the ne
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
-	const discovered: Awaited<ReturnType<IRendererHost['model']['listProviderModels']>>[number] = {
+	const discovered = createTestModel({
 		model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model', discovered: true,
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [], fastEnabled: false,
 		autoCompactTokenLimit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown' },
 		supportedReasoningEfforts: [], modelReasoningEffort: null, defaultPersonality: null,
-	};
+	});
 	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
 	const fake = fakeApi();
 	let loads = 0;

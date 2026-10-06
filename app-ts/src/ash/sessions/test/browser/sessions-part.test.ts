@@ -30,7 +30,7 @@ import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
-import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
+import type { SessionsPartOptions } from '../../browser/parts/sessions/sessionsPart.js';
 import { ChatAttachmentModel } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 
@@ -48,7 +48,7 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
+const { SessionsPart } = await import("../../browser/parts/sessions/sessionsPart.js");
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');

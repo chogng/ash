@@ -1,21 +1,21 @@
-import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
+import type { ChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import "./media/sessionsPart.css";
-import { Dimension } from "../../../base/browser/dom.js";
-import type { ICommandService } from "../../../platform/commands/common/commands.js";
-import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
-import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
-import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
-import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import { WorkbenchPart } from "../../../workbench/browser/part.js";
-import type { SessionsViewSelection } from "../../services/sessions/browser/sessionsService.js";
+import { Dimension } from "../../../../base/browser/dom.js";
+import type { ICommandService } from "../../../../platform/commands/common/commands.js";
+import type { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import type { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
+import type { IChatService } from "../../../../workbench/services/chat/common/chatService.js";
+import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
+import { WorkbenchPart } from "../../../../workbench/browser/part.js";
+import type { SessionsViewSelection } from "../../../services/sessions/browser/sessionsService.js";
 import { SessionsChatView, type SessionsChatViewOptions } from "./sessionsChatView.js";
-import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import type { ChatWidgetModel } from '../chatWidgetModel.js';
-import type { INotificationService } from '../../../platform/notification/common/notification.js';
-import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ChatWidgetModel } from '../../chatWidgetModel.js';
+import type { INotificationService } from '../../../../platform/notification/common/notification.js';
+import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;

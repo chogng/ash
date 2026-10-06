@@ -51,6 +51,7 @@ export type EditorPartChangeEvent =
 	| { readonly kind: 'groupAdded'; readonly group: EditorGroupState }
 	| { readonly kind: 'groupRemoved'; readonly groupId: EditorGroupId }
 	| { readonly kind: 'activeGroupChanged'; readonly groupId: EditorGroupId }
+	| { readonly kind: 'groupVisibilityChanged'; readonly groupId: EditorGroupId; readonly visible: boolean }
 	| { readonly kind: 'modalEditorChanged'; readonly visible: boolean }
 	| { readonly kind: 'groupChanged'; readonly groupId: EditorGroupId; readonly event: EditorGroupChangeEvent };
 

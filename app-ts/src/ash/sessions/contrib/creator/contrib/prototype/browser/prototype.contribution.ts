@@ -3,7 +3,7 @@ import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
 import { CreatorFrameNavigator } from '../../../browser/creatorFrameNavigator.js';
-import { CreatorModes } from '../../../browser/creatorWorkspace.js';
+import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
 import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
 import { DesignMode } from '../../../common/config/editorConfiguration.js';
 
@@ -23,7 +23,7 @@ class PrototypeWorkspace extends CreatorCanvasWorkspace {
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.screens.setVisible(visible); }
 }
 
-CreatorModes.set(CreatorMode.Prototype, {
+registerCreatorMode({
 	id: CreatorMode.Prototype,
 	title: getCreatorModeTitle(CreatorMode.Prototype),
 	description: localize('sessions.creator.prototype.description', 'Design screens and walk through their sequence.'),

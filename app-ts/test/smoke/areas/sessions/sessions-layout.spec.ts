@@ -133,9 +133,10 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await expect(sidebar).toBeHidden();
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
-	await expect(sidebar).toBeHidden();
-	await expect(auxiliarybar).toBeHidden();
-	// The Library editor has no sidebar; reopen Code to check the retained visibility preference.
+	await expect(sidebar).toBeVisible();
+	await expect(sidebar.getByRole('navigation', { name: 'Library categories' })).toBeVisible();
+	await expect(auxiliarybar).toBeVisible();
+	// Each mode keeps its visibility preference; returning to Code restores its hidden sidebar.
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeHidden();
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
@@ -155,7 +156,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await page.setViewportSize({ width: 1_900, height: 950 });
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const panes = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot');
-	const add = page.locator('.ash-sessions-list-controls').getByRole('button', { name: 'New session', exact: true });
+	const add = page.locator('.ash-sessions-list-controls').getByRole('button', { name: 'New Session', exact: true });
 	const typeDraft = async (text: string): Promise<void> => {
 		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.waitForEditorFocus();
