@@ -136,6 +136,50 @@ pub struct PromptImageResizeLimits {
     pub max_patches: usize,
 }
 
+impl PromptImageResizeLimits {
+    pub const fn new(max_dimension: u32, max_patches: usize) -> Self {
+        Self {
+            max_dimension,
+            max_patches,
+        }
+    }
+}
+
+/// Resize budgets for each caller-selected prompt image detail. The invocation owner
+/// chooses these limits; preparation never rewrites the durable source image.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PromptImageDetailLimits {
+    pub auto: PromptImageResizeLimits,
+    pub low: PromptImageResizeLimits,
+    pub high: PromptImageResizeLimits,
+    pub original: PromptImageResizeLimits,
+}
+
+impl PromptImageDetailLimits {
+    pub const fn new(
+        auto: PromptImageResizeLimits,
+        low: PromptImageResizeLimits,
+        high: PromptImageResizeLimits,
+        original: PromptImageResizeLimits,
+    ) -> Self {
+        Self {
+            auto,
+            low,
+            high,
+            original,
+        }
+    }
+}
+
+impl Default for PromptImageDetailLimits {
+    fn default() -> Self {
+        const LOW: PromptImageResizeLimits = PromptImageResizeLimits::new(512, 256);
+        const STANDARD: PromptImageResizeLimits =
+            PromptImageResizeLimits::new(MAX_DIMENSION, 1_536);
+        Self::new(STANDARD, LOW, STANDARD, STANDARD)
+    }
+}
+
 /// Metadata retained when transcoding an image.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ImageMetadataPolicy {

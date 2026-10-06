@@ -5,6 +5,7 @@ mod model;
 mod money;
 mod pricing;
 mod rate_card;
+mod summary;
 
 pub use error::AccountingError;
 pub use model::ApiOperationId;
@@ -34,3 +35,5 @@ pub use rate_card::RateCardRevision;
 #[cfg(test)]
 #[path = "accounting_tests.rs"]
 mod tests;
+
+pub use summary::checked_record_reference_cost;

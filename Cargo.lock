@@ -688,6 +688,7 @@ dependencies = [
  "ash-uds",
  "ash-utils-absolute-path",
  "ash-utils-home-dir",
+ "ash-utils-image",
  "ash-utils-path-uri",
  "ash-utils-sleep-inhibitor",
  "ash-voice-host",
@@ -1306,6 +1307,7 @@ dependencies = [
  "ash-context-engine",
  "ash-protocol",
  "ash-thread-store",
+ "ash-utils-image",
  "serde_json",
 ]
 
@@ -2278,6 +2280,7 @@ dependencies = [
  "ash-response-debug-context",
  "ash-secrets",
  "ash-supergrok",
+ "ash-utils-image",
  "ash-utils-output-truncation",
  "ash-websocket-client",
  "base64 0.22.1",

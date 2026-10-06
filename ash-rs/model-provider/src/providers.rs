@@ -7,7 +7,7 @@ use ash_client::ResolvedApiTarget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_protocol::Model;
-use ash_protocol::ModelImageInputPolicy;
+use ash_utils_image::PromptImageDetailLimits;
 use model_provider_info::ApiProfile;
 use model_provider_info::NormalizedModelProviderConfig;
 use model_provider_info::ProviderAdapter as ProviderAdapterKind;
@@ -33,8 +33,8 @@ pub(crate) trait ProviderAdapter: Send + Sync {
     fn endpoint(&self) -> ApiEndpoint;
 
     /// Selects image limits from the model already resolved for this invocation.
-    fn image_input_policy(&self, _: &Model) -> ModelImageInputPolicy {
-        ModelImageInputPolicy::default()
+    fn image_input_policy(&self, _: &Model) -> PromptImageDetailLimits {
+        PromptImageDetailLimits::default()
     }
 
     /// Returns provider-owned non-secret headers applied to every direct API request.

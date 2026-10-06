@@ -1,3 +1,6 @@
+//! Model catalog parameter declarations and their structural invariants.
+//! Selected invocation values belong to `ModelRequest`, not this specification.
+
 use crate::CapabilitySupport;
 use crate::ModelId;
 use crate::ModelSpeed;

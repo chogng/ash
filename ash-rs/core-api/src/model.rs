@@ -4,12 +4,12 @@ use ash_context_engine::ContextBudget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_protocol::ModelBillingScope;
-use ash_protocol::ModelImageInputPolicy;
 use ash_protocol::ModelRef;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
 use ash_protocol::ModelStreamEvent;
 use ash_protocol::ReasoningConfig;
+use ash_utils_image::PromptImageDetailLimits;
 
 /// Receives provider-neutral incremental output for one model invocation.
 ///
@@ -75,8 +75,8 @@ pub trait ModelService: Send + Sync {
     fn image_input_policy(
         &self,
         _: ModelSelection<'_>,
-    ) -> Result<ModelImageInputPolicy, CoreError> {
-        Ok(ModelImageInputPolicy::default())
+    ) -> Result<PromptImageDetailLimits, CoreError> {
+        Ok(PromptImageDetailLimits::default())
     }
 
     /// Reports whether the selected immutable model can measure input locally or remotely.

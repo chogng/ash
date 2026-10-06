@@ -13,8 +13,8 @@ use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_context_engine::ContextTokenMeasurementSource;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::Model;
-use ash_protocol::ModelImageInputLimits;
-use ash_protocol::ModelImageInputPolicy;
+use ash_utils_image::PromptImageDetailLimits;
+use ash_utils_image::PromptImageResizeLimits;
 use model_provider_info::InputTokenCountProfile;
 use model_provider_info::NormalizedModelProviderConfig;
 
@@ -36,14 +36,14 @@ impl OpenAiAdapter {
 }
 
 impl ProviderAdapter for OpenAiAdapter {
-    fn image_input_policy(&self, model: &Model) -> ModelImageInputPolicy {
-        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
-        const HIGH: ModelImageInputLimits = ModelImageInputLimits::new(2_048, 2_440);
-        const ORIGINAL: ModelImageInputLimits = ModelImageInputLimits::new(6_000, 10_000);
+    fn image_input_policy(&self, model: &Model) -> PromptImageDetailLimits {
+        const LOW: PromptImageResizeLimits = PromptImageResizeLimits::new(512, 256);
+        const HIGH: PromptImageResizeLimits = PromptImageResizeLimits::new(2_048, 2_440);
+        const ORIGINAL: PromptImageResizeLimits = PromptImageResizeLimits::new(6_000, 10_000);
         if model.capabilities.image_detail_original == CapabilitySupport::Supported {
-            ModelImageInputPolicy::new(ORIGINAL, LOW, HIGH, ORIGINAL)
+            PromptImageDetailLimits::new(ORIGINAL, LOW, HIGH, ORIGINAL)
         } else {
-            ModelImageInputPolicy::new(HIGH, LOW, HIGH, HIGH)
+            PromptImageDetailLimits::new(HIGH, LOW, HIGH, HIGH)
         }
     }
 

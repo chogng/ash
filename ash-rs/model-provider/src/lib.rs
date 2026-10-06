@@ -4,6 +4,7 @@ mod auth;
 mod catalog;
 mod diagnostics;
 mod error;
+mod image_request;
 mod lazy_client;
 mod provider;
 mod providers;

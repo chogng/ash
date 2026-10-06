@@ -9,8 +9,8 @@ use ash_client::ResolvedApiTarget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_protocol::Model;
-use ash_protocol::ModelImageInputLimits;
-use ash_protocol::ModelImageInputPolicy;
+use ash_utils_image::PromptImageDetailLimits;
+use ash_utils_image::PromptImageResizeLimits;
 use model_provider_info::InputTokenCountProfile;
 use model_provider_info::NormalizedModelProviderConfig;
 
@@ -38,10 +38,10 @@ impl AnthropicAdapter {
 }
 
 impl ProviderAdapter for AnthropicAdapter {
-    fn image_input_policy(&self, _: &Model) -> ModelImageInputPolicy {
-        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
-        const STANDARD: ModelImageInputLimits = ModelImageInputLimits::new(1_568, 1_120);
-        ModelImageInputPolicy::new(STANDARD, LOW, STANDARD, STANDARD)
+    fn image_input_policy(&self, _: &Model) -> PromptImageDetailLimits {
+        const LOW: PromptImageResizeLimits = PromptImageResizeLimits::new(512, 256);
+        const STANDARD: PromptImageResizeLimits = PromptImageResizeLimits::new(1_568, 1_120);
+        PromptImageDetailLimits::new(STANDARD, LOW, STANDARD, STANDARD)
     }
 
     fn endpoint(&self) -> ApiEndpoint {

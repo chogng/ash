@@ -6,18 +6,18 @@ use ash_attachments::Attachments;
 use ash_protocol::ContentPart;
 use ash_protocol::ImageDetail;
 use ash_protocol::InputItem;
-use ash_protocol::ModelImageInputLimits;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
 use ash_protocol::ResponseItem;
 use ash_protocol::StopReason;
+use ash_utils_image::PromptImageResizeLimits;
 
 use super::AttachmentModelService;
 use crate::ContextTokenMeasurementOutcome;
 use crate::CoreError;
-use crate::ModelImageInputPolicy;
 use crate::ModelSelection;
 use crate::ModelService;
+use crate::PromptImageDetailLimits;
 use attachment_store::FileAttachmentStore;
 
 #[test]
@@ -169,8 +169,8 @@ fn selected_model_policy_downsamples_only_the_provider_request_clone() {
         attachment: attachment.clone(),
         detail: ImageDetail::Auto,
     });
-    let limited = ModelImageInputLimits::new(1_000, 1_000);
-    let provider = Arc::new(RecordingModel::with_policy(ModelImageInputPolicy::new(
+    let limited = PromptImageResizeLimits::new(1_000, 1_000);
+    let provider = Arc::new(RecordingModel::with_policy(PromptImageDetailLimits::new(
         limited, limited, limited, limited,
     )));
     let service = AttachmentModelService::new(provider.clone(), attachments.clone());
@@ -217,8 +217,8 @@ fn legacy_inline_data_urls_use_the_same_ephemeral_provider_policy() {
         url: source_url.clone(),
         detail: ImageDetail::Auto,
     });
-    let limited = ModelImageInputLimits::new(1_000, 1_000);
-    let provider = Arc::new(RecordingModel::with_policy(ModelImageInputPolicy::new(
+    let limited = PromptImageResizeLimits::new(1_000, 1_000);
+    let provider = Arc::new(RecordingModel::with_policy(PromptImageDetailLimits::new(
         limited, limited, limited, limited,
     )));
     let service = AttachmentModelService::new(provider.clone(), Arc::new(Attachments::in_memory()));
@@ -254,20 +254,20 @@ fn legacy_inline_data_urls_use_the_same_ephemeral_provider_policy() {
 
 struct RecordingModel {
     request: Mutex<Option<ModelRequest>>,
-    image_policy: ModelImageInputPolicy,
+    image_policy: PromptImageDetailLimits,
 }
 
 impl Default for RecordingModel {
     fn default() -> Self {
         Self {
             request: Mutex::new(None),
-            image_policy: ModelImageInputPolicy::default(),
+            image_policy: PromptImageDetailLimits::default(),
         }
     }
 }
 
 impl RecordingModel {
-    fn with_policy(image_policy: ModelImageInputPolicy) -> Self {
+    fn with_policy(image_policy: PromptImageDetailLimits) -> Self {
         Self {
             request: Mutex::new(None),
             image_policy,
@@ -289,7 +289,7 @@ impl ModelService for RecordingModel {
     fn image_input_policy(
         &self,
         _: ModelSelection<'_>,
-    ) -> Result<ModelImageInputPolicy, CoreError> {
+    ) -> Result<PromptImageDetailLimits, CoreError> {
         Ok(self.image_policy)
     }
 

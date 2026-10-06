@@ -45,11 +45,10 @@ use ash_model_tokenizer::LocalTokenizerService;
 use ash_models_manager::ModelRequirements;
 use ash_models_manager::ModelsManager;
 use ash_models_manager::ModelsManagerError;
-use ash_protocol::CapabilitySupport;
-use ash_protocol::ModelImageInputPolicy;
 use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_secrets::SecretStore;
+use ash_utils_image::PromptImageDetailLimits;
 use model_provider_info::Model;
 use model_provider_info::ModelId;
 use model_provider_info::ModelProviderConfig;
@@ -473,8 +472,9 @@ impl Provider {
                 .or_else(|| model.settings.default_service_tier.clone());
         }
         crate::request_settings::apply_settings(model, self.protocol(), &mut request)?;
-        let _ = request.sanitize_image_details(
-            model.capabilities.image_detail_original == CapabilitySupport::Supported,
+        crate::image_request::normalize_image_details(
+            &mut request,
+            model.capabilities.image_detail_original,
         );
         Ok(request)
     }
@@ -1713,8 +1713,8 @@ impl ModelRuntimeRequest {
 /// changes should affect a later invocation.
 pub trait ModelInvoker: Send + Sync {
     /// Returns image limits belonging to this immutable provider/model selection.
-    fn image_input_policy(&self) -> ModelImageInputPolicy {
-        ModelImageInputPolicy::default()
+    fn image_input_policy(&self) -> PromptImageDetailLimits {
+        PromptImageDetailLimits::default()
     }
 
     fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
@@ -1824,7 +1824,7 @@ struct RegisteredModelInvoker {
 }
 
 impl ModelInvoker for RegisteredModelInvoker {
-    fn image_input_policy(&self) -> ModelImageInputPolicy {
+    fn image_input_policy(&self) -> PromptImageDetailLimits {
         self.provider.adapter.image_input_policy(&self.model)
     }
 

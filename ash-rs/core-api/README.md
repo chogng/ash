@@ -2,7 +2,8 @@
 
 - 定义 `AgentRuntime` 的完整操作：提交、追加输入、交互恢复、取消、派生和恢复。
 - 提供 `ThreadView`、`TurnView`、`SessionView` 只读结果，隐藏命令日志、投递标记和执行器内部状态。
-- 定义模型调用、Hooks、策略评估、浏览器操作和执行观察契约。
+- 定义模型调用、Hooks、策略评估、浏览器操作和执行观察契约。模型图片准备限制复用
+  `ash-utils-image::PromptImageDetailLimits`，不依赖供应商运行时。
 - 定义写租约、工作树绑定、消息 checkpoint 和 Thread 更新接口。
 - 统一接口使用的 `CoreError`，复用现有领域值与存储错误。
 - 允许能力实现依赖契约，不引入 `ash-core` 执行代码。

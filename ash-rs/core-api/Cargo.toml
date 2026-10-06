@@ -10,6 +10,7 @@ name = "core_api"
 doctest = false
 
 [dependencies]
+ash-utils-image = { workspace = true }
 agent-graph-store = { workspace = true }
 ash-action-policy = { workspace = true }
 ash-async-utils = { workspace = true }

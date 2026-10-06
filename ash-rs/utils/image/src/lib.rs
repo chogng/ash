@@ -11,6 +11,7 @@ pub use processing::EncodedImage;
 pub use processing::ImageAnimationPolicy;
 pub use processing::ImageMetadataPolicy;
 pub use processing::ImageSafetyLimits;
+pub use processing::PromptImageDetailLimits;
 pub use processing::PromptImageMode;
 pub use processing::PromptImagePolicy;
 pub use processing::PromptImageResizeLimits;

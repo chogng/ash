@@ -829,7 +829,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 input_estimate.as_ref(),
                 ModelUsageSource::Turn,
             )?;
-            snapshot.reference_cost = snapshot.reference_cost.record_unpriced();
+            snapshot.reference_cost.complete = false;
         }
         ThreadEvent::ModelInvocationRecorded {
             thread_id,
@@ -864,12 +864,13 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     ModelUsageSource::Turn
                 },
             )?;
-            snapshot.reference_cost = snapshot
-                .reference_cost
-                .checked_record(&record.reference_cost)
-                .ok_or_else(|| {
-                    CoreError::Journal("Thread reference cost aggregate is invalid".into())
-                })?;
+            snapshot.reference_cost = ash_model_accounting::checked_record_reference_cost(
+                &snapshot.reference_cost,
+                &record.reference_cost,
+            )
+            .ok_or_else(|| {
+                CoreError::Journal("Thread reference cost aggregate is invalid".into())
+            })?;
         }
         ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
             require_no_command(envelope)?;
@@ -2849,9 +2850,7 @@ fn apply_model_usage(
     input_estimate: Option<&ash_protocol::ModelInputEstimate>,
     source: ModelUsageSource,
 ) -> Result<(), CoreError> {
-    let next_thread_usage = snapshot
-        .usage
-        .checked_record(usage)
+    let next_thread_usage = crate::model_usage::checked_record_usage(&snapshot.usage, usage)
         .ok_or_else(|| CoreError::Journal("Thread model usage aggregate overflowed".into()))?;
     let turn_index = snapshot
         .turns
@@ -2864,9 +2863,7 @@ fn apply_model_usage(
             "model usage requires a Turn that has started execution".into(),
         ));
     }
-    let next_turn_usage = turn
-        .usage
-        .checked_record(usage)
+    let next_turn_usage = crate::model_usage::checked_record_usage(&turn.usage, usage)
         .ok_or_else(|| CoreError::Journal("Turn model usage aggregate overflowed".into()))?;
     let context_usage = model_context_usage(usage, input_estimate)?;
     let next_calibrations = match input_estimate {

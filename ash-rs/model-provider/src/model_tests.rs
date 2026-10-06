@@ -569,7 +569,7 @@ fn registered_openai_compatible_model_propagates_wire_stream_events() {
 #[test]
 fn image_input_policy_belongs_to_the_resolved_model_invoker() {
     use ash_protocol::ImageDetail;
-    use ash_protocol::ModelImageInputLimits;
+    use ash_utils_image::PromptImageResizeLimits;
 
     let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(FailingTransport));
     for (provider, model, auto, high, original) in [
@@ -625,8 +625,13 @@ fn image_input_policy_belongs_to_the_resolved_model_invoker() {
             (ImageDetail::Original, original),
         ] {
             assert_eq!(
-                policy.limits_for(detail),
-                ModelImageInputLimits::new(dimension, patches),
+                match detail {
+                    ImageDetail::Auto => policy.auto,
+                    ImageDetail::Low => policy.low,
+                    ImageDetail::High => policy.high,
+                    ImageDetail::Original => policy.original,
+                },
+                PromptImageResizeLimits::new(dimension, patches),
                 "{provider}/{model}: {detail:?}"
             );
         }

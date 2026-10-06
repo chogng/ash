@@ -68,12 +68,12 @@ use ash_models_manager::ModelsManager;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelBillingScope;
-use ash_protocol::ModelImageInputPolicy;
 use ash_rollout::LocalStateRepository;
 use ash_secrets::FileSecretStore;
 use ash_secrets::SecretStore;
 use ash_skills_extension::BuiltInSkillSource;
 use ash_skills_extension::SkillConfigSnapshotProvider;
+use ash_utils_image::PromptImageDetailLimits;
 use core_api::CoreError;
 use core_api::ModelSelection;
 use core_api::ModelService;
@@ -1776,8 +1776,12 @@ pub fn open_app_server_with_codebase_providers(
         } else {
             server.with_plugins_manager(manager)
         };
-        let policy = ash_core_plugins::EditorExtensionPolicy::open(options.profile_root.join("editor-extension-policy.json"))
-            .map_err(|error| OpenAppServerError(format!("editor extension policy unavailable: {error:?}")))?;
+        let policy = ash_core_plugins::EditorExtensionPolicy::open(
+            options.profile_root.join("editor-extension-policy.json"),
+        )
+        .map_err(|error| {
+            OpenAppServerError(format!("editor extension policy unavailable: {error:?}"))
+        })?;
         server = server.with_editor_extension_policy(Arc::new(policy));
     } else if let Some(client) = plugin_package_service {
         server = server.with_plugin_package_service(client);
@@ -1822,7 +1826,6 @@ pub fn open_app_server_with_codebase_providers(
         }
         if let Some(authority) = &connectors.plugin_authority {
             server = server.with_plugin_authority(authority.clone());
-
         }
         if let Some(oauth) = &connectors.oauth {
             server = server.with_connector_oauth_service(Arc::clone(oauth));
@@ -1831,12 +1834,16 @@ pub fn open_app_server_with_codebase_providers(
             server = server.with_connector_device_oauth_service(Arc::clone(oauth));
         }
     }
-    if has_editor_policy || connector_runtime.as_ref().is_some_and(|runtime| runtime.plugin_authority.is_some()) {
-        let executable = std::env::current_exe()
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-        let directory = executable.parent().ok_or_else(|| {
-            OpenAppServerError("missing product executable directory".into())
-        })?;
+    if has_editor_policy
+        || connector_runtime
+            .as_ref()
+            .is_some_and(|runtime| runtime.plugin_authority.is_some())
+    {
+        let executable =
+            std::env::current_exe().map_err(|error| OpenAppServerError(error.to_string()))?;
+        let directory = executable
+            .parent()
+            .ok_or_else(|| OpenAppServerError("missing product executable directory".into()))?;
         server = server
             .with_extension_host_runtime(
                 Arc::new(ash_editor_extension_host::ProductJavaScriptLauncher::new(
@@ -2366,7 +2373,7 @@ impl ModelService for ConfigBackedModelService {
     fn image_input_policy(
         &self,
         selection: ModelSelection<'_>,
-    ) -> Result<ModelImageInputPolicy, CoreError> {
+    ) -> Result<PromptImageDetailLimits, CoreError> {
         let config = self.config_for_selection(selection)?;
         Ok(self
             .resolver
@@ -2809,7 +2816,7 @@ impl ModelService for ProviderModelService {
     fn image_input_policy(
         &self,
         _: ModelSelection<'_>,
-    ) -> Result<ModelImageInputPolicy, CoreError> {
+    ) -> Result<PromptImageDetailLimits, CoreError> {
         Ok(self.invoker.image_input_policy())
     }
 
@@ -3135,7 +3142,7 @@ impl ModelService for FrozenModelService {
     fn image_input_policy(
         &self,
         _: ModelSelection<'_>,
-    ) -> Result<ModelImageInputPolicy, CoreError> {
+    ) -> Result<PromptImageDetailLimits, CoreError> {
         self.provider
             .image_input_policy(ModelSelection::ConfiguredDefault)
     }

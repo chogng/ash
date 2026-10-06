@@ -166,7 +166,7 @@ pub use context::HarnessInstruction;
 pub use context::InstructionActivation;
 pub use context::InstructionScope;
 
-use ash_protocol::ModelImageInputPolicy;
+use ash_utils_image::PromptImageDetailLimits;
 use core_api::ActionPolicyService;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookDecision;
@@ -208,3 +208,5 @@ pub(crate) use core_api::StartThreadRequest;
 pub(crate) use core_api::SteerTurnRequest;
 
 pub use turn_policy::ApprovalReviewerFactory;
+
+mod model_usage;

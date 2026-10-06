@@ -54,16 +54,10 @@ impl AttachmentModelService {
                             .map_err(|error| CoreError::Context(error.to_string()))?,
                     }),
                     ContentPart::ImageAttachment { attachment, detail } => {
-                        let limits = policy.limits_for(*detail);
+                        let limits = image_limits(policy, *detail);
                         let data_url = self
                             .attachments
-                            .materialize_data_url_with_limits(
-                                attachment,
-                                ash_utils_image::PromptImageResizeLimits {
-                                    max_dimension: limits.max_dimension,
-                                    max_patches: limits.max_patches,
-                                },
-                            )
+                            .materialize_data_url_with_limits(attachment, limits)
                             .map_err(|error| CoreError::Context(error.to_string()))?;
                         Some(ContentPart::ImageUrl {
                             url: data_url,
@@ -71,16 +65,10 @@ impl AttachmentModelService {
                         })
                     }
                     ContentPart::ImageUrl { url, detail } if is_data_url(url) => {
-                        let limits = policy.limits_for(*detail);
+                        let limits = image_limits(policy, *detail);
                         let data_url = self
                             .attachments
-                            .prepare_data_url_with_limits(
-                                url,
-                                ash_utils_image::PromptImageResizeLimits {
-                                    max_dimension: limits.max_dimension,
-                                    max_patches: limits.max_patches,
-                                },
-                            )
+                            .prepare_data_url_with_limits(url, limits)
                             .map_err(|error| CoreError::Context(error.to_string()))?;
                         Some(ContentPart::ImageUrl {
                             url: data_url,
@@ -95,6 +83,18 @@ impl AttachmentModelService {
             }
         }
         Ok(materialized)
+    }
+}
+
+fn image_limits(
+    policy: ash_utils_image::PromptImageDetailLimits,
+    detail: ash_protocol::ImageDetail,
+) -> ash_utils_image::PromptImageResizeLimits {
+    match detail {
+        ash_protocol::ImageDetail::Auto => policy.auto,
+        ash_protocol::ImageDetail::Low => policy.low,
+        ash_protocol::ImageDetail::High => policy.high,
+        ash_protocol::ImageDetail::Original => policy.original,
     }
 }
 
@@ -133,7 +133,7 @@ impl ModelService for AttachmentModelService {
     fn image_input_policy(
         &self,
         selection: ModelSelection<'_>,
-    ) -> Result<crate::ModelImageInputPolicy, CoreError> {
+    ) -> Result<crate::PromptImageDetailLimits, CoreError> {
         self.inner.image_input_policy(selection)
     }
 

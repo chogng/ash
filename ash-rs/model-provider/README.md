@@ -213,3 +213,8 @@ Call/Result 历史的请求返回 unavailable。DeepSeek 的本地 tokenizer ada
 `ProviderCredentialService` 从一次密钥读取分别生成调用和计数凭据。Google `countTokens` 使用 `x-goog-api-key`，不能复制生成接口的 Bearer 头；计数地址仍由明确配置决定。品牌和 OAuth 设备标识由所属 provider／登录能力提供，协议头统一由 `ash-api` 校验合并。
 
 WebSocket 工厂要求调用者传入共享网络策略的 connector，不另建代理/TLS 规则。语音采集、播放及把工具交给授权执行器属于 host；API 只提供配置、收发与状态。协议和验证边界见[端点实现](../../docs/ash-api.md#46-端点归属与-websocket-实现)。
+
+模型输入的最终图片清晰度处理由 `src/image_request.rs` 拥有，仅修改发出的请求副本；不支持或
+尚未确认支持 Original 的模型使用 Auto，已确认支持的模型保留 Original。`ModelInvoker` 返回
+`ash-utils-image::PromptImageDetailLimits`，表达冻结型号的尺寸与 patch 限制；Core 按请求的
+清晰度准备图片。共享 protocol 只定义请求内容，不执行这一步处理。

@@ -8,7 +8,6 @@ use crate::TurnId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
 use ts_rs::TS;
 
 /// How the backend established the model identity or service tier used for pricing.
@@ -72,59 +71,6 @@ impl Default for ModelReferenceCostSummary {
             known_amounts: Vec::new(),
             complete: true,
         }
-    }
-}
-
-impl ModelReferenceCostSummary {
-    /// Returns the next aggregate, or `None` when an amount is malformed or overflows.
-    pub fn checked_record(&self, reference_cost: &ModelReferenceCostRecord) -> Option<Self> {
-        let (amount, complete) = match reference_cost {
-            ModelReferenceCostRecord::Complete { cost } => (Some(&cost.amount), self.complete),
-            ModelReferenceCostRecord::Partial { known_minimum, .. } => {
-                (Some(&known_minimum.amount), false)
-            }
-            ModelReferenceCostRecord::Unpriced { .. } => (None, false),
-        };
-        self.checked_add(amount, complete)
-    }
-
-    /// Marks one legacy invocation as unpriced without discarding known totals.
-    pub fn record_unpriced(&self) -> Self {
-        Self {
-            known_amounts: self.known_amounts.clone(),
-            complete: false,
-        }
-    }
-
-    fn checked_add(&self, amount: Option<&ModelMoneyAmount>, complete: bool) -> Option<Self> {
-        let mut totals = BTreeMap::new();
-        for known in &self.known_amounts {
-            if known.currency.trim().is_empty() {
-                return None;
-            }
-            let pico_units = known.pico_units.parse::<u128>().ok()?;
-            if totals.insert(known.currency.clone(), pico_units).is_some() {
-                return None;
-            }
-        }
-        if let Some(amount) = amount {
-            if amount.currency.trim().is_empty() {
-                return None;
-            }
-            let pico_units = amount.pico_units.parse::<u128>().ok()?;
-            let total = totals.entry(amount.currency.clone()).or_insert(0u128);
-            *total = total.checked_add(pico_units)?;
-        }
-        Some(Self {
-            known_amounts: totals
-                .into_iter()
-                .map(|(currency, pico_units)| ModelMoneyAmount {
-                    currency,
-                    pico_units: pico_units.to_string(),
-                })
-                .collect(),
-            complete,
-        })
     }
 }
 

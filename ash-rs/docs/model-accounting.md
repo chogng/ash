@@ -23,7 +23,7 @@
 
 ## 要解决的问题
 
-当前成功模型响应会记录 `ModelInvocationRecorded`，旧 `ModelUsageRecorded` 只用于历史回放。Thread/Turn 继续汇总输入、输出、缓存读取、缓存写入和推理 token；新事件另外保留调用 ID、时间、模型、可验证的计费入口和参考成本。这解决了“这个 Thread 用了多少 token”以及首批公开加速价格的单次计价，但还不能可靠回答：
+当前成功模型响应会记录 `ModelInvocationRecorded`，旧 `ModelUsageRecorded` 只用于历史回放。Thread/Turn 的 token 累计由 Core 状态归并执行；参考成本累计由 `ash-model-accounting` 计算，Core 提交结果，`ash-protocol` 只保存事实和汇总格式。Thread/Turn 继续汇总输入、输出、缓存读取、缓存写入和推理 token；新事件另外保留调用 ID、时间、模型、可验证的计费入口和参考成本。这解决了“这个 Thread 用了多少 token”以及首批公开加速价格的单次计价，但还不能可靠回答：
 
 - 某个供应商、模型、Project 或时间段调用了多少次、用了多少 token、花了多少参考成本；
 - 缓存命中率是多少，批处理、服务等级、区域和长上下文如何影响价格；

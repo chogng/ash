@@ -16,6 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 extension-protocol.workspace = true
+ash-utils-image = { workspace = true }
 assets = { workspace = true }
 testing = { workspace = true }
 rfd = { workspace = true }

@@ -1,7 +1,7 @@
 # ash-utils-image
 
 `ash-utils-image` 在不可信图片 bytes 对模型可见之前，负责供应商无关的校验和转换。跨 crate 的
-安全边界与 Tool output policy 以 [`docs/tools.md`](../../../docs/tools.md) 为准；本 README 是
+安全边界与 Tool output policy 以 [`docs/tools/tools.md`](../../../docs/tools/tools.md) 为准；本 README 是
 crate 实现契约的权威说明。
 
 ## 所有权
@@ -21,6 +21,9 @@ telemetry，也不决定处理失败的图片如何出现在对话中。
   frame 数，然后应用 `PromptImageMode`、metadata 与 animation policy，返回 `EncodedImage`。
 - `load_data_url_for_prompt` 只接受受支持的 Base64 图片 data URL，核对声明 MIME 与实际文件签名，
   再委托 `load_for_prompt_bytes`。
+- `PromptImageDetailLimits` 保存 Auto、Low、High、Original 的尺寸与 patch 限制，供模型调用方和
+  Core 共用；调用方选择对应等级并传入 `PromptImageResizeLimits`。默认限制与原有图片准备行为
+  一致，不代表某个型号的能力，也不替代产品上传额度。
 - `PromptImagePolicy` 让安全、缩放、metadata 和 animation 选择在调用点保持显式。`Original` 只
   关闭面向模型的主动缩放，不能绕过任何安全限制。
 - `EncodedImage` 同时报告源尺寸、准备后尺寸和源 frame 数；其 bytes 不可变且可共享，cache hit

@@ -188,7 +188,7 @@ fn historical_agent_capability_scope_cannot_pass_tools_to_descendants() {
 }
 
 #[test]
-fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
+fn model_usage_preserves_partial_reports_and_legacy_summary_fields() {
     let legacy_usage: ModelUsage = serde_json::from_value(json!({
         "inputTokens": 5,
         "outputTokens": 2,
@@ -225,26 +225,6 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
         cache_write_input_tokens: None,
         reasoning_tokens: Some(1),
     };
-    let summary = ModelUsageSummary::default()
-        .checked_record(Some(&first))
-        .unwrap()
-        .checked_record(Some(&second))
-        .unwrap()
-        .checked_record(None)
-        .unwrap();
-
-    assert_eq!(summary.model_invocations, 3);
-    assert_eq!(summary.input_tokens.reported, 17);
-    assert!(!summary.input_tokens.complete);
-    assert_eq!(summary.output_tokens.reported, 3);
-    assert!(!summary.output_tokens.complete);
-    assert_eq!(summary.cached_input_tokens.reported, 2);
-    assert!(!summary.cached_input_tokens.complete);
-    assert_eq!(summary.cache_write_input_tokens.reported, 1);
-    assert!(!summary.cache_write_input_tokens.complete);
-    assert_eq!(summary.reasoning_tokens.reported, 1);
-    assert!(!summary.reasoning_tokens.complete);
-
     assert_eq!(
         serde_json::to_value(ThreadEvent::ModelUsageRecorded {
             thread_id: ThreadId::new("thread_1").unwrap(),
@@ -349,50 +329,6 @@ fn model_invocation_fact_keeps_exact_cost_strings() {
     assert_eq!(
         json["record"]["referenceCost"]["cost"]["amount"]["picoUnits"],
         "2548000000"
-    );
-}
-
-#[test]
-fn reference_cost_summary_adds_exact_amounts_and_preserves_unknown_work() {
-    let complete = ModelReferenceCostRecord::Complete {
-        cost: RatedModelCost {
-            amount: ModelMoneyAmount {
-                currency: "USD".into(),
-                pico_units: "10080000000".into(),
-            },
-            revision: "rates-v1".into(),
-            line_items: Vec::new(),
-        },
-    };
-    let partial = ModelReferenceCostRecord::Partial {
-        known_minimum: RatedModelCost {
-            amount: ModelMoneyAmount {
-                currency: "USD".into(),
-                pico_units: "250000000".into(),
-            },
-            revision: "rates-v1".into(),
-            line_items: Vec::new(),
-        },
-        reason: ModelReferenceCostReason::MissingTokenRates {
-            dimensions: vec!["cache_write_input".into()],
-        },
-    };
-
-    let summary = ModelReferenceCostSummary::default()
-        .checked_record(&complete)
-        .unwrap()
-        .checked_record(&partial)
-        .unwrap();
-
-    assert_eq!(
-        summary,
-        ModelReferenceCostSummary {
-            known_amounts: vec![ModelMoneyAmount {
-                currency: "USD".into(),
-                pico_units: "10330000000".into(),
-            }],
-            complete: false,
-        }
     );
 }
 
@@ -1134,52 +1070,6 @@ fn durable_tool_result_preserves_structured_image_content_and_reads_legacy_text(
         serde_json::from_value::<ThreadItem>(legacy).unwrap(),
         ThreadItem::ToolResult { content: None, text, .. } if text == "legacy"
     ));
-}
-
-#[test]
-fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
-    let mut request = ModelRequest {
-        verbosity: None,
-        reasoning_summary: None,
-        service_tier: None,
-        speed: None,
-        instructions: None,
-        input: vec![
-            InputItem::Message(Message {
-                role: MessageRole::User,
-                content: vec![ContentPart::ImageUrl {
-                    url: "data:image/png;base64,AA==".into(),
-                    detail: ImageDetail::Original,
-                }],
-                tool_calls: Vec::new(),
-            }),
-            InputItem::ToolResult(ToolResult {
-                call_id: ToolCallId::new("tool_1").unwrap(),
-                name: ToolName::new("image").unwrap(),
-                content: vec![ContentPart::ImageUrl {
-                    url: "data:image/png;base64,AA==".into(),
-                    detail: ImageDetail::Original,
-                }],
-                is_error: false,
-            }),
-        ],
-        tools: Vec::new(),
-        tool_choice: ToolChoice::Auto,
-        parallel_tool_calls: false,
-        reasoning: None,
-        max_output_tokens: None,
-        temperature: None,
-        prompt_cache_key: None,
-        prompt_cache_prefix_end: Some(0),
-    };
-
-    let decisions = request.sanitize_image_details(false);
-
-    assert_eq!(decisions.len(), 2);
-    assert!(decisions.iter().all(|decision| {
-        decision.effective == ImageDetail::Auto
-            && decision.reason == ImageDetailDecisionReason::OriginalUnsupportedDowngraded
-    }));
 }
 
 #[test]

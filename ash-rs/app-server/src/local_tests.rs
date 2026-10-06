@@ -32,8 +32,6 @@ use ash_model_provider::ModelProviderError;
 use ash_model_provider::ProviderId;
 use ash_plugin::LocalPluginPackage;
 use ash_protocol::CommandId;
-use ash_protocol::ImageDetail;
-use ash_protocol::ModelImageInputLimits;
 use ash_protocol::ModelRef;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
@@ -42,6 +40,7 @@ use ash_protocol::ReasoningEffort;
 use ash_protocol::ResponseItem;
 use ash_protocol::StopReason;
 use ash_secrets::MemorySecretStore;
+use ash_utils_image::PromptImageResizeLimits;
 use ash_web_search_extension::WebSearchBackend;
 use ash_web_search_extension::WebSearchError;
 use ash_web_search_extension::WebSearchRequest;
@@ -3108,14 +3107,14 @@ struct SnapshotModel {
 }
 
 impl ModelInvoker for SnapshotModel {
-    fn image_input_policy(&self) -> ModelImageInputPolicy {
+    fn image_input_policy(&self) -> PromptImageDetailLimits {
         let dimension = if self.model == "before-update" {
             800
         } else {
             1_200
         };
-        let limits = ModelImageInputLimits::new(dimension, 1_000);
-        ModelImageInputPolicy::new(limits, limits, limits, limits)
+        let limits = PromptImageResizeLimits::new(dimension, 1_000);
+        PromptImageDetailLimits::new(limits, limits, limits, limits)
     }
 
     fn output_transport(&self) -> ash_protocol::ModelOutputTransport {
@@ -3171,8 +3170,8 @@ fn model_invocations_and_image_limits_keep_an_in_flight_snapshot() {
         model
             .image_input_policy(ModelSelection::ConfiguredDefault)
             .unwrap()
-            .limits_for(ImageDetail::Auto),
-        ModelImageInputLimits::new(800, 1_000)
+            .auto,
+        PromptImageResizeLimits::new(800, 1_000)
     );
     select_model(&config, "select-after", before_update, "after-update");
     gate.release();
@@ -3199,15 +3198,15 @@ fn model_invocations_and_image_limits_keep_an_in_flight_snapshot() {
         frozen
             .image_input_policy(ModelSelection::ConfiguredDefault)
             .unwrap()
-            .limits_for(ImageDetail::Auto),
-        ModelImageInputLimits::new(800, 1_000)
+            .auto,
+        PromptImageResizeLimits::new(800, 1_000)
     );
     assert_eq!(
         model
             .image_input_policy(ModelSelection::ConfiguredDefault)
             .unwrap()
-            .limits_for(ImageDetail::Auto),
-        ModelImageInputLimits::new(1_200, 1_000)
+            .auto,
+        PromptImageResizeLimits::new(1_200, 1_000)
     );
     remove_config_files(&path);
 }
