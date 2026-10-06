@@ -13,17 +13,17 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("model_id", json!("")),
         ("display_name", json!(" ")),
         ("context_window", json!(0)),
-        ("default_context_window", json!(0)),
-        ("default_context_window", json!(1_050_001)),
-        ("default_context_window", json!(null)),
-        ("context_window_options", json!([])),
         ("context_window_options", json!([272000, 0])),
         ("context_window_options", json!([272000, 1_050_001])),
         ("context_window_options", json!([1_000_000, 272000])),
         ("context_window_options", json!([272000, 272000])),
-        ("context_window_options", json!([1_000_000])),
         ("context_window_options", json!([272000, 400000, 1000000])),
         ("auto_compact_token_limit", json!(0)),
+        ("default_context_window", json!(272000)),
+        ("default_personality", json!(null)),
+        ("capabilities", json!({"personality":"supported"})),
+        ("capabilities", json!({"fast_mode":"supported"})),
+        ("capabilities", json!({"tools":"invalid"})),
         ("model_reasoning_effort", json!("minimal")),
         ("instructions", json!({"revision":"v1", "body":" "})),
         ("instructions", json!({"revision":" ", "body":"base"})),
@@ -53,9 +53,12 @@ fn duplicate_identities_fail_and_unknown_metadata_stays_unknown() {
     let model = row();
     assert!(parse_catalog(&json!({"models":[model, model]}).to_string()).is_err());
     let mut model = row();
-    model["context_window"] = serde_json::Value::Null;
-    model["default_context_window"] = serde_json::Value::Null;
-    model["context_window_options"] = json!([]);
+    model.as_object_mut().unwrap().remove("context_window");
+    assert!(parse_catalog(&json!({"models":[model.clone()]}).to_string()).is_err());
+    model
+        .as_object_mut()
+        .unwrap()
+        .remove("context_window_options");
     let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
     assert_eq!(
         parsed[0].context_window,
@@ -69,19 +72,51 @@ fn context_preferences_are_explicit_data_independent_of_the_model_name() {
         let mut model = row();
         model["model_id"] = json!(name);
         model["context_window"] = json!(300000);
-        model["default_context_window"] = json!(80000);
         model["context_window_options"] = json!([80000, 160000]);
         let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
-        assert_eq!(
-            parsed[0].default_context_window,
-            ash_protocol::ContextWindow::Known(80000)
-        );
         assert_eq!(parsed[0].context_window_options, [80000, 160000]);
         assert_eq!(
             parsed[0].model().context_window,
             ash_protocol::ContextWindow::Known(300000)
         );
     }
+}
+
+#[test]
+fn sparse_declarations_preserve_unknowns_and_known_capacity_without_presets() {
+    let minimal = json!({
+        "provider_id":"example", "model_id":"plain-model", "display_name":"Plain Model",
+        "instructions":{"revision":"v1", "body":"Independent base instructions"}
+    });
+    let parsed = parse_catalog(&json!({"models":[minimal.clone()]}).to_string()).unwrap();
+    let spec = &parsed[0];
+    assert_eq!(spec.context_window, ash_protocol::ContextWindow::Unknown);
+    assert!(spec.context_window_options.is_empty());
+    assert_eq!(spec.capabilities, ash_protocol::ModelCapabilities::UNKNOWN);
+    assert!(spec.supported_reasoning_efforts.is_empty());
+    assert_eq!(spec.model_reasoning_effort, None);
+    assert_eq!(spec.auto_compact_token_limit, None);
+
+    let mut fixed = minimal;
+    fixed["context_window"] = json!(300000);
+    fixed["capabilities"] = json!({"tools":"unsupported", "imageDetailOriginal":"supported"});
+    fixed["auto_compact_token_limit"] = json!(160000);
+    let parsed = parse_catalog(&json!({"models":[fixed]}).to_string()).unwrap();
+    let spec = &parsed[0];
+    assert_eq!(spec.context_window_options, [300000]);
+    assert_eq!(
+        spec.capabilities.tools,
+        ash_protocol::CapabilitySupport::Unsupported
+    );
+    assert_eq!(
+        spec.capabilities.image_detail_original,
+        ash_protocol::CapabilitySupport::Supported
+    );
+    assert_eq!(
+        spec.capabilities.reasoning,
+        ash_protocol::CapabilitySupport::Unknown
+    );
+    assert_eq!(spec.auto_compact_token_limit, Some(160000));
 }
 
 #[test]

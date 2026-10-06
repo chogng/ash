@@ -325,7 +325,7 @@ URL，canonical attachment reference 继续作为 durable authority。
 
 ### 7.1 预算输入
 
-内置模型的容量、默认执行预算和普通／扩展预算档位分别由 `models.json` 的 `context_window`、`default_context_window` 和 `context_window_options` 声明。`models-manager` 按准确模型身份读取声明，合并用户配置和当前连接的目录容量；App Server 再把有效预算冻结给本轮 Core。Core 不按型号名称选择默认窗口或扩展档位。模型声明与校验规则见 [模型声明文档](model-provider-info.md#7-静态模型元数据)。
+内置模型的容量由 `models.json` 的 `context_window` 声明；`context_window_options` 只在需要独立预算档位时填写，第一项作为默认执行预算。没有档位声明时，目录解析生成等于容量的唯一档位；容量未知时预算仍未知。`models-manager` 按准确模型身份读取声明，合并用户配置和当前连接的目录容量；App Server 再把有效预算冻结给本轮 Core。Core 不按型号名称选择默认窗口或扩展档位。模型声明与校验规则见 [模型声明文档](model-provider-info.md#7-静态模型元数据)。
 
 预算至少包含：
 

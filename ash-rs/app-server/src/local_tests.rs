@@ -2509,7 +2509,7 @@ fn configured_model_context_enables_core_managed_compaction() {
         .unwrap();
     let selected = ModelRef::new(provider, model);
     let spec = model_provider_info::find_static_model(&selected).unwrap();
-    let ContextWindow::Known(default_window) = spec.default_context_window else {
+    let Some(default_window) = spec.context_window_options.first().copied() else {
         panic!("the selected model declares its default budget");
     };
     let compact = (u64::from(default_window) * 9 / 10) as u32;

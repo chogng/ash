@@ -154,7 +154,7 @@ App Server DTO/schema fixture。
 ## 有效模型信息与职责
 
 - `entry.info()` 返回原始目录信息；`entry.model_info(&provider_config)` 返回配置生效后的独立副本。
-- 先校验 provider 身份和配置。按准确 ModelId 读取 `model_context`，未声明时才使用自定义连接的默认窗口。内置模型没有用户覆盖时，读取 `models.json` 的 `default_context_window`；预算选项由同一条目的 `context_window_options` 声明。目录证据仍保留 `context_window` 的最大容量，实际预算受当前容量限制；发现结果不根据型号前缀生成预算档位。
+- 先校验 provider 身份和配置。按准确 ModelId 读取 `model_context`，未声明时才使用自定义连接的默认窗口。内置模型没有用户覆盖时，使用 `models.json` 的 `context_window_options` 第一项作为默认预算；未声明档位时，目录解析统一生成等于容量的唯一档位。目录证据仍保留 `context_window` 的最大容量，实际预算受当前容量限制；发现结果不根据型号前缀生成预算档位。
 - 配置窗口不能超过目录已知窗口。未配置压缩阈值时建议使用有效窗口的 90%；显式阈值同样受此上限限制。
 - 未知窗口保持未知，除非配置明确提供。配置不推断工具能力、不改变 availability，也不改写 snapshot、provenance 或 generation。
 - App Server 的模型列表与调用预算读取同一批静态规格和当前连接的已缓存发现结果，统一计算输出预留、安全余量及压缩阈值。每轮开始时冻结目录证据和配置；刷新只影响后续执行。未知容量可以展示，但必须声明窗口后才能请求模型；真正执行分配和压缩由 Core 负责。

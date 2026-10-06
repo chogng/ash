@@ -150,20 +150,13 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
   "model_id": "model-id",
   "display_name": "Display Name",
   "context_window": 1000000,
-  "default_context_window": 200000,
   "context_window_options": [200000, 1000000],
-  "auto_compact_token_limit": null,
   "capabilities": {
     "tools": "supported",
-    "reasoning": "supported",
-    "parallelToolCalls": "unknown",
-    "personality": "unknown",
-    "imageDetailOriginal": "unknown",
-    "fastMode": "unknown"
+    "reasoning": "supported"
   },
   "supported_reasoning_efforts": ["low", "medium", "high"],
   "model_reasoning_effort": "medium",
-  "default_personality": null,
   "instructions": {
     "revision": "model-base-v1",
     "body": "Complete Agent base instructions for this model.\n"
@@ -171,9 +164,9 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 }
 ```
 
-条目放在顶层 `models` 数组中。未知上下文窗口用 `null`；未知能力保持 `unknown`，不因采用默认提示词而猜测规格。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+条目放在顶层 `models` 数组中。只有身份、显示名和完整提示词必填；省略上下文容量表示未知，省略能力表示 `unknown`，不代表不支持，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
 
-`context_window` 是模型容量，`default_context_window` 是没有用户覆盖时的执行预算。`context_window_options` 明确声明普通预算和可选的扩展预算，按升序包含一或两个值，第一项必须是默认预算，所有值不得超过容量。未知容量同时使用默认值 `null` 和空选项数组。每个模型独立声明这些值，运行时不根据型号名称推断默认预算或扩展档位。用户覆盖仍由 `models-manager` 合并，并受当前目录容量限制；压缩推荐使用有效预算的 90%，条目的显式压缩阈值与用户覆盖也受这一上限限制。
+`context_window` 是模型容量。执行预算就是容量时，无需填写 `context_window_options`；解析后的唯一档位和默认预算都等于容量。需要较小的普通预算或扩展预算时，选项按升序声明一或两个值，第一项就是默认预算，所有值不得超过容量，不再单独维护 `default_context_window`。未知容量不能声明档位。目录只在解析边界补全运行时元数据，新增协议字段不会要求逐模型填写。用户覆盖仍由 `models-manager` 合并，并受当前目录容量限制；压缩推荐使用有效预算的 90%，条目的显式压缩阈值与用户覆盖也受这一上限限制。
 
 `ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、协作模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，资源清单在 `BUILD.bazel`，修改后需重编译并重启。
 

@@ -121,10 +121,7 @@ impl ModelCatalogEntry {
         let window = if let Some(custom) = &config.custom {
             Some(custom.context_window)
         } else {
-            match self.declared_default_context_window {
-                ContextWindow::Known(tokens) => Some(tokens),
-                ContextWindow::Unknown => None,
-            }
+            self.declared_context_window_options.first().copied()
         };
         match (self.info().context_window, window) {
             (ContextWindow::Known(limit), Some(window)) => ContextWindow::Known(limit.min(window)),

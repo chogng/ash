@@ -23,9 +23,9 @@ struct ModelCatalog {
 
 // Validate at the data boundary: a malformed registered model is an error, not an unknown model.
 fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> {
-    let catalog: ModelCatalog = serde_json::from_str(json)?;
+    let mut catalog: ModelCatalog = serde_json::from_str(json)?;
     let mut identities = HashSet::new();
-    for spec in &catalog.models {
+    for spec in &mut catalog.models {
         let provider = ProviderId::new(&spec.provider_id).map_err(serde_json::Error::custom)?;
         let model = ModelId::new(&spec.model_id).map_err(serde_json::Error::custom)?;
         if !identities.insert((provider, model)) {
@@ -37,11 +37,14 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
         if spec.display_name.trim().is_empty() {
             return Err(serde_json::Error::custom("model display name is empty"));
         }
-        match (spec.context_window, spec.default_context_window) {
-            (ContextWindow::Known(capacity), ContextWindow::Known(default)) => {
-                if default > capacity
-                    || spec.context_window_options.first() != Some(&default)
-                    || spec.context_window_options.len() > 2
+        match spec.context_window {
+            ContextWindow::Known(capacity) => {
+                // Without separate presets the full declared capacity is the only budget.
+                // Normalize once so every consumer uses the same default and selectable values.
+                if spec.context_window_options.is_empty() {
+                    spec.context_window_options.push(capacity);
+                }
+                if spec.context_window_options.len() > 2
                     || spec
                         .context_window_options
                         .iter()
@@ -56,11 +59,10 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
                     ));
                 }
             }
-            (ContextWindow::Unknown, ContextWindow::Unknown)
-                if spec.context_window_options.is_empty() => {}
-            _ => {
+            ContextWindow::Unknown if spec.context_window_options.is_empty() => {}
+            ContextWindow::Unknown => {
                 return Err(serde_json::Error::custom(
-                    "context defaults must agree with declared capacity",
+                    "context options require declared capacity",
                 ));
             }
         }

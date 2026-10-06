@@ -230,7 +230,7 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-[`ash-rs/model-provider-info/models.json`](../ash-rs/model-provider-info/models.json) 是产品内置文本模型的唯一声明点，`STATIC_MODEL_CATALOG` 提供其一次解析后的共享数据。每个条目包含厂商、模型 ID、显示名、模型容量 `context_window`、默认执行预算 `default_context_window`、普通／扩展档位 `context_window_options`、能力、推理参数，以及可独立修改的完整基础提示词与 revision。订阅/API 共享模型条目；`access`、`runtime` 和凭据不属于模型条目。未知容量和默认预算都写为 `null`，预算选项写为空数组。默认值与选项的校验规则见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
+[`ash-rs/model-provider-info/models.json`](../ash-rs/model-provider-info/models.json) 是产品内置文本模型的唯一声明点，`STATIC_MODEL_CATALOG` 提供其一次解析后的共享数据。每个条目必须包含厂商、模型 ID、显示名，以及可独立修改的完整基础提示词与 revision；模型容量、独立预算档位、已知能力和推理参数按需填写。`context_window_options` 第一项就是默认预算；没有档位声明时预算等于已知容量。省略容量或能力表示未知，不代表不支持。订阅/API 共享模型条目；`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
 
 模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
 

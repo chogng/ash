@@ -269,16 +269,17 @@ fn every_builtin_uses_its_json_context_preferences_and_preserves_explicit_budget
             .unwrap();
         let mut config = ModelProviderConfig::new(model.provider.clone());
         let default = resolved.entry().model_info(&config).unwrap();
-        assert_eq!(
-            default.context_window, spec.default_context_window,
-            "{}",
-            spec.model_id
-        );
+        let expected_window = spec
+            .context_window_options
+            .first()
+            .copied()
+            .map_or(ContextWindow::Unknown, ContextWindow::Known);
+        assert_eq!(default.context_window, expected_window, "{}", spec.model_id);
         assert_eq!(
             resolved.entry().context_window_options(&config),
             spec.context_window_options
         );
-        let compact = match spec.default_context_window {
+        let compact = match expected_window {
             ContextWindow::Known(window) => {
                 let recommended = (u64::from(window) * 9 / 10) as u32;
                 Some(
@@ -337,7 +338,6 @@ fn declared_budgets_follow_observed_capacity_and_keep_compaction_limits() {
         .resolve_static(&model_ref(), &ModelRequirements::agent())
         .unwrap();
     let mut entry = resolved.entry().clone();
-    entry.declared_default_context_window = ContextWindow::Known(80_000);
     entry.declared_context_window_options = vec![80_000, 240_000];
     let mut config = ModelProviderConfig::new(model_ref().provider);
     assert_eq!(entry.context_window_options(&config), [80_000]);
@@ -357,7 +357,6 @@ fn declared_budgets_follow_observed_capacity_and_keep_compaction_limits() {
         entry.model_info(&config).unwrap().context_window,
         ContextWindow::Known(80_000)
     );
-    entry.declared_default_context_window = ContextWindow::Known(240_000);
     entry.declared_context_window_options = vec![240_000, 300_000];
     assert_eq!(
         entry.default_context_window(&config),
