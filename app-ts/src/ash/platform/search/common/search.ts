@@ -51,3 +51,18 @@ export interface IContentSearchService {
 }
 
 export const IContentSearchService = createServiceIdentifier<IContentSearchService>("contentSearchService");
+
+export type ContentSearchEngine = 'tgrep' | 'ripgrep';
+
+export interface ContentSearchConfiguration {
+	readonly revision: number;
+	readonly engine: ContentSearchEngine;
+}
+
+/** Backend-owned preference shared by Agent, editor and Codebase content searches. */
+export interface IContentSearchConfigurationService {
+	read(): Promise<ContentSearchConfiguration>;
+	configure(engine: ContentSearchEngine, expectedRevision: number): Promise<void>;
+}
+
+export const IContentSearchConfigurationService = createServiceIdentifier<IContentSearchConfigurationService>('contentSearchConfigurationService');

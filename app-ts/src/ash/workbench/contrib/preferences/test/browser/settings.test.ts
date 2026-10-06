@@ -100,6 +100,7 @@ await import('../../../scm/browser/scm.contribution.js');
 const { IGitService: GitServiceId } = await import('../../../git/common/gitService.js');
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
+const { IContentSearchConfigurationService } = await import('../../../../../platform/search/common/search.js');
 const { INetworkDiagnosticsService } = await import('../../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js');
 const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
 const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/remoteAgentService.js');
@@ -740,6 +741,22 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangePermissions: Event.None,
 		list: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
 	} as unknown as IDirPermissionsService);
+	let searchSnapshot: import('../../../../../platform/search/common/search.js').ContentSearchConfiguration = { revision: 4, engine: 'tgrep' };
+	let rejectSearchSave = false;
+	let nextSearchRead: Promise<typeof searchSnapshot> | undefined;
+	const searchWrites: { engine: string; expectedRevision: number; }[] = [];
+	services.registerInstance(IContentSearchConfigurationService, {
+		read: async () => {
+			const pending = nextSearchRead;
+			nextSearchRead = undefined;
+			return pending ?? searchSnapshot;
+		},
+		configure: async (engine, expectedRevision) => {
+			searchWrites.push({ engine, expectedRevision });
+			if (rejectSearchSave) { throw new Error('Revision conflict'); }
+			searchSnapshot = { engine, revision: expectedRevision + 1 };
+		},
+	});
 	services.registerInstance(INetworkDiagnosticsService, {
 		read: async () => ({ revision: 0, httpMode: 'http2', targets: [] }),
 		configureHttp: async () => { },
@@ -821,6 +838,42 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.textContent, 'Chat');
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
+	await nextTurn();
+	const searchEngine = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"] [role="combobox"]');
+	assert.equal(searchEngine?.textContent, 'tgrep (default)');
+	assert.throws(() => configuration.inspect('grep.backend'), /Unknown configuration key/);
+	assert.ok(searchEngine);
+	const searchRow = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"]')!;
+	searchEngine.click();
+	const searchList = ownerDocument.getElementById(searchEngine.getAttribute('aria-controls')!)!;
+	searchList.querySelectorAll<HTMLElement>('[role="option"]')[1].click();
+	await nextTurn();
+	assert.equal(searchEngine.textContent, 'ripgrep');
+	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'Search engine saved.');
+	assert.deepEqual(searchWrites, [{ engine: 'ripgrep', expectedRevision: 4 }]);
+	rejectSearchSave = true;
+	searchEngine.click();
+	searchList.querySelectorAll<HTMLElement>('[role="option"]')[0].click();
+	await nextTurn();
+	assert.equal((searchEngine as HTMLButtonElement).disabled, true);
+	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'Could not save search engine. Refresh the configuration before trying again.');
+	rejectSearchSave = false;
+	searchRow.querySelector<HTMLButtonElement>('button:not([role="combobox"])')!.click();
+	await nextTurn();
+	assert.equal(searchEngine.textContent, 'ripgrep');
+	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
+	const pendingSearch = new DeferredPromise<typeof searchSnapshot>();
+	nextSearchRead = pendingSearch.p;
+	searchRow.querySelector<HTMLButtonElement>('button:not([role="combobox"])')!.click();
+	connectionChanged.fire('disconnected');
+	await pendingSearch.complete({ revision: 1, engine: 'tgrep' });
+	await nextTurn();
+	assert.equal((searchEngine as HTMLButtonElement).disabled, true);
+	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'App Server is disconnected.');
+	connectionChanged.fire('connected');
+	await nextTurn();
+	assert.equal(searchEngine.textContent, 'ripgrep');
+	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');

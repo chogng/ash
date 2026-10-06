@@ -700,7 +700,9 @@ fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
         service.clear_index(&worktree, &token).unwrap(),
         ash_state::ClearOutcome::InUse
     );
-    service.release_directory(&worktree, &token).unwrap();
+    service
+        .release_directory(worktree.canonical_path(), &token)
+        .unwrap();
     assert!(!service.index_status(&worktree, &token).unwrap().active);
     assert!(!worktree.canonical_path().join(".git").is_dir());
     git(
@@ -711,6 +713,10 @@ fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
             worktree.canonical_path().to_str().unwrap(),
         ],
     );
+    // Cleanup retries must not reopen a checkout already removed by the preceding attempt.
+    service
+        .release_directory(worktree.canonical_path(), &token)
+        .unwrap();
     assert_eq!(
         service
             .search(&root, &query("base_marker"), &token)

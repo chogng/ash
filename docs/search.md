@@ -46,7 +46,7 @@ flowchart TD
 ```
 
 - 宿主读取公共配置，创建服务并注入使用者；公共服务不经 Agent 工具组合向其他使用者提供。
-- grep 按目录复用索引会话，管理引擎进程与缓存生命周期；调用方只持有能力接口。
+- grep 按目录复用索引会话，管理引擎进程与租约生命周期；调用方只持有能力接口。App Server 删除 worktree 前等待已开始的搜索并确认释放其搜索租约。
 - 请求的权限、取消、分页游标与结果预算分别管理；共享索引不扩大任何调用方的授权范围。
 - 调用入口核验权限，能力内部约束目录范围；未保存内容由持有源码视图的上层合并。
 - 查询契约表达文字/正则、大小写、范围、过滤、上限和新鲜度；引擎命令行参数留在适配实现内部。
@@ -63,7 +63,7 @@ flowchart TD
 | Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                               | `Codebase` 的源码、chunk 与版本管理不引用 grep                     |
 | 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI 和 Rust 桌面文件面板调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引      |
 | 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                  | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
-| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                              | 统计描述初始文件筛选，不包含后续内容批次或 Ash 写入覆盖            |
+| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                              | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                |
 
 实现入口：[宿主组装](../ash-rs/app-server/src/server/environment_runtime.rs)、
 [检索组合](../ash-rs/codebase/src/retrieval/service.rs)、
@@ -135,6 +135,10 @@ Agent、Codebase 和编辑器共用 `grep::Search`，并注入同一 `grep::Serv
 - `grep/index/disableAndDelete` 提交公共配置、释放服务，再删除活动目录的缓存。
 
 原 `[agent].grepBackend` 自动迁移到 `[grep].backend`；公共协议使用 `grepBackend`。
+
+TS 前端可在“设置 → 通用 → 应用 → 内容搜索 → 搜索引擎”选择默认的 tgrep 或 ripgrep。
+控件通过 `config/read` 和带当前配置 revision 的 `config/update` 直接读写 `[grep].backend`，
+不在前端 `settings.json` 保存副本。保存后读回配置；断连或保存失败时禁用选择并提示刷新。
 
 ## 与其他能力的关系
 

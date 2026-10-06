@@ -115,20 +115,23 @@ impl Service {
         }
     }
 
-    /// Wait for active searches and release the directory's engine lease before filesystem removal.
+    /// Wait for active searches and release a canonical directory's lease before filesystem removal.
+    /// Lookup uses the retained identity so retrying cleanup of an absent checkout needs no reopen.
     pub fn release_directory(
         &self,
-        root: &Dir,
+        canonical_root: &std::path::Path,
         cancellation: &CancellationToken,
     ) -> Result<(), Error> {
         // Searches retain this read guard through their engine operation. The write guard excludes
         // new searches while the final registration is detached and its root handles are closed.
         let state = self.state.write().unwrap_or_else(|e| e.into_inner());
-        let index = state
-            .indexes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&root.id());
+        let mut indexes = state.indexes.lock().unwrap_or_else(|e| e.into_inner());
+        let id = indexes
+            .iter()
+            .find(|(_, index)| index.search.matches_directory(canonical_root))
+            .map(|(id, _)| id.clone());
+        let index = id.and_then(|id| indexes.remove(&id));
+        drop(indexes);
         if let Some(index) = index {
             let index = Arc::try_unwrap(index)
                 .map_err(|_| Error::Failed("search registration is still in use".into()))?;

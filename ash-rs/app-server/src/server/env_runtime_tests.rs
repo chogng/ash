@@ -80,6 +80,22 @@ impl core_api::ModelService for RequestRecordingModel {
 }
 
 #[test]
+fn directory_cleanup_does_not_retain_the_disposed_environment_runtime() {
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let server = crate::open_app_server(
+        crate::AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_dir_root(directory.path()),
+    )
+    .unwrap();
+    assert!(server.dir_services.is_some());
+    let runtime = Arc::downgrade(&server.env_runtime);
+    drop(server);
+    assert!(runtime.upgrade().is_none());
+}
+
+#[test]
 fn clearing_directories_keeps_home_instructions_in_model_requests() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir(root.path().join("instructions")).unwrap();

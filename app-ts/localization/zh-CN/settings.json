@@ -205,7 +205,21 @@
     "displayLanguage.restartMessage": "重启 Ash 以使用{0}？",
     "displayLanguage.restartDetail": "显示语言偏好已保存。重启应用或刷新页面后生效。",
     "displayLanguage.restartNow": "立即重启",
-    "displayLanguage.restartLater": "稍后"
+    "displayLanguage.restartLater": "稍后",
+    "search.verbosity": "内容搜索无障碍帮助",
+    "search.verbosityDescription": "在内容搜索设置中提示如何打开无障碍帮助。",
+    "search.help": "内容搜索设置\n使用 Tab 键访问搜索引擎和刷新。按 Enter 或空格打开搜索引擎，用方向键选择 tgrep 或 ripgrep，然后按 Enter 保存。tgrep 是默认引擎。Agent、编辑器和 Codebase 的内容搜索共用所选引擎。刷新会读取后端配置。保存失败时，请先刷新再重试。按 Escape 关闭帮助并返回控件。",
+    "search.group": "内容搜索",
+    "search.engine": "搜索引擎",
+    "search.description": "选择 Agent、编辑器和 Codebase 共用的内容搜索引擎。默认使用 tgrep；选择 ripgrep 可使用 rg。",
+    "search.default": "tgrep（默认）",
+    "search.refresh": "刷新",
+    "search.loading": "正在读取搜索配置…",
+    "search.saving": "正在保存搜索引擎…",
+    "search.saved": "搜索引擎已保存。",
+    "search.readFailed": "无法读取搜索配置。请连接 App Server 后刷新。",
+    "search.saveFailed": "无法保存搜索引擎。请刷新配置后重试。",
+    "search.disconnected": "App Server 已断开连接。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",

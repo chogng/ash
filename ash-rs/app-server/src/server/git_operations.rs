@@ -552,7 +552,9 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
         match params.mode {
             GitWorktreeDeleteMode::Unbound => {
-                dirs.release_search(Path::new(&params.checkout_root))
+                let checkout_root = dunce::canonicalize(&params.checkout_root)
+                    .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+                dirs.release_search(&checkout_root)
                     .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
                 dirs.runtime
                     .block_on(

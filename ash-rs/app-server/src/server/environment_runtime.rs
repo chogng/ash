@@ -1251,9 +1251,7 @@ impl AppServer {
             watcher.bind_hooks(hooks.clone());
         }
         let mut executor = self
-            .env_runtime_mut()
-            .turn_executor
-            .clone()
+            .turn_executor_snapshot()
             .with_tool_service(tools.reloadable.tools(), policy)
             .with_hooks(hooks.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {

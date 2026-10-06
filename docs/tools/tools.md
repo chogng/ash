@@ -328,9 +328,9 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 
 模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认使用包内 tgrep；公共配置 `grep.backend = "ripgrep"` 可显式选择 `rg`。编辑器与 Codebase 也使用同一 grep 服务；`glob` 继续通过 `rg --files` 枚举文件。交互式路径搜索契约由 [`ash-rs/file-search/README.md`](../ash-rs/file-search/README.md) 维护。
 
-[`ash-grep`](../ash-rs/grep/README.md) 通过内部 tgrep 适配器按仓库启动并持有 `tgrep shared-serve` 子进程，为各 Directory 注册独立 worktree，通过其本机 TCP JSON-RPC 查询。tgrep 自己维护 trigram 索引和文件监听。公共结果按路径排序，Agent 调用限定 100 个匹配行；Ash 文件工具写入后先由对应 worktree 的刷新接口确认处理，避免监听延迟。外部编辑仍遵循 tgrep 异步索引语义；正向 glob 直接筛选索引候选。单文件和含未保存文档的查询使用磁盘扫描。公共结果与 RPC 分页携带本次索引查询的计划和候选统计，具体过滤约定见 [`ash-tgrep`](../ash-rs/tgrep/README.md)。
+[`ash-grep`](../../ash-rs/grep/README.md) 通过内部 tgrep 适配器按仓库启动并持有上游 `tgrep serve --shared` 子进程，为各 Directory 注册独立 worktree 租约，通过其本机 TCP JSON-RPC 查询。普通目录与未提交的新仓库使用单目录服务。tgrep 自己维护 trigram 索引和文件监听。公共结果按路径排序，Agent 调用限定 100 个匹配行；Ash 文件工具写入后先由对应 worktree 的刷新接口确认处理，避免监听延迟；单目录服务使用 reload 确认。删除 worktree 前先等待已开始的搜索并释放目录租约。外部编辑仍遵循 tgrep 异步索引语义；正向 glob 直接筛选索引候选。单文件和含未保存文档的查询使用磁盘扫描。公共结果与 RPC 分页携带本次索引查询的计划和候选统计，具体过滤约定见 [`ash-tgrep`](../../ash-rs/tgrep/README.md)。
 
-运行时版本、源码和补丁校验值由 [`third_party/tgrep/runtime-lock.json`](../third_party/tgrep/runtime-lock.json) 固定。开发准备与发布构建编译校验后的固定源码与补丁，统一放入 `ash-resources/tgrep/`；搜索期间不下载。普通关闭切回 `rg` 并保留磁盘索引；关闭并删除在配置提交后释放服务，再通过 State Runtime 的独占租约删除。旧 `fastRegex` 配置迁移为 `tgrep`，旧索引不读取，新索引使用版本目录。
+运行时版本、源码和补丁校验值由 [`third_party/tgrep/runtime-lock.json`](../../third_party/tgrep/runtime-lock.json) 固定。开发准备与发布构建编译校验后的固定源码与补丁，统一放入 `ash-resources/tgrep/`；搜索期间不下载。普通关闭切回 `rg` 并保留磁盘索引；关闭并删除在配置提交后释放服务，再通过 State Runtime 的独占租约删除。旧 `fastRegex` 配置迁移为 `tgrep`，旧索引不读取，新索引使用版本目录。
 
 `ash-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
 `PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、

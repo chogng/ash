@@ -454,20 +454,22 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         )
         .authorize(ash_file_access::Permission::LoadInstructions)
         .unwrap();
-        let runtime = server.env_runtime_mut();
-        let contributions = super::dir_contributions::DirContributions::discover(
-            root.path(),
-            runtime.dir_grants.clone(),
-            Some(authorization),
-            Some(home),
-        )
-        .unwrap();
-        runtime._dir_contributions = Some(contributions.clone());
-        runtime.turn_executor = runtime
-            .turn_executor
-            .clone()
-            .with_harness_context_provider(contributions);
-        let executor = runtime.turn_executor.clone();
+        let executor = {
+            let mut runtime = server.env_runtime_mut();
+            let contributions = super::dir_contributions::DirContributions::discover(
+                root.path(),
+                runtime.dir_grants.clone(),
+                Some(authorization),
+                Some(home),
+            )
+            .unwrap();
+            runtime._dir_contributions = Some(contributions.clone());
+            runtime.turn_executor = runtime
+                .turn_executor
+                .clone()
+                .with_harness_context_provider(contributions);
+            runtime.turn_executor.clone()
+        };
         server.turn_backend.install_executor(executor);
         server.model_catalog = Arc::new(SelectedModel(model.clone()));
         let mut connection = server.connection();

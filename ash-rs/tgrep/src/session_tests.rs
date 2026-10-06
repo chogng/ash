@@ -557,10 +557,14 @@ fn independent_leases_release_only_their_own_registration() {
         Session::open(first.executable.clone(), root.path(), index.path(), &token).unwrap();
     let (first_view, first_lease, generation) = match &first.registration {
         Registration::Shared {
+            root: wire_root,
             view,
             lease,
             generation,
-        } => (view, lease, generation),
+        } => {
+            assert_eq!(wire_root, &fs::canonicalize(root.path()).unwrap());
+            (view, lease, generation)
+        }
         _ => panic!("expected shared registration"),
     };
     match &second.registration {

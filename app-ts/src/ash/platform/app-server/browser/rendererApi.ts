@@ -12,7 +12,7 @@ import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createDisconnectedGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
-import { createDisconnectedContentSearchApi } from "../../search/browser/searchApi.js";
+import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
 import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
 import { createDisconnectedSkillApi } from "../../skills/browser/skillApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
@@ -60,6 +60,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		languageServers: createDisconnectedLanguageServerService(unavailableOperation),
 		git: createDisconnectedGitApi(unavailableOperation),
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
+		contentSearchConfiguration: createDisconnectedContentSearchConfigurationApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
 		assets: {
 			getCatalog: () => unavailableOperation("asset/catalog"),

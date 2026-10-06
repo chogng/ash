@@ -2,6 +2,8 @@ import type { AppServerProtocolClient } from "../../app-server/browser/appServer
 import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IContentSearchApi } from "../common/searchApi.js";
+import { generateUuid } from '../../../base/common/uuid.js';
+import type { IContentSearchConfigurationService } from '../common/search.js';
 
 export function createDisconnectedContentSearchApi(unavailable: UnavailableOperation): IContentSearchApi {
 	return {
@@ -16,5 +18,24 @@ export function createAppServerContentSearchApi(connection: AppServerProtocolCli
 		start: (params) => appServerRequest(connection, "grep/search/start", params),
 		read: (params) => appServerRequest(connection, "grep/search/read", params),
 		cancel: (params) => voidResult(appServerRequest(connection, "grep/search/cancel", params)),
+	};
+}
+
+export function createAppServerContentSearchConfigurationApi(connection: AppServerProtocolClient): IContentSearchConfigurationService {
+	return {
+		read: async () => {
+			const result = await appServerRequest(connection, 'config/read', {});
+			return { revision: result.revision, engine: result.grepBackend };
+		},
+		configure: async (engine, expectedRevision) => {
+			await appServerRequest(connection, 'config/update', { commandId: generateUuid(), expectedRevision, grepBackend: engine });
+		},
+	};
+}
+
+export function createDisconnectedContentSearchConfigurationApi(unavailable: UnavailableOperation): IContentSearchConfigurationService {
+	return {
+		read: () => unavailable('contentSearchConfiguration.read'),
+		configure: () => unavailable('contentSearchConfiguration.configure'),
 	};
 }

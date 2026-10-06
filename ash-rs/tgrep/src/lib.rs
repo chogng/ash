@@ -158,9 +158,8 @@ pub struct IndexStats {
     pub candidates: usize,
     pub total_files: usize,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Status {
-    #[serde(rename = "num_files")]
     pub indexed_file_count: usize,
     pub indexing: bool,
     pub ready: bool,
@@ -180,6 +179,8 @@ enum Registration {
     Directory,
     Released,
     Shared {
+        // Preserve the engine's canonical spelling, including Windows extended paths, on the wire.
+        root: PathBuf,
         view: String,
         lease: String,
         generation: Value,
@@ -235,7 +236,8 @@ impl Session {
                 params: Some(params.clone()),
             };
             let result = process.rpc("attach", params, cancellation, deadline)?;
-            if result["root"] != json!(root)
+            let wire_root: PathBuf = serde_json::from_value(result["root"].clone())?;
+            if dunce::simplified(&wire_root) != root
                 || result["lease"] != lease
                 || result["generation"]["profile"] != profile()
             {
@@ -248,6 +250,7 @@ impl Session {
                 .to_owned();
             pending.params = None;
             Registration::Shared {
+                root: wire_root,
                 view,
                 lease,
                 generation: result["generation"].clone(),
@@ -273,6 +276,10 @@ impl Session {
             }
             std::thread::sleep(Duration::from_millis(25));
         }
+    }
+    /// Canonical directory identity retained even when the checkout has already been removed.
+    pub fn matches_directory(&self, canonical_root: &Path) -> bool {
+        self.root == dunce::simplified(canonical_root)
     }
     /// Consume this registration after in-flight callers finish, before deleting its directory.
     pub fn close(mut self, cancellation: &CancellationToken) -> Result<(), Error> {
@@ -496,9 +503,12 @@ impl Session {
     }
     fn validate_view(&self, value: &Value) -> Result<(), Error> {
         if let Registration::Shared {
-            view, generation, ..
+            root,
+            view,
+            generation,
+            ..
         } = &self.registration
-            && (value["root"] != json!(self.root)
+            && (value["root"] != json!(root)
                 || value["view"] != *view
                 || value["generation"] != *generation)
         {

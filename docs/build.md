@@ -1,6 +1,6 @@
 # 构建与开发
 
-本文说明仓库环境准备、产品构建、通用验证和清理。Electron、Browser、Stanza 的启动模式、热更新和前端测试集中在 [app-ts README](../app-ts/README.md)；产品关系见 [产品线](product-lines.md)。
+本文说明环境准备、产品构建、验证和缓存清理。Electron、Browser、Stanza 的启动模式、热更新和前端测试见 [app-ts README](../app-ts/README.md)；产品关系见 [产品线](product-lines.md)。
 
 ## 构建入口
 
@@ -43,7 +43,7 @@
 2. 执行 `pnpm install`，安装 Node workspace 依赖。
 3. 执行 `just install`，获取 Cargo 依赖并创建含固定版本 Ruff 和 codespell 的 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
 
-直接执行 `node` 时仍需使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Python 构建入口在 Windows 使用 `python`，其他平台使用 `python3`。
+直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Python 构建入口在 Windows 使用 `python`，其他平台使用 `python3`。
 
 ### 项目命令
 
@@ -78,21 +78,9 @@
 | `pnpm stylelint:update`                                     | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
 | `pnpm clean`                                                | 清理本地产物和 Python 缓存                                                 |
 
-格式化配置按语言独立维护：TS/JS 使用 TypeScript Language Service 和根 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml) 与固定工具链，Python 使用仓库固定版本的 Ruff。JSON、YAML、Markdown、CSS、HTML 使用固定版本的 Prettier 和 [`.prettierrc.toml`](../.prettierrc.toml)。`pnpm test:format` 验证前端格式化命令与文件范围；[Formatting CI](../.github/workflows/format.yml) 分别检查 TS/JS、配置与文档、Rust，Python 格式检查保留在 Build tooling CI。
+格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用 [Prettier](../.prettierrc.toml)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
 
-TS/JS 入口通过 Git 选择 `app-ts/`、`build/`、`extensions/`、`test/`、`services/` 和 `ash-rs/js-extension-host/` 下的第一方源码，排除生成文件、第三方代码、声明文件和 fixtures。TypeScript 格式化器保留现有引号与换行布局；新代码的单引号和 import 单行规则仍遵循 [TypeScript 规范](../.github/instructions/typescript-coding-guidelines.instructions.md)。编辑器使用相同 TypeScript 版本、Tab 和分号设置，自动导入使用单引号。Prettier 的排除范围在 [`.prettierignore`](../.prettierignore)，文档中的代码块不由 Prettier 重排。全量检查报告现有格式差异，检查命令不修改源码；格式化可通过语言独立入口执行。
-
-Rust 入口从 Cargo metadata 选择第一方 workspace 包，不格式化 `vendor/` 与 `third_party/` 中的包；固定 stable rustfmt 支持的配置不包含 `imports_granularity`，一行一个 import 的要求继续按 Rust 规范执行。
-
-英文拼写检查使用固定版本 codespell。执行 `just install-python` 安装工具，再执行 `just spellcheck`；检查只报告错字，不自动改写文件。本地与 [Spelling CI](../.github/workflows/codespell.yml) 使用同一入口，从 Git 获取已跟踪及未忽略的新文件，跳过已删除文件和本地构建产物。
-
-扫描规则在 [`.codespellrc`](../.codespellrc)：排除生成内容、fixtures、测试源码、独立非英文翻译文件、语法正则、词干与训练数据、收集的外部资料和第三方副本。普通测试目录中的文档和 `.spec.ts` 仍检查。TUI 的混合翻译源码也参与扫描；[`.codespellignore`](../.codespellignore) 只收录已确认的名称、API 字段、缩写和源码中的法语词，每行一个、按字母排序，允许词在整个仓库生效。真实错字应修正，仅将已确认的误报加入允许词。
-
-`stylelint` 默认排除测试和测试数据中的 CSS，显式路径没有匹配生产 CSS 时返回失败。清单位于 [ash-known-variables.json](../build/lib/stylelint/ash-known-variables.json)，`colors`、`sizes` 来自注册表，`others` 仅收录已确认由组件或平台设置的变量；三类列表都需排序，不能重复。清单更新通过显式选择 `colorRegistry.releaseTest.ts` 完成，该文件不进入日常单测的默认选择。前端 `test:main` 和 CI 都运行这些检查。
-
-变量不存在、在低层 CSS 中引用 `.ash-workbench`、在页面根上使用 `:has()`、使用 `[class*=...]` 等 class 子串选择器都会使检查失败。设计提示覆盖间距、字重、字体角色、图标、圆角和标准描边，不修改 CSS，也不影响退出码；默认检查 Sessions，显式指定路径时检查所选文件。圆角提示要求按表面层级选择，圆形或胶囊不能按最近的数字机械替换。
-
-桌面启动步骤在对应源码中直接记录 `performance.mark`，普通构建也保留这些打点。`ASH_DESKTOP_STARTUP_TRACE=1` 让构建检查追踪所需的打点是否进入 JavaScript 产物，并启用 `Desktop startup trace` 场景；插件不改写启动源码。构造完成、视图恢复完成和整体恢复完成是不同的时间点；切换工作区不重复记录启动打点。构建固定包含 Workbench 与 Sessions 页面，不读取模式环境变量；旧 profile 与存储数据迁移由各自现有 owner 处理。
+`just spellcheck` 使用固定版本 codespell，扫描范围和允许词分别由 [`.codespellrc`](../.codespellrc)、[`.codespellignore`](../.codespellignore) 维护。`pnpm stylelint` 检查生产 CSS 的变量与选择器；更新变量清单使用 `pnpm stylelint:update` 并审阅差异。
 
 验证完整开发包时使用 `just ash-package`，需要让 Code TUI 运行该包时使用 `just ash-package-run`。日常 `just ash` 只准备源码运行所需程序。
 
@@ -116,26 +104,23 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 
 以下入口由 [`scripts/workflow.py`](../scripts/workflow.py) 组织现有命令：
 
-| 命令                           | 完成的步骤                                                                                                                                                  |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `just context <file>`          | 列出文件与快照源码所属的 Cargo 包、适用的 `AGENTS.md` 和 scoped instructions，以及这些规范引用的 skill；是否调用 skill 仍按其适用范围判断                   |
-| `just verify <package>`        | 使用同一 `ci-test` profile，依次执行该包的 `check`、`test` 和 `rust-warnings`；任一步失败就停止，测试没有通过任何用例也视为失败                             |
-| `just snapshot <path.snap>...` | 定位快照源码中带字面量名称的 `tui_assert_snapshot!`，按所属测试分组，从已编译列表确认唯一测试，每个测试精确运行一次；有待审阅基线时展示差异并返回非零退出码 |
-| `just snapshot --pending`      | 汇总 TUI 的 `.snap.new`，按测试分组复跑并展示差异                                                                                                           |
+| 命令                           | 完成的步骤                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `just context <file>`          | 列出所属 Cargo 包、适用规范与引用的 skill                                                          |
+| `just verify <package>`        | 使用同一 `ci-test` profile 执行包级 `check`、`test`、`rust-warnings`；失败或没有通过任何用例时停止 |
+| `just snapshot <path.snap>...` | 定位所属 TUI 测试并按组运行；展示待审阅差异，有待审阅基线时返回非零退出码                          |
+| `just snapshot --pending`      | 汇总 TUI 的 `.snap.new`，按测试分组复跑并展示差异                                                  |
 
 `verify` 支持 `--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
 
 ```sh
 just context code/tui/snapshots/fullscreen/composer/composer_focused.snap
 just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap
-just snapshot code/tui/snapshots/inline/state/config_english_punctuation_chinese.snap code/tui/snapshots/fullscreen/state/config_english_punctuation_chinese.snap
 just snapshot --pending --plan
 just verify ash-utils-home-dir
 ```
 
-`snapshot` 当前覆盖 `code/tui/snapshots/` 下由带字面量名称的断言生成的外部快照，接受 `.snap` 和 `.snap.new` 路径；动态名称、共享 helper 中的断言和真实 PTY 快照使用所属测试入口。需要进程内 App Server 的测试传入 `--features in-process-tests`。脚本清除继承的 `INSTA_*` 设置，运行时生成 `.snap.new`，避免环境设置直接覆盖基线或隐藏失败。
-
-可以显式传入多份快照，也可以用 `--pending` 汇总所有待审阅文件；重复路径和同一测试产生的多个模式会合并，同一测试只运行一次。某个测试失败后继续运行其他已选测试，最后保留失败退出码。脚本展示选中的待审阅文件及本轮新产生的文件。
+`snapshot` 覆盖 `code/tui/snapshots/` 下由带字面量名称的断言生成的外部快照，接受 `.snap` 和 `.snap.new`，同一测试只运行一次。动态名称、共享 helper 中的断言和真实 PTY 快照使用所属测试入口。需要进程内 App Server 时传入 `--features in-process-tests`。运行生成 `.snap.new`，不直接覆盖基线。
 
 按 [test-tui](../.agents/skills/test-tui/SKILL.md) 逐份审阅后，显式列出要接受的具体文件：
 
@@ -143,9 +128,9 @@ just verify ash-utils-home-dir
 just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
 ```
 
-`--accept` 可接受多份已审阅文件，必须显式列出路径，不能与 `--pending` 同用。命令先确认全部指定文件都有待审阅基线、全部测试都能唯一定位，再展示全部指定差异，逐份接受，最后不带快照更新环境设置按组复跑。其他待审阅快照保留；只要 `code/tui/snapshots/` 中还有 `.snap.new`，命令返回非零退出码并列出路径。
+`--accept` 必须显式列出已审阅文件，不能与 `--pending` 同用；接受后按组复跑测试。其他待审阅文件保留；目录中还有 `.snap.new` 时返回非零退出码并列出路径。
 
-Windows Cargo 的测试 Job 禁止子进程脱离，而共享 App Server 必须独立于启动者存活。验证这种进程生命周期时，使用 `just test-processes ash-app-server --test managed_lifecycle`：Cargo 负责编译，仓库脚本按 Cargo 报告的路径独立运行测试程序，保留后台的脱离标志。该入口只接受显式选择的集成测试，不包含库单测或文档测试；普通测试继续使用 `just test`。
+Windows Cargo 的测试 Job 禁止子进程脱离。验证共享 App Server 独立于启动者存活时，使用 `just test-processes ash-app-server --test managed_lifecycle`，先由 Cargo 编译，再独立运行测试程序。此入口只接受显式选择的集成测试；普通测试使用 `just test`。
 
 修改 TUI 后先运行受影响的单测，需要验证真实进程、终端信号或恢复时再运行 PTY 场景：
 
@@ -155,8 +140,6 @@ just test-tui actual_tui_process_interrupts_an_inflight_http_stream
 ```
 
 涉及进程内 App Server 的会话测试需显式启用功能：`just test-tui-unit conversation_flow_tests --features in-process-tests`。两个入口都可用 `just --set tui_profile <profile> ...` 覆盖配置；PTY 入口的服务程序和测试会一起切换。首次构建服务程序仍需时间。日常启动验证用 `just build-code`，使用 `dev-small`。
-
-`ci-test` 继承 `test` 的优化配置：共享 workspace 包使用优化级别 1，TUI 保留包级别的 0，App Server 及其客户端保留 `s`。将整个 workspace 降到 0 会使 macOS 服务程序的 `__eh_frame` 超过 compact-unwind 的 16 MiB 偏移限制；因此不在 `ci-test` 中覆盖全局优化级别。调试信息仍为 `limited`，异常展开设置不变。
 
 同一轮验证按单测、必要的 PTY 场景、warning 检查顺序运行；不要同时启动这些 Cargo 任务。`test-tui-unit` 和 `test-tui` 复用 `.build/cargo` 中同配置的产物，并发运行仍会等待 Cargo 构建锁。
 
@@ -200,19 +183,38 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 `pnpm clean` 删除 `.build/` 及 `build/`、`scripts/` 内的 Python 缓存，不清理 `node_modules`、用户级 pnpm store 或 `.ash/` 配置。源码目录 `build/`、`scripts/` 不属于构建产物。
 
-日常 Cargo 入口和产品程序构建保留增量缓存、依赖库及编译指纹，只记录使用时间并持有构建租约。完整目录盘点与清理通过 `just prune-build-cache` 独立执行，避免给热构建增加扫描等待，或因清理可复用产物而导致下一次构建重编译。旧运行版本与临时编译、索引目录仍由各自的生命周期自动回收。
+### 清理与缓存
 
-显式回收默认将闲置增量缓存收至 32 GiB、闲置 profile 的完整产物收至 64 GiB，后者包含增量缓存。增量回收保留依赖库和程序；完整产物超限时按最近使用时间整组清理旧 profile，包括依赖库、程序、编译指纹和 build script 输出，下一次使用需要重编译。清理保留锁文件，避免等待中的 Cargo 进程持有失效的锁。这些预算只在运行清理命令时应用，不是日常构建的自动磁盘上限。
+日常 Cargo 和产品构建保留编译缓存，只记录使用时间并持有租约。目录盘点与回收通过 `just prune-build-cache` 单独执行，避免热构建等待扫描或清理后重新编译。
 
-回收器取得 Cargo 的 profile 锁及仓库构建租约后才访问产物。`cargo run/test` 的仓库入口在子进程退出前持续持有租约；正在构建或运行的 profile 不参与回收。完成不足一分钟的产物留给发布步骤，因此显式回收也允许工作集暂时超限。开发产品使用独立的带租约 generation，清理编译目录不会删除已发布的运行版本。
+| 清理参数             | 默认值 | 回收内容                                                                          |
+| -------------------- | ------ | --------------------------------------------------------------------------------- |
+| `--max-gib`          | 32 GiB | 闲置增量缓存；保留依赖库和程序                                                    |
+| `--artifact-max-gib` | 64 GiB | 闲置 profile 的全部产物，包含增量缓存；按最近使用时间整组清理，下次使用需要重编译 |
 
-`just prune-build-cache` 单独执行回收；`--max-gib` 和 `--artifact-max-gib` 分别指定两项预算。自定义 `CARGO_TARGET_DIR` 不自动参与仓库预算；仓库内独立验证目录可显式清理，例如 `just prune-build-cache --target-dir .build/tgrep-shared-validation --max-gib 0 --artifact-max-gib 0`。验证脚本应在结束时删除自己创建的编译与索引目录，仅长期保留报告、日志和复现源码；`just bench-build` 已遵守这一生命周期。
+预算仅在显式清理时应用。回收保留锁文件，跳过正在构建、运行或完成不足一分钟的 profile，工作集可能暂时超限。自定义 `CARGO_TARGET_DIR` 不自动参与预算；仓库内的其他 Cargo 输出目录可用 `--target-dir` 指定。
 
-`just rust-warnings` 使用 Cargo 1.97 起提供的 `CARGO_BUILD_WARNINGS=deny` 检查新生成和已缓存的警告，保持 `RUSTFLAGS` 与普通构建一致，避免 warning 门禁生成另一套编译产物。
+开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/ash_rs/README.md)和 [Code 构建](../build/code/README.md)。
+
+`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
 生成的前端协议副本位于 `app-ts/src/ash/platform/app-server/common/generated/`，可由 `pnpm --dir app-ts protocol:sync` 重建。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 
 ## Rust 依赖检查与构建测量
+
+### 构建配置
+
+配置以 [`Cargo.toml`](../Cargo.toml) 与 [`.cargo/config.toml`](../.cargo/config.toml) 为准：
+
+| Profile     | 用途                                                  | 调试信息       |
+| ----------- | ----------------------------------------------------- | -------------- |
+| `dev`       | 普通开发构建，保留增量编译                            | `limited`      |
+| `dev-small` | Code 等产品开发程序；按包调整优化级别和 codegen units | 关闭并剥离符号 |
+| `ci-test`   | 包级完整验证、TUI 单测与 PTY 场景，共用编译产物       | `limited`      |
+
+`ci-test` 继承 `test` 的优化配置：共享包为 1，TUI 为 0，App Server 及其客户端为 `s`。不要全局降到 0，否则 macOS 服务程序的 `__eh_frame` 可能超过 compact-unwind 的 16 MiB 偏移限制。
+
+协议消费者使用队列、通话、协作和任务交付的轻量契约，服务实现使用同一份类型；schema/export 按需启用。优化依赖范围与实际编辑循环后，再决定是否调整编译参数。本地保留增量编译；使用 sccache 的 CI 作业关闭增量编译，不能直接照搬到本地。
 
 ### 依赖检查
 
@@ -244,19 +246,6 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 `--absolute-regression 2` 可额外允许两秒以内的波动。RSS 是 `time` 报告的最大驻留集；产物大小是 Cargo 输出文件大小。空输出目录不会清空系统或外部编译器缓存，touch 场景也不能证明实际代码编辑的重编译速度。
 
-### 其他项目的做法与 Ash 的选择
-
-2026-10-05 对照本地 Zed `a49db374b6`、Warp `3959ea721`、Codex `989c01a41a`，并核对 Cargo 与 sccache 文档。配置需要按 Ash 的实际依赖图和编辑循环验证，不能仅凭其他项目使用就采用。
-
-| 做法与来源                                                                                                                                                                                                                                                                                            | Ash 的现状与选择                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Zed](https://github.com/zed-industries/zed/blob/a49db374b6/Cargo.toml#L1028) 对齐普通依赖与构建工具依赖的 profile，减少重复编译，并优化部分过程宏依赖                                                                                                                                                | Ash 存在构建与普通依赖的参数、feature 差异；本次参数对齐候选没有证明冷构建提速，未采用，具体结果见下文                                                                                                                            |
-| [Warp](https://github.com/warpdotdev/warp/blob/3959ea721/Cargo.toml#L436) 开发构建使用 `line-tables-only`、`unpacked`；[Codex](https://github.com/openai/codex/blob/989c01a41a/codex-rs/Cargo.toml#L610) 另设关闭调试信息的 `dev-small`                                                               | Ash 的产品 `dev-small` 已关闭调试信息；普通 `dev` / `ci-test` 使用 `limited`。进一步减少调试信息需要保留诊断能力并实测，不能作为既有提速成果                                                                                      |
-| Codex 的 CI 使用 sccache，关闭增量编译以复用编译结果                                                                                                                                                                                                                                                  | Ash 的 trace、protocol CI 已采用；本地保留增量编译。[sccache 的 Rust 限制](https://github.com/mozilla/sccache/blob/main/docs/Rust.md)要求关闭增量编译，且不能缓存调用系统链接器的程序与过程宏，不能将 CI 配置直接用于本地编辑循环 |
-| [Rust Performance Book](https://nnethercote.github.io/perf-book/compile-times.html) 建议通过时间线定位串行依赖，并减少大量宏展开和泛型实例化；[构建配置章节](https://nnethercote.github.io/perf-book/build-configuration.html#minimizing-compile-times)区分链接器、调试信息及实验性编译后端的适用条件 | 优先收窄协议契约的依赖范围，再定位协议自身的编译热点。macOS 链接需保留既有 unwind 约束；nightly 并行前端、Cranelift 尚未在本产品验证                                                                                              |
-
-调整前的 `cargo tree` 确认 `ash-app-server-protocol → ash-queue → ash-extension-api → ash-tools → ash-file-system → arboard → image`，SQLite 则由 `ash-call`、`ash-collaboration`、`ash-queue` 引入。队列、通话、协作和任务交付的数据类型现已分别归属轻量 `*-contract` crate；协议、普通客户端和 TUI 按需直接使用契约，服务实现使用并导出同一份类型。服务端启用任务交付的 `runtime` feature 时，Cargo 的 feature 合并也不再将执行器带入协议；进程内客户端测试仍编译真实执行器。完整产品仍需要图片库与 SQLite，不能把协议包缩小后的收益推算为完整产品冷构建收益。
-
 ### CI 检查
 
 | 工作流                                                              | 覆盖                                                                   |
@@ -268,99 +257,18 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 | [rust-warnings.yml](../.github/workflows/rust-warnings.yml)         | Rust warning 检查和 TUI 测试                                           |
 | [rust-build-health.yml](../.github/workflows/rust-build-health.yml) | 依赖检查、Rust 测试和构建性能比较                                      |
 
-每次 main push 的性能检查在同一 runner 和工具链下对协议包前后版本各测三轮；耗时中位数同时增加超过 25% 和两秒时失败。查看上传的报告，负载波动时复测。具体触发条件和平台分工以工作流为准。
+相关文件变更推送到 main 后，性能检查在同一 runner 和工具链下对协议包前后版本各测三轮；耗时中位数同时增加超过 25% 和两秒时失败。具体触发条件和平台分工以工作流为准。
 
 ### 历史测量与适用范围
 
-2026-10-05 将队列、通话、协作和任务交付的数据类型移至独立契约 crate，服务实现继续使用同一份类型。任务交付独立后，服务端启用 `runtime` feature 也不会通过 Cargo 的 feature 合并把执行依赖带回协议。使用同一 macOS arm64 主机、Rust 1.98.0、`dev-small`、12 个任务，对默认配置 `ash-app-server-protocol` 各测三轮，期间没有其他 Rust 构建。最终中位数如下：
+以下仅保留能说明当前构建选择的测量。条件均为 macOS arm64、Rust 1.98.0、`dev-small`、12 个任务、三轮中位数；不能作为其他机器或当前版本的耗时预算。
 
-| 场景                      | 调整前 | 调整后 |
-| ------------------------- | ------ | ------ |
-| 空输出目录构建 / 秒       | 43.50  | 32.26  |
-| 无改动构建 / 秒           | 1.21   | 1.14   |
-| 时间戳触发协议重编译 / 秒 | 4.26   | 4.20   |
-| 冷构建编译单元            | 255    | 174    |
-| 冷构建最大 RSS / GiB      | 1.49   | 1.47   |
+| 场景                     | 已验证结果                                                                                             | 范围与代价                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| 2026-10-05，协议依赖拆分 | 队列、通话、协作、任务交付类型移入契约 crate 后，协议包空输出构建 43.50 → 32.26 秒，编译单元 255 → 174 | 热构建没有明显变化；完整产品仍需要执行、图片和 SQLite，未证明完整产品冷构建提速 |
+| 2026-10-01，实际协议编辑 | schema 按需启用、协议包优化级别降为 0 后，`just build-code` 重编译 14.10 → 8.74 秒                     | 开发 CLI 程序约增大 11%；冷构建波动较大，未给出稳定提速比例                     |
 
-协议包冷构建约快 26%，热构建没有明显变化；时间戳场景两边均确认协议库实际重编译，不能据此宣称功能编辑提速。契约拆分主要减少依赖编译，并未明显缩小协议自身的产物。完整产品仍使用执行、图片和 SQLite 依赖，本次没有测量完整产品冷构建、实际功能编辑或其他平台，也没有改变 profile、增量编译和编译缓存策略。报告位于 `.build/build-health/protocol-contracts-20261005/report.json`，原始三轮报告为 `ash-app-server-protocol-dev-small-{xtna8298,mlr30r75}/report.json`；六个独立编译目录均自动删除。只分离前三类契约的中间候选冷构建为 31.64 秒，报告为 `ash-app-server-protocol-dev-small-k41ebmmm/report.json`；这组只用于记录过程，不作为最终实现的测量结果。测量工具的工作区快照同步支持新增契约文件与已删除模块，仍拒绝测量期间的输入变更。
-
-验证完成：协议 93 项、通话 12 项、协作 8 项、队列 6 项、任务持久化 2 项、真实任务投递/SSH 流程 4 项、服务端基础设施 15 项、TUI 队列 10 项；外部媒体服务测试按已有规则忽略。客户端 39 项先通过，旧终端 fixture 缺少 `ready` 的一项补齐数据并单独重跑通过。TUI 首次筛选名错误产生的零用例结果不计入验证，已按实际模块名重跑。协议两次再生成均没有改变任何产物，严格 TypeScript 检查、受影响包的检查和 warning gate、完整 `just build-code`、生成 CLI 的 `--help`、Python 脚本 88 项测试以及依赖检查通过。正常 Code 构建和 warning gate 没有报告 warning。
-
-四个新增契约的 Bazel 构建通过，并补齐任务交付实现的运行时目标。后续补齐 `utils/fuzzy-match` 的 BUILD 文件、斜杠命令与编辑器扩展协议的 schema/export feature 和可选依赖，以及斜杠命令单测的共享 fixture。完整 `bazel build //ash-rs/app-server-protocol:app-server-protocol` 通过；现有 Bazel 单测通过 123 项：协议 90 项、编辑器扩展协议 16 项、斜杠命令 14 项、模糊匹配 3 项，构建与测试没有报告 Rust warning。此次构建修复的日志位于 `.build/build-health/bazel-protocol-20261005/`；契约拆分的日志与逐项结果位于 `.build/build-health/protocol-contracts-20261005/`，前三个契约的 Bazel 日志为 `.build/build-health/protocol-contracts-bazel.log`。本机未验证 Linux/Windows 构建。原 `call/src/session.rs` 与 `collaboration/src/types.rs` 分别迁入 `call-contract/src/lib.rs` 与 `collaboration-contract/src/lib.rs`；服务 crate 继续导出同一份类型，序列化与调用契约保持不变。
-
-以下是特定源码、机器和场景的记录，不是当前构建预算。完整实验过程可通过本文件的 Git 历史查阅，原始报告位于各次记录指定的 `.build/build-health/` 目录。
-
-2026-10-05 将 Cargo 缓存盘点和回收移出日常构建入口，避免构建等待目录扫描及缓存清理导致重编译。macOS arm64 上，已有 `ci-test` 缓存的 `just check ash-app-server-daemon --profile ci-test --offline` 三轮无改动检查中位数为改前 1.14 秒、改后 1.20 秒，没有测出整个检查命令提速；新入口的租约与使用时间记录单独测量 100 次，中位数为 0.059 毫秒。改前每轮将盘点标记设为过期，改后不盘点。报告位于 `.build/build-health/cargo-cache-20261005/report.json`。本次未改变 Rust 编译参数、profile 或依赖，未测冷编译及实际代码编辑，不据此宣称编译器提速；默认 32/64 GiB 预算改为显式清理时应用。
-
-同日验证 Zed 的构建依赖 profile 对齐思路：保持 Rust 1.98.0、macOS arm64、12 个任务和全部源码、锁文件、仓库配置一致，对 `ash-app-server-protocol` / `dev-small` 各运行三轮 `just bench-build`。候选仅通过本次命令的环境变量设置 `CARGO_PROFILE_DEV_SMALL_BUILD_OVERRIDE_OPT_LEVEL=1`、`CARGO_PROFILE_DEV_SMALL_BUILD_OVERRIDE_CODEGEN_UNITS=16`、`CARGO_PROFILE_DEV_SMALL_BUILD_OVERRIDE_DEBUG=none`，没有修改仓库 profile。
-
-| 三轮中位数             | 原配置 | 构建依赖参数对齐候选 |
-| ---------------------- | ------ | -------------------- |
-| 空输出目录构建 / 秒    | 49.71  | 50.34                |
-| 无改动重跑 / 秒        | 1.23   | 1.21                 |
-| 源码时间戳重编译 / 秒  | 4.31   | 4.01                 |
-| 冷构建最大驻留集 / GiB | 1.48   | 1.48                 |
-| 冷构建编译单元数       | 289    | 288                  |
-
-候选没有证明冷构建提速，时间戳重编译仅减少约 0.30 秒，未验证实际代码编辑或完整产品；因此未采用。`itoa`、`memchr`、`zmij`、`serde_core`、`serde_json` 仍各有两份库编译单元，部分还有 feature 差异，仅对齐这三个参数不足以复用它们。原配置下 SQLite 构建脚本耗时中位数 16.95 秒、上层协议库 13.19 秒、下层协议库 12.38 秒、`image` 9.35 秒；各项可并行，不能相加推算可节省的时间。两组构建完成且未报告编译器 warning，六个独立编译目录均已自动清理，仅保留日志、时间线和报告。汇总为 `.build/build-health/peer-build-20261005/report.json`，原始报告为 `ash-app-server-protocol-dev-small-{sp5y1nvx,y41lc4c8}/report.json`。
-
-| 日期与条件                                                                 | 改动与结果                                                                                                                                                                                                       | 适用范围                                                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-13，macOS aarch64、Rust 1.98.0、4 个任务                           | TUI 测试与服务程序统一为 `ci-test` 后，顺序冷编译约 18 分 20 秒 → 9 分 15 秒，输出约 10 GB → 9.1 GB                                                                                                              | 不代表其他 profile；当时 macOS 链接仍有 compact-unwind 提示                                                                                                                                                                                                                                                                                                                                                     |
-| 2026-09-13，同平台、6 个任务                                               | 协议注册表共享非泛型实现，三组发布重编译中位数 120.07 → 83.46 秒                                                                                                                                                 | 六次重编译包集合一致；全局 `4 CGU + ThinLTO` 候选使 CLI 编辑重编译 6.50 → 159.24 秒，未采用                                                                                                                                                                                                                                                                                                                     |
-| 2026-09-24，同平台、`dev`、6 个任务                                        | 协议类型移出反馈服务，三轮空输出目录构建中位数 89.55 → 69.27 秒，RSS 1.33 → 1.36 GB                                                                                                                              | 协议包结果，未证明完整产品提速                                                                                                                                                                                                                                                                                                                                                                                  |
-| 2026-09-24，同平台、`dev`、4 个任务                                        | 已预热 sccache 的协议包空输出构建 66.03 → 47.88 秒                                                                                                                                                               | touch 复用了未变化的内容，不代表实际编辑；RSS 未覆盖缓存服务                                                                                                                                                                                                                                                                                                                                                    |
-| 2026-09-24，同平台、无 sccache                                             | 协议默认配置去除重复 check，三轮完整命令中位数 220.13 → 145.92 秒                                                                                                                                                | 同机交错对照，有负载波动；不代表 GitHub runner                                                                                                                                                                                                                                                                                                                                                                  |
-| 2026-09-25，Windows x86_64、Rust 1.98.0、`dev-small`                       | Code 使用 `rust-lld` 后，三轮实际文案编辑重编译中位数 11.31 → 7.84 秒                                                                                                                                            | Windows Code 编辑场景；未采集进程树 RSS，冷编译不能单独归因于链接器                                                                                                                                                                                                                                                                                                                                             |
-| 2026-09-26，macOS arm64                                                    | Vite 显式预优化依赖后，首次窗口菜单和编辑区可见耗时 4507 → 2873 毫秒，重载 1 → 0 次                                                                                                                              | 两次依赖缓存失效的单次 Playwright 对照，不代表日常启动或 Rust 冷编译                                                                                                                                                                                                                                                                                                                                            |
-| 2026-09-28，macOS arm64、Rust 1.98.0、12 个任务                            | TUI 测试包优化级别降为 0，实际编辑重编译中位数 13.31 → 6.72 秒，测试程序 235.2 → 253.9 MiB                                                                                                                       | 共享增量输出；缺少同条件冷编译对照                                                                                                                                                                                                                                                                                                                                                                              |
-| 2026-09-28，同平台、`dev-small`                                            | Code TUI 优化级别降为 0，三轮实际编辑重编译中位数 5.79 → 3.49 秒，回切为 5.84 秒                                                                                                                                 | `just build-code` 的 TUI 编辑场景；冷编译及运行性能未配对测量，发布配置未变                                                                                                                                                                                                                                                                                                                                     |
-| 2026-09-30，macOS arm64、Rust 1.98.0、现有 `test` 缓存                     | `just --set tui_profile test test-tui-unit session_manager` 在提交稳定后的单次重跑中，Cargo 阶段 0.74 秒，13 项测试执行 0.13 秒                                                                                  | 先前运行观察到宏动态库的系统签名校验等待，期间 `git pull` 也触发了重编译；此记录未测默认 `ci-test` 的冷构建，不是配置修改前后的速度对照                                                                                                                                                                                                                                                                         |
-| 2026-10-01，macOS arm64、Rust 1.98.0、`ash-tui` / `dev-small`、12 个任务   | 三轮空输出目录构建中位数 125.97 秒，无改动 1.73 秒，源码时间戳变化 2.82 秒；冷构建 RSS 1.34 GiB，TUI `.rlib` 54.8 MiB                                                                                            | TUI 自身冷编译中位数 10.37 秒；AWS-LC 构建中位数 84.06 秒，经 HTTP、GitHub、State 依赖延长尾部。构建脚本还下载 Sherpa 库，Cargo 离线模式未阻止该下载；不是优化前后对照                                                                                                                                                                                                                                          |
-| 2026-10-01，同平台、现有 `dev-small` 缓存                                  | 源码不变，仅通过 `ASH_BUILD_COMMIT` 改变构建提交号，`just build-code` 单次耗时 2.30 → 16.27 秒，13 个编译单元重编译；恢复后 15.81 秒                                                                             | `build-info` 的提交身份经过协议和诊断依赖传播至 TUI、CLI 与 App Server；未改 Git checkout。单次触发实验，不是提速结果                                                                                                                                                                                                                                                                                           |
-| 2026-10-01，同平台、`ash-tui` / `dev-small`、12 个任务，三轮对照           | TLS 显式使用 ring，云端转写改为宿主选择的 feature，Sherpa 静态库按锁定版本共享后：冷构建 125.97 → 80.54 秒，无改动 1.73 → 1.41 秒，时间戳重编译 2.82 → 2.53 秒；冷构建 RSS 1.34 → 1.33 GiB，TUI `.rlib` 54.8 MiB | 最终代码冷构建约快 36%，三轮为 83.57 / 78.30 / 80.54 秒；前一候选的三轮中位数为 89.57 秒，差值不单独归因于 SDK 适配修正。仅 TLS 调整为 117.39 秒。TUI 默认依赖图移除 AWS-LC、model-provider 与 tokenizers；完整 App Server 仍启用云端转写，并因其他上游依赖保留 AWS-LC。共享 Sherpa 资源已预热，原构建脚本会在 Cargo 离线模式中下载资源，结果包含消除该下载的收益；不代表首次资源准备、其他平台或完整产品冷构建 |
-| 2026-10-01，同平台、现有 `dev-small` 缓存，三轮实际 `just build-code` 对照 | 构建身份与稳定数据契约分开后，仅改变 `ASH_BUILD_COMMIT` 的构建中位数 13.73 → 6.13 秒；重编译包从 13 个缩至身份库、CLI、App Server，协议与 TUI 保持缓存                                                           | 无改动 1.51 → 0.83 秒，TUI 时间戳重编译 4.17 → 3.32 秒；时间戳变化不是实际功能编辑。单项身份调整的提交号重编译为 9.64 秒；这些完整入口数据不用于推断完整产品冷构建                                                                                                                                                                                                                                              |
-| 2026-10-02，macOS arm64、Rust 1.98.0、`ci-test`                            | 移除全局优化级别 0 后，App Server / Remote 的 `__eh_frame` 分别为 10.8 / 10.5 MiB，低于 16 MiB；两个服务的实际链接均通过 `-D warnings`                                                                           | 验证使用提交 `240064771` 的独立检出，保留 TUI 的包级别 0 与异常展开设置。三轮构建基线因期间出现新提交而被测量工具拒绝，不作为构建速度对照；日志及段大小位于 `.build/build-health/unwind-20261002/`                                                                                                                                                                                                              |
-
-优化前的报告为 `.build/build-health/ash-tui-dev-small-gc6em9qr/report.json`，完整入口、提交号实验和测试日志汇总在 `.build/build-health/tui-investigation-20261001/report.json`。该次调查的默认 `ci-test` 13 项会话测试通过，首次 Cargo 编译 33.20 秒，无改动重跑 0.70 秒；当时未复现持续卡死，系统对宏动态库的检查耗时未单独测量。
-
-2026-10-01 优化对照报告：最终 TUI 为 `.build/build-health/ash-tui-dev-small-big7auep/report.json`，前候选为 `ash-tui-dev-small-o1xchm_t/report.json`，TLS 单项为 `ash-tui-dev-small-r4dns3wj/report.json`；完整 Code 的基线、身份单项与最终候选位于 `.build/build-health/tui-fix-20261001/{baseline,identity,final}-product.json`。
-
-同日验证时也复现了系统等待：`rustc` 的采样栈停在加载过程宏动态库的 `dlopen → mapSegments → fcntl`，编译器 CPU 为 0，`syspolicyd` 正在执行安全评估。该轮小范围 `just check` 共耗时 4 分 42 秒，并最终继续完成；栈与系统日志保存在上述 `tui-fix-20261001` 目录。此现象与依赖编译的 CPU 工作不同，已实现的依赖与缓存调整不能保证消除 macOS 首次加载检查；本次未更改系统安全设置。
-
-本次验证：完整 `just build-code`、默认 TUI 的 1,197 项测试、本地与 cloud 语音测试、诊断/反馈及听写 RPC、协议测试、更新与 Remote 宿主测试、受影响包的 `just rust-warnings`、Python 构建测试与 `just dependencies`。真实模型/麦克风测试按已有条件忽略；Windows/Linux 构建未在本机执行。后端与 Remote 的 `ci-test` 程序链接有 `__eh_frame` 超过 16 MiB 的 compact-unwind 提示；测试通过，但不将其记录为无 warning 的构建。正常 Code 的 `dev-small` 构建和包级 warning 检查未出现该提示，未改变全局 profile 或 unwind 设置。
-
-2026-10-01 补齐 `utils/cargo-bin` 和 `utils/cli` 时，对 `ash-cli` / `dev-small` 做了三轮构建对照，使用同一 macOS arm64 主机、Rust 1.98.0 和 12 个任务。最初空输出构建中位数为 85.70 秒；补齐后为 98.00 秒，回切原 CLI 源码后为 98.17 秒。无改动分别为 1.45 / 1.62 / 1.58 秒，源码时间戳重编译为 2.60 / 2.78 / 2.81 秒。后两组的冷构建 RSS 为 1.68 / 1.54 GiB，CLI 二进制约 83.4 MiB。回切保留了新增 workspace 成员；这些结果未证明工具库能够提速，也不能把最初与后两组的差异直接归因于工具库。
-
-真实 `just build-code` 的三轮对照中，无改动为 0.78 → 0.78 秒，CLI 错误前缀的实际代码编辑为 2.36 → 2.40 秒，CLI 二进制约 84.5 MiB，编辑构建 RSS 约 0.87 GiB。参数图拆成独立 crate 的实验，在 TUI Debug 文案实际编辑后为 3.63 → 3.57 秒，回切为 3.69 秒；没有明显收益，已撤回。Cargo timings 中 `ash-app-server-protocol` 单个编译单元约 41–48 秒，新增 CLI 工具库约 0.24 秒；该调查未修改协议实现或全局优化配置，冷编译瓶颈仍在。
-
-报告分别为 `.build/build-health/ash-cli-dev-small-{iktqajj3,9wk3uvac,jw5yk5r9}/report.json`；完整入口与拆分实验位于 `.build/build-health/cli-utils-20261001/{baseline-product,kept-product,tui-product}.json`。Cargo/Bazel 工具库测试、CLI 43 项测试、一个真实终端资源场景、正常 Code 构建、包级 warning 检查及依赖检查通过。完整 Bazel CLI 目标的首次分析被已有 `collaboration-mode-templates` / `ash-mcp` 依赖标签错误阻断；后续修复结果见下文。Windows/Linux 运行行为未在本机验证。
-
-2026-10-01 随后对协议编译做了三项实验：`ash-exec` 的 JSON Schema 派生改为显式 `schema` feature，两个协议包在 `dev-small` 下使用 `opt-level=0`，以及优化 `syn`、`quote`、`proc-macro2`、`serde_derive` 的候选配置。最终保留前两项；schema feature 的嵌套类型与标识符约束由测试覆盖。
-
-下表每项为三轮中位数，测量基于 `0090c73f55` 及本次改动，使用同一 macOS arm64 主机、Rust 1.98.0、12 个任务。CLI 冷构建使用独立输出目录；Code 编辑场景复用产品输出，逐轮修改协议 `AppServerListenInfoError` 的实际错误文本，并确认协议及下游重新编译，随后恢复原文。
-
-| 方案                         | CLI 冷构建 / 秒 | CLI 无改动 / 秒 | CLI 时间戳重编译 / 秒 | Code 协议编辑 / 秒 | CLI 冷构建 RSS / GiB | Code 的 ash / MiB |
-| ---------------------------- | --------------- | --------------- | --------------------- | ------------------ | -------------------- | ----------------- |
-| 基线                         | 90.79           | 1.87            | 2.69                  | 14.10              | 1.69                 | 84.6              |
-| schema 显式开启              | 91.65           | 1.64            | 2.83                  | 13.27              | 1.35                 | 85.5              |
-| 再将协议包优化级别降为 0     | 100.05          | 1.64            | 2.90                  | 9.07               | 1.24                 | 93.7              |
-| 再优化宏依赖的候选           | 87.32           | 1.58            | 2.82                  | 8.62               | 1.24                 | 92.9              |
-| 撤回宏配置后的复测，最终保留 | 74.26           | 1.47            | 2.74                  | 8.74               | 1.24                 | 93.7              |
-
-最终方案的实际协议编辑约快 38%，Code 无改动仍约 0.8 秒，编辑构建 RSS 为 1.59 GiB。代价是开发 CLI 二进制约增大 11%。协议编译单元本身的三轮中位数从底层 31.92 秒、上层 45.96 秒降到 9.42 秒、21.76 秒；回切复测为 9.26 秒、18.48 秒。
-
-同一份代码、相同已记录输入与环境的两组冷构建结果从 100.05 秒变为 74.26 秒，波动较大，因此不能给出稳定冷构建提速比例，也不能将宏候选的差值单独归因于宏优化。宏配置回切后编辑时间为 8.74 秒，与候选的 8.62 秒接近，未保留该配置。这些结果不代表完整 Code 冷构建、所有协议类型编辑、发布构建或其他平台。
-
-CLI 报告位于 `.build/build-health/ash-cli-dev-small-{n4o_stkm,og0s6jgl,in95a67w,fha0_w73,voewa4mc}/report.json`；实际产品报告位于 `.build/build-health/protocol-20261001/{baseline,schema-off,opt0,macro3,kept}-product.json`。
-
-协议测试（上层 72 项、底层 45 项）、执行测试（默认配置 10 项、schema 配置 11 项）、CLI 命令测试 9 项、包级检查、两种配置的 warning 检查、依赖检查及当前工作区的 `just build-code` 通过。执行测试的旧 Turn fixture 已补齐 `mode`。Bazel 已同步显式 schema feature 和可选依赖；首次目标分析被已有的 `collaboration-mode-templates` 目标名称错误阻断，随后完成以下修复。其他平台未在本机测量。
-
-同日修正 Bazel 的 `collaboration-mode-templates`、`ash-mcp` 目标名与 App Server 导入名，补齐协议目标的可选 schema 依赖、Web 模板资源及云端语音 feature。共享构建宏现在让单测继承库的 feature，执行 schema 测试与云端语音测试不再被跳过。协议 fixture 测试使用 `cargo-bin` 定位 Cargo/Bazel 资源；metadata 与解码器生成保持固定 JSON 字段顺序，不受 `serde_json/preserve_order` 影响。
-
-`bazel build //ash-rs/exec:exec //ash-cli:ash` 和生成二进制的 `ash --help` 通过。五个 Bazel 单测目标共通过 114 项：模式模板 2 项、MCP 12 项、执行/schema 11 项、语音 17 项、协议 72 项；语音的三项真实模型/麦克风测试按既有条件忽略。Cargo 在显式启用 `export,serde_json/preserve_order` 时的协议 72 项测试也通过；受影响包的检查、warning 检查与依赖检查通过，`just generate-protocol` 没有改变生成文件。日志位于 `.build/build-health/protocol-20261001/bazel-*.log` 与 `protocol-preserve-order3.log`；这次修复没有新增性能测量。
-
-早期 WebRTC 构建记录属于已切换的依赖图，不能用于当前耗时判断。2026-09-24 产品宿主拆除 App Server 实现依赖的单包测量，也没有同条件完整产品冷构建的前后对照。
+工具库补齐没有证明产品构建提速；参数库拆分、过程宏优化与构建依赖 profile 对齐候选均未证明收益，未保留。原始测量保存在 `.build/build-health/`；已提交的详细记录可从本文 Git 历史查阅。
 
 ## 构建源码与仓库脚本边界
 

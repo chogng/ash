@@ -15,6 +15,7 @@
 - 结果按路径、行号排序；每行保留完整文本与 UTF-8 byte ranges。UTF-16 高亮、模型文本格式和各自结果预算由调用方转换。
 - 每次最多 5,000 个匹配行；引擎执行有 30 秒期限和输出容量限制。错误和取消显式返回，不自动切换引擎。
 - `configure` 更新同一服务，所有使用者共同生效；切换前等待已有搜索结束，再释放索引进程和租约。
+- `release_directory` 等待已开始的搜索并确认释放目录租约，App Server 在 worktree 删除前调用。其他 worktree 的服务和租约继续有效。
 - State Runtime 按仓库身份持有 `Grep` 目录，worktree 共享基础索引并保留独立差异缓存；配置位于 `[grep].backend`，默认 `tgrep`。
 
 ```sh

@@ -1118,7 +1118,7 @@ def test_tgrep_resolution(root):
     executable = executable_file(root / "tgrep-source", b"tgrep")
     return ExecutableResolution(
         executable,
-        "1.0.12-ash.1",
+        "1.0.12-ash.e9d55db.1",
         "local-override",
         hashlib.sha256(b"tgrep").hexdigest(),
     )

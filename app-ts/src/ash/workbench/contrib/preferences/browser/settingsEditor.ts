@@ -1,3 +1,4 @@
+import { SearchSettingsContent } from '../../search/browser/searchSettingsContent.js';
 import { NetworkSettingsContent } from './networkSettingsContent.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
@@ -204,6 +205,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.activeCategory = initialCategory;
 		this.contents.push(
 			this._register(this.instantiationService.createInstance(NetworkSettingsContent, settingsContent)),
+			this._register(this.instantiationService.createInstance(SearchSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(AdvisorSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SkillsSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),

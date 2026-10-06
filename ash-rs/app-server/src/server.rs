@@ -743,7 +743,7 @@ impl AppServer {
             config.as_ref(),
             file_access,
             hooks,
-            Arc::clone(&self.env_runtime),
+            Arc::downgrade(&self.env_runtime),
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
             database_path,
@@ -1405,9 +1405,7 @@ impl AppServer {
             .install_extensions(registry.clone())
             .map_err(|e| e.to_string())?;
         let executor = self
-            .env_runtime_mut()
-            .turn_executor
-            .clone()
+            .turn_executor_snapshot()
             .with_extensions(registry.clone());
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
@@ -1455,9 +1453,7 @@ impl AppServer {
             .map_err(|error| error.to_string())?;
         self._skill_watcher = Some(runtime.start_watching());
         let executor = self
-            .env_runtime_mut()
-            .turn_executor
-            .clone()
+            .turn_executor_snapshot()
             .with_extensions(Arc::clone(&agent_extensions));
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
@@ -1600,9 +1596,11 @@ impl AppServer {
     ) -> Result<Self, git_runtime::GitRuntimeError> {
         let runtime = git_runtime::GitRuntime::new(authorization, Arc::clone(&self.updates))?;
         let watcher = runtime.start_watching(self.config.clone());
-        let state = self.env_runtime_mut();
-        state.workspace._git_watcher = Some(watcher);
-        state.workspace.git = Some(runtime);
+        {
+            let mut state = self.env_runtime_mut();
+            state.workspace._git_watcher = Some(watcher);
+            state.workspace.git = Some(runtime);
+        }
         Ok(self)
     }
 
@@ -1652,9 +1650,7 @@ impl AppServer {
             None => TurnActionPolicy::new(policy, ash_extension_api::ApprovalReviewer::Unavailable),
         });
         let mut executor = self
-            .env_runtime_mut()
-            .turn_executor
-            .clone()
+            .turn_executor_snapshot()
             .with_tool_service(tools, policy)
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 client_host: Arc::clone(&self.client_host),
@@ -1683,11 +1679,12 @@ impl AppServer {
         self
     }
 
-    fn env_runtime_mut(&mut self) -> &mut EnvRuntime {
-        Arc::get_mut(&mut self.env_runtime)
-            .expect("environment runtime cannot be mutated through a builder after it is shared")
-            .get_mut()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    fn env_runtime_mut(&mut self) -> std::sync::RwLockWriteGuard<'_, EnvRuntime> {
+        // Directory cleanup retains this runtime during composition so it always releases the
+        // current search service, including services replaced when environment config changes.
+        self.env_runtime
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Creates a root Thread using this environment's directory authority.
@@ -1759,9 +1756,7 @@ impl AppServer {
             .install_extensions(self.agent_extensions.clone())
             .map_err(|error| error.to_string())?;
         let executor = self
-            .env_runtime_mut()
-            .turn_executor
-            .clone()
+            .turn_executor_snapshot()
             .with_extensions(self.agent_extensions.clone());
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;

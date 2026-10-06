@@ -19,7 +19,7 @@ import { createAppServerDiffApi } from "../../diff/browser/diffApi.js";
 import { createAppServerSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createAppServerGitApi } from "../../git/browser/gitApi.js";
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
-import { createAppServerContentSearchApi } from "../../search/browser/searchApi.js";
+import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
 import { createAppServerModelApi, createAppServerSessionApi, createAppServerThreadApi, createAppServerTurnApi } from "../../sessions/browser/sessionApi.js";
 import { createAppServerSkillApi } from "../../skills/browser/skillApi.js";
 import { AppServerTerminalProcessService } from "../../terminal/browser/appServerTerminalProcessService.js";
@@ -118,6 +118,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		languageServers: createAppServerLanguageServerService(connection),
 		git: createAppServerGitApi(connection),
 		contentSearch: createAppServerContentSearchApi(connection),
+		contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
 		terminal: new AppServerTerminalProcessService(connection, appServer),
 		assets: new AppServerAssetService(connection),
 		testing: new AppServerTestExecutionService(connection),

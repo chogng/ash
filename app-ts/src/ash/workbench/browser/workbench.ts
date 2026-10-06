@@ -171,7 +171,7 @@ import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import type { BrowserStorageServiceOptions } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
-import { IContentSearchService } from "../../platform/search/common/search.js";
+import { IContentSearchService, IContentSearchConfigurationService } from "../../platform/search/common/search.js";
 import { BrowserContentSearchService, FileContentSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
@@ -507,6 +507,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
+		services.registerInstance(IContentSearchConfigurationService, api.contentSearchConfiguration);
 		services.registerInstance(IHooksService, api.hooks);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
