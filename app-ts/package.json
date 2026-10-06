@@ -92,6 +92,8 @@
     "dev:stanza": "vite --config ../build/app_ts/vite/editor.vite.config.ts",
     "dev:web": "cross-env ASH_WEB_APP_SERVER=0 vite --config ../build/app_ts/vite/vite.config.ts --mode web",
     "dev:web:full": "cross-env ASH_WEB_APP_SERVER=1 vite --config ../build/app_ts/vite/vite.config.ts --mode web",
+    "dev:web:agents": "cross-env ASH_DEV_AGENTS_WINDOW=1 pnpm run dev:web:full",
+    "dev:web:agents:ui": "cross-env ASH_DEV_AGENTS_WINDOW=1 pnpm run dev:web",
     "typecheck:web:watch": "tsc -p tsconfig.renderer.json --noEmit --watch --preserveWatchOutput",
     "prebuild:web": "pnpm run prepare:generated",
     "build:web": "cross-env ASH_WEB_APP_SERVER=0 node ../build/app_ts/build.ts web",

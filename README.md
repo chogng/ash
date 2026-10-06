@@ -91,9 +91,17 @@ For a Linux Electron Desktop, Web, and Rust backend environment, open the reposi
 ```bash
 pnpm dev:web      # Browser Workbench at http://127.0.0.1:5173/, no Rust build
 pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
+pnpm dev:web:agents # Sessions with App Server and frontend/backend watching
+pnpm dev:web:agents:ui # Sessions UI at http://127.0.0.1:5173/, no Rust build
 ```
 
 The full Web mode is a local development integration, not a deployable Web service.
+
+For Sessions, select `Ash Sessions Web (Chrome)` with F5 to prepare the backend and
+open its authenticated Sessions page in the browser debugger. The UI-only configuration
+is `Ash Sessions Web (Chrome, UI Only)`. Both use Vite hot updates; connected Web commands
+also rebuild Rust sources and switch the managed backend after successful compilation,
+retaining browser authentication and unsent input. See [frontend development](app-ts/README.md#日常-web-开发).
 
 Use `Ash Web (Chrome)` with F5 for browser development. This mode opens, edits and saves
 browser-authorized local folders, restores dirty editors after reload, stores settings in IndexedDB,

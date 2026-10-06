@@ -11,6 +11,16 @@
 			"runOptions": { "instanceLimit": 1 }
 		},
 		{
+			"label": "Prepare Ash Web Backend",
+			"type": "shell",
+			"command": "pnpm --dir app-ts predev:web:full",
+			"options": { "cwd": "${workspaceFolder}" },
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "group": "ash-browser-ui" },
+			"runOptions": { "instanceLimit": 1 },
+			"osx": { "command": "uv run --python 3.12 pnpm --dir app-ts predev:web:full" }
+		},
+		{
 			"label": "Watch Ash Web Types",
 			"type": "shell",
 			"command": "pnpm typecheck:web:watch",

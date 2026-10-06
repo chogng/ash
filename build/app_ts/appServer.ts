@@ -32,7 +32,7 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
   return file === 'Cargo.toml' || file === 'Cargo.lock';
 }
 
-export async function watchAppServer(options: { skipInitial?: boolean } = {}): Promise<() => void> {
+export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void> } = {}): Promise<() => void> {
   let activeBuild: ChildProcess | undefined;
   let buildRequested = !options.skipInitial;
   let debounce: NodeJS.Timeout | undefined;
@@ -68,6 +68,8 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
           await generateProtocol(cancellation.signal);
           cancellation.signal.throwIfAborted();
           await runBackendBuild();
+          cancellation.signal.throwIfAborted();
+          await options.onDidBuild?.();
         } catch (error) {
           if (!stopped) console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -79,7 +81,11 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
 
   function runBackendBuild(): Promise<void> {
     return new Promise<void>((resolvePromise, reject) => {
-      const { command, args } = pythonCommand(['-B', 'build/ash_rs/develop.py']);
+      // Web owns a packaged Node runtime; Electron supplies Node from its host.
+      const buildArguments = options.javascriptRuntime === 'packaged-node'
+        ? ['-B', 'build/ash_rs/prepare.py', '--javascript-runtime', 'packaged-node']
+        : ['-B', 'build/ash_rs/develop.py'];
+      const { command, args } = pythonCommand(buildArguments);
       const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
       activeBuild = child;
       child.once('error', error => {

@@ -83,3 +83,31 @@ test('watcher invokes the Python backend builder after protocol synchronization'
   assert.match(await failure.promise, /backend build exited with status 1/);
   assert.deepEqual(commands, ['build/ash_rs/protocol.py', 'build/ash_rs/develop.py']);
 });
+
+for (const succeeds of [true, false]) {
+  test(`Web watcher ${succeeds ? 'selects the backend after a successful build' : 'keeps the backend when compilation fails'}`, async t => {
+    const commands: string[][] = [];
+    const completed = Promise.withResolvers<void>();
+    let reloads = 0;
+    t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+    t.mock.method(fs, 'watch', () => ({ close() {} }));
+    t.mock.method(console, 'error', (message: string) => {
+      assert.match(message, /backend build exited with status 1/);
+      completed.resolve();
+    });
+    t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+      commands.push([...args]);
+      const child = new ChildProcess();
+      setImmediate(() => child.emit('close', commands.length === 1 || succeeds ? 0 : 1, null));
+      return child;
+    });
+    syncBuiltinESMExports();
+    const stop = await watchAppServer({ javascriptRuntime: 'packaged-node', onDidBuild: async () => { reloads++; completed.resolve(); } });
+    t.after(stop);
+    await completed.promise;
+    assert.deepEqual({ commands, reloads }, {
+      commands: [pythonCommand(['-B', 'build/ash_rs/protocol.py']).args, pythonCommand(['-B', 'build/ash_rs/prepare.py', '--javascript-runtime', 'packaged-node']).args],
+      reloads: succeeds ? 1 : 0,
+    });
+  });
+}

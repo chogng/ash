@@ -12,8 +12,10 @@
 | 直接开发 Agents 窗口，监听前后端变化 | `pnpm --dir app-ts dev:agents` | `Ash (Electron, Agents)` |
 | 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm --dir app-ts dev:ui:connected` | `Ash (Electron, Frontend Watch Only)` |
 | Electron 界面，不构建或启动后端 | `pnpm dev:desktop:ui` | — |
-| 浏览器工作台、本地文件编辑，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome, UI Only)` |
-| 浏览器与真实 App Server | `pnpm dev:web:full` | — |
+| 浏览器工作台、本地文件编辑，不构建或启动后端 | `pnpm dev:web` | `Ash Web (Chrome)` |
+| 浏览器与真实 App Server，监听前后端变化 | `pnpm dev:web:full` | — |
+| 直接开发 Sessions Web，监听前后端变化 | `pnpm dev:web:agents` | `Ash Sessions Web (Chrome)` |
+| Sessions Web 界面，不构建或启动后端 | `pnpm dev:web:agents:ui` | `Ash Sessions Web (Chrome, UI Only)` |
 | 独立 Stanza 编辑器 | `pnpm dev:stanza` | `Stanza Editor - Standalone` |
 
 `Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
@@ -22,7 +24,7 @@
 
 ### 日常 Web 开发
 
-1. 执行 `pnpm dev:web`，打开 5173；也可用 F5 的 `Ash Web (Chrome, UI Only)` 启动和调试。
+1. 执行 `pnpm dev:web`，打开 5173；也可用 F5 的 `Ash Web (Chrome)` 启动和调试。
 2. 通过 File → Open Folder 选择并授权项目目录。浏览器文件服务直接读写目录，页面 URL 的 `folder` 参数保存工作区身份；刷新恢复目录、编辑器和已持久化的未保存内容。再次选择同一目录会复用身份，Close Folder 清除当前目录。
 3. 保存 TypeScript 或 CSS 后由 Vite 更新。另开终端运行 `pnpm typecheck:web:watch`，持续检查类型；`pnpm typecheck:web` 执行一次完整检查。
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
@@ -36,6 +38,10 @@ Web 构建只包含浏览器 Workbench 与 Sessions 页面，输出到 `.build/a
 
 后端集成使用 `pnpm dev:web:full`，生产构建与启动分别使用 `pnpm build:web:full`、`pnpm start:web:full`。两种 Web 构建使用同一输出目录，预览和测试应匹配最后一次构建模式。
 
+Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions 认证链接；F5 选择 `Ash Sessions Web (Chrome)`，准备前后端后自动打开该链接并连接 Chrome 调试器。只开发界面时使用 `pnpm dev:web:agents:ui` 或 `Ash Sessions Web (Chrome, UI Only)`，5173 根地址直接进入 Sessions。两种 Sessions 入口复用相同的浏览器页面、Vite 热更新和 Web 构建。切回 Workbench 后可继续使用同一浏览器会话。
+
+完整 Web 开发由 Vite 管理 Rust 监听器和 Web 启动进程。保存 Rust 或 Cargo 文件后先同步协议、编译并发布含独立 Node 的开发包；成功后通过 `ensure-selected` 切换受管后端。编译失败保留当前后端。Web 启动进程持续持有原入口，使重启后的监听地址和浏览器授权继续有效；页面重连时保留会话选择和未发送输入。停止 Vite 会释放监听器和入口授权；其他客户端共用的后端仍按共享生命周期管理。连接后端的 F5 配置通过 `serverReadyAction` 打开动态认证链接，停止服务器调试会同时停止其 `Browser Debug`；只停止浏览器调试时服务器继续运行，可在调试工具栏停止服务器。仅界面 F5 配置保留服务器与浏览器双向停止。
+
 F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口通过 `uv run --python 3.12` 选择 Python；手动运行命令时，按 [macOS 环境要求](../docs/build.md#macos-与-linux-开发环境) 配置。
 
 当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](../docs/workbench-modes.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
@@ -47,6 +53,7 @@ F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口�
 | Renderer 与 CSS | Vite 热更新；符合条件的 UI 方法修改保留现有实例 |
 | Electron Main / Preload | 编译和 preload 沙箱依赖校验通过后重启 Electron |
 | Rust 后端 | 完整桌面开发命令监听后端，增量编译后发布开发运行目录，所有本地窗口共用一次后端重启 |
+| Web Rust 后端 | 完整 Web 开发命令监听后端，编译并发布独立 Node 开发包后切换后端，保留页面与浏览器授权 |
 
 Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/app_ts/vite/hotReloadPlugin.ts`。
 
@@ -56,7 +63,7 @@ Electron 启动前并行准备键盘模块、前端生成资源和后端资源�
 
 开发启动器使用 `.build/app-ts/dev/profile` 和 `.build/app-ts/dev/user-data`，Workbench 与 Agents 共享开发数据；设置 `ASH_HOME` 可以指定其他开发配置。资源或运行工具锁文件修改后执行 VS Code 任务 `Prepare Ash Backend`，或 `pnpm --dir app-ts prepare:backend`，准备完成后已运行的完整开发窗口会切换到新版本。
 
-需要单独监听后端时，先执行 `pnpm --dir app-ts prepare:backend`，再在仓库根目录执行 `pnpm dev:desktop:rust`。仅 UI、`dev:ui:connected` 和普通 Web 模式不监听后端。后端开发包和下载规则见 [共享包构建](../build/ash_rs/README.md)。
+需要单独监听桌面后端时，先执行 `pnpm --dir app-ts prepare:backend`，再在仓库根目录执行 `pnpm dev:desktop:rust`。仅 UI、`dev:ui:connected`、`dev:web` 和 `dev:web:agents:ui` 不监听后端。后端开发包和下载规则见 [共享包构建](../build/ash_rs/README.md)。
 
 ### 打开工作区
 

@@ -13,7 +13,7 @@ export type AshWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
 /**
  * Redirects the development server root to the shared Browser Workbench.
  */
-export function workbenchEntryPlugin(): AshWorkbenchEntryPlugin {
+export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.html'): AshWorkbenchEntryPlugin {
   return {
     name: "ash-workbench-entry",
     configureServer(server) {
@@ -28,7 +28,7 @@ export function workbenchEntryPlugin(): AshWorkbenchEntryPlugin {
         response.statusCode = 302;
         response.setHeader("Cache-Control", "no-store");
         const query = request.url?.indexOf('?') ?? -1;
-        response.setHeader("Location", `/browser/workbench/workbench.html${query >= 0 ? request.url!.slice(query) : ''}`);
+        response.setHeader("Location", `${entryPath}${query >= 0 ? request.url!.slice(query) : ''}`);
         response.end();
       });
     },

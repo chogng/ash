@@ -151,6 +151,9 @@ pub(crate) fn launch_web(
             Ok(true) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             _ => {}
         }
+        // Attach to one managed generation while lifecycle commands hold off replacement.
+        // Release before waiting on the lease so stop/restart can close its connection.
+        let operation = endpoint.acquire_operation_lock()?;
         let Some(control) = request_control(&endpoint, ControlCommand::Status)? else {
             continue;
         };
@@ -188,6 +191,7 @@ pub(crate) fn launch_web(
             return Err("Web listener changed its port".into());
         }
         web.port = port;
+        drop(operation);
         reader.get_mut().clear_deadline().map_err(io_error)?;
         let shutdown = reader.get_ref().try_clone().map_err(io_error)?;
         if !published {

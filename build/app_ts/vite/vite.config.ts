@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
   const webOnly = mode === "web";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
   const sourceRoot = resolve(desktopRoot, "src/ash/code");
+  const browserEntryPath = process.env.ASH_DEV_AGENTS_WINDOW === '1'
+    ? `/browser/sessions/${AshSessionsRendererEntry}.html`
+    : '/browser/workbench/workbench.html';
   const browserEntry = "browser/workbench/workbench";
   const electronEntry = "electron-browser/workbench/workbench";
   const browserInputs = {
@@ -50,7 +53,7 @@ export default defineConfig(({ mode }) => {
       buildMetricsPlugin(),
       localizationPlugin(),
       hotReloadPlugin({ desktopRoot }),
-      workbenchEntryPlugin(),
+      workbenchEntryPlugin(browserEntryPath),
       productIconsPlugin(),
 		browserExtensionsPlugin(),
       {
@@ -66,7 +69,7 @@ export default defineConfig(({ mode }) => {
         },
       },
       ...(process.env.ASH_DESKTOP_STARTUP_TRACE === '1' ? [desktopStartupTracePlugin()] : []),
-      ...(webAppServerEnabled ? [webAppServerVitePlugin()] : []),
+      ...(webAppServerEnabled ? [webAppServerVitePlugin(browserEntryPath)] : []),
     ],
     optimizeDeps: {
       // The dependency scanner parses source before Vite transforms parameter decorators.

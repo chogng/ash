@@ -28,7 +28,10 @@ fn main() {
     // V8's public headers contain intentionally unused virtual parameters. Mark the
     // dependency as a system include; warnings in our shim remain enabled.
     if compiler.get_compiler().is_like_msvc() {
-        compiler.flag(format!("/external:I{}", include.display()));
+        compiler
+            .flag("/Zc:__cplusplus")
+            .flag("/external:W0")
+            .flag(format!("/external:I{}", include.display()));
     } else {
         compiler
             .flag("-isystem")

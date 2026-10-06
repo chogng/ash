@@ -1,6 +1,7 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { promisify } from 'node:util';
 import { developmentAshPackagePath } from './runtimeStore.ts';
 import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../app-ts/src/ash/platform/app-server/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
@@ -10,6 +11,7 @@ interface WebLaunch {
 	readonly info: WebListenInfo;
 	readonly exited: Promise<number>;
 	close(): Promise<void>;
+	reloadBackend(): Promise<void>;
 }
 
 export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv> }): Promise<WebLaunch> {
@@ -37,7 +39,10 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	const child = spawn(executable, arguments_, { cwd: root, env: environment, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
 	let diagnostic = '';
 	child.stderr.on('data', chunk => { diagnostic = (diagnostic + String(chunk)).slice(-8192); });
-	const exited = new Promise<number>(resolveExit => { child.once('close', code => resolveExit(code ?? 1)); });
+	const exited = new Promise<number>(resolveExit => { child.once('close', code => {
+		if (code !== 0 && diagnostic) console.error(diagnostic.trim());
+		resolveExit(code ?? 1);
+	}); });
 	let closing: Promise<void> | undefined;
 	const close = (): Promise<void> => closing ??= (async () => {
 		child.stdin.end();
@@ -62,12 +67,22 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 				} catch (error) { finish(error instanceof Error ? error : new Error('Invalid Web launch record')); }
 			});
 		});
-		return { info, exited, close };
+		return { info, exited, close, reloadBackend: async () => {
+			const selected = developmentAshPackagePath(root, 'packaged-node');
+			const backend = source.ASH_APP_SERVER_PATH ?? join(selected, 'bin', `ash-app-server${suffix}`);
+			// Keep the Web lease alive: it restores the same listener and browser tokens
+			// when the managed backend adopts the newly published package.
+			await promisify(execFile)(join(selected, 'bin', `ash-app-server-daemon${suffix}`), ['ensure-selected'], {
+				env: { ...environment, ASH_APP_SERVER_PATH: backend, ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(selected, 'ash-path', `rg${suffix}`)) },
+				windowsHide: true, timeout: 30_000,
+			});
+			console.info('[app-server] Web backend selected');
+		} };
 	} catch (error) { await close(); throw error; }
 }
 
-export function authenticatedWebUrl(info: WebListenInfo, origin = info.endpoint): string {
-	const url = new URL('/browser/workbench/workbench.html', origin);
+export function authenticatedWebUrl(info: WebListenInfo, origin = info.endpoint, entryPath = '/browser/workbench/workbench.html'): string {
+	const url = new URL(entryPath, origin);
 	url.hash = new URLSearchParams({ 'ash-endpoint': info.endpoint, 'ash-ticket': info.ticket }).toString();
 	return url.href;
 }

@@ -90,6 +90,54 @@
 			"presentation": { "hidden": true }
 		},
 		{
+			"name": "Ash Sessions Web (Chrome)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
+			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
+			"cwd": "${workspaceFolder}/app-ts",
+			"env": { "ASH_WEB_APP_SERVER": "1", "ASH_DEV_AGENTS_WINDOW": "1", "NO_COLOR": "1" },
+			"preLaunchTask": "Prepare Ash Web Backend",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
+				"action": "debugWithChrome",
+				"uriFormat": "%s",
+				"webRoot": "${workspaceFolder}",
+				"killOnServerStop": true
+			},
+			"presentation": { "group": "1_ash_desktop", "order": 4 }
+		},
+		{
+			"name": "Ash Sessions Web (Chrome, UI Only)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
+			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
+			"cwd": "${workspaceFolder}/app-ts",
+			"env": { "ASH_WEB_APP_SERVER": "0", "ASH_DEV_AGENTS_WINDOW": "1", "NO_COLOR": "1" },
+			"preLaunchTask": "Prepare Ash Web",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"action": "startDebugging",
+				"name": "Ash Sessions Web Browser (Chrome)",
+				"killOnServerStop": true
+			},
+			"presentation": { "group": "1_ash_desktop", "order": 5 }
+		},
+		{
+			"name": "Ash Sessions Web Browser (Chrome)",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/",
+			"webRoot": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": ["Ash Sessions Web (Chrome, UI Only)"],
+			"presentation": { "hidden": true }
+		},
+		{
 			"name": "Ash App (Rust)",
 			"type": "node-terminal",
 			"request": "launch",

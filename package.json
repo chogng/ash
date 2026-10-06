@@ -53,6 +53,8 @@
     "dev:desktop:rust": "pnpm --dir app-ts dev:rust",
     "dev:web": "pnpm --dir app-ts dev:web",
     "dev:web:full": "pnpm --dir app-ts dev:web:full",
+    "dev:web:agents": "pnpm --dir app-ts dev:web:agents",
+    "dev:web:agents:ui": "pnpm --dir app-ts dev:web:agents:ui",
     "build:web": "pnpm --dir app-ts build:web",
     "build:web:full": "pnpm --dir app-ts build:web:full",
     "start:web": "pnpm --dir app-ts start:web",

@@ -34,9 +34,14 @@ test("Workbench entry leaves non-root and mutating requests to Vite", () => {
   }
 });
 
-function configuredMiddleware(): Connect.NextHandleFunction {
+test('Sessions development opens its page directly and preserves workspace parameters', () => {
+  const middleware = configuredMiddleware('/browser/sessions/sessions-code.html');
+  assert.equal(invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location, '/browser/sessions/sessions-code.html?folder=project');
+});
+
+function configuredMiddleware(entryPath?: string): Connect.NextHandleFunction {
   let middleware: Connect.NextHandleFunction | undefined;
-  workbenchEntryPlugin().configureServer({
+  workbenchEntryPlugin(entryPath).configureServer({
     middlewares: {
       use(candidate) {
         middleware = candidate;

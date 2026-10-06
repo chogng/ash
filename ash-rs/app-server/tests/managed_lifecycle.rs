@@ -486,6 +486,35 @@ fn web_launch_reuses_the_managed_process_and_releases_its_listener() {
     let session: ash_app_server_protocol::WebSessionInfo =
         serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
     assert!(session.workspace_id.starts_with("sha256:"));
+
+    // Exercise repeated real replacements with the original launch and browser token.
+    let mut latest_pid = started.pid;
+    for _ in 0..3 {
+        latest_pid = run_lifecycle(LifecycleCommand::Restart, options.clone(), executable)
+            .unwrap()
+            .pid;
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            assert!(
+                launch.0.try_wait().unwrap().is_none(),
+                "Web launch exited during restart"
+            );
+            if let Ok(mut http) = std::net::TcpStream::connect(authority) {
+                http.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                if write!(http, "POST /ash/session HTTP/1.1\r\nHost: {authority}\r\nOrigin: http://{authority}\r\nAuthorization: Bearer {}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", session.token).is_ok() {
+                    let mut response = String::new();
+                    if http.read_to_string(&mut response).is_ok() && response.starts_with("HTTP/1.1 200") {
+                        break;
+                    }
+                }
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Web listener did not restore browser authorization"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
     drop(launch.0.stdin.take());
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     while launch.0.try_wait().unwrap().is_none() {
@@ -497,5 +526,5 @@ fn web_launch_reuses_the_managed_process_and_releases_its_listener() {
     }
     assert!(std::net::TcpStream::connect(authority).is_err());
     let still_running = run_lifecycle(LifecycleCommand::Version, options, executable).unwrap();
-    assert_eq!(still_running.pid, started.pid);
+    assert_eq!(still_running.pid, latest_pid);
 }

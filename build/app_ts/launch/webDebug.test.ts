@@ -7,10 +7,9 @@ import { join, resolve, relative, isAbsolute } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
 import { _electron, expect } from '@playwright/test';
+import { developmentAshPackagePath } from '../runtimeStore.ts';
 
 const repository = resolve(import.meta.dirname, '../../..');
-const serverName = 'Ash Web (Chrome)';
-const browserName = 'Ash Web Browser (Chrome)';
 
 interface DebugState {
 	readonly sessions: readonly { name: string; parentName?: string }[];
@@ -18,12 +17,19 @@ interface DebugState {
 }
 
 // An installed VS Code supplies the real task runner, server-ready extension and JavaScript debugger.
-test('Web F5 releases its server and browser when either debug session stops and can launch again', {
-	timeout: 180_000,
+for (const [serverName, browserName, port, connected] of [
+	['Ash Web (Chrome)', 'Ash Web Browser (Chrome)', 5173, false],
+	['Ash Sessions Web (Chrome, UI Only)', 'Ash Sessions Web Browser (Chrome)', 5173, false],
+	['Ash Sessions Web (Chrome)', 'Browser Debug', 5174, true],
+] as const) {
+test(`${serverName} F5 releases its server and browser when ${connected ? 'the server' : 'either debug session'} stops and can launch again`, {
+	// The connected launch can compile the Rust backend before its first debugger starts.
+	timeout: connected ? 360_000 : 180_000,
 	skip: !process.env.ASH_VSCODE_EXECUTABLE,
 }, async t => {
-	await assertPortAvailable();
-	const directory = await mkdtemp(join(tmpdir(), 'ash-web-debug-'));
+	await assertPortAvailable(port);
+	// Keep the managed socket path below Windows' AF_UNIX path limit.
+	const directory = await mkdtemp(join(tmpdir(), 'ash-wd-'));
 	const extension = join(directory, 'extension');
 	const profile = join(directory, 'profile');
 	const endpointFile = join(directory, 'endpoint.json');
@@ -42,6 +48,7 @@ test('Web F5 releases its server and browser when either debug session stops and
 	await writeFile(join(extension, 'extension.cjs'), extensionSource);
 	const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 	environment.ASH_WEB_DEBUG_ENDPOINT = endpointFile;
+	environment.ASH_WEB_APP_SERVER_PROFILE = join(directory, 'b');
 	delete environment.ELECTRON_RUN_AS_NODE;
 	// Debugger readiness must work without the terminal tool's inherited color overrides.
 	delete environment.NO_COLOR;
@@ -60,6 +67,10 @@ test('Web F5 releases its server and browser when either debug session stops and
 	t.after(async () => {
 		if (endpoint) { await command('stopAll'); }
 		await application.close();
+		if (connected) {
+			const executable = join(developmentAshPackagePath(repository, 'packaged-node'), 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
+			await promisify(execFile)(executable, ['stop'], { env: { ...environment, ASH_HOME: join(directory, 'b') }, windowsHide: true });
+		}
 		const temporaryPath = relative(tmpdir(), directory);
 		assert.ok(!temporaryPath.startsWith('..') && !isAbsolute(temporaryPath));
 		await rm(directory, { recursive: true, force: true });
@@ -79,14 +90,19 @@ test('Web F5 releases its server and browser when either debug session stops and
 		return result as T;
 	}
 
-	for (const stopName of [serverName, browserName]) {
+	for (const stopName of connected ? [serverName] : [serverName, browserName]) {
 		assert.equal(await command<boolean>('start', serverName), true);
-		await expect.poll(async () => (await command<DebugState>('state')).sessions.filter(session => !session.parentName).map(session => session.name).sort(), {
-			timeout: 60_000,
-		}).toEqual([serverName, browserName].sort());
+		try {
+			await expect.poll(async () => (await command<DebugState>('state')).sessions.filter(session => !session.parentName).map(session => session.name).sort(), {
+				timeout: 60_000,
+			}).toEqual([serverName, browserName].sort());
+		} catch (error) {
+			t.diagnostic(JSON.stringify(await command<DebugState>('state')));
+			throw error;
+		}
 		await expect.poll(async () => (await command<DebugState>('state')).sessions.some(session => session.parentName === browserName), { timeout: 30_000 }).toBe(true);
 		await expect.poll(async () => {
-			const result = await command<{ result: string }>('evaluate', browserName);
+			const result = await command<{ result: string }>(connected ? 'evaluateConnected' : 'evaluate', browserName);
 			return result.result;
 		}, { timeout: 30_000 }).toBe('true');
 		const pids = await debugProcessIds(application.process().pid!);
@@ -97,31 +113,32 @@ test('Web F5 releases its server and browser when either debug session stops and
 			try { process.kill(pid, 0); return false; }
 			catch (error) { if (error.code !== 'ESRCH') { throw error; } return true; }
 		}), { timeout: 10_000 }).toBe(true);
-		await assertPortAvailable();
+		await assertPortAvailable(port);
 	}
 
 	const occupied = createServer();
 	await new Promise<void>((resolveListen, reject) => {
 		occupied.once('error', reject);
-		occupied.listen(5173, '127.0.0.1', resolveListen);
+		occupied.listen(port, '127.0.0.1', resolveListen);
 	});
 	try {
 		await command('start', serverName);
-		await expect.poll(async () => (await command<DebugState>('state')).output.some(output => output.includes('Port 5173 is already in use')), { timeout: 30_000 }).toBe(true);
+		await expect.poll(async () => (await command<DebugState>('state')).output.some(output => output.includes(`Port ${port} is already in use`)), { timeout: 30_000 }).toBe(true);
 		await expect.poll(async () => (await command<DebugState>('state')).sessions, { timeout: 10_000 }).toEqual([]);
 		assert.equal(occupied.listening, true);
 		assert.deepEqual(await debugProcessIds(application.process().pid!), []);
 	} finally {
 		await new Promise<void>((resolveClose, reject) => occupied.close(error => error ? reject(error) : resolveClose()));
 	}
-	await assertPortAvailable();
+	await assertPortAvailable(port);
 });
+}
 
-async function assertPortAvailable(): Promise<void> {
+async function assertPortAvailable(port: number): Promise<void> {
 	const server = createServer();
 	await new Promise<void>((resolveListen, reject) => {
 		server.once('error', reject);
-		server.listen(5173, '127.0.0.1', resolveListen);
+		server.listen(port, '127.0.0.1', resolveListen);
 	});
 	await new Promise<void>((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose()));
 }
@@ -176,6 +193,7 @@ exports.activate = function (context) {
 			} else if (action === 'start') {
 				result = await vscode.debug.startDebugging(vscode.workspace.workspaceFolders[0], name);
 			} else if (action === 'stopAll') {
+				for (const execution of vscode.tasks.taskExecutions) { execution.terminate(); }
 				await Promise.all([...sessions.values()].map(session => vscode.debug.stopDebugging(session)));
 				result = true;
 			} else {
@@ -184,11 +202,11 @@ exports.activate = function (context) {
 				if (action === 'stop') {
 					await vscode.debug.stopDebugging(session);
 					result = true;
-				} else if (action === 'evaluate') {
+				} else if (action === 'evaluate' || action === 'evaluateConnected') {
 					const target = [...sessions.values()].find(candidate => candidate.parentSession?.id === session.id);
 					if (!target) { throw new Error('Missing browser target'); }
 					result = await target.customRequest('evaluate', {
-						expression: '!!document.querySelector(".ash-workbench")', context: 'repl',
+						expression: action === 'evaluateConnected' ? '!!document.querySelector(".ash-sessions-window") && !!globalThis.ashWebWorkbenchHost' : session.name.includes('Sessions') ? '!!document.querySelector(".ash-sessions-window")' : '!!document.querySelector(".ash-workbench")', context: 'repl',
 					});
 				} else { throw new Error('Unknown action: ' + action); }
 			}
