@@ -265,8 +265,9 @@ def verify(package, node=None):
                     },
                 )
                 assert initialized["protocolVersion"] == {
-                    key: metadata["protocol"][key] for key in ("major", "revision")
+                    key: metadata["protocol"][key] for key in ("major",)
                 }
+                assert initialized["schemaHash"] == metadata["protocol"]["schemaHash"]
                 status = client.call("grep/index/status", {})
                 assert status["enabled"] and not status["active"], status
                 status = client.call("grep/index/rebuild", {})

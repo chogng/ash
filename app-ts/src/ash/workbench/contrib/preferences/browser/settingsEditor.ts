@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { SearchSettingsContent } from '../../search/browser/searchSettingsContent.js';
 import { NetworkSettingsContent } from './networkSettingsContent.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -9,7 +9,7 @@ import { h } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
@@ -22,7 +22,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
 import { GitConfiguration, type GitAutofetch } from '../../git/common/gitConfiguration.js';
 import { IGitService } from '../../git/common/gitService.js';
@@ -42,7 +42,7 @@ import { DictationSettingsContent } from '../../chat/browser/speechToText/dictat
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { SettingsSearchWidget } from './settingsWidgets.js';
-import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
+import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor } from './settingsLayout.js';
 import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from './settingsTreeModels.js';
 import { TOCTree, TOCTreeModel, type SettingsTOCOpenEntry } from './tocTree.js';
@@ -50,7 +50,7 @@ import { TOCTree, TOCTreeModel, type SettingsTOCOpenEntry } from './tocTree.js';
 export const SettingsEditorId = 'workbench.editor.settings';
 
 /** Owns the Settings search, navigation, and Configuration Registry-backed controls. */
-export class SettingsEditor extends Disposable implements IEditorPane {
+export class SettingsEditor extends EditorPane implements IEditorPane {
 	public readonly id = SettingsEditorId;
 	private content!: HTMLElement;
 	private contentDescription!: HTMLParagraphElement;
@@ -110,7 +110,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.contextViewProvider = contextViewProvider;
 	}
 
-	public create(container: HTMLElement): void {
+	public override create(container: HTMLElement): void {
 		if (this.rootDomNode) throw new Error('Settings editor has already been created');
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
 		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsContentItem>());
@@ -198,6 +198,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this.element.append(navigation, this.content);
 		rootDomNode.append(this.element);
 		container.append(rootDomNode);
+		super.create(rootDomNode);
 		this.rootDomNode = rootDomNode;
 
 		const initialCategory = SettingsCategories[0];
@@ -255,7 +256,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this._register(toDisposable(() => rootDomNode.remove()));
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isSettingsEditorInput(input)) throw new TypeError(`Settings editor cannot open ${input.resource}`);
 		if (signal.aborted) throw signal.reason;
 		this.languageServerSettings.setInput(input);
@@ -276,23 +277,24 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		}
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		if (this.searchWidget) this.searchWidget.value = '';
 	}
 
-	public layout(_dimension: IDimension): void {
+	public override layout(_dimension: IDimension): void {
 		this.navigationScrollable.layout();
 		this.contentScrollable.layout();
 		this.revealSection();
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		this.visible = visibility === EditorPaneVisibility.Visible;
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		this.visible = visibility;
 		this.updateContentVisibility();
 		this.revealSection();
 	}
 
-	public focus(): void {
+	public override focus(): void {
 		if (!this.visible) return;
 		this.searchWidget?.focus();
 	}

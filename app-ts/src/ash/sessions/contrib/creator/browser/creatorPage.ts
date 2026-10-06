@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import './creatorPage.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -9,7 +9,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { localize } from '../../../../nls.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { CreatorMode } from '../common/creator.js';
@@ -18,20 +18,23 @@ import { CreatorModes, type ICreatorWorkspace } from './creatorWorkspace.js';
 const pages = new WeakMap<Element, CreatorPage>();
 const navigationViews = new WeakMap<Element, CreatorNavigationView>();
 
-export class CreatorEditorPane extends Disposable implements IEditorPane {
+export class CreatorEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.creator';
 	public page!: CreatorPage;
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.page = this._register(this.instantiation.createInstance(CreatorPage, parent.ownerDocument));
 		parent.append(this.page.domNode);
+		super.create(this.page.domNode);
 		this.page.initialize();
 	}
-	public async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
-	public clearInput(): void { }
-	public setVisible(visibility: EditorPaneVisibility): void { this.page.setVisible(visibility === EditorPaneVisibility.Visible); }
-	public layout(dimension: IDimension): void { this.page.layout(dimension); }
-	public focus(): void { this.page.focus(); }
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
+	public override clearInput(): void { }
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility); this.page.setVisible(visibility);
+	}
+	public override layout(dimension: IDimension): void { this.page.layout(dimension); }
+	public override focus(): void { this.page.focus(); }
 }
 
 /** Home and non-canvas workspaces use the same contributed navigation container. */

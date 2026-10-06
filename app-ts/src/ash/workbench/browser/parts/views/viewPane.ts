@@ -2,6 +2,7 @@ import "./views.css";
 import { Emitter } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
 import type { IView } from "../../../common/views.js";
+import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 
 /** Runtime inputs supplied by a browser view container to every pane. */
 export type IViewPaneOptions = IPaneOptions;
@@ -39,6 +40,10 @@ export abstract class ViewPane extends Pane implements IView {
 
 	isVisible(): boolean {
 		return this.visible;
+	}
+
+	public hasFocus(): boolean {
+		return isAncestorOfActiveElement(this.element);
 	}
 
 	isBodyVisible(): boolean {

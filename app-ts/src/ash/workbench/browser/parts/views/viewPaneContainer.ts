@@ -10,6 +10,7 @@ import { PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
+import { Composite } from '../../composite.js';
 
 /** Construction inputs for one browser view container. */
 export interface ViewPaneContainerOptions {
@@ -29,7 +30,7 @@ export interface ViewPaneContainerOptions {
  * Owns registered pane instances and workspace layout state. The model owns
  * visibility; hiding a pane detaches it without discarding contribution state.
  */
-export class ViewPaneContainer extends Disposable {
+export class ViewPaneContainer extends Composite {
 	readonly element: HTMLElement;
 	readonly id: string;
 	readonly viewContainer: IViewContainerDescriptor;
@@ -46,7 +47,6 @@ export class ViewPaneContainer extends Disposable {
 	private mountedPanes: ViewPane[] = [];
 	private syncing = false;
 	private didLayout = false;
-	private visible = true;
 	private readonly viewsAdded = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewsRemoved = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean; }>());
@@ -67,6 +67,7 @@ export class ViewPaneContainer extends Disposable {
 		element.className = "ash-view-pane-container";
 		element.dataset.viewContainerId = options.viewContainer.id;
 		container.append(element);
+		super.create(element);
 		this.id = options.viewContainer.id;
 		this.viewContainer = options.viewContainer;
 		this.headersVisible = options.paneHeaders !== "hidden";
@@ -122,14 +123,9 @@ export class ViewPaneContainer extends Disposable {
 		return this.model.isVisible(id) ? this._panes.get(id)?.pane : undefined;
 	}
 
-	isVisible(): boolean {
-		return this.visible;
-	}
-
-	setVisible(visible: boolean): void {
-		if (this.visible === visible) return;
-		this.visible = visible;
-		this.element.hidden = !visible;
+	public override setVisible(visible: boolean): void {
+		if (this.isVisible() === visible) return;
+		super.setVisible(visible);
 		for (const [, item] of this._panes) {
 			item.pane.setVisible(visible && this.model.isVisible(item.pane.id));
 		}
@@ -149,7 +145,7 @@ export class ViewPaneContainer extends Disposable {
 		return this.openView(id, true) !== undefined;
 	}
 
-	focus(): void {
+	public override focus(): void {
 		this.panes[0]?.focus();
 	}
 
@@ -181,7 +177,7 @@ export class ViewPaneContainer extends Disposable {
 					this.onDidFailCreateView(error, descriptor.id);
 					continue;
 				}
-				pane.setVisible(this.visible);
+				pane.setVisible(this.isVisible());
 				const item = new ViewPaneItem(pane, this.readSize(descriptor.id) ?? 200);
 				this._panes.set(descriptor.id, item);
 				item.listenToViewEvents(
@@ -205,10 +201,10 @@ export class ViewPaneContainer extends Disposable {
 					this.mountedPanes.splice(currentIndex, 1);
 					this.mountedPanes.splice(index, 0, pane);
 				}
-				pane.setVisible(this.visible);
+				pane.setVisible(this.isVisible());
 				index += 1;
 			}
-			if (focusRemoved && this.visible) this.focus();
+			if (focusRemoved && this.isVisible()) this.focus();
 		} finally {
 			this.syncing = false;
 		}

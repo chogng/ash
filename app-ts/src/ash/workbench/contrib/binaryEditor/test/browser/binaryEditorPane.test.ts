@@ -7,7 +7,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Event } from '../../../../../base/common/event.js';
 import { FileKind, IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { EditorPaneMatch } from "../../../../../workbench/browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
 import { BaseBinaryResourceEditor, binaryEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryEditor.js";
 import { BinaryResourceDiffEditor, binaryDiffEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryDiffEditor.js";
 import { EditorInputSerializers } from "../../../../../workbench/services/editor/common/editorInputSerializer.js";

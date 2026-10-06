@@ -1,4 +1,4 @@
-import type { IEditorPane } from "./editorPane.js";
+import type { IEditorPane } from '../../../common/editor.js';
 
 /** Pane capability persisted with an editor working set. */
 export interface IEditorPaneWithViewState extends IEditorPane {

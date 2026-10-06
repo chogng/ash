@@ -1,16 +1,16 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { addDisposableListener, h, svg as createSvgElement } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Separator } from "../../../../base/common/actions.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { clamp } from "../../../../base/common/numbers.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
-import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneMatch, EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { PdfAnnotationPoint, PdfAnnotationRect, PdfNoteAnnotation } from "../common/pdfAnnotations.js";
 import { PdfAnnotationModel } from "./pdfAnnotationModel.js";
 import type { IPdfAnnotationStore } from "./pdfAnnotationStore.js";
@@ -47,7 +47,7 @@ type ActiveAnnotation = ActiveHighlight | ActiveInk;
  * The PDF itself stays immutable. Annotations persist in a versioned companion file through
  * {@link IPdfAnnotationStore}, so document loading and review metadata remain independently owned.
  */
-export class PdfEditorPane extends Disposable implements IEditorPane {
+export class PdfEditorPane extends EditorPane implements IEditorPane {
 	readonly id = PDF_EDITOR_ID;
 
 	private readonly annotationModel = this._register(new PdfAnnotationModel());
@@ -94,7 +94,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		}));
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("PDF editor pane has already been created");
 		const ownerDocument = parent.ownerDocument;
 		const container = h(ownerDocument, "div");
@@ -154,6 +154,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		content.append(pages, sidebar);
 		container.append(toolbar.element, content);
 		parent.append(container);
+		super.create(container);
 
 		this.container = container;
 		this.toolbar = toolbar;
@@ -175,7 +176,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		this.renderSidebar();
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (matchPdfEditor(input) === EditorPaneMatch.None) {
 			throw new RangeError(`PDF editor cannot open ${input.resource}`);
 		}
@@ -208,7 +209,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		}
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.activeAnnotation?.preview.remove();
 		this.activeAnnotation = undefined;
 		this.annotationInteractions.clear();
@@ -224,13 +225,9 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		this.renderSidebar();
 	}
 
-	layout(_dimension: IDimension): void { }
+	public override layout(_dimension: IDimension): void { }
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-	}
-
-	focus(): void {
+	public override focus(): void {
 		this.requirePages().focus();
 	}
 

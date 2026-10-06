@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import "./media/editorTitleControl.css";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -17,7 +17,7 @@ import type { EditorGroupId } from "../../../services/editor/common/editorState.
 import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
 import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
 import type { Range } from "../../../../editor/common/core/range.js";
-import type { IEditorPane } from "./editorPane.js";
+
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import { MultiRowEditorControl } from "./multiRowEditorTabsControl.js";

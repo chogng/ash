@@ -75,7 +75,9 @@ def resolve_tgrep(
             directory = Path(temporary)
             _extract_source(source, directory)
             # Apply upstream-relative paths independently of any parent checkout.
-            patch_environment = dict(os.environ, GIT_CEILING_DIRECTORIES=str(directory.parent))
+            patch_environment = dict(
+                os.environ, GIT_CEILING_DIRECTORIES=str(directory.parent)
+            )
             for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
                 patch_environment.pop(name, None)
             subprocess.run(

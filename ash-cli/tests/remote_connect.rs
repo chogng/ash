@@ -13,9 +13,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use ash_app_server_protocol::protocol::initialize::{
-    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
-};
+use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use serde_json::json;
@@ -363,7 +361,6 @@ fn incompatible_initialize_response() -> String {
             "serverInfo": { "name": "fake-remote", "version": "1" },
             "protocolVersion": {
                 "major": APP_SERVER_PROTOCOL_MAJOR + 1,
-                "revision": APP_SERVER_PROTOCOL_REVISION
             },
             "schemaHash": "incompatible-protocol",
             "capabilities": {
@@ -374,10 +371,12 @@ fn incompatible_initialize_response() -> String {
                 "turns": true,
                 "projects": false,
                 "memories": false,
+                "approvalEnvironment": false,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,
                 "git": false,
+                "github": false,
                 "contentSearch": false,
                 "codebase": false,
                 "cloudCodebase": false,
@@ -392,11 +391,7 @@ fn incompatible_initialize_response() -> String {
                 "marketplace": false,
                 "mcp": false,
                 "mcpOAuth": false,
-                "contracts": {
-                    "sessions": { "version": APP_SERVER_CAPABILITY_VERSION },
-                    "threads": { "version": APP_SERVER_CAPABILITY_VERSION },
-                    "turns": { "version": APP_SERVER_CAPABILITY_VERSION }
-                }
+                "contracts": {}
             },
             "slashCommands": []
         }

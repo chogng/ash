@@ -14,8 +14,7 @@ import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions, type EditorPaneStatus } from '../../../common/editor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -33,7 +32,7 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
 import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
-import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
+
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimTrailingWhitespaceCommand.js";
 import { EditOperation } from '../../../../editor/common/core/editOperation.js';
@@ -154,7 +153,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	private saving = false;
 	private beforeSaveHooks: Array<() => void | Promise<void>> = [];
 
-	getControl(): EditorPanePart | undefined {
+	public override getControl(): EditorPanePart | undefined {
 		return this.part.value;
 	}
 
@@ -248,11 +247,12 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		};
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("EditorPane has already been created");
 		const container = h(parent.ownerDocument, "div");
 		container.className = "stanza-editor-pane";
 		parent.append(container);
+		super.create(container);
 		this.container = container;
 		this._register(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));
 		this._register(toDisposable(() => {
@@ -261,7 +261,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		}));
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
 		throwIfCancelled(signal, "Code editor input loading was cancelled");
 		const isProvidedResource = input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);
@@ -403,7 +403,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.statusChangeEmitter.fire();
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.loadingProvidedInput.clear();
 		this.statusListener.clear();
 		this.part.clear();
@@ -414,10 +414,9 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.statusChangeEmitter.fire();
 	}
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		if (!this.container) return;
-		this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-		if (visibility === EditorPaneVisibility.Visible) this.part.value?.layout(this.dimension);
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		if (visibility) this.part.value?.layout(this.dimension);
 	}
 
 	async saveAs(resource: URI): Promise<void> {

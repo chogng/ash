@@ -1,5 +1,5 @@
 import {
-	APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH,
+	APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH,
 	type InitializeResult, type ModelCatalogEntry,
 } from '../../common/generated/index.js';
 
@@ -7,7 +7,7 @@ import {
 export function createTestInitializeResult(): InitializeResult {
 	return {
 		serverInfo: { name: 'ash-app-server', version: '0.1.0' },
-		protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION },
+		protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR },
 		schemaHash: APP_SERVER_SCHEMA_HASH,
 		slashCommands: [],
 		capabilities: {
@@ -40,9 +40,6 @@ export function createTestInitializeResult(): InitializeResult {
 			mcpOAuth: true,
 			contracts: {
 				github: { version: 1 },
-				sessions: { version: APP_SERVER_CAPABILITY_VERSION },
-				threads: { version: APP_SERVER_CAPABILITY_VERSION },
-				turns: { version: APP_SERVER_CAPABILITY_VERSION },
 			},
 		},
 	};

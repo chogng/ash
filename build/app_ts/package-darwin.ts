@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { AshApplicationId } from '../../app-ts/src/ash/code/common/application.ts';
-import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from '../../app-ts/src/ash/platform/app-server/common/generated/protocol.ts';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../app-ts/src/ash/platform/app-server/common/generated/protocol.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const appRoot = join(repositoryRoot, 'app-ts');
@@ -141,8 +141,6 @@ async function validateBackend(path: string): Promise<void> {
 		|| metadata.layoutVersion !== 2 || metadata.version !== application.version
 		|| metadata.entrypoint !== 'bin/ash-app-server'
 		|| metadata.protocol?.major !== APP_SERVER_PROTOCOL_MAJOR
-		|| metadata.protocol?.revision !== APP_SERVER_PROTOCOL_REVISION
-		|| metadata.protocol?.capabilityVersion !== APP_SERVER_CAPABILITY_VERSION
 		|| metadata.protocol?.schemaHash !== APP_SERVER_SCHEMA_HASH
 		|| typeof metadata.buildId !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(metadata.buildId)
 		|| !/^[a-f0-9]{64}$/u.test(metadata.components?.appServer?.binarySha256)

@@ -1,24 +1,24 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewService, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
 import type { IBrowserViewModel } from '../common/browserView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDialogsModel } from '../../../common/dialogs.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import './media/browser.css';
 
 /** Workbench controls and geometry for one Main-owned web page. */
-export class BrowserEditor extends Disposable implements IEditorPane {
+export class BrowserEditor extends EditorPane implements IEditorPane {
 	static readonly ID = 'ash.editor.browser';
 	readonly id = BrowserEditor.ID;
 	private domNode!: HTMLDivElement;
@@ -56,7 +56,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		}));
 	}
 
-	create(container: HTMLElement): void {
+	public override create(container: HTMLElement): void {
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-browser-editor';
@@ -93,6 +93,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this.viewportDomNode.setAttribute('aria-label', 'Webpage. Press F6 to return to the address field.');
 		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.target().focus()).catch(error => this.report(error)); }));
 		this.domNode.append(toolbar, this.statusDomNode, this.downloadDomNode, this.viewportDomNode); container.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener<KeyboardEvent>(this.domNode, 'keydown', event => {
 			if (event.key === 'Enter' && event.target === this.addressDomNode) { event.preventDefault(); void this.navigate().catch(error => this.report(error)); }
@@ -118,7 +119,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		}));
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
 		if (!(input instanceof BrowserEditorInput)) { throw new TypeError('Expected browser editor input'); }
 		const model = await input.resolve();
@@ -138,10 +139,12 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		this.render(model.state);
 		this.refreshLayout();
 	}
-	clearInput(): void { this.visible = false; this.addressDomNode.disabled = true; this.refreshLayout(); this.modelListeners.clear(); }
-	layout(_dimension: IDimension): void { this.refreshLayout(); }
-	setVisible(visibility: EditorPaneVisibility): void { this.visible = visibility === EditorPaneVisibility.Visible; this.refreshLayout(); }
-	focus(): void {
+	public override clearInput(): void { this.visible = false; this.addressDomNode.disabled = true; this.refreshLayout(); this.modelListeners.clear(); }
+	public override layout(_dimension: IDimension): void { this.refreshLayout(); }
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility); this.visible = visibility; this.refreshLayout();
+	}
+	public override focus(): void {
 		this.addressDomNode.focus(); this.addressDomNode.select();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.browser')) {
 			this.statusDomNode.textContent = 'Enter a URL and press Enter. Press Alt+F1 for browser help.';

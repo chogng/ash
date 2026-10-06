@@ -26,7 +26,7 @@ import { WorkspaceContextService } from '../../../workbench/services/workspaces/
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService } from '../../../workbench/services/workingCopy/common/workingCopyService.js';
-import { EditorPaneVisibility } from '../../../workbench/browser/parts/editor/editorPane.js';
+
 import { ILifecycleService, LifecyclePhase, StartupKind, type IBeforeShutdownEvent } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
@@ -35,7 +35,6 @@ import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
-
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 browser.window.HTMLElement.prototype.scrollTo = function (left: number | ScrollToOptions = {}, top?: number): void {
@@ -177,7 +176,7 @@ class DesignEditorFixture extends Disposable {
 		const layers = this._register(child.createInstance(DesignLayersView, this.layersDomNode, { id: 'design.layers', title: 'Layers' }));
 		properties.setVisible(true);
 		layers.setVisible(true);
-		this.pane.setVisible(EditorPaneVisibility.Visible);
+		this.pane.setVisible(true);
 		this._register(child);
 		this._register(toDisposable(() => { editorHost.remove(); this.propertiesDomNode.remove(); this.layersDomNode.remove(); }));
 	}
@@ -413,7 +412,7 @@ test('Design color picker uses Chinese labels and releases its overlay when the 
 		assert.ok(picker.querySelector('[aria-label="颜色格式"]'));
 		assert.ok(picker.querySelector('[aria-label="饱和度和亮度"]'));
 		assert.ok(picker.querySelector('[aria-label="文档颜色"]'));
-		view.pane.setVisible(EditorPaneVisibility.Hidden);
+		view.pane.setVisible(false);
 		assert.equal(colorContextView.visible, false);
 	} finally { resetNlsResolver(); }
 });
@@ -887,11 +886,11 @@ test('Design panels share the editor selection and detach when the pane hides', 
 	assert.equal(view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent, '2 objects selected.');
 	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
-	view.pane.setVisible(EditorPaneVisibility.Hidden);
+	view.pane.setVisible(false);
 	assert.equal(view.designEditors.activeEditor.get(), undefined);
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties'), null);
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 0);
-	view.pane.setVisible(EditorPaneVisibility.Visible);
+	view.pane.setVisible(true);
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 2);
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 });
@@ -907,7 +906,7 @@ test('Design shutdown checks cancel, save and discard even while its page is hid
 	browser.window.document.body.append(host);
 	using hostCleanup = toDisposable(() => host.remove());
 	page.create(host);
-	page.setVisible(EditorPaneVisibility.Visible);
+	page.setVisible(true);
 	const editor = designEditors.activeEditor.get()!;
 	const isVetoed = async (): Promise<boolean> => {
 		const vetoes: (boolean | Promise<boolean>)[] = [];
@@ -916,7 +915,7 @@ test('Design shutdown checks cancel, save and discard even while its page is hid
 	};
 	try {
 		pressCanvas(editor, 'r');
-		page.setVisible(EditorPaneVisibility.Hidden);
+		page.setVisible(false);
 		saveDecision = ConfirmResult.CANCEL;
 		assert.equal(await isVetoed(), true);
 		assert.equal(designEditors.document.isDirty, true);
@@ -925,7 +924,7 @@ test('Design shutdown checks cancel, save and discard even while its page is hid
 		assert.equal(parseDesignDocument(fileContent).shapes.length, 1);
 		assert.equal(designEditors.document.isDirty, false);
 		assert.equal(designEditors.activeEditor.get(), undefined);
-		page.setVisible(EditorPaneVisibility.Visible);
+		page.setVisible(true);
 		pressCanvas(editor, 'e');
 		saveDecision = ConfirmResult.DONT_SAVE;
 		assert.equal(await isVetoed(), false);
@@ -960,12 +959,12 @@ test('Design page instances share the window document and retain independent edi
 	browser.window.document.body.append(host);
 	using hostCleanup = toDisposable(() => host.remove());
 	firstPage.create(host);
-	firstPage.setVisible(EditorPaneVisibility.Visible);
+	firstPage.setVisible(true);
 	const first = designEditors.activeEditor.get()!;
 	pressCanvas(first, 'r');
 	pressCanvas(first, '+');
 	secondPage.create(host);
-	secondPage.setVisible(EditorPaneVisibility.Visible);
+	secondPage.setVisible(true);
 	const second = designEditors.activeEditor.get()!;
 	assert.notEqual(first, second);
 	assert.equal(first.documentController, second.documentController);

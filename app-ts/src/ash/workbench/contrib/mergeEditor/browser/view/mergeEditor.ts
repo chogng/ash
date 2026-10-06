@@ -14,7 +14,7 @@ import type { TextModel } from '../../../../../editor/common/model/textModel.js'
 import { TextModel as OwnedTextModel } from '../../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
+
 import type { EditorPanePart } from '../../../../browser/parts/editor/textResourceEditor.js';
 import { MergeEditorModel, type MergeEditorChoice, type MergeEditorHunk, type MergeEditorSide } from '../model/mergeEditorModel.js';
 import { getAlignments } from './lineAlignment.js';
@@ -34,7 +34,7 @@ export interface MergeResultEditor extends IDisposable {
 	create(container: HTMLElement): void;
 	clearInput(): void;
 	layout(dimension: IDimension): void;
-	setVisible(visibility: EditorPaneVisibility): void;
+	setVisible(visibility: boolean): void;
 	focus(): void;
 	getControl(): EditorPanePart | undefined;
 }
@@ -270,8 +270,8 @@ export class MergeEditor extends Disposable {
 		}));
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
+	public setVisible(visibility: boolean): void {
+		this.domNode.hidden = !visibility;
 		this.resultEditor.setVisible(visibility);
 	}
 

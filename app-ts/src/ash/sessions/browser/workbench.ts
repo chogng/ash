@@ -648,11 +648,6 @@ export abstract class Workbench extends Disposable {
 			['panel', panel],
 		]);
 		layout.createWorkbenchLayout(parts);
-		for (const part of [sidebar, panel, auxiliarybar]) {
-			this._register(part.onDidSelectComposite(event => {
-				void views.openViewContainer(event.compositeId, true).catch(error => notificationService.error(String(error)));
-			}));
-		}
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
 			event.veto(editor.confirmCloseAllEditors().then(confirmed => !confirmed), 'Sessions unsaved files');
 		}));

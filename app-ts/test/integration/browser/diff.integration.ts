@@ -55,7 +55,7 @@ const secondOriginal = resources.add(new TextModel('one\n'));
 const secondModified = resources.add(new TextModel('one'));
 const second = resources.add(new DiffModel({ original: secondOriginal, modified: secondModified, diffProvider: computation, diffOptions }));
 const single = resources.add(editorServices.createInstance(DiffEditorWidget, { container: document.getElementById('single')!, model }));
-resources.add(editorServices.createInstance(MultiDiffEditorWidget, {
+const multi = resources.add(editorServices.createInstance(MultiDiffEditorWidget, {
 	container: document.getElementById('multi')!,
 	model: resources.add(new MultiDiffEditorModel([
 		resources.add(new DocumentDiffItem({ id: 'first', label: 'first.ts' }, model)),
@@ -90,6 +90,10 @@ let lastHunkAction: { text: string; originalStart: number; modifiedStart: number
 let themeBinding: IDisposable | undefined;
 
 const harness = {
+	activeMultiControl(): string | undefined {
+		return multi.getActiveControl()?.modifiedEditor.getModel()?.getText();
+	},
+	focusMulti(): void { multi.focus(); },
 	readIndicatorSetting(): { title: string; description: string; } {
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration('diffEditor.renderIndicators')!.setting!;
 		return { title: setting.title, description: setting.description };

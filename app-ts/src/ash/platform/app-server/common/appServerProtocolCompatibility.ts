@@ -1,49 +1,15 @@
-import { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from './generated/index.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from './generated/index.js';
 import { decodeAppServerResult } from './generated/AppServerProtocolDecoder.js';
+import { localize } from '../../../nls.js';
 
-const serverCapabilityFields = [
-	'agentInteractions',
-	'documentCollaboration',
-	'sessions',
-	'threads',
-	'turns',
-	'projects',
-	'resources',
-	'attachments',
-	'fileSystem',
-	'git',
-	'contentSearch',
-	'codebase',
-	'cloudCodebase',
-	'terminal',
-	'debugAdapter',
-	'typst',
-	'updateReplay',
-	'extensions',
-	'extensionHost',
-	'connectors',
-	'plugins',
-	'marketplace',
-	'mcp',
-	'mcpOAuth',
-] as const satisfies readonly (keyof ServerCapabilities)[];
+type AppServerCapabilityName = Exclude<keyof ServerCapabilities, 'contracts'>;
 
-export interface AppServerCapabilityRequirement {
-	readonly name: string;
-	readonly minVersion: number;
-	readonly maxVersion: number;
-}
-
-export const requiredSessionCapabilities: readonly AppServerCapabilityRequirement[] = [
-	{ name: 'sessions', minVersion: APP_SERVER_CAPABILITY_VERSION, maxVersion: APP_SERVER_CAPABILITY_VERSION },
-	{ name: 'threads', minVersion: APP_SERVER_CAPABILITY_VERSION, maxVersion: APP_SERVER_CAPABILITY_VERSION },
-	{ name: 'turns', minVersion: APP_SERVER_CAPABILITY_VERSION, maxVersion: APP_SERVER_CAPABILITY_VERSION },
-];
+export const requiredSessionCapabilities: readonly AppServerCapabilityName[] = ['sessions', 'threads', 'turns'];
 
 export type AppServerProtocolIncompatibility =
 	| { readonly kind: 'majorVersion'; readonly expected: number; readonly received: number; }
-	| { readonly kind: 'missingCapability'; readonly name: string; readonly minVersion: number; readonly maxVersion: number; }
-	| { readonly kind: 'capabilityVersion'; readonly name: string; readonly minVersion: number; readonly maxVersion: number; readonly received: number; };
+	| { readonly kind: 'schemaHash'; readonly expected: string; readonly received: string; }
+	| { readonly kind: 'missingCapability'; readonly name: string; };
 
 /** Initialization failure that a host may recover by selecting another trusted runtime. */
 export class AppServerProtocolIncompatibleError extends Error {
@@ -56,7 +22,6 @@ export class AppServerProtocolIncompatibleError extends Error {
 export interface AppServerProtocolDiagnostics {
 	readonly clientProtocolMajor: number;
 	readonly serverProtocolMajor: number;
-	readonly serverProtocolRevision: number;
 	readonly clientSchemaHash: string;
 	readonly serverSchemaHash: string;
 	readonly schemaMatches: boolean;
@@ -64,7 +29,7 @@ export interface AppServerProtocolDiagnostics {
 
 export interface ValidateAppServerInitializeOptions {
 	readonly expectedServerName?: string;
-	readonly requiredCapabilities?: readonly AppServerCapabilityRequirement[];
+	readonly requiredCapabilities?: readonly AppServerCapabilityName[];
 }
 
 export function validateAppServerInitializeResult(value: unknown, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
@@ -76,18 +41,12 @@ export function validateAppServerInitializeResult(value: unknown, options: Valid
 	if (protocolVersion.major !== APP_SERVER_PROTOCOL_MAJOR) {
 		throw new AppServerProtocolIncompatibleError({ kind: 'majorVersion', expected: APP_SERVER_PROTOCOL_MAJOR, received: protocolVersion.major });
 	}
-	for (const requirement of options.requiredCapabilities ?? requiredSessionCapabilities) {
-		const booleanField = serverCapabilityFields.find(field => field === requirement.name);
-		if (booleanField && capabilities[booleanField] !== true) {
-			throw new AppServerProtocolIncompatibleError({ kind: 'missingCapability', ...requirement });
-		}
-		const contract = capabilities.contracts[requirement.name];
-		if (contract === undefined) {
-			throw new AppServerProtocolIncompatibleError({ kind: 'missingCapability', ...requirement });
-		}
-		const version = contract.version;
-		if (version < requirement.minVersion || version > requirement.maxVersion) {
-			throw new AppServerProtocolIncompatibleError({ kind: 'capabilityVersion', ...requirement, received: version });
+	if (initialized.schemaHash !== APP_SERVER_SCHEMA_HASH) {
+		throw new AppServerProtocolIncompatibleError({ kind: 'schemaHash', expected: APP_SERVER_SCHEMA_HASH, received: initialized.schemaHash });
+	}
+	for (const name of options.requiredCapabilities ?? requiredSessionCapabilities) {
+		if (capabilities[name] !== true) {
+			throw new AppServerProtocolIncompatibleError({ kind: 'missingCapability', name });
 		}
 	}
 	return initialized;
@@ -97,7 +56,6 @@ export function appServerProtocolDiagnostics(initialized: InitializeResult): App
 	return {
 		clientProtocolMajor: APP_SERVER_PROTOCOL_MAJOR,
 		serverProtocolMajor: initialized.protocolVersion.major,
-		serverProtocolRevision: initialized.protocolVersion.revision,
 		clientSchemaHash: APP_SERVER_SCHEMA_HASH,
 		serverSchemaHash: initialized.schemaHash,
 		schemaMatches: initialized.schemaHash === APP_SERVER_SCHEMA_HASH,
@@ -107,10 +65,10 @@ export function appServerProtocolDiagnostics(initialized: InitializeResult): App
 function describeIncompatibility(incompatibility: AppServerProtocolIncompatibility): string {
 	switch (incompatibility.kind) {
 		case 'majorVersion':
-			return `Ash App Server protocol major mismatch: Desktop requires ${incompatibility.expected}, server advertised ${incompatibility.received}`;
+			return localize('appServer.protocol.majorMismatch', 'Ash App Server protocol major mismatch: client requires {0}, server advertised {1}', incompatibility.expected, incompatibility.received);
+		case 'schemaHash':
+			return localize('appServer.protocol.schemaMismatch', 'Ash App Server protocol schema mismatch: client requires {0}, server advertised {1}. Rebuild and start the matching backend.', incompatibility.expected, incompatibility.received);
 		case 'missingCapability':
-			return `Ash App Server is missing required capability ${incompatibility.name}; Desktop supports versions ${incompatibility.minVersion}-${incompatibility.maxVersion}`;
-		case 'capabilityVersion':
-			return `Ash App Server capability ${incompatibility.name} is incompatible: Desktop supports versions ${incompatibility.minVersion}-${incompatibility.maxVersion}, server advertised ${incompatibility.received}`;
+			return localize('appServer.protocol.missingCapability', 'Ash App Server is missing required capability {0}', incompatibility.name);
 	}
 }

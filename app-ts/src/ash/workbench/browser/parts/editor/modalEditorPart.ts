@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
@@ -14,7 +14,7 @@ import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroupView.js';
-import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
+import type { EditorPaneCreationOptions } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
 import { editorInputKey } from './editorTabsControl.js';
 
@@ -139,7 +139,7 @@ export class ModalEditorPart extends Disposable {
 			const instance = new ModalEditorPaneInstance(this.contentDomNode, pane);
 			pane.create(instance.domNode);
 			void pane.setInput(input, instance.signal);
-			this.active.value?.setVisible(EditorPaneVisibility.Hidden);
+			this.active.value?.setVisible(false);
 			this.active.value = instance;
 			this.currentEntry = { input, instance };
 			this.contentDomNode.replaceChildren(instance.domNode);
@@ -173,7 +173,7 @@ export class ModalEditorPart extends Disposable {
 		this.pending.set(sequence, instance);
 		try {
 			pane.create(instance.domNode);
-			instance.setVisible(EditorPaneVisibility.Hidden);
+			instance.setVisible(false);
 			await pane.setInput(input, instance.signal);
 		} catch (error) {
 			this.pending.deleteAndDispose(sequence);
@@ -186,7 +186,7 @@ export class ModalEditorPart extends Disposable {
 		}
 		const committed = this.pending.deleteAndLeak(sequence);
 		if (!committed) throw new EditorOpenSupersededError(input);
-		this.active.value?.setVisible(EditorPaneVisibility.Hidden);
+		this.active.value?.setVisible(false);
 		this.active.value = committed;
 		this.currentEntry = { input, instance: committed };
 		this.contentDomNode.replaceChildren(committed.domNode);
@@ -225,7 +225,7 @@ export class ModalEditorPart extends Disposable {
 	private hide(): void {
 		if (!this.visible) return;
 		this.visible = false;
-		this.active.value?.setVisible(EditorPaneVisibility.Hidden);
+		this.active.value?.setVisible(false);
 		this.hostDomNode.hidden = true;
 		this.visibilityEmitter.fire(false);
 		const focusToRestore = this.focusToRestore;
@@ -250,7 +250,7 @@ export class ModalEditorPart extends Disposable {
 			this.visible = true;
 			this.hostDomNode.hidden = false;
 			this.visibilityEmitter.fire(true);
-			this.active.value?.setVisible(EditorPaneVisibility.Visible);
+			this.active.value?.setVisible(true);
 			this.activePane?.layout(this.dimension);
 		}
 		if (!preserveFocus) this.focusEditorContent();
@@ -283,12 +283,12 @@ class ModalEditorPaneInstance extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(pane);
 		this._register(toDisposable(() => pane.clearInput()));
-		this._register(toDisposable(() => pane.setVisible(EditorPaneVisibility.Hidden)));
+		this._register(toDisposable(() => pane.setVisible(false)));
 		this._register(toDisposable(() => abortController.abort()));
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
+	public setVisible(visibility: boolean): void {
+		this.domNode.hidden = !visibility;
 		this.pane.setVisible(visibility);
 	}
 }

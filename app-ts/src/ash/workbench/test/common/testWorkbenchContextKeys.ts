@@ -70,6 +70,7 @@ const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	activeGroup: emptyGroup,
 	count: 1,
 	getGroup: (id: string) => id === emptyGroup.id ? emptyGroup : undefined,
+	findGroup: () => undefined,
 });
 
 const emptyEditorService: IEditorService = Object.freeze({
@@ -97,6 +98,8 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	setLayoutStyle: () => { },
 	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
+	hasFocus: () => false,
+	getVisibleNeighborPart: () => undefined,
 	isPanelMaximized: () => false,
 	toggleMaximizedPanel: () => { },
 	showPart: () => { },

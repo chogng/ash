@@ -1,24 +1,24 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { basename } from '../../../../base/common/resources.js';
 import { IFileService } from "../../../../platform/files/common/files.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { BinaryEditorModel } from '../../../common/editor/binaryEditorModel.js';
 import { localize } from '../../../../nls.js';
-import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
+import { EditorPaneMatch, EditorPane } from './editorPane.js';
 
 export const BINARY_EDITOR_ID = "ash.editor.binary";
 const MAX_BINARY_EDITOR_BYTES = 128 * 1024 * 1024;
 const MAX_RENDERED_BYTES = 64 * 1024;
 
 /** Read-only hexadecimal/ascii projection for resources that are not safe text. */
-export class BaseBinaryResourceEditor extends Disposable implements IEditorPane {
+export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane {
 	readonly id = BINARY_EDITOR_ID;
 	protected container: HTMLElement | undefined;
 	private content: HTMLPreElement | undefined;
@@ -33,7 +33,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		super();
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("Binary editor pane has already been created");
 		const container = h(parent.ownerDocument, "div");
 		container.className = "ash-binary-editor";
@@ -45,6 +45,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		content.className = "ash-binary-editor-content";
 		container.append(summary, content);
 		parent.append(container);
+		super.create(container);
 		this.container = container;
 		this.updateAriaLabel();
 		this.summary = summary;
@@ -52,7 +53,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		this._register(toDisposable(() => container.remove()));
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const summary = this.requireSummary();
 		const content = this.requireContent();
 		throwIfCancelled(signal, "Binary editor loading was cancelled");
@@ -77,7 +78,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		}
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.model.clear();
 		this.metadata = undefined;
 		this.updateAriaLabel();
@@ -85,13 +86,9 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		if (this.content) this.content.textContent = "";
 	}
 
-	layout(_dimension: IDimension): void { }
+	public override layout(_dimension: IDimension): void { }
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-	}
-
-	focus(): void { this.container?.focus(); }
+	public override focus(): void { this.container?.focus(); }
 
 	getMetadata(): string | undefined { return this.metadata; }
 

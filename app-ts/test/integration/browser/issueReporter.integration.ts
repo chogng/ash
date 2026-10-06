@@ -1,3 +1,4 @@
+import type { IEditorPane } from '../../../src/ash/workbench/common/editor.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
@@ -25,7 +26,7 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
-import type { IEditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
+
 import '../../../src/ash/workbench/contrib/issue/browser/issue.contribution.js';
 
 interface Request { id: number; method: string; params: Record<string, unknown>; }

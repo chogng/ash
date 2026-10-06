@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				composite: resolve(import.meta.dirname, 'composite.html'),
 				actionWidget: resolve(import.meta.dirname, 'actionWidget.html'),
 				search: resolve(import.meta.dirname, 'search.html'),
 				debug: resolve(import.meta.dirname, 'debug.html'),

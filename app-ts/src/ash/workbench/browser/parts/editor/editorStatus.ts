@@ -1,9 +1,10 @@
+import { isEditorPaneWithStatus } from '../../../common/editor.js';
 import "./media/editorstatus.css";
 import { addDisposableListener, h, isHTMLElement } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import { isEditorPaneWithStatus } from "./editorPane.js";
+
 import type { IEditorPart } from "./editorPart.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 

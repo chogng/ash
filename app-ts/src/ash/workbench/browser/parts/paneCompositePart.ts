@@ -1,11 +1,11 @@
 import type { PaneCompositeOptions } from './views/paneComposite.js';
+import type { PaneComposite } from './views/paneComposite.js';
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import type { IActivityHoverOptions } from "./compositeBarActions.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import "./paneCompositePart.css";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IDimension } from "../../../base/browser/dom.js";
-import { type Event } from "../../../base/common/event.js";
 import { localize, type ILocalizationService, type LocalizationKey } from "../../services/localization/common/localizationService.js";
 import { MenuWorkbenchToolBar } from "../../../platform/actions/browser/toolbar.js";
 import type { IMenuService, MenuId } from "../../../platform/actions/common/actions.js";
@@ -15,7 +15,7 @@ import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, 
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
 import type { IViewDescriptorService } from "../../common/views.js";
 import { CompositePart } from "./compositePart.js";
-import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositeBar.js";
+import { CompositeBar, type CompositeBarPresentation, type ICompositeBarOptions } from "./compositeBar.js";
 import type { PartTitleProjection } from "./views/viewPane.js";
 import { h } from "../../../base/browser/dom.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
@@ -30,6 +30,7 @@ export interface PaneCompositeTitleActions {
 
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
 export interface PaneCompositePartOptions {
+	readonly openComposite: ICompositeBarOptions['openComposite'];
 	readonly activityHoverOptions?: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
@@ -57,9 +58,8 @@ export interface PaneCompositePartOptions {
  * Parts only supply region constraints and
  * location-specific presentation.
  */
-export class PaneCompositePart extends CompositePart {
+export class PaneCompositePart extends CompositePart<PaneComposite> {
 	readonly compositeBar: CompositeBar;
-	readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly activeCompositeContext: IContextKey<string> | undefined;
 	private readonly storageService: IStorageService | undefined;
@@ -85,6 +85,16 @@ export class PaneCompositePart extends CompositePart {
 		this._register(toDisposable(() => this.activeCompositeContext?.reset()));
 		this.storageService = options.storageService;
 		this.location = options.location;
+		this._register(this.onDidCompositeOpen(({ composite }) => {
+			const id = composite.getId();
+			this.activeCompositeContext?.set(id);
+			this.compositeBar.setActiveComposite(id);
+			this.storeActiveComposite(id);
+		}));
+		this._register(this.onDidCompositeClose(() => {
+			this.activeCompositeContext?.reset();
+			this.compositeBar.setActiveComposite(undefined);
+		}));
 		const ownerDocument = container.ownerDocument;
 		const ariaLabel = localize(options.localizationService, options.ariaLabelKey, options.ariaLabel);
 		const viewsAriaLabel = localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel);
@@ -93,6 +103,7 @@ export class PaneCompositePart extends CompositePart {
 		this.titleContentDomNode = h(ownerDocument, "div");
 		this.titleContentDomNode.className = "ash-pane-composite-title-content";
 		this.compositeBar = this._register(new CompositeBar(this.titleContentDomNode, {
+			openComposite: options.openComposite,
 			activityHoverOptions: options.activityHoverOptions ?? { position: () => HoverPosition.ABOVE },
 			viewDescriptorService: options.viewDescriptorService,
 			localizationService: options.localizationService,
@@ -104,7 +115,6 @@ export class PaneCompositePart extends CompositePart {
 			storageService: options.storageService,
 			containerFilter: options.compositeBarContainerFilter,
 		}));
-		this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
 		this.titleActionsSlotDomNode = h(ownerDocument, "div");
 		this.titleActionsSlotDomNode.className = "ash-pane-composite-title-actions";
 		this.viewTitleActionsDomNode = h(ownerDocument, "div");
@@ -151,13 +161,6 @@ export class PaneCompositePart extends CompositePart {
 			return stored;
 		}
 		return this.viewDescriptorService.getDefaultViewContainer(this.location)?.id;
-	}
-
-	override showComposite(compositeId: string): void {
-		super.showComposite(compositeId);
-		this.activeCompositeContext?.set(compositeId);
-		this.compositeBar.setActiveComposite(compositeId);
-		this.storeActiveComposite(compositeId);
 	}
 
 	setCompositeBarVisible(visible: boolean): void {

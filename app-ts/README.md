@@ -92,7 +92,7 @@ Electron 的 `open-file`、`open-url` 和第二实例参数统一进入 `platfor
 
 `src/main.ts` 先执行 bootstrap，再进入 `code/electron-main/main.ts`。应用在 Electron Ready 后启动；入口模块不在顶层等待 `app.whenReady()`，避免模块加载与 Ready 互相等待。
 
-连接 App Server 后校验初始化结果、服务端身份、协议主版本及必需能力版本，schema hash 用于诊断。门禁通过后创建业务窗口，窗口在 `ready-to-show` 后显示。失败时对话框提供重试或退出；重试先恢复连接组件的 stopped 状态。启动测量方法见 [Desktop 启动测量](docs/desktop-startup.md)。
+连接 App Server 后校验初始化结果、服务端身份、协议主版本、生成协议指纹及必需能力可用性。门禁通过后创建业务窗口，窗口在 `ready-to-show` 后显示。失败时对话框提供重试或退出；重试先恢复连接组件的 stopped 状态。启动测量方法见 [Desktop 启动测量](docs/desktop-startup.md)。
 
 Electron 将当前可执行文件提供给后端的 JavaScript LSP 启动器，只有对应子进程使用 `ELECTRON_RUN_AS_NODE=1`；Renderer 和普通 App Server 不进入 Node mode。完整 Web 模式使用随包的独立 Node。进程与连接职责见 [前端连接边界](docs/frontend-app-server-boundary.md)。
 

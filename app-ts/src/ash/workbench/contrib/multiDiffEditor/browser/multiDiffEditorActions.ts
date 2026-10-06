@@ -8,7 +8,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffEditorPane } from './multiDiffEditorPane.js';
+import { MultiDiffEditor } from './multiDiffEditor.js';
 
 export const MultiDiffGoToNextChangeCommandId = 'multiDiffEditor.goToNextChange';
 export const MultiDiffGoToPreviousChangeCommandId = 'multiDiffEditor.goToPreviousChange';
@@ -108,9 +108,9 @@ export class MultiDiffExpandAllAction extends Action2 {
 	}
 }
 
-function activeMultiDiffPane(accessor: ServicesAccessor): MultiDiffEditorPane | undefined {
+function activeMultiDiffPane(accessor: ServicesAccessor): MultiDiffEditor | undefined {
 	const pane = accessor.get(IEditorPart).activePane;
-	return pane instanceof MultiDiffEditorPane ? pane : undefined;
+	return pane instanceof MultiDiffEditor ? pane : undefined;
 }
 
 function isEditorInput(value: unknown): value is IResourceEditorInput {

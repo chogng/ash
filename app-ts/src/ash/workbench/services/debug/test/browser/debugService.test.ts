@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -28,6 +29,30 @@ const launchJson = `{
   ],
   "compounds": [{ "name": "Both", "configurations": ["One", "Two"], "preLaunchTask": "prepare", "stopAll": true }]
 }`;
+
+test('DebugService exposes the active session state for the pause shortcut and clears it after stopping', async () => {
+	using resources = new DisposableStore();
+	const root = URI.file('C:\\project');
+	const contextKeys = resources.add(new ContextKeyService());
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, contextKeys);
+	assert.equal(contextKeys.getContext().getValue('debugState'), 'inactive');
+	await service.refresh();
+	const session = await service.startDebugging(service.configurations[1]!);
+	assert.equal(contextKeys.getContext().getValue('debugState'), 'running');
+	const stopped = new Promise<void>(resolve => {
+		const listener = resources.add(session.onDidChangeState(state => {
+			if (state === 'stopped') { listener.dispose(); resolve(); }
+		}));
+	});
+	processes.event(session.id, 'stopped', { threadId: 1 });
+	await stopped;
+	assert.equal(contextKeys.getContext().getValue('debugState'), 'stopped');
+	await service.stop(session);
+	assert.equal(contextKeys.getContext().getValue('debugState'), 'inactive');
+});
 
 test("DebugService persists workspace breakpoints and watch expressions", async () => {
 	const storage = new TestStorageService();
@@ -286,7 +311,7 @@ function workspaceService(root: URI): IWorkspaceContextService {
 }
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }
 
-function createDebugService(owner: DisposableStore, files: IFileService, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry): DebugService {
+function createDebugService(owner: DisposableStore, files: IFileService, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService())): DebugService {
 	const services = owner.add(new InstantiationService(new ServiceCollection(
 		[IFileService, files],
 		[IWorkspaceContextService, workspace],
@@ -296,6 +321,7 @@ function createDebugService(owner: DisposableStore, files: IFileService, workspa
 		[ITaskService, tasks],
 		[IDebugAdapterFactorySource, adapters],
 		[ILogService, new NullLoggerService()],
+		[IContextKeyService, contextKeys],
 	)));
 	return services.createInstance(DebugService);
 }

@@ -241,7 +241,7 @@ Main 必须：
    控制面；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
-4. 校验 protocol major 和必需能力版本，记录 schema hash 与 server build 供诊断；
+4. 校验 protocol major、生成协议指纹和必需能力可用性，记录 server build 供诊断；
 5. 将 stdout 仅交给 JSONL 协议解析器；
 6. 对 stderr 做大小限制和 secret 脱敏；
 7. 为启动、初始化、请求和关闭设置 deadline；
@@ -271,8 +271,8 @@ metadata 和由这些字段确定性生成的 `buildId`。该清单随产品包�
 Server Host 前复验清单形状和二进制 digest，开发热重载不把可变产物伪装成签名发布物。
 
 `AppServerSession` 独占一个 peer，只有 initialize response 同时通过 server identity、protocol major
-和 required capability version gate 后才进入 Ready，并保存协商后的 server info/capabilities；schema
-hash 差异进入诊断，不单独阻止启动。
+和生成协议指纹、必需能力可用性检查后才进入 Ready，并保存 server info/capabilities。
+前后端由同一次构建交付；schema hash 不同会拒绝连接，避免旧后端静默忽略新字段。
 
 `AppServerSession` 是 connection lifecycle。它不是产品 `Session`，不得保存产品 Session
 membership、lineage 或权威业务状态；Renderer 只维护可以丢弃并重新读取的 `ISession / IChat`
@@ -1010,7 +1010,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 Desktop 完成的最低证据：
 
 - TypeScript strict build 通过；
-- initialize 成功并校验 protocol major 与 required capability versions，同时记录 schema hash 诊断；
+- initialize 成功并校验 protocol major、生成协议指纹与必需能力可用性；
 - Session 创建、Thread 创建/fork、订阅恢复和 Turn 中断端到端通过；
 - 通知能从 App Server 到 Renderer；
 - 未生成或参数错误的 IPC 被拒绝；

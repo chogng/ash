@@ -1,11 +1,11 @@
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { PaneComposite } from '../../../browser/parts/views/paneComposite.js';
+import type { IPaneComposite } from '../../../common/panecomposite.js';
 import type { ViewContainerLocation } from '../../../common/views.js';
 import type { WorkbenchPartId } from '../../layout/browser/layoutService.js';
 
 export interface PaneCompositeEvent {
-	readonly composite: PaneComposite;
+	readonly composite: IPaneComposite;
 	readonly viewContainerLocation: ViewContainerLocation;
 }
 
@@ -13,8 +13,8 @@ export interface PaneCompositeEvent {
 export interface IPaneCompositePartService {
 	readonly onDidPaneCompositeOpen: Event<PaneCompositeEvent>;
 	readonly onDidPaneCompositeClose: Event<PaneCompositeEvent>;
-	openPaneComposite(id: string | undefined, viewContainerLocation: ViewContainerLocation, focus?: boolean): Promise<PaneComposite | undefined>;
-	getActivePaneComposite(viewContainerLocation: ViewContainerLocation): PaneComposite | undefined;
+	openPaneComposite(id: string | undefined, viewContainerLocation: ViewContainerLocation, focus?: boolean): Promise<IPaneComposite | undefined>;
+	getActivePaneComposite(viewContainerLocation: ViewContainerLocation): IPaneComposite | undefined;
 	getPartId(viewContainerLocation: ViewContainerLocation): WorkbenchPartId;
 	hideActivePaneComposite(viewContainerLocation: ViewContainerLocation): void;
 	getLastActivePaneCompositeId(viewContainerLocation: ViewContainerLocation): string | undefined;

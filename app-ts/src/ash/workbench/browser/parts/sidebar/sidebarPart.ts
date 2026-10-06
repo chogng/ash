@@ -10,9 +10,11 @@ import type { ILocalizationService, LocalizationKey } from "../../../services/lo
 import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 import { ActivityBarPosition } from '../../../common/configuration.js';
+import type { ICompositeBarOptions } from '../compositeBar.js';
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
+	readonly openComposite: ICompositeBarOptions['openComposite'];
 	readonly activityHoverOptions?: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
@@ -48,6 +50,7 @@ export class SidebarPart extends PaneCompositePart {
 	constructor(container: HTMLElement, options: SidebarPartOptions) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
 		super(container, {
+			openComposite: options.openComposite,
 			activityHoverOptions: options.activityHoverOptions,
 			viewDescriptorService: options.viewDescriptorService,
 			contextKeyService: options.contextKeyService,
@@ -96,10 +99,10 @@ export class SidebarPart extends PaneCompositePart {
 		}
 	}
 
-	override showComposite(compositeId: string): void {
+	override showComposite(compositeId: string, focus = false): void {
 		const previousId = this.activeCompositeId;
 		if (previousId) this.getComposite(previousId)?.setMergedTitleActionsHost();
-		super.showComposite(compositeId);
+		super.showComposite(compositeId, focus);
 		this.activeTitleListener.value = this.getComposite(compositeId)?.onDidChangeTitle(() => this.updateActiveTitle());
 		this.updateActiveTitle();
 	}

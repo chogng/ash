@@ -138,6 +138,8 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	setLayoutStyle(): void { }
 
 	isPartVisible(partId: WorkbenchPartId): boolean { return partId === "auxiliarybar"; }
+	hasFocus(): boolean { return false; }
+	getVisibleNeighborPart(): undefined { return undefined; }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(_partId: WorkbenchPartId): void { }

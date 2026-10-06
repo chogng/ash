@@ -1,4 +1,4 @@
-import { MultiDiffEditorPane } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorPane.js';
+import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -2802,7 +2802,7 @@ window.ashStandaloneIntegration = {
 				document.body.append(host);
 				actionPreviewResources.add(bindColorTheme(parent.get(IThemeService), host));
 				actionPreviewResources.add(toDisposable(() => host.remove()));
-				const diff = actionPreviewResources.add(services.createInstance(MultiDiffEditorPane, {
+				const diff = actionPreviewResources.add(services.createInstance(MultiDiffEditor, {
 					modelService: services.get(ITextModelResourceService),
 					createComputationService: () => new DiffService().createComputationService(),
 				}));

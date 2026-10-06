@@ -84,7 +84,6 @@ struct JavaScriptRuntime {
 #[serde(rename_all = "camelCase")]
 struct ProtocolIdentity {
     major: u64,
-    revision: u64,
     schema_hash: String,
 }
 
@@ -386,10 +385,7 @@ fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
     validate_segment(&metadata.target, "target")?;
     validate_segment(&metadata.javascript_runtime.kind, "runtime kind")?;
     validate_segment(&metadata.build_profile, "build profile")?;
-    if metadata.protocol.major == 0
-        || metadata.protocol.major > u64::from(u32::MAX)
-        || metadata.protocol.revision > u64::from(u32::MAX)
-    {
+    if metadata.protocol.major == 0 || metadata.protocol.major > u64::from(u32::MAX) {
         return Err(invalid("package protocol version is invalid"));
     }
     let schema_hash = metadata.protocol.schema_hash.strip_prefix(SHA256_PREFIX);

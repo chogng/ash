@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "mocha";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from '../../../app-server/common/generated/index.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../../app-server/common/generated/index.js';
 import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, packagedAppServerSha256 } from '../../node/appServerDaemonPackage.js';
 import { remoteExecutablePath } from '../../../remote/node/remotePackage.js';
 import { createAppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
@@ -82,18 +82,18 @@ function developmentTarget(): string {
 test("packaged server host digest is bound to the canonical package entrypoint", () => {
 	const resourcesPath = mkdtempSync(join(tmpdir(), "ash-package-"));
 	try {
-		writeFileSync(join(resourcesPath, "ash-package.json"), JSON.stringify({
+		const metadata = {
 			buildId: `sha256:${"b".repeat(64)}`,
 			components: { appServerDaemon: { binarySha256: "a".repeat(64) }, appServer: { binarySha256: "c".repeat(64) } },
 			entrypoint: "bin/ash-app-server.exe",
 			layoutVersion: 2,
 			protocol: {
 				major: APP_SERVER_PROTOCOL_MAJOR,
-				revision: APP_SERVER_PROTOCOL_REVISION,
 				schemaHash: APP_SERVER_SCHEMA_HASH,
 			},
 			version: "1.2.3",
-		}));
+		};
+		writeFileSync(join(resourcesPath, "ash-package.json"), JSON.stringify(metadata));
 		assert.equal(packagedAppServerSha256({ appPath: "/workspace/app-ts", isPackaged: true, platform: "win32", resourcesPath }), "c".repeat(64));
 		assert.equal(packagedAppServerDaemonSha256({
 			appPath: "/unused",
@@ -102,6 +102,9 @@ test("packaged server host digest is bound to the canonical package entrypoint",
 			platform: "win32",
 			resourcesPath,
 		}), "a".repeat(64));
+		const incompatible = { ...metadata, protocol: { ...metadata.protocol, schemaHash: `sha256:${'0'.repeat(64)}` } };
+		writeFileSync(join(resourcesPath, "ash-package.json"), JSON.stringify(incompatible));
+		assert.throws(() => packagedAppServerSha256({ appPath: "/unused", isPackaged: true, platform: "win32", resourcesPath }), /Invalid Ash package metadata/);
 	} finally {
 		rmSync(resourcesPath, { recursive: true, force: true });
 	}

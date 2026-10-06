@@ -4,6 +4,7 @@ import { localize } from "../../../services/localization/common/localizationServ
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 import type { PartTitleProjection, ViewPane } from "./viewPane.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
+import type { IPaneComposite } from "../../../common/panecomposite.js";
 
 export interface PaneCompositeOptions extends ViewPaneContainerOptions {
 	readonly paneHeaders?: PaneHeaderVisibility;
@@ -20,7 +21,7 @@ export type PaneLayout = "stack" | "fill";
  * Parts retain instances while switching so pane visibility, focus, and
  * contribution-owned state survive temporary deactivation.
  */
-export class PaneComposite extends ViewPaneContainer {
+export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	title: string;
 	private readonly titleChange = this._register(new Emitter<void>());
 	readonly onDidChangeTitle = this.titleChange.event;
@@ -43,7 +44,12 @@ export class PaneComposite extends ViewPaneContainer {
 		}
 	}
 
-	getTitle(): string {
+	/** This retained object owns both the hosted content and its view operations. */
+	public override getControl(): ViewPaneContainer {
+		return this;
+	}
+
+	public override getTitle(): string {
 		const paneTitle = this.mergedPane?.paneTitle;
 		return paneTitle && paneTitle !== this.title ? `${this.title}: ${paneTitle}` : this.title;
 	}

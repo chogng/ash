@@ -3,7 +3,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
-import type { IEditorGroup, IEditorGroupsService } from '../common/editorGroupsService.js';
+import type { IEditorGroup, IEditorGroupsService, IFindGroupScope } from '../common/editorGroupsService.js';
 import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from "../common/editorState.js";
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
@@ -61,6 +61,10 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	getGroup(id: EditorGroupId): IEditorGroup | undefined {
 		return this.editorPart.groups.find(group => group.id === id);
+	}
+
+	public findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined {
+		return this.editorPart.findGroup(scope, source);
 	}
 
 	get count(): number {

@@ -4,7 +4,7 @@ import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutlineOptions } from "../../../../editor/common/model/documentOutline.js";
 import type { DocumentPlugin } from "../../../../editor/common/model/documentPlugin.js";
 import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
-import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import type { EditorPaneOptions } from "./documentEditorPane.js";
 import { matchDocumentEditor, type EditorInputMatcher } from "./documentEditorInput.js";
 import { DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';

@@ -32,7 +32,7 @@ for (const succeeds of [true, false]) {
 				child.stdout = new PassThrough();
 				child.stderr = new PassThrough();
 				child.stdin.once('finish', () => child.emit('close', 0, null));
-				setImmediate(() => child.stdout!.emit('data', JSON.stringify({ endpoint: 'http://127.0.0.1:1234', ticket: 'test-ticket', pid: 42 }) + '\n'));
+				setImmediate(() => child.stdout!.emit('data', JSON.stringify({ endpoint: 'http://127.0.0.1:1234', ticket: 'b'.repeat(64), pid: 42 }) + '\n'));
 			}
 			return child;
 		});

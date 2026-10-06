@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
@@ -9,7 +9,7 @@ import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../ed
 import type { DocumentPlugin } from '../../../../editor/common/model/documentPlugin.js';
 import type { TextModelWorkingCopyReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { assertDefined } from "../../../../base/common/types.js";
-import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { RichTextEditorWidget, type RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
@@ -17,7 +17,7 @@ import type { DocumentSelection } from "../../../../editor/common/core/documentS
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutline } from "../../../../editor/common/model/documentOutline.js";
 import type { IDocumentCollaborationService } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
-import { EditorPaneVisibility, type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDocumentEditorTextModelService } from '../../../services/documentEditor/common/documentTypes.js';
 import type { IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
@@ -37,7 +37,7 @@ export interface EditorPaneOptions extends RichTextEditorOptions {
 }
 
 /** Workbench pane that hosts one structured document editor. */
-export class DocumentEditorPane extends Disposable implements IEditorPane {
+export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	readonly id = DOCUMENT_EDITOR_ID;
 
 	private readonly modelReference = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
@@ -68,11 +68,12 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		}));
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("Document editor pane has already been created");
 		const container = h(parent.ownerDocument, "div");
 		container.className = "stanza-structured-editor-pane";
 		parent.append(container);
+		super.create(container);
 		this.container = container;
 		const { createDocumentCollaborationService, ...editorOptions } = this.options;
 		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
@@ -92,7 +93,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		editor.create(container);
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.requireContainer();
 		const editor = this.requireEditor();
 		const generation = ++this.inputGeneration;
@@ -122,7 +123,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		editor.layout(this.dimension);
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.inputGeneration += 1;
 		this.stopCollaboration();
 		if (this.collaboration) this.collaboration.element.hidden = true;
@@ -130,16 +131,12 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		this.modelReference.clear();
 	}
 
-	layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
 		this.requireEditor().layout(this.dimension);
 	}
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-	}
-
-	focus(): void {
+	public override focus(): void {
 		this.requireEditor().focus();
 	}
 

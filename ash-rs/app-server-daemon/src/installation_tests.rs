@@ -119,7 +119,7 @@ fn package(root: &Path, name: &str, version: &str) -> std::path::PathBuf {
     let identity = json!({
         "buildProfile": "release",
         "javascriptRuntime": { "kind": "packagedNode" },
-        "protocol": { "major": 1, "revision": 2, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
+        "protocol": { "major": 1, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
         "target": "aarch64-apple-darwin",
         "version": version,
     });
@@ -140,7 +140,7 @@ fn package(root: &Path, name: &str, version: &str) -> std::path::PathBuf {
             "buildProfile": "release",
             "files": files,
             "javascriptRuntime": { "kind": "packagedNode" },
-            "protocol": { "major": 1, "revision": 2, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
+            "protocol": { "major": 1, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
             "target": "aarch64-apple-darwin",
             "version": version,
         }))

@@ -3,7 +3,7 @@ import { isBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { BaseBinaryResourceEditor } from "./binaryEditor.js";
-import { EditorPaneMatch } from "./editorPane.js";
+import { EditorPaneMatch } from './editorPane.js';
 import { SideBySideEditor } from "./sideBySideEditor.js";
 
 /** Keeps each side's file-size metadata visible to comparison commands and status UI. */

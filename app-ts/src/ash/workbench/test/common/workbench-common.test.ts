@@ -400,6 +400,10 @@ test("file views register after their host container", async () => {
 
 class TestView implements IView {
 	private visible = true;
+	public get paneTitle(): string { return this.id; }
+	public hasFocus(): boolean { return false; }
+	public isBodyVisible(): boolean { return this.visible; }
+	public setExpanded(): boolean { return false; }
 
 	constructor(readonly id: string) { }
 

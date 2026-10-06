@@ -1,11 +1,11 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/searchEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
@@ -17,7 +17,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { SearchResultImpl } from '../../search/browser/searchTreeModel/searchResult.js';
@@ -25,7 +25,7 @@ import { SearchEditorID, InSearchEditor } from './constants.js';
 import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from './searchEditorSerialization.js';
 
 /** Query controls own transient input; the shared text editor owns the editable, saved search document. */
-export class SearchEditor extends Disposable implements IEditorPane {
+export class SearchEditor extends EditorPane implements IEditorPane {
 	public readonly id = SearchEditorID;
 	public domNode!: HTMLElement;
 	private queryInput!: HTMLTextAreaElement;
@@ -54,16 +54,17 @@ export class SearchEditor extends Disposable implements IEditorPane {
 		this._register(textEditor);
 	}
 
-	public getControl(): ReturnType<TextResourceEditor['getControl']> { return this.textEditor.getControl(); }
+	public override getControl(): ReturnType<TextResourceEditor['getControl']> { return this.textEditor.getControl(); }
 	public get workingCopy(): TextResourceEditor['workingCopy'] { return this.textEditor.workingCopy; }
 	public save(): Promise<void> { return this.textEditor.save(); }
 	public saveAs(resource: URI): Promise<void> { return this.textEditor.saveAs(resource); }
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-search-editor';
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => { this.controller?.abort(); this.domNode.remove(); }));
 		const scope = this._register(this.contextKeys.createScoped(this.domNode));
 		const focused = InSearchEditor.bindTo(scope);
@@ -146,7 +147,7 @@ export class SearchEditor extends Disposable implements IEditorPane {
 		}, true));
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		await this.textEditor.setInput({ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false }, signal);
 		this.readQuery();
@@ -155,7 +156,7 @@ export class SearchEditor extends Disposable implements IEditorPane {
 		if (this.dimension) { this.layout(this.dimension); }
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.controller?.abort();
 		this.controller = undefined;
 		this.inputListeners.clear();
@@ -164,14 +165,15 @@ export class SearchEditor extends Disposable implements IEditorPane {
 		this.stopButton.enabled = false;
 		this.status.textContent = '';
 	}
-	public focus(): void { this.queryInput.focus(); }
-	public setVisible(visibility: EditorPaneVisibility): void {
+	public override focus(): void { this.queryInput.focus(); }
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
 		// Editor hosts become visible after their initial layout; measurements taken
 		// while the tab is hidden cannot size the results editor.
-		if (visibility === EditorPaneVisibility.Visible && this.dimension) { this.layout(this.dimension); }
+		if (visibility && this.dimension) { this.layout(this.dimension); }
 		this.textEditor.setVisible(visibility);
 	}
-	public layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.domNode.style.width = `${dimension.width}px`;
 		this.domNode.style.height = `${dimension.height}px`;

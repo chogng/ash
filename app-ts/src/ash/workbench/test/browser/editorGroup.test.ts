@@ -1,4 +1,5 @@
 import type { IResourceEditorInput } from '../../common/editor.js';
+import { EditorPane } from '../../browser/parts/editor/editorPane.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createBinaryDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 import { DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration } from '../../browser/parts/editor/editorConfiguration.js';
@@ -7,7 +8,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
-import type { IEditorPane } from "../../browser/parts/editor/editorPane.js";
+
 import type { IEditorGroupsService } from "../../services/editor/common/editorGroupsService.js";
 
 test('EditorGroupView keeps the caller language when resource detection has no language', async () => {
@@ -177,19 +178,16 @@ test('binary comparisons select the diff association using the modified file pat
 	}
 });
 
-class TestEditorPane implements IEditorPane {
-	constructor(readonly id: string = "test.editor") { }
+class TestEditorPane extends EditorPane {
+	constructor(readonly id: string = "test.editor") { super(); }
 
-	create(_parent: HTMLElement): void { }
-	async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
-	clearInput(): void { }
-	layout(_dimension: { readonly width: number; readonly height: number; }): void { }
-	setVisible(_visibility: number): void { }
-	focus(): void { }
-	dispose(): void { }
-	[Symbol.dispose](): void {
-		this.dispose();
+	public override create(_parent: HTMLElement): void {
+		super.create(_parent);
 	}
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
+	public override clearInput(): void { }
+	public override layout(_dimension: { readonly width: number; readonly height: number; }): void { }
+	public override focus(): void { }
 }
 
 function input(name: string): IResourceEditorInput {

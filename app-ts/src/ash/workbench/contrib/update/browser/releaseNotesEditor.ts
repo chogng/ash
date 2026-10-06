@@ -1,10 +1,10 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './releaseNotesEditor.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { MarkdownDocumentView } from '../../markdown/browser/markdownDocumentRenderer.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
 import { IOnboardingTryoutService } from '../../onboarding/common/onboardingTryout.js';
@@ -16,7 +16,7 @@ export const releaseNotesResource = 'ash-release-notes:/current';
 
 const releaseNotesByFile = import.meta.glob('../../../../../../release-notes/v*.md', { query: '?raw', import: 'default', eager: true }) as Readonly<Record<string, string>>;
 
-export class ReleaseNotesEditor extends Disposable implements IEditorPane {
+export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 	readonly id = releaseNotesEditorId;
 	private root!: HTMLElement;
 	private documentView!: MarkdownDocumentView;
@@ -27,10 +27,11 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 		@IOpenerService private readonly opener: IOpenerService,
 	) { super(); }
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.root = h(parent.ownerDocument, 'div');
 		this.root.className = 'ash-release-notes-editor';
 		parent.append(this.root);
+		super.create(this.root);
 		this._register(toDisposable(() => this.root.remove()));
 		this.documentView = this._register(new MarkdownDocumentView(this.root, {
 			title: localize('releaseNotes.title', 'Release Notes'),
@@ -38,16 +39,15 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 		}));
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
 		if (input.resource.toString() !== releaseNotesResource) throw new Error('Invalid release notes resource');
 		this.render();
 	}
 
-	clearInput(): void { }
-	layout(_dimension: IDimension): void { }
-	setVisible(_visibility: EditorPaneVisibility): void { }
-	focus(): void { this.documentView.focus(); }
+	public override clearInput(): void { }
+	public override layout(_dimension: IDimension): void { }
+	public override focus(): void { this.documentView.focus(); }
 
 	private render(): void {
 		const match = /^(\d+\.\d+)\./.exec(packageMetadata.version);

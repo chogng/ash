@@ -5,7 +5,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { TextDiffEditor } from '../../../browser/parts/editor/textDiffEditor.js';
-import { MultiDiffEditorPane } from '../../multiDiffEditor/browser/multiDiffEditorPane.js';
+import { MultiDiffEditor } from '../../multiDiffEditor/browser/multiDiffEditor.js';
 
 class ToggleWordWrapAction extends Action2 {
 	constructor() {
@@ -22,7 +22,7 @@ class ToggleWordWrapAction extends Action2 {
 			pane.toggleWordWrap();
 			return;
 		}
-		if (pane instanceof MultiDiffEditorPane) {
+		if (pane instanceof MultiDiffEditor) {
 			pane.toggleWordWrap();
 			return;
 		}

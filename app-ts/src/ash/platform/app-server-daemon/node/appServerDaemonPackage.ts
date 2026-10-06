@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../app-server/common/generated/index.js";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from "../../app-server/common/generated/index.js";
 import { developmentArtifactsPath, developmentAshPackagePath } from "../../environment/node/developmentArtifacts.js";
 
 export interface AppServerDaemonPackageLocation {
@@ -21,13 +21,12 @@ interface AshPackageMetadata {
 	readonly layoutVersion?: unknown;
 	readonly protocol?: {
 		readonly major?: unknown;
-		readonly revision?: unknown;
 		readonly schemaHash?: unknown;
 	};
 	readonly version?: unknown;
 }
 
-/** Reads the digest bound to the signed product package; development generations use protocol negotiation. */
+/** Reads the digest bound to the signed product package; development generations are checked during initialization. */
 export function packagedAppServerDaemonSha256(location: AppServerDaemonPackageLocation): string | undefined {
 	return packagedComponentSha256(location, "appServerDaemon");
 }
@@ -49,7 +48,6 @@ function packagedComponentSha256(location: AppServerDaemonPackageLocation, compo
 	const expectedEntrypoint = `bin/${location.platform === "win32" ? "ash-app-server.exe" : "ash-app-server"}`;
 	const digest = metadata.components?.[component]?.binarySha256;
 	const protocolMatchesDesktop = metadata.protocol?.major === APP_SERVER_PROTOCOL_MAJOR
-		&& metadata.protocol.revision === APP_SERVER_PROTOCOL_REVISION
 		&& metadata.protocol.schemaHash === APP_SERVER_SCHEMA_HASH;
 	if (metadata.layoutVersion !== 2 || metadata.entrypoint !== expectedEntrypoint || (location.expectedVersion !== undefined && metadata.version !== location.expectedVersion) || !protocolMatchesDesktop || typeof metadata.buildId !== "string" || !/^sha256:[a-f0-9]{64}$/.test(metadata.buildId) || typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) {
 		throw new Error(`Invalid Ash package metadata: ${metadataPath}`);

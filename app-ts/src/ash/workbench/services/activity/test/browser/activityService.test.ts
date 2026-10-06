@@ -21,7 +21,9 @@ test('ActivityService combines concurrent counts and descriptions and releases o
 	using container = registry.registerViewContainer({ id: 'test', title: 'Test', location: ViewContainerLocation.Sidebar });
 	using contextKeys = new ContextKeyService();
 	using views = new ViewDescriptorService({ registry }, contextKeys);
-	using bar = new CompositeBar(dom.window.document.body, { activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views' });
+	using bar = new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views'
+	});
 	using activity = new ActivityService(bar);
 	using first = activity.showViewContainerActivity('test', new NumberBadge(2, '2 unsaved files'));
 	using second = activity.showViewContainerActivity('test', new NumberBadge(3, '3 incoming changes'));
@@ -59,6 +61,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		let actions: readonly IAction[] = [];
 		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		using bar = new CompositeBar(dom.window.document.body, {
+			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
 			contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },
@@ -77,6 +80,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		await storage.flush();
 		using restoredStorage = new BrowserStorageService({ ...options, workspaceId: 'second' });
 		using restored = new CompositeBar(dom.window.document.body, {
+			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,
 			contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },

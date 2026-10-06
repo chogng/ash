@@ -1,10 +1,10 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { addDisposableListener, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -13,7 +13,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ImageResource, inspectImage, type ImageMetadata } from '../../../../platform/media/browser/image.js';
-import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPaneMatch, EditorPane } from '../../../browser/parts/editor/editorPane.js';
 
 export const IMAGE_PREVIEW_ID = 'ash.imagePreview';
 
@@ -24,7 +24,7 @@ export function matchImagePreview(input: IResourceEditorInput): EditorPaneMatch 
 		: EditorPaneMatch.None;
 }
 
-export class ImagePreview extends Disposable implements IEditorPane {
+export class ImagePreview extends EditorPane implements IEditorPane {
 	public readonly id = IMAGE_PREVIEW_ID;
 	private static readonly instances = new WeakMap<HTMLElement, ImagePreview>();
 	private readonly resource = this._register(new MutableDisposable<ImageResource>());
@@ -55,7 +55,7 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		return root ? this.instances.get(root) : undefined;
 	}
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.domNode = h(parent.ownerDocument, 'div', { className: 'ash-image-preview' });
 		this.domNode.tabIndex = 0;
 		this.domNode.setAttribute('role', 'region');
@@ -71,6 +71,7 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		this.summaryDomNode.setAttribute('role', 'status');
 		this.domNode.append(controls, this.viewportDomNode, this.summaryDomNode);
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		ImagePreview.instances.set(this.domNode, this);
 		this._register(toDisposable(() => {
 			this.clearInput();
@@ -109,12 +110,12 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		this.updateLabels();
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		await this.load(input, signal, true);
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.generation++;
 		this.loading.clear();
 		this.input = undefined;
@@ -127,12 +128,12 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		this.updateLabels();
 	}
 
-	public layout(_dimension: IDimension): void { this.updateImageGeometry(); }
-	public setVisible(visibility: EditorPaneVisibility): void {
-		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
+	public override layout(_dimension: IDimension): void { this.updateImageGeometry(); }
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
 		this.domNode.classList.toggle('hidden', this.domNode.hidden);
 	}
-	public focus(): void { this.viewportDomNode.focus(); }
+	public override focus(): void { this.viewportDomNode.focus(); }
 
 	public getAccessibleContent(): string {
 		const metadata = this.metadata;

@@ -787,7 +787,7 @@ test("Editor widgets delegate optional feature composition to contributions", ()
 
 test("Multi-diff keeps generic projection in Editor and product integration in Workbench", () => {
 	const widget = readFileSync(join(editorRoot, "browser/widget/multiDiffEditor/multiDiffEditorWidget.ts"), "utf8");
-	const pane = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditorPane.ts"), "utf8");
+	const pane = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditor.ts"), "utf8");
 	const input = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditorInput.ts"), "utf8");
 	const contribution = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditor.contribution.ts"), "utf8");
 	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.contribution.ts"), "utf8");

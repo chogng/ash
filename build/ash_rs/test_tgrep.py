@@ -53,7 +53,9 @@ class TgrepTests(unittest.TestCase):
                 commands.append(command)
                 if command[1] == "build":
                     build_directories.append(Path(kwargs["cwd"]))
-                    self.assertFalse(build_directories[-1].is_relative_to(root / "cache"))
+                    self.assertFalse(
+                        build_directories[-1].is_relative_to(root / "cache")
+                    )
                     target = (
                         Path(kwargs["env"]["CARGO_TARGET_DIR"])
                         / "aarch64-apple-darwin/release/tgrep"
@@ -140,6 +142,8 @@ class TgrepTests(unittest.TestCase):
             ).hexdigest()
             lock.write_text(json.dumps(data))
             original_run = subprocess.run
+            temporary_directory = tempfile.TemporaryDirectory
+            (root / "cache").mkdir()
 
             def run(command, **kwargs):
                 if command[0] == "git":
@@ -155,6 +159,12 @@ class TgrepTests(unittest.TestCase):
                 output.write_bytes(b"compiled patched source")
 
             with (
+                patch(
+                    "build.ash_rs.tgrep.tempfile.TemporaryDirectory",
+                    side_effect=lambda **kwargs: temporary_directory(
+                        dir=root / "cache", **kwargs
+                    ),
+                ),
                 patch("build.ash_rs.tgrep.subprocess.run", side_effect=run),
                 patch(
                     "build.ash_rs.tgrep.subprocess.check_output",

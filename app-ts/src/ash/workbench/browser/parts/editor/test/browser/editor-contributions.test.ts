@@ -1,5 +1,5 @@
-import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { SaveReason, type ISaveOptions } from '../../../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane, EditorPaneStatus } from '../../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -12,8 +12,8 @@ import { BrowserWorkingCopyService } from "../../../../../services/workingCopy/b
 import type { IWorkingCopy } from "../../../../../services/workingCopy/common/workingCopyService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../services/statusbar/browser/statusbar.js";
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from "../../../../../services/editor/common/editorConfiguration.js";
-import type { IEditorPane, EditorPaneStatus } from "../../editorPane.js";
-import { EditorPaneVisibility } from "../../editorPane.js";
+import { EditorPane } from '../../editorPane.js';
+
 import type { IEditorPart } from "../../editorPart.js";
 import { EditorAutoSave } from "../../editorAutoSave.js";
 import { EditorStatusContribution } from "../../editorStatus.js";
@@ -282,7 +282,7 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	async revert(): Promise<void> { this.dirty = false; this.dirtyEmitter.fire(); }
 }
 
-class TestStatusPane extends Disposable implements IEditorPane {
+class TestStatusPane extends EditorPane implements IEditorPane {
 	readonly id = "test.status";
 	private readonly statusEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeStatus = this.statusEmitter.event;
@@ -291,12 +291,13 @@ class TestStatusPane extends Disposable implements IEditorPane {
 	constructor(readonly workingCopy: IWorkingCopy | undefined) { super(); }
 	getStatus(): EditorPaneStatus { return this.status; }
 	setStatus(status: EditorPaneStatus): void { this.status = status; this.statusEmitter.fire(); }
-	create(): void { }
-	async setInput(): Promise<void> { }
-	clearInput(): void { }
-	layout(): void { }
-	setVisible(_visibility: EditorPaneVisibility): void { }
-	focus(): void { }
+	public override create(parent: HTMLElement): void {
+		super.create(parent);
+	}
+	public override async setInput(): Promise<void> { }
+	public override clearInput(): void { }
+	public override layout(): void { }
+	public override focus(): void { }
 }
 
 function statusTexts(statusbar: StatusbarService): string[] {

@@ -1,4 +1,5 @@
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
+import { CONTEXT_DEBUG_STATE } from '../common/debug.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -86,7 +87,7 @@ for (const [id, title, keybinding, operation] of [
 	[STEP_OUT_DEBUG_COMMAND_ID, "Step Out", Keybinding.single(logicalKey("F11", { shiftKey: true })), "stepOut"],
 ] as const) {
 	registerAction2(class DebugSessionAction extends Action2 {
-		constructor() { super({ id, title, f1: true, precondition: AppServerAvailableContext.isEqualTo(true), ...(keybinding ? { keybinding: { primary: keybinding } } : {}) }); }
+		constructor() { super({ id, title, f1: true, precondition: AppServerAvailableContext.isEqualTo(true), ...(keybinding ? { keybinding: { primary: keybinding, ...(operation === 'pause' ? { when: CONTEXT_DEBUG_STATE.isEqualTo('running') } : {}) } } : {}) }); }
 		override run(accessor: ServicesAccessor): void {
 			const session = accessor.get(IDebugService).session;
 			if (!session) return;

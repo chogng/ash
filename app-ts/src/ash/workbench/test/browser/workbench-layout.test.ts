@@ -381,6 +381,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		const contextKeys = disposables.add(new ContextKeyService());
 		const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 		const bar = disposables.add(new CompositeBar(harness.container, {
+			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical',
 		}));
@@ -763,7 +764,9 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	assert.ok(descriptor);
 	const model = viewDescriptors.getViewContainerModel(descriptor.id);
 	const host = h(dom.window.document, "main");
-	const sidebar = new SidebarPart(host, { viewDescriptorService: viewDescriptors, contextKeyService: contextKeys });
+	const sidebar = new SidebarPart(host, {
+		openComposite: async () => null, viewDescriptorService: viewDescriptors, contextKeyService: contextKeys
+	});
 	const composite = new SCMViewPaneContainer(host, {
 		viewContainer: descriptor,
 		model,
@@ -1140,6 +1143,7 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 		registry,
 	}, contextKeys));
 	const sidebar = disposables.add(new SidebarPart(dom.window.document.body, {
+		openComposite: async id => { selections.push(id); return null; },
 		viewDescriptorService: viewDescriptors,
 		contextKeyService: contextKeys,
 	}));
@@ -1162,9 +1166,6 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	activitybar.setSidebarVisible(false);
 	assert.equal(activitybar.domNode.classList.contains('sidebar-open'), false);
 	const selections: string[] = [];
-	disposables.add(sidebar.onDidSelectComposite(
-		({ compositeId }) => selections.push(compositeId),
-	));
 
 	assert.equal(
 		compositeBar.domNode.querySelectorAll(".ash-action-view-item").length,
@@ -1361,6 +1362,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const firstStorage = createStorage("workspace-a");
 	const first = new SidebarPart(dom.window.document.body, {
+		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 		storageService: firstStorage,
 	});
@@ -1373,6 +1375,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const restoredStorage = createStorage("workspace-a");
 	const restored = new SidebarPart(dom.window.document.body, {
+		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 		storageService: restoredStorage,
 	});
@@ -1389,6 +1392,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const defaultStorage = createStorage("workspace-a");
 	const fallback = new SidebarPart(dom.window.document.body, {
+		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 		storageService: defaultStorage,
 	});
@@ -1414,6 +1418,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 		registry,
 	}, contextKeys));
 	const agentSidebar = disposables.add(new SidebarPart(dom.window.document.body, {
+		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 		contextKeyService: contextKeys,
 		id: "agentSidebar",
@@ -1587,6 +1592,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 		},
 	};
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		openComposite: async id => { selections.push(id); return null; },
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Panel,
@@ -1594,9 +1600,6 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 		presentation: "label",
 		contextMenuProvider,
 	}));
-	disposables.add(compositeBar.onDidSelectComposite(
-		({ compositeId }) => selections.push(compositeId),
-	));
 	dom.window.document.body.append(compositeBar.domNode);
 	Object.defineProperty(compositeBar.domNode, "clientWidth", {
 		configurable: true,
@@ -1656,6 +1659,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	let actions: readonly IAction[] = [];
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu(options) { actions = options.getActions(); } };
 	const compositeBar = firstBar.add(new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Sidebar,
@@ -1686,6 +1690,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 
 	const restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'other', backend: dom.window.localStorage, flushInterval: 0 });
 	const restored = new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Sidebar,
@@ -1718,6 +1723,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 		translate: (_bundle: string, key: string, fallback: string) => key === "terminal" && locale === "zh-CN" ? "终端" : fallback,
 	} as unknown as ILocalizationService;
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		localizationService: localization,
@@ -1767,6 +1773,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	}, paneStorage);
 	const auxiliarybar = disposables.add(
 		new AuxiliarybarPart(dom.window.document.body, {
+			openComposite: async () => null,
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 		}),
@@ -1891,6 +1898,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
 		location: ViewContainerLocation.Panel,
@@ -2056,6 +2064,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const contexts = disposables.add(new ContextKeyService());
 	const descriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
 	const bar = disposables.add(new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
 	}));
@@ -2066,6 +2075,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const restoredStorage = disposables.add(new BrowserStorageService({ ...storageOptions, workspaceId: 'second' }));
 	const restoredDescriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
 	const restored = disposables.add(new CompositeBar(dom.window.document.body, {
+		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,
 	}));

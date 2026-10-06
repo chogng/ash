@@ -1,9 +1,9 @@
-import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import './library.css';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -13,7 +13,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { ImageResource } from '../../../../platform/media/browser/image.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { ILibraryService, type LibraryState } from './libraryService.js';
 
 interface LibraryItem {
@@ -28,7 +28,7 @@ interface LibraryItem {
 }
 
 /** Owns only the central browsing surface; side Views have independent DOM and visibility lifetimes. */
-export class LibraryEditorPane extends Disposable implements IEditorPane {
+export class LibraryEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.library';
 	public domNode!: HTMLElement;
 	private readonly ui = this._register(new DisposableStore());
@@ -57,9 +57,10 @@ export class LibraryEditorPane extends Disposable implements IEditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) { super(); }
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.domNode = h(parent.ownerDocument, 'section', { className: 'ash-library', attributes: { 'aria-label': localize('library.title', 'Library') } });
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsLibraryFocused', true);
 		this.initialize();
 		this._register(this.library.onDidRequestItemFocus(assetId => [...this.itemViews.values()].find(item => item.entry.version.assetId === assetId)?.domNode.focus()));
@@ -88,18 +89,19 @@ export class LibraryEditorPane extends Disposable implements IEditorPane {
 		}));
 	}
 
-	public async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
-	public clearInput(): void { }
-	public setVisible(visibility: EditorPaneVisibility): void {
-		this.visible = visibility === EditorPaneVisibility.Visible;
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
+	public override clearInput(): void { }
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		this.visible = visibility;
 		if (this.visible) { void this.library.reload(); }
 		else { this.releaseImages(); }
 	}
-	public layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.domNode.classList.toggle('narrow', dimension.width < 760);
 		this.domNode.classList.toggle('compact', dimension.width < 320);
 	}
-	public focus(): void { this.searchDomNode.focus(); }
+	public override focus(): void { this.searchDomNode.focus(); }
 
 	private initialize(): void {
 		this.domNode.setAttribute('aria-label', localize('library.title', 'Library'));

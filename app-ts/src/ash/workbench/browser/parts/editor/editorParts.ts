@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
@@ -14,10 +14,11 @@ import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/edit
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
-import type { IEditorPane } from "./editorPane.js";
+
 import { editorInputKey } from "./editorTabsControl.js";
 import type { EditorCloseAllOptions, IEditorPart, RecentlyClosedEditor } from "./editorPart.js";
 import type { IEditorGroupView } from "./editor.js";
+import type { IEditorGroup, IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
 import {
 	AuxiliaryEditorPart,
 	type AuxiliaryEditorPartCreation,
@@ -83,6 +84,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	get domNode(): HTMLElement { return this._activePart.domNode; }
 	get groups(): readonly IEditorGroupView[] { return this.parts.flatMap(part => part.groups); }
 	get activeGroup(): IEditorGroupView { return this._activePart.activeGroup; }
+	public findGroup(scope: IFindGroupScope, source: IEditorGroup = this.activeGroup): IEditorGroup | undefined {
+		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === source.id))!;
+		return part.findGroup(scope, source);
+	}
 	toggleActiveGroupLock(): boolean { return this._activePart.toggleActiveGroupLock(); }
 	get activeInput(): IResourceEditorInput | undefined { return this._activePart.activeInput; }
 	get activePane(): IEditorPane | undefined { return this._activePart.activePane; }

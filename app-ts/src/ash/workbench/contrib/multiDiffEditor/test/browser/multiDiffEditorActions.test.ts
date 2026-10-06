@@ -34,8 +34,8 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 			MultiDiffGoToPreviousChangeCommandId,
 		} = await import('../../browser/multiDiffEditorActions.js');
 		const { MULTI_DIFF_EDITOR_ID } = await import('../../browser/multiDiffEditorInput.js');
-		const { MultiDiffEditorPane } = await import('../../browser/multiDiffEditorPane.js');
-		class TrackingMultiDiffEditorPane extends MultiDiffEditorPane {
+		const { MultiDiffEditor } = await import('../../browser/multiDiffEditor.js');
+		class TrackingMultiDiffEditor extends MultiDiffEditor {
 			public readonly calls: string[] = [];
 
 			constructor(@IInstantiationService instantiationService: IInstantiationService) {
@@ -80,7 +80,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffExpandAllAction));
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
 		const services = new InstantiationService();
-		const pane = services.createInstance(TrackingMultiDiffEditorPane);
+		const pane = services.createInstance(TrackingMultiDiffEditor);
 		registrations.add(pane);
 		services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);
 		const openedInputs: IResourceEditorInput[] = [];

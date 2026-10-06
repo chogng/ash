@@ -1,4 +1,5 @@
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
+import type { EditorPane } from './editorPane.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
@@ -24,8 +25,8 @@ import type { EditorCloseOptions } from '../../../services/editor/common/editorG
 import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import { EditorPaneVisibility, isEditorPaneWithStatus, type IEditorPane } from "./editorPane.js";
-import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput } from '../../../common/editor.js';
+
+import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -479,8 +480,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			return existing.paneInstance.pane;
 		}
 
-		let createdPane: IEditorPane | undefined;
-		let pane: IEditorPane;
+		let createdPane: EditorPane | undefined;
+		let pane: EditorPane;
 		try {
 			pane = descriptor.create({
 				input,
@@ -588,7 +589,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.ordinaryContent = undefined;
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorOpened", editor: this.editorState(entry) }));
 		if (options.inactive && this.activeInput) {
-			paneInstance.setVisible(EditorPaneVisibility.Hidden);
+			paneInstance.setVisible(false);
 			this.renderContent();
 			this.renderChrome();
 		} else {
@@ -751,7 +752,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.contentVisible = visible;
 		this.contentDomNode.hidden = !visible;
-		this.activeEntry?.paneInstance.setVisible(visible ? EditorPaneVisibility.Visible : EditorPaneVisibility.Hidden);
+		this.activeEntry?.paneInstance.setVisible(visible ? true : false);
 	}
 
 	focus(): void {
@@ -764,7 +765,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.renderContent();
 		this.panes.activate(entry.paneInstance, this.dimension);
 		if (!this.contentVisible) {
-			entry.paneInstance.setVisible(EditorPaneVisibility.Hidden);
+			entry.paneInstance.setVisible(false);
 		}
 		if (changed) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: this.editorState(entry) }));

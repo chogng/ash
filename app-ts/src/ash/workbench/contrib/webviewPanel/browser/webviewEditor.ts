@@ -1,17 +1,17 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { WebviewElement } from '../../../../platform/webview/browser/webviewElement.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { CustomTextEditorModel } from '../../customEditor/common/customTextEditorModel.js';
 
@@ -22,7 +22,7 @@ export interface CustomTextEditorProvider {
 }
 
 /** Generic text-backed webview host. Extension code owns the document's HTML. */
-export class WebviewEditor extends Disposable implements IEditorPane {
+export class WebviewEditor extends EditorPane implements IEditorPane {
 	public readonly id: string;
 	private container: HTMLElement | undefined;
 	private readonly inputResources = this._register(new DisposableStore());
@@ -46,15 +46,16 @@ export class WebviewEditor extends Disposable implements IEditorPane {
 		this.id = provider.viewType;
 	}
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.container = h(parent.ownerDocument, 'div');
 		this.container.className = 'ash-webview-editor';
 		this.container.style.height = '100%';
 		parent.append(this.container);
+		super.create(this.container);
 		this._register(toDisposable(() => this.container?.remove()));
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		const reference = await this.models.acquire(input, signal);
 		this.model = this.inputResources.add(this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled));
@@ -120,28 +121,22 @@ export class WebviewEditor extends Disposable implements IEditorPane {
 		await render();
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.renderRequest.clear();
 		this.model = undefined;
 		this.inputResources.clear();
 		this.webview.clear();
 	}
-	public getControl(): WebviewElement | undefined { return this.webview.value; }
+	public override getControl(): WebviewElement | undefined { return this.webview.value; }
 
-	public layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		if (this.container) {
 			this.container.style.width = `${dimension.width}px`;
 			this.container.style.height = `${dimension.height}px`;
 		}
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		if (this.container) {
-			this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-		}
-	}
-
-	public focus(): void { this.webview.value?.focus(); }
+	public override focus(): void { this.webview.value?.focus(); }
 	public async save(): Promise<void> { await this.model?.save(new AbortController().signal); }
 	public async saveAs(resource: URI): Promise<void> { await this.model?.saveAs(resource, new AbortController().signal); }
 }

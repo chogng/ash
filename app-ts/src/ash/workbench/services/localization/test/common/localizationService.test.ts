@@ -12,6 +12,7 @@ import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.j
 import { normalizeLocale } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
 import { LocalizationConfiguration } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
+import { AppServerProtocolIncompatibleError } from '../../../../../platform/app-server/common/appServerProtocolCompatibility.js';
 
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { JSDOM } from 'jsdom';
@@ -29,6 +30,14 @@ import '../../../../contrib/git/browser/gitWorktrees.js';
 suite('Workbench localization', () => {
 	setup(() => initializeTestLocalization('en'));
 	teardown(() => resetNlsResolver());
+
+	test('backend protocol mismatch reports the fingerprints in Chinese', () => {
+		initializeTestLocalization('zh-CN');
+		const expected = `sha256:${'a'.repeat(64)}`;
+		const received = `sha256:${'b'.repeat(64)}`;
+		const error = new AppServerProtocolIncompatibleError({ kind: 'schemaHash', expected, received });
+		assert.equal(error.message, `Ash 前后端协议指纹不匹配：客户端要求 ${expected}，后端返回 ${received}。请重新构建并启动对应的后端。`);
+	});
 
 	test('Panel commands and navigation help use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');

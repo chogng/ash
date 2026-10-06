@@ -3,14 +3,14 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
-import type { PaneComposite } from '../../../browser/parts/views/paneComposite.js';
+import type { IPaneComposite } from '../../../common/panecomposite.js';
 import { IViewDescriptorService, type IView, type IViewContainerDescriptor, type IViewDescriptor, type ViewContainerLocation } from '../../../common/views.js';
 import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
 import { IViewsService } from '../common/viewsService.js';
 
 /** Descriptors own view identity, Parts own instances, and this service observes their runtime visibility and focus. */
 export class ViewsService extends Disposable implements IViewsService {
-	private readonly containers = new Map<string, PaneComposite>();
+	private readonly containers = new Map<string, IPaneComposite>();
 	private readonly containerListeners = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly visibleViews = new Set<string>();
 	private focusedViewId: string | undefined;
@@ -64,7 +64,7 @@ export class ViewsService extends Disposable implements IViewsService {
 		return this.descriptors.getViewContainerById(id) !== null;
 	}
 
-	public async openViewContainer(id: string, focus = false): Promise<PaneComposite | null> {
+	public async openViewContainer(id: string, focus = false): Promise<IPaneComposite | null> {
 		const container = this.descriptors.getViewContainerById(id);
 		if (!container) { return null; }
 		return await this.panes.openPaneComposite(id, container.location, focus) ?? null;
@@ -82,7 +82,7 @@ export class ViewsService extends Disposable implements IViewsService {
 		return composite ? this.descriptors.getViewContainerById(composite.id) : null;
 	}
 
-	public getActiveViewPaneContainerWithId(id: string): PaneComposite | null {
+	public getActiveViewPaneContainerWithId(id: string): IPaneComposite | null {
 		const container = this.descriptors.getViewContainerById(id);
 		const composite = container && this.panes.getActivePaneComposite(container.location);
 		return composite?.id === id ? composite : null;
@@ -109,8 +109,8 @@ export class ViewsService extends Disposable implements IViewsService {
 			return null;
 		}
 		const composite = await this.openViewContainer(container.id);
-		const view = composite?.openView(id, focus);
-		if (focus && view?.element.contains(view.element.ownerDocument.activeElement)) {
+		const view = composite?.getControl().openView(id, focus);
+		if (focus && view?.hasFocus()) {
 			this.setFocus(id);
 		}
 		return view as T | undefined ?? null;
@@ -142,7 +142,7 @@ export class ViewsService extends Disposable implements IViewsService {
 		return (container && this.containers.get(container.id)?.getView(id)) as T | undefined ?? null;
 	}
 
-	private observeContainer(composite: PaneComposite): void {
+	private observeContainer(composite: IPaneComposite): void {
 		if (this.containers.get(composite.id) === composite) { return; }
 		this.containers.set(composite.id, composite);
 		const listeners = this.containerListeners.set(composite.id, new DisposableStore());
@@ -167,7 +167,7 @@ export class ViewsService extends Disposable implements IViewsService {
 		listeners.add(composite.onDidBlurView(view => this.clearFocus(view.id)));
 		for (const view of composite.panes) {
 			updateVisibility(view.id, view.isBodyVisible());
-			if (view.element.contains(view.element.ownerDocument.activeElement)) { this.setFocus(view.id); }
+			if (view.hasFocus()) { this.setFocus(view.id); }
 		}
 	}
 

@@ -177,7 +177,7 @@ fn package(root: &Path, name: &str, contents: &str) -> std::path::PathBuf {
             "buildProfile": "dev-small",
             "files": files,
             "javascriptRuntime": { "kind": "hostProvidedNode" },
-            "protocol": { "major": 1, "revision": 2, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
+            "protocol": { "major": 1, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
             "target": "x86_64-pc-windows-msvc",
             "version": "0.1.0"
         }))
@@ -193,7 +193,7 @@ fn build_id(files: &BTreeMap<String, String>) -> String {
     let identity = json!({
         "buildProfile": "dev-small",
         "javascriptRuntime": { "kind": "hostProvidedNode" },
-        "protocol": { "major": 1, "revision": 2, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
+        "protocol": { "major": 1, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
         "target": "x86_64-pc-windows-msvc",
         "version": "0.1.0"
     });

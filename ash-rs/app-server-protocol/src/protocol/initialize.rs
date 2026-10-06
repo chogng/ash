@@ -11,24 +11,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 18;
-// Version 12 uses manual/auto permission IDs. Clients must reject older contracts before
-// sending a Turn, rather than silently selecting an unintended permission mode.
-// Version 13 requires separate current observations in Guardian environment responses.
-// Version 14 scopes recent Guardian commands across local project Sessions with provenance.
-// Version 15 requires backend scan defaults, adjustable history scope, aggregate samples and coverage.
-// Version 16 requires cancellable Git ignore queries and scoped ignore-change notifications.
-// Version 17 requires model catalogs with service-tier and reasoning-effort descriptors.
-// Version 18 requires snake_case model metadata and model preference request fields.
-// Version 19 distinguishes catalog defaults from selected reasoning effort.
-// Version 20 selects catalog acceleration IDs and restricts each option independently.
-// Version 21 stores long context as a boolean independently of token capacities.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 21;
-
+// Same-product clients bind to the generated schema fingerprint, not a shared
+// counter for unrelated capability domains.
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
-    CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),
-    CapabilityRequirement::exact("threads", APP_SERVER_CAPABILITY_VERSION),
-    CapabilityRequirement::exact("turns", APP_SERVER_CAPABILITY_VERSION),
+    CapabilityRequirement::Enabled("sessions"),
+    CapabilityRequirement::Enabled("threads"),
+    CapabilityRequirement::Enabled("turns"),
 ];
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -53,14 +41,12 @@ pub struct InitializeResult {
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolVersion {
     pub major: u32,
-    pub revision: u32,
 }
 
 impl ProtocolVersion {
     pub const fn current() -> Self {
         Self {
             major: APP_SERVER_PROTOCOL_MAJOR,
-            revision: APP_SERVER_PROTOCOL_REVISION,
         }
     }
 }
@@ -71,24 +57,19 @@ pub struct CapabilityContract {
     pub version: u32,
 }
 
-impl CapabilityContract {
-    pub const fn current() -> Self {
-        Self {
-            version: APP_SERVER_CAPABILITY_VERSION,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CapabilityRequirement {
-    pub name: &'static str,
-    pub min_version: u32,
-    pub max_version: u32,
+pub enum CapabilityRequirement {
+    Enabled(&'static str),
+    Contract {
+        name: &'static str,
+        min_version: u32,
+        max_version: u32,
+    },
 }
 
 impl CapabilityRequirement {
     pub const fn exact(name: &'static str, version: u32) -> Self {
-        Self {
+        Self::Contract {
             name,
             min_version: version,
             max_version: version,
@@ -102,10 +83,12 @@ pub enum ProtocolCompatibilityError {
         expected: u32,
         received: u32,
     },
+    SchemaHash {
+        expected: String,
+        received: String,
+    },
     MissingCapability {
         name: &'static str,
-        min_version: u32,
-        max_version: u32,
     },
     CapabilityVersion {
         name: &'static str,
@@ -122,13 +105,13 @@ impl fmt::Display for ProtocolCompatibilityError {
                 formatter,
                 "protocol major mismatch: client requires {expected}, server advertised {received}"
             ),
-            Self::MissingCapability {
-                name,
-                min_version,
-                max_version,
-            } => write!(
+            Self::SchemaHash { expected, received } => write!(
                 formatter,
-                "required App Server capability {name} is missing; client supports versions {min_version}..={max_version}"
+                "protocol schema mismatch: client requires {expected}, server advertised {received}"
+            ),
+            Self::MissingCapability { name } => write!(
+                formatter,
+                "required App Server capability {name} is missing"
             ),
             Self::CapabilityVersion {
                 name,
@@ -155,32 +138,42 @@ pub fn ensure_protocol_compatible(
             received: initialized.protocol_version.major,
         });
     }
+    // The product ships one generated contract. Check it before permitting requests so
+    // an older backend cannot silently ignore fields such as permission or model choices.
+    let expected = crate::schema_hash();
+    if initialized.schema_hash.0 != expected {
+        return Err(ProtocolCompatibilityError::SchemaHash {
+            expected,
+            received: initialized.schema_hash.0.clone(),
+        });
+    }
     for requirement in requirements {
-        if matches!(
-            initialized.capabilities.is_enabled(requirement.name),
-            Some(false)
-        ) {
-            return Err(ProtocolCompatibilityError::MissingCapability {
-                name: requirement.name,
-                min_version: requirement.min_version,
-                max_version: requirement.max_version,
-            });
-        }
-        let Some(contract) = initialized.capabilities.contracts.get(requirement.name) else {
-            return Err(ProtocolCompatibilityError::MissingCapability {
-                name: requirement.name,
-                min_version: requirement.min_version,
-                max_version: requirement.max_version,
-            });
-        };
-        if contract.version < requirement.min_version || contract.version > requirement.max_version
-        {
-            return Err(ProtocolCompatibilityError::CapabilityVersion {
-                name: requirement.name,
-                min_version: requirement.min_version,
-                max_version: requirement.max_version,
-                received: contract.version,
-            });
+        match *requirement {
+            CapabilityRequirement::Enabled(name) => {
+                if initialized.capabilities.is_enabled(name) != Some(true) {
+                    return Err(ProtocolCompatibilityError::MissingCapability { name });
+                }
+            }
+            CapabilityRequirement::Contract {
+                name,
+                min_version,
+                max_version,
+            } => {
+                if initialized.capabilities.is_enabled(name) == Some(false) {
+                    return Err(ProtocolCompatibilityError::MissingCapability { name });
+                }
+                let Some(contract) = initialized.capabilities.contracts.get(name) else {
+                    return Err(ProtocolCompatibilityError::MissingCapability { name });
+                };
+                if contract.version < min_version || contract.version > max_version {
+                    return Err(ProtocolCompatibilityError::CapabilityVersion {
+                        name,
+                        min_version,
+                        max_version,
+                        received: contract.version,
+                    });
+                }
+            }
         }
     }
     Ok(())
@@ -256,39 +249,8 @@ impl ServerCapabilities {
     }
 
     pub fn advertise_contracts(&mut self) {
-        let capabilities = [
-            ("agentInteractions", self.agent_interactions),
-            ("documentCollaboration", self.document_collaboration),
-            ("sessions", self.sessions),
-            ("threads", self.threads),
-            ("turns", self.turns),
-            ("projects", self.projects),
-            ("memories", self.memories),
-            ("approvalEnvironment", self.approval_environment),
-            ("resources", self.resources),
-            ("attachments", self.attachments),
-            ("fileSystem", self.file_system),
-            ("git", self.git),
-            ("contentSearch", self.content_search),
-            ("codebase", self.codebase),
-            ("cloudCodebase", self.cloud_codebase),
-            ("terminal", self.terminal),
-            ("debugAdapter", self.debug_adapter),
-            ("typst", self.typst),
-            ("updateReplay", self.update_replay),
-            ("extensions", self.extensions),
-            ("extensionHost", self.extension_host),
-            ("connectors", self.connectors),
-            ("plugins", self.plugins),
-            ("marketplace", self.marketplace),
-            ("mcp", self.mcp),
-            ("mcpOAuth", self.mcp_oauth),
-        ];
-        self.contracts = capabilities
-            .into_iter()
-            .filter(|(_, available)| *available)
-            .map(|(name, _)| (name.into(), CapabilityContract::current()))
-            .collect();
+        // Only independently versioned optional contracts need entries here. Shared
+        // protocol identity and boolean availability cover the other capabilities.
         if self.github {
             self.contracts
                 .insert("github".into(), CapabilityContract { version: 1 });

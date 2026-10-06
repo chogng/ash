@@ -206,6 +206,8 @@ if (new URLSearchParams(location.search).has('pane')) {
 	}, context, Object.assign(store.add(new BrowserLayoutService({ root: document.querySelector<HTMLElement>('#terminal')! })), {
 		onDidChangePartVisibility: visibility.event,
 		isPartVisible: () => visible,
+		hasFocus: () => false,
+		getVisibleNeighborPart: () => undefined,
 		isPanelMaximized: () => false,
 		toggleMaximizedPanel: () => { },
 		showPart: () => setPanel(true),

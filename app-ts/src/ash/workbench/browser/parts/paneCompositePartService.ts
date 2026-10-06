@@ -27,8 +27,9 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 	) {
 		super();
 		for (const [viewContainerLocation, part] of parts) {
-			this._register(part.onDidCompositeOpen(composite => this.opened.fire({ composite, viewContainerLocation })));
-			this._register(part.onDidCompositeClose(composite => this.closed.fire({ composite, viewContainerLocation })));
+			// Parts publish close before removing the retained instance from their collection.
+			this._register(part.onDidCompositeOpen(({ composite }) => this.opened.fire({ composite: part.getComposite(composite.getId())!, viewContainerLocation })));
+			this._register(part.onDidCompositeClose(composite => this.closed.fire({ composite: part.getComposite(composite.getId())!, viewContainerLocation })));
 		}
 	}
 
@@ -55,14 +56,15 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 			composite = created;
 			part.addComposite(composite);
 		}
-		part.showComposite(container.id);
+		part.showComposite(container.id, focus);
 		this.layout.showPart(this.getPartId(location));
-		if (focus) { composite.focus(); }
 		return composite;
 	}
 
 	public getActivePaneComposite(location: ViewContainerLocation): PaneComposite | undefined {
-		const composite = this.getPart(location).getActiveComposite();
+		const part = this.getPart(location);
+		const id = part.activeCompositeId;
+		const composite = id ? part.getComposite(id) : undefined;
 		return composite?.isVisible() ? composite : undefined;
 	}
 

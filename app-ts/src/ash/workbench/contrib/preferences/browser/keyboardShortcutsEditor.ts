@@ -1,6 +1,6 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/keyboardShortcutsEditor.css';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { h, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -17,14 +17,14 @@ import { IContextKeyService, type IScopedContextKeyService } from "../../../../p
 import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
 import { KeyboardShortcutsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
 
 export const KeyboardShortcutsEditorId = 'workbench.editor.keyboardShortcuts';
 
 /** A tab-hosted editor for searching and updating the active keybindings resource. */
-export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
+export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 	public readonly id = KeyboardShortcutsEditorId;
 	private readonly model: KeyboardShortcutsEditorModel;
 	private readonly rows = new Map<string, KeyboardShortcutRow>();
@@ -62,13 +62,14 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 		}));
 	}
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError('Keyboard Shortcuts editor has already been created');
 		const ownerDocument = parent.ownerDocument;
 		const container = h(ownerDocument, 'div');
 		container.className = 'ash-keybindings-editor';
 		container.setAttribute('aria-label', 'Keyboard Shortcuts');
 		parent.append(container);
+		super.create(container);
 		this.container = container;
 		this._register(toDisposable(() => container.remove()));
 
@@ -126,26 +127,26 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 		this.renderRows(this.model.items);
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isKeyboardShortcutsEditorInput(input)) throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
 		throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.closeRecorder();
 	}
 
-	public layout(_dimension: IDimension): void {
+	public override layout(_dimension: IDimension): void {
 		this.scrollable?.layout();
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
-		if (visibility === EditorPaneVisibility.Hidden) this.recordingContext?.reset();
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		if (!visibility) this.recordingContext?.reset();
 		else if (this.editingItem) this.recordingContext?.set(true);
 	}
 
-	public focus(): void {
+	public override focus(): void {
 		this.searchInput?.focus();
 	}
 

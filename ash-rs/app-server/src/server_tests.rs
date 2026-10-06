@@ -2084,13 +2084,17 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
         response["result"]["protocolVersion"],
         serde_json::json!({
             "major": ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
-            "revision": ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
         })
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
     assert_eq!(
-        response["result"]["capabilities"]["contracts"]["sessions"]["version"],
-        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION
+        response["result"]["schemaHash"],
+        ash_app_server_protocol::schema_hash()
+    );
+    assert!(
+        response["result"]["capabilities"]["contracts"]
+            .get("sessions")
+            .is_none()
     );
 }
 
@@ -7581,7 +7585,11 @@ fn cancelled_subscription_login_preserves_connection_selection() {
         let server = server()
             .with_config_store(config.clone())
             .with_login_service(Arc::new(
-                LoginService::new(Arc::new(Driver { provider, method: method.clone() })).unwrap(),
+                LoginService::new(Arc::new(Driver {
+                    provider,
+                    method: method.clone(),
+                }))
+                .unwrap(),
             ));
         let mut connection = server.connection();
         initialize(&server, &mut connection);

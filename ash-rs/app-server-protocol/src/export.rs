@@ -41,16 +41,8 @@ pub fn protocol_metadata() -> String {
     // Fixture bytes must not depend on whether another crate enables preserve_order.
     let metadata = BTreeMap::from([
         (
-            "capabilityVersion",
-            Value::from(crate::protocol::initialize::APP_SERVER_CAPABILITY_VERSION),
-        ),
-        (
             "major",
             Value::from(crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR),
-        ),
-        (
-            "revision",
-            Value::from(crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION),
         ),
         ("schemaHash", Value::from(schema_hash())),
     ]);
@@ -89,8 +81,6 @@ fn generated_protocol() -> String {
     format!(
         "{GENERATED_TYPESCRIPT_HEADER}\
          export const APP_SERVER_PROTOCOL_MAJOR = {} as const;\n\
-         export const APP_SERVER_PROTOCOL_REVISION = {} as const;\n\
-         export const APP_SERVER_CAPABILITY_VERSION = {} as const;\n\
          export const APP_SERVER_SCHEMA_HASH = {schema_hash:?} as const;\n\
          export type JsonRpcVersion = \"2.0\";\n\
          export type JsonRpcId = number | string | null;\n\
@@ -101,8 +91,6 @@ fn generated_protocol() -> String {
          export type JsonRpcResponse<R, E> = JsonRpcSuccess<R> | JsonRpcFailure<E>;\n\
          export type JsonRpcError = {{ code: number; message: string; data: unknown }};\n",
         crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
-        crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
-        crate::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
     )
 }
 
@@ -405,7 +393,7 @@ fn generated_types_index() -> String {
 fn generated_index() -> String {
     format!(
         "{GENERATED_TYPESCRIPT_HEADER}\
-         export {{ APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH }} from './protocol.js';\n\
+         export {{ APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH }} from './protocol.js';\n\
          export type {{ JsonRpcError, JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcSuccess, JsonRpcVersion }} from './protocol.js';\n\
          export type {{ AppServerListenInfo }} from './AppServerListenInfo.js';\n\
          export type {{ WebListenInfo }} from './WebListenInfo.js';\n\

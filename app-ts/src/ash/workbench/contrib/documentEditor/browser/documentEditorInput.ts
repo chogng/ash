@@ -1,6 +1,6 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 
-import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 
 export const DOCUMENT_EDITOR_ID = "stanza.editor.document";
 

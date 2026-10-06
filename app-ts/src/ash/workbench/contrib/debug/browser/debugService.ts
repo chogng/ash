@@ -2,6 +2,8 @@ import { DebugConsoleService } from '../../../services/debug/browser/debugConsol
 import { IDebugConsoleService } from '../../../services/debug/common/debugConsoleService.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { localize } from '../../../../nls.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { CONTEXT_DEBUG_STATE } from '../common/debug.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type JsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -85,8 +87,13 @@ export class DebugService extends Disposable implements IDebugService {
 		@ITaskService private readonly tasks: ITaskService,
 		@IDebugAdapterFactorySource private readonly adapters: DebugAdapterFactorySource,
 		@ILogService private readonly logService: ILogService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
+		// Session changes include state changes; inactive debugging must leave F6 available for region navigation.
+		const debugState = CONTEXT_DEBUG_STATE.bindTo(contextKeys);
+		this._register(this.onDidChangeSession(session => debugState.set(session?.state ?? 'inactive')));
+		this._register(toDisposable(() => debugState.reset()));
 		this.stateMemento = this._register(new Memento(storage, { id: "debug.workspace", scope: StorageScope.WORKSPACE, target: StorageTarget.USER, defaultValue: () => EMPTY_STATE, parse: parsePersistedDebugState, serialize: serializePersistedDebugState }));
 		this.restoreState(this.stateMemento.state);
 		this._register(this.stateMemento.onDidChange(event => { if (event.external) this.restoreState(event.state); }));

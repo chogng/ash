@@ -43,7 +43,7 @@
 2. 执行 `pnpm install`，安装 Node workspace 依赖。
 3. 执行 `just install`，获取 Cargo 依赖并创建含固定版本 Ruff 和 codespell 的 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
 
-直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Python 构建入口在 Windows 使用 `python`，其他平台使用 `python3`。
+直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Node 启动的 Python 构建工具在 Windows 使用初始化创建的 `scripts/.venv/Scripts/python.exe`，可用 `PYTHON` 显式指定解释器；Just 在 Windows 使用 PATH 中的 `python`，其他平台使用 `python3`。
 
 ### 项目命令
 

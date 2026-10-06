@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export interface PythonHost {
 	readonly platform: NodeJS.Platform;
@@ -12,6 +13,7 @@ const currentHost: PythonHost = { platform: process.platform, environment: proce
 export function pythonCommand(args: string[], host: PythonHost = currentHost): { command: string; args: string[]; } {
 	const configured = host.environment.PYTHON;
 	if (configured) return { command: configured, args };
+	if (host.platform === 'win32') return { command: resolve(import.meta.dirname, '../scripts/.venv/Scripts/python.exe'), args };
 	if (host.platform === 'darwin') {
 		for (const candidate of [
 			'/opt/homebrew/opt/python@3.12/libexec/bin/python3',
@@ -20,7 +22,7 @@ export function pythonCommand(args: string[], host: PythonHost = currentHost): {
 			if (host.fileExists(candidate)) return { command: candidate, args };
 		}
 	}
-	return { command: host.platform === 'win32' ? 'python' : 'python3', args };
+	return { command: 'python3', args };
 }
 
 if (import.meta.main) {

@@ -1,9 +1,9 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert as ariaAlert } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -15,7 +15,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISCMService, type ISCMConflictFile, type ISCMConflictProvider, type ISCMConflictResolution } from '../common/scm.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { MergeEditor, MergeEditorModel } from '../../mergeEditor/browser/mergeEditor.js';
 import { hasMergeConflictMarkers, parseMergeConflictBlocks } from '../common/mergeConflict.js';
@@ -24,7 +24,7 @@ import { isScmMergeEditorInput, SCM_MERGE_EDITOR_ID, type ScmMergeEditorInput } 
 export const ScmMergeFocusedContext = new RawContextKey<boolean>('scmMergeEditorFocused', false);
 
 /** Three index stages and one ordinary file-backed result editor. */
-export class ScmMergeEditorPane extends Disposable implements IEditorPane {
+export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = SCM_MERGE_EDITOR_ID;
 	private readonly inputListeners = this._register(new MutableDisposable<DisposableStore>());
 	private readonly modelSlot = this._register(new MutableDisposable<MergeEditorModel>());
@@ -62,7 +62,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 
 	public get workingCopy(): IWorkingCopy | undefined { return this.resultEditor.workingCopy; }
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-scm-merge-editor';
@@ -72,6 +72,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.ScmMerge)) this.updateAriaLabel();
 		}));
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const scopedContext = this._register(this.contextKeys.createScoped(this.domNode));
 		ScmMergeFocusedContext.bindTo(scopedContext).set(true);
@@ -97,7 +98,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.mergeView.create(this.domNode);
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isScmMergeEditorInput(input)) throw new TypeError('SCM merge editor requires a conflict input');
 		const conflictProvider = this.scmService.getRepository(input.repositoryId)?.provider.mergeProvider;
 		if (!conflictProvider) throw new Error(`SCM repository '${input.repositoryId}' cannot resolve merge conflicts`);
@@ -152,7 +153,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		}
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.inputListeners.clear();
 		this.fileChoiceStore.clear();
 		this.fileChoiceButtons.length = 0;
@@ -171,16 +172,16 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.finishButton.enabled = false;
 	}
 
-	public layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.mergeView.layout(dimension);
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
 		this.mergeView.setVisible(visibility);
 	}
 
-	public focus(): void {
+	public override focus(): void {
 		if (this.resultLoaded) this.mergeView.focus();
 		else this.fileChoiceButtons[0]?.focus();
 	}

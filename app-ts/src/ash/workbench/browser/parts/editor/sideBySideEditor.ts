@@ -1,25 +1,25 @@
 import "./media/sidebysideeditor.css";
 import { h, type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
-import { isResourceDiffEditorInput, type IResourceEditorInput } from '../../../common/editor.js';
+import { toDisposable } from "../../../../base/common/lifecycle.js";
+import { EditorPane } from './editorPane.js';
+import { isResourceDiffEditorInput, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 
 /** Hosts two resource panes with independent lifetimes and a shared editor tab. */
-export class SideBySideEditor extends Disposable implements IEditorPane {
+export class SideBySideEditor extends EditorPane implements IEditorPane {
 	private container: HTMLElement | undefined;
 
 	constructor(
 		readonly id: string,
-		private readonly secondaryPane: IEditorPane,
-		private readonly primaryPane: IEditorPane,
+		private readonly secondaryPane: EditorPane,
+		private readonly primaryPane: EditorPane,
 	) {
 		super();
 		this._register(secondaryPane);
 		this._register(primaryPane);
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("Side-by-side editor has already been created");
 		const container = h(parent.ownerDocument, "div");
 		container.className = "ash-side-by-side-editor";
@@ -31,13 +31,14 @@ export class SideBySideEditor extends Disposable implements IEditorPane {
 		right.setAttribute("aria-label", "Modified");
 		container.append(left, right);
 		parent.append(container);
+		super.create(container);
 		this.container = container;
 		this.secondaryPane.create(left);
 		this.primaryPane.create(right);
 		this._register(toDisposable(() => container.remove()));
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isResourceDiffEditorInput(input)) throw new TypeError("Side-by-side editor requires two inputs");
 		if (!this.container) throw new ReferenceError("Side-by-side editor has not been created");
 		throwIfCancelled(signal, "Side-by-side editor loading was cancelled");
@@ -58,12 +59,12 @@ export class SideBySideEditor extends Disposable implements IEditorPane {
 		}
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.secondaryPane.clearInput();
 		this.primaryPane.clearInput();
 	}
 
-	layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		const width = Math.max(0, dimension.width);
 		const height = Math.max(0, dimension.height);
 		const divider = 1;
@@ -72,13 +73,13 @@ export class SideBySideEditor extends Disposable implements IEditorPane {
 		this.primaryPane.layout({ width: Math.max(0, width - divider - leftWidth), height });
 	}
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		if (this.container) this.container.hidden = visibility === EditorPaneVisibility.Hidden;
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
 		this.secondaryPane.setVisible(visibility);
 		this.primaryPane.setVisible(visibility);
 	}
 
-	focus(): void { this.primaryPane.focus(); }
+	public override focus(): void { this.primaryPane.focus(); }
 
 	protected getSecondaryEditorPane(): IEditorPane { return this.secondaryPane; }
 	protected getPrimaryEditorPane(): IEditorPane { return this.primaryPane; }

@@ -5,7 +5,7 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../common/generated/index.js";
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../common/generated/index.js";
 import { connectWebRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../common/appServerTransport.js";
 import { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
@@ -416,11 +416,9 @@ test('initialization can outlast bridge connection without timing out', async ()
 	} finally { client.dispose(); }
 });
 
-test('a compatible newer schema initializes and decodes additive result fields', async () => {
+test('a matching schema initializes and decodes additive result fields', async () => {
 	const transport = new FakeTransport(value => ({
 		...value,
-		schemaHash: `sha256:${'0'.repeat(64)}`,
-		protocolVersion: { ...value.protocolVersion, revision: value.protocolVersion.revision + 1 },
 		futureCapability: true,
 	}));
 	const client = new AppServerProtocolClient(transport);
@@ -437,11 +435,11 @@ test('incompatible versions and missing required capabilities never make a conne
 	for (const initialize of [
 		(value: InitializeResult) => ({ ...value, protocolVersion: { ...value.protocolVersion, major: value.protocolVersion.major + 1 } }),
 		(value: InitializeResult) => ({ ...value, capabilities: { ...value.capabilities, sessions: false } }),
-		(value: InitializeResult) => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, sessions: { version: APP_SERVER_CAPABILITY_VERSION + 1 } } } }),
+		(value: InitializeResult) => ({ ...value, schemaHash: `sha256:${'0'.repeat(64)}` }),
 	]) {
 		const client = new AppServerProtocolClient(new FakeTransport(initialize));
 		try {
-			await assert.rejects(client.connect(), /protocol major mismatch|capability sessions/);
+			await assert.rejects(client.connect(), /protocol major mismatch|protocol schema mismatch|capability sessions/);
 			assert.equal(client.state, 'crashed');
 			await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /not ready/);
 		} finally { client.dispose(); }

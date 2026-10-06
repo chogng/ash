@@ -81,7 +81,7 @@ fn only_self_contained_release_packages_with_a_trusted_key_check_automatically()
         "version": "1.2.3",
         "target": "aarch64-apple-darwin",
         "javascriptRuntime": {"kind": "packagedNode"},
-        "protocol": {"major": 7, "capabilityVersion": 8},
+        "protocol": {"major": ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR, "schemaHash": ash_app_server_protocol::schema_hash()},
         "components": {"appServer": {"updatePublicKey": "a".repeat(64)}},
     });
     fs::write(&metadata_path, serde_json::to_vec(&metadata).unwrap()).unwrap();

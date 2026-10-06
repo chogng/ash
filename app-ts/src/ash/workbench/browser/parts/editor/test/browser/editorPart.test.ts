@@ -35,7 +35,7 @@ import { URI } from "../../../../../../base/common/uri.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../../../platform/editor/common/editor.js';
-import { createEditorOpenError, EditorInputCapabilities, EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../../../../workbench/common/editor.js';
+import { createEditorOpenError, EditorInputCapabilities, EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IEditorPane } from '../../../../../../workbench/common/editor.js';
 import type { LanguageLocation } from "../../../../../../editor/common/languages.js";
 import type {
 	CommandId,
@@ -63,11 +63,7 @@ import {
 	type IFileDialogService,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
 
-import {
-	EditorPaneMatch,
-	EditorPaneVisibility,
-	type IEditorPane,
-} from "../../../../../../workbench/browser/parts/editor/editorPane.js";
+import { EditorPaneMatch, EditorPane } from '../../../../../../workbench/browser/parts/editor/editorPane.js';
 import type { IEditorPaneWithViewState } from "../../../../../../workbench/browser/parts/editor/editorWithViewState.js";
 import { EditorPaneRegistry, EditorPanes, type IEditorPaneDescriptor } from "../../../../editor.js";
 import { ActiveEditorContext } from "../../../../../../workbench/common/contextkeys.js";
@@ -165,10 +161,10 @@ test('inactive editor opens keep the selected tab and its content visible', asyn
 	await editor.openEditor(first);
 	await editor.openEditor(second, { inactive: true, pinned: true, preserveFocus: true });
 	assert.equal(editor.activeInput, first);
-	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	assert.equal(panes[1]!.visibilities.at(-1), false);
 	await editor.openEditor(second);
 	assert.equal(editor.activeInput, second);
-	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Visible);
+	assert.equal(panes[1]!.visibilities.at(-1), true);
 	dom.window.close();
 });
 
@@ -200,9 +196,9 @@ test('hidden editor content keeps newly opened panes hidden and reserves the det
 	editor.setEditorContentVisible(false);
 	await editor.openEditor(input('C:/project/second.ts'));
 	assert.equal(panes[1]!.dimension!.width, width - 200);
-	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	assert.equal(panes[1]!.visibilities.at(-1), false);
 	editor.setEditorContentVisible(true);
-	assert.equal(panes[1]!.visibilities.at(-1), EditorPaneVisibility.Visible);
+	assert.equal(panes[1]!.visibilities.at(-1), true);
 	assert.equal(dom.window.document.querySelectorAll('.ash-editor-pane-host:not([hidden])').length, 1);
 	dom.window.close();
 });
@@ -591,8 +587,8 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 		"stanza.editor.code",
 	);
 	assert.deepEqual(panes[0]?.visibilities, [
-		EditorPaneVisibility.Hidden,
-		EditorPaneVisibility.Visible,
+		false,
+		true,
 	]);
 	const titleControl = editor.domNode.querySelector(
 		".ash-editor-title-control",
@@ -650,7 +646,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	);
 	assert.equal(panes[0]?.disposed, false);
 	assert.deepEqual(panes[0]?.visibilities.slice(-1), [
-		EditorPaneVisibility.Hidden,
+		false,
 	]);
 	assert.deepEqual(panes[1]?.dimension, { width: 800, height: 543 });
 	const tabs = editor.domNode.querySelectorAll<HTMLElement>("[role='tab']");
@@ -948,7 +944,7 @@ test('working-set restoration retains excluded live groups and hidden pane state
 	await editors.openEditor(page, { pinned: true }, { groupId: retained.id });
 	const pane = retained.activePane as TestEditorPane;
 	editor.setGroupVisible(retained.id, false);
-	assert.equal(pane.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	assert.equal(pane.visibilities.at(-1), false);
 	assert.deepEqual(editors.visibleEditors, [document]);
 	editor.setContentRightInset(240);
 	editor.layout(new Dimension(120, 600));
@@ -960,10 +956,10 @@ test('working-set restoration retains excluded live groups and hidden pane state
 	assert.equal(editor.groups.find(group => group.id === retained.id), retained);
 	assert.equal(retained.activePane, pane);
 	assert.equal(pane.disposed, false);
-	assert.equal(pane.visibilities.at(-1), EditorPaneVisibility.Hidden);
+	assert.equal(pane.visibilities.at(-1), false);
 	assert.deepEqual(editors.visibleEditors.map(input => input.resource.toString()), [document.resource.toString()]);
 	editor.setGroupVisible(retained.id, true);
-	assert.equal(pane.visibilities.at(-1), EditorPaneVisibility.Visible);
+	assert.equal(pane.visibilities.at(-1), true);
 	assert.equal(retained.activePane, pane);
 	dom.window.close();
 });
@@ -2104,8 +2100,8 @@ test('workspace shutdown saves an untitled editor through Save As before accepti
 	dom.window.close();
 });
 
-class TestEditorPane extends Disposable implements IEditorPane {
-	readonly visibilities: EditorPaneVisibility[] = [];
+class TestEditorPane extends EditorPane implements IEditorPane {
+	readonly visibilities: boolean[] = [];
 	inputError: Error | undefined;
 	inputPromise: Promise<void> | undefined;
 	inputSignal: AbortSignal | undefined;
@@ -2119,13 +2115,14 @@ class TestEditorPane extends Disposable implements IEditorPane {
 		super();
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const element = h(parent.ownerDocument, "div");
 		element.textContent = this.id;
 		parent.append(element);
+		super.create(element);
 	}
 
-	async setInput(
+	public override async setInput(
 		_input: IResourceEditorInput,
 		signal: AbortSignal,
 	): Promise<void> {
@@ -2134,20 +2131,21 @@ class TestEditorPane extends Disposable implements IEditorPane {
 		await this.inputPromise;
 	}
 
-	clearInput(): void { }
+	public override clearInput(): void { }
 
-	layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = {
 			width: dimension.width,
 			height: dimension.height,
 		};
 	}
 
-	setVisible(visibility: EditorPaneVisibility): void {
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
 		this.visibilities.push(visibility);
 	}
 
-	focus(): void {
+	public override focus(): void {
 		this.focusCount += 1;
 	}
 
@@ -2359,7 +2357,7 @@ class TestKeybindingService implements IKeybindingService {
 function descriptor(
 	id: string,
 	defaultExtension: string,
-	create: () => IEditorPane,
+	create: () => EditorPane,
 ): IEditorPaneDescriptor {
 	return {
 		id,

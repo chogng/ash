@@ -1,22 +1,22 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/issueReporter.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../../platform/github/common/githubService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IIssueFormService, IssueType, type IssueReporterState } from '../common/issue.js';
 import { issueReporterEditorId } from './issueService.js';
 
 /** The editor owns its DOM; the form service keeps the draft through tab closure. */
-export class IssueReporterEditorPane extends Disposable implements IEditorPane {
+export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 	readonly id = issueReporterEditorId;
 	private domNode!: HTMLDivElement;
 	private title!: InputBox;
@@ -48,11 +48,12 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 	) { super(); }
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-issue-reporter';
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => { this.form.cancelSearch(); this.domNode.remove(); }));
 		const content = h(document, 'div');
 		content.className = 'issue-reporter-content';
@@ -121,16 +122,15 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		this.render(this.form.state);
 	}
 
-	async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (signal.aborted) { throw new CancellationError(); }
 		await this.form.initialize({});
 		if (signal.aborted) { throw new CancellationError(); }
 	}
-	getControl(): HTMLElement { return this.domNode; }
-	clearInput(): void { this.form.cancelSearch(); }
-	layout(dimension: IDimension): void { this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`; }
-	setVisible(visibility: EditorPaneVisibility): void { this.domNode.hidden = visibility === EditorPaneVisibility.Hidden; }
-	focus(): void { this.title.focus(); }
+	public override getControl(): HTMLElement { return this.domNode; }
+	public override clearInput(): void { this.form.cancelSearch(); }
+	public override layout(dimension: IDimension): void { this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`; }
+	public override focus(): void { this.title.focus(); }
 
 	private render(data: IssueReporterState): void {
 		const locked = data.submitting || data.createdIssue !== undefined;

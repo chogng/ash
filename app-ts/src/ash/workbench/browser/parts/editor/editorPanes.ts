@@ -1,7 +1,7 @@
+import type { IEditorPane } from '../../../common/editor.js';
+import type { EditorPane } from './editorPane.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IEditorPane } from './editorPane.js';
-import { EditorPaneVisibility } from './editorPane.js';
 
 /** Owns the pane hosts, active pane, and pane lifetimes within one editor group. */
 export class EditorPanes extends Disposable {
@@ -21,12 +21,12 @@ export class EditorPanes extends Disposable {
 		return this.pendingInstance;
 	}
 
-	create(pane: IEditorPane): EditorPaneInstance {
+	create(pane: EditorPane): EditorPaneInstance {
 		const instance = new EditorPaneInstance(this.container, pane);
 		this.instances.set(instance, instance);
 		try {
 			pane.create(instance.domNode);
-			instance.setVisible(EditorPaneVisibility.Hidden);
+			instance.setVisible(false);
 		} catch (error) {
 			this.disposePane(instance);
 			throw error;
@@ -50,18 +50,18 @@ export class EditorPanes extends Disposable {
 		this.clearPending(instance);
 		if (this.activeInstance === instance) {
 			this.activeInstance = undefined;
-			instance.setVisible(EditorPaneVisibility.Hidden);
+			instance.setVisible(false);
 		}
 		this.instances.deleteAndDispose(instance);
 	}
 
 	activate(instance: EditorPaneInstance, dimension: IDimension): void {
 		if (this.activeInstance !== instance) {
-			this.activeInstance?.setVisible(EditorPaneVisibility.Hidden);
+			this.activeInstance?.setVisible(false);
 			this.activeInstance = instance;
 		}
 		instance.pane.layout(dimension);
-		instance.setVisible(EditorPaneVisibility.Visible);
+		instance.setVisible(true);
 	}
 
 	layout(dimension: IDimension): void {
@@ -81,7 +81,7 @@ export class EditorPaneInstance extends Disposable {
 	readonly panelId: string;
 	readonly tabId: string;
 
-	constructor(container: HTMLElement, readonly pane: IEditorPane) {
+	constructor(container: HTMLElement, readonly pane: EditorPane) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const id = ++editorPaneId;
@@ -99,12 +99,12 @@ export class EditorPaneInstance extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(pane);
 		this._register(toDisposable(() => pane.clearInput()));
-		this._register(toDisposable(() => pane.setVisible(EditorPaneVisibility.Hidden)));
+		this._register(toDisposable(() => pane.setVisible(false)));
 		this._register(toDisposable(() => abortController.abort()));
 	}
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
+	setVisible(visibility: boolean): void {
+		this.domNode.hidden = !visibility;
 		this.pane.setVisible(visibility);
 	}
 

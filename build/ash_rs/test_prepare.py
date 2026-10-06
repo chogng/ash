@@ -295,7 +295,6 @@ class PrepareTests(unittest.TestCase):
                     "load_protocol_metadata",
                     return_value={
                         "major": 1,
-                        "revision": 1,
                         "schemaHash": "sha256:" + "c" * 64,
                     },
                 ),

@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { RunOnceScheduler } from "../../../../base/common/async.js";
@@ -25,7 +25,7 @@ import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, Brea
 import type { EditorGroupId } from "../../../services/editor/common/editorState.js";
 import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
 import { BreadcrumbsModel, type FileElement, type SymbolElement } from "./breadcrumbsModel.js";
-import type { IEditorPane } from "./editorPane.js";
+
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';

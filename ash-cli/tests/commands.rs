@@ -276,7 +276,7 @@ fn selected_managed_cli_ensures_the_local_daemon_without_a_pinned_cli_switching_
             "version": version,
             "buildProfile": "dev-small",
             "javascriptRuntime": { "kind": "packagedNode" },
-            "protocol": { "major": 1, "revision": 2, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
+            "protocol": { "major": 1, "schemaHash": format!("sha256:{}", "a".repeat(64)) },
             "target": build_info::TARGET,
         });
         metadata.sort_all_objects();

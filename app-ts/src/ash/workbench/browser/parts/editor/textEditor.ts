@@ -1,9 +1,8 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { EditorPane } from './editorPane.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { EditorPaneSelectionChangeReason } from '../../../common/editor.js';
-import type { EditorPaneStatus } from './editorPane.js';
+import { EditorPaneSelectionChangeReason, type EditorPaneStatus, type IEditorControl } from '../../../common/editor.js';
 
 export function toEditorPaneSelectionChangeReason(source: string): EditorPaneSelectionChangeReason {
 	switch (source) {
@@ -15,17 +14,17 @@ export function toEditorPaneSelectionChangeReason(source: string): EditorPaneSel
 }
 
 /** Selection details shared by text-based Workbench panes. */
-export interface ITextEditorControl {
+export interface ITextEditorControl extends IEditorControl {
 	getSelections?(): Selection[] | null;
 }
 
 /** Owns the status reported by a text editor to the Workbench. */
-export abstract class AbstractTextEditor<T extends ITextEditorControl> extends Disposable {
+export abstract class AbstractTextEditor<T extends ITextEditorControl> extends EditorPane {
 	protected readonly statusChangeEmitter = this._register(new Emitter<void>());
 	protected languageId: string | undefined;
 	readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
-	abstract getControl(): T | undefined;
+	public abstract getControl(): T | undefined;
 
 	getStatus(): EditorPaneStatus {
 		const selections = this.getControl()?.getSelections?.();

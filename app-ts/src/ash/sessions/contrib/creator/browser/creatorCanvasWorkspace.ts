@@ -7,7 +7,7 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize } from '../../../../nls.js';
-import { EditorPaneVisibility } from '../../../../workbench/browser/parts/editor/editorPane.js';
+
 import { DesignEditorPage } from './designEditorPage.js';
 import { DocumentCommands } from '../common/commands/documentCommands.js';
 import type { DesignShape } from '../common/model/document.js';
@@ -74,7 +74,7 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 		this.editor.revealShape(frame.id);
 		return frame.id;
 	}
-	public setVisible(visible: boolean): void { this.page.setVisible(visible ? EditorPaneVisibility.Visible : EditorPaneVisibility.Hidden); }
+	public setVisible(visible: boolean): void { this.page.setVisible(visible ? true : false); }
 	public layout(dimension: IDimension): void {
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
 		this.page.layout({ width: dimension.width, height: Math.max(0, dimension.height - this.actionsDomNode.offsetHeight) });

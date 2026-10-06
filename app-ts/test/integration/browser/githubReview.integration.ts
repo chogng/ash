@@ -1,3 +1,4 @@
+import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import '../../../src/ash/editor/browser/widget/diffEditor/registrations.contribution.js';
 import '../../../src/ash/workbench/contrib/github/browser/github.contribution.js';
@@ -14,7 +15,7 @@ import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_S
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
 import { AppServerGitHubService } from '../../../src/ash/platform/github/browser/appServerGitHubService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import { IGitService, type GitCommand }  from '../../../src/ash/workbench/contrib/git/common/gitService.js';
+import { IGitService, type GitCommand } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -31,7 +32,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
-import type { IEditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
+
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
@@ -40,7 +41,7 @@ import { ITextModelResourceService } from '../../../src/ash/workbench/services/t
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../src/ash/workbench/contrib/github/browser/githubReviewModel.js';
 
 if (new URL(location.href).searchParams.has('zh')) { setNlsMessages('zh-CN', messages); }
-interface Request { id: number; method: string; params: Record<string, unknown> }
+interface Request { id: number; method: string; params: Record<string, unknown>; }
 const head = 'a'.repeat(40); const base = 'b'.repeat(40);
 const file = { filename: 'new.rs', previousFilename: 'old.rs', status: 'renamed', additions: 1, deletions: 1, changes: 2, patch: '@@ -1 +1 @@\n-old\n+new' };
 const comment = { id: 'comment-1', author: 'Alice', body: 'Please explain', url: 'https://github.com/team/repo/pull/7#discussion', canUpdate: true, canDelete: true };
@@ -65,7 +66,7 @@ class ReviewTransport implements AppServerTransport {
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'review-test', workspaceRoot: '/workspace' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string }).frame) as Request; this.requests.push(request);
+		const request = JSON.parse((payload as { frame: string; }).frame) as Request; this.requests.push(request);
 		if (request.method === this.heldMethod) { this.held = request; return; }
 		this.dispatch(request);
 	}
@@ -122,7 +123,7 @@ resources.add(bindColorTheme(theme, document.body));
 const transport = new ReviewTransport(); const client = new AppServerProtocolClient(transport); resources.add(toDisposable(() => client.dispose())); await client.connect();
 services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const localRepository = { id: 'local-repo', label: 'Local repo', path: '/workspace', root: URI.file('/workspace') };
-const gitRequests: { method: string; params: Record<string, unknown> }[] = [];
+const gitRequests: { method: string; params: Record<string, unknown>; }[] = [];
 let dirty = false;
 services.registerInstance(IGitService, {
 	listRepositories: async () => [localRepository],
@@ -132,22 +133,24 @@ services.registerInstance(IGitService, {
 } as unknown as IGitService);
 services.registerInstance(IWorkingCopyService, { getAll: () => dirty ? [{ resource: URI.file('/workspace/a.rs'), isDirty: true }] : [] } as unknown as IWorkingCopyService);
 const accounts = resources.add(new Emitter<AccountState>());
-const loggedOut: { provider: string; accountId?: string }[] = [];
+const loggedOut: { provider: string; accountId?: string; }[] = [];
 const browserHosts: (string | undefined)[] = [];
 const initialAccount: AccountState = { revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', credentialRevision: 1n, status: 'ready' }] };
-services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => initialAccount, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => {}, logout: async (provider, accountId) => { loggedOut.push({ provider, accountId }); transport.accountCatalog = transport.accountCatalog.filter(account => account.id !== accountId); accounts.fire({ revision: 2n, accounts: transport.accountCatalog.map(account => ({ provider: 'github', accountId: account.id, credentialRevision: BigInt(account.credentialRevision), status: 'ready' })) }); } });
-services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => {} });
-services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, dispose() {}, [Symbol.dispose]() {} });
+services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => initialAccount, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async (provider, accountId) => { loggedOut.push({ provider, accountId }); transport.accountCatalog = transport.accountCatalog.filter(account => account.id !== accountId); accounts.fire({ revision: 2n, accounts: transport.accountCatalog.map(account => ({ provider: 'github', accountId: account.id, credentialRevision: BigInt(account.credentialRevision), status: 'ready' })) }); } });
+services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => { } });
+services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ITextModelResourceService, resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } })));
 services.registerInstance(IGitHubReviewModel, resources.add(services.createInstance(GitHubReviewModel)));
 const dialogs = resources.add(new DialogService()); services.registerInstance(IDialogService, dialogs); services.registerInstance(IDialogsModel, dialogs.model); services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
 resources.add(new DialogHandlerContribution(dialogs.model, services.get(IWorkbenchDialogHandler)));
-let pane: IEditorPane | undefined;
+let pane: EditorPane | undefined;
 services.registerInstance(IEditorPart, { get activePane() { return pane; } } as IEditorPart);
-services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async input => {
-	if (pane) { pane.dispose(); }
-	pane = EditorPanes.getEditorPane(input)!.create({ instantiationService: services }); pane.create(document.getElementById('github')!); pane.layout({ width: innerWidth, height: innerHeight }); await pane.setInput(input, new AbortController().signal); pane.focus();
-}, focusActiveEditor: () => pane!.focus() });
+services.registerInstance(IEditorService, {
+	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async input => {
+		if (pane) { pane.dispose(); }
+		pane = EditorPanes.getEditorPane(input)!.create({ instantiationService: services }); pane.create(document.getElementById('github')!); pane.layout({ width: innerWidth, height: innerHeight }); await pane.setInput(input, new AbortController().signal); pane.focus();
+	}, focusActiveEditor: () => pane!.focus()
+});
 const commands = resources.add(new CommandService(services));
 window.ashGitHubReview = {
 	requests: transport.requests, gitRequests, loggedOut, browserHosts, dirty: () => { dirty = true; }, open: () => commands.executeCommand('workbench.action.github.open'), close: () => { pane?.dispose(); pane = undefined; },
@@ -159,4 +162,4 @@ window.ashGitHubReview = {
 };
 window.addEventListener('pagehide', () => { pane?.dispose(); resources.dispose(); }, { once: true });
 await window.ashGitHubReview.open();
-declare global { interface Window { ashGitHubReview: { requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown> }[]; loggedOut: { provider: string; accountId?: string }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }
+declare global { interface Window { ashGitHubReview: { requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }

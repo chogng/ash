@@ -150,6 +150,33 @@ export class Grid<TView extends IView = IView> extends Disposable {
 		return this.gridview.getViewSize(this.getViewLocation(view));
 	}
 
+	/** Measures the current Grid frames once per navigation request, including nested splits. */
+	public getNeighborViews(view: TView, direction: Direction): TView[] {
+		this.getViewLocation(view);
+		if (!this.isViewVisible(view)) { return []; }
+		const source = view.element.getBoundingClientRect();
+		const horizontal = direction === Direction.Left || direction === Direction.Right;
+		const forward = direction === Direction.Right || direction === Direction.Down;
+		const sourceStart = horizontal ? source.top : source.left;
+		const sourceEnd = horizontal ? source.bottom : source.right;
+		const boundary = horizontal ? (forward ? source.right : source.left) : (forward ? source.bottom : source.top);
+		const candidates: { view: TView; gap: number; offset: number; }[] = [];
+		for (const candidate of this.views) {
+			if (candidate === view || !this.isViewVisible(candidate)) { continue; }
+			const bounds = candidate.element.getBoundingClientRect();
+			const start = horizontal ? bounds.top : bounds.left;
+			const end = horizontal ? bounds.bottom : bounds.right;
+			if (Math.min(sourceEnd, end) <= Math.max(sourceStart, start)) { continue; }
+			const edge = horizontal ? (forward ? bounds.left : bounds.right) : (forward ? bounds.top : bounds.bottom);
+			const gap = forward ? edge - boundary : boundary - edge;
+			if (gap < -0.5) { continue; }
+			candidates.push({ view: candidate, gap, offset: Math.abs(start + end - sourceStart - sourceEnd) });
+		}
+		candidates.sort((left, right) => left.gap - right.gap || left.offset - right.offset);
+		const nearest = candidates[0]?.gap;
+		return candidates.filter(candidate => candidate.gap <= nearest! + 0.5).map(candidate => candidate.view);
+	}
+
 	resizeView(view: TView, dimension: IDimension): void {
 		this.gridview.resizeView(this.getViewLocation(view), dimension);
 	}

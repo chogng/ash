@@ -189,7 +189,7 @@ validate options
   → create bounded request/result-event channels
   → start server runner and connection driver
   → send initialize through the normal request path
-  → validate protocol major and required capability versions
+  → validate protocol major, generated schema fingerprint and required capability availability
   → return Ready AppServerSession
 ```
 
@@ -198,7 +198,7 @@ validate options
 - `initialize` 是 connection 的首个 request；
 - initialize 也经过正式 request channel、dispatcher 和 result pairing，不能直接调用内部
   server method；
-- protocol major 不一致、required capability 缺失或版本不兼容时，`start` 失败；schema hash 不一致只进入诊断；
+- protocol major 或生成协议指纹不一致、required capability 不可用时，`start` 失败；独立可选契约仍按自己的版本检查；
 - `start` 失败必须关闭已创建的 connection/channel 并 join 已启动的 task；
 - 调用方永远拿不到半初始化的 `AppServerClient`；
 - start options 完整描述 composition，不依赖 consumer 在启动前偷偷修改全局状态。
@@ -476,7 +476,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 - protocol method registry；
 - external JSON-RPC request/response 编解码；
 - response ID 校验；
-- protocol major、版本化 required capability 校验，以及非致命 schema hash 诊断；
+- protocol major、生成协议指纹与必需能力可用性校验；
 - successful `InitializeResult` 保存在 `AppServerClient::initialization` snapshot 中，consumer
   可读取 server capabilities 与动态 slash catalog，而无需重复 handshake；
 - typed `list_skills` / `set_skill_enablement` method；

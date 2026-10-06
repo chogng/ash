@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from '../../../app-server/common/generated/index.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../../app-server/common/generated/index.js';
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
 
 test('packaged daemon connections use verified binaries and an explicit workspace environment', async () => {
@@ -22,7 +22,7 @@ test('packaged daemon connections use verified binaries and an explicit workspac
 			components: { appServerDaemon: { binarySha256: daemonDigest }, appServer: { binarySha256: backendDigest } },
 			entrypoint: 'bin/ash-app-server',
 			layoutVersion: 2,
-			protocol: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION, schemaHash: APP_SERVER_SCHEMA_HASH },
+			protocol: { major: APP_SERVER_PROTOCOL_MAJOR, schemaHash: APP_SERVER_SCHEMA_HASH },
 			version: '1.2.3',
 		}));
 		const { launcher, generationFile } = createAppServerDaemonLauncher({
@@ -60,7 +60,7 @@ test('Agents daemon connections identify their role without a workspace grant', 
 			components: { appServerDaemon: { binarySha256: 'a'.repeat(64) }, appServer: { binarySha256: 'c'.repeat(64) } },
 			entrypoint: 'bin/ash-app-server.exe',
 			layoutVersion: 2,
-			protocol: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION, schemaHash: APP_SERVER_SCHEMA_HASH },
+			protocol: { major: APP_SERVER_PROTOCOL_MAJOR, schemaHash: APP_SERVER_SCHEMA_HASH },
 			version: '1.2.3',
 		}));
 		const { launcher } = createAppServerDaemonLauncher({

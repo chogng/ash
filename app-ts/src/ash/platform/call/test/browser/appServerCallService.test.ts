@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerCallService } from '../../browser/appServerCallService.js';
 import { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../app-server/common/appServerTransport.js';
-import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_CAPABILITY_VERSION, type InitializeResult, type ServerCapabilities, type CallStatus } from '../../../app-server/common/generated/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type CallStatus } from '../../../app-server/common/generated/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 
 class Transport implements AppServerTransport {
@@ -50,7 +50,7 @@ class Transport implements AppServerTransport {
 				mcp: true,
 				mcpOAuth: true,
 			} satisfies Omit<ServerCapabilities, 'contracts'>;
-			result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { sessions: { version: APP_SERVER_CAPABILITY_VERSION }, threads: { version: APP_SERVER_CAPABILITY_VERSION }, turns: { version: APP_SERVER_CAPABILITY_VERSION }, memoryDiagnostics: { version: 1 } } }, slashCommands: [] } satisfies InitializeResult;
+			result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { memoryDiagnostics: { version: 1 } } }, slashCommands: [] } satisfies InitializeResult;
 		} else if (request.method === 'call/start') { this.status.resourceId = request.params.resourceId; result = this.status; }
 		else if (request.method === 'call/screenFrames') { this.pending.push(request.id); return; }
 		else { throw new Error(`Unexpected request ${request.method}`); }

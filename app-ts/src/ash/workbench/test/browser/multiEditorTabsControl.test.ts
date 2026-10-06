@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../common/editor.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { IDecorationsService, type IDecorationData } from '../../services/decorations/common/decorations.js';
 import '../../../editor/test/browser/testEditorDom.js';
@@ -25,7 +25,7 @@ import { updateConnectedTabClipping } from "../../browser/parts/editor/connected
 import { EditorTitleControl } from "../../browser/parts/editor/editorTitleControl.js";
 import { EditorTabsModeConfiguration } from "../../services/editor/common/editorConfiguration.js";
 import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration } from "../../browser/parts/editor/breadcrumbs.js";
-import type { IEditorPane } from "../../browser/parts/editor/editorPane.js";
+
 import { WorkbenchConfiguration } from '../../common/configuration.js';
 import { EditorBreadcrumbsControl } from '../../browser/parts/editor/breadcrumbsControl.js';
 import { setNlsResolver, resetNlsResolver } from '../../../nls.js';

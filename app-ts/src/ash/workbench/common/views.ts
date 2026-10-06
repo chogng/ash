@@ -26,7 +26,7 @@ export interface IViewContainerDescriptor {
 	readonly localizationKey?: LocalizationKey;
 	readonly location: ViewContainerLocation;
 	/** Browser host constructed for this container when it opens. */
-	readonly ctorDescriptor?: SyncDescriptor<IView>;
+	readonly ctorDescriptor?: SyncDescriptor<IViewPaneContainer>;
 	readonly icon?: Icon;
 	readonly order?: number;
 	readonly isDefault?: boolean;
@@ -66,8 +66,12 @@ export interface IViewDescriptorsChangeEvent {
 /** Runtime behavior shared by browser views and non-DOM view consumers. */
 export interface IView {
 	readonly id: string;
+	readonly paneTitle: string;
 
 	focus(): void;
+	hasFocus(): boolean;
+	isBodyVisible(): boolean;
+	setExpanded(expanded: boolean): boolean;
 	isVisible(): boolean;
 	setVisible(visible: boolean): void;
 }
@@ -76,6 +80,11 @@ export interface IView {
 export interface IViewPaneContainer {
 	readonly id: string;
 	readonly panes: readonly IView[];
+	readonly onDidAddViews: Event<readonly IView[]>;
+	readonly onDidRemoveViews: Event<readonly IView[]>;
+	readonly onDidChangeViewVisibility: Event<{ readonly view: IView; readonly visible: boolean; }>;
+	readonly onDidFocusView: Event<IView>;
+	readonly onDidBlurView: Event<IView>;
 	getView(id: string): IView | undefined;
 	openView(id: string, focus?: boolean): IView | undefined;
 	focus(): void;

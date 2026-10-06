@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -10,7 +10,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../common/editorService.js';
-import type { IEditorPane } from '../../../../browser/parts/editor/editorPane.js';
+
 import { type IEditorPartsService as EditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');

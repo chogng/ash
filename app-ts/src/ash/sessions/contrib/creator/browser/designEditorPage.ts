@@ -3,7 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import { EditorPaneVisibility } from '../../../../workbench/browser/parts/editor/editorPane.js';
+
 import type { DesignDocumentController } from './designDocumentController.js';
 import { IDesignEditorService } from './designEditorService.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
@@ -40,9 +40,9 @@ export class DesignEditorPage extends Disposable {
 		}));
 	}
 
-	public clearInput(): void { this.setVisible(EditorPaneVisibility.Hidden); }
-	public setVisible(visibility: EditorPaneVisibility): void {
-		const visible = visibility === EditorPaneVisibility.Visible;
+	public clearInput(): void { this.setVisible(false); }
+	public setVisible(visibility: boolean): void {
+		const visible = visibility;
 		this.editor.setVisible(visible);
 		if (visible) this.designEditors.setActiveEditor(this.editor);
 		else if (this.designEditors.activeEditor.get() === this.editor) this.designEditors.setActiveEditor(undefined);

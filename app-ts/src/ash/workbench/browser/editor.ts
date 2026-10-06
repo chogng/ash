@@ -2,7 +2,7 @@ import type { IResourceEditorInput } from '../common/editor.js';
 import { Emitter, type Event } from '../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { EditorOpenOptions } from '../services/editor/common/editorService.js';
-import { EditorPaneMatch, type EditorPaneCreationOptions, type IEditorPane } from './parts/editor/editorPane.js';
+import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
 
 /** Resource matchers are pure; Workbench inputs are values rather than input classes. */
 export interface IEditorPaneDescriptor {
@@ -11,7 +11,7 @@ export interface IEditorPaneDescriptor {
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Creates a distinct tab identity when this editor opens beside the source. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;
-	create(options: EditorPaneCreationOptions): IEditorPane;
+	create(options: EditorPaneCreationOptions): EditorPane;
 }
 
 export interface IEditorPaneRegistry {

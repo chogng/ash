@@ -11,7 +11,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
-import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
+
 import { EditorPaneSelectionChangeReason } from '../../../../common/editor.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -118,9 +118,9 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	pane.focus();
 	assert.equal(dom.window.document.activeElement?.classList.contains("stanza-editor-input"), true);
 	assert.equal((dom.window.document.activeElement as HTMLTextAreaElement).dir, "rtl");
-	pane.setVisible(EditorPaneVisibility.Hidden);
+	pane.setVisible(false);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
-	pane.setVisible(EditorPaneVisibility.Visible);
+	pane.setVisible(true);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, false);
 
 	pane.clearInput();

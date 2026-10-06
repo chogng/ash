@@ -9,7 +9,7 @@ import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
-import { MultiDiffEditorPane } from './multiDiffEditorPane.js';
+import { MultiDiffEditor } from './multiDiffEditor.js';
 import { OpenScmMultiDiffEditorAction } from './scmMultiDiffAction.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 
@@ -34,7 +34,7 @@ registerEditorPane({
 		if (!instantiationService) throw new Error('Stanza Multi Diff requires the Workbench instantiation service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
-		return instantiationService.createInstance(MultiDiffEditorPane, {
+		return instantiationService.createInstance(MultiDiffEditor, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),

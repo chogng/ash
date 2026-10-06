@@ -7,6 +7,8 @@ import { ViewContainerLocation } from "../../../common/views.js";
 import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart } from "../paneCompositePart.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 
 /** Bottom tool region with Panel tabs and a contextual title toolbar. */
 export class PanelPart extends PaneCompositePart {
@@ -21,8 +23,10 @@ export class PanelPart extends PaneCompositePart {
 		@ILocalizationService localizationService: ILocalizationService,
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, {
+			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			viewDescriptorService,
 			contextKeyService,
 			storageService,
@@ -40,8 +44,8 @@ export class PanelPart extends PaneCompositePart {
 		this.titleDomNode.classList.add("ash-panel-title-control");
 	}
 
-	override showComposite(compositeId: string): void {
-		super.showComposite(compositeId);
+	override showComposite(compositeId: string, focus = false): void {
+		super.showComposite(compositeId, focus);
 		this.setTitleProjection(this.getComposite(compositeId)?.partTitleProjection);
 	}
 }

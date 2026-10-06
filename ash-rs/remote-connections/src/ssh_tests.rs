@@ -18,8 +18,6 @@ use ash_app_server_protocol::protocol::common::ClientInfo;
 #[cfg(unix)]
 use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 #[cfg(unix)]
-use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_REVISION;
-#[cfg(unix)]
 use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
 use ash_remote::RemoteDirPath;
 use ash_remote::RemoteProfile;
@@ -187,27 +185,33 @@ fn runtime_probe_distinguishes_available_and_missing_runtime() {
 
 #[cfg(unix)]
 #[test]
-fn compatibility_probe_uses_protocol_capabilities_and_tolerates_schema_drift() {
+fn compatibility_probe_requires_matching_protocol_and_generated_schema() {
     let directory = tempfile::tempdir().unwrap();
     let compatible = directory.path().join("compatible-ssh");
-    write_initialize_server(&compatible, APP_SERVER_PROTOCOL_MAJOR, "newer-schema");
+    let schema_hash = ash_app_server_protocol::schema_hash();
+    write_initialize_server(&compatible, APP_SERVER_PROTOCOL_MAJOR, &schema_hash);
 
     let initialization = SshAppServerConnectionOptions::new(profile())
         .with_ssh_executable(&compatible)
         .probe_compatibility(client_info(), ClientCapabilities::default())
         .unwrap();
-    assert_eq!(initialization.schema_hash.0, "newer-schema");
+    assert_eq!(initialization.schema_hash.0, schema_hash);
 
     let incompatible = directory.path().join("incompatible-ssh");
-    write_initialize_server(&incompatible, APP_SERVER_PROTOCOL_MAJOR + 1, "newer-schema");
-    let error = SshAppServerConnectionOptions::new(profile())
-        .with_ssh_executable(incompatible)
-        .probe_compatibility(client_info(), ClientCapabilities::default())
-        .unwrap_err();
-    assert_eq!(
-        error.kind(),
-        RemoteConnectionFailureKind::ProtocolIncompatible
-    );
+    for (major, hash) in [
+        (APP_SERVER_PROTOCOL_MAJOR + 1, schema_hash.as_str()),
+        (APP_SERVER_PROTOCOL_MAJOR, "different-schema"),
+    ] {
+        write_initialize_server(&incompatible, major, hash);
+        let error = SshAppServerConnectionOptions::new(profile())
+            .with_ssh_executable(&incompatible)
+            .probe_compatibility(client_info(), ClientCapabilities::default())
+            .unwrap_err();
+        assert_eq!(
+            error.kind(),
+            RemoteConnectionFailureKind::ProtocolIncompatible
+        );
+    }
 }
 
 #[cfg(unix)]
@@ -234,7 +238,6 @@ fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash:
             "serverInfo": { "name": "fake-remote", "version": "1" },
             "protocolVersion": {
                 "major": protocol_major,
-                "revision": APP_SERVER_PROTOCOL_REVISION
             },
             "schemaHash": server_schema_hash,
             "capabilities": capabilities,

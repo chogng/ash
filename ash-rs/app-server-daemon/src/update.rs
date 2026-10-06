@@ -13,7 +13,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION;
 use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 use ash_package_store::PackageStore;
 use ash_product_update::ExpectedRelease;
@@ -146,8 +145,8 @@ struct JavascriptRuntime {
 #[derive(Deserialize)]
 struct ProtocolIdentity {
     major: u32,
-    #[serde(rename = "capabilityVersion")]
-    capability_version: u32,
+    #[serde(rename = "schemaHash")]
+    schema_hash: String,
 }
 
 pub(crate) fn install_stable(
@@ -265,7 +264,7 @@ fn install_stable_with_mode(
             || metadata.target != target
             || metadata.javascript_runtime.kind != "packagedNode"
             || metadata.protocol.major != APP_SERVER_PROTOCOL_MAJOR
-            || metadata.protocol.capability_version != APP_SERVER_CAPABILITY_VERSION
+            || metadata.protocol.schema_hash != ash_app_server_protocol::schema_hash()
             || !metadata
                 .components
                 .get("appServer")

@@ -6,7 +6,7 @@ import type { Range } from '../../../../editor/common/core/range.js';
 import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { assertDefined } from "../../../../base/common/types.js";
-import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput } from '../../../common/editor.js';
 
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
@@ -40,7 +40,7 @@ export interface DiffEditorPaneOptions {
 }
 
 /** Workbench pane that owns an editable comparison over two acquired text references. */
-export class TextDiffEditor extends Disposable implements IEditorPaneWithSelection {
+export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelection {
 	readonly id = DIFF_EDITOR_ID;
 	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
 	private readonly selectionListener = this._register(new MutableDisposable<IDisposable>());
@@ -50,7 +50,7 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	getControl(): DiffEditorWidget | undefined {
+	public override getControl(): DiffEditorWidget | undefined {
 		return this.session.value?.editor;
 	}
 
@@ -85,11 +85,12 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 		this.modelService = options.modelService;
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("DiffEditorPane has already been created");
 		const container = h(parent.ownerDocument, "div");
 		container.className = "stanza-diff-editor-pane";
 		parent.append(container);
+		super.create(container);
 		this.container = container;
 		this._register(toDisposable(() => {
 			container.remove();
@@ -97,7 +98,7 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 		}));
 	}
 
-	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isDiffEditorInput(input)) {
 			throw new TypeError("Diff editor pane requires a diff editor input");
 		}
@@ -136,22 +137,21 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 		next.layout(this.dimension);
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.selectionListener.clear();
 		this.session.clear();
 	}
 
-	layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
 		this.session.value?.layout(this.dimension);
 	}
 
-	setVisible(visibility: EditorPaneVisibility): void {
-		if (!this.container) return;
-		this.container.hidden = visibility === EditorPaneVisibility.Hidden;
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
 		const session = this.session.value;
 		if (!session) return;
-		if (visibility === EditorPaneVisibility.Visible) {
+		if (visibility) {
 			session.editor.originalEditor.onVisible();
 			session.editor.modifiedEditor.onVisible();
 			session.layout(this.dimension);
@@ -161,7 +161,7 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 		}
 	}
 
-	focus(): void {
+	public override focus(): void {
 		this.session.value?.focus();
 	}
 

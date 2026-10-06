@@ -23,7 +23,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { type ITextModel } from '../../../../../editor/common/model.js';
-import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
+
 import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 
@@ -217,7 +217,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.equal(codeEditorService.listDiffEditors().length, 1);
 	pane.focus();
 	assert.equal(editor.contains(dom.window.document.activeElement), true);
-	pane.setVisible(EditorPaneVisibility.Hidden);
+	pane.setVisible(false);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
 	pane.clearInput();
 	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 0);

@@ -10,7 +10,7 @@ fn polling_reclaims_oversized_logs_without_restart_and_preserves_the_writer() {
     let profile = tempfile::tempdir().unwrap();
     let mut endpoint = ManagedEndpoint::bind(profile.path()).unwrap();
     let mut writer = endpoint.endpoint.open_log().unwrap();
-    writer.set_len(2 * 1024 * 1024).unwrap();
+    writer.write_all(&vec![b'x'; 2 * 1024 * 1024]).unwrap();
     endpoint.last_log_maintenance = Instant::now() - Duration::from_secs(2);
     assert!(endpoint.poll_connection().unwrap().is_none());
     assert_eq!(writer.metadata().unwrap().len(), 0);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../base/common/event.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
@@ -113,6 +114,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 		[IDebugAdapterFactorySource, adapters],
 		[ILogService, new NullLoggerService()],
 	)));
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	using service = services.createInstance(DebugService);
 	const session = await service.startDebugging({ id: 'debug-terminal', name: 'Terminal request', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: { cwd: URI.file('/workspace').fsPath } });
 	try { return await response; }

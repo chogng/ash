@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { resolve } from 'node:path';
 import { pythonCommand, type PythonHost } from './python.ts';
 
 const arguments_ = ['-B', 'build/ash_rs/prepare.py'];
@@ -21,7 +22,10 @@ test('python command selects Homebrew Python on Apple Silicon', () => {
 
 test('python command uses the platform command when no interpreter is configured', () => {
 	assert.deepEqual(pythonCommand(arguments_, host('linux')), { command: 'python3', args: arguments_ });
-	assert.deepEqual(pythonCommand(arguments_, host('win32')), { command: 'python', args: arguments_ });
+});
+
+test('Windows Node tools use the Python environment installed for the repository', () => {
+	assert.deepEqual(pythonCommand(arguments_, host('win32')), { command: resolve(import.meta.dirname, '../scripts/.venv/Scripts/python.exe'), args: arguments_ });
 });
 
 function host(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv = {}, fileExists: (path: string) => boolean = () => false): PythonHost {

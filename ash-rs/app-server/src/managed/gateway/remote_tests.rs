@@ -74,7 +74,7 @@ fn ssh_initialize_routes_early_messages_and_keeps_the_buffered_stream() {
     let response = serde_json::json!({"jsonrpc":"2.0","id":1,"result":{
         "serverInfo":{"name":"ash-app-server","version":"test"},
         "protocolVersion":ProtocolVersion::current(),
-        "schemaHash":"test", "capabilities":capabilities,"slashCommands":[]
+        "schemaHash":ash_app_server_protocol::schema_hash(), "capabilities":capabilities,"slashCommands":[]
     }});
     let trailing = serde_json::json!({"jsonrpc":"2.0","id":2,"result":{}});
     let stream = format!("{notification}\n{host_request}\n{response}\n{trailing}\n");

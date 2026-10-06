@@ -313,10 +313,19 @@ fn open_log(path: &Path) -> Result<File, String> {
     if !metadata.is_file() {
         return Err("Local App Server log is not a regular file".into());
     }
-    truncate_log(&file, &metadata)?;
+    if metadata.len() > MAX_LOG_BYTES {
+        // Windows append handles lack FILE_WRITE_DATA, which truncation requires.
+        // Keep inherited writers append-only and use a separate handle for maintenance.
+        let writable_log = OpenOptions::new()
+            .write(true)
+            .open(path)
+            .map_err(io_error)?;
+        writable_log.set_len(0).map_err(io_error)?;
+    }
     Ok(file)
 }
 
+#[cfg(unix)]
 fn truncate_log(file: &File, metadata: &fs::Metadata) -> Result<(), String> {
     if metadata.len() > MAX_LOG_BYTES {
         file.set_len(0).map_err(io_error)?;

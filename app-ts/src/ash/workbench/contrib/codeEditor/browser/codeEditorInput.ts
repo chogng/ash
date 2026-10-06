@@ -1,6 +1,6 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { DocumentTypes } from "../../../services/documentEditor/common/documentTypes.js";
-import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import { isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";

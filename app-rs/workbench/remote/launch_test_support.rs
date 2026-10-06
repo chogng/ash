@@ -6,9 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 #[cfg(unix)]
-use ash_app_server_protocol::protocol::initialize::{
-    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
-};
+use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 #[cfg(unix)]
 use serde_json::json;
 
@@ -31,7 +29,6 @@ fn initialize_response_with_protocol(server_schema_hash: &str, protocol_major: u
             "serverInfo": { "name": "fake-remote", "version": "1" },
             "protocolVersion": {
                 "major": protocol_major,
-                "revision": APP_SERVER_PROTOCOL_REVISION
             },
             "schemaHash": server_schema_hash,
             "capabilities": {
@@ -42,10 +39,12 @@ fn initialize_response_with_protocol(server_schema_hash: &str, protocol_major: u
                 "turns": true,
                 "projects": false,
                 "memories": false,
+                "approvalEnvironment": false,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,
                 "git": false,
+                "github": false,
                 "contentSearch": false,
                 "codebase": false,
                 "cloudCodebase": false,
@@ -60,11 +59,7 @@ fn initialize_response_with_protocol(server_schema_hash: &str, protocol_major: u
                 "marketplace": false,
                 "mcp": false,
                 "mcpOAuth": false,
-                "contracts": {
-                    "sessions": { "version": APP_SERVER_CAPABILITY_VERSION },
-                    "threads": { "version": APP_SERVER_CAPABILITY_VERSION },
-                    "turns": { "version": APP_SERVER_CAPABILITY_VERSION }
-                }
+                "contracts": {}
             },
             "slashCommands": []
         }

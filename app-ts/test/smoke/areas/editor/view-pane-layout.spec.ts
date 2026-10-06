@@ -2,6 +2,52 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+test('region navigation visits editor splits, skips hidden parts and follows sidebar placement', async ({ workbench, application }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	const first = workbench.editors.groupAt(0).editor.input;
+	const second = workbench.editors.groupAt(1).editor.input;
+	await expect(second).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.navigateLeft');
+	await expect(first).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.navigateRight');
+	await expect(second).toBeFocused();
+
+	await workbench.quickaccess.runCommand('workbench.action.output.show');
+	const panel = page.locator('[data-part="panel"]');
+	await expect.poll(() => panel.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.navigateUp');
+	await expect(second).toBeFocused();
+	await page.keyboard.press('F6');
+	await expect.poll(() => panel.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	await page.keyboard.press('Shift+F6');
+	await expect(second).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.closePanel');
+	await expect(panel).toBeHidden();
+	await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	const auxiliary = page.locator('[data-part="auxiliarybar"]');
+	await expect(auxiliary).toBeVisible();
+	await second.focus();
+	await page.keyboard.press('F6');
+	await expect.poll(() => auxiliary.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	await expect(panel).toBeHidden();
+	await page.keyboard.press('Shift+F6');
+	await expect(second).toBeFocused();
+
+	await workbench.quickaccess.runCommand('workbench.files.action.focusOpenEditorsView');
+	await workbench.menus.select(application, () => page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Manage', exact: true }).click({ button: 'right' }), ['Move Primary Side Bar Right']);
+	await expect(page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
+	await second.focus();
+	await workbench.quickaccess.runCommand('workbench.action.navigateRight');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	await expect.poll(() => sidebar.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.navigateLeft');
+	await expect(second).toBeFocused();
+});
+
 test('panel commands focus the retained view and restore editor geometry after maximizing', async ({ workbench }) => {
 	const page = workbench.page;
 	const panel = page.locator('[data-part="panel"]');

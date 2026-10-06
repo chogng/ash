@@ -1,6 +1,6 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -8,7 +8,7 @@ import { IGitHubConnectionService } from '../../../services/accounts/common/gitH
 import { IGitService } from '../../../contrib/git/common/gitService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
 import { GitCloneCommandId } from '../../git/common/gitCommands.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
@@ -18,7 +18,7 @@ export const GettingStartedPageId = 'workbench.editor.gettingStarted';
 export const GettingStartedFocusedContext = new RawContextKey<boolean>('gettingStartedFocused', false);
 
 /** Owns the Welcome editor's content and focus while its tab is open. */
-export class GettingStartedPage extends Disposable implements IEditorPane {
+export class GettingStartedPage extends EditorPane implements IEditorPane {
 	public readonly id = GettingStartedPageId;
 	private domNode: HTMLElement | undefined;
 	private content: GettingStarted | undefined;
@@ -36,10 +36,11 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		this._register(this.recentWorkspaces.onDidChange(() => this.content?.setRecentProjects(this.projects())));
 	}
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const domNode = h(parent.ownerDocument, 'div');
 		domNode.className = 'ash-getting-started-pane';
 		parent.append(domNode);
+		super.create(domNode);
 		this.domNode = domNode;
 		this._register(toDisposable(() => domNode.remove()));
 		const scopedContext = this._register(this.contextKeyService.createScoped(domNode));
@@ -60,20 +61,21 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		}));
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isGettingStartedInput(input)) throw new TypeError('Welcome editor requires a Welcome input');
 		if (signal.aborted) throw signal.reason;
 	}
 
-	public clearInput(): void { }
+	public override clearInput(): void { }
 
-	public layout(_dimension: IDimension): void { }
+	public override layout(_dimension: IDimension): void { }
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		if (visibility === EditorPaneVisibility.Hidden) this.focusedContext?.set(false);
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		if (!visibility) this.focusedContext?.set(false);
 	}
 
-	public focus(): void {
+	public override focus(): void {
 		this.domNode?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
 	}
 

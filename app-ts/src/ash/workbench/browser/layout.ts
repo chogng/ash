@@ -1,6 +1,7 @@
 import { h } from "../../base/browser/dom.js";
 import { Dimension, getClientArea, type IDimension } from "../../base/browser/dom.js";
-import { SerializableGrid, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
+import { SerializableGrid, type SerializedGridDescriptor, type Direction } from "../../base/browser/ui/grid/grid.js";
+import { isAncestorOfActiveElement } from '../../base/browser/focus.js';
 import { Emitter } from "../../base/common/event.js";
 import { MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
@@ -110,6 +111,15 @@ export class WorkbenchLayout
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
+
+	public hasFocus(partId: WorkbenchPartId): boolean {
+		return this.isPartVisible(partId) && isAncestorOfActiveElement(this.view(partId).part.domNode);
+	}
+
+	public getVisibleNeighborPart(partId: WorkbenchPartId, direction: Direction): WorkbenchPartId | undefined {
+		return this.grid.getNeighborViews(this.view(partId), direction)
+			.find(view => view.partId === 'editor' || view.partId === 'sidebar' || view.partId === 'panel' || view.partId === 'auxiliarybar' || view.partId === 'agentSidebar')?.partId;
+	}
 
 	/** Editor restoration follows the Workbench setting; Ash has no startup-file or temporary-workspace launch path. */
 	shouldRestoreEditors(): boolean {

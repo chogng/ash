@@ -11,6 +11,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
+import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../../editor/browser/widget/multiDiffEditor/model.js';
 import { bindActionContext } from '../../../../editor/browser/widget/multiDiffEditor/utils.js';
 import { type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorViewModel.js';
@@ -22,7 +23,7 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import type { IMenuService } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
-import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../contrib/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -33,7 +34,7 @@ import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 
-export interface MultiDiffEditorPaneOptions {
+export interface MultiDiffEditorOptions {
 	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
 	readonly lineHeight?: number;
@@ -54,16 +55,16 @@ export interface MultiDiffEditorPaneOptions {
 }
 
 /** Workbench pane that loads visible comparisons and hosts the generic editor widget. */
-export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithViewState {
+export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewState {
 	public readonly id = MULTI_DIFF_EDITOR_ID;
 	public readonly viewStateTypeId = 'ash.multiDiffEditor';
-	private readonly session = this._register(new MutableDisposable<MultiDiffEditorPaneSession>());
-	private readonly pendingSession = this._register(new MutableDisposable<MultiDiffEditorPaneSession>());
+	private readonly session = this._register(new MutableDisposable<MultiDiffEditorSession>());
+	private readonly pendingSession = this._register(new MutableDisposable<MultiDiffEditorSession>());
 	private editorContainerDomNode: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	constructor(
-		private readonly options: MultiDiffEditorPaneOptions,
+		private readonly options: MultiDiffEditorOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
@@ -77,11 +78,12 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithVi
 		}
 	}
 
-	public create(parent: HTMLElement): void {
-		if (this.editorContainerDomNode) throw new ReferenceError('MultiDiffEditorPane has already been created');
+	public override create(parent: HTMLElement): void {
+		if (this.editorContainerDomNode) throw new ReferenceError('MultiDiffEditor has already been created');
 		const editorContainerDomNode = h(parent.ownerDocument, 'div');
 		editorContainerDomNode.className = 'stanza-multi-diff-editor-pane';
 		parent.append(editorContainerDomNode);
+		super.create(editorContainerDomNode);
 		this.editorContainerDomNode = editorContainerDomNode;
 		this._register(toDisposable(() => {
 			editorContainerDomNode.remove();
@@ -89,14 +91,14 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithVi
 		}));
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isMultiDiffEditorInput(input)) throw new TypeError('Multi-diff editor pane requires a multi-diff editor input');
 		const container = this.requireContainer();
 		throwIfCancelled(signal, 'Multi-diff editor input loading was cancelled');
-		let next: MultiDiffEditorPaneSession | undefined;
+		let next: MultiDiffEditorSession | undefined;
 		try {
 			next = this.instantiationService.createInstance(
-				MultiDiffEditorPaneSession, container, input,
+				MultiDiffEditorSession, container, input,
 				input.label ?? 'Changes', this.options, signal,
 			);
 			this.pendingSession.value = next;
@@ -114,24 +116,27 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithVi
 		await this.options.viewsService?.focusView(GIT_VIEW_ID);
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.pendingSession.clear();
 		this.session.clear();
 	}
 
-	public layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
 		this.session.value?.layout(this.dimension);
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		if (!this.editorContainerDomNode) return;
-		this.editorContainerDomNode.hidden = visibility === EditorPaneVisibility.Hidden;
-		if (visibility === EditorPaneVisibility.Visible) this.session.value?.layout(this.dimension);
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		if (visibility) this.session.value?.layout(this.dimension);
 	}
 
-	public focus(): void {
+	public override focus(): void {
 		this.session.value?.focus();
+	}
+
+	public override getControl(): DiffEditorWidget | undefined {
+		return this.session.value?.editor?.getActiveControl();
 	}
 
 	public saveViewState(): unknown {
@@ -170,7 +175,7 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithVi
 	}
 }
 
-class MultiDiffEditorPaneSession extends Disposable {
+class MultiDiffEditorSession extends Disposable {
 	public readonly editor: MultiDiffEditorWidget | undefined;
 	private readonly models: DiffModel[] = [];
 	private readonly abortController = new AbortController();
@@ -182,7 +187,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 		container: HTMLElement,
 		paneInput: MultiDiffEditorInput,
 		label: string,
-		options: MultiDiffEditorPaneOptions,
+		options: MultiDiffEditorOptions,
 		initialSignal: AbortSignal,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IConfigurationService configuration: IConfigurationService,
@@ -328,7 +333,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 		this.editor?.focus();
 	}
 
-	private createFileActions(container: HTMLElement, input: MultiDiffEditorInputItem, options: MultiDiffEditorPaneOptions, contextMenuProvider: IContextMenuProvider, sourceInput?: MultiDiffEditorInput): WorkbenchToolBar {
+	private createFileActions(container: HTMLElement, input: MultiDiffEditorInputItem, options: MultiDiffEditorOptions, contextMenuProvider: IContextMenuProvider, sourceInput?: MultiDiffEditorInput): WorkbenchToolBar {
 		const actions: IAction[] = [new PaneAction('multiDiff.openFile', 'Open File', 'Open File', Lxicon.linkExternal, true, item => options.editorService?.openEditor(item.goToFile ?? item.modified))];
 		const change = input.gitChange;
 		if (change) {
@@ -352,7 +357,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 		return toolbar;
 	}
 
-	private async refreshGitSource(input: MultiDiffEditorInput | undefined, options: MultiDiffEditorPaneOptions): Promise<void> {
+	private async refreshGitSource(input: MultiDiffEditorInput | undefined, options: MultiDiffEditorOptions): Promise<void> {
 		if (input?.source?.kind !== 'git' || !options.gitService || !options.editorService) return;
 		const next = await createGitMultiDiffEditorInput(options.gitService, input.source.scope);
 		await options.editorService.openEditor(next, { pinned: true });

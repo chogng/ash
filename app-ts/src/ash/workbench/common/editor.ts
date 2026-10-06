@@ -6,6 +6,47 @@ import type { IAction } from '../../base/common/actions.js';
 import { toError } from '../../base/common/errors.js';
 import type Severity from '../../base/common/severity.js';
 import { URI } from '../../base/common/uri.js';
+import type { IDisposable } from '../../base/common/lifecycle.js';
+import type { ISize } from '../../base/common/layout.js';
+import type { IComposite, ICompositeControl } from './composite.js';
+import type { IWorkingCopy } from '../services/workingCopy/common/workingCopyService.js';
+
+/** Format-specific control exposed by a Workbench editor pane. */
+export interface IEditorControl extends ICompositeControl { }
+
+/** One retained editor implementation; its host owns creation, visibility and disposal. */
+export interface IEditorPane extends IComposite, IDisposable {
+	readonly id: string;
+	readonly workingCopy?: IWorkingCopy;
+	getControl(): IEditorControl | undefined;
+	setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
+	clearInput(): void;
+	layout(dimension: ISize): void;
+	setVisible(visible: boolean): void;
+	isVisible(): boolean;
+	revealRange?(range: Range): void;
+	save?(): Promise<void>;
+	saveAs?(resource: URI): Promise<void>;
+}
+
+export interface EditorPaneStatus {
+	readonly lineNumber?: number;
+	readonly columnNumber?: number;
+	readonly selectionCount?: number;
+	readonly languageId?: string;
+	readonly encoding?: string;
+	readonly endOfLine?: string;
+}
+
+export interface IEditorPaneWithStatus extends IEditorPane {
+	readonly onDidChangeStatus: Event<void>;
+	getStatus(): EditorPaneStatus;
+}
+
+export function isEditorPaneWithStatus(pane: IEditorPane | undefined): pane is IEditorPaneWithStatus {
+	const candidate = pane as Partial<IEditorPaneWithStatus> | undefined;
+	return typeof candidate?.onDidChangeStatus === 'function' && typeof candidate.getStatus === 'function';
+}
 
 export enum SaveReason {
 	EXPLICIT = 1,
@@ -129,7 +170,7 @@ export const enum EditorPaneSelectionChangeReason {
 }
 
 /** Selection history capability shared by Workbench editor panes. */
-export interface IEditorPaneWithSelection {
+export interface IEditorPaneWithSelection extends IEditorPane {
 	readonly onDidChangeSelection: Event<EditorPaneSelectionChangeReason>;
 	getSelection(): Range | undefined;
 	restoreSelection(selection: Range, source: TextEditorSelectionSource): void;

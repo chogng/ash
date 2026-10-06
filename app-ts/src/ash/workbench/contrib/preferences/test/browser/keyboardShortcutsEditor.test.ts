@@ -2,7 +2,7 @@ import { KeybindingTestServices } from '../../../../services/keybinding/test/bro
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IKeyboardLayoutService } from '../../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
-import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -37,7 +37,7 @@ const { IKeybindingService } = await import('../../../../../platform/keybinding/
 const { NotificationService } = await import('../../../../../workbench/services/notification/common/notificationService.js');
 const { KeybindingsRegistry } = await import('../../../../../platform/keybinding/common/keybindingsRegistry.js');
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
-const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
+const { EditorPaneMatch, EditorPane } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
 const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
 const { KeyboardShortcutsEditor, KeyboardShortcutsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/keyboardShortcutsEditor.js');
 const { CommandService } = await import('../../../../../workbench/services/commands/common/commandService.js');
@@ -189,19 +189,19 @@ function waitForStatus(document: Document, message: string): Promise<void> {
 	});
 }
 
-class TestSettingsEditor extends Disposable {
+class TestSettingsEditor extends EditorPane {
 	readonly id = 'test.settings';
 	private element: HTMLElement | undefined;
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.element = h(parent.ownerDocument, 'div');
 		this.element.tabIndex = -1;
 		parent.append(this.element);
+		super.create(this.element);
 	}
 
-	async setInput(): Promise<void> { }
-	clearInput(): void { }
-	layout(): void { }
-	setVisible(): void { }
-	focus(): void { this.element?.focus(); }
+	public override async setInput(): Promise<void> { }
+	public override clearInput(): void { }
+	public override layout(): void { }
+	public override focus(): void { this.element?.focus(); }
 }

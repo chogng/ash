@@ -931,7 +931,7 @@ def load_protocol_metadata(repository_root: Path) -> Dict[str, object]:
         not isinstance(metadata, dict)
         or any(
             type(metadata.get(key)) is not int or metadata[key] < 0
-            for key in ("major", "revision")
+            for key in ("major",)
         )
         or not isinstance(metadata.get("schemaHash"), str)
         or re.fullmatch(r"sha256:[a-f0-9]{64}", metadata["schemaHash"]) is None

@@ -5,9 +5,11 @@ import { ViewContainerLocation } from "../../../common/views.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart } from "../paneCompositePart.js";
+import type { ICompositeBarOptions } from '../compositeBar.js';
 
 /** Construction inputs for the fixed Auxiliary Bar Pane Composite host. */
 export interface AuxiliarybarPartOptions {
+	readonly openComposite: ICompositeBarOptions['openComposite'];
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly storageService?: IStorageService;
@@ -31,6 +33,7 @@ export class AuxiliarybarPart extends PaneCompositePart {
 
 	constructor(container: HTMLElement, options: AuxiliarybarPartOptions) {
 		super(container, {
+			openComposite: options.openComposite,
 			viewDescriptorService: options.viewDescriptorService,
 			contextKeyService: options.contextKeyService,
 			storageService: options.storageService,
@@ -46,8 +49,8 @@ export class AuxiliarybarPart extends PaneCompositePart {
 		this.contentDomNode.classList.add("ash-auxiliarybar-content");
 	}
 
-	override showComposite(compositeId: string): void {
-		super.showComposite(compositeId);
+	override showComposite(compositeId: string, focus = false): void {
+		super.showComposite(compositeId, focus);
 		const composite = this.getComposite(compositeId);
 		this.setTitleProjection(composite?.partTitleProjection);
 	}

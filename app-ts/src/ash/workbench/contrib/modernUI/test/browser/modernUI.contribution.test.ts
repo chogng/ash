@@ -28,6 +28,8 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 
 	constructor(container: HTMLElement) { super({ root: container }); }
 	isPartVisible(): boolean { return false; }
+	hasFocus(): boolean { return false; }
+	getVisibleNeighborPart(): undefined { return undefined; }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(): void { }

@@ -168,9 +168,11 @@ export class AppServerConnectionRelay extends Disposable {
 				if (!isRecord(value)) { throw new Error('Invalid runtime incompatibility'); }
 				const number = (key: string): number => { const result = value[key]; if (typeof result !== 'number' || !Number.isSafeInteger(result) || result < 0) { throw new Error('Invalid runtime version'); } return result; };
 				if (value.kind === 'majorVersion') { return new AppServerProtocolIncompatibleError({ kind: value.kind, expected: number('expected'), received: number('received') }); }
-				if ((value.kind === 'missingCapability' || value.kind === 'capabilityVersion') && typeof value.name === 'string' && value.name.length < 128) {
-					const common = { name: value.name, minVersion: number('minVersion'), maxVersion: number('maxVersion') };
-					return new AppServerProtocolIncompatibleError(value.kind === 'missingCapability' ? { kind: value.kind, ...common } : { kind: value.kind, ...common, received: number('received') });
+				if (value.kind === 'schemaHash' && typeof value.expected === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.expected) && typeof value.received === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.received)) {
+					return new AppServerProtocolIncompatibleError({ kind: value.kind, expected: value.expected, received: value.received });
+				}
+				if (value.kind === 'missingCapability' && typeof value.name === 'string' && value.name.length < 128) {
+					return new AppServerProtocolIncompatibleError({ kind: value.kind, name: value.name });
 				}
 				throw new Error('Invalid runtime incompatibility');
 			}, invoke: value => processLauncher()?.recoverInitializationFailure?.(value) ?? false,

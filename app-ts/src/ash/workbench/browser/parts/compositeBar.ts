@@ -3,7 +3,8 @@ import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js"
 import type { ActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../base/browser/ui/actionbar/actionbar.js";
 import { Separator, type IAction } from "../../../base/common/actions.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { onUnexpectedError } from '../../../base/common/errors.js';
+import type { IComposite } from '../../common/composite.js';
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 
 import { localize, type ILocalizationService } from "../../services/localization/common/localizationService.js";
@@ -14,13 +15,9 @@ import { h } from "../../../base/browser/dom.js";
 import { observeResize } from "../../../base/browser/observer.js";
 import { StorageScope, StorageTarget, type IStorageService } from '../../../platform/storage/common/storage.js';
 
-/** Selection of an inactive Composite requested from a CompositeBar. */
-export interface CompositeBarSelectionEvent {
-	readonly compositeId: string;
-}
-
 /** Construction inputs for a location-specific Composite selector. */
 export interface ICompositeBarOptions {
+	readonly openComposite: (id: string, preserveFocus?: boolean) => Promise<IComposite | null>;
 	readonly activityHoverOptions: IActivityHoverOptions;
 	readonly viewDescriptorService: IViewDescriptorService;
 	readonly localizationService?: ILocalizationService;
@@ -61,8 +58,7 @@ export class CompositeBar extends Disposable {
 	private readonly storageService: IStorageService | undefined;
 	private readonly overflowEnabled: boolean;
 	private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
-	private readonly _onDidSelectComposite =
-		this._register(new Emitter<CompositeBarSelectionEvent>());
+	private readonly openComposite: ICompositeBarOptions['openComposite'];
 	private containers: readonly IViewContainerDescriptor[] = [];
 	private displayedContainers: readonly IViewContainerDescriptor[] = [];
 	private hiddenContainerIds = new Set<string>();
@@ -78,11 +74,9 @@ export class CompositeBar extends Disposable {
 	private restoringOrder = false;
 	private _activeCompositeId: string | undefined;
 
-	readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
-		this._onDidSelectComposite.event;
-
 	constructor(container: HTMLElement, options: ICompositeBarOptions) {
 		super();
+		this.openComposite = options.openComposite;
 		const presentation = options.presentation ?? "icon";
 		this.activityHoverOptions = options.activityHoverOptions;
 		this.viewDescriptorService = options.viewDescriptorService;
@@ -197,11 +191,11 @@ export class CompositeBar extends Disposable {
 		this.render();
 	}
 
-	setActiveComposite(compositeId: string): void {
+	setActiveComposite(compositeId: string | undefined): void {
 		const available = this.viewDescriptorService
 			.getViewContainers(this.location)
 			.some((container) => container.id === compositeId);
-		if (!available) {
+		if (compositeId !== undefined && !available) {
 			throw new Error(`Composite Bar item is not available: ${compositeId}`);
 		}
 		if (this._activeCompositeId === compositeId) return;
@@ -325,7 +319,7 @@ export class CompositeBar extends Disposable {
 					checked: container.id === this._activeCompositeId,
 					badge: this.badges.get(container.id),
 					badgeEnabled: this.badgesEnabled && this.areBadgesEnabled(container.id),
-					onActivate: (compositeId) => this._onDidSelectComposite.fire({ compositeId }),
+					onActivate: (compositeId) => { void this.openComposite(compositeId).catch(onUnexpectedError); },
 				});
 			}),
 			...(showOverflow ? [new CompositeOverflowActivityAction(localize(this.localizationService, { bundle: "ash.regions", key: "additionalViews" }, "Additional views"))] : []),
@@ -405,7 +399,7 @@ export class CompositeBar extends Disposable {
 					tooltip: label,
 					enabled: true,
 					checked: container.id === this._activeCompositeId,
-					run: () => this._onDidSelectComposite.fire({ compositeId: container.id }),
+					run: () => this.openComposite(container.id),
 				};
 			});
 	}

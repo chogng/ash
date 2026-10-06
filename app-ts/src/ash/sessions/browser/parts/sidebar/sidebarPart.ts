@@ -17,6 +17,8 @@ import { SessionsList } from "./sessionsList.js";
 import { TeamsPanel, type TeamRoleOption } from './teamsPanel.js';
 import { ITeamsManagementService } from '../../../services/teams/common/teamsManagement.js';
 import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
@@ -68,8 +70,11 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
 		return Math.max(SESSION_SIDEBAR_DEFAULT_WIDTH, width);
 	}
-	constructor(container: HTMLElement, @IViewDescriptorService descriptors: IViewDescriptorService, @IContextKeyService contextKeys: IContextKeyService, @IStorageService storage: IStorageService) {
-		super(container, { viewDescriptorService: descriptors, contextKeyService: contextKeys, storageService: storage, compositeBarVisible: false });
+	constructor(container: HTMLElement, @IViewDescriptorService descriptors: IViewDescriptorService, @IContextKeyService contextKeys: IContextKeyService, @IStorageService storage: IStorageService, @IInstantiationService instantiationService: IInstantiationService) {
+		super(container, {
+			viewDescriptorService: descriptors, contextKeyService: contextKeys, storageService: storage, compositeBarVisible: false,
+			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+		});
 		this.topActivityBarHost = h(container.ownerDocument, 'div');
 		this.topActivityBarHost.className = 'ash-sessions-activity-host top';
 		this.topActivityBarHost.hidden = true;
@@ -82,8 +87,8 @@ export class SidebarPart extends WorkbenchSidebarPart {
 	public override getPaneCompositeOptions(): ReturnType<WorkbenchSidebarPart['getPaneCompositeOptions']> {
 		return { paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true };
 	}
-	public override showComposite(id: string): void {
-		super.showComposite(id);
+	public override showComposite(id: string, focus = false): void {
+		super.showComposite(id, focus);
 		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.bottomActivityBarHost);
 	}
 	override setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {

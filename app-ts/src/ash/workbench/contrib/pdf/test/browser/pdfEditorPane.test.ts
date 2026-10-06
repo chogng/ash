@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { CancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
-import { EditorPaneMatch, EditorPaneVisibility } from "../../../../../workbench/browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
 import { PdfEditorPane } from "../../../../../workbench/contrib/pdf/browser/pdfEditorPane.js";
 import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
 import { WorkspacePdfDocumentLoader } from "../../../../../workbench/contrib/pdf/browser/pdfDocumentLoader.js";
@@ -77,9 +77,9 @@ test("PDF editor renders pages, creates annotations, and saves a companion docum
 	actionButton(dom, "ash.pdf.annotations.redo").click();
 	assert.equal(dom.window.document.querySelectorAll(".ash-pdf-annotation-note").length, 0);
 
-	pane.setVisible(EditorPaneVisibility.Hidden);
+	pane.setVisible(false);
 	assert.equal(reader.hidden, true);
-	pane.setVisible(EditorPaneVisibility.Visible);
+	pane.setVisible(true);
 	pane.focus();
 	assert.equal(dom.window.document.activeElement, pages);
 	pane.clearInput();

@@ -5,7 +5,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { WorkerDiffComputationService } from '../../../../editor/browser/services/workerDiffComputationService.js';
@@ -20,18 +20,18 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { GitHubNotificationFilter, GitHubForkBranches, GitHubDiffSide, GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod, GitHubReviewEvent, GitHubReviewThreadState, GitHubReviewerChange, IGitHubService, type GitHubFileContent, type GitHubPullRequestFile, type GitHubReviewThread } from '../../../../platform/github/common/githubService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IGitService } from '../../git/common/gitService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IGitHubReviewModel, isReviewLine, type GitHubComposeDraft } from './githubReviewModel.js';
 
 export const githubEditorId = 'ash.githubEditor';
 
 /** The pane owns widgets and immutable text references; the window model owns review drafts. */
-export class GitHubEditor extends Disposable implements IEditorPane {
+export class GitHubEditor extends EditorPane implements IEditorPane {
 	public readonly id = githubEditorId;
 	private root!: HTMLDivElement;
 	private account!: SelectBox;
@@ -117,8 +117,9 @@ export class GitHubEditor extends Disposable implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 	) { super(); }
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.root = h(parent.ownerDocument, 'div'); this.root.className = 'ash-github-editor'; parent.append(this.root);
+		super.create(this.root);
 		this.root.setAttribute('aria-label', localize('github.editor.title', 'GitHub Pull Requests and Issues'));
 		const header = this.element(this.root, 'github-header');
 		this.account = this.select(header, localize('github.editor.account', 'GitHub account'), []);
@@ -199,7 +200,7 @@ export class GitHubEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal);
 		const cancel = () => this.model.cancelLoading();
 		signal.addEventListener('abort', cancel, { once: true });
@@ -217,11 +218,10 @@ export class GitHubEditor extends Disposable implements IEditorPane {
 			this.render();
 		} finally { signal.removeEventListener('abort', cancel); }
 	}
-	public clearInput(): void { this.diffCancellation.dispose(true); this.diffSession.clear(); this.diffIdentity = undefined; }
-	public layout(dimension: IDimension): void { this.root.style.width = `${dimension.width}px`; this.root.style.height = `${dimension.height}px`; this.root.classList.toggle('compact', dimension.width < 800); }
-	public setVisible(visibility: EditorPaneVisibility): void { this.root.hidden = visibility === EditorPaneVisibility.Hidden; }
-	public focus(): void { if (this.model.mode === 'notifications') { this.notificationFilter.focus(); } else { this.owner.focus(); } }
-	public getControl(): HTMLElement { return this.root; }
+	public override clearInput(): void { this.diffCancellation.dispose(true); this.diffSession.clear(); this.diffIdentity = undefined; }
+	public override layout(dimension: IDimension): void { this.root.style.width = `${dimension.width}px`; this.root.style.height = `${dimension.height}px`; this.root.classList.toggle('compact', dimension.width < 800); }
+	public override focus(): void { if (this.model.mode === 'notifications') { this.notificationFilter.focus(); } else { this.owner.focus(); } }
+	public override getControl(): HTMLElement { return this.root; }
 	public accessibleContent(): string {
 		const selected = this.model.pullRequest ?? this.model.issue;
 		return [this.model.selectedAccount && `${this.model.selectedAccount.login}@${this.model.selectedAccount.host}`, this.model.notifications.map(row => `${row.unread ? localize('github.editor.unread', 'Unread') : ''} ${row.repository.owner}/${row.repository.name}: ${row.title} (${row.reason})`).join('\n'), this.model.fork && localize('github.editor.forkAccepted', 'Fork creation accepted: {0}. GitHub may still be copying the repository.', this.model.fork.fullName), this.reviewers.textContent, this.status.textContent, selected && `#${selected.number} ${selected.title}\n${selected.body}`, this.model.checks?.checks.map(check => `${check.name}: ${check.conclusion ?? check.status}`).join('\n'), this.model.files.map(file => `${file.filename} +${file.additions} −${file.deletions}`).join('\n'), this.model.threads.map(thread => `${thread.path}:${thread.line ?? ''}\n${thread.comments.comments.map(comment => `${comment.author ?? ''}: ${comment.body}`).join('\n')}`).join('\n\n'), this.model.reviews.map(review => `${review.state}: ${review.body}`).join('\n'), this.model.issue?.comments.map(comment => comment.body).join('\n'), this.model.draft?.body, this.model.draft?.comments.map(comment => `${comment.path}:${comment.line}\n${comment.body}`).join('\n')].filter(Boolean).join('\n\n');

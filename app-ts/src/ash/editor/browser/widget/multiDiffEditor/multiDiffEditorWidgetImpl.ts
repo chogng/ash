@@ -115,7 +115,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					() => this.activateItem(item.id), this.workbenchUIElementFactory,
 				);
 				section.setCollapsed(this.viewModel.isCollapsed(item.id));
-				section.domNode.classList.toggle('active', this.viewModel.activeChange?.itemId === item.id);
+				section.domNode.classList.toggle('active', this.viewModel.activeItemId === item.id);
 				const state = this.viewModel.getItemViewState(item.id);
 				if (state) section.restoreViewState(state.original, state.modified);
 				return section;
@@ -171,10 +171,16 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	public focus(): void {
-		const itemId = this.viewModel.activeChange?.itemId ?? this.items[0]?.id;
+		const itemId = this.viewModel.activeItemId ?? this.items[0]?.id;
 		const section = this.sections.get(this.items.findIndex(item => item.id === itemId));
 		if (section?.editor) section.editor.focus();
 		else this.domNode.focus({ preventScroll: true });
+	}
+
+	/** The current file keeps its identity when focus moves to its header or a Workbench action. */
+	public getActiveControl(): DiffEditorWidget | undefined {
+		const index = this.items.findIndex(item => item.id === this.viewModel.activeItemId);
+		return this.sections.get(index)?.editor;
 	}
 
 	public saveViewState(): MultiDiffEditorViewState {
@@ -270,6 +276,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private activateItem(itemId: string): void {
+		this.viewModel.activeItemId = itemId;
 		for (const section of this.sections.values()) section.domNode.classList.toggle('active', section.item.id === itemId);
 	}
 

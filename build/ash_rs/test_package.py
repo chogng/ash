@@ -231,7 +231,7 @@ class PackageTests(unittest.TestCase):
     ]
 
     def test_product_protocol_metadata_comes_from_committed_metadata(self) -> None:
-        metadata = {"major": 7, "revision": 11, "schemaHash": "sha256:" + "a" * 64}
+        metadata = {"major": 7, "schemaHash": "sha256:" + "a" * 64}
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             path = root / "ash-rs/app-server-protocol/schema/metadata.json"
@@ -251,8 +251,8 @@ class PackageTests(unittest.TestCase):
             for value in (
                 [],
                 {},
-                {"major": True, "revision": 1, "schemaHash": "sha256:" + "a" * 64},
-                {"major": 7, "revision": 1, "schemaHash": "invalid"},
+                {"major": True, "schemaHash": "sha256:" + "a" * 64},
+                {"major": 7, "schemaHash": "invalid"},
             ):
                 with self.subTest(metadata=value):
                     path.write_text(json.dumps(value), encoding="utf-8")
@@ -515,7 +515,6 @@ class PackageTests(unittest.TestCase):
     def test_host_provided_runtime_package_omits_standalone_node(self) -> None:
         generated_protocol = {
             "major": 7,
-            "revision": 11,
             "schemaHash": "sha256:" + "a" * 64,
         }
         with tempfile.TemporaryDirectory() as temporary:

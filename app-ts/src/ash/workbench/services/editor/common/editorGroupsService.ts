@@ -3,6 +3,13 @@ import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceState } from './editorState.js';
 
+export enum GroupDirection { UP, DOWN, LEFT, RIGHT }
+export enum GroupLocation { FIRST, LAST, NEXT, PREVIOUS }
+export interface IFindGroupScope {
+	readonly direction?: GroupDirection;
+	readonly location?: GroupLocation;
+}
+
 /** Editor operations and canonical state shared by commands and group hosts. */
 export interface IEditorGroup {
 	readonly id: EditorGroupId;
@@ -49,6 +56,7 @@ export interface IEditorGroupsService {
 	readonly activeGroup: IEditorGroup;
 	readonly count: number;
 	getGroup(id: EditorGroupId): IEditorGroup | undefined;
+	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
 }
 
 export const IEditorGroupsService = createServiceIdentifier<IEditorGroupsService>('editorGroupsService');

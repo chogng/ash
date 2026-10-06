@@ -1,21 +1,21 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './traceEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { triggerDownload } from '../../../../base/browser/fileAccess.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { exportTrace, TraceConnection, type TraceConnectionState, type TraceSpan } from './traceConnection.js';
 
 export const traceEditorId = 'workbench.editor.trace';
 let nextListId = 0;
 
 /** Developer trace UI; the connection owns the wire contract and bounded capture. */
-export class TraceEditor extends Disposable implements IEditorPane {
+export class TraceEditor extends EditorPane implements IEditorPane {
 	readonly id = traceEditorId;
 	private readonly connection = this._register(new TraceConnection());
 	private domNode!: HTMLDivElement;
@@ -38,11 +38,12 @@ export class TraceEditor extends Disposable implements IEditorPane {
 
 	constructor(@IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IConfigurationService private readonly configuration: IConfigurationService) { super(); }
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-trace';
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-trace-toolbar';
@@ -110,11 +111,13 @@ export class TraceEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); }
-	clearInput(): void { this.connection.disconnect(); this.connection.clear(); this.token.value = ''; }
-	layout(dimension: IDimension): void { this.domNode.style.width = dimension.width + 'px'; this.domNode.style.height = dimension.height + 'px'; }
-	setVisible(visibility: EditorPaneVisibility): void { this.shown = visibility === EditorPaneVisibility.Visible; if (this.shown) { this.scheduleRender(); } }
-	focus(): void {
+	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); }
+	public override clearInput(): void { this.connection.disconnect(); this.connection.clear(); this.token.value = ''; }
+	public override layout(dimension: IDimension): void { this.domNode.style.width = dimension.width + 'px'; this.domNode.style.height = dimension.height + 'px'; }
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility); this.shown = visibility; if (this.shown) { this.scheduleRender(); }
+	}
+	public override focus(): void {
 		this.address.focus();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.trace')) {
 			this.statusDomNode.textContent = localize('trace.hint', 'Trace viewer. Press Alt+F1 for keyboard and connection help.');

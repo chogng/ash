@@ -1,6 +1,7 @@
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 
 export const CONTEXT_DISASSEMBLY_VIEW_FOCUS = new RawContextKey<boolean>('disassemblyViewFocus', false);
+export const CONTEXT_DEBUG_STATE = new RawContextKey<string>('debugState', 'inactive');
 export const DEBUG_VIEW_ID = "workbench.view.debug";
 export const DISASSEMBLY_VIEW_ID = 'workbench.debug.disassemblyView';
 export const OPEN_DISASSEMBLY_VIEW_COMMAND_ID = 'debug.action.openDisassemblyView';

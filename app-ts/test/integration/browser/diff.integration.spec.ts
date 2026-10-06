@@ -15,6 +15,22 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+test('multi-diff exposes the active file control and retains it while focus leaves the editor', async ({ page }) => {
+	await openDiffPage(page);
+	const files = page.locator('#multi .stanza-multi-diff-editor-section');
+	await expect(files).toHaveCount(2);
+	await files.nth(0).locator('.stanza-editor-input').last().focus();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBe('same\nbefore 🤖 after\nlast');
+	await files.nth(1).locator('.stanza-editor-input').last().focus();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBe('one');
+	await page.locator('#modified').focus();
+	expect(await page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBe('one');
+	await page.evaluate(() => window.ashDiffIntegration.focusMulti());
+	await expect(files.nth(1).locator('.stanza-editor-input').last()).toBeFocused();
+	await files.nth(1).getByRole('button', { name: /second.ts/ }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBeUndefined();
+});
+
 test('diff feature revert buttons support keyboard, undo, read-only and live options', async ({ page }) => {
 	await openDiffPage(page);
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');

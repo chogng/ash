@@ -1,6 +1,6 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 
-import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 
 export const PDF_EDITOR_ID = "ash.workbench.pdfViewer";
 export const PDF_CONTENT_TYPE = "application/pdf";

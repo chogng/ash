@@ -894,6 +894,14 @@ export class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
 		const sidebar = this._register(new SidebarPart(workbenchRoot, {
+			openComposite: (id, preserveFocus) => services.invokeFunction(accessor => {
+				const panes = accessor.get(IPaneCompositePartService);
+				if (panes.getActivePaneComposite(ViewContainerLocation.Sidebar)?.getId() === id) {
+					panes.hideActivePaneComposite(ViewContainerLocation.Sidebar);
+					return Promise.resolve(null);
+				}
+				return accessor.get(IViewsService).openViewContainer(id, !preserveFocus);
+			}),
 			activityHoverOptions: {
 				// Read at display time so a pending hover follows the current host placement.
 				position: () => getActivityHoverPosition(
@@ -923,6 +931,7 @@ export class Workbench extends Disposable {
 		const activityService = this._register(new ActivityService(sidebar.compositeBar));
 		services.registerInstance(IActivityService, activityService);
 		const agentSidebar = this._register(new SidebarPart(workbenchRoot, {
+			openComposite: (id, preserveFocus) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			storageService: storage,
@@ -1027,6 +1036,7 @@ export class Workbench extends Disposable {
 		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
 		const auxiliarybar = this._register(new AuxiliarybarPart(workbenchRoot, {
+			openComposite: (id, preserveFocus) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			storageService: storage,
@@ -1107,15 +1117,6 @@ export class Workbench extends Disposable {
 		};
 		performance.mark('ash.workbench.shell-ready');
 		const paneRestoration = this.restoreActiveViewContainers();
-		for (const [location, part] of paneParts) {
-			this._register(part.onDidSelectComposite(({ compositeId }) => {
-				if (location === ViewContainerLocation.Sidebar && part.activeCompositeId === compositeId && layout.isPartVisible('sidebar')) {
-					views.closeViewContainer(compositeId);
-					return;
-				}
-				void views.openViewContainer(compositeId).catch(onUnexpectedError);
-			}));
-		}
 		lifecycleService.phase = LifecyclePhase.Ready;
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();

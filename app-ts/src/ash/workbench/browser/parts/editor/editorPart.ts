@@ -1,7 +1,7 @@
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
-import { createEditorOpenError, isEditorOpenError, type IResourceEditorInput } from '../../../common/editor.js';
+import { createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import "./media/editorpart.css";
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { basename } from "../../../../base/common/resources.js";
@@ -44,11 +44,11 @@ import type { Range } from "../../../../editor/common/core/range.js";
 import { EditorDropTarget } from "./editorDropTarget.js";
 import { EditorsObserver } from "./editorsObserver.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
-import type { IEditorGroup, IEditorGroupsContainer } from '../../../services/editor/common/editorGroupsService.js';
+import { GroupDirection, GroupLocation, type IEditorGroup, type IEditorGroupsContainer, type IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
 import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import type { IEditorPane } from "./editorPane.js";
+
 import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } from "../../editor.js";
 import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
@@ -76,6 +76,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly activeGroup: IEditorGroupView;
 	addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView;
 	activateGroup(id: EditorGroupId): void;
+	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
 	isGroupVisible(id: EditorGroupId): boolean;
 	setGroupVisible(id: EditorGroupId, visible: boolean): void;
 	toggleActiveGroupLock(): boolean;
@@ -306,6 +307,24 @@ export class EditorPart extends WorkbenchPart implements IEditorPart, IEditorGro
 
 	public activateGroup(id: EditorGroupId): void {
 		this.setActiveGroup(this.groupHosts.get(id)!.group);
+	}
+
+	public findGroup(scope: IFindGroupScope, source: IEditorGroup = this._activeGroup): IEditorGroup | undefined {
+		const host = this.groupHosts.get(source.id)!;
+		if (scope.direction !== undefined) {
+			const directions = { [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down, [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right };
+			const neighbor = this.editorGrid.getNeighborViews(host.view, directions[scope.direction])[0];
+			return neighbor && this._groups.find(candidate => candidate.view === neighbor)!.group;
+		}
+		const visible = this._groups.filter(candidate => this.editorGrid.isViewVisible(candidate.view));
+		const index = visible.indexOf(host);
+		switch (scope.location) {
+			case GroupLocation.FIRST: return visible[0]?.group;
+			case GroupLocation.LAST: return visible.at(-1)?.group;
+			case GroupLocation.NEXT: return visible[index + 1]?.group;
+			case GroupLocation.PREVIOUS: return visible[index - 1]?.group;
+		}
+		return undefined;
 	}
 
 	public isGroupVisible(id: EditorGroupId): boolean {

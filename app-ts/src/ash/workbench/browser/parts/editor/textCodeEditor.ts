@@ -17,7 +17,7 @@ export interface ITextCodeEditorControl extends ITextEditorControl {
 export abstract class AbstractTextCodeEditor<T extends ITextCodeEditorControl> extends AbstractTextEditor<T> {
 	protected dimension: IDimension = { width: 0, height: 0 };
 
-	layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = {
 			width: Math.max(0, dimension.width),
 			height: Math.max(0, dimension.height),
@@ -25,7 +25,7 @@ export abstract class AbstractTextCodeEditor<T extends ITextCodeEditorControl> e
 		this.getControl()?.layout(this.dimension);
 	}
 
-	focus(): void {
+	public override focus(): void {
 		this.getControl()?.focus();
 	}
 

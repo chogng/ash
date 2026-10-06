@@ -6,9 +6,9 @@ import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextRe
 import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
 import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
-import type { IEditorPane } from './editorPane.js';
+
 import type { IEditorPaneRegistry } from '../../editor.js';
-import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
+import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 
 export interface EditorContextKeySource extends IEditorStateSource {

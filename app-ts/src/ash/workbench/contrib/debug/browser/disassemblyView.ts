@@ -1,4 +1,4 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import './media/disassemblyView.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert, status } from '../../../../base/browser/ui/aria/aria.js';
@@ -10,7 +10,7 @@ import { Table } from '../../../../base/browser/ui/table/tableWidget.js';
 import type { ITableColumn, ITableRenderer } from '../../../../base/browser/ui/table/table.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import type { IAction } from '../../../../base/common/actions.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -21,7 +21,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDebugService, type IDebugSession, type IDisassembledInstruction, type IInstructionBreakpoint } from '../../../services/debug/common/debugService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { CONTEXT_DISASSEMBLY_VIEW_FOCUS, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
@@ -32,7 +32,7 @@ interface BreakpointCell { readonly button: Button; instruction: IDisassembledIn
 interface TextCell { readonly text: HTMLElement; readonly hover: IManagedHover; }
 
 /** Displays one paused session's DAP instruction window; DebugService owns breakpoints and frame focus. */
-export class DisassemblyView extends Disposable implements IEditorPane {
+export class DisassemblyView extends EditorPane implements IEditorPane {
 	public readonly id = DISASSEMBLY_VIEW_ID;
 	public domNode!: HTMLElement;
 	private table!: Table<IDisassembledInstruction>;
@@ -61,11 +61,12 @@ export class DisassemblyView extends Disposable implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 	) { super(); }
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-disassembly';
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => { this.generation++; this.domNode.remove(); }));
 		const scope = this._register(this.contextKeys.createScoped(this.domNode));
 		const focused = CONTEXT_DISASSEMBLY_VIEW_FOCUS.bindTo(scope);
@@ -164,7 +165,7 @@ export class DisassemblyView extends Disposable implements IEditorPane {
 		this._register(this.keybindings.onDidUpdateKeybindings(updateHint));
 	}
 
-	public async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		this.inputSignal = signal;
 		const abort = (): void => { this.generation++; };
@@ -179,7 +180,7 @@ export class DisassemblyView extends Disposable implements IEditorPane {
 		signal.throwIfAborted();
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.generation++;
 		this.inputResources.clear();
 		this.inputSignal = undefined;
@@ -193,10 +194,9 @@ export class DisassemblyView extends Disposable implements IEditorPane {
 		this.renderControls();
 		this.contentChanged.fire();
 	}
-	public layout(dimension: IDimension): void { this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`; }
-	public setVisible(visibility: EditorPaneVisibility): void { this.domNode.hidden = visibility === EditorPaneVisibility.Hidden; }
-	public focus(): void { this.table.domFocus(); }
-	public getControl(): DisassemblyView { return this; }
+	public override layout(dimension: IDimension): void { this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`; }
+	public override focus(): void { this.table.domFocus(); }
+	public override getControl(): DisassemblyView { return this; }
 	public getAccessibleContent(): string { return this.instructions.length ? this.instructions.map(instruction => this.instructionText(instruction)).join('\n') : this.statusDomNode.textContent!; }
 	public toggleBreakpoint(): void { const instruction = this.selectedInstruction(); if (instruction) { this.toggleInstructionBreakpoint(instruction); } }
 	public async step(operation: 'stepOver' | 'stepInto' | 'stepOut'): Promise<void> {

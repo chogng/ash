@@ -39816,16 +39816,10 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
-        },
-        "revision": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
         }
       },
       "required": [
-        "major",
-        "revision"
+        "major"
       ],
       "type": "object"
     },

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
-import { EditorPaneMatch } from "../../../../browser/parts/editor/editorPane.js";
+import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 import { academicProfile } from "../../browser/academicEditorProfile.js";
 import { matchDocumentEditor } from "../../../documentEditor/browser/documentEditorInput.js";
 import { createDocumentEditorPaneOptions, findEditorProfile, matchEditorProfiles } from "../../../documentEditor/browser/editorProfile.js";

@@ -44,7 +44,7 @@ import { NotificationService } from '../../../workbench/services/notification/co
 import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
-import type { ViewPaneContainer } from "../../../workbench/browser/parts/views/viewPaneContainer.js";
+import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
@@ -1271,17 +1271,35 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	const view = {
 		element: h(testStorageEnvironment.window.document, "div"),
 		id: CHAT_VIEW_ID,
-		focus: () => focused++,
+		paneTitle: 'Chat',
+		focus: () => { focused++; view.element.focus(); },
+		hasFocus: () => view.element.contains(view.element.ownerDocument.activeElement),
+		isBodyVisible: () => true,
+		setExpanded: () => false,
 		isVisible: () => true,
 		setVisible: () => undefined,
 	};
-	const paneContainer = {
+	view.element.tabIndex = 0;
+	testStorageEnvironment.window.document.body.append(view.element);
+	using removeView = toDisposable(() => view.element.remove());
+	const composite: IPaneComposite = {
+		id: CHAT_VIEW_CONTAINER_ID,
+		title: 'Chat',
 		panes: [],
+		onDidFocus: Event.None,
+		onDidBlur: Event.None,
 		onDidChangeViewVisibility: Event.None,
 		onDidAddViews: Event.None,
 		onDidRemoveViews: Event.None,
 		onDidFocusView: Event.None,
 		onDidBlurView: Event.None,
+		getId: () => CHAT_VIEW_CONTAINER_ID,
+		getTitle: () => 'Chat',
+		getControl: () => composite,
+		focus: () => view.focus(),
+		hasFocus: () => view.hasFocus(),
+		isVisible: () => true,
+		setVisible: () => undefined,
 		getView: (viewId: string) => viewId === CHAT_VIEW_ID ? view : undefined,
 		openView: (viewId: string, focus = false) => {
 			assert.equal(viewId, CHAT_VIEW_ID);
@@ -1289,13 +1307,12 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 			opened++;
 			return view;
 		},
-	} as unknown as ViewPaneContainer;
+	};
 	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	using services = new InstantiationService();
 	services.registerInstance(IViewDescriptorService, descriptors);
 	services.registerInstance(IContextKeyService, contextKeys);
-	const composite = Object.assign(paneContainer, { id: CHAT_VIEW_CONTAINER_ID }) as import("../../../workbench/browser/parts/views/paneComposite.js").PaneComposite;
 	services.registerInstance(IPaneCompositePartService, {
 		onDidPaneCompositeOpen: Event.None,
 		onDidPaneCompositeClose: Event.None,

@@ -20,7 +20,7 @@
 
 ## 1. 适用范围
 
-本文适用于 `SidebarPart`、`AuxiliarybarPart`、`Agent Sidebar` 和 `PanelPart`。它们都是某个 `ViewContainerLocation` 的 pane-like host。Editor 使用 editor-group 专用架构，不套用本文的 Composite 生命周期。
+本文适用于 `SidebarPart`、`AuxiliarybarPart`、`Agent Sidebar` 和 `PanelPart`。它们都是某个 `ViewContainerLocation` 的 pane-like host。Editor 使用 editor-group 专用架构管理输入和实例，但 `EditorPane` 与 `PaneComposite` 共用浏览器 `Composite` 的焦点、内容根节点和显隐管理。
 
 本文不重新定义：
 
@@ -44,6 +44,10 @@ PaneCompositePart
 ```
 
 `PaneCompositePart` 创建标题的左右槽位并持有 Composite 生命周期。`CompositeBar` 只负责把可用 View Container 投影为可切换 item。`MenuWorkbenchToolBar` 只负责把指定 `MenuId` 投影到标题右侧。`PaneComposite` 负责当前 container 的 pane、内容和 view-owned title control。
+
+`common/composite.ts` 的 `IComposite` 规定工作台读取内容 ID、标题、内部控件和操作焦点的公共接口。`IEditorPane` 与 `IPaneComposite` 继承它；视图的内部控件就是它已经持有的视图容器，不另建对象。焦点进入或离开整块内容时才发出 `onDidFocus` / `onDidBlur`，在内部控件之间移动不会重复发出事件。监听器随内容实例释放。
+
+`CompositeBar` 通过 `openComposite` 回调打开内容，打开行为由 `IViewsService` 和区域服务执行。`CompositePart` 在内容显示、隐藏或切换时发出打开、关闭事件；打开事件携带本次是否请求聚焦。隐藏区域保留实例，再次打开使用同一实例。F6 / Shift+F6 只访问可见区域；方向导航先访问编辑器分组，再根据 Grid 的实际位置进入相邻区域。多文件 diff 的 `getControl()` 返回当前文件的 diff 控件，移走焦点后仍保留当前文件选择。
 
 Activity Bar 的首选 tooltip 方向由组件层的 `getActivityHoverPosition` 统一计算：侧栏向内、顶部向下、底部向上。Workbench 和 Sessions 的宿主各自读取所属窗口的位置配置，在 `setupDelayedHover` 的回调中取值；位置切换保留按钮和监听器。Hover 服务负责显示生命周期，底层布局负责坐标计算和空间不足时的方向调整。
 

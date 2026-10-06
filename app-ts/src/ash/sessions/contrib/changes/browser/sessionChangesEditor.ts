@@ -1,11 +1,11 @@
-import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
+import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../workbench/common/editor.js';
 import { Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { EditorPanes } from '../../../../workbench/browser/editor.js';
-import { EditorPaneVisibility, type EditorPaneCreationOptions, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { type EditorPaneCreationOptions, EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import type { MultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -14,7 +14,7 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 /** Resolves the selected conversation's changes only while its editor content is visible. */
-export class SessionChangesEditor extends Disposable implements IEditorPane {
+export class SessionChangesEditor extends EditorPane implements IEditorPane {
 	public readonly id = 'ash.sessions.changesEditor';
 	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
 	private domNode!: HTMLDivElement;
@@ -43,7 +43,7 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
 	}
 
-	public create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		this.domNode = h(parent.ownerDocument, 'div', { className: 'ash-sessions-changes-editor' });
 		this.messageDomNode = h(parent.ownerDocument, 'p', { className: 'ash-sessions-editor-message' });
 		this.messageDomNode.setAttribute('role', 'status');
@@ -67,15 +67,16 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 		updateHint();
 		this.domNode.append(this.messageDomNode);
 		parent.append(this.domNode);
+		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public async setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
 		this.input = input;
 		await this.refresh();
 	}
 
-	public clearInput(): void {
+	public override clearInput(): void {
 		this.input = undefined;
 		this.comparisonInput = undefined;
 		this.revision++;
@@ -90,8 +91,9 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 		return this.comparisonInput.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n');
 	}
 
-	public setVisible(visibility: EditorPaneVisibility): void {
-		const visible = visibility === EditorPaneVisibility.Visible;
+	public override setVisible(visibility: boolean): void {
+		super.setVisible(visibility);
+		const visible = visibility;
 		if (this.visible === visible) {
 			return;
 		}
@@ -106,16 +108,20 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 		}
 	}
 
-	public layout(dimension: IDimension): void {
+	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.comparison.value?.layout(dimension);
 	}
-	public focus(): void {
+	public override focus(): void {
 		if (this.comparison.value) {
 			this.comparison.value.focus();
 		} else {
 			this.domNode.focus();
 		}
+	}
+
+	public override getControl(): IEditorControl | undefined {
+		return this.comparison.value?.getControl();
 	}
 
 	private async refresh(): Promise<void> {
@@ -163,7 +169,7 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 			}
 			this.messageDomNode.hidden = true;
 			pane.layout(this.dimension);
-			pane.setVisible(EditorPaneVisibility.Visible);
+			pane.setVisible(true);
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision) {
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));

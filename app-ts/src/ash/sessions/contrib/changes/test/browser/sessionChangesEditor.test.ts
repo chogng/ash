@@ -10,7 +10,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
-import { EditorPaneVisibility } from '../../../../../workbench/browser/parts/editor/editorPane.js';
+
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -36,8 +36,8 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	using pane = services.createInstance(SessionChangesEditor, {});
 	pane.create(dom.window.document.body);
 	await pane.setInput({ resource: URI.parse('ash-session-changes:/a?thread=a-thread') }, new AbortController().signal);
-	pane.setVisible(EditorPaneVisibility.Visible);
-	pane.setVisible(EditorPaneVisibility.Hidden);
+	pane.setVisible(true);
+	pane.setVisible(false);
 	await pending.complete([{
 		changeSetId: 'change-a', sessionId: 'a', threadId: 'a-thread', turnId: 'turn-a', repositoryId: 'repository-a',
 		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
@@ -46,7 +46,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	await Promise.resolve();
 	assert.equal(requests, 1);
 	assert.equal(pane.getAccessibleContent(), 'Loading changes…');
-	pane.setVisible(EditorPaneVisibility.Visible);
+	pane.setVisible(true);
 	await Promise.resolve();
 	assert.equal(requests, 2);
 	assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');

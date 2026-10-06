@@ -23,6 +23,7 @@ export class MultiDiffEditorViewModel {
 	private readonly collapsedItemIds = new Set<string>();
 	private readonly itemViewStates = new Map<string, DiffEditorItemViewState>();
 	private selectedChange: MultiDiffEditorLocation | undefined;
+	public activeItemId: string | undefined;
 
 	constructor(items: readonly { readonly id: string; }[]) {
 		this.itemIds = new Set(items.map(item => item.id));
@@ -33,6 +34,7 @@ export class MultiDiffEditorViewModel {
 		for (const id of this.collapsedItemIds) if (!this.itemIds.has(id)) this.collapsedItemIds.delete(id);
 		for (const id of this.itemViewStates.keys()) if (!this.itemIds.has(id)) this.itemViewStates.delete(id);
 		if (this.selectedChange && !this.itemIds.has(this.selectedChange.itemId)) this.selectedChange = undefined;
+		if (this.activeItemId && !this.itemIds.has(this.activeItemId)) this.activeItemId = undefined;
 	}
 
 	public get activeChange(): MultiDiffEditorLocation | undefined {
@@ -96,6 +98,7 @@ export class MultiDiffEditorViewModel {
 			if (this.itemIds.has(state.id)) this.itemViewStates.set(state.id, state);
 		}
 		this.selectedChange = undefined;
+		this.activeItemId = undefined;
 		return value.scrollTop;
 	}
 }

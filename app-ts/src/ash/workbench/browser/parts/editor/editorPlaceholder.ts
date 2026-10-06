@@ -2,18 +2,18 @@ import "./media/editorplaceholder.css";
 import { h, type IDimension } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import type { IAction } from "../../../../base/common/actions.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { basename } from "../../../../base/common/resources.js";
 import Severity from "../../../../base/common/severity.js";
 import { localize } from "../../../../nls.js";
-import { isEditorOpenError, type IResourceEditorInput } from "../../../common/editor.js";
+import { isEditorOpenError, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 
-import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
+import { EditorPane } from './editorPane.js';
 
 let nextErrorPageId = 0;
 
 /** Keeps an unsuccessful resource open with the actions supplied by its editor. */
-export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
+export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 	readonly id = "workbench.editor.openError";
 	private root!: HTMLDivElement;
 	private title!: HTMLHeadingElement;
@@ -32,7 +32,7 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 		super();
 	}
 
-	create(parent: HTMLElement): void {
+	public override create(parent: HTMLElement): void {
 		const ownerDocument = parent.ownerDocument;
 		const id = ++nextErrorPageId;
 		this.root = h(ownerDocument, "div");
@@ -51,11 +51,12 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 		this.actionsDomNode.className = "ash-editor-open-error-actions";
 		this.root.append(this.severityLabel, this.title, this.detail, this.actionsDomNode);
 		parent.append(this.root);
+		super.create(this.root);
 		this._register(toDisposable(() => this.root.remove()));
 		this.render();
 	}
 
-	setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
+	public override setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
 		this.input = input;
 		this.render();
 		return Promise.resolve();
@@ -66,14 +67,13 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	clearInput(): void {
+	public override clearInput(): void {
 		this.input = undefined;
 	}
 
-	layout(_dimension: IDimension): void { }
-	setVisible(_visibility: EditorPaneVisibility): void { }
+	public override layout(_dimension: IDimension): void { }
 
-	focus(): void {
+	public override focus(): void {
 		this.firstButton?.focus();
 	}
 

@@ -46,18 +46,9 @@ use remote::RemoteTarget;
 const MAX_REMOTE_TARGETS: usize = 32;
 const MAX_LOCAL_TARGETS: usize = 32;
 const TASK_CONTRACTS: &[ash_app_server_protocol::protocol::initialize::CapabilityRequirement] = &[
-    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact(
-        "sessions",
-        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
-    ),
-    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact(
-        "threads",
-        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
-    ),
-    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact(
-        "turns",
-        ash_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION,
-    ),
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::Enabled("sessions"),
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::Enabled("threads"),
+    ash_app_server_protocol::protocol::initialize::CapabilityRequirement::Enabled("turns"),
     ash_app_server_protocol::protocol::initialize::CapabilityRequirement::exact("taskDelivery", 1),
 ];
 

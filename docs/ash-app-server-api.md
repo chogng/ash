@@ -159,13 +159,13 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 }
 ```
 
-返回值包含 `serverInfo`、`protocolVersion`、完整 schema 的 `schemaHash`、版本化 server capability，
+返回值包含 `serverInfo`、`protocolVersion`、自动生成的完整协议指纹 `schemaHash`、实际可用的 server capability，
 以及 composition 边界冻结的 `slashCommands` snapshot：
 
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 7, "revision": 12 },
+  "protocolVersion": { "major": 7 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -185,10 +185,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "typst": true,
     "updateReplay": true,
     "contracts": {
-      "sessions": { "version": 16 },
-      "threads": { "version": 16 },
-      "turns": { "version": 16 },
-      "projects": { "version": 16 }
+      "memoryDiagnostics": { "version": 1 }
     }
   },
   "slashCommands": [
@@ -201,13 +198,12 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 }
 ```
 
-客户端必须拒绝不同 protocol major、缺失的 required capability 或不支持的 capability version。
-capability 15 增加 Guardian 可配置的历史范围、聚合事实来源与扫描覆盖量；capability 14 将 Guardian 近期命令扩展到同一授权目录的跨会话记录，并提供结构化命令来源；capability 13
-增加 `observations` 响应字段。旧客户端须先升级再连接。
-权限 ID 在 capability 12 中统一为 `manual / auto / bypassPermissions`，旧 capability 11
-使用不同 ID，因此必须在初始化时拒绝。名称、说明、翻译 key 与确认标记由共享 Rust 定义生成到
-`ApprovalModes.ts`，界面通过领域适配层渲染，不需要新增一次菜单查询 RPC。
-schema hash 是 exact artifact 诊断信号，不单独决定运行时兼容性。
+本地打包、开发启动、远程连接与后端更新统一要求相同的 protocol major 和 `schemaHash`。指纹由 Rust 协议生成器根据完整 JSON Schema 自动计算；协议字段、方法或返回类型变化后运行 `just generate-protocol`，无需维护 revision 或所有能力共用的版本计数。主版本只用于明确的破坏性协议语义变化。前端与后端随同一次构建交付，启动入口先准备对应后端产物。
+
+每条连接在进入 Ready 前还必须验证 server identity、响应形状以及必需能力的布尔值。`sessions`、`threads`、`turns` 只表达是否可用；`contracts` 仅保留 `taskDelivery`、`marketplaceSearch` 等独立可选能力自己的契约版本。指纹不同必须拒绝连接，并报告客户端与后端的指纹；不得忽略字段差异后继续发送请求。远程后端也必须使用匹配的生成协议，当前不提供跨指纹版本范围协商。
+
+权限 ID 使用 `manual / auto / bypassPermissions`。名称、说明、翻译 key 与确认标记由共享 Rust 定义生成到 `ApprovalModes.ts`，界面通过领域适配层渲染，不需要新增一次菜单查询 RPC。旧权限字段、模型选择、Guardian 观察或时间策略的协议变化由生成指纹校验覆盖。
+
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
 description 不能为空，同一 snapshot 中 name 必须唯一。可选字段 `argumentHint`（如 `<path>`、`<prompt>`）
 用于向客户端声明行内参数占位虚提示。该 snapshot 负责 discoverability 与 inline argument parsing；
@@ -327,7 +323,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `languageServer/configure` / `languageServer/remove`                                     | config                                    | revision-safe 修改或恢复 language-server mode/path preference                                                                                                                                                               |
 | `provider/configure` / `provider/remove`                                                 | config                                    | 按 connection ID 保存或移除配置；后续请求按已就绪凭据重新选择连接。                                                                                                                                                         |
 | `provider/apiKey/set` / `provider/list`                                                  | model connection                          | 按 connection ID 保存独立凭据；列表返回所属厂商、接入类型、configured、active 和 ready，不返回密钥。`active` 表示当前自动选中的连接。                                                                                       |
-| `provider/probe`                                                                         | model provider                            | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量；协议 revision 31。 |
+| `provider/probe`                                                                         | model provider                            | 使用未保存的 `config` 和可选临时 `apiKey`；填写 `model` 时发起一次最小生成请求，省略时获取模型 ID 列表。返回 `passed`、`models` 或 `failed`；不保存配置和密钥，不重试其他路径。成功不证明完整上下文容量。 |
 | `provider/models/list`                                                                   | model observations                        | 按 connection 刷新观察目录，返回 models、empty 或 failed。缓存隔离接入、账户和配置；不改写内置目录、模型选择或当前接入。订阅账户的后台观察在模型变化时另发 `provider/models/updated`。                                      |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set`                  | config                                    | 修改 standalone MCP desired config                                                                                                                                                                                          |
 | `mcp/server/connect` / `mcp/server/disconnect`                                           | runtime                                   | 设置 process-local lifecycle intent，不改变 Config revision                                                                                                                                                                 |
@@ -1280,7 +1276,7 @@ Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 G
 
 纯前端构建通过 `pnpm --dir app-ts protocol:sync` 同步快照，不运行 Cargo。同步会移除退场类型，保留未变文件的时间戳，并在源快照缺失或目标包含手写文件时失败。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
 
-生成类型只用于协议客户端、领域通信接口和运行时 adapter；领域服务、编辑器与 UI 使用前端自有类型。WebSocket 只传输消息，`initialize` 负责主版本和能力版本检查。schema hash 差异用于诊断，不单独阻断连接；允许扩展的结果对象可增加字段，严格对象、未知枚举和未声明通知仍须经过解码规则校验，不会因握手通过而跳过。
+生成类型只用于协议客户端、领域通信接口和运行时 adapter；领域服务、编辑器与 UI 使用前端自有类型。WebSocket 只传输消息，`initialize` 负责主版本、生成协议指纹和必需能力可用性检查。schema hash 不同会阻断连接；允许扩展的结果对象可增加字段，严格对象、未知枚举和未声明通知仍须经过解码规则校验，不会因握手通过而跳过。
 
 生成快照一致性测试、`pnpm --dir app-ts typecheck:protocol`、协议行为测试和受影响的前端构建必须同时通过。
 
@@ -1338,7 +1334,7 @@ PR 文件最多 3000 个，达到上限的结果设置 `limitReached`，不能�
 
 ## 时间上下文配置
 
-此契约自 capability version 5 提供；客户端与后端必须匹配，旧版不能静默忽略时间策略。
+客户端与后端必须使用相同的生成协议指纹，旧后端不能静默忽略时间策略。
 
 `config/read.timeContext` 返回 profile 的模型时间策略；`config/update.timeContext` 接受完整策略对象，沿用 `commandId` 与 `expectedRevision` 的原子提交、重放和冲突规则。缺失该更新字段保持原策略，`null` 恢复默认 `{ "mode": "date" }`。
 
@@ -1362,7 +1358,7 @@ PR 文件最多 3000 个，达到上限的结果设置 `limitReached`，不能�
 
 ## Advisor
 
-此变更使用 protocol revision 3、capability version 7。
+此契约由生成协议指纹绑定，客户端与后端必须匹配。
 
 `session/request` 提供两种顾问操作：
 
