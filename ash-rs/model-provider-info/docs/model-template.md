@@ -263,6 +263,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 | 请求设置       | 已有 verbosity、摘要；服务等级含 ID、名称、说明与默认值，加速机制独立声明 | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
 | 工具           | 已有工具和并行能力标记、工具输出预算                                      | 工具选择、strict、schema 子集、数量限制、结果/历史协议               |
 | 接入           | 已有 API profile、独立流式/语音协议、计数声明                             | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入  |
+| 退役公告       | 已有连接范围内的公告与可选确定日期，菜单徽标消费（见第 10 节）             | 其他接入公告来源尚未自动接入；静态清单不声明接入特定日期             |
 | 缓存与状态     | 协议实现已有部分缓存、会话行为                                            | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义          |
 
 完整性的检查单位是“实际能否按正确条件构造请求并解析结果”。Codex 的展示顺序、升级提示、搜索工具选择等还包含自身产品策略；这些字段要有 Ash 的明确负责方和调用用途，不能为了增加行数照抄。
@@ -272,7 +273,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_models.rs` 的 `ModelInfo`，内置实例在 `codex-rs/models-manager/models.json`；`codex-rs/app-server-protocol/src/protocol/v2/model.rs` 的 `Model` 是供客户端选择模型的较小结果。它们是 Codex 自己的契约，不是跨供应商的标准。下面按当前本地源码逐项列出对应关系；没有对应消费者的字段不加入 Ash 目录。
 
 | Codex `ModelInfo` 字段                                                                                      | Ash 对应字段或负责方                                                          | 当前处理                                                                  |
-| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `slug`、`display_name`、`description`                                                                       | `model_id`、`display_name`、`description`                                     | 静态、动态目录保留；简介可省略                                            |
 | `supported_reasoning_levels`、`default_reasoning_level`                                                     | `supported_reasoning_efforts[{effort,description}]`、`default_reasoning_effort` | 保留档位顺序及说明；Codex `xhigh` 对应 JSON `extraHigh`，请求仍按协议编码 |
 | `service_tiers`、`default_service_tier`                                                                     | `settings.service_tiers[{id,name,description}]`、`default_service_tier`          | 原样保留请求 ID；默认值必须引用列表成员                                   |
@@ -318,3 +319,24 @@ Codex 示例 JSON 还可能含有不在这份 `ModelInfo` 中的字段，例如 
 4. 流式测试覆盖完整终止、预算用尽、工具等待、取消、错误和最终 usage；零用量与未知用量分别表达。
 5. 界面与 TUI 只提供有效可配置项；固定温度、不能关闭的思考模式和不支持的服务等级都按声明呈现。切换模型不能带入旧型号的非法设置。
 6. 真实服务验证单独记录接入、型号、版本、日期和脱敏结果；本地 schema 与请求测试不能证明账户权益或模型质量。
+
+## 10. 当前已实现的退役公告（2026-10-06 核对）
+
+模型退役提示采用共享协议 `ModelRetirement { shutdown_date: Option<String> }`：
+外层没有公告时不显示徽标；对象存在且日期为 null 表示已公告但日期尚未确定；
+具体日期必须是有效的 YYYY-MM-DD。生命周期的 Legacy、Preview 分类不能证明即将退役。
+
+| 接入                             | 官方证据与差异                                                                                                                                                                             | Ash 处理                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| OpenAI API 模型列表              | [models/list](https://developers.openai.com/api/reference/resources/models/methods/list) 返回可选 `shutdown_date`，null 表示未公告                                                         | 当前连接目录读取确定日期，null 撤回旧公告  |
+| Claude API 模型列表              | [models/list](https://platform.claude.com/docs/en/api/models/list) 未声明同等停用日期字段；[退役公告](https://platform.claude.com/docs/en/docs/about-claude/model-deprecations) 是独立来源 | 不从 ID 或发布时间推断，不自动导入网页公告 |
+| Gemini API                       | [models](https://ai.google.dev/api/models) 未声明同等字段；[退役表](https://ai.google.dev/gemini-api/docs/deprecations) 的日期可能只表示最早停用时间                                       | 不把最早日期当作确定日期；当前未自动导入   |
+| GLM、Kimi、Grok、Ollama 当前接入 | 现有目录适配器未提供退役证据；没有核实通用公告接口                                                                                                                                         | 维持未知，不因为型号旧或没有发现而显示退役 |
+| ChatGPT、Kimi、Grok 等订阅连接   | 与公开 API 的目录及可用范围独立，当前适配器未提供退役公告                                                                                                                                  | 不继承公开 API 的日期                      |
+
+公告是连接目录事实，不能作为请求参数、访问权限或自动换模策略。
+`models.json` 当前没有可填写的退役字段；避免将某一 API 的停用计划扩散到同型号的所有接入。
+来源补丁用现有 `Patch<ModelRetirement>` 区分省略、明确 null 和公告对象，
+models-manager 合并并记录来源，App Server 输出可选 retirement，前端适配为 camelCase。
+确定日期和无日期公告、撤回公告均有真实菜单消费者；原始公告的检索与维护仍归目录来源，
+不在 Renderer 抓取网页或维护另一份型号时间表。

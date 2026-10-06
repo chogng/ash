@@ -3,11 +3,16 @@ import type { ModelAccelerationOption } from './ModelAccelerationOption.js';
 import type { ModelCapabilities } from './ModelCapabilities.js';
 import type { ModelReasoningEffortOption } from './ModelReasoningEffortOption.js';
 import type { ModelRef } from './ModelRef.js';
+import type { ModelRetirement } from './ModelRetirement.js';
 import type { ModelSettings } from './ModelSettings.js';
 import type { Personality } from './Personality.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 
 export type ModelCatalogEntry = { model: ModelRef, display_name: string, description: string | null,
+/**
+ * Retirement evidence for this catalog row, without inferring availability from its date.
+ */
+retirement?: ModelRetirement | null,
 /**
  * True only when this ID belongs to the last successful endpoint observation.
  */

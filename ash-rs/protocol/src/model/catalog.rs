@@ -65,6 +65,51 @@ pub enum ModelMetadataQuality {
     Unknown,
 }
 
+/// A confirmed retirement announcement for the catalog's exact model and connection scope.
+///
+/// This is independent of lifecycle classification and availability: legacy or preview models
+/// are not necessarily retiring, and an announcement does not revoke access or select a replacement.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct ModelRetirement {
+    /// Exact shutdown date in YYYY-MM-DD form; null means announced without a confirmed date.
+    /// Earliest possible dates are not exact shutdown dates. Keep date-only values out of time zones.
+    pub shutdown_date: Option<String>,
+}
+
+impl ModelRetirement {
+    pub fn validate(&self) -> Result<(), String> {
+        let Some(date) = self.shutdown_date.as_deref() else {
+            return Ok(());
+        };
+        let bytes = date.as_bytes();
+        if bytes.len() != 10
+            || bytes[4] != b'-'
+            || bytes[7] != b'-'
+            || !bytes
+                .iter()
+                .enumerate()
+                .all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit())
+        {
+            return Err("retirement shutdown_date must be a YYYY-MM-DD date".into());
+        }
+        let year: u32 = date[..4].parse().expect("validated date digits");
+        let month: u32 = date[5..7].parse().expect("validated date digits");
+        let day: u32 = date[8..].parse().expect("validated date digits");
+        let days = match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+            2 => 28,
+            _ => 0,
+        };
+        if year == 0 || day == 0 || day > days {
+            return Err("retirement shutdown_date must be a valid calendar date".into());
+        }
+        Ok(())
+    }
+}
+
 /// How a user gains access to a model.
 ///
 /// [`ModelRef::provider`] identifies the model vendor. Product composition may use this access
@@ -110,7 +155,7 @@ fn unknown_capability_support() -> CapabilitySupport {
     CapabilitySupport::Unknown
 }
 
-/// Provider-neutral model metadata published by a catalog, independent of a live connection.
+/// Provider-neutral model metadata from bundled declarations or a connection-scoped observation.
 ///
 /// Capacity and parameter declarations guide request construction; this row does not prove account
 /// access or endpoint compatibility. The editable bundled row is owned by model-provider-info.
@@ -122,6 +167,10 @@ pub struct ModelInfo {
     pub description: Option<String>,
     #[serde(default)]
     pub access: ModelAccess,
+    /// Connection-sourced retirement evidence; omission means no known announcement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub retirement: Option<ModelRetirement>,
     pub context_window: ContextWindow,
     /// Optional model-specific compaction threshold; Core determines the effective execution budget.
     pub auto_compact_token_limit: Option<u32>,
@@ -169,6 +218,9 @@ impl ModelInfo {
             self.description.as_deref(),
             &self.supported_reasoning_efforts,
         )?;
+        if let Some(retirement) = &self.retirement {
+            retirement.validate()?;
+        }
         self.settings.validate().map_err(str::to_owned)
     }
 
@@ -178,6 +230,7 @@ impl ModelInfo {
             display_name: display_name.into(),
             description: None,
             access: ModelAccess::Unknown,
+            retirement: None,
             context_window: ContextWindow::Unknown,
             auto_compact_token_limit: None,
             capabilities: ModelCapabilities::UNKNOWN,

@@ -65,6 +65,10 @@ pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
     pub description: Option<String>,
+    /// Retirement evidence for this catalog row, without inferring availability from its date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub retirement: Option<ash_protocol::ModelRetirement>,
     /// True only when this ID belongs to the last successful endpoint observation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -101,6 +105,7 @@ impl ModelCatalogEntry {
             model,
             display_name: info.display_name.clone(),
             description: info.description.clone(),
+            retirement: info.retirement.clone(),
             discovered: None,
             context_window: match info.context_window {
                 ContextWindow::Known(tokens) => Some(tokens),

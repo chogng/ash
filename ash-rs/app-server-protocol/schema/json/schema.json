@@ -37456,6 +37456,17 @@
         "model": {
           "$ref": "#/$defs/ModelRef"
         },
+        "retirement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRetirement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Retirement evidence for this catalog row, without inferring availability from its date."
+        },
         "selected_acceleration": {
           "description": "Current preference on the active connection; capability support is reported separately.",
           "type": [
@@ -38343,6 +38354,20 @@
         "knownAmounts",
         "complete"
       ],
+      "type": "object"
+    },
+    "ModelRetirement": {
+      "additionalProperties": false,
+      "description": "A confirmed retirement announcement for the catalog's exact model and connection scope.\n\nThis is independent of lifecycle classification and availability: legacy or preview models\nare not necessarily retiring, and an announcement does not revoke access or select a replacement.",
+      "properties": {
+        "shutdown_date": {
+          "description": "Exact shutdown date in YYYY-MM-DD form; null means announced without a confirmed date.\nEarliest possible dates are not exact shutdown dates. Keep date-only values out of time zones.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "ModelServiceTier": {

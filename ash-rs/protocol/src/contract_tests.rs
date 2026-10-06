@@ -1317,3 +1317,34 @@ fn acceleration_options_use_exact_tier_ids_and_reject_ambiguous_mechanisms() {
         Err("acceleration option IDs must be unique across mechanisms")
     );
 }
+
+#[test]
+fn retirement_requires_confirmed_calendar_dates_but_allows_an_undated_announcement() {
+    for date in [None, Some("2028-02-29"), Some("2027-01-31")] {
+        let retirement = ModelRetirement {
+            shutdown_date: date.map(str::to_owned),
+        };
+        assert!(retirement.validate().is_ok());
+        let value = serde_json::to_value(&retirement).unwrap();
+        assert_eq!(
+            serde_json::from_value::<ModelRetirement>(value).unwrap(),
+            retirement
+        );
+    }
+    for date in [
+        "",
+        "2027-02-29",
+        "2027-04-31",
+        "2027-00-01",
+        "2027-01-00",
+        "0000-01-01",
+        "2027-1-31",
+        "2027-01-31T00:00:00Z",
+    ] {
+        let mut info = ModelInfo::new(ModelId::new("example").unwrap(), "Example");
+        info.retirement = Some(ModelRetirement {
+            shutdown_date: Some(date.into()),
+        });
+        assert!(info.validate().is_err(), "accepted {date}");
+    }
+}

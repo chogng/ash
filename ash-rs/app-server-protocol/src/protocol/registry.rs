@@ -2205,6 +2205,8 @@ use ash_protocol::ModelReferenceCostRecord;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReferenceCostSummary;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelRetirement;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelServiceTier;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelSettings;
@@ -5591,6 +5593,7 @@ typescript_bindings! {
     ModelSpeed,
     ModelAcceleration,
     ModelAccelerationOption,
+    ModelRetirement,
     ModelToolOutputLimit,
     ReasoningEffort,
     ModelReasoningEffortOption,

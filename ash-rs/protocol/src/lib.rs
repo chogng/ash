@@ -175,6 +175,7 @@ pub use model::ModelReferenceCostSummary;
 pub use model::ModelRequest;
 pub use model::ModelResponse;
 pub use model::ModelResponseBilling;
+pub use model::ModelRetirement;
 pub use model::ModelServiceTier;
 pub use model::ModelSettings;
 pub use model::ModelSpeed;

@@ -167,6 +167,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.display_name,
+		retirement: entry.retirement ? Object.freeze({ shutdownDate: entry.retirement.shutdown_date }) : undefined,
 		description: entry.description,
 		defaultContextWindow: entry.default_context_window,
 		maximumContextWindow: entry.maximum_context_window,
@@ -187,6 +188,9 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.displayName === candidate.displayName
 			&& entry.description === candidate.description
 			&& entry.discovered === candidate.discovered
+			// Announcement withdrawal and date changes must notify open pickers, even with identical models.
+			&& (entry.retirement !== undefined) === (candidate.retirement !== undefined)
+			&& entry.retirement?.shutdownDate === candidate.retirement?.shutdownDate
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
 			&& entry.contextWindow === candidate.contextWindow
 			&& entry.defaultContextWindow === candidate.defaultContextWindow

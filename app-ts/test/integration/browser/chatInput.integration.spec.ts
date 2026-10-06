@@ -566,3 +566,40 @@ for (const surface of ['chat', 'cowork']) {
 	});
 
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`retirement announcements update the open model menu and remain selectable in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('.ash-chat-input-model-action');
+		await trigger.press('ArrowDown');
+		const menu = page.locator('.ash-chat-model-picker');
+		const row = menu.getByRole('menuitemradio', { name: 'Test Model', exact: true });
+		await expect(row.locator('.ash-menu-badge')).toHaveCount(0);
+		await page.evaluate(() => window.ashChatInputIntegration.setRetirement({}));
+		const announced = locale === 'zh-CN' ? '即将退役' : 'Retiring soon';
+		await expect(row.locator('.ash-menu-badge')).toHaveText(announced);
+		await expect(row).toHaveAttribute('aria-description', new RegExp(announced));
+		await page.evaluate(() => window.ashChatInputIntegration.setRetirement({ shutdownDate: '2027-01-31' }));
+		const scheduled = locale === 'zh-CN' ? '将于 2027-01-31 退役' : 'Retires on 2027-01-31';
+		await expect(row.locator('.ash-menu-badge')).toHaveText(scheduled);
+		expect(await row.locator('.ash-menu-badge').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(28);
+		await expect(row).toHaveAttribute('aria-description', new RegExp(scheduled));
+		await page.setViewportSize({ width: 280, height: 600 });
+		expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		const search = menu.getByRole('combobox');
+		await search.fill('2027-01-31');
+		await expect(row).toBeVisible();
+		await search.fill('');
+		await page.evaluate(() => window.ashChatInputIntegration.setRetirement(undefined));
+		await expect(row.locator('.ash-menu-badge')).toHaveCount(0);
+		await expect(row).not.toHaveAttribute('aria-description', /2027-01-31/);
+		await page.evaluate(() => window.ashChatInputIntegration.setRetirement({ shutdownDate: '2027-01-31' }));
+		await search.press('ArrowDown');
+		await expect(row).toBeFocused();
+		expect(await row.evaluate(element => getComputedStyle(element.querySelector('.ash-menu-badge')!).color === getComputedStyle(element).color)).toBe(true);
+		await row.press('Enter');
+		await expect(menu).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+}

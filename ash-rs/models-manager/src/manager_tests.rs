@@ -1064,3 +1064,88 @@ async fn invalid_settings_observation_does_not_replace_a_successful_catalog() {
             .any(|entry| entry.model().model == model_id("other"))
     );
 }
+
+#[tokio::test]
+async fn retirement_updates_preserve_unknown_evidence_and_allow_withdrawal_within_one_scope() {
+    let manager = ModelsManager::new(registry());
+    let scope = dynamic_scope("strict", "account-a");
+    let other_scope = dynamic_scope("strict", "account-b");
+    let scheduled = ash_protocol::ModelRetirement {
+        shutdown_date: Some("2027-01-31".into()),
+    };
+    let updates = [
+        ash_protocol::Patch::Value(scheduled.clone()),
+        ash_protocol::Patch::Missing,
+        ash_protocol::Patch::Value(ash_protocol::ModelRetirement {
+            shutdown_date: None,
+        }),
+        ash_protocol::Patch::Null,
+    ];
+    let source = Arc::new(QueueSource::new(updates.into_iter().map(|retirement| {
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::Partial,
+            [
+                DiscoveredModel::new(model_id("alpha")).with_metadata(ModelMetadataPatch {
+                    retirement,
+                    ..Default::default()
+                }),
+            ],
+        ))
+    })));
+    let other = Arc::new(QueueSource::new([Ok(modified(
+        &other_scope,
+        DiscoveryCoverage::Partial,
+        [DiscoveredModel::new(model_id("alpha"))],
+    ))]));
+    manager.refresh(other_scope.clone(), other).await.unwrap();
+    for expected in [
+        Some(scheduled.clone()),
+        Some(scheduled),
+        Some(ash_protocol::ModelRetirement {
+            shutdown_date: None,
+        }),
+        None,
+    ] {
+        let snapshot = manager
+            .refresh(scope.clone(), source.clone())
+            .await
+            .unwrap();
+        let entry = snapshot
+            .entries()
+            .iter()
+            .find(|entry| entry.model().model == model_id("alpha"))
+            .unwrap();
+        assert_eq!(entry.info().retirement, expected);
+        assert_eq!(entry.availability(), ModelAvailability::Available);
+        assert_eq!(
+            entry.provenance().retirement,
+            Some(crate::MetadataSource::ProviderLive)
+        );
+        assert!(
+            manager
+                .snapshot(&other_scope)
+                .unwrap()
+                .entries()
+                .iter()
+                .all(|entry| entry.info().retirement.is_none())
+        );
+    }
+}
+
+#[test]
+fn retirement_patch_round_trips_omission_withdrawal_and_undated_announcement() {
+    for value in [
+        serde_json::json!({"capabilities": {}}),
+        serde_json::json!({"capabilities": {}, "retirement": null}),
+        serde_json::json!({"capabilities": {}, "retirement": {"shutdown_date": null}}),
+    ] {
+        let patch: ModelMetadataPatch = serde_json::from_value(value.clone()).unwrap();
+        let persisted = serde_json::to_value(&patch).unwrap();
+        assert_eq!(persisted.get("retirement"), value.get("retirement"));
+        assert_eq!(
+            serde_json::from_value::<ModelMetadataPatch>(persisted).unwrap(),
+            patch
+        );
+    }
+}

@@ -204,6 +204,10 @@ impl ModelCatalogSource for HttpModelCatalogSource {
                         id: String,
                         #[serde(default)]
                         display_name: Option<String>,
+                        // Compatible endpoints may omit this field. Only explicit null withdraws
+                        // an announcement; an API date never becomes a subscription-wide fact.
+                        #[serde(default)]
+                        shutdown_date: ash_protocol::Patch<String>,
                     }
                     let catalog: Catalog =
                         serde_json::from_slice(response.body()).map_err(|_| {
@@ -223,6 +227,11 @@ impl ModelCatalogSource for HttpModelCatalogSource {
                             models.push(DiscoveredModel::new(id).with_metadata(
                                 ash_models_manager::ModelMetadataPatch {
                                     display_name: entry.display_name,
+                                    retirement: entry.shutdown_date.map(|date| {
+                                        ash_protocol::ModelRetirement {
+                                            shutdown_date: Some(date),
+                                        }
+                                    }),
                                     ..Default::default()
                                 },
                             ));

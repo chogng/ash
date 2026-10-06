@@ -38,7 +38,7 @@ import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
 import { addDisposableListener, stopEvent } from '../../../src/ash/base/browser/dom.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; dispose(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -198,6 +198,11 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	setRetirement: retirement => {
+		models = models.map(entry => ({ ...entry, retirement }));
+		renderModels();
+		modelChanged.fire();
+	},
 	denyAcceleration: id => {
 		models = models.map(entry => ({ ...entry, accelerationOptions: entry.accelerationOptions!.filter(option => option.id !== id) }));
 		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined });

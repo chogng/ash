@@ -62,6 +62,10 @@ impl CatalogRecord {
                 .default_personality
                 .map(|_| MetadataSource::ProviderSeed),
             lifecycle: None,
+            retirement: info
+                .retirement
+                .as_ref()
+                .map(|_| MetadataSource::ProviderSeed),
         };
         Self {
             info,
@@ -151,6 +155,18 @@ fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
         record.info.access = access;
     }
     let source = MetadataSource::ProviderLive;
+    // A live withdrawal must remove persisted evidence too; omission is not a withdrawal.
+    match &patch.retirement {
+        ash_protocol::Patch::Missing => {}
+        ash_protocol::Patch::Null => {
+            record.info.retirement = None;
+            record.provenance.retirement = Some(source);
+        }
+        ash_protocol::Patch::Value(retirement) => {
+            record.info.retirement = Some(retirement.clone());
+            record.provenance.retirement = Some(source);
+        }
+    }
     if let Some(description) = &patch.description {
         record.info.description = Some(description.clone());
         record.provenance.description = Some(source);
@@ -277,6 +293,7 @@ fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<Metad
         provenance.default_reasoning_effort,
         provenance.default_personality,
         provenance.lifecycle,
+        provenance.retirement,
     ];
     sources
         .into_iter()

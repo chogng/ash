@@ -43,6 +43,8 @@
     "models.provider.failed": "Model test failed",
     "models.provider.duplicateModel": "Each model ID must be unique.",
     "models.provider.saveFailed": "Could not save provider: {0}",
+    "chat.modelPicker.retirementDate": "Retires on {0}",
+    "chat.modelPicker.retiring": "Retiring soon",
     "chat.modelPicker.contextWindow": "{0} context window",
     "chat.connections.activated": "Current connection: {0}. Applies to the next turn.",
     "chat.connections.activateFailed": "Could not activate the connection",

@@ -34,7 +34,9 @@ export interface IActionListItem<T> {
 	readonly checked?: boolean;
 	readonly canPreview?: boolean;
 	readonly keybinding?: ResolvedKeybinding;
-	/** Searchable metadata announced with the action; the row renders only its label. */
+	/** Visible status text, included in search and the accessible description. */
+	readonly badge?: string;
+	/** Searchable metadata announced with the action, separate from the visible label and badge. */
 	readonly detail?: string;
 }
 
@@ -241,7 +243,7 @@ export class ActionList<T> extends Disposable {
 				header = entry;
 				continue;
 			}
-			const text = `${entry.label} ${entry.detail ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
+			const text = `${entry.label} ${entry.detail ?? ''} ${entry.badge ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
 			if (!terms.every(term => text.includes(term))) {
 				continue;
 			}
@@ -263,6 +265,7 @@ export class ActionList<T> extends Disposable {
 				enabled: entry.kind === ActionListItemKind.Action && !entry.disabled,
 				icon: entry.group?.icon,
 				checked: entry.checked,
+				badge: entry.badge,
 				run: () => this.select(entry),
 			};
 		});
@@ -273,7 +276,7 @@ export class ActionList<T> extends Disposable {
 			className: 'ash-action-widget-menu',
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeybinding: action => entries.get(action.id)?.keybinding,
-			getAriaDescription: action => entries.get(action.id)?.detail,
+			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
 			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
 		}));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));

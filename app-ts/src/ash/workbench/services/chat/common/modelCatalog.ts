@@ -13,12 +13,19 @@ export interface ModelAccelerationOption {
 	readonly description: string;
 }
 
+/** Confirmed announcement for the selected connection; an absent date still means retiring. */
+export interface ModelRetirement {
+	/** Exact date-only YYYY-MM-DD value, displayed without time-zone conversion. */
+	readonly shutdownDate?: string | null;
+}
+
 export interface ModelCatalogEntry {
 	readonly longContext: boolean | null;
 	readonly model: ModelRef;
 	readonly displayName: string;
 	readonly description?: string | null;
 	readonly discovered?: boolean;
+	readonly retirement?: ModelRetirement;
 	readonly contextWindow?: number | null;
 	readonly defaultContextWindow?: number | null;
 	readonly maximumContextWindow?: number | null;

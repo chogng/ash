@@ -703,3 +703,54 @@ fn anthropic_catalog_reads_all_pages_and_retains_the_last_complete_observation()
     );
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 4);
 }
+
+#[test]
+fn openai_catalog_consumes_and_withdraws_connection_scoped_shutdown_dates() {
+    struct Catalog(Mutex<std::collections::VecDeque<serde_json::Value>>);
+    impl OperationClient for Catalog {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            let entry = self.0.lock().unwrap().pop_front().unwrap();
+            Ok(ClientResponse::new(
+                200,
+                vec![],
+                serde_json::to_vec(&serde_json::json!({"data": [entry]})).unwrap(),
+            ))
+        }
+    }
+    let client = Arc::new(Catalog(Mutex::new(std::collections::VecDeque::from([
+        serde_json::json!({"id": "example", "shutdown_date": "2027-01-31"}),
+        serde_json::json!({"id": "example"}),
+        serde_json::json!({"id": "example", "shutdown_date": null}),
+        serde_json::json!({"id": "example", "shutdown_date": "2027-02-30"}),
+    ]))));
+    let runtime = crate::ModelProviderRuntime::builtin_with_client(client);
+    let config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
+    let binding = runtime.catalog_binding(&config).unwrap().unwrap();
+    let manager = runtime.models_manager();
+    let executor = tokio::runtime::Runtime::new().unwrap();
+    for expected in [Some("2027-01-31"), Some("2027-01-31"), None] {
+        executor
+            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .unwrap();
+        let catalog = manager
+            .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
+            .unwrap();
+        let entry = catalog
+            .iter()
+            .find(|entry| entry.model().model.as_str() == "example")
+            .unwrap();
+        assert_eq!(
+            entry
+                .info()
+                .retirement
+                .as_ref()
+                .and_then(|retirement| retirement.shutdown_date.as_deref()),
+            expected
+        );
+    }
+    assert!(
+        executor
+            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .is_err()
+    );
+}

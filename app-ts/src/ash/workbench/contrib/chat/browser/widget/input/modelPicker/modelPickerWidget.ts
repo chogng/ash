@@ -343,7 +343,7 @@ export class ModelPickerWidget extends Disposable {
 						{ type },
 						() => {
 							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Tab moves between model settings. Space selects one acceleration option, turns it off, or turns long context on or off. Long context is off by default. Only one acceleration option can be selected. The model settings description explains how acceleration affects processing and usage. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu.');
+								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, Retirement badges show confirmed shutdown dates when available. Type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Tab moves between model settings. Space selects one acceleration option, turns it off, or turns long context on or off. Long context is off by default. Only one acceleration option can be selected. The model settings description explains how acceleration affects processing and usage. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu.');
 							}
 							return content.innerText;
 						},

@@ -219,6 +219,7 @@ pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCat
             default_reasoning_effort: None,
             default_personality: None,
             lifecycle: None,
+            retirement: None,
         },
         Vec::new(),
     )

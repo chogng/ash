@@ -906,6 +906,7 @@ export type { ModelRef } from './ModelRef.js';
 export type { ModelReferenceCostReason } from './ModelReferenceCostReason.js';
 export type { ModelReferenceCostRecord } from './ModelReferenceCostRecord.js';
 export type { ModelReferenceCostSummary } from './ModelReferenceCostSummary.js';
+export type { ModelRetirement } from './ModelRetirement.js';
 export type { ModelServiceTier } from './ModelServiceTier.js';
 export type { ModelSettings } from './ModelSettings.js';
 export type { ModelSpeed } from './ModelSpeed.js';

@@ -174,3 +174,35 @@ fn acceleration_patch_distinguishes_omission_clear_and_selected_id() {
     old["fast"] = serde_json::json!(true);
     assert!(serde_json::from_value::<ModelPreferencesUpdateParams>(old).is_err());
 }
+
+#[test]
+fn catalog_transports_retirement_without_requiring_a_date() {
+    let model = ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("example").unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), "Example");
+    for retirement in [
+        None,
+        Some(ash_protocol::ModelRetirement {
+            shutdown_date: None,
+        }),
+        Some(ash_protocol::ModelRetirement {
+            shutdown_date: Some("2027-01-31".into()),
+        }),
+    ] {
+        info.retirement = retirement.clone();
+        let entry = ModelCatalogEntry::from_info(model.clone(), &info);
+        let value = serde_json::to_value(&entry).unwrap();
+        assert_eq!(
+            value.get("retirement").cloned(),
+            retirement
+                .as_ref()
+                .map(|value| serde_json::to_value(value).unwrap())
+        );
+        assert_eq!(
+            serde_json::from_value::<ModelCatalogEntry>(value).unwrap(),
+            entry
+        );
+    }
+}

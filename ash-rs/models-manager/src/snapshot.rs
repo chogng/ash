@@ -72,6 +72,7 @@ pub struct ModelMetadataProvenance {
     pub default_reasoning_effort: Option<MetadataSource>,
     pub default_personality: Option<MetadataSource>,
     pub lifecycle: Option<MetadataSource>,
+    pub retirement: Option<MetadataSource>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

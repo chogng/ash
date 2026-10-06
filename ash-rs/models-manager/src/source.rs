@@ -37,6 +37,9 @@ pub struct ModelMetadataPatch {
     pub default_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     pub lifecycle: Option<ModelLifecycle>,
+    /// Omission preserves known evidence; explicit null withdraws this connection's announcement.
+    #[serde(default, skip_serializing_if = "ash_protocol::Patch::is_missing")]
+    pub retirement: ash_protocol::Patch<ash_protocol::ModelRetirement>,
 }
 
 impl ModelMetadataPatch {
@@ -47,6 +50,9 @@ impl ModelMetadataPatch {
                 .as_deref()
                 .unwrap_or_default(),
         )?;
+        if let ash_protocol::Patch::Value(retirement) = &self.retirement {
+            retirement.validate()?;
+        }
         self.settings.validate().map_err(str::to_owned)
     }
 }
