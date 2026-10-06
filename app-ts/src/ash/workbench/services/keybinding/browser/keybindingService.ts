@@ -40,9 +40,11 @@ import {
 
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
-import type {
-	CommandId,
-	ICommandService,
+import {
+	type CommandId,
+	type ICommandService,
+	type CommandRegistry,
+	CommandsRegistry,
 } from "../../../../platform/commands/common/commands.js";
 import { type Context, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { type IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
@@ -81,6 +83,7 @@ export interface WorkbenchKeybindingServiceOptions {
 	readonly keyboardLayoutService: IKeyboardLayoutService;
 	readonly statusbarService?: IStatusbarService;
 	readonly registry?: KeybindingRegistry;
+	readonly commandRegistry?: CommandRegistry;
 	readonly chordTimeoutMs?: number;
 }
 
@@ -95,6 +98,7 @@ export class WorkbenchKeybindingService
 	private userBindings: readonly IUserFriendlyKeybinding[] = [];
 	private readonly userRegistration = this._register(new MutableDisposable<IDisposable>());
 	private readonly registry: KeybindingRegistry;
+	private readonly commandRegistry: CommandRegistry;
 	private loadQueue: Promise<void> = Promise.resolve();
 	private readonly schemaContributions = new Map<KeybindingsSchemaContribution, IDisposable | undefined>();
 	private readonly schemaRegistration = this._register(new MutableDisposable<IDisposable>());
@@ -137,6 +141,7 @@ export class WorkbenchKeybindingService
 		this.keyboardLayoutService = options.keyboardLayoutService;
 		this.statusbarService = options.statusbarService;
 		this.registry = options.registry ?? KeybindingsRegistry;
+		this.commandRegistry = options.commandRegistry ?? CommandsRegistry;
 		this.resolver = new KeybindingResolver({
 			registry: this.registry,
 			resolveKeybinding: (keybinding) => this.keyboardLayoutService
@@ -162,6 +167,7 @@ export class WorkbenchKeybindingService
 			this.leaveChordMode();
 			this._onDidUpdateKeybindings.fire();
 		}));
+		this._register(this.commandRegistry.onDidChangeCommands(() => this.updateKeybindingsSchema()));
 		this.updateKeybindingsSchema();
 		this._register(JsonSchemasRegistry.registerAssociation(profiles.currentProfile.keybindingsResource, 'ash://schemas/keybindings'));
 		this._register(files.onDidChangeFiles(event => {
@@ -253,19 +259,54 @@ export class WorkbenchKeybindingService
 	}
 
 	private updateKeybindingsSchema(): void {
+		const definitions = [...this.commandRegistry.getCommands().values()];
+		const commandNames = definitions.filter(command => !command.id.startsWith('_'));
+		const commandSchemas: JsonSchema[] = [];
+		for (const command of definitions) {
+			const args = command.metadata?.args;
+			if (args?.length !== 1) {
+				continue;
+			}
+			const argument = args[0];
+			if (!argument.schema) {
+				continue;
+			}
+			const isRequired = argument.isOptional === undefined ? Boolean(argument.schema.required?.length) : !argument.isOptional;
+			commandSchemas.push({
+				if: { required: ['command'], properties: { command: { const: command.id } } },
+				then: { required: isRequired ? ['args'] : [], properties: { args: argument.schema } },
+			});
+		}
+		commandSchemas.push(...[...this.schemaContributions.keys()].flatMap(contribution => contribution.getSchemaAdditions()));
 		const keybindingsSchema: JsonSchema = {
 			type: 'object',
+			required: ['key'],
 			properties: {
 				key: { type: 'string' },
-				command: { type: ['string', 'null'] },
+				command: {
+					anyOf: [{ $ref: '#/definitions/commandNames' }, { type: 'string' }, { type: 'null' }],
+					errorMessage: localize('keybindings.commandType', "The command must be a string or null. To run multiple commands, use 'runCommands' with a 'commands' argument."),
+				},
 				when: { type: 'string' },
 				args: {},
 			},
-			allOf: [...this.schemaContributions.keys()].flatMap(contribution => contribution.getSchemaAdditions()),
+			allOf: [{ $ref: '#/definitions/commandsSchemas' }],
 		};
 		this.schemaRegistration.clear();
 		this.schemaRegistration.value = JsonSchemasRegistry.registerSchema('ash://schemas/keybindings', {
+			id: 'ash://schemas/keybindings',
 			type: 'array',
+			definitions: {
+				commandNames: {
+					type: 'string',
+					enum: commandNames.map(command => command.id),
+					enumDescriptions: commandNames.map(command => {
+						const description = command.metadata?.description;
+						return typeof description === 'string' ? description : description?.value ?? '';
+					}),
+				},
+				commandsSchemas: { allOf: commandSchemas },
+			},
 			items: keybindingsSchema,
 		});
 	}

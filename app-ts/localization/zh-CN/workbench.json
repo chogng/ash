@@ -1,5 +1,6 @@
 {
   "ash": {
+    "keybindings.commandType": "command 必须是字符串或 null。要运行多个命令，请使用 “runCommands” 并传入 “commands” 参数。",
     "runCommands": "运行多个命令",
     "runCommands.description": "依次运行多个命令",
     "runCommands.commands": "要运行的命令",

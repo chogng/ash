@@ -31,9 +31,14 @@ import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../src/
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
+import { addDisposableListener, stopEvent } from '../../../src/ash/base/browser/dom.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; denyAcceleration(id: string): void; dispose(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; dispose(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -42,6 +47,12 @@ if (locale) {
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 const resources = new DisposableStore();
+resources.add(bindColorTheme(resources.add(new TestThemeService(darkColorTheme)), document.body));
+if (new URLSearchParams(location.search).has('gestureAncestor')) {
+	const main = document.querySelector('main')!;
+	resources.add(Gesture.addTarget(main));
+	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
+}
 const services = resources.add(new InstantiationService());
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
@@ -193,6 +204,7 @@ window.ashChatInputIntegration = {
 		modelChanged.fire();
 	},
 	showModels: renderModels,
+	openModels: () => part.openModelSelector(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
 	showQuestions: () => part.render({

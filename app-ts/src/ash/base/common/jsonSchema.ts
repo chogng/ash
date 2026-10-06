@@ -18,6 +18,7 @@ export interface JsonSchema {
 	readonly enumDescriptions?: readonly string[];
 	readonly markdownEnumDescriptions?: readonly string[];
 	readonly properties?: Readonly<Record<string, JsonSchema>>;
+	readonly definitions?: Readonly<Record<string, JsonSchema>>;
 	readonly patternProperties?: Readonly<Record<string, JsonSchema>>;
 	readonly required?: readonly string[];
 	readonly additionalProperties?: boolean | JsonSchema;
@@ -77,11 +78,13 @@ export interface JsonSchemaIssue {
 
 /** Resolves completion metadata, selecting conditional branches from the current document. */
 export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly (string | number)[], root?: JsonValueNode): JsonSchema | undefined {
-	let current = schema;
+	if (!schema) return undefined;
+	const rootSchema = schema;
+	let current: JsonSchema | undefined = schema;
 	let node = root;
 	for (const segment of path) {
 		if (!current) return undefined;
-		current = completionSchema(current, node);
+		current = completionSchema(current, node, rootSchema);
 		if (typeof segment === 'number') {
 			if (isSchemaTuple(current.items)) {
 				const itemSchema = current.items[segment] ?? current.additionalItems;
@@ -96,27 +99,47 @@ export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly 
 			node = node?.type === 'object' ? node.properties.find(property => property.key === segment)?.valueNode : undefined;
 		}
 	}
-	return current ? completionSchema(current, node) : undefined;
+	return current ? completionSchema(current, node, rootSchema) : undefined;
 }
 
 /** Validation keeps the original schema; this view combines metadata reachable while typing. */
-function completionSchema(schema: JsonSchema, node: JsonValueNode | undefined): JsonSchema {
+function completionSchema(schema: JsonSchema, node: JsonValueNode | undefined, rootSchema: JsonSchema): JsonSchema {
+	if (schema.$ref) return completionSchema(resolveSchemaReference(schema.$ref, rootSchema), node, rootSchema);
 	let result = schema;
 	for (const addition of schema.allOf ?? []) {
-		result = mergeCompletionSchemas(result, completionSchema(addition, node));
+		result = mergeCompletionSchemas(result, completionSchema(addition, node, rootSchema));
 	}
 	if (schema.if && node) {
-		const branch = matchesSchema(node, schema.if) ? schema.then : schema.else;
+		const branch = matchesSchema(node, schema.if, rootSchema) ? schema.then : schema.else;
 		if (branch) {
-			result = mergeCompletionSchemas(result, completionSchema(branch, node));
+			result = mergeCompletionSchemas(result, completionSchema(branch, node, rootSchema));
 		}
 	}
-	for (const alternative of [...schema.anyOf ?? [], ...schema.oneOf ?? []]) {
-		const view = completionSchema(alternative, node);
+	const anyOf = schema.anyOf?.map(alternative => completionSchema(alternative, node, rootSchema));
+	const oneOf = schema.oneOf?.map(alternative => completionSchema(alternative, node, rootSchema));
+	for (const view of [...anyOf ?? [], ...oneOf ?? []]) {
 		// Alternative value constraints remain separate so enum suggestions can include every branch.
 		result = mergeCompletionSchemas(result, { properties: view.properties, patternProperties: view.patternProperties, items: view.items });
 	}
-	return result;
+	return { ...result, anyOf, oneOf };
+}
+
+/** References resolve within the owning schema document, including its absolute self URI. */
+function resolveSchemaReference(reference: string, rootSchema: JsonSchema): JsonSchema {
+	const fragment = reference.indexOf('#/');
+	const documentId = reference.slice(0, fragment);
+	if (fragment < 0 || documentId && documentId !== rootSchema.id) {
+		throw new Error(`JSON schema reference does not belong to this document: ${reference}`);
+	}
+	let target: unknown = rootSchema;
+	for (const part of reference.slice(fragment + 2).split('/')) {
+		const key = decodeURIComponent(part).replaceAll('~1', '/').replaceAll('~0', '~');
+		if (typeof target !== 'object' || target === null || !(key in target)) {
+			throw new Error(`Unknown JSON schema reference: ${reference}`);
+		}
+		target = (target as Record<string, unknown>)[key];
+	}
+	return target as JsonSchema;
 }
 
 function mergeCompletionSchemas(left: JsonSchema, right: JsonSchema): JsonSchema {
@@ -136,34 +159,38 @@ function mergeCompletionSchemas(left: JsonSchema, right: JsonSchema): JsonSchema
 export function validateJsonSchema(document: JsonDocument, schema: JsonSchema | undefined): readonly JsonSchemaIssue[] {
 	if (!document.root || !schema) return Object.freeze([]);
 	const issues: JsonSchemaIssue[] = [];
-	validateNode(document.root, schema, issues);
+	validateNode(document.root, schema, issues, schema);
 	return Object.freeze(issues);
 }
 
-function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchemaIssue[]): void {
+function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchemaIssue[], rootSchema: JsonSchema): void {
+	if (schema.$ref) {
+		validateNode(node, resolveSchemaReference(schema.$ref, rootSchema), issues, rootSchema);
+		return;
+	}
 	if (schema.if) {
-		const branch = matchesSchema(node, schema.if) ? schema.then : schema.else;
-		if (branch) validateNode(node, branch, issues);
+		const branch = matchesSchema(node, schema.if, rootSchema) ? schema.then : schema.else;
+		if (branch) validateNode(node, branch, issues, rootSchema);
 	}
 	if (Object.hasOwn(schema, 'const') && !equalJson(schema.const!, nodeValue(node))) {
 		issues.push(issue('Value does not match the required constant', node));
 	}
-	if (schema.anyOf && !schema.anyOf.some(candidate => matchesSchema(node, candidate))) {
-		issues.push(issue('Value does not match any permitted schema', node));
+	if (schema.anyOf && !schema.anyOf.some(candidate => matchesSchema(node, candidate, rootSchema))) {
+		issues.push(issue(schema.errorMessage ?? 'Value does not match any permitted schema', node));
 		return;
 	}
-	if (schema.oneOf && schema.oneOf.filter(candidate => matchesSchema(node, candidate)).length !== 1) {
+	if (schema.oneOf && schema.oneOf.filter(candidate => matchesSchema(node, candidate, rootSchema)).length !== 1) {
 		issues.push(issue('Value must match exactly one permitted schema', node));
 		return;
 	}
-	for (const candidate of schema.allOf ?? []) validateNode(node, candidate, issues);
-	if (schema.not && matchesSchema(node, schema.not)) {
-		issues.push(issue('Value matches a forbidden schema', node));
+	for (const candidate of schema.allOf ?? []) validateNode(node, candidate, issues, rootSchema);
+	if (schema.not && matchesSchema(node, schema.not, rootSchema)) {
+		issues.push(issue(schema.errorMessage ?? 'Value matches a forbidden schema', node));
 		return;
 	}
 	const types = schema.type === undefined ? undefined : Array.isArray(schema.type) ? schema.type : [schema.type];
 	if (types && !types.some(type => nodeMatchesType(node, type))) {
-		issues.push(issue(`Expected ${types.join(' or ')}`, node));
+		issues.push(issue(schema.errorMessage ?? `Expected ${types.join(' or ')}`, node));
 		return;
 	}
 	if (schema.enum && !schema.enum.some(candidate => equalJson(candidate, nodeValue(node)))) {
@@ -190,10 +217,10 @@ function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchem
 		if (isSchemaTuple(schema.items)) {
 			for (let index = 0; index < node.items.length; index++) {
 				const itemSchema = schema.items[index] ?? schema.additionalItems;
-				if (itemSchema && typeof itemSchema !== 'boolean') validateNode(node.items[index], itemSchema, issues);
+				if (itemSchema && typeof itemSchema !== 'boolean') validateNode(node.items[index], itemSchema, issues, rootSchema);
 			}
 		} else {
-			for (const item of node.items) validateNode(item, schema.items, issues);
+			for (const item of node.items) validateNode(item, schema.items, issues, rootSchema);
 		}
 	}
 	if (node.type === 'array') {
@@ -211,20 +238,20 @@ function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchem
 		if (!property.valueNode) continue;
 		const propertySchema = schema.properties?.[property.key];
 		if (propertySchema) {
-			validateNode(property.valueNode, propertySchema, issues);
+			validateNode(property.valueNode, propertySchema, issues, rootSchema);
 			continue;
 		}
 		if (schema.additionalProperties === false) issues.push(issue(`Property '${property.key}' is not permitted`, property.keyNode));
-		if (typeof schema.additionalProperties === 'object') validateNode(property.valueNode, schema.additionalProperties, issues);
+		if (typeof schema.additionalProperties === 'object') validateNode(property.valueNode, schema.additionalProperties, issues, rootSchema);
 	}
 	for (const required of schema.required ?? []) {
 		if (!seen.has(required)) issues.push(issue(`Required property '${required}' is missing`, node));
 	}
 }
 
-function matchesSchema(node: JsonValueNode, schema: JsonSchema): boolean {
+function matchesSchema(node: JsonValueNode, schema: JsonSchema, rootSchema: JsonSchema): boolean {
 	const issues: JsonSchemaIssue[] = [];
-	validateNode(node, schema, issues);
+	validateNode(node, schema, issues, rootSchema);
 	return issues.length === 0;
 }
 

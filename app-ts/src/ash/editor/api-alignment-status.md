@@ -163,7 +163,7 @@ Quick Fix 的生产调用已经接入 `platform/actionWidget/browser/actionWidge
 
 注册了预览处理器的宿主提供预览按钮和 Ctrl/Cmd+Enter，通过已有 `IBulkEditService` 打开批量编辑预览面板。控制器保留原提供者解析和版本有效性检查；关闭动作菜单不会取消待确认的预览，文档变化或编辑器释放会取消它。确认后提交由工作区编辑事务负责，提交自身产生的模型变化不能中途取消已确认的多文件编辑；提交错误仍向调用方报告。未注册预览处理器的独立编辑器只显示直接执行能力。
 
-`ActionWidgetDropdown` 已由粘贴与拖放的 `PostEditWidget` 消费，替换原先的 select 控件：按钮打开共享动作菜单，Escape 先关闭菜单并恢复按钮焦点，再次 Escape 返回编辑器；原有候选切换、附加资源撤销和 snippet 会话保持由编辑器贡献管理。控制器、事后控件管理器与下拉按钮通过实例化服务创建，词条在控件显示时按当前语言解析。
+粘贴与拖放的 `PostEditWidget` 自己持有 `Button`，经构造注入的 `IActionWidgetService` 打开共享动作菜单，不依赖 `ActionWidgetDropdown` 的内部节点。内容组件声明 `allowEditorOverflow` 和 `suppressMouseDown`，让按钮能接收点击且不改变编辑器光标；挂到编辑器外的控件通过 `bindColorTheme` 跟随主题。Escape 先关闭菜单并恢复按钮焦点，再次 Escape 返回编辑器；切换候选前关闭菜单，文档变化或控件释放也关闭其菜单。原有候选切换、附加资源撤销和 snippet 会话仍由编辑器贡献管理。控制器与事后控件管理器通过实例化服务创建，词条在控件显示时按当前语言解析。
 
 Quick Fix 有多个类别时使用 `TabbedActionListWidget` 显示“全部操作”与各分类标签页；只有一个类别时保留普通动作列表。标签页复用 `TabList` 的焦点和选中语义，左右方向键移动焦点，Enter/Space 选择，向下方向键回到可用操作。切换分类更新同一份 `ActionList`，保留查询与异步执行状态，并继续通过原 action 索引执行或预览；类别页不重复显示自己的分组标题。弹层、关闭与焦点恢复仍由共享服务和 `ContextView` 管理。新增文件位于与上游对应的路径，实现由 Ash 现有组件组成；当前完成这些生产消费者所需的契约，没有将完整上游服务、列表或独立标签页弹层 API 计为已对齐。
 

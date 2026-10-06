@@ -210,7 +210,7 @@ test('Model picker uses free toolbar space before truncating its label', async (
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-container');
-	const modelLabel = composer.locator('.ash-chat-input-model-action .ash-button-label');
+	const modelLabel = composer.locator('.ash-chat-input-model-action .ash-chat-input-picker-label');
 	// The disconnected catalog only exposes a short label; exercise the toolbar with a longer model name.
 	await modelLabel.evaluate(element => { element.textContent = 'GPT-5.6 Sol Extended Context Preview'; });
 	const overflow = async (): Promise<number> => modelLabel.evaluate(element => element.scrollWidth - element.clientWidth);

@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -15,6 +17,7 @@ suite('Browser URL service', () => {
 	test('opener product links and host callbacks reach the same handlers with distinct trust', async () => {
 		using services = new InstantiationService();
 		services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		using opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		using callbacks = new Emitter<URI>();
@@ -42,6 +45,7 @@ suite('Browser URL service', () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(BrowserURLService, undefined), /openerService/);
 		services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		using opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		using service = services.createInstance(BrowserURLService, undefined);

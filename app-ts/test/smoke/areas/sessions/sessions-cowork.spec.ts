@@ -55,7 +55,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 		await expect(effortMenu).toBeHidden();
 		await expect(effort).toHaveText('High');
 		await expect(effort).toBeFocused();
-		await expect(card.locator('.ash-chat-model-picker-control > button')).toHaveCount(2);
+		await expect(card.locator('.ash-chat-model-picker-control').getByRole('button')).toHaveCount(2);
 		await effort.press('ArrowDown');
 		const contexts = effortMenu.locator('[data-action-id^="ash.chat.input.context."] button');
 		await contexts.last().click();

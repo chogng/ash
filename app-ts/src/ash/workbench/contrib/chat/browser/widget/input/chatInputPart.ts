@@ -105,6 +105,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	// Retaining this action keeps the open picker and its focused switch alive when the selection changes.
 	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => { });
 	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
+	// The toolbar owns the retained item; commands open it without synthesizing DOM events.
+	private modelPickerActionItem!: ModelPickerActionItem;
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
@@ -335,13 +337,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	openModelSelector(): void {
-		const button = this.inputToolbar.element.querySelector<HTMLButtonElement>(".ash-chat-input-model-action");
-		if (!button || button.disabled || button.classList.contains("disabled")) {
-			this.focus();
-			return;
-		}
-		button.focus();
-		button.click();
+		this.modelPickerActionItem.openModelPicker();
 	}
 
 	setVisible(visible: boolean): void {
@@ -534,7 +530,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action.id === this.dictationSession.action.id) { return new DictationActionViewItem(action); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
-			return this.instantiationService.createInstance(ModelPickerActionItem, action, {
+			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,

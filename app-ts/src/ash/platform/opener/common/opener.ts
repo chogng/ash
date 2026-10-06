@@ -38,6 +38,8 @@ export interface OpenOptions {
 	readonly editorOptions?: ITextEditorOptions;
 	readonly skipValidation?: boolean;
 	readonly allowContributedOpeners?: boolean | string;
+	/** Command URIs are consumed without execution unless explicitly allowed by their caller. */
+	readonly allowCommands?: boolean | readonly string[];
 }
 
 export interface ResolveExternalUriOptions {

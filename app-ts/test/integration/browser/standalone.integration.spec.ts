@@ -6619,8 +6619,27 @@ test('Chinese paste options open a shared action menu and Escape restores its tr
 	await page.keyboard.press('Escape');
 	await expect(trigger).toBeFocused();
 	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	for (const key of ['Enter', 'Space', 'ArrowUp']) {
+		await trigger.press(key);
+		await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+		await expect(page.getByRole('menuitem')).toHaveCount(2);
+		await page.keyboard.press('Escape');
+		await expect(trigger).toBeFocused();
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	}
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('CUSTOM');
 	await page.keyboard.press('Escape');
 	await expect(trigger).toHaveCount(0);
 	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+});
+
+test('changing the document closes the paste menu with its selector', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.runPasteProviderSelector());
+	const trigger = page.getByRole('button', { name: 'Paste options', exact: true });
+	await trigger.click();
+	await expect(page.getByRole('menuitem')).toHaveCount(2);
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCopy());
+	await expect(trigger).toHaveCount(0);
+	await expect(page.locator('.ash-action-widget')).toHaveCount(0);
 });

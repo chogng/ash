@@ -336,3 +336,24 @@ test('an existing hidden Shell parses and completes without revealing the panel 
 	await expect(page.locator('#outside')).toBeFocused();
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
+
+
+test('runCommands shortcuts execute with Terminal focused and keep command keys out of the Shell', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/terminal.html?shortcuts');
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalBatchIntegration)), errors })).toEqual({ ready: true, errors: [] });
+	await page.evaluate(async () => { window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready(); });
+	const terminal = page.locator('.xterm-helper-textarea');
+	await expect(terminal).toBeFocused();
+	await terminal.press('Control+Alt+Y');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalBatchIntegration.order)).toEqual([{ source: 'shortcut' }, 'first finished', 'second']);
+	await terminal.press('Control+Alt+Z');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalBatchIntegration.errors())).toEqual(['Unknown command: test.terminal.missing']);
+	expect(await page.evaluate(() => window.ashTerminalBatchIntegration.order)).toEqual([{ source: 'shortcut' }, 'first finished', 'second', undefined, 'first finished']);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual([]);
+	await terminal.press('x');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['x']);
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});

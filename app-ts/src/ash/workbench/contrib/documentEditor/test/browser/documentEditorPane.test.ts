@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import { Event } from '../../../../../base/common/event.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -55,6 +57,7 @@ class EditorPane extends DocumentEditorPane {
 		const services = new InstantiationService();
 		const codeEditors = new StandaloneCodeEditorService();
 		services.registerInstance(ICodeEditorService, codeEditors);
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		const opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		services.registerInstance(DialogServiceId, testDialogs);
@@ -79,6 +82,7 @@ test('registered Academic panes share one model, save baseline and working copy 
 	services.registerInstance(DialogServiceId, testDialogs);
 	using codeEditors = new StandaloneCodeEditorService();
 	services.registerInstance(ICodeEditorService, codeEditors);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	const input = { resource: URI.file('/paper.ash-academic') };

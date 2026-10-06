@@ -10,7 +10,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
-import type { Button } from '../../../../../../../base/browser/ui/button/button.js';
+import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import { getModelConfigSummary, modelPickerEffortOptions } from './modelPickerModelConfig.js';
@@ -22,17 +22,18 @@ let nextConfigurationId = 0;
 export class ModelPickerConfiguration extends Disposable {
 	private readonly contextView: ContextView;
 	private readonly menu = this._register(new MutableDisposable<Menu>());
+	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 
 	constructor(
 		private readonly delegate: IModelPickerDelegate,
-		private readonly trigger: Button,
+		private readonly trigger: HTMLElement,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
 		@ILanguageModelsService private readonly languageModels: ILanguageModelsService,
 	) {
 		super();
 		this.contextView = this._register(new ContextView(contextViewService.container));
-		const button = this.trigger.domNode;
+		const button = this.trigger;
 		this._register(addDisposableListener(button, 'focus', () => this.updateHelpHint()));
 		this._register(AccessibleViewRegistry.register({
 			type: AccessibleViewType.Help,
@@ -47,7 +48,7 @@ export class ModelPickerConfiguration extends Disposable {
 					() => {
 						const entry = this.selectedEntry;
 						return [
-							localize('chat.modelPicker.configurationHelp', 'Model options menu. Thinking level and long context are separate groups. Long context is off by default. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.'),
+							localize('chat.modelPicker.configurationHelp', 'Model options menu. Thinking level and long context are separate groups. Long context is off by default. Tab moves between the model and model options buttons. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.'),
 							...(entry ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).filter(option => option.description).map(option => `${option.label}: ${option.description}`) : []),
 						].join('\n');
 					},
@@ -62,10 +63,12 @@ export class ModelPickerConfiguration extends Disposable {
 		const entry = this.selectedEntry;
 		const summary = entry ? getModelConfigSummary(entry, this.delegate.getSelectedReasoningEffort()) : '';
 		this.trigger.hidden = this.delegate.isAutomaticModel() || summary.length === 0;
-		this.trigger.label = summary;
+		this.trigger.classList.toggle('hidden', this.trigger.hidden);
+		this.trigger.querySelector('.ash-chat-input-picker-label')!.textContent = summary;
 		const label = entry?.supportedReasoningEfforts?.length ? localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', summary) : summary;
-		this.trigger.domNode.setAttribute('aria-label', label);
-		this.trigger.setTitle(label);
+		this.trigger.setAttribute('aria-label', label);
+		this.hover.clear();
+		this.hover.value = getHoverDelegate().setupHover({ target: this.trigger, content: label, groupId: 'actions' });
 		this.updateHelpHint();
 	}
 
@@ -79,8 +82,8 @@ export class ModelPickerConfiguration extends Disposable {
 		const selected = entry ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).find(option => option.checked) : undefined;
 		const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
 		const description = [selected?.description, hint].filter(Boolean).join(' ');
-		if (description) { this.trigger.domNode.setAttribute('aria-description', description); }
-		else { this.trigger.domNode.removeAttribute('aria-description'); }
+		if (description) { this.trigger.setAttribute('aria-description', description); }
+		else { this.trigger.removeAttribute('aria-description'); }
 	}
 
 	public show(): void {
@@ -157,7 +160,7 @@ export class ModelPickerConfiguration extends Disposable {
 		}
 		this.menu.value = menu;
 		const shown = this.contextView.show({
-			anchor: this.trigger.domNode,
+			anchor: this.trigger,
 			content: menu.element,
 			anchorPosition: AnchorPosition.Above,
 			gap: 4,
@@ -166,7 +169,7 @@ export class ModelPickerConfiguration extends Disposable {
 			layer: 20,
 			isTargetWithin: target => menu.contains(target),
 			onHide: () => {
-				this.trigger.domNode.setAttribute('aria-expanded', 'false');
+				this.trigger.setAttribute('aria-expanded', 'false');
 				this.menu.clear();
 			},
 		});
@@ -174,7 +177,7 @@ export class ModelPickerConfiguration extends Disposable {
 			this.menu.clear();
 			return;
 		}
-		this.trigger.domNode.setAttribute('aria-expanded', 'true');
+		this.trigger.setAttribute('aria-expanded', 'true');
 		(menu.element.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ?? menu.element.querySelector<HTMLElement>('[role="menuitemradio"]'))?.focus();
 	}
 }

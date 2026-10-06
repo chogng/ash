@@ -94,6 +94,25 @@ test('Keybindings JSON saves the profile file, applies shortcuts after reload an
 	await group.editor.waitForEditorContents(content => content === source);
 });
 
+test('runCommands offers command names and nested batch arguments in Keybindings JSON', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires product JSON language declarations');
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const group = workbench.editors.groupAt(0);
+	const commandNames = '[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":["run"]}}]';
+	const nestedArguments = '[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":[{"command":"runCommands","args":{}}]}}]';
+	for (const [source, offset, suggestion] of [
+		[commandNames, commandNames.indexOf('["run"]') + '["run'.length, 'runCommands'],
+		[nestedArguments, nestedArguments.lastIndexOf('{}') + 1, 'commands'],
+	] as const) {
+		await replaceJson(group.editor.input, source);
+		await group.editor.input.press('ControlOrMeta+End');
+		for (let count = offset; count < source.length; count++) await group.editor.input.press('ArrowLeft');
+		await group.editor.input.press('Control+Space');
+		await expect(group.content.locator('.stanza-editor-completion-option').filter({ hasText: suggestion })).toBeVisible();
+		await group.editor.input.press('Escape');
+	}
+});
+
 test('Keybindings JSON completes paste command arguments and ordered provider preferences', async ({ target, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires product JSON language declarations');
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');

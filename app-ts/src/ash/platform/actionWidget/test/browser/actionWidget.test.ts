@@ -17,6 +17,8 @@ import { IActionWidgetService } from '../../browser/actionWidget.js';
 import { ActionList, ActionListItemKind } from '../../browser/actionList.js';
 import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import type { IAction } from '../../../../base/common/actions.js';
 
 function createServices(document: Document, resources: DisposableStore): InstantiationService {
 	setIconResolver(document, icon => getIconDefinition(icon));
@@ -356,6 +358,41 @@ test('a dropdown opens typed actions and disposal cannot close a replacement men
 	}
 });
 
+
+test('dropdown providers refresh choices and a dismissed request cannot reopen or close another menu', async () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	try {
+		using resources = new DisposableStore();
+		const services = createServices(dom.window.document, resources);
+		const service = services.get(IActionWidgetService);
+		let pending = new DeferredPromise<readonly IAction[]>();
+		const visibility: boolean[] = [];
+		const dropdown = resources.add(services.createInstance(ActionWidgetDropdown, dom.window.document.querySelector<HTMLElement>('main')!, {
+			label: 'Modes', ariaLabel: 'Modes', actionProvider: { getActions: () => pending.p },
+		}));
+		resources.add(dropdown.onDidChangeVisibility(value => visibility.push(value)));
+		const choice: IAction = { id: 'choice', label: 'First', tooltip: '', enabled: true, checked: true, run: () => { } };
+		dropdown.show();
+		dropdown.hide();
+		await pending.complete([choice]);
+		assert.equal(service.isVisible, false);
+		pending = new DeferredPromise<readonly IAction[]>();
+		dropdown.show();
+		await pending.complete([choice]);
+		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'First');
+		dropdown.hide();
+		pending = new DeferredPromise<readonly IAction[]>();
+		dropdown.show();
+		await pending.complete([{ ...choice, label: 'Updated' }]);
+		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'Updated');
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => { }, onHide: () => { } }, dropdown.element);
+		dropdown.dispose();
+		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');
+		assert.deepEqual(visibility, [true, false, true, false]);
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('filtered action updates retain model identity and expose metadata without visible descriptions', () => {
 	const dom = new JSDOM('<body><button id="source">Models</button></body>');

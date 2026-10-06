@@ -31,13 +31,20 @@ export class ModelPickerActionItem extends ActionViewItem {
 	public override render(container: HTMLElement): void {
 		container.classList.add('ash-chat-input-model-selector');
 		this.pickerWidget.render(container);
+		this.pickerWidget.setEnabled(this.action.enabled);
 	}
 
 	public override focus(): void {
 		this.pickerWidget.focus();
 	}
 
-	public override setTabbable(tabbable: boolean): void {
-		this.pickerWidget.setTabbable(tabbable);
+	public openModelPicker(): void {
+		this.focus();
+		this.pickerWidget.show();
+	}
+
+	public override setTabbable(_tabbable: boolean): void {
+		// Both picker triggers are page-level Tab stops, independent of ActionBar's current item.
+		this.pickerWidget.setEnabled(this.action.enabled);
 	}
 }

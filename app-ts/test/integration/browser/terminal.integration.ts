@@ -1,3 +1,14 @@
+import { AppServerAvailableContext } from '../../../src/ash/workbench/common/contextkeys.js';
+import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
+import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { CommandRegistry, CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { KeybindingRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import '../../../src/ash/workbench/contrib/commands/common/commands.contribution.js';
 import type { IProcessDataEvent } from '../../../src/ash/platform/terminal/common/terminal.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
@@ -88,6 +99,47 @@ declare global {
 	}
 }
 
+// The process boundary records Shell writes while the product keybinding service owns dispatch.
+if (new URLSearchParams(location.search).has('shortcuts')) {
+	const shortcutServices = store.add(widgetServices.createChild());
+	const registry = new CommandRegistry();
+	const order: unknown[] = [];
+	store.add(registry.registerMany([
+		CommandsRegistry.getCommands().get('runCommands')!,
+		{ id: 'test.terminal.first', handler: async (_accessor, value) => { order.push(value); await Promise.resolve(); order.push('first finished'); } },
+		{ id: 'test.terminal.second', handler: () => order.push('second') },
+	]));
+	const commands = store.add(new CommandService(shortcutServices, registry));
+	shortcutServices.registerInstance(ICommandService, commands);
+	shortcutServices.registerInstance(ILogService, new NullLoggerService());
+	const notifications = store.add(new NotificationService());
+	shortcutServices.registerInstance(INotificationService, notifications);
+	const profiles = new UserDataProfileService();
+	shortcutServices.registerInstance(IUserDataProfileService, profiles);
+	const source = JSON.stringify([
+		{ key: 'ctrl+alt+y', command: 'runCommands', args: { commands: [{ command: 'test.terminal.first', args: { source: 'shortcut' } }, 'test.terminal.second'] } },
+		{ key: 'ctrl+alt+z', command: 'runCommands', args: { commands: ['test.terminal.first', 'test.terminal.missing', 'test.terminal.second'] } },
+	]);
+	shortcutServices.registerInstance(IFileService, {
+		onDidChangeFiles: Event.None,
+		readFile: async resource => ({ resource, content: source, revision: '1' }),
+	} as IFileService);
+	const layouts = store.add(new BrowserKeyboardLayoutService({ navigator }));
+	const keybindings = store.add(shortcutServices.createInstance(WorkbenchKeybindingService, {
+		ownerDocument: document, commandService: commands, commandRegistry: registry,
+		contextKeyService: shortcutServices.get(IContextKeyService), keyboardLayoutService: layouts,
+		registry: new KeybindingRegistry(),
+	}));
+	await keybindings.initialize();
+	window.ashTerminalBatchIntegration = { order, errors: () => notifications.getNotifications().map(item => item.message) };
+}
+
+declare global {
+	interface Window {
+		ashTerminalBatchIntegration: { readonly order: readonly unknown[]; errors(): readonly string[]; };
+	}
+}
+
 // Exercise the production pane with controlled process and workspace boundaries.
 if (new URLSearchParams(location.search).has('pane')) {
 	widget.dispose();
@@ -102,8 +154,10 @@ if (new URLSearchParams(location.search).has('pane')) {
 	const workspaceChanged = store.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
 	const created = store.add(new Emitter<ITerminalInstance>());
 	const context = store.add(new ContextKeyService());
+	AppServerAvailableContext.bindTo(context).set(true);
 	const services = store.add(widgetServices.createChild());
-	const commands = new CommandService(services);
+	const commands = store.add(new CommandService(services));
+	services.registerInstance(ICommandService, commands);
 	const menu = new MenuService(commands, context);
 	let visible = false;
 	let selected = true;
@@ -301,16 +355,17 @@ if (new URLSearchParams(location.search).has('embedder')) {
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	let hostWidget: TerminalInstanceWidget;
-	let hostReady: Promise<void> = Promise.resolve();
+	let completeHost!: () => void;
+	const hostReady = new Promise<void>(resolve => { completeHost = resolve; });
 	services.registerInstance(IViewsService, {
 		openView: async (_id: string) => {
 			if (!hostWidget) {
 				hostWidget = store.add(services.createInstance(TerminalInstanceWidget, document.querySelector<HTMLElement>('#terminal')!, terminals.activeInstance!));
 				hostWidget.setVisible(true);
-				hostReady = hostWidget.initialize();
-				await hostReady;
+				await hostWidget.initialize();
 			}
 			hostWidget.focus();
+			completeHost();
 			return null;
 		},
 	} as IViewsService);
@@ -328,9 +383,9 @@ if (new URLSearchParams(location.search).has('embedder')) {
 		},
 	});
 	const contributions = store.add(WorkbenchContributionsRegistry.createHost(services, undefined, [TerminalMainContribution.ID]));
-	contributions.advance(WorkbenchPhase.BlockStartup);
+	contributions.advance(WorkbenchPhase.BlockRestore);
 	window.ashEmbedderTerminalIntegration = {
-		ready: async () => { await Promise.resolve(); await Promise.resolve(); await hostReady; },
+		ready: async () => { await hostReady; },
 		name: value => hostName.fire(value),
 		output: value => hostOutput.fire(value),
 		exit: code => hostExit.fire(code),

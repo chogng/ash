@@ -1,10 +1,17 @@
+import { createJsonCompletionProvider } from '../../../language/common/jsonLanguageFeatures.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
+import '../../../../contrib/commands/common/commands.contribution.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 import { KeybindingTestServices } from './keybindingTestServices.js';
 import { suiteTeardown } from 'mocha';
 const profileFixture = new KeybindingTestServices();
 suiteTeardown(() => profileFixture.dispose());
 import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { parseJsonDocument } from '../../../../../base/common/json.js';
-import { validateJsonSchema, type JsonSchema } from '../../../../../base/common/jsonSchema.js';
+import { jsonSchemaAtPath, validateJsonSchema, type JsonSchema } from '../../../../../base/common/jsonSchema.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -26,6 +33,7 @@ import {
 } from "../../../../../base/common/keybindingLabels.js";
 import {
 	CommandRegistry,
+	CommandsRegistry,
 } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
@@ -988,11 +996,13 @@ test('keybinding schema registration updates conditional command arguments and r
 	using contexts = new ContextKeyService();
 	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows });
 	using services = new InstantiationService();
-	using commands = new CommandService(services, new CommandRegistry());
+	const registry = new CommandRegistry();
+	using commands = new CommandService(services, registry);
 	using notifications = new NotificationService();
 	using keybindings = new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
 		commandService: commands,
+		commandRegistry: registry,
 		contextKeyService: contexts,
 		keyboardLayoutService: layouts,
 	}, notifications, profileFixture.files, profileFixture.profiles);
@@ -1010,11 +1020,11 @@ test('keybinding schema registration updates conditional command arguments and r
 		},
 	});
 	const invalid = (): number => validateJsonSchema(
-		parseJsonDocument('[{"command":"test.paste","args":{"kind":"html"}}]'),
+		parseJsonDocument('[{"key":"ctrl+p","command":"test.paste","args":{"kind":"html"}}]'),
 		JsonSchemasRegistry.getSchema('ash://schemas/keybindings'),
 	).length;
 	assert.equal(invalid(), 1);
-	assert.equal(validateJsonSchema(parseJsonDocument('[{"command":"other","args":{"kind":42}}]'), JsonSchemasRegistry.getSchema('ash://schemas/keybindings')).length, 0);
+	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+p","command":"other","args":{"kind":42}}]'), JsonSchemasRegistry.getSchema('ash://schemas/keybindings')).length, 0);
 	kind = 'html';
 	changed.fire();
 	assert.equal(invalid(), 0);
@@ -1022,7 +1032,68 @@ test('keybinding schema registration updates conditional command arguments and r
 	const readsAfterDispose = schemaReads;
 	changed.fire();
 	assert.equal(schemaReads, readsAfterDispose);
-	assert.deepEqual((JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.items as JsonSchema).allOf, []);
+	assert.deepEqual(JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.definitions!.commandsSchemas.allOf, []);
 	keybindings.dispose();
 	assert.equal(JsonSchemasRegistry.getSchema('ash://schemas/keybindings'), undefined);
+});
+
+
+test('registered command metadata drives nested batch validation, completion and live replacement', async () => {
+	const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(catalog.locale, catalog.bundles);
+	using resetLocale = toDisposable(() => resetNlsResolver());
+	const dom = new JSDOM('<body></body>');
+	using close = toDisposable(() => dom.window.close());
+	using contexts = new ContextKeyService();
+	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows });
+	using services = new InstantiationService();
+	const registry = new CommandRegistry();
+	using commands = new CommandService(services, registry);
+	using notifications = new NotificationService();
+	using batch = registry.registerMany([CommandsRegistry.getCommands().get('runCommands')!]);
+	using keybindings = new WorkbenchKeybindingService({
+		ownerDocument: dom.window.document, commandService: commands, commandRegistry: registry,
+		contextKeyService: contexts, keyboardLayoutService: layouts,
+	}, notifications, profileFixture.files, profileFixture.profiles);
+	const validate = (value: unknown): readonly string[] => validateJsonSchema(
+		parseJsonDocument(JSON.stringify([value])), JsonSchemasRegistry.getSchema('ash://schemas/keybindings'),
+	).map(issue => issue.message);
+	const target = registry.registerMany([{
+		id: 'test.argument', handler: () => undefined,
+		metadata: { description: 'Choose a kind', args: [{ name: 'options', isOptional: false, schema: {
+			type: 'object', required: ['kind'], properties: { kind: { enum: ['text', 'html'] } },
+		} }] },
+	}]);
+	try {
+		const value = { key: 'ctrl+p', command: 'runCommands', args: { commands: [{ command: 'test.argument', args: { kind: 'text' } }] } };
+		assert.deepEqual(validate(value), []);
+		assert.deepEqual(validate({ key: 'ctrl+p', command: 'runCommands' }), ["Required property 'args' is missing"]);
+		assert.equal(validate({ ...value, args: { commands: [{ command: 'test.argument' }] } }).length, 1);
+		assert.equal(validate({ ...value, args: { commands: [{ command: 'test.argument', args: { kind: 42 } }] } }).length, 1);
+		assert.deepEqual(validate({ ...value, args: { commands: [{ command: 'runCommands', args: { commands: ['unknown.command'] } }] } }), []);
+		const schema = JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!;
+		const node = parseJsonDocument(JSON.stringify([value]));
+		const kind = jsonSchemaAtPath(schema, [0, 'args', 'commands', 0, 'args', 'kind'], node.root);
+		assert.deepEqual(kind?.enum, ['text', 'html']);
+		const names = jsonSchemaAtPath(schema, [0, 'args', 'commands', 0, 'command'], node.root);
+		assert.deepEqual(names?.anyOf?.[0].enum, ['runCommands', 'test.argument']);
+		assert.deepEqual(names?.anyOf?.[0].enumDescriptions, ['Run several commands', 'Choose a kind']);
+		const source = JSON.stringify([value]).replace('"kind":"text"', '"kind":""');
+		using model = new TextModel(source);
+		const completion = await createJsonCompletionProvider().provideCompletions({
+			requestId: 1, languageId: 'jsonc', resource: profileFixture.profiles.currentProfile.keybindingsResource,
+			position: new Position(1, source.indexOf('"kind":""') + '"kind":"'.length + 1),
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		assert.deepEqual(completion?.items.map(item => item.label), ['"text"', '"html"']);
+		assert.match(validate({ key: 'ctrl+p', command: ['first', 'second'] })[0]!, /运行多个命令.*runCommands/u);
+		target.replace([{ id: 'test.argument', handler: () => undefined, metadata: { description: 'A count', args: [{ name: 'count', schema: { type: 'number' } }] } }]);
+		assert.equal(validate(value).length, 1);
+		assert.deepEqual(validate({ key: 'ctrl+p', command: 'test.argument', args: 3 }), []);
+		target.dispose();
+		assert.deepEqual(validate(value), []);
+		assert.deepEqual(JsonSchemasRegistry.getSchema('ash://schemas/keybindings')!.definitions!.commandNames.enum, ['runCommands']);
+	} finally {
+		target.dispose();
+	}
 });

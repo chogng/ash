@@ -84,3 +84,22 @@ test('replacing a command batch replaces its constraints and disposal removes th
 	}
 	assert.equal(registry.getCommand('test.replaced'), undefined);
 });
+
+
+test('command registry publishes complete metadata after each atomic change and provides isolated snapshots', () => {
+	const registry = new CommandRegistry();
+	const snapshots: Array<readonly string[]> = [];
+	using listener = registry.onDidChangeCommands(() => snapshots.push([...registry.getCommands().keys()]));
+	const metadata = { description: 'A number', args: [{ name: 'value', schema: { type: 'number' as const } }] };
+	const registration = registry.registerMany([{ id: 'test.metadata', handler: () => undefined, metadata }]);
+	assert.deepEqual(registry.getCommands().get('test.metadata')!.metadata, metadata);
+	const previous = registry.getCommands();
+	registration.replace([{ id: 'test.new', handler: () => undefined, metadata: { description: 'New command' } }]);
+	assert.ok(previous.has('test.metadata'));
+	assert.equal(registry.getCommands().has('test.metadata'), false);
+	using other = registry.register('test.other', () => undefined);
+	assert.throws(() => registration.replace([{ id: 'test.other', handler: () => undefined }]), /already registered/);
+	assert.deepEqual(snapshots, [['test.metadata'], ['test.new'], ['test.new', 'test.other']]);
+	registration.dispose();
+	assert.deepEqual(snapshots.at(-1), ['test.other']);
+});

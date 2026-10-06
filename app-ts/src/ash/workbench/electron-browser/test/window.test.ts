@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../editor/standalone/browser/standaloneServices.js';
 import { initializeTestLocalization } from '../../services/localization/test/common/localizationTestUtils.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -135,6 +137,7 @@ test('desktop zoom follows the profile setting and persists a window zoom change
 	using services = new InstantiationService();
 	using codeEditors = new StandaloneCodeEditorService();
 	services.registerInstance(ICodeEditorService, codeEditors);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	services.registerInstance(INativeHostService, host);

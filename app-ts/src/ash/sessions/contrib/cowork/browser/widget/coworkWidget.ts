@@ -84,7 +84,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		this.listWidget = this._register(instantiationService.createInstance(ChatListWidget, this.element, {
 			imageResourceLoader,
 			onDidRequestLink: (target: string) => {
-				void openChatMarkdownLink(target, commandService, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
+				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
 			},
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
@@ -246,14 +246,12 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 
 export async function openChatMarkdownLink(
 	target: string,
-	commandService: ICommandService,
 	openerService: IOpenerService | undefined,
 	editorService: IEditorService | undefined,
 ): Promise<void> {
 	if (target.startsWith("#") || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
-		const command = parseCommandLink(target);
-		if (command) await commandService.executeCommand(command.id, ...command.args);
+		if (openerService) await openerService.open(target, { allowCommands: true, fromUserGesture: true });
 		return;
 	}
 	const resource = URI.parse(target);
@@ -296,22 +294,6 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 		catch { return undefined; }
 	}
 	return undefined;
-}
-
-function parseCommandLink(target: string): { readonly id: string; readonly args: readonly unknown[]; } | undefined {
-	const match = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?$/i.exec(target);
-	if (!match) return undefined;
-	let id: string;
-	try { id = decodeURIComponent(match[1]!); }
-	catch { return undefined; }
-	if (!id) return undefined;
-	if (!match[2]) return { id, args: [] };
-	try {
-		const args: unknown = JSON.parse(decodeURIComponent(match[2]));
-		return Array.isArray(args) ? { id, args } : undefined;
-	} catch {
-		return undefined;
-	}
 }
 
 function formatNumber(value: number): string { return new Intl.NumberFormat("en-US").format(value); }

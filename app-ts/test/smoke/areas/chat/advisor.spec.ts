@@ -160,6 +160,28 @@ test('Model picker keeps search quiet and aligns menu rows and the chosen icon',
 	await picker.getByRole('combobox').press('Escape');
 });
 
+test('Chat pickers remain reachable through Tab and restore focus on Escape', async ({ workbench }) => {
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const mode = page.locator('.ash-chat-input-mode-action');
+	const model = page.locator('.ash-chat-input-model-action');
+	await mode.focus();
+	await page.keyboard.press('Tab');
+	await expect(model).toBeFocused();
+	await page.keyboard.press('Shift+Tab');
+	await expect(mode).toBeFocused();
+	await mode.press('Enter');
+	await expect(page.locator('.ash-chat-input-mode-menu')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(mode).toBeFocused();
+	await model.press('Enter');
+	await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(model).toBeFocused();
+});
+
 test('Model widget hover uses the same background as the input toolbar', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
@@ -174,8 +196,10 @@ test('Model widget hover uses the same background as the input toolbar', async (
 	const hoverBackground = await contextSelector.evaluate(element => getComputedStyle(element).backgroundColor);
 	expect(hoverBackground).not.toBe('rgba(0, 0, 0, 0)');
 	await selector.hover();
-	await expect(control).toHaveCSS('background-color', hoverBackground);
+	await expect(selector).toHaveCSS('background-color', hoverBackground);
+	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await page.mouse.move(0, 0);
+	await expect(selector).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 

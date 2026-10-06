@@ -1,6 +1,8 @@
 import './postEditWidget.css';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -8,7 +10,10 @@ import { type IContextKey, type RawContextKey } from '../../../../platform/conte
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
+import { ActionListItemKind } from '../../../../platform/actionWidget/browser/actionList.js';
+import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
+import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { IBulkEditService, ResourceFileEdit, ResourceTextEdit } from '../../../browser/services/bulkEditService.js';
 import { Range } from '../../../common/core/range.js';
@@ -29,8 +34,12 @@ export interface EditSet<T extends TransferEdit> {
 
 /** Owns the small editor-local selector shown after a paste or drop with alternatives. */
 class PostEditWidget<T extends TransferEdit> extends Disposable implements IContentWidget {
+	public readonly allowEditorOverflow = true;
+	public readonly suppressMouseDown = true;
 	private readonly domNode: HTMLElement;
-	private readonly dropdown: ActionWidgetDropdown;
+	private readonly button: Button;
+	private readonly actions: readonly IAction[];
+	private menuVisible = false;
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -41,30 +50,45 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		onSelect: (index: number) => void,
 		onDismiss: () => void,
 		configureAction: IAction | undefined,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
+		@IThemeService themeService: IThemeService,
 	) {
 		super();
 		const document = editor.getDomNode()!.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'stanza-editor-post-edit-selector';
-		this.dropdown = this._register(instantiationService.createInstance(ActionWidgetDropdown, this.domNode, {
+		// Overflow content widgets are mounted outside the editor's theme root.
+		this._register(bindColorTheme(themeService, this.domNode));
+		this.actions = Separator.join(edits.allEdits.map((edit, index) => ({
+			id: `${id}.${index}`,
+			label: edit.title,
+			tooltip: edit.title,
+			enabled: true,
+			run: () => onSelect(index),
+		})), configureAction ? [{ ...configureAction, run: () => configureAction.run(editor) }] : []);
+		this.button = this._register(new Button(this.domNode, {
 			label: edits.allEdits[edits.activeEditIndex]!.title,
 			ariaLabel: label,
-			actions: Separator.join(edits.allEdits.map((edit, index) => ({
-				id: `${id}.${index}`,
-				label: edit.title,
-				tooltip: edit.title,
-				enabled: true,
-				run: () => onSelect(index),
-			})), configureAction ? [{ ...configureAction, run: () => configureAction.run(editor) }] : []),
+			icon: Lxicon.chevronDown,
+			presentation: 'secondary',
+			size: 'small',
+			onClick: () => this.menuVisible ? this.hideSelector() : this.showSelector(),
 		}));
-		this.dropdown.element.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.'));
-		this._register(addDisposableListener<KeyboardEvent>(this.dropdown.element, 'keydown', event => {
-			if (event.key !== 'Escape') return;
-			event.stopPropagation();
-			onDismiss();
-			editor.focus();
+		this.button.domNode.setAttribute('aria-haspopup', 'menu');
+		this.button.domNode.setAttribute('aria-expanded', 'false');
+		this.button.domNode.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.'));
+		this._register(addDisposableListener<KeyboardEvent>(this.button.domNode, 'keydown', event => {
+			if (event.isComposing) { return; }
+			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+				stopEvent(event);
+				this.showSelector();
+			} else if (event.key === 'Escape') {
+				stopEvent(event);
+				onDismiss();
+				editor.focus();
+			}
 		}));
+		this._register(toDisposable(() => this.hideSelector()));
 		editor.addContentWidget(this);
 		this._register(toDisposable(() => editor.removeContentWidget(this)));
 		this._register(editor.onDidChangeCursorPosition(onDismiss));
@@ -80,8 +104,34 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		};
 	}
 	showSelector(): void {
-		this.dropdown.element.focus();
-		this.dropdown.show();
+		if (this.menuVisible) { return; }
+		this.button.focus();
+		this.actionWidgetService.show(this.id, false, this.actions.map(action => ({
+			kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
+			item: action,
+			label: action.label,
+			disabled: !action.enabled,
+		})), {
+			onShow: () => {
+				this.menuVisible = true;
+				this.button.domNode.setAttribute('aria-expanded', 'true');
+			},
+			onSelect: async action => {
+				// Changing the edit disposes this widget during undo, so close its menu first.
+				this.hideSelector(false);
+				this.editor.focus();
+				await action.run();
+			},
+			onHide: () => {
+				this.menuVisible = false;
+				this.button.domNode.setAttribute('aria-expanded', 'false');
+			},
+		}, this.button.domNode);
+	}
+
+	private hideSelector(didCancel = true): void {
+		// A replacement menu invokes onHide; disposal must not dismiss that new owner's menu.
+		if (this.menuVisible) { this.actionWidgetService.hide(didCancel); }
 	}
 }
 

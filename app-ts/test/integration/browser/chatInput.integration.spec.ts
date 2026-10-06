@@ -202,7 +202,68 @@ for (const { modelOptions, surface } of ['effort', 'context', 'none'].flatMap(mo
 }
 
 
+test('Mode picker keeps its Tab stop and shares menu activation, placement and dismissal', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => {
+		window.ashChatInputIntegration.showModels();
+		document.querySelector<HTMLElement>('main')!.style.marginTop = '300px';
+	});
+	const mode = page.locator('.ash-chat-input-mode-action');
+	const model = page.locator('.ash-chat-input-model-action');
+	const menu = page.locator('.ash-chat-input-mode-menu');
+	await expect(mode).toHaveAttribute('tabindex', '0');
+	await mode.focus();
+	await page.keyboard.press('Tab');
+	await expect(model).toBeFocused();
+	await page.keyboard.press('Shift+Tab');
+	await expect(mode).toBeFocused();
+	await mode.hover();
+	await page.mouse.down();
+	await expect(menu).toBeVisible();
+	await page.mouse.up();
+	await expect(menu).toBeVisible();
+	const trigger = (await mode.boundingBox())!;
+	const popup = (await menu.boundingBox())!;
+	expect(popup.y + popup.height).toBeLessThanOrEqual(trigger.y);
+	await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
+	await page.keyboard.press('Escape');
+	await expect(mode).toBeFocused();
+	await expect(mode).toHaveAttribute('aria-expanded', 'false');
+	for (const key of ['Enter', 'Space']) {
+		await page.keyboard.down(key);
+		await expect(menu).toBeVisible();
+		await page.keyboard.up(key);
+		await expect(menu).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(mode).toBeFocused();
+	}
+	await mode.press('ArrowDown');
+	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
+	await expect(menu).toBeHidden();
+});
+
 for (const surface of ['chat', 'cowork']) {
+	test(`Picker focus rings follow keyboard and pointer input in ${surface}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?surface=${surface}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const model = page.locator('.ash-chat-input-model-action');
+		const options = page.locator('.ash-chat-input-configuration-action');
+		await model.focus();
+		await page.keyboard.press('Tab');
+		await expect(options).toBeFocused();
+		await expect(options).toHaveCSS('outline-style', 'solid');
+		await options.press('Enter');
+		await page.keyboard.press('Escape');
+		await expect(options).toBeFocused();
+		await expect(options).toHaveCSS('outline-style', 'solid');
+		await page.mouse.click(0, 0);
+		await options.focus();
+		await expect(options).toHaveCSS('outline-style', 'none');
+		await page.keyboard.press('Shift+Tab');
+		await expect(model).toBeFocused();
+		await expect(model).toHaveCSS('outline-style', 'solid');
+	});
+
 	test(`model picker preserves width, Auto state and popup ownership in ${surface}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?surface=${surface}&modelSet=multiple`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
@@ -288,7 +349,86 @@ for (const locale of ['en', 'zh-CN']) {
 
 
 for (const surface of ['chat', 'cowork']) {
-	test(`Model widget highlights both triggers and their gap on hover in ${surface}`, async ({ page }) => {
+	test(`Split picker activates on mouse down and keyboard press without a second activation in ${surface}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?surface=${surface}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const control = page.locator('.ash-chat-model-picker-control');
+		await expect(control).toHaveAttribute('role', 'group');
+		await expect(control.locator(':scope > a[role="button"]')).toHaveCount(2);
+		await page.evaluate(() => window.ashChatInputIntegration.openModels());
+		await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		for (const { trigger, popup } of [
+			{ trigger: control.locator('.ash-chat-input-model-action'), popup: page.getByRole('dialog', { name: 'Choose a chat model' }) },
+			{ trigger: control.locator('.ash-chat-input-configuration-action'), popup: page.getByRole('menu', { name: 'Model options', exact: true }) },
+		]) {
+			await trigger.hover();
+			await page.mouse.down({ button: 'right' });
+			await expect(popup).toBeHidden();
+			await page.mouse.up({ button: 'right' });
+			await page.mouse.down();
+			await expect(popup).toBeVisible();
+			await page.mouse.up();
+			await expect(popup).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(trigger).toBeFocused();
+			for (const key of ['Enter', 'Space']) {
+				await page.keyboard.down(key);
+				await expect(popup).toBeVisible();
+				await page.keyboard.up(key);
+				await expect(popup).toBeVisible();
+				await page.keyboard.press('Escape');
+				await expect(trigger).toBeFocused();
+			}
+		}
+	});
+
+	test(`Split picker handles touch and pen taps and rejects drags and cancelled touches in ${surface}`, async ({ browser, baseURL }) => {
+		const context = await browser.newContext({ baseURL, hasTouch: true });
+		try {
+			const page = await context.newPage();
+			await page.goto(`/chatInput.html?surface=${surface}&gestureAncestor=1`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const control = page.locator('.ash-chat-model-picker-control');
+			const model = control.locator('.ash-chat-input-model-action');
+			const options = control.locator('.ash-chat-input-configuration-action');
+			const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+			const menu = page.getByRole('menu', { name: 'Model options', exact: true });
+			const triggers = [{ trigger: model, popup: picker }, { trigger: options, popup: menu }];
+			if (surface === 'chat') { triggers.push({ trigger: page.locator('.ash-chat-input-mode-action'), popup: page.locator('.ash-chat-input-mode-menu') }); }
+			for (const { trigger, popup } of triggers) {
+				await trigger.tap();
+				await expect(popup).toBeVisible();
+				await page.keyboard.press('Escape');
+				await expect(trigger).toBeFocused();
+			}
+			await expect(page.locator('output[aria-label="Decision"]')).toBeEmpty();
+			const bounds = (await model.boundingBox())!;
+			const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+			const input = await context.newCDPSession(page);
+			await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+			await expect(picker).toBeHidden();
+			await input.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...point, x: point.x + 30 }] });
+			await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+			await expect(picker).toBeHidden();
+			await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+			await input.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+			await expect(picker).toBeHidden();
+			await model.tap();
+			await expect(picker).toBeVisible();
+			await page.keyboard.press('Escape');
+			await input.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, pointerType: 'pen' });
+			await input.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, pointerType: 'pen', button: 'left', clickCount: 1 });
+			await expect(picker).toBeHidden();
+			await input.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, pointerType: 'pen', button: 'left', clickCount: 1 });
+			await expect(picker).toBeVisible();
+			await input.detach();
+		} finally {
+			await context.close();
+		}
+	});
+
+	test(`Model widget highlights only the hovered trigger in ${surface}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?surface=${surface}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const control = page.locator('.ash-chat-model-picker-control');
@@ -299,19 +439,28 @@ for (const surface of ['chat', 'cowork']) {
 		for (const background of ['rgb(45, 45, 45)', 'rgb(225, 225, 225)', 'rgb(255, 255, 0)']) {
 			await control.evaluate((element, value) => element.style.setProperty('--ash-toolbar-hover-background', value), background);
 			await model.hover();
-			await expect(control).toHaveCSS('background-color', background);
+			await expect(model).toHaveCSS('background-color', background);
+			await expect(options).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await options.hover();
-			await expect(control).toHaveCSS('background-color', background);
+			await expect(options).toHaveCSS('background-color', background);
+			await expect(model).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			const modelBounds = (await model.boundingBox())!;
 			const optionsBounds = (await options.boundingBox())!;
+			expect(optionsBounds.x - modelBounds.x - modelBounds.width).toBeGreaterThan(0);
 			await page.mouse.move((modelBounds.x + modelBounds.width + optionsBounds.x) / 2, modelBounds.y + modelBounds.height / 2);
-			await expect(control).toHaveCSS('background-color', background);
+			await expect(model).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(options).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await page.mouse.move(0, 0);
+			await expect(model).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(options).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		}
 	});
 
-	test(`Both model triggers stay in one retained widget with toolbar navigation in ${surface}`, async ({ page }) => {
+	test(`Both model triggers retain independent Tab stops and toolbar navigation in ${surface}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?surface=${surface}&modelSet=multiple`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const control = page.locator('.ash-chat-model-picker-control');
@@ -319,12 +468,18 @@ for (const surface of ['chat', 'cowork']) {
 		const options = control.locator('.ash-chat-input-configuration-action');
 		const retainedModel = await model.elementHandle();
 		const retainedOptions = await options.elementHandle();
-		await expect(control.locator(':scope > button')).toHaveCount(2);
+		await expect(control.getByRole('button')).toHaveCount(2);
+		await expect(model).toHaveAttribute('tabindex', '0');
+		await expect(options).toHaveAttribute('tabindex', '0');
 		await model.focus();
+		await page.keyboard.press('Tab');
+		await expect(options).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		await expect(model).toBeFocused();
 		await model.press('ArrowRight');
 		await expect(options).toBeFocused();
 		await expect(options).toHaveAttribute('tabindex', '0');
-		await expect(model).toHaveAttribute('tabindex', '-1');
+		await expect(model).toHaveAttribute('tabindex', '0');
 		await expect(options).toHaveAccessibleName('Model options: Low');
 		await options.press('ArrowDown');
 		await page.getByRole('menuitemradio', { name: 'High', exact: true }).click();
@@ -335,17 +490,19 @@ for (const surface of ['chat', 'cowork']) {
 		await options.press('ArrowLeft');
 		await expect(model).toBeFocused();
 		await expect(model).toHaveAttribute('tabindex', '0');
-		await expect(options).toHaveAttribute('tabindex', '-1');
+		await expect(options).toHaveAttribute('tabindex', '0');
 		await model.press('ArrowDown');
 		const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 		await picker.getByRole('switch', { name: 'Auto', exact: true }).press('Space');
 		await expect(options).toBeHidden();
+		await expect(options).toHaveAttribute('tabindex', '-1');
 		await page.keyboard.press('Escape');
 		await expect(model).toBeFocused();
 		await model.press('ArrowDown');
 		await picker.getByRole('switch', { name: 'Auto', exact: true }).press('Space');
 		await page.keyboard.press('Escape');
 		await expect(options).toBeVisible();
+		await expect(options).toHaveAttribute('tabindex', '0');
 		await page.setViewportSize({ width: 280, height: 600 });
 		const geometry = await control.evaluate(element => ({ overflow: element.scrollWidth - element.clientWidth, right: element.getBoundingClientRect().right }));
 		expect(geometry.overflow).toBe(0);

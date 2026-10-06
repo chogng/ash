@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
@@ -146,6 +148,7 @@ const services = disposables.add(new InstantiationService());
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(ICodeEditorService, disposables.add(new StandaloneCodeEditorService()));
+services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 const openedLinks: string[] = [];
 const opener = disposables.add(services.createInstance(OpenerService));
 services.registerInstance(IOpenerService, opener);

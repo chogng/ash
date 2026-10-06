@@ -6,6 +6,7 @@ import { Emitter } from '../../../base/common/event.js';
 import '../../../base/browser/ui/dialog/dialog.css';
 import '../../../base/browser/ui/menu/menu.css';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
+import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
@@ -38,6 +39,7 @@ export interface IActionListItem<T> {
 }
 
 export interface IActionListOptions {
+	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
 	readonly showFilter?: boolean;

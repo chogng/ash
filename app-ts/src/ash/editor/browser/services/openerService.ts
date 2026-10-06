@@ -15,6 +15,7 @@ import type {
 	ResolveExternalUriOptions,
 } from '../../../platform/opener/common/opener.js';
 import { ICodeEditorService } from './codeEditorService.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
 
 /** Orders validation, URI resolution and editor/external opening without host policy. */
 export class OpenerService extends AbstractDisposable implements IOpenerService {
@@ -26,7 +27,7 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 	private _defaultExternalOpener: IExternalOpener | undefined;
 	private readonly _externalOpeners = new LinkedList<IExternalOpener>();
 
-	constructor(@ICodeEditorService editorService: ICodeEditorService) {
+	constructor(@ICodeEditorService editorService: ICodeEditorService, @ICommandService private readonly commandService: ICommandService) {
 		super();
 		this._defaultExternalOpener = {
 			openExternal: async href => {
@@ -81,6 +82,21 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 			for (const validator of this._validators) {
 				if (!await validator.shouldOpen(validationTarget, options)) return false;
 			}
+		}
+		if (resource.scheme === 'command') {
+			const id = resource.path.replace(/^\/+/, '');
+			const allowed = options?.allowCommands;
+			if (allowed !== true && !(Array.isArray(allowed) && allowed.includes(id))) {
+				return true;
+			}
+			// URI components are already decoded; decoding again would corrupt literal percent sequences.
+			let args: unknown[] = [];
+			if (resource.query) {
+				const value: unknown = JSON.parse(resource.query);
+				args = Array.isArray(value) ? value : [value];
+			}
+			await this.commandService.executeCommand(id, ...args);
+			return true;
 		}
 		if (options?.openExternal || resource.scheme === 'http' || resource.scheme === 'https' || resource.scheme === 'mailto') {
 			return this._doOpenExternal(target, options);

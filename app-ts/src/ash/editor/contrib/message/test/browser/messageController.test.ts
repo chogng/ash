@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../../standalone/browser/standaloneServices.js';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -74,6 +76,7 @@ test('Markdown resource links open through the code editor service', async () =>
 	});
 	using services = new InstantiationService();
 	services.registerInstance(ICodeEditorService, codeEditorService);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using editor = createTestCodeEditor({ container, model, instantiationService: services });
 	editor.layout({ width: 400, height: 100 });
 	const messages = MessageController.get(editor);
@@ -105,6 +108,7 @@ test('Markdown message URLs reach contributed openers and dismiss the message', 
 	using services = new InstantiationService();
 	using codeEditors = new StandaloneCodeEditorService();
 	services.registerInstance(ICodeEditorService, codeEditors);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
 	let resolveOpened!: (href: string) => void;

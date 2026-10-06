@@ -495,3 +495,27 @@ test("registered menu actions retain their startup labels without language-chang
 		resetNlsResolver();
 	}
 });
+
+
+test('action registration retains parameter schemas and constraints for command consumers', async () => {
+	class ValidatedAction extends Action2 {
+		constructor() {
+			super({
+				id: 'test.actions.metadata', title: 'Validated action',
+				metadata: { description: 'A number', args: [{ name: 'count', constraint: 'number', schema: { type: 'number' } }] },
+			});
+		}
+		public override run(_accessor: ServicesAccessor, ...args: readonly unknown[]): unknown { return args[0]; }
+	}
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const registration = registerAction2(ValidatedAction);
+	try {
+		assert.deepEqual(CommandsRegistry.getCommands().get('test.actions.metadata')!.metadata, new ValidatedAction().desc.metadata);
+		assert.equal(await commands.executeCommand('test.actions.metadata', 4), 4);
+		await assert.rejects(commands.executeCommand('test.actions.metadata', 'four'), TypeError);
+	} finally {
+		registration.dispose();
+	}
+	assert.equal(CommandsRegistry.getCommands().get('test.actions.metadata'), undefined);
+});

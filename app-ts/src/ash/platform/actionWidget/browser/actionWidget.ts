@@ -71,6 +71,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		layout();
 		const shown = this.contextViewService.show({
 			anchor,
+			anchorPosition: listOptions.anchorPosition,
 			content: list.domNode,
 			presentation: 'plain',
 			gap: 4,

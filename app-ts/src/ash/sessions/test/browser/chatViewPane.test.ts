@@ -169,29 +169,25 @@ suiteTeardown(() => {
 test("Chat Markdown links route resource, command, and external targets through their owning services", async () => {
 	const editorResources: URI[] = [];
 	const externalTargets: { target: string; options: OpenOptions; }[] = [];
-	const commands: Array<{ readonly id: string; readonly args: readonly unknown[]; }> = [];
 	const editorService = {
 		openEditor: async ({ resource }: { readonly resource: URI; }) => { editorResources.push(resource); },
 	} as unknown as IEditorService;
 	const openerService = {
 		open: async (target: string, options: OpenOptions) => { externalTargets.push({ target, options }); },
 	} as unknown as IOpenerService;
-	const commandService = {
-		executeCommand: async (id: string, ...args: readonly unknown[]) => { commands.push({ id, args }); },
-	} as unknown as ICommandService;
 
-	await openChatMarkdownLink("vscode-remote://ssh-remote+host/src/file.ts", commandService, openerService, editorService);
-	await openChatMarkdownLink('ash-remote://ssh+host/src/ash.ts', commandService, openerService, editorService);
-	await openChatMarkdownLink("vscode-file://vscode-app/workspace/readme.md", commandService, openerService, editorService);
-	await openChatMarkdownLink('vscode-remote-resource://ssh-remote+host/workspace/image.png', commandService, openerService, editorService);
-	await openChatMarkdownLink('vscode-notebook-cell:///workspace/notebook.ipynb#cell-4', commandService, openerService, editorService);
-	await openChatMarkdownLink('vscode-file://other-host/workspace/secret.md', commandService, openerService, editorService);
-	await openChatMarkdownLink('vscode-remote-resource://127.0.0.1:9999/vscode-remote-resource?path=%2Fworkspace%2Fsecret.png', commandService, openerService, editorService);
-	await openChatMarkdownLink("command:ash.open?%5B%22readme.md%22%5D", commandService, openerService, editorService);
-	await openChatMarkdownLink("mailto:help@example.com", commandService, openerService, editorService);
-	await openChatMarkdownLink('https://example.com/docs', commandService, openerService, editorService);
-	await openChatMarkdownLink("private:///workbench/resource", commandService, openerService, editorService);
-	await openChatMarkdownLink("#section", commandService, openerService, editorService);
+	await openChatMarkdownLink("vscode-remote://ssh-remote+host/src/file.ts", openerService, editorService);
+	await openChatMarkdownLink('ash-remote://ssh+host/src/ash.ts', openerService, editorService);
+	await openChatMarkdownLink("vscode-file://vscode-app/workspace/readme.md", openerService, editorService);
+	await openChatMarkdownLink('vscode-remote-resource://ssh-remote+host/workspace/image.png', openerService, editorService);
+	await openChatMarkdownLink('vscode-notebook-cell:///workspace/notebook.ipynb#cell-4', openerService, editorService);
+	await openChatMarkdownLink('vscode-file://other-host/workspace/secret.md', openerService, editorService);
+	await openChatMarkdownLink('vscode-remote-resource://127.0.0.1:9999/vscode-remote-resource?path=%2Fworkspace%2Fsecret.png', openerService, editorService);
+	await openChatMarkdownLink("command:ash.open?%5B%22readme.md%22%5D", openerService, editorService);
+	await openChatMarkdownLink("mailto:help@example.com", openerService, editorService);
+	await openChatMarkdownLink('https://example.com/docs', openerService, editorService);
+	await openChatMarkdownLink("private:///workbench/resource", openerService, editorService);
+	await openChatMarkdownLink("#section", openerService, editorService);
 
 	assert.deepEqual(editorResources.map(resource => resource.toString()), [
 		'ash-remote://ssh+host/src/file.ts',
@@ -200,7 +196,7 @@ test("Chat Markdown links route resource, command, and external targets through 
 		'ash-remote://ssh+host/workspace/image.png',
 		'vscode-notebook-cell:///workspace/notebook.ipynb#cell-4',
 	]);
-	assert.deepEqual(commands, [{ id: "ash.open", args: ["readme.md"] }]);
+	assert.deepEqual(externalTargets.shift(), { target: "command:ash.open?%5B%22readme.md%22%5D", options: { allowCommands: true, fromUserGesture: true } });
 	assert.deepEqual(externalTargets, ['mailto:help@example.com', 'https://example.com/docs'].map(target => ({ target, options: { openExternal: true, fromUserGesture: true, allowContributedOpeners: true } })));
 });
 
@@ -523,15 +519,15 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>(".ash-chat-input-model-action .ash-button-label")?.textContent, "GPT-6.1 Sol");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label'), 'Model options: Medium');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>(".ash-chat-input-model-action .ash-chat-input-picker-label")?.textContent, "GPT-6.1 Sol");
+		assert.equal(inputToolbar?.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
-	const modelButton = firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-model-action");
-	modelButton?.click();
+	const modelButton = firstChatPane.querySelector<HTMLElement>(".ash-chat-input-model-action");
+	modelButton?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker[role="dialog"]');
 	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
 	assert.equal(modelPicker?.closest('.ash-context-view')?.parentElement, contextViewService.container);
@@ -551,19 +547,19 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-model-action")?.getAttribute('aria-expanded'), 'false');
-	firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.click();
+	assert.equal(firstChatPane.querySelector<HTMLElement>(".ash-chat-input-model-action")?.getAttribute('aria-expanded'), 'false');
+	firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	const effortMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-configuration-menu');
 	assert.equal(effortMenu?.querySelector('.ash-chat-model-configuration-heading')?.textContent, 'Thinking Level');
 	assert.deepEqual([...effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []].map(button => button.textContent), ['Low', 'Medium', 'High']);
 	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'Medium');
 	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), null);
 	effortMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.high'] button")?.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: High');
-	firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.click();
+	await waitFor(() => firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: High');
+	firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.querySelector('.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]')?.textContent, 'High');
 	dom.window.document.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")?.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: Medium');
+	await waitFor(() => firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: Medium');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);

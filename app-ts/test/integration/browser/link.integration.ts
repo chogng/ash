@@ -1,3 +1,11 @@
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { openChatMarkdownLink } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
+import { openChatMarkdownLink as openCoworkMarkdownLink } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
+import '../../../src/ash/workbench/contrib/commands/common/commands.contribution.js';
 import '../../../src/ash/editor/editor.all.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -12,7 +20,7 @@ import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/co
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -44,6 +52,8 @@ import '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriO
 declare global {
 	interface Window {
 		ashLinkIntegration: {
+			readonly commandCalls: readonly unknown[];
+			commandLink(trusted: boolean, failure?: boolean, cowork?: boolean): void;
 			readonly opened: readonly string[];
 			readonly customOpened: readonly string[];
 			readonly files: readonly { resource: string; line: number; column: number; }[];
@@ -72,6 +82,7 @@ const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const editorServices = resources.add(new StandaloneServiceCollection({}));
 const services = resources.add(editorServices.createChild());
+services.registerInstance(ICommandService, resources.add(new CommandService(services)));
 const configuration = services.get(IConfigurationService);
 await configuration.updateValue(HoverConfiguration.delay, 0);
 const contextViews = resources.add(new BrowserContextViewService(document.body));
@@ -132,8 +143,37 @@ const liveEditor = resources.add(services.createInstance(TextResourceEditor, sto
 liveEditor.create(liveEditorContainer);
 pane.setVisible(true);
 channel.appendLine({ text: 'src/main.ts:12:7: check this file', severity: 'warning' });
+const commandCalls: unknown[] = [];
+const commandHost = document.createElement('section');
+commandHost.id = 'command-link';
+document.body.append(commandHost);
+services.registerInstance(ILogService, new NullLoggerService());
+const commandNotifications = resources.add(new NotificationService());
+services.registerInstance(INotificationService, commandNotifications);
+resources.add(commandNotifications.onDidAdd(item => {
+	const notice = document.createElement('div');
+	notice.setAttribute('role', 'alert');
+	notice.textContent = item.message;
+	commandHost.append(notice);
+}));
+resources.add(CommandsRegistry.registerMany([
+	{ id: 'test.link.first', handler: async (_accessor, value) => { commandCalls.push(value); await Promise.resolve(); commandCalls.push('first finished'); } },
+	{ id: 'test.link.second', handler: () => commandCalls.push('second') },
+]));
 window.ashLinkIntegration = {
-	opened, customOpened, files, contributed, settingsRevealed,
+	opened, customOpened, files, contributed, settingsRevealed, commandCalls,
+	commandLink: (trusted, failure, cowork) => {
+		const router = cowork ? openCoworkMarkdownLink : openChatMarkdownLink;
+		const commands: unknown[] = [{ command: 'test.link.first', args: { text: '%20 中文' } }];
+		if (failure) commands.push('test.link.missing');
+		commands.push('test.link.second');
+		const href = `command:runCommands?${encodeURIComponent(JSON.stringify({ commands }))}`;
+		const rendered = resources.add(new MarkdownElement({
+			ownerDocument: document, markdown: { value: `[Run linked commands](${href})`, isTrusted: trusted },
+			linkHandler: target => { void router(target, opener, undefined).catch(error => { throw error; }); },
+		}));
+		commandHost.replaceChildren(rendered.element);
+	},
 	installExternalOpeners: chinese => {
 		if (chinese) {
 			const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;

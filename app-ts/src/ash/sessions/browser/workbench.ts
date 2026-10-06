@@ -399,14 +399,14 @@ export abstract class Workbench extends Disposable {
 		feedbackHost.className = "ash-feedback-host";
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
+		const commandService = this._register(new CommandService(services));
+		services.registerInstance(ICommandService, commandService);
 		const openerService = this._register(services.createInstance(OpenerService));
 		if (options.nativeHostApi) {
 			openerService.setDefaultExternalOpener({ openExternal: options.nativeHostApi.openExternal.bind(options.nativeHostApi) });
 		}
 		services.registerInstance(IOpenerService, openerService);
 		services.registerInstance(IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService);
-		const commandService = this._register(new CommandService(services));
-		services.registerInstance(ICommandService, commandService);
 		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));
 		const contextKeys = this._register(new ContextKeyService());
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.hasAppServer);

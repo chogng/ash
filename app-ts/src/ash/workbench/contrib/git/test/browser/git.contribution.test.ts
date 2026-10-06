@@ -78,10 +78,11 @@ test('Graph copies the full message and opens the selected commit on its hosting
 	services.registerInstance(IClipboardService, { writeText: async text => { writes.push(text); } } as IClipboardService);
 	using codeEditors = new StandaloneCodeEditorService();
 	services.registerInstance(ICodeEditorService, codeEditors);
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
 	using opener = services.createInstance(OpenerService);
 	opener.setDefaultExternalOpener({ openExternal: async url => { writes.push(url); return true; } });
 	services.registerInstance(IOpenerService, opener);
-	using commands = new CommandService(services);
 	const url = `https://gitlab.example/team/project/-/commit/${selectedId}`;
 	const element = historyElement({ remoteLinks: [{ name: 'origin', uri: URI.parse(url) }] });
 	await commands.executeCommand('git.graph.copyHash', element);

@@ -1,0 +1,44 @@
+.ash-chat-input-picker-split {
+	display: flex;
+	align-items: center;
+	border-radius: var(--ash-corner-radius-circle);
+}
+
+.ash-chat-input-picker-button {
+	display: flex;
+	box-sizing: border-box;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	color: var(--ash-button-foreground);
+	background: transparent;
+	font: inherit;
+	text-decoration: none;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+
+.ash-chat-input-picker-button:hover {
+	background: var(--ash-toolbar-hover-background);
+}
+
+.ash-chat-input-picker-button.hidden {
+	display: none;
+}
+
+.ash-chat-input-picker-button:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: -1px;
+}
+
+.ash-chat-input-picker-focus-scope.pointer-focus .ash-chat-input-picker-button:focus-visible,
+.ash-chat-input-picker-focus-scope.pointer-focus .ash-button:focus-visible {
+	outline: none;
+}
+
+.ash-chat-input-picker-label {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

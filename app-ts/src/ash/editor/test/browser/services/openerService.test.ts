@@ -1,3 +1,5 @@
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../standalone/browser/standaloneServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -13,6 +15,7 @@ ensureNoDisposablesAreLeakedInTestSuite();
 test('opener service validates and prioritizes registered openers', async () => {
 	using services = new InstantiationService();
 	services.registerInstance(ICodeEditorService, editorService());
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using service = services.createInstance(OpenerService);
 	using validator = service.registerValidator({ shouldOpen: async target => !target.toString().includes('blocked') });
 	using opener = service.registerOpener({ open: async target => target.toString().includes('handled') });
@@ -24,6 +27,7 @@ test('opener service validates and prioritizes registered openers', async () => 
 test('opener service resolves and delegates external resources explicitly', async () => {
 	using services = new InstantiationService();
 	services.registerInstance(ICodeEditorService, editorService());
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using service = services.createInstance(OpenerService);
 	const opened: string[] = [];
 	using resolver = service.registerExternalUriResolver({
@@ -55,6 +59,7 @@ test('opener service requires its editor dependency at creation', () => {
 test('explicit default selection bypasses all contributed handlers and releases a failed resolution', async () => {
 	using services = new InstantiationService();
 	services.registerInstance(ICodeEditorService, editorService());
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	const calls: string[] = [];
 	using registered = opener.registerExternalOpener({ openExternal: async () => { assert.fail('Default selection must bypass contributed handlers'); } });
@@ -70,7 +75,51 @@ test('opener passes a file URI and decoded selection to its code editor service'
 	const opened: unknown[] = [];
 	editors.openCodeEditor = async input => { opened.push(input); return null; };
 	services.registerInstance(ICodeEditorService, editors);
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	await opener.open('file:///workspace/file.ts#12,7');
 	assert.deepEqual(opened, [{ resource: URI.file('/workspace/file.ts'), options: { selection: { startLineNumber: 12, startColumn: 7, endLineNumber: undefined, endColumn: undefined } } }]);
+});
+
+
+test('command links execute decoded object, positional, scalar and empty arguments through the command service', async () => {
+	using services = new InstantiationService();
+	services.registerInstance(ICodeEditorService, editorService());
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	using opener = services.createInstance(OpenerService);
+	const calls: unknown[][] = [];
+	using command = CommandsRegistry.register('test.opener.command', (_accessor, ...args) => calls.push([...args]));
+	for (const value of [{ commands: ['first', 'second'], text: '%20 中文' }, ['one', 2], null, false, 0]) {
+		assert.equal(await opener.open(`command:test.opener.command?${encodeURIComponent(JSON.stringify(value))}`, { allowCommands: true }), true);
+	}
+	await opener.open('command:///test.opener.command', { allowCommands: ['test.opener.command'] });
+	assert.deepEqual(calls, [[{ commands: ['first', 'second'], text: '%20 中文' }], ['one', 2], [null], [false], [0], []]);
+	await assert.rejects(opener.open('command:test.opener.command?not-json', { allowCommands: true }), SyntaxError);
+	assert.equal(calls.length, 6);
+});
+
+test('command link permissions and validators prevent command, editor and external side effects', async () => {
+	using services = new InstantiationService();
+	services.registerInstance(ICodeEditorService, { ...editorService(), openCodeEditor: async () => { assert.fail('Commands must not open an editor'); } });
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	using opener = services.createInstance(OpenerService);
+	opener.setDefaultExternalOpener({ openExternal: async () => { assert.fail('Commands must not open externally'); } });
+	let calls = 0;
+	using command = CommandsRegistry.register('test.opener.permissions', () => calls++);
+	const target = 'command:test.opener.permissions';
+	assert.equal(await opener.open(target, { openExternal: true }), true);
+	assert.equal(await opener.open(target, { allowCommands: false }), true);
+	assert.equal(await opener.open(target, { allowCommands: ['other'] }), true);
+	assert.equal(calls, 0);
+	await opener.open(target, { allowCommands: ['test.opener.permissions'] });
+	assert.equal(calls, 1);
+	using validator = opener.registerValidator({ shouldOpen: async () => false });
+	assert.equal(await opener.open(target, { allowCommands: true }), false);
+	assert.equal(calls, 1);
+});
+
+test('opener service requires its command dependency at creation', () => {
+	using services = new InstantiationService();
+	services.registerInstance(ICodeEditorService, editorService());
+	assert.throws(() => services.createInstance(OpenerService), /commandService/);
 });

@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -69,6 +71,7 @@ class Fixture extends Disposable {
 		this.services = this._register(new InstantiationService(new ServiceCollection(descriptor)));
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
+		this.services.registerSingleton(ICommandService, () => this.services.createInstance(StandaloneCommandService));
 		this.opener = this._register(this.services.createInstance(OpenerService));
 		this.services.registerInstance(IOpenerService, this.opener);
 		this.opener.setDefaultExternalOpener({ openExternal: async href => { this.hostOpened.push(href); return true; } });

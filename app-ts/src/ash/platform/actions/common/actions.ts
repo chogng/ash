@@ -343,10 +343,11 @@ export function registerAction2(
 	const registrations = new DisposableStore();
 
 	try {
-		registrations.add(CommandsRegistry.register(
-			action.desc.id,
-			(accessor, ...args) => action.run(accessor, ...args),
-		));
+		registrations.add(CommandsRegistry.registerMany([{
+			id: action.desc.id,
+			handler: (accessor, ...args) => action.run(accessor, ...args),
+			metadata: action.desc.metadata ?? { description: action.desc.title },
+		}]));
 
 		for (const contribution of toArray(action.desc.keybinding)) {
 			const platformContribution = getPlatformKeybinding(contribution);

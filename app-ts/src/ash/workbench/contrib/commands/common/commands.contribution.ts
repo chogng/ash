@@ -31,8 +31,17 @@ registerAction2(class RunCommands extends Action2 {
 								description: localize('runCommands.commands', 'Commands to run'),
 								items: {
 									anyOf: [
+										{ $ref: 'ash://schemas/keybindings#/definitions/commandNames' },
 										{ type: 'string' },
-										{ type: 'object', required: ['command'], properties: { command: { type: 'string' }, args: {} } },
+										{
+											type: 'object',
+											required: ['command'],
+											properties: {
+												command: { anyOf: [{ $ref: 'ash://schemas/keybindings#/definitions/commandNames' }, { type: 'string' }] },
+												args: {},
+											},
+											allOf: [{ $ref: 'ash://schemas/keybindings#/definitions/commandsSchemas' }],
+										},
 									],
 								},
 							},

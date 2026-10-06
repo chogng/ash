@@ -3,6 +3,7 @@ import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
+import { EventType, Gesture } from '../../../../../../../base/browser/touch.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
@@ -15,15 +16,18 @@ import { ModelPickerDetailsMenu } from './modelPickerHover.js';
 import { buildModelPickerItems } from './modelPickerItems.js';
 import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/browser/ui/hover/hoverDelegate.js';
+import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
 
 let nextPickerId = 0;
 
 /** Model controls retain business state; ActionWidget owns the popup and its action list. */
 export class ModelPickerWidget extends Disposable {
-	private nameButton: Button | undefined;
-	private configurationButton: Button | undefined;
+	private nameButton: HTMLElement | undefined;
+	private configurationButton: HTMLElement | undefined;
+	private readonly nameHover = this._register(new MutableDisposable<IManagedHover>());
 	private configuration: ModelPickerConfiguration | undefined;
-	private tabbable = false;
+	private enabled = true;
 	private readonly popup: MutableDisposable<DisposableStore>;
 
 	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
@@ -38,54 +42,72 @@ export class ModelPickerWidget extends Disposable {
 		control.className = 'ash-chat-model-picker-control';
 		container.append(control);
 		this._register(toDisposable(() => control.remove()));
-		const name = this.nameButton = this._register(new Button(control, { label: '', hoverGroupId: 'actions' }));
-		const options = this.configurationButton = this._register(new Button(control, { label: '', hoverGroupId: 'actions' }));
-		name.toggleClassName('ash-chat-input-model-action', true);
-		options.toggleClassName('ash-chat-input-configuration-action', true);
-		name.domNode.setAttribute('aria-haspopup', 'dialog');
-		name.domNode.setAttribute('aria-expanded', 'false');
-		options.domNode.setAttribute('aria-haspopup', 'menu');
-		options.domNode.setAttribute('aria-expanded', 'false');
+		const { primaryButton: name, secondaryButton: options } = renderChatInputPickerSplit(control);
+		this._register(trackChatInputPickerFocus(control));
+		this.nameButton = name;
+		this.configurationButton = options;
+		name.classList.add('ash-chat-input-model-action');
+		options.classList.add('ash-chat-input-configuration-action');
+		name.setAttribute('aria-haspopup', 'dialog');
+		options.setAttribute('aria-haspopup', 'menu');
 		this.configuration = this._register(this.instantiationService.createInstance(ModelPickerConfiguration, this.delegate, options));
-		this._register(name.onDidClick(() => {
+		this.bindTrigger(name, () => {
+			name.focus();
 			if (this.visible) { this.hide(); }
-			else { this.show(name.domNode); }
-		}));
-		this._register(options.onDidClick(() => {
+			else { this.show(name); }
+		});
+		this.bindTrigger(options, () => {
 			this.hide();
 			options.focus();
 			this.configuration!.show();
-		}));
+		});
 		this._register(addDisposableListener(control, 'keydown', event => {
+			if (!this.enabled || event.isComposing) { return; }
 			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 				stopEvent(event);
-				if (event.target === name.domNode) { this.show(name.domNode); }
+				if (event.target === name) { this.show(name); }
 				else { this.configuration!.show(); }
-			} else if (event.key === 'ArrowRight' && event.target === name.domNode && !options.hidden) {
+			} else if (event.key === 'ArrowRight' && event.target === name && !options.hidden) {
 				stopEvent(event);
 				options.focus();
-			} else if (event.key === 'ArrowLeft' && event.target === options.domNode) {
+			} else if (event.key === 'ArrowLeft' && event.target === options) {
 				stopEvent(event);
 				name.focus();
 			}
 		}));
-		// ActionBar tracks the composite item; the widget tracks its current trigger.
-		this._register(addDisposableListener(control, 'focusin', () => this.setTabbable(this.tabbable)));
 		this._register(this.delegate.onDidChangePresentation(() => this.updateButtons()));
 		this.updateButtons();
+	}
+
+	private bindTrigger(trigger: HTMLElement, activate: () => void): void {
+		this._register(addDisposableListener(trigger, 'mousedown', event => {
+			if (event.button !== 0 || trigger.getAttribute('aria-disabled') === 'true') { return; }
+			stopEvent(event);
+			activate();
+		}));
+		this._register(addDisposableListener(trigger, 'keydown', event => {
+			if (event.isComposing || (event.key !== 'Enter' && event.key !== ' ') || trigger.getAttribute('aria-disabled') === 'true') { return; }
+			stopEvent(event);
+			activate();
+		}));
+		this._register(Gesture.addTarget(trigger));
+		this._register(addDisposableListener(trigger, EventType.Tap, event => {
+			stopEvent(event);
+			if (this.enabled) { activate(); }
+		}));
 	}
 
 	public focus(): void {
 		this.nameButton?.focus();
 	}
 
-	public setTabbable(tabbable: boolean): void {
-		this.tabbable = tabbable;
-		if (this.nameButton && this.configurationButton) {
-			const configurationFocused = this.configurationButton.hasFocus() && !this.configurationButton.hidden;
-			this.nameButton.domNode.tabIndex = tabbable && !configurationFocused ? 0 : -1;
-			this.configurationButton.domNode.tabIndex = tabbable && configurationFocused ? 0 : -1;
+	public setEnabled(enabled: boolean): void {
+		this.enabled = enabled;
+		for (const button of [this.nameButton!, this.configurationButton!]) {
+			button.setAttribute('aria-disabled', String(!enabled));
+			button.tabIndex = enabled && !button.hidden ? 0 : -1;
 		}
+		if (!enabled) { this.hide(); }
 	}
 
 	private updateButtons(): void {
@@ -94,12 +116,13 @@ export class ModelPickerWidget extends Disposable {
 		const label = this.delegate.isAutomaticModel()
 			? localize('chat.modelPicker.auto', 'Auto')
 			: model?.displayName ?? localize('chat.modelPicker.selectModel', 'Select model');
-		this.nameButton!.label = label;
-		this.nameButton!.domNode.setAttribute('aria-label', label);
-		this.nameButton!.setTitle(label);
+		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
+		this.nameButton!.setAttribute('aria-label', label);
+		this.nameHover.clear();
+		this.nameHover.value = getHoverDelegate().setupHover({ target: this.nameButton!, content: label, groupId: 'actions' });
 		this.configuration!.renderButton();
-		if (this.configurationButton!.hidden && this.configurationButton!.hasFocus()) { this.focus(); }
-		this.setTabbable(this.tabbable);
+		if (this.configurationButton!.hidden && this.configurationButton!.ownerDocument.activeElement === this.configurationButton) { this.focus(); }
+		this.setEnabled(this.enabled);
 	}
 
 	public get visible(): boolean {
@@ -112,8 +135,8 @@ export class ModelPickerWidget extends Disposable {
 		}
 	}
 
-	public show(anchor: HTMLElement): void {
-		if (this.visible) return;
+	public show(anchor: HTMLElement = this.nameButton!): void {
+		if (this.visible || !this.enabled) return;
 		const ownerDocument = anchor.ownerDocument;
 		let models = this.delegate.getModels();
 		const session = new DisposableStore();

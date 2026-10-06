@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
@@ -20,6 +22,7 @@ suite('Desktop URL service', () => {
 	test('opener relays through Main and handles the returning callback before focusing its window', async () => {
 		using services = new InstantiationService();
 		services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService);
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 		using opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		const calls: unknown[] = [];

@@ -1,5 +1,5 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { Event } from "../../../base/common/event.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
 import type { ServicesAccessor } from "../../instantiation/common/instantiation.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
@@ -43,7 +43,9 @@ export interface ICommandEvent {
 
 /** Stores realm-wide command definitions independently of their UI bindings. */
 export class CommandRegistry {
-	private readonly commands = new Map<CommandId, { readonly owner: object; readonly handler: CommandHandler; }>();
+	private readonly commands = new Map<CommandId, { readonly owner: object; readonly definition: CommandDefinition; }>();
+	private readonly changed = new Emitter<void>();
+	readonly onDidChangeCommands: Event<void> = this.changed.event;
 
 	register(id: CommandId, command: CommandHandler): IDisposable {
 		return this.registerMany([{ id, handler: command }]);
@@ -57,6 +59,7 @@ export class CommandRegistry {
 			if (disposed) return;
 			disposed = true;
 			this.deleteOwner(owner);
+			this.changed.fire();
 		}) as CommandRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Command registration is already disposed");
@@ -66,7 +69,11 @@ export class CommandRegistry {
 	}
 
 	getCommand(id: CommandId): CommandHandler | undefined {
-		return this.commands.get(id)?.handler;
+		return this.commands.get(id)?.definition.handler;
+	}
+
+	getCommands(): ReadonlyMap<CommandId, CommandDefinition> {
+		return new Map([...this.commands].map(([id, entry]) => [id, entry.definition]));
 	}
 
 	hasCommand(id: CommandId): boolean {
@@ -87,7 +94,8 @@ export class CommandRegistry {
 			ids.add(command.id);
 		}
 		this.deleteOwner(owner);
-		for (const command of normalized) this.commands.set(command.id, { owner, handler: command.handler });
+		for (const command of normalized) this.commands.set(command.id, { owner, definition: command });
+		this.changed.fire();
 	}
 
 	private deleteOwner(owner: object): void {
