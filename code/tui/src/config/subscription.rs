@@ -553,6 +553,7 @@ fn execute_with_browser<T: JsonRpcTransport>(
         SubscriptionCommand::SignOut => client
             .logout_account(AccountLogoutParams {
                 provider: provider.id().into(),
+                account_id: None,
             })
             .and_then(|_| client.read_accounts())
             .map(SubscriptionEvent::SignedOut),

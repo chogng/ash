@@ -2135,15 +2135,15 @@ test('A manual model choice stays with its chat while later new chats use the ne
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
 	const discovered: Awaited<ReturnType<IRendererHost['model']['listProviderModels']>>[number] = createTestModel({
-		model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model', discovered: true,
+		model: { provider: 'custom-gateway', model: 'private-model' }, display_name: 'Private model', discovered: true,
 		description: 'Private model overview',
-		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [], fastEnabled: false,
-		autoCompactTokenLimit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown' },
-		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }], modelReasoningEffort: null, defaultPersonality: null,
+		context_window: null, default_context_window: null, maximum_context_window: null, context_window_options: [], fast_enabled: false,
+		auto_compact_token_limit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallel_tool_calls: 'unknown', personality: 'unknown', image_detail_original: 'unknown', fast_mode: 'unknown' },
+		supported_reasoning_efforts: [{ effort: 'low', description: 'Quick tasks' }], model_reasoning_effort: null, default_personality: null,
 	});
-	discovered.capabilities.fastMode = 'supported';
-	discovered.settings.serviceTiers = [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }];
-	discovered.settings.acceleration = { type: 'serviceTier', serviceTier: 'priority' };
+	discovered.capabilities.fast_mode = 'supported';
+	discovered.settings.service_tiers = [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }];
+	discovered.settings.acceleration = { type: 'service_tier', service_tier: 'priority' };
 	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
 	const fake = fakeApi();
 	let loads = 0;
@@ -2160,7 +2160,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	await initial.complete({ models: [] });
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
-		model: discovered.model, displayName: discovered.displayName, description: discovered.description, discovered: true,
+		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [],
 		supportsFast: true, fast: false, supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],
 		acceleration: { name: 'Priority lane', description: 'Faster processing' },
@@ -2173,13 +2173,13 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.equal(loads, 2);
 	let changes = 0;
 	using subscription = models.onDidChangeModels(() => changes++);
-	discovered.settings.serviceTiers[0].description = 'Updated processing terms';
+	discovered.settings.service_tiers[0].description = 'Updated processing terms';
 	const refreshed = await models.refreshModels();
 	assert.deepEqual(refreshed[0].acceleration, { name: 'Priority lane', description: 'Updated processing terms' });
 	assert.equal(changes, 1);
 	assert.equal(pickerEntry.acceleration.description, 'Faster processing');
 	discovered.description = 'Updated overview';
-	discovered.supportedReasoningEfforts[0].description = 'Updated explanation';
+	discovered.supported_reasoning_efforts[0].description = 'Updated explanation';
 	const explained = await models.refreshModels();
 	assert.equal(explained[0].description, 'Updated overview');
 	assert.deepEqual(explained[0].supportedReasoningEfforts, [{ effort: 'low', description: 'Updated explanation' }]);
@@ -2677,12 +2677,17 @@ function fakeApi(options: FakeOptions = {}): {
 			setModelPreferences: async () => { },
 			listModels: async () => {
 				modelListRequests.push(undefined);
-				return { models: (options.models ?? []).map(entry => createTestModel({ ...entry, supportedReasoningEfforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })) })) };
+				return { models: (options.models ?? []).map(entry => createTestModel({
+					model: entry.model, display_name: entry.displayName,
+					context_window: entry.contextWindow ?? null,
+					model_reasoning_effort: entry.modelReasoningEffort ?? null,
+					supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
+				})) };
 			},
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
 			listProviderModels: async (connection: string) => {
 				providerModelRequests.push(connection);
-				return (options.providerModels?.[connection] ?? []).map(entry => createTestModel(entry));
+				return (options.providerModels?.[connection] ?? []).map(entry => createTestModel({ model: entry.model, display_name: entry.displayName }));
 			},
 			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string; }) => {
 				providerKeyRequests.push({ connection, apiKey });

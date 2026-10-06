@@ -97,7 +97,10 @@ fn api_key(provider: String) -> Result<(), CliError> {
 
 pub(super) fn logout(provider: String) -> Result<(), CliError> {
     management::with_client(|client| {
-        print_json(&client.logout_account(AccountLogoutParams { provider })?)
+        print_json(&client.logout_account(AccountLogoutParams {
+            provider,
+            account_id: None,
+        })?)
     })
 }
 

@@ -108,7 +108,9 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 		setModelPreferences: async (model, update) => {
 			const snapshot = await appServerRequest(connection, 'config/read', {});
 			await appServerRequest(connection, 'model/preferences/update', {
-				commandId: createUuid(), expectedRevision: snapshot.revision, model, ...update,
+				command_id: createUuid(), expected_revision: snapshot.revision, model,
+				...(update.fast !== undefined ? { fast: update.fast } : {}),
+				...(update.contextWindow !== undefined ? { context_window: update.contextWindow } : {}),
 			});
 		},
 		listCustomProviders: async () => {

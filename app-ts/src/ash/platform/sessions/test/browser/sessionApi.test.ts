@@ -19,12 +19,12 @@ test('Model preferences send a targeted update with the current revision', async
 	await api.setModelPreferences(model, { fast: true });
 	await api.setModelPreferences(model, { contextWindow: 1_000_000 });
 	await api.setModelPreferences(model, { fast: false });
-	assert.deepEqual(writes.map(({ commandId, ...update }) => { assert.ok(commandId); return update; }), [
-		{ expectedRevision: 7, model, fast: true },
-		{ expectedRevision: 7, model, contextWindow: 1_000_000 },
-		{ expectedRevision: 7, model, fast: false },
+	assert.deepEqual(writes.map(({ command_id, ...update }) => { assert.ok(command_id); return update; }), [
+		{ expected_revision: 7, model, fast: true },
+		{ expected_revision: 7, model, context_window: 1_000_000 },
+		{ expected_revision: 7, model, fast: false },
 	]);
-	assert.equal(new Set(writes.map(write => write.commandId)).size, 3);
+	assert.equal(new Set(writes.map(write => write.command_id)).size, 3);
 });
 
 test('Review model saves only independent review settings with the current config revision', async () => {

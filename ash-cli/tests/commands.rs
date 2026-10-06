@@ -172,6 +172,7 @@ fn help_version_and_usage_errors_do_not_open_the_profile() {
         (vec!["mcp", "add", "--help"], 0),
         (vec!["login", "status", "--help"], 0),
         (vec!["not-a-command"], 2),
+        (vec!["tcp-tunnel"], 2),
         (vec!["resume", "session"], 2),
         (vec!["exec", "--unknown", "task"], 2),
         (

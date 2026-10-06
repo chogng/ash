@@ -1,0 +1,6 @@
+OpenAI Codex
+Copyright 2025 OpenAI
+
+The initial HTTP/3 CONNECT transport was derived from OpenAI Codex's tcp-tunnel.
+Ash replaces its process helper with typed library contracts, owned asynchronous
+lifetimes, caller-provided credentials and TLS roots, and library integration tests.

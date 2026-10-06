@@ -124,6 +124,7 @@ members = [
     "ash-rs/http-client",
     "ash-rs/http-test-support",
     "ash-rs/network-proxy",
+    "ash-rs/tcp-tunnel",
     "ash-rs/mxc-sandbox",
     "ash-rs/windows-sandbox",
     "ash-rs/windows-sandbox-service",
@@ -333,6 +334,13 @@ build-identity = { package = "ash-build-identity", path = "ash-rs/build-identity
 mxc-sandbox = { package = "ash-mxc-sandbox", path = "ash-rs/mxc-sandbox" }
 windows-sandbox = { package = "ash-windows-sandbox", path = "ash-rs/windows-sandbox" }
 network-proxy = { package = "ash-network-proxy", path = "ash-rs/network-proxy" }
+tcp-tunnel = { package = "ash-tcp-tunnel", path = "ash-rs/tcp-tunnel" }
+# This HTTP/3 revision provides the CONNECT and draining contracts used by the tunnel.
+h3 = { git = "https://github.com/hyperium/h3", rev = "e07e69412876f7e26f026bd75a48b2704d8c8283" }
+h3-quinn = { git = "https://github.com/hyperium/h3", rev = "e07e69412876f7e26f026bd75a48b2704d8c8283" }
+http = "1"
+quinn = { version = "0.11", default-features = false }
+rcgen = { version = "0.14", default-features = false }
 bytes = "1"
 http-body-util = "0.1"
 hyper = "1"

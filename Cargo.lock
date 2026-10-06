@@ -2982,6 +2982,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-tcp-tunnel"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "bytes",
+ "h3",
+ "h3-quinn",
+ "http",
+ "pretty_assertions",
+ "quinn",
+ "rcgen",
+ "rustls",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "ash-teams"
 version = "0.1.0"
 dependencies = [
@@ -7095,6 +7113,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "h3"
+version = "0.0.8"
+source = "git+https://github.com/hyperium/h3?rev=e07e69412876f7e26f026bd75a48b2704d8c8283#e07e69412876f7e26f026bd75a48b2704d8c8283"
+dependencies = [
+ "bytes",
+ "fastrand",
+ "futures-util",
+ "http",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
+name = "h3-quinn"
+version = "0.0.10"
+source = "git+https://github.com/hyperium/h3?rev=e07e69412876f7e26f026bd75a48b2704d8c8283#e07e69412876f7e26f026bd75a48b2704d8c8283"
+dependencies = [
+ "bytes",
+ "futures",
+ "h3",
+ "quinn",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10932,6 +10976,7 @@ checksum = "0c1a41e437b6bbd489372cd4971de128e85c855f56c57f283d20ff016cf7c0a8"
 dependencies = [
  "bytes",
  "cfg_aliases 0.2.2",
+ "futures-io",
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp 0.5.15",
