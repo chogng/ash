@@ -60,24 +60,24 @@ def main(arguments: list[str] | None = None) -> int:
             REPOSITORY_ROOT / "third_party/tgrep/runtime-lock.json",
             REPOSITORY_ROOT / "third_party/.cache/tgrep",
         ).executable
-    executables = stage_runtime(built)
-    environment = runtime_environment(environment, executables)
-    if requires_selected_server(arguments):
-        prepared = subprocess.run(
-            [str(executables["ash"]), "app-server", "daemon", "ensure-selected"],
+    with stage_runtime(built) as executables:
+        environment = runtime_environment(environment, executables)
+        if requires_selected_server(arguments):
+            prepared = subprocess.run(
+                [str(executables["ash"]), "app-server", "daemon", "ensure-selected"],
+                cwd=REPOSITORY_ROOT,
+                env=environment,
+                stdout=subprocess.DEVNULL,
+                check=False,
+            )
+            if prepared.returncode != 0:
+                return prepared.returncode
+        return subprocess.run(
+            [str(executables["ash"]), *arguments],
             cwd=REPOSITORY_ROOT,
             env=environment,
-            stdout=subprocess.DEVNULL,
             check=False,
-        )
-        if prepared.returncode != 0:
-            return prepared.returncode
-    return subprocess.run(
-        [str(executables["ash"]), *arguments],
-        cwd=REPOSITORY_ROOT,
-        env=environment,
-        check=False,
-    ).returncode
+        ).returncode
 
 
 if __name__ == "__main__":

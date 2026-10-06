@@ -700,9 +700,28 @@ fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
         service.clear_index(&worktree, &token).unwrap(),
         ash_state::ClearOutcome::InUse
     );
+    service.release_directory(&worktree, &token).unwrap();
+    assert!(!service.index_status(&worktree, &token).unwrap().active);
+    assert!(!worktree.canonical_path().join(".git").is_dir());
+    git(
+        temporary.path(),
+        &[
+            "worktree",
+            "remove",
+            worktree.canonical_path().to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        service
+            .search(&root, &query("base_marker"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
     service.configure(Backend::Ripgrep).unwrap();
     assert_eq!(
-        service.clear_index(&worktree, &token).unwrap(),
+        service.clear_index(&root, &token).unwrap(),
         ash_state::ClearOutcome::Cleared
     );
     assert!(!directory.exists());

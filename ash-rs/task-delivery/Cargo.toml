@@ -6,9 +6,10 @@ license-file.workspace = true
 publish.workspace = true
 
 [features]
-runtime = ["dep:ash-async-utils", "dep:ash-config", "dep:ash-core", "dep:ash-file-access", "dep:ash-git", "dep:ash-remote", "dep:ash-remote-profile-store", "dep:base64", "dep:features", "dep:worktree", "dep:rusqlite", "dep:state"]
+runtime = ["dep:queue", "dep:ash-async-utils", "dep:ash-config", "dep:ash-core", "dep:ash-file-access", "dep:ash-git", "dep:ash-remote", "dep:ash-remote-profile-store", "dep:base64", "dep:features", "dep:worktree", "dep:rusqlite", "dep:state"]
 
 [dependencies]
+contract = { package = "ash-task-delivery-contract", path = "../task-delivery-contract" }
 ash-async-utils = { workspace = true, optional = true }
 ash-config = { workspace = true, optional = true }
 ash-core = { workspace = true, optional = true }
@@ -20,15 +21,11 @@ base64 = { workspace = true, optional = true }
 features = { workspace = true, optional = true }
 worktree = { workspace = true, optional = true }
 protocol = { package = "ash-protocol", path = "../protocol" }
-queue = { workspace = true }
+queue = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
-schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 state = { package = "ash-state", path = "../state", optional = true }
-thiserror = { workspace = true }
-ts-rs = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -27,6 +27,7 @@ impl GitTurnChangesRuntime {
         let Some(binding) = self.binding(thread_id) else {
             return Ok(());
         };
+        self.dirs.release_search(binding.checkout_root())?;
         self.dirs
             .runtime
             .block_on(self.dirs.worktrees.cleanup(
@@ -89,6 +90,7 @@ impl GitTurnChangesRuntime {
         }
         eligible.sort_by(|left, right| right.0.cmp(&left.0));
         for (_, thread_id, binding) in eligible.into_iter().skip(settings.keep_count) {
+            self.dirs.release_search(binding.checkout_root())?;
             self.dirs
                 .runtime
                 .block_on(self.dirs.worktrees.cleanup(

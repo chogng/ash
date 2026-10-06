@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
-import shutil
 import subprocess
 import sys
-import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -17,10 +15,12 @@ from build.lib.cargo import cargo_artifact_executable  # noqa: E402
 from build.lib.cargo import cargo_rendered_diagnostic  # noqa: E402
 from build.lib.cargo import parse_cargo_message  # noqa: E402
 from build.lib.cargo import resolve_cargo_target_directory  # noqa: E402
+from build.lib.cargo_cache import leased_cache  # noqa: E402
 from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.targets import default_target  # noqa: E402
 from build.lib.v8 import resolve_v8_cargo_env  # noqa: E402
+from build.ash_rs.develop import leased_binary_generation  # noqa: E402
 
 
 DEVELOPMENT_PROFILE = "dev-small"
@@ -72,13 +72,16 @@ def build_binaries(
     executables: dict[str, Path] = {}
     # Cargo writes build progress to stderr; keep it on the terminal while
     # reading JSON diagnostics and executable paths from stdout as they arrive.
-    with subprocess.Popen(
-        command,
-        cwd=REPOSITORY_ROOT,
-        env=cargo_environment,
-        stdout=subprocess.PIPE,
-        text=True,
-    ) as process:
+    with (
+        leased_cache(REPOSITORY_ROOT, profile=DEVELOPMENT_PROFILE),
+        subprocess.Popen(
+            command,
+            cwd=REPOSITORY_ROOT,
+            env=cargo_environment,
+            stdout=subprocess.PIPE,
+            text=True,
+        ) as process,
+    ):
         for line in process.stdout:
             message = parse_cargo_message(line)
             if diagnostic := cargo_rendered_diagnostic(message):
@@ -98,38 +101,11 @@ def build_binaries(
     return 0, executables
 
 
-def stage_runtime(executables: dict[str, Path]) -> dict[str, Path]:
-    digest = hashlib.sha256()
-    for name, executable in sorted(executables.items()):
-        digest.update(name.encode("utf-8"))
-        digest.update(b"\0")
-        with executable.open("rb") as source:
-            while chunk := source.read(1024 * 1024):
-                digest.update(chunk)
-        digest.update(b"\0")
-    runtime = DEVELOPMENT_RUNTIME_ROOT / digest.hexdigest()
-    if not runtime.is_dir():
-        DEVELOPMENT_RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
-        staging = DEVELOPMENT_RUNTIME_ROOT / f".next-{uuid.uuid4()}"
-        try:
-            staging.mkdir()
-            for executable in executables.values():
-                shutil.copy2(executable, staging / executable.name)
-            try:
-                staging.rename(runtime)
-            except FileExistsError:
-                pass
-        finally:
-            shutil.rmtree(staging, ignore_errors=True)
-    staged = {
-        name: runtime / executable.name for name, executable in executables.items()
-    }
-    for name, executable in staged.items():
-        if not executable.is_file():
-            raise RuntimeError(
-                f"Code development runtime is missing {name}: {executable}"
-            )
-    return staged
+@contextmanager
+def stage_runtime(executables: dict[str, Path]):
+    """Keep this immutable generation leased for the entire Code launch."""
+    with leased_binary_generation(executables, DEVELOPMENT_RUNTIME_ROOT) as staged:
+        yield staged
 
 
 def main() -> int:

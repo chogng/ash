@@ -743,6 +743,7 @@ impl AppServer {
             config.as_ref(),
             file_access,
             hooks,
+            Arc::clone(&self.env_runtime),
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
             database_path,

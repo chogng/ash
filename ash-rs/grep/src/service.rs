@@ -115,6 +115,28 @@ impl Service {
         }
     }
 
+    /// Wait for active searches and release the directory's engine lease before filesystem removal.
+    pub fn release_directory(
+        &self,
+        root: &Dir,
+        cancellation: &CancellationToken,
+    ) -> Result<(), Error> {
+        // Searches retain this read guard through their engine operation. The write guard excludes
+        // new searches while the final registration is detached and its root handles are closed.
+        let state = self.state.write().unwrap_or_else(|e| e.into_inner());
+        let index = state
+            .indexes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&root.id());
+        if let Some(index) = index {
+            let index = Arc::try_unwrap(index)
+                .map_err(|_| Error::Failed("search registration is still in use".into()))?;
+            index.search.close(cancellation)?;
+        }
+        Ok(())
+    }
+
     pub fn index_status(
         &self,
         root: &Dir,
@@ -447,7 +469,7 @@ fn status(s: tgrep::Status) -> IndexStatus {
         enabled: true,
         active: true,
         indexing: s.indexing,
-        ready: s.hidden_complete,
+        ready: s.ready,
         indexed_file_count: s.indexed_file_count,
         watcher_active: s.watcher_active,
     }

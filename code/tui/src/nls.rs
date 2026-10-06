@@ -1768,6 +1768,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Executables", "実行プログラム", "可执行程序", "Exécutables"),
     translation("Assets", "リソース", "资源", "Ressources"),
+    translation(
+        "Editor extensions",
+        "エディター拡張機能",
+        "编辑器扩展",
+        "Extensions d’éditeur",
+    ),
     translation("enabled", "有効", "已启用", "activé"),
     translation("disabled", "無効", "已停用", "désactivé"),
     translation("built-in", "組み込み", "内置", "intégré"),

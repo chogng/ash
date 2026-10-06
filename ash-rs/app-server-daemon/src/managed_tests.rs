@@ -6,6 +6,20 @@ use crate::wire::write_json_line;
 use std::net::Shutdown;
 
 #[test]
+fn polling_reclaims_oversized_logs_without_restart_and_preserves_the_writer() {
+    let profile = tempfile::tempdir().unwrap();
+    let mut endpoint = ManagedEndpoint::bind(profile.path()).unwrap();
+    let mut writer = endpoint.endpoint.open_log().unwrap();
+    writer.set_len(2 * 1024 * 1024).unwrap();
+    endpoint.last_log_maintenance = Instant::now() - Duration::from_secs(2);
+    assert!(endpoint.poll_connection().unwrap().is_none());
+    assert_eq!(writer.metadata().unwrap().len(), 0);
+    writer.write_all(b"after maintenance\n").unwrap();
+    assert_eq!(endpoint.endpoint.log_tail().unwrap(), "after maintenance");
+    std::fs::remove_file(&endpoint.endpoint.log).unwrap();
+}
+
+#[test]
 fn incomplete_prelude_leaves_business_and_stop_connections_available() {
     let profile = tempfile::tempdir().unwrap();
     let mut endpoint = ManagedEndpoint::bind(profile.path()).unwrap();

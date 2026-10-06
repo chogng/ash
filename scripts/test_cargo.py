@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import unittest
+from contextlib import nullcontext
 from unittest.mock import patch
 
 from scripts.cargo import main, prepare_test_executable, run_process_tests
@@ -11,6 +12,12 @@ from scripts.cargo import main, prepare_test_executable, run_process_tests
 
 class CodeModeHostTests(unittest.TestCase):
     def setUp(self) -> None:
+        cache = patch(
+            "scripts.cargo.leased_cache",
+            side_effect=lambda _root, **_options: nullcontext(),
+        )
+        cache.start()
+        self.addCleanup(cache.stop)
         # These tests replace subprocess.run, including platform.py's Windows
         # version probe. Keep host detection outside the mocked process boundary.
         target = patch(
@@ -18,6 +25,26 @@ class CodeModeHostTests(unittest.TestCase):
         )
         target.start()
         self.addCleanup(target.stop)
+
+    @patch.dict(
+        "scripts.cargo.os.environ",
+        {"RUSTFLAGS": "--cfg probe", "CARGO_ENCODED_RUSTFLAGS": "--cfg\x1fprobe"},
+        clear=True,
+    )
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
+    @patch("scripts.cargo.cargo_command_uses_package", return_value=False)
+    def test_warning_gate_preserves_the_compiler_artifact_identity(
+        self, uses_package, uses_v8, run
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        self.assertEqual(
+            main(["--deny-warnings", "check", "-p", "ash-package-store"]), 0
+        )
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(environment["CARGO_BUILD_WARNINGS"], "deny")
+        self.assertEqual(environment["RUSTFLAGS"], "--cfg probe")
+        self.assertEqual(environment["CARGO_ENCODED_RUSTFLAGS"], "--cfg\x1fprobe")
 
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch("scripts.cargo.subprocess.run")
@@ -240,6 +267,14 @@ class CodeModeHostTests(unittest.TestCase):
 
 
 class ProcessTestRunnerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        cache = patch(
+            "scripts.cargo.leased_cache",
+            side_effect=lambda _root, **_options: nullcontext(),
+        )
+        cache.start()
+        self.addCleanup(cache.stop)
+
     def artifact(self, name: str, kind: str = "test") -> dict:
         return {
             "reason": "compiler-artifact",

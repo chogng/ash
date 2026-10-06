@@ -21,7 +21,7 @@ ash-utils-absolute-path = { workspace = true }
 ash-utils-path = { workspace = true }
 memories = { workspace = true }
 guardian-environment = { workspace = true }
-queue = { workspace = true }
+queue = { package = "ash-queue-contract", path = "../../ash-rs/queue-contract" }
 message-history = { workspace = true }
 state = { package = "ash-state", path = "../../ash-rs/state" }
 ash-config = { workspace = true }

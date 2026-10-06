@@ -8,27 +8,26 @@
 mod in_memory;
 mod room;
 mod sqlite;
-mod types;
 
+pub use contract::DocumentCollaborationAuditEvent;
+pub use contract::DocumentCollaborationInvite;
+pub use contract::DocumentCollaborationMember;
+pub use contract::DocumentCollaborationOpenParams;
+pub use contract::DocumentCollaborationOpenResult;
+pub use contract::DocumentCollaborationPresence;
+pub use contract::DocumentCollaborationPresenceParams;
+pub use contract::DocumentCollaborationPresenceReadParams;
+pub use contract::DocumentCollaborationPresenceReplay;
+pub use contract::DocumentCollaborationPresenceSnapshot;
+pub use contract::DocumentCollaborationPrincipal;
+pub use contract::DocumentCollaborationRoomRole;
+pub use contract::DocumentCollaborationSnapshot;
+pub use contract::DocumentCollaborationSubmitParams;
+pub use contract::DocumentCollaborationSubmitResult;
+pub use contract::DocumentCollaborationUpdate;
 pub use in_memory::InMemoryDocumentCollaborationRooms;
 pub use room::DocumentCollaborationReplay;
 pub use sqlite::SqliteDocumentCollaborationRooms;
-pub use types::DocumentCollaborationAuditEvent;
-pub use types::DocumentCollaborationInvite;
-pub use types::DocumentCollaborationMember;
-pub use types::DocumentCollaborationOpenParams;
-pub use types::DocumentCollaborationOpenResult;
-pub use types::DocumentCollaborationPresence;
-pub use types::DocumentCollaborationPresenceParams;
-pub use types::DocumentCollaborationPresenceReadParams;
-pub use types::DocumentCollaborationPresenceReplay;
-pub use types::DocumentCollaborationPresenceSnapshot;
-pub use types::DocumentCollaborationPrincipal;
-pub use types::DocumentCollaborationRoomRole;
-pub use types::DocumentCollaborationSnapshot;
-pub use types::DocumentCollaborationSubmitParams;
-pub use types::DocumentCollaborationSubmitResult;
-pub use types::DocumentCollaborationUpdate;
 
 #[cfg(test)]
 #[path = "in_memory_tests.rs"]

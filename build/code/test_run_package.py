@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import call
 from unittest.mock import patch
@@ -34,7 +35,7 @@ class PackageRunnerTests(unittest.TestCase):
                 patch.object(
                     run_package.code_build,
                     "stage_runtime",
-                    return_value={"ash": staged},
+                    return_value=nullcontext({"ash": staged}),
                 ),
                 patch.object(run_package.subprocess, "run") as subprocess_run,
             ):
@@ -101,7 +102,7 @@ class PackageRunnerTests(unittest.TestCase):
                 patch.object(
                     run_package.code_build,
                     "stage_runtime",
-                    return_value={"ash": staged},
+                    return_value=nullcontext({"ash": staged}),
                 ),
                 patch.object(run_package.subprocess, "run") as subprocess_run,
             ):

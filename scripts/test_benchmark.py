@@ -4,6 +4,7 @@ import errno
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -12,7 +13,7 @@ import benchmark
 
 
 class BenchmarkTests(unittest.TestCase):
-    def test_tracked_build_timestamps_include_source_and_manifest(self):
+    def test_build_input_timestamps_include_source_and_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "lib.rs"
@@ -20,11 +21,34 @@ class BenchmarkTests(unittest.TestCase):
             source.write_text("pub fn value() {}\n")
             manifest.write_text("[package]\n")
             with patch("benchmark.output", return_value="lib.rs\0Cargo.toml\0"):
-                before = benchmark.tracked_build_timestamps(root)
+                before = benchmark.build_input_timestamps(root)
                 os.utime(source, ns=(1_000_000_000, 2_000_000_000))
-                after = benchmark.tracked_build_timestamps(root)
+                after = benchmark.build_input_timestamps(root)
             self.assertNotEqual(before, after)
             self.assertEqual(before["Cargo.toml"], after["Cargo.toml"])
+
+    def test_working_tree_snapshot_tracks_new_deleted_and_ignored_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            old = root / "old.rs"
+            old.write_text("pub fn old() {}\n")
+            (root / ".gitignore").write_text("target/\n")
+            subprocess.run(["git", "add", "old.rs", ".gitignore"], cwd=root, check=True)
+            old.unlink()
+            new = root / "new.rs"
+            new.write_text("pub fn new() {}\n")
+            ignored = root / "target"
+            ignored.mkdir()
+            (ignored / "generated.rs").write_text("ignored\n")
+            before = benchmark.build_input_timestamps(root)
+            self.assertIsNone(before["old.rs"])
+            self.assertEqual(before["new.rs"], new.stat().st_mtime_ns)
+            self.assertNotIn("target/generated.rs", before)
+            os.utime(new, ns=(1_000_000_000, 2_000_000_000))
+            self.assertNotEqual(before, benchmark.build_input_timestamps(root))
+            old.write_text("pub fn restored() {}\n")
+            self.assertIsNotNone(benchmark.build_input_timestamps(root)["old.rs"])
 
     def test_run_target_cleanup_retries_when_directory_gains_a_file(self):
         with tempfile.TemporaryDirectory() as directory:

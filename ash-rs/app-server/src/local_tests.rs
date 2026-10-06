@@ -4055,12 +4055,15 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
     run_local_git(repo.path(), &["add", "."]);
     run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
+    let grep = Arc::new(grep::Service::installed(grep::Backend::Tgrep, None).unwrap());
+    let search_root = ash_file_access::Dir::open_local(repo.path()).unwrap();
     let server = open_app_server(
         AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_dir_root(repo.path()),
     )
-    .unwrap();
+    .unwrap()
+    .with_grep(search_root.clone(), Arc::clone(&grep));
     let mut connection = server.connection();
     local_call(
         &server,
@@ -4088,6 +4091,35 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
         .checkout_root()
         .to_path_buf();
     std::fs::write(checkout.join("uncommitted.txt"), "discard me").unwrap();
+    let search_dir = ash_file_access::Dir::open_local(&checkout).unwrap();
+    let query = grep::Query {
+        query: "initial".into(),
+        pattern: grep::Pattern::Literal,
+        case_sensitivity: grep::CaseSensitivity::Sensitive,
+        scope: std::path::PathBuf::new(),
+        include_patterns: Vec::new(),
+        exclude_patterns: Vec::new(),
+        max_results: 100,
+        freshness: grep::Freshness::Indexed,
+    };
+    let cancellation = ash_async_utils::CancellationSource::new();
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &search_dir, &query, &cancellation.token())
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &search_root, &query, &cancellation.token())
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    let git_dir = run_local_git(&checkout, &["rev-parse", "--absolute-git-dir"]);
+    let marker = std::path::Path::new(git_dir.trim()).join("tgrep-view-v1.json");
+    assert!(marker.exists());
     let inventory = local_call(
         &server,
         &mut connection,
@@ -4107,6 +4139,14 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     );
     assert!(deleted.get("error").is_none(), "{deleted}");
     assert!(!checkout.exists());
+    assert!(!marker.exists());
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &search_root, &query, &cancellation.token())
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
     assert_eq!(deleted["result"]["worktrees"].as_array().unwrap().len(), 1);
     let sessions = local_call(
         &server,

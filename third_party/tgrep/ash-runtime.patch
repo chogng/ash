@@ -1,0 +1,354 @@
+diff --git a/Cargo.lock b/Cargo.lock
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1261,7 +1261,7 @@
+ 
+ [[package]]
+ name = "tgrep-cli"
+-version = "1.0.11"
++version = "1.0.12-ash.e9d55db.1"
+ dependencies = [
+  "anyhow",
+  "assert_cmd",
+@@ -1288,7 +1288,7 @@
+ 
+ [[package]]
+ name = "tgrep-core"
+-version = "1.0.11"
++version = "1.0.12-ash.e9d55db.1"
+ dependencies = [
+  "anyhow",
+  "blake3",
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -4,7 +4,7 @@
+ resolver = "2"
+ 
+ [workspace.package]
+-version = "1.0.11"
++version = "1.0.12-ash.e9d55db.1"
+ edition = "2024"
+ license = "MIT"
+ repository = "https://github.com/microsoft/tgrep"
+diff --git a/tgrep-cli/src/ash.rs b/tgrep-cli/src/ash.rs
+new file mode 100644
+--- /dev/null
++++ b/tgrep-cli/src/ash.rs
+@@ -0,0 +1,58 @@
++//! Ash packaging additions; indexing and worktree lifecycle remain upstream-owned.
++use anyhow::{Context, Result, ensure};
++use serde_json::json;
++use std::path::Path;
++use std::process::Command;
++
++pub fn identity(root: &Path) -> Result<()> {
++    let root = std::fs::canonicalize(root)?;
++    let plain = || println!("{}", json!({"directory":root,"revision":null}));
++    if !root.ancestors().any(|p| p.join(".git").exists()) {
++        plain();
++        return Ok(());
++    }
++    let git = |args: &[&str]| {
++        Command::new("git")
++            .env_remove("GIT_DIR")
++            .env_remove("GIT_WORK_TREE")
++            .env_remove("GIT_INDEX_FILE")
++            .env("LC_ALL", "C")
++            .arg("-C")
++            .arg(&root)
++            .args(args)
++            .output()
++    };
++    let common = git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
++    if !common.status.success() {
++        ensure!(
++            String::from_utf8_lossy(&common.stderr).contains("not a git repository"),
++            "Git identity failed: {}",
++            String::from_utf8_lossy(&common.stderr)
++        );
++        plain();
++        return Ok(());
++    }
++    let directory = std::fs::canonicalize(std::str::from_utf8(&common.stdout)?.trim())?;
++    let revision = git(&["rev-parse", "--verify", "--quiet", "HEAD"])?;
++    if !revision.status.success() {
++        ensure!(
++            revision.status.code() == Some(1),
++            "Git revision failed: {}",
++            String::from_utf8_lossy(&revision.stderr)
++        );
++        plain();
++        return Ok(());
++    }
++    let top = git(&["rev-parse", "--show-toplevel"])?;
++    ensure!(top.status.success(), "Git worktree discovery failed");
++    if std::fs::canonicalize(std::str::from_utf8(&top.stdout)?.trim())? != root {
++        plain();
++        return Ok(());
++    }
++    println!(
++        "{}",
++        json!({"directory": directory,
++        "revision": std::str::from_utf8(&revision.stdout).context("non-UTF-8 Git revision")?.trim()})
++    );
++    Ok(())
++}
+diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
+--- a/tgrep-cli/src/main.rs
++++ b/tgrep-cli/src/main.rs
+@@ -13,6 +13,7 @@
+ mod output;
+ mod search;
+ mod serve;
++mod ash;
+ mod status;
+ mod walkcount;
+ 
+@@ -585,6 +586,11 @@
+ 
+ #[derive(Subcommand)]
+ enum Command {
++    /// Describe the directory identity and shared-service eligibility for Ash.
++    Identity {
++        #[arg(default_value = ".")]
++        path: PathBuf,
++    },
+     /// Build or rebuild the trigram index.
+     Index {
+         /// Root directory to index.
+@@ -1167,6 +1173,7 @@
+     }
+ 
+     let result = match cli.command {
++        Some(Command::Identity { path }) => ash::identity(&path),
+         Some(Command::Index {
+             path,
+             exclude,
+diff --git a/tgrep-cli/src/serve/shared/server.rs b/tgrep-cli/src/serve/shared/server.rs
+--- a/tgrep-cli/src/serve/shared/server.rs
++++ b/tgrep-cli/src/serve/shared/server.rs
+@@ -381,8 +381,11 @@
+ }
+ 
+ fn send_error(stream: &mut TcpStream, id: Value, error: &anyhow::Error) {
++    // Ash distinguishes an invalidated snapshot from permanent protocol/storage failures.
++    let code = if matches!(error.downcast_ref::<WorktreeError>(),
++        Some(WorktreeError::NotReady | WorktreeError::ChangedDuringReconcile)) { -32002 } else { -32001 };
+     let response =
+-        json!({"jsonrpc":"2.0", "id":id, "error":{"code":-32001,"message":format!("{error:#}")}});
++        json!({"jsonrpc":"2.0", "id":id, "error":{"code":code,"message":format!("{error:#}")}});
+     if let Err(error) = writeln!(stream, "{response}") {
+         eprintln!("shared RPC error response failed: {error}");
+     }
+@@ -856,13 +859,13 @@
+     }
+ 
+     fn describe(&self, entry: &Entry) -> Result<Value> {
+-        let snapshot_valid = match entry.view.with_snapshot(|_| ()) {
+-            Ok(()) => true,
+-            Err(WorktreeError::NotReady) => false,
++        let (snapshot_valid, num_files) = match entry.view.with_snapshot(|snapshot| snapshot.files("", true).len()) {
++            Ok(count) => (true, count),
++            Err(WorktreeError::NotReady) => (false, 0),
+             Err(error) => {
+                 entry.metrics.lock().expect("metrics").error =
+                     Some(format!("validating shared snapshot: {error}"));
+-                false
++                (false, 0)
+             }
+         };
+         let status = entry.view.status()?;
+@@ -874,6 +877,7 @@
+             "root":entry.view.root(), "view":entry.id, "generation":entry.view.generation().key(),
+             "ready":snapshot_valid && status.ready && !running
+                 && checkpoint_epoch == Some(status.epoch),
++            "num_files":num_files,
+             "epoch":status.epoch, "published_epoch":status.published_epoch,
+             "pending_paths":status.pending_paths, "full_required":status.full_required,
+             "queued":entry.queued.load(Ordering::SeqCst), "last_error":metrics.error,
+@@ -1113,7 +1117,7 @@
+             | "type_clear" => value
+                 .as_array()
+                 .is_some_and(|array| array.iter().all(Value::is_string)),
+-            "max_count" | "after_context" | "before_context" | "max_filesize"
++            "max_results" | "max_count" | "after_context" | "before_context" | "max_filesize"
+             | "regex_size_limit" | "dfa_size_limit" => value.is_null() || value.is_u64(),
+             "case_insensitive"
+             | "fixed_string"
+@@ -1197,10 +1201,9 @@
+             .last
+             .as_ref()
+             .map(|stats| stats.epoch);
+-        ensure!(
+-            !entry.running.load(Ordering::SeqCst) && checkpoint_epoch == Some(epoch),
+-            "shared reconciliation or checkpoint publication incomplete; retry or scan"
+-        );
++        if entry.running.load(Ordering::SeqCst) || checkpoint_epoch != Some(epoch) {
++            return Err(WorktreeError::NotReady.into());
++        }
+         Ok(result)
+     }
+ 
+@@ -1238,15 +1241,19 @@
+             })??;
+             (json!({"files":paths, "epoch":epoch}), epoch)
+         } else {
+-            let request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
+-            let (paths, total, epoch) = self.query_snapshot(entry, |snapshot| {
+-                (
+-                    snapshot.candidates(&request.plan, &scope.prefix, scope.hidden),
+-                    request.opts.stats.then(|| snapshot.files("", true).len()),
+-                    snapshot.epoch(),
+-                )
++            let mut request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
++            let limit = crate::serve::global_result_limit(query).map_err(anyhow::Error::msg)?;
++            let per_file_limit = request.opts.max_count;
++            let (paths, raw_count, total, epoch) = self.query_snapshot(entry, |snapshot| {
++                let candidates = snapshot.candidates(&request.plan, "", true);
++                let raw_count = candidates.len();
++                let paths: Vec<_> = candidates.into_iter().filter(|path| {
++                    scope.relative(path).is_some()
++                        && snapshot.visibility().is_visible(path, &scope.prefix, scope.hidden)
++                }).collect();
++                (paths, raw_count,
++                    request.opts.stats.then(|| snapshot.files("", true).len()), snapshot.epoch())
+             })?;
+-            let raw_count = paths.len();
+             let paths: Vec<_> = paths
+                 .into_iter()
+                 .filter(|path| {
+@@ -1262,6 +1269,11 @@
+             let mut rows = Vec::new();
+             let mut stats = Vec::new();
+             for relative in &paths {
++                if let Some(limit) = limit {
++                    if rows.len() == limit { break; }
++                    let remaining = limit - rows.len();
++                    request.opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
++                }
+                 let read = (|| -> Result<Vec<u8>> {
+                     let file =
+                         self.query_snapshot(entry, |snapshot| snapshot.open_file(relative))??;
+@@ -1293,7 +1305,8 @@
+                     &request.opts,
+                     Some(&mut budget),
+                 )?;
+-                rows.extend(found.rows);
++                let remaining = limit.map_or(usize::MAX, |limit| limit - rows.len());
++                rows.extend(found.rows.into_iter().take(remaining));
+                 stats.extend(found.stats);
+             }
+             (
+@@ -1305,10 +1318,9 @@
+                 epoch,
+             )
+         };
+-        ensure!(
+-            self.query_snapshot(entry, |snapshot| snapshot.epoch() == epoch)?,
+-            "view changed during query; retry or scan"
+-        );
++        if !self.query_snapshot(entry, |snapshot| snapshot.epoch() == epoch)? {
++            return Err(WorktreeError::ChangedDuringReconcile.into());
++        }
+         for (key, value) in metadata.as_object().expect("metadata object") {
+             result[key] = value.clone();
+         }
+diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
+--- a/tgrep-cli/src/serve.rs
++++ b/tgrep-cli/src/serve.rs
+@@ -1742,6 +1742,15 @@
+     })
+ }
+ 
++// Ash's limit is global and distinct from ripgrep's per-file max_count.
++// A bounded request uses ordered matching so later files never consume its row budget.
++pub(super) fn global_result_limit(params: &serde_json::Value) -> Result<Option<usize>, String> {
++    params.get("max_results").map(|value| {
++        value.as_u64().filter(|n| (1..=5001).contains(n)).map(|n| n as usize)
++            .ok_or_else(|| "max_results must be between 1 and 5001".into())
++    }).transpose()
++}
++
+ fn handle_search(
+     id: Option<serde_json::Value>,
+     params: &serde_json::Value,
+@@ -1757,12 +1766,16 @@
+         Err(e) => return json_rpc_error(id, -32602, &e),
+     };
+ 
++    let limit = match global_result_limit(params) {
++        Ok(limit) => limit,
++        Err(error) => return json_rpc_error(id, -32602, &error),
++    };
+     let matcher = req.matcher;
+     let plan = req.plan;
+     let glob_filter = req.glob_filter;
+     let type_filter = req.type_filter;
+     let encoding = req.encoding;
+-    let opts = req.opts;
++    let mut opts = req.opts;
+     let pattern = req.pattern;
+     let case_insensitive = req.case_insensitive;
+     let scope = req.scope;
+@@ -1861,7 +1874,7 @@
+     // Two-phase approach: read-lock for cache hits, then disk I/O outside the
+     // lock, then a single write-lock to promote hits and insert misses.
+     let t_resolve = Instant::now();
+-    let candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding.may_differ_from_index() {
++    let mut candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding.may_differ_from_index() {
+         // The cache holds text decoded with the default (BOM-sniffing) rules and
+         // is shared by every client. A request that asked for a different
+         // `--encoding` must neither read those entries nor write its own, or one
+@@ -1932,23 +1945,37 @@
+     };
+     let resolve_ms = t_resolve.elapsed().as_secs_f64() * 1000.0;
+ 
+-    // Parallel regex matching across candidate files
+     let t_search = Instant::now();
+-    let per_file: std::result::Result<Vec<FileSearchResult>, String> = candidate_contents
+-        .par_iter()
+-        .map(|(rel_path, content)| {
+-            search_file_matches(rel_path, content, &matcher, &opts).map_err(|e| format!("{e}"))
+-        })
+-        .collect();
+-    let per_file = match per_file {
+-        Ok(per_file) => per_file,
+-        Err(e) => return json_rpc_error(id, -32603, &e),
+-    };
+     let mut matches = Vec::new();
+     let mut file_stats = Vec::new();
+-    for file in per_file {
+-        matches.extend(file.rows);
+-        file_stats.extend(file.stats);
++    if let Some(limit) = limit {
++        candidate_contents.sort_by(|a, b| a.0.cmp(&b.0));
++        let per_file_limit = opts.max_count;
++        let mut budget = JsonBudget { remaining: 64 * 1024 * 1024 - 1024 };
++        for (path, content) in &candidate_contents {
++            let remaining = limit - matches.len();
++            opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
++            let file = match search_file_matches_bounded(path, content, &matcher, &opts, Some(&mut budget)) {
++                Ok(file) => file,
++                Err(error) => return json_rpc_error(id, -32603, &error.to_string()),
++            };
++            matches.extend(file.rows.into_iter().take(remaining));
++            file_stats.extend(file.stats);
++            if matches.len() == limit { break; }
++        }
++    } else {
++        let per_file: std::result::Result<Vec<FileSearchResult>, String> = candidate_contents
++            .par_iter()
++            .map(|(path, content)| search_file_matches(path, content, &matcher, &opts).map_err(|e| format!("{e}")))
++            .collect();
++        let per_file = match per_file {
++            Ok(files) => files,
++            Err(error) => return json_rpc_error(id, -32603, &error),
++        };
++        for file in per_file {
++            matches.extend(file.rows);
++            file_stats.extend(file.stats);
++        }
+     }
+ 
+     let search_ms = t_search.elapsed().as_secs_f64() * 1000.0;

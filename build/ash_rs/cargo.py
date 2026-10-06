@@ -11,6 +11,7 @@ from build.lib.cargo import cargo_artifact_executable
 from build.lib.cargo import cargo_rendered_diagnostic
 from build.lib.cargo import parse_cargo_message
 from build.lib.cargo import resolve_cargo_target_directory
+from build.lib.cargo_cache import leased_cache
 from build.lib.sherpa import resolve_sherpa_cargo_env
 from build.lib.targets import TargetSpec
 from build.lib.v8 import resolve_v8_cargo_env
@@ -90,19 +91,24 @@ def build_binaries(
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
     if "ash-voice-host" in missing:
         command.extend(["--features", "ash-voice-host/host"])
-    result = subprocess.run(
-        command,
-        cwd=repository_root,
-        env=cargo_environment(spec)
-        if any(
-            name not in {"ash-windows-sandbox", "ash-windows-sandbox-service"}
-            for name in missing
+    with leased_cache(
+        repository_root,
+        profile="debug" if cargo_profile == "dev" else cargo_profile,
+        target_triple=None if host_build else spec.target,
+    ):
+        result = subprocess.run(
+            command,
+            cwd=repository_root,
+            env=cargo_environment(spec)
+            if any(
+                name not in {"ash-windows-sandbox", "ash-windows-sandbox-service"}
+                for name in missing
+            )
+            else None,
+            stdout=subprocess.PIPE,
+            text=True,
+            check=False,
         )
-        else None,
-        stdout=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
     executables = {}
     for line in result.stdout.splitlines():
         message = parse_cargo_message(line)

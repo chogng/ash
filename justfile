@@ -69,6 +69,10 @@ dependencies *args:
 bench-build *args:
     {{ python }} -B scripts/benchmark.py {{ recipe_args }}
 
+# Explicitly trim idle Cargo caches; ordinary builds retain reusable compiler state.
+prune-build-cache *args:
+    {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}
+
 # Build the three product hosts from the repository root.
 build: build-code build-desktop build-app
 

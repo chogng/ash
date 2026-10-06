@@ -21,7 +21,9 @@ filegroup(
     srcs = [
         "__init__.py",
         "cargo.py",
+        "cargo_cache.py",
         "cargo_selection.py",
+        "file_lock.py",
         "targets.py",
         "v8.py",
         "//:build/__init__.py",

@@ -168,7 +168,7 @@ impl Eq for InProcessClientOptions {}
 
 /// In-memory transport that still exercises the versioned JSON-RPC dispatcher.
 pub struct InProcessTransport {
-    _background: Arc<Option<queue::QueueRuntime>>,
+    _background: Arc<Option<queue_runtime::QueueRuntime>>,
     server: Arc<AppServer>,
     connection: ConnectionState,
     notifications: Vec<String>,
@@ -195,7 +195,7 @@ impl InProcessTransport {
 
     fn with_background(
         server: Arc<AppServer>,
-        background: Arc<Option<queue::QueueRuntime>>,
+        background: Arc<Option<queue_runtime::QueueRuntime>>,
     ) -> Self {
         let connection = server.connection();
         Self {
@@ -208,7 +208,7 @@ impl InProcessTransport {
 
     fn from_shared_product_host(
         server: Arc<AppServer>,
-        background: Arc<Option<queue::QueueRuntime>>,
+        background: Arc<Option<queue_runtime::QueueRuntime>>,
     ) -> Self {
         let connection = server.product_host_connection();
         Self {
@@ -223,7 +223,7 @@ impl InProcessTransport {
 /// Shared embedded App Server composition that can open multiple isolated logical connections.
 #[derive(Clone)]
 pub struct InProcessAppServer {
-    background: Arc<Option<queue::QueueRuntime>>,
+    background: Arc<Option<queue_runtime::QueueRuntime>>,
     pub(crate) server: Arc<AppServer>,
     pub(crate) client_info: ClientInfo,
     pub(crate) capabilities: ClientCapabilities,

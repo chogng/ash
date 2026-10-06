@@ -1,4 +1,4 @@
-"""Build the checksum-locked tgrep source and product protocol patch."""
+"""Build the checksum-locked tgrep source and Ash runtime patch."""
 
 import hashlib
 import json
@@ -52,6 +52,10 @@ def resolve_tgrep(
     executable = cache / ("tgrep" + spec.executable_suffix)
     manifest = cache / "build.json"
     with exclusive_lock(cache / ".build.lock", create=True):
+        # The published executable is self-contained. Compiler outputs belong to
+        # this resolver's build lifetime, including caches created by older builds.
+        if (cache / "target").exists():
+            shutil.rmtree(cache / "target")
         if (
             executable.is_file()
             and manifest.is_file()
@@ -86,7 +90,8 @@ def resolve_tgrep(
                 env=patch_environment,
                 check=True,
             )
-            environment = dict(os.environ, CARGO_TARGET_DIR=str(cache / "target"))
+            target_directory = directory / "target"
+            environment = dict(os.environ, CARGO_TARGET_DIR=str(target_directory))
             subprocess.run(
                 [
                     cargo,
@@ -102,7 +107,7 @@ def resolve_tgrep(
                 env=environment,
                 check=True,
             )
-            output = cache / "target" / spec.target / "release" / executable.name
+            output = target_directory / spec.target / "release" / executable.name
             actual = (
                 subprocess.check_output([str(output), "--version"], text=True).strip()
                 if spec.target == default_target()

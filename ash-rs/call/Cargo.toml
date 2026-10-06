@@ -9,10 +9,11 @@ publish.workspace = true
 name = "call"
 
 [features]
-runtime = ["dep:ash-http-client", "dep:url", "dep:tempfile", "dep:tokio"]
+runtime = ["dep:serde", "dep:ash-http-client", "dep:url", "dep:tempfile", "dep:tokio"]
 
 [dependencies]
-serde = { workspace = true }
+contract = { package = "ash-call-contract", path = "../call-contract" }
+serde = { workspace = true, optional = true }
 serde_json = { workspace = true }
 rusqlite = { workspace = true }
 rand = { workspace = true }
@@ -22,8 +23,6 @@ ash-secrets = { workspace = true }
 ash-http-client = { optional = true, workspace = true }
 url = { optional = true, workspace = true }
 tempfile = { optional = true, workspace = true }
-schemars = { workspace = true }
-ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 tokio = { optional = true, workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 [lints]

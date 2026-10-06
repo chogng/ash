@@ -11,13 +11,11 @@ name = "ash_collaboration"
 path = "src/lib.rs"
 
 [dependencies]
+contract = { package = "ash-collaboration-contract", path = "../collaboration-contract" }
 getrandom = { workspace = true }
 rusqlite = { workspace = true }
-schemars = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

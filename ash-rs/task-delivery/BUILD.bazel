@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "task-delivery",
+    crate_name = "ash_task_delivery",
+    crate_features = ["runtime"],
+)

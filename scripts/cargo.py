@@ -18,6 +18,7 @@ from build.lib.cargo import (  # noqa: E402
     cargo_rendered_diagnostic,
     parse_cargo_message,
 )
+from build.lib.cargo_cache import leased_cache, profile_from_arguments  # noqa: E402
 from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
@@ -250,9 +251,9 @@ def main(arguments: list[str] | None = None) -> int:
         parser.error(f"unsupported V8 target: {target}")
     environment = os.environ.copy()
     if args.deny_warnings:
-        environment["RUSTFLAGS"] = " ".join(
-            filter(None, [environment.get("RUSTFLAGS"), "-D warnings"])
-        )
+        # Cargo replays cached diagnostics for this gate without changing rustc's
+        # artifact identity, unlike appending -D warnings to RUSTFLAGS.
+        environment["CARGO_BUILD_WARNINGS"] = "deny"
     needs_code_mode_host = (
         cargo_arguments[0] == "test"
         and "--no-run" not in cargo_arguments
@@ -300,28 +301,33 @@ def main(arguments: list[str] | None = None) -> int:
             REPOSITORY_ROOT / "third_party/.cache/tgrep",
         )
         environment["ASH_TGREP_PATH"] = str(executable.executable)
-    if needs_code_mode_host:
-        environment["ASH_CODE_MODE_HOST_BIN"] = prepare_test_executable(
-            args.cargo, cargo_arguments, environment, "ash-code-mode-host"
-        )
-    if (
-        cargo_arguments[0] == "test"
-        and "--no-run" not in cargo_arguments
-        and "ASH_APP_SERVER_PATH" not in environment
-        and cargo_command_uses_package(
-            args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-remote-server"
-        )
+    with leased_cache(
+        REPOSITORY_ROOT,
+        profile=profile_from_arguments(cargo_arguments),
+        target_triple=cargo_target(cargo_arguments),
     ):
-        environment["ASH_APP_SERVER_PATH"] = prepare_test_executable(
-            args.cargo, cargo_arguments, environment, "ash-app-server"
-        )
-    if args.process_tests:
-        # Windows Cargo owns a Job that forbids CREATE_BREAKAWAY_FROM_JOB. A process
-        # lifecycle test must exercise the daemon's independent lifetime unchanged.
-        return run_process_tests(args.cargo, cargo_arguments, environment)
-    return subprocess.run(
-        [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment
-    ).returncode
+        if needs_code_mode_host:
+            environment["ASH_CODE_MODE_HOST_BIN"] = prepare_test_executable(
+                args.cargo, cargo_arguments, environment, "ash-code-mode-host"
+            )
+        if (
+            cargo_arguments[0] == "test"
+            and "--no-run" not in cargo_arguments
+            and "ASH_APP_SERVER_PATH" not in environment
+            and cargo_command_uses_package(
+                args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-remote-server"
+            )
+        ):
+            environment["ASH_APP_SERVER_PATH"] = prepare_test_executable(
+                args.cargo, cargo_arguments, environment, "ash-app-server"
+            )
+        if args.process_tests:
+            # Windows Cargo owns a Job that forbids CREATE_BREAKAWAY_FROM_JOB. A process
+            # lifecycle test must exercise the daemon's independent lifetime unchanged.
+            return run_process_tests(args.cargo, cargo_arguments, environment)
+        return subprocess.run(
+            [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment
+        ).returncode
 
 
 if __name__ == "__main__":

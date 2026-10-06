@@ -14,7 +14,7 @@ required-features = ["host"]
 
 [features]
 default = []
-host = ["dep:cpal", "dep:crossbeam-queue", "dep:rubato", "dep:sonora", "dep:process-hardening"]
+host = ["dep:cpal", "dep:crossbeam-queue", "dep:rubato", "dep:sonora", "dep:process-hardening", "dep:ash-package-store"]
 
 [lints]
 workspace = true
@@ -29,6 +29,7 @@ crossbeam-queue = { workspace = true, optional = true }
 rubato = { workspace = true, optional = true }
 sonora = { workspace = true, optional = true }
 process-hardening = { workspace = true, optional = true }
+ash-package-store = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -20,19 +20,23 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.0.12-ash.1";
+pub const VERSION: &str = "1.0.12-ash.e9d55db.1";
 const TIMEOUT: Duration = Duration::from_secs(30);
 const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Debug)]
 pub enum Error {
     Failed(String),
+    /// The shared view was invalidated; reconcile before retrying within the same deadline.
+    NotReady(String),
     Cancelled(String),
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Failed(message) | Self::Cancelled(message) => f.write_str(message),
+            Self::Failed(message) | Self::NotReady(message) | Self::Cancelled(message) => {
+                f.write_str(message)
+            }
         }
     }
 }
@@ -94,19 +98,32 @@ impl Executable {
         root: &Path,
         cancellation: &CancellationToken,
     ) -> Result<PathBuf, Error> {
+        Ok(self.identity(root, cancellation)?.directory)
+    }
+    fn identity(
+        &self,
+        root: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<DirectoryIdentity, Error> {
         let mut command = std::process::Command::new(&self.0);
         command.arg("identity").arg(root);
         let lines = process::capture(command, cancellation, Instant::now() + TIMEOUT, 1)?;
-        let value: Value = serde_json::from_str(
+        serde_json::from_str(
             lines
                 .first()
                 .ok_or_else(|| failed("missing search identity"))?,
-        )?;
-        let directory = value["directory"]
-            .as_str()
-            .ok_or_else(|| failed("invalid search identity"))?;
-        dunce::canonicalize(directory).map_err(Into::into)
+        )
+        .map_err(Into::into)
     }
+}
+
+#[derive(Deserialize)]
+struct DirectoryIdentity {
+    directory: PathBuf,
+    revision: Option<String>,
+}
+fn profile() -> Value {
+    json!({"content":"raw-git-blob-auto-v1","coverage":"tracked-regular-files-v1","max_blob_bytes":67108864})
 }
 
 pub struct Query<'a> {
@@ -146,7 +163,7 @@ pub struct Status {
     #[serde(rename = "num_files")]
     pub indexed_file_count: usize,
     pub indexing: bool,
-    pub hidden_complete: bool,
+    pub ready: bool,
     pub watcher_active: bool,
 }
 
@@ -156,9 +173,42 @@ pub struct Session {
     executable: Executable,
     root: PathBuf,
     process: std::sync::Arc<process::Server>,
-    worktree_id: u64,
+    registration: Registration,
     changed: Mutex<BTreeSet<PathBuf>>,
 }
+enum Registration {
+    Directory,
+    Released,
+    Shared {
+        view: String,
+        lease: String,
+        generation: Value,
+    },
+}
+
+struct PendingAttachment {
+    process: std::sync::Arc<process::Server>,
+    params: Option<Value>,
+}
+impl Drop for PendingAttachment {
+    fn drop(&mut self) {
+        if let Some(params) = self.params.take() {
+            let process = std::sync::Arc::clone(&self.process);
+            // Attach runs on the daemon's lifecycle worker even after its connection closes.
+            // Replay the same token on that worker, then release it, keeping the owned daemon alive.
+            std::thread::spawn(move || {
+                let cancellation = ash_async_utils::CancellationSource::new();
+                let deadline = Instant::now() + INDEX_TIMEOUT;
+                if let Ok(result) =
+                    process.rpc("attach", params.clone(), &cancellation.token(), deadline)
+                {
+                    let _ = process.rpc("detach", json!({"root":params["root"],"view":result["view"],"lease":params["lease"]}), &cancellation.token(), deadline);
+                }
+            });
+        }
+    }
+}
+
 impl Session {
     pub fn open(
         executable: Executable,
@@ -168,38 +218,159 @@ impl Session {
     ) -> Result<Self, Error> {
         let root = dunce::canonicalize(root)?;
         let process = process::Server::shared(&executable, &root, index, cancellation)?;
-        let registration = process.rpc(
-            "attach",
-            json!({"root":root}),
-            cancellation,
-            Instant::now() + INDEX_TIMEOUT,
-        )?;
-        let worktree_id = registration["worktree_id"]
-            .as_u64()
-            .ok_or_else(|| failed("missing worktree registration"))?;
-        Ok(Self {
+        let deadline = Instant::now() + INDEX_TIMEOUT;
+        let registration = if process.is_shared() {
+            let identity = executable.identity(&root, cancellation)?;
+            static NEXT_LEASE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+            let number = NEXT_LEASE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| failed(e.to_string()))?
+                .as_nanos();
+            // Allocate the token before sending; it identifies this registration across retries.
+            let lease = format!("{}-{time}-{number}", std::process::id());
+            let params = json!({"root":root,"revision":identity.revision.ok_or_else(|| failed("worktree has no starting revision"))?,"profile":profile(),"lease":lease});
+            let mut pending = PendingAttachment {
+                process: std::sync::Arc::clone(&process),
+                params: Some(params.clone()),
+            };
+            let result = process.rpc("attach", params, cancellation, deadline)?;
+            if result["root"] != json!(root)
+                || result["lease"] != lease
+                || result["generation"]["profile"] != profile()
+            {
+                return Err(failed("invalid worktree registration"));
+            }
+            let view = result["view"]
+                .as_str()
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| failed("missing worktree view"))?
+                .to_owned();
+            pending.params = None;
+            Registration::Shared {
+                view,
+                lease,
+                generation: result["generation"].clone(),
+            }
+        } else {
+            Registration::Directory
+        };
+        let session = Self {
             executable,
             root,
             process,
-            worktree_id,
+            registration,
             changed: Mutex::new(BTreeSet::new()),
-        })
+        };
+        session.wait_ready(cancellation, deadline)?;
+        Ok(session)
+    }
+    fn wait_ready(&self, cancellation: &CancellationToken, deadline: Instant) -> Result<(), Error> {
+        loop {
+            check(cancellation, deadline)?;
+            if self.status(cancellation)?.ready {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+    /// Consume this registration after in-flight callers finish, before deleting its directory.
+    pub fn close(mut self, cancellation: &CancellationToken) -> Result<(), Error> {
+        if let Registration::Shared { view, lease, .. } = &self.registration {
+            self.process.rpc(
+                "detach",
+                json!({"root":self.root,"view":view,"lease":lease}),
+                cancellation,
+                Instant::now() + INDEX_TIMEOUT,
+            )?;
+        }
+        self.registration = Registration::Released;
+        Ok(())
     }
     pub fn status(&self, cancellation: &CancellationToken) -> Result<Status, Error> {
-        serde_json::from_value(self.rpc(
-            "status",
-            json!({}),
-            cancellation,
-            Instant::now() + TIMEOUT,
-        )?)
-        .map_err(Into::into)
+        let value = self.rpc("status", json!({}), cancellation, Instant::now() + TIMEOUT)?;
+        let (indexing, ready, watcher_active) = match self.registration {
+            Registration::Shared { .. } => (
+                value["reconcile_running"]
+                    .as_bool()
+                    .ok_or_else(|| failed("invalid reconciliation status"))?,
+                value["ready"]
+                    .as_bool()
+                    .ok_or_else(|| failed("invalid readiness status"))?,
+                value["watch_mode"]
+                    .as_str()
+                    .ok_or_else(|| failed("invalid watcher status"))?
+                    == "native",
+            ),
+            Registration::Released => return Err(failed("search registration was released")),
+            Registration::Directory => (
+                value["indexing"]
+                    .as_bool()
+                    .ok_or_else(|| failed("invalid indexing status"))?,
+                value["hidden_complete"]
+                    .as_bool()
+                    .ok_or_else(|| failed("invalid coverage status"))?
+                    && value["indexing"] == false,
+                value["watcher_active"]
+                    .as_bool()
+                    .ok_or_else(|| failed("invalid watcher status"))?,
+            ),
+        };
+        Ok(Status {
+            indexed_file_count: value["num_files"]
+                .as_u64()
+                .ok_or_else(|| failed("invalid file count"))?
+                as usize,
+            indexing,
+            ready,
+            watcher_active,
+        })
     }
     pub fn rebuild(&self, cancellation: &CancellationToken) -> Result<Status, Error> {
-        // Serialize the edit set across reload so writes racing publication remain dirty afterwards.
+        // Hold pending edits until the engine has acknowledged publication.
         let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
-        self.rpc("reload", json!({}), cancellation, Instant::now() + TIMEOUT)?;
+        self.refresh(&[], cancellation, Instant::now() + INDEX_TIMEOUT)?;
         changed.clear();
         self.status(cancellation)
+    }
+    fn refresh(
+        &self,
+        changed: &[PathBuf],
+        cancellation: &CancellationToken,
+        deadline: Instant,
+    ) -> Result<(), Error> {
+        match &self.registration {
+            Registration::Shared { view, lease, .. } => {
+                let paths = changed
+                    .iter()
+                    .map(|path| portable(path))
+                    .collect::<Result<Vec<_>, _>>()?;
+                loop {
+                    check(cancellation, deadline)?;
+                    let result = self.process.rpc("refresh", json!({"root":self.root,"view":view,"lease":lease,"changed":paths,"full":paths.is_empty()}), cancellation, deadline);
+                    match result {
+                        Ok(value) => {
+                            self.validate_view(&value)?;
+                            if value["processed_epoch"].as_u64().is_none() {
+                                return Err(failed("missing worktree refresh epoch"));
+                            }
+                            if value["ready"] == true {
+                                break;
+                            }
+                        }
+                        Err(Error::NotReady(_)) => {}
+                        Err(error) => return Err(error),
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+            }
+            Registration::Released => return Err(failed("search registration was released")),
+            Registration::Directory => {
+                self.process
+                    .rpc("reload", json!({}), cancellation, deadline)?;
+            }
+        }
+        Ok(())
     }
     pub fn paths_changed(&self, paths: &[PathBuf]) {
         let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
@@ -246,9 +417,8 @@ impl Session {
         }
         let mut changed = self.changed.lock().unwrap();
         if !changed.is_empty() {
-            self.rpc(
-                "refresh",
-                json!({"paths":changed.iter().collect::<Vec<_>>()}),
+            self.refresh(
+                &changed.iter().cloned().collect::<Vec<_>>(),
                 cancellation,
                 deadline,
             )?;
@@ -257,11 +427,24 @@ impl Session {
         drop(changed);
         let mut globs: Vec<String> = query.include.iter().map(|s| (*s).to_owned()).collect();
         globs.extend(query.exclude.iter().map(|g| format!("!{g}")));
-        let result = self.rpc("search", json!({
+        let params = json!({
             "pattern":query.pattern,"case_insensitive":query.case_insensitive,
             "scope":portable(query.scope)?,"glob":globs,"files_only":false,
             "max_count":limit+1,"max_results":limit+1,"detail":false,"positions":false,"stats":true
-        }), cancellation, deadline)?;
+        });
+        let result = loop {
+            check(cancellation, deadline)?;
+            if !self.status(cancellation)?.ready {
+                self.refresh(&[], cancellation, deadline)?;
+            }
+            match self.rpc("search", params.clone(), cancellation, deadline) {
+                Ok(value) => break value,
+                Err(Error::NotReady(_)) => {
+                    self.refresh(&[], cancellation, deadline)?;
+                }
+                Err(error) => return Err(error),
+            }
+        };
         let index_stats = serde_json::from_value(result["index_stats"].clone())?;
         let mut matches = Vec::new();
         for value in rows(&result)? {
@@ -287,12 +470,41 @@ impl Session {
     fn rpc(
         &self,
         method: &str,
-        mut params: Value,
+        params: Value,
         cancellation: &CancellationToken,
         deadline: Instant,
     ) -> Result<Value, Error> {
-        params["worktree_id"] = json!(self.worktree_id);
-        self.process.rpc(method, params, cancellation, deadline)
+        match &self.registration {
+            Registration::Released => Err(failed("search registration was released")),
+            Registration::Directory => self.process.rpc(method, params, cancellation, deadline),
+            Registration::Shared { view, .. } => {
+                let value = self.process.rpc(
+                    method,
+                    json!({"root":self.root,"view":view,"query":params}),
+                    cancellation,
+                    deadline,
+                )?;
+                self.validate_view(&value)?;
+                if method != "status"
+                    && (value["ready"] != true || value["epoch"].as_u64().is_none())
+                {
+                    return Err(failed("worktree query is not ready"));
+                }
+                Ok(value)
+            }
+        }
+    }
+    fn validate_view(&self, value: &Value) -> Result<(), Error> {
+        if let Registration::Shared {
+            view, generation, ..
+        } = &self.registration
+            && (value["root"] != json!(self.root)
+                || value["view"] != *view
+                || value["generation"] != *generation)
+        {
+            return Err(failed("worktree response identity changed"));
+        }
+        Ok(())
     }
 
     fn admitted(&self, relative: &Path, scope: &Path) -> bool {
@@ -517,13 +729,15 @@ impl Session {
 }
 impl Drop for Session {
     fn drop(&mut self) {
-        let cancellation = ash_async_utils::CancellationSource::new();
-        let _ = self.rpc(
-            "detach",
-            json!({}),
-            &cancellation.token(),
-            Instant::now() + Duration::from_secs(1),
-        );
+        if let Registration::Shared { view, lease, .. } = &self.registration {
+            let cancellation = ash_async_utils::CancellationSource::new();
+            let _ = self.process.rpc(
+                "detach",
+                json!({"root":self.root,"view":view,"lease":lease}),
+                &cancellation.token(),
+                Instant::now() + Duration::from_secs(1),
+            );
+        }
     }
 }
 

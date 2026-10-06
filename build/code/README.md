@@ -4,7 +4,7 @@
 由根目录 `ash-cli/` 实现；TUI 由 `code/` 实现；此目录只负责构建和交付工具。
 
 `build.py` 一次编译开发所需的 CLI、App Server、语音设备辅助程序和平台程序，读取 Cargo 报告的可执行文件路径。
-`build/code/run.py` 调用 `build.py` 的暂存能力，将可执行文件放入 `.build/code/dev/<digest>/` 后启动 CLI；独立运行 `build.py` 只编译。
+`build/code/run.py` 调用共享开发发布器，将可执行文件放入 `.build/code/dev/generations/<digest>/bin/` 后启动 CLI；独立运行 `build.py` 只编译。启动器在发布锁内取得版本租约，持续持有至 CLI 退出；CLI、App Server、Code Mode 和语音辅助程序也各自持有进程租约。每次发布只保留当前版本和仍持有租约的历史版本，未变化的程序通过 `objects/` 中的硬链接共享，最后一个版本释放后回收对应对象。
 
 正式发布按顺序组装，已有输出目录不会被覆盖：
 

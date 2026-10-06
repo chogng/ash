@@ -7,7 +7,7 @@ publish.workspace = true
 
 [features]
 # Product hosts connect to a separate server process; embedding is used by contract tests.
-in-process = ["dep:ash-app-server", "dep:ash-client"]
+in-process = ["dep:queue-runtime", "dep:ash-app-server", "dep:ash-client"]
 
 [lib]
 doctest = false
@@ -16,7 +16,8 @@ path = "src/lib.rs"
 
 [dependencies]
 memories = { workspace = true }
-queue = { workspace = true }
+queue = { package = "ash-queue-contract", path = "../queue-contract" }
+queue-runtime = { package = "ash-queue", path = "../ext/queue", optional = true }
 diagnostics = { workspace = true }
 feedback-contract = { workspace = true }
 base64 = { workspace = true }
@@ -35,6 +36,7 @@ workspace = true
 ash-utils-pty = { workspace = true }
 
 [dev-dependencies]
+queue-runtime = { package = "ash-queue", path = "../ext/queue" }
 ash-app-server = { workspace = true }
 ash-client = { workspace = true }
 ash-protocol = { workspace = true }

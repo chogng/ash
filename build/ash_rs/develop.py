@@ -9,6 +9,7 @@ import re
 import shutil
 import sys
 import uuid
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -22,6 +23,7 @@ from build.ash_rs.prepare import (
 )
 from build.download.artifacts import sha256
 from build.lib.file_lock import exclusive_lock as _exclusive_lock
+from build.lib.file_lock import shared_lock
 from build.lib.targets import TARGETS, default_target
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,6 +90,42 @@ def _publish_generation(
         {"version": 1, "resources": str(package.resolve()), "binaries": digests},
         sort_keys=True,
     )
+    return _publish_files(
+        files,
+        digests,
+        identity,
+        {"ash-resources": package / "ash-resources"},
+        {"ash-path": package / "ash-path"},
+        directory,
+    )
+
+
+@contextmanager
+def leased_binary_generation(binaries: dict[str, Path], directory: Path):
+    """Publish Code's executables and acquire its launch lease before collection can run."""
+    directory.mkdir(parents=True, exist_ok=True)
+    files = {f"bin/{path.name}": path for path in binaries.values()}
+    digests = {name: sha256(path) for name, path in sorted(files.items())}
+    identity = json.dumps({"version": 1, "binaries": digests}, sort_keys=True)
+    with ExitStack() as lifetime:
+        with _exclusive_lock(directory / "publish.lock", create=True):
+            _, generation = _publish_files(files, digests, identity, {}, {}, directory)
+            runtime = directory / "generations" / generation
+            # The publication lock fences concurrent collectors until the shared lease
+            # is held. The runner retains it through child startup and process exit.
+            lifetime.enter_context(shared_lock(runtime / ".lease"))
+            _cleanup_generations(directory, generation)
+        yield {name: runtime / "bin" / path.name for name, path in binaries.items()}
+
+
+def _publish_files(
+    files: dict[str, Path],
+    digests: dict[str, str],
+    identity: str,
+    copied_directories: dict[str, Path],
+    linked_directories: dict[str, Path],
+    directory: Path,
+) -> tuple[bool, str]:
     generation = hashlib.sha256(identity.encode()).hexdigest()
     contents = json.dumps({"version": 3, "runtime": f"generations/{generation}"}) + "\n"
     pointer = directory / "current.json"
@@ -100,10 +138,10 @@ def _publish_generation(
             (staging / "bin").mkdir(parents=True)
             objects = directory / "objects"
             objects.mkdir(exist_ok=True)
-            shutil.copytree(
-                package / "ash-path", staging / "ash-path", copy_function=os.link
-            )
-            shutil.copytree(package / "ash-resources", staging / "ash-resources")
+            for name, source in linked_directories.items():
+                shutil.copytree(source, staging / name, copy_function=os.link)
+            for name, source in copied_directories.items():
+                shutil.copytree(source, staging / name)
             for name, source in files.items():
                 immutable = objects / digests[name]
                 if not immutable.exists():

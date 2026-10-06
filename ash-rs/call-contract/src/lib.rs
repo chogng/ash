@@ -1,7 +1,61 @@
+//! Shared call contracts, independent of execution and storage.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CallRole {
+    Owner,
+    Speaker,
+    Listener,
+    Agent,
+}
+
+impl CallRole {
+    pub fn can_publish_audio(self) -> bool {
+        self != Self::Listener
+    }
+    pub fn can_share_screen(self) -> bool {
+        matches!(self, Self::Owner | Self::Speaker)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "state"
+)]
+pub enum MediaState {
+    Preparing,
+    Ready,
+    Rotating { previous_room: String },
+    Closing,
+    Closed,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CallMember {
+    pub id: String,
+    pub role: CallRole,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CallSnapshot {
+    pub id: String,
+    #[ts(type = "number")]
+    pub revision: u64,
+    #[ts(type = "number")]
+    pub media_epoch: u64,
+    pub media_room: String,
+    pub media_state: MediaState,
+    pub members: Vec<CallMember>,
+}
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(

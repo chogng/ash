@@ -1,3 +1,4 @@
+use super::environment_runtime::EnvRuntime;
 use crate::dir_grants::DirGrants;
 use ash_config::ConfigStore;
 use ash_file_access::{Dir, DirId};
@@ -17,6 +18,7 @@ pub(super) struct ThreadDirs {
     pub(super) bindings: RwLock<BTreeMap<ThreadId, ManagedDirBinding>>,
     pub(super) file_access: Arc<DirGrants>,
     pub(super) hooks: Arc<DeclarativeHookRuntime>,
+    env_runtime: Arc<RwLock<EnvRuntime>>,
 }
 
 impl ThreadDirs {
@@ -26,6 +28,7 @@ impl ThreadDirs {
         config: &ConfigStore,
         file_access: Arc<DirGrants>,
         hooks: Arc<DeclarativeHookRuntime>,
+        env_runtime: Arc<RwLock<EnvRuntime>>,
     ) -> Result<Arc<Self>, String> {
         let dir = Dir::open_local(dir_root).map_err(|error| error.to_string())?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -68,7 +71,25 @@ impl ThreadDirs {
             bindings: RwLock::new(bindings),
             file_access,
             hooks,
+            env_runtime,
         }))
+    }
+
+    pub(super) fn release_search(&self, checkout_root: &Path) -> Result<(), String> {
+        let search = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .workspace
+            .grep
+            .clone();
+        if let Some(search) = search {
+            let root = Dir::open_local(checkout_root).map_err(|error| error.to_string())?;
+            search
+                .release_directory(&root, &ash_async_utils::CancellationSource::new().token())
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
     }
 
     pub(super) fn binding(&self, thread_id: &ThreadId) -> Option<ManagedDirBinding> {

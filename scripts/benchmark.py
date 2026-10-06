@@ -114,10 +114,27 @@ def remove_run_target(target: Path) -> None:
                 raise
 
 
-def tracked_build_timestamps(root: Path) -> dict[str, int]:
-    names = output(["git", "ls-files", "-z", "--", "*.rs", "*.toml"], root)
+def build_input_timestamps(root: Path) -> dict[str, int | None]:
+    # Measure the working tree, including new contracts and removed modules.
+    # Keeping deleted paths records their absence and detects later recreation.
+    names = output(
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+            "*.rs",
+            "*.toml",
+        ],
+        root,
+    )
     return {
-        name: (root / name).stat().st_mtime_ns for name in names.split("\0") if name
+        name: (root / name).stat().st_mtime_ns if (root / name).exists() else None
+        for name in names.split("\0")
+        if name
     }
 
 
@@ -272,7 +289,7 @@ def main(arguments: list[str] | None = None) -> int:
             str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(inputs)
         }
-        build_timestamps = tracked_build_timestamps(root)
+        build_timestamps = build_input_timestamps(root)
         if args.compare:
             baseline = json.loads(args.compare.read_text())
             if baseline["environment"] != report["environment"]:
@@ -330,9 +347,9 @@ def main(arguments: list[str] | None = None) -> int:
             raise ValueError(
                 "HEAD changed during measurement; repeat with stable inputs"
             )
-        if tracked_build_timestamps(root) != build_timestamps:
+        if build_input_timestamps(root) != build_timestamps:
             raise ValueError(
-                "tracked Rust or TOML timestamps changed during measurement; repeat with stable inputs"
+                "Rust or TOML inputs changed during measurement; repeat with stable inputs"
             )
         report["medians"] = {
             scenario: {

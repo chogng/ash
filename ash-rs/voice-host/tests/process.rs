@@ -60,6 +60,31 @@ async fn relocated_executable_needs_no_media_runtime_and_releases_process() {
 }
 
 #[tokio::test]
+async fn running_audio_host_leases_its_generation_until_pipe_shutdown() {
+    let package = tempfile::tempdir().unwrap();
+    let bin = package.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let path = bin.join(if cfg!(windows) {
+        "ash-voice-host.exe"
+    } else {
+        "ash-voice-host"
+    });
+    std::fs::copy(executable(), &path).unwrap();
+    let lease = std::fs::OpenOptions::new()
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .open(package.path().join(".lease"))
+        .unwrap();
+    let host = AudioHost::spawn(&path.canonicalize().unwrap())
+        .await
+        .unwrap();
+    assert!(lease.try_lock().is_err());
+    host.close().await.unwrap();
+    lease.try_lock().unwrap();
+}
+
+#[tokio::test]
 async fn invalid_request_is_rejected_and_parent_pipe_loss_exits() {
     let (mut child, mut input, mut output) = ready().await;
     let payload = br#"{"id":2,"command":{"operation":"capture","state":"muted"}}"#;

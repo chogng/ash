@@ -1,3 +1,5 @@
+//! Shared collaboration contracts, independent of execution and storage.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

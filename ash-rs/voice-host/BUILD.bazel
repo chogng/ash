@@ -11,6 +11,7 @@ ash_rust_crate(
     crate_features = ["host"],
     extra_deps = [
         "//ash-rs/process-hardening:process-hardening",
+        "//ash-rs/package-store:package-store",
         "@crates//:cpal",
         "@crates//:crossbeam-queue",
         "@crates//:rubato",
@@ -22,6 +23,6 @@ ash_rust_binary(
     name = "ash-voice-host",
     crate_name = "ash_voice_host",
     crate_root = "src/main.rs",
-    deps = [":voice-host-enabled", "//ash-rs/process-hardening:process-hardening"],
+    deps = [":voice-host-enabled", "//ash-rs/process-hardening:process-hardening", "//ash-rs/package-store:package-store"],
     extra_aliases = {"//ash-rs/process-hardening": "process_hardening"},
 )

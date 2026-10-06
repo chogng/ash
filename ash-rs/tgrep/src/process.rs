@@ -76,9 +76,23 @@ pub(super) struct Server {
     child: SharedChild,
     address: SocketAddr,
     index: PathBuf,
+    protocol: Protocol,
+}
+enum Protocol {
+    Directory,
+    Shared(Discovery),
 }
 #[derive(Deserialize)]
 struct Discovery {
+    pid: u32,
+    port: u16,
+    protocol: u32,
+    instance: String,
+    repository: String,
+    storage: PathBuf,
+}
+#[derive(Deserialize)]
+struct DirectoryDiscovery {
     pid: u32,
     port: u16,
 }
@@ -114,40 +128,62 @@ impl Server {
         if lines.first().map(String::as_str) != Some(&format!("tgrep {VERSION}")) {
             return Err(failed(format!("expected packaged tgrep {VERSION}")));
         }
+        let identity = executable.identity(root, cancellation)?;
         std::fs::create_dir_all(index)?;
-        let child = Arc::new(Mutex::new(OwnedChild(
-            Command::new(&executable.0)
-                .arg("shared-serve")
-                .arg(root)
+        let mut command = Command::new(&executable.0);
+        command.arg("serve").arg(root);
+        let marker = if identity.revision.is_some() {
+            command.arg("--shared").arg("--shared-storage").arg(index);
+            identity.directory.join("tgrep-daemon-v1.json")
+        } else {
+            command
                 .arg("--index-path")
                 .arg(index)
-                .arg("--no-require-git")
+                .arg("--no-require-git");
+            index.join("serve.json")
+        };
+        let child = Arc::new(Mutex::new(OwnedChild(
+            command
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()?,
         )));
         register(&child);
-        let address = loop {
+        let (address, protocol) = loop {
             check(cancellation, deadline)?;
-            if let Some(status) = child
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .0
-                .try_wait()?
-            {
+            let mut process = child.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(status) = process.0.try_wait()? {
                 return Err(failed(format!(
                     "tgrep server exited during startup: {status}"
                 )));
             }
-            if let Ok(bytes) = std::fs::read(index.join("serve.json")) {
+            let pid = process.0.id();
+            drop(process);
+            if let Ok(bytes) = std::fs::read(&marker) {
                 if bytes.len() <= 4096 {
-                    if let Ok(info) = serde_json::from_slice::<Discovery>(&bytes) {
-                        if info.pid == child.lock().unwrap_or_else(|e| e.into_inner()).0.id()
+                    if identity.revision.is_some() {
+                        if let Ok(info) = serde_json::from_slice::<Discovery>(&bytes)
+                            && info.pid == pid
                             && info.port != 0
+                            && info.protocol == 1
+                            && !info.instance.is_empty()
+                            && !info.repository.is_empty()
+                            && dunce::canonicalize(&info.storage)? == dunce::canonicalize(index)?
                         {
-                            break SocketAddr::from((Ipv4Addr::LOCALHOST, info.port));
+                            break (
+                                SocketAddr::from((Ipv4Addr::LOCALHOST, info.port)),
+                                Protocol::Shared(info),
+                            );
                         }
+                    } else if let Ok(info) = serde_json::from_slice::<DirectoryDiscovery>(&bytes)
+                        && info.pid == pid
+                        && info.port != 0
+                    {
+                        break (
+                            SocketAddr::from((Ipv4Addr::LOCALHOST, info.port)),
+                            Protocol::Directory,
+                        );
                     }
                 }
             }
@@ -157,12 +193,28 @@ impl Server {
             child,
             address,
             index: index.into(),
+            protocol,
         };
-        let capabilities = server.rpc("capabilities", Value::Null, cancellation, deadline)?;
-        if capabilities["shared_worktrees"] != 1 {
-            return Err(failed("unsupported shared search protocol"));
+        if server.is_shared() {
+            let hello = server.rpc("hello", json!({}), cancellation, deadline)?;
+            if hello["capabilities"]
+                != json!([
+                    "leases",
+                    "recoverable-attach",
+                    "worktree-overlays",
+                    "refresh",
+                    "search",
+                    "files"
+                ])
+                || hello["profile"] != super::profile()
+            {
+                return Err(failed("unsupported shared search protocol"));
+            }
         }
         Ok(server)
+    }
+    pub(super) fn is_shared(&self) -> bool {
+        matches!(self.protocol, Protocol::Shared(_))
     }
     pub(super) fn index(&self) -> &Path {
         &self.index
@@ -187,8 +239,16 @@ impl Server {
         let mut socket = TcpStream::connect_timeout(&self.address, Duration::from_secs(1))?;
         socket.set_read_timeout(Some(POLL))?;
         socket.set_write_timeout(Some(Duration::from_secs(1)))?;
-        let mut request =
-            serde_json::to_vec(&json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}))?;
+        let mut envelope = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
+        if let Protocol::Shared(info) = &self.protocol {
+            envelope["protocol"] = json!(info.protocol);
+            envelope["instance"] = json!(info.instance);
+            envelope["repository"] = json!(info.repository);
+        }
+        let mut request = serde_json::to_vec(&envelope)?;
+        if request.len() >= 1024 * 1024 {
+            return Err(failed("tgrep request exceeds 1 MiB"));
+        }
         request.push(b'\n');
         socket.write_all(&request)?;
         let mut response = Vec::new();
@@ -217,19 +277,42 @@ impl Server {
             }
         }
         let mut response: Value = serde_json::from_slice(&response)?;
-        if response["jsonrpc"] != "2.0" || response["id"] != 1 {
+        if !response.is_object() || response["jsonrpc"] != "2.0" {
             return Err(failed("invalid tgrep response identity"));
         }
         if let Some(error) = response.get("error") {
-            return Err(failed(format!(
+            if !response.get("id").is_some_and(|id| id == 1 || id.is_null())
+                || response.get("result").is_some()
+                || error["code"].as_i64().is_none()
+                || error["message"].as_str().is_none()
+            {
+                return Err(failed("invalid tgrep error response"));
+            }
+            let message = format!(
                 "tgrep: {}",
-                error["message"].as_str().unwrap_or("request failed")
-            )));
+                error["message"].as_str().expect("validated message")
+            );
+            return Err(if self.is_shared() && error["code"] == -32002 {
+                Error::NotReady(message)
+            } else {
+                failed(message)
+            });
         }
-        response
+        if response["id"] != 1 {
+            return Err(failed("invalid tgrep response identity"));
+        }
+        let result = response
             .as_object_mut()
             .and_then(|v| v.remove("result"))
-            .ok_or_else(|| failed("missing tgrep result"))
+            .ok_or_else(|| failed("missing tgrep result"))?;
+        if let Protocol::Shared(info) = &self.protocol
+            && (result["protocol"] != info.protocol
+                || result["instance"] != info.instance
+                || result["repository"] != info.repository)
+        {
+            return Err(failed("stale or incompatible tgrep service"));
+        }
+        Ok(result)
     }
 }
 

@@ -77,6 +77,47 @@ class TgrepTests(unittest.TestCase):
             self.assertEqual(commands[0][:3], ["git", "apply", "--check"])
             self.assertIn("--locked", commands[2])
             self.assertEqual(len(commands), 3)
+            self.assertEqual(
+                {path.name for path in first.executable.parent.iterdir()},
+                {"tgrep", "build.json", ".build.lock"},
+            )
+
+    def test_reusing_a_published_binary_collects_legacy_compiler_outputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = self.fixture(root)
+
+            def run(command, **kwargs):
+                if command[1] == "build":
+                    target = Path(kwargs["env"]["CARGO_TARGET_DIR"])
+                    executable = target / "aarch64-apple-darwin/release/tgrep"
+                    executable.parent.mkdir(parents=True)
+                    executable.write_bytes(b"published engine")
+
+            with (
+                patch("build.ash_rs.tgrep.subprocess.run", side_effect=run),
+                patch(
+                    "build.ash_rs.tgrep.subprocess.check_output",
+                    return_value="toolchain",
+                ),
+                patch("build.ash_rs.tgrep.default_target", return_value="other-target"),
+            ):
+                first = resolve_tgrep(
+                    TARGETS["aarch64-apple-darwin"], lock, root / "cache"
+                )
+                legacy = first.executable.parent / "target"
+                legacy.mkdir()
+                (legacy / "old.rlib").write_bytes(b"compiler cache")
+                with patch(
+                    "build.ash_rs.tgrep.subprocess.run",
+                    side_effect=AssertionError("unexpected rebuild"),
+                ):
+                    repeated = resolve_tgrep(
+                        TARGETS["aarch64-apple-darwin"], lock, root / "cache"
+                    )
+            self.assertEqual(first, repeated)
+            self.assertFalse(legacy.exists())
+            self.assertEqual(first.executable.read_bytes(), b"published engine")
 
     def test_patch_is_applied_inside_an_ignored_parent_checkout(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -120,6 +161,30 @@ class TgrepTests(unittest.TestCase):
                     TARGETS["aarch64-apple-darwin"], lock, root / "cache"
                 )
             self.assertEqual(result.executable.read_bytes(), b"compiled patched source")
+
+    def test_failed_build_removes_partial_sources_and_compiler_outputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = self.fixture(root)
+
+            def run(command, **kwargs):
+                if command[1] == "build":
+                    target = Path(kwargs["env"]["CARGO_TARGET_DIR"])
+                    target.mkdir()
+                    (target / "partial.rlib").write_bytes(b"unfinished build")
+                    raise subprocess.CalledProcessError(1, command)
+
+            with (
+                patch("build.ash_rs.tgrep.subprocess.run", side_effect=run),
+                patch(
+                    "build.ash_rs.tgrep.subprocess.check_output",
+                    return_value="toolchain",
+                ),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
+            cache = next((root / "cache/test").iterdir())
+            self.assertEqual({path.name for path in cache.iterdir()}, {".build.lock"})
 
     def test_source_or_patch_corruption_is_rejected_before_compiling(self):
         for filename in ("source.tar.gz", "engine.patch"):

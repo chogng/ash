@@ -49,8 +49,9 @@ Queue 已持久接受任务才返回成功回执。丢失回执后重复投递�
 
 ## 实现归属
 
-本 crate 拥有包、重试约束和持久关联，`runtime` feature 提供领域流程；协议生成只消费数据类型，
-无需编译执行引擎。App Server 组合目录授权、现有 SSH route 和工具注册。命名目标与运行时代际
+[`ash-task-delivery-contract`](../task-delivery-contract/src/lib.rs) 拥有包、回执、报告、摘要和包校验；
+协议直接依赖契约，不受服务端启用 `runtime` feature 的影响。本 crate 使用并导出同一份契约，
+拥有重试流程和持久关联，`runtime` feature 提供领域流程。App Server 组合目录授权、现有 SSH route 和工具注册。命名目标与运行时代际
 都由 `remote-profile-store` 持有；Git 对象传输由 `ash-git` 持有。没有额外的消息板服务或监听进程。
 
 验证入口：`just test ash-task-delivery --features runtime`、`just test ash-git transfer`、

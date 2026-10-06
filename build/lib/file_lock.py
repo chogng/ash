@@ -1,4 +1,4 @@
-"""Exclusive file leases shared by build publication and source compilation."""
+"""File leases shared by build publication, running programs and source compilation."""
 
 import os
 from contextlib import contextmanager
@@ -8,6 +8,19 @@ from pathlib import Path
 @contextmanager
 def exclusive_lock(path: Path, *, create: bool = False, blocking: bool = True):
     """Use the same OS locks as ash-package-store's fs2 process leases."""
+    with _file_lock(path, exclusive=True, create=create, blocking=blocking) as locked:
+        yield locked
+
+
+@contextmanager
+def shared_lock(path: Path, *, create: bool = False):
+    """Keep a published runtime alive while its launcher hands resources to children."""
+    with _file_lock(path, exclusive=False, create=create, blocking=True):
+        yield
+
+
+@contextmanager
+def _file_lock(path: Path, *, exclusive: bool, create: bool, blocking: bool):
     if os.name == "nt":
         import ctypes
         from ctypes import wintypes
@@ -53,7 +66,7 @@ def exclusive_lock(path: Path, *, create: bool = False, blocking: bool = True):
             overlapped = Overlapped()
             locked = kernel.LockFileEx(
                 handle,
-                2 | (0 if blocking else 1),
+                (2 if exclusive else 0) | (0 if blocking else 1),
                 0,
                 0xFFFFFFFF,
                 0xFFFFFFFF,
@@ -71,7 +84,11 @@ def exclusive_lock(path: Path, *, create: bool = False, blocking: bool = True):
 
         with path.open("a+b" if create else "r+b") as file:
             try:
-                fcntl.flock(file, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+                fcntl.flock(
+                    file,
+                    (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+                    | (0 if blocking else fcntl.LOCK_NB),
+                )
             except BlockingIOError:
                 yield False
             else:

@@ -23,13 +23,13 @@ required-features = ["export"]
 extension-protocol = { workspace = true }
 slash-commands = { package = "ash-slash-commands", path = "../slash-commands" }
 noop-macros = { package = "ash-app-server-protocol-noop-macros", path = "../app-server-protocol-noop-macros" }
-call = { package = "ash-call", path = "../call" }
+call = { package = "ash-call-contract", path = "../call-contract" }
 response-debug-context = { workspace = true }
 memories = { workspace = true }
 guardian-environment = { workspace = true }
 extension-items = { workspace = true }
-queue = { workspace = true }
-task-delivery = { workspace = true }
+queue = { package = "ash-queue-contract", path = "../queue-contract" }
+task-delivery = { package = "ash-task-delivery-contract", path = "../task-delivery-contract" }
 build-info = { workspace = true }
 analytics = { workspace = true }
 diagnostics = { workspace = true }
@@ -46,7 +46,7 @@ zeroize = { workspace = true }
 ash-protocol = { workspace = true }
 ash-environment = { workspace = true }
 ash-file-access = { workspace = true }
-ash-collaboration = { workspace = true }
+collaboration = { package = "ash-collaboration-contract", path = "../collaboration-contract" }
 ash-thread-transcript = { workspace = true }
 ash-utils-path-uri = { workspace = true }
 

@@ -449,7 +449,7 @@ impl SqliteDocumentCollaborationRooms {
                 Ok(DocumentCollaborationMember {
                     principal_id,
                     display_name,
-                    role: DocumentCollaborationRoomRole::from_sql(&role)?,
+                    role: role_from_sql(&role)?,
                 })
             })
             .collect()
@@ -519,7 +519,7 @@ impl SqliteDocumentCollaborationRooms {
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
         ).optional().map_err(sqlite_error)?
             .ok_or_else(|| "The collaboration room member does not exist".to_string())?;
-        let role = DocumentCollaborationRoomRole::from_sql(&role)?;
+        let role = role_from_sql(&role)?;
         let access_token = random_access_token()?;
         transaction.execute(
             "UPDATE document_collaboration_room_members SET token_hash = ?3 WHERE room_id = ?1 AND principal_id = ?2",
@@ -763,7 +763,7 @@ fn insert_room_member(
 ) -> Result<(), String> {
     connection.execute(
         "INSERT INTO document_collaboration_room_members (room_id, principal_id, display_name, role, token_hash, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![room_id, principal.id, principal.display_name, role.as_sql(), access_token.map(token_hash), unix_millis()?],
+        params![room_id, principal.id, principal.display_name, role_to_sql(role), access_token.map(token_hash), unix_millis()?],
     ).map_err(sqlite_error)?;
     Ok(())
 }
@@ -779,7 +779,7 @@ fn require_room_role(
         |row| row.get::<_, String>(0),
     ).optional().map_err(sqlite_error)?
         .ok_or_else(|| "The collaboration principal is not a room member".to_string())
-        .and_then(|role| DocumentCollaborationRoomRole::from_sql(&role))
+        .and_then(|role| role_from_sql(&role))
 }
 
 fn record_audit(
@@ -834,22 +834,21 @@ fn unix_millis() -> Result<i64, String> {
         .map_err(|_| "System clock exceeds SQLite timestamp range".into())
 }
 
-impl DocumentCollaborationRoomRole {
-    fn as_sql(self) -> &'static str {
-        match self {
-            Self::Owner => "owner",
-            Self::Editor => "editor",
-            Self::Viewer => "viewer",
-        }
+// SQLite's stored role spelling belongs to storage, not the shared wire contract.
+fn role_to_sql(role: DocumentCollaborationRoomRole) -> &'static str {
+    match role {
+        DocumentCollaborationRoomRole::Owner => "owner",
+        DocumentCollaborationRoomRole::Editor => "editor",
+        DocumentCollaborationRoomRole::Viewer => "viewer",
     }
+}
 
-    fn from_sql(value: &str) -> Result<Self, String> {
-        match value {
-            "owner" => Ok(Self::Owner),
-            "editor" => Ok(Self::Editor),
-            "viewer" => Ok(Self::Viewer),
-            _ => Err("The collaboration room contains an invalid member role".into()),
-        }
+fn role_from_sql(value: &str) -> Result<DocumentCollaborationRoomRole, String> {
+    match value {
+        "owner" => Ok(DocumentCollaborationRoomRole::Owner),
+        "editor" => Ok(DocumentCollaborationRoomRole::Editor),
+        "viewer" => Ok(DocumentCollaborationRoomRole::Viewer),
+        _ => Err("The collaboration room contains an invalid member role".into()),
     }
 }
 

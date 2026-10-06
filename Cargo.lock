@@ -739,6 +739,7 @@ dependencies = [
  "ash-memory-diagnostics",
  "ash-protocol",
  "ash-queue",
+ "ash-queue-contract",
  "ash-utils-pty",
  "base64 0.22.1",
  "serde",
@@ -784,8 +785,8 @@ dependencies = [
  "ash-analytics",
  "ash-app-server-protocol-noop-macros",
  "ash-build-info",
- "ash-call",
- "ash-collaboration",
+ "ash-call-contract",
+ "ash-collaboration-contract",
  "ash-diagnostics",
  "ash-editor-extension-protocol",
  "ash-environment",
@@ -797,10 +798,10 @@ dependencies = [
  "ash-memories",
  "ash-memory-diagnostics",
  "ash-protocol",
- "ash-queue",
+ "ash-queue-contract",
  "ash-response-debug-context",
  "ash-slash-commands",
- "ash-task-delivery",
+ "ash-task-delivery-contract",
  "ash-thread-transcript",
  "ash-utils-cargo-bin",
  "ash-utils-path-uri",
@@ -989,19 +990,27 @@ dependencies = [
 name = "ash-call"
 version = "0.1.0"
 dependencies = [
+ "ash-call-contract",
  "ash-http-client",
  "ash-secrets",
  "rand 0.9.5",
  "rusqlite",
- "schemars",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "ts-rs",
  "url",
+]
+
+[[package]]
+name = "ash-call-contract"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
 ]
 
 [[package]]
@@ -1041,6 +1050,7 @@ dependencies = [
  "ash-core-plugins",
  "ash-exec",
  "ash-install-context",
+ "ash-package-store",
  "ash-plugin",
  "ash-process-hardening",
  "ash-product-update",
@@ -1172,13 +1182,20 @@ dependencies = [
 name = "ash-collaboration"
 version = "0.1.0"
 dependencies = [
+ "ash-collaboration-contract",
  "getrandom 0.2.17",
  "rusqlite",
- "schemars",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+]
+
+[[package]]
+name = "ash-collaboration-contract"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
  "ts-rs",
 ]
 
@@ -2503,12 +2520,20 @@ dependencies = [
  "ash-extension-api",
  "ash-extension-items",
  "ash-protocol",
+ "ash-queue-contract",
  "rusqlite",
- "schemars",
- "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-queue-contract"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "schemars",
+ "serde",
  "ts-rs",
 ]
 
@@ -2933,16 +2958,27 @@ dependencies = [
  "ash-remote",
  "ash-remote-profile-store",
  "ash-state",
+ "ash-task-delivery-contract",
  "base64 0.22.1",
  "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "worktree",
+]
+
+[[package]]
+name = "ash-task-delivery-contract"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "ash-queue-contract",
  "schemars",
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
- "worktree",
 ]
 
 [[package]]
@@ -3105,7 +3141,7 @@ dependencies = [
  "ash-message-history",
  "ash-product-update",
  "ash-protocol",
- "ash-queue",
+ "ash-queue-contract",
  "ash-slash-commands",
  "ash-sprite",
  "ash-state",
@@ -3417,6 +3453,7 @@ dependencies = [
 name = "ash-voice-host"
 version = "0.1.0"
 dependencies = [
+ "ash-package-store",
  "ash-process-hardening",
  "cpal",
  "crossbeam-queue",

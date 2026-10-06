@@ -227,6 +227,11 @@ impl Fixture {
         self
     }
 
+    pub fn with_cli_executable(mut self, executable: PathBuf) -> Self {
+        self.ash = executable;
+        self
+    }
+
     pub fn with_missing_voice_host(mut self) -> Self {
         self.voice_host = Some(self.root.join("missing-voice-host"));
         self

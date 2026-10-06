@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "call-contract",
+    crate_name = "ash_call_contract",
+)

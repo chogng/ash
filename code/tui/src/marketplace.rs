@@ -776,6 +776,7 @@ fn kind_label(kind: Kind) -> &'static str {
         Kind::Localization => "Localizations",
         Kind::Executable => "Executables",
         Kind::Asset => "Assets",
+        Kind::EditorExtension => "Editor extensions",
     }
 }
 

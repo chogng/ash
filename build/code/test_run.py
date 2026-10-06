@@ -4,6 +4,7 @@ import io
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import call
 from unittest.mock import patch
@@ -13,6 +14,14 @@ from build.code import build
 
 
 class SourceRunnerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        cache = patch(
+            "build.code.build.leased_cache",
+            side_effect=lambda _root, **_options: nullcontext(),
+        )
+        cache.start()
+        self.addCleanup(cache.stop)
+
     def test_main_selects_the_built_server_before_launching_the_tui(self) -> None:
         staged = self._executables(Path("C:/staged"))
         with (
@@ -22,7 +31,7 @@ class SourceRunnerTests(unittest.TestCase):
                 "build_binaries",
                 return_value=(0, self._executables(Path("C:/built"))),
             ),
-            patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "stage_runtime", return_value=nullcontext(staged)),
             patch.object(run, "resolve_tgrep") as tgrep,
             patch.object(run, "default_target", return_value="x86_64-pc-windows-msvc"),
             patch.object(run.subprocess, "run") as subprocess_run,
@@ -63,7 +72,7 @@ class SourceRunnerTests(unittest.TestCase):
                 "build_binaries",
                 return_value=(0, self._executables(Path("C:/built"))),
             ),
-            patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "stage_runtime", return_value=nullcontext(staged)),
             patch.object(run, "resolve_tgrep") as tgrep,
             patch.object(run, "default_target", return_value="x86_64-pc-windows-msvc"),
             patch.object(run.subprocess, "run") as subprocess_run,
@@ -81,7 +90,7 @@ class SourceRunnerTests(unittest.TestCase):
         with (
             patch.dict(run.os.environ, {"PATH": "tools"}, clear=True),
             patch.object(run, "build_binaries", return_value=(0, built)) as build,
-            patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "stage_runtime", return_value=nullcontext(staged)),
             patch.object(run, "resolve_tgrep") as tgrep,
             patch.object(run, "default_target", return_value="x86_64-pc-windows-msvc"),
             patch.object(run.subprocess, "run") as subprocess_run,
@@ -277,13 +286,49 @@ class SourceRunnerTests(unittest.TestCase):
             first.write_bytes(b"ash")
             second.write_bytes(b"daemon")
             with patch.object(build, "DEVELOPMENT_RUNTIME_ROOT", root / "runtime"):
-                staged = build.stage_runtime({"ash": first, "daemon": second})
-                repeated = build.stage_runtime({"ash": first, "daemon": second})
+                with build.stage_runtime({"ash": first, "daemon": second}) as staged:
+                    with build.stage_runtime(
+                        {"ash": first, "daemon": second}
+                    ) as repeated:
+                        self.assertEqual(staged, repeated)
 
             self.assertEqual(staged, repeated)
             self.assertEqual(staged["ash"].read_bytes(), b"ash")
             self.assertEqual(staged["daemon"].read_bytes(), b"daemon")
-            self.assertEqual(len(list((root / "runtime").iterdir())), 1)
+            self.assertEqual(len(list((root / "runtime/generations").iterdir())), 1)
+
+    def test_old_launch_survives_publication_then_releases_its_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / "built/ash"
+            executable.parent.mkdir()
+            executable.write_bytes(b"first")
+            with patch.object(build, "DEVELOPMENT_RUNTIME_ROOT", root / "runtime"):
+                with build.stage_runtime({"ash": executable}) as first:
+                    old = first["ash"].parent.parent
+                    executable.write_bytes(b"second")
+                    with build.stage_runtime({"ash": executable}) as second:
+                        self.assertEqual(first["ash"].read_bytes(), b"first")
+                        self.assertEqual(second["ash"].read_bytes(), b"second")
+                        self.assertEqual(
+                            len(list((root / "runtime/generations").iterdir())), 2
+                        )
+                with build.stage_runtime({"ash": executable}) as current:
+                    self.assertFalse(old.exists())
+                    self.assertEqual(current, second)
+                    self.assertEqual(len(list((root / "runtime/objects").iterdir())), 1)
+
+    def test_changed_programs_share_unchanged_executable_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first, host = root / "ash", root / "host"
+            first.write_bytes(b"first")
+            host.write_bytes(b"unchanged")
+            with patch.object(build, "DEVELOPMENT_RUNTIME_ROOT", root / "runtime"):
+                with build.stage_runtime({"ash": first, "host": host}) as previous:
+                    first.write_bytes(b"second")
+                    with build.stage_runtime({"ash": first, "host": host}) as current:
+                        self.assertTrue(previous["host"].samefile(current["host"]))
 
     @staticmethod
     def _executables(root: Path) -> dict[str, Path]:

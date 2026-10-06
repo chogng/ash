@@ -460,6 +460,9 @@ fn enabled_unique_skills_become_dollar_selector_items() {
 fn effective_plugins_become_at_mention_items() {
     let plugin = |id: &str, effective: bool| PluginPackageDto {
         id: id.into(),
+        display_name: id.into(),
+        permissions: Vec::new(),
+        has_editor_extensions: false,
         version: "1.0.0".into(),
         digest: "sha256:test".into(),
         enabled: effective,

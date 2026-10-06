@@ -2,9 +2,36 @@ use super::*;
 use ash_async_utils::CancellationSource;
 use std::fs;
 
+fn git(root: &Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn fixture() -> (tempfile::TempDir, tempfile::TempDir, Session) {
     let root = tempfile::tempdir().unwrap();
-    fs::create_dir(root.path().join(".git")).unwrap();
+    git(root.path(), &["init", "-b", "main"]);
+    git(
+        root.path(),
+        &[
+            "-c",
+            "user.name=Search Test",
+            "-c",
+            "user.email=search@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "initial",
+        ],
+    );
     let index = tempfile::tempdir().unwrap();
     let executable = Executable::resolve(&InstallContext::current()).unwrap();
     let session = Session::open(
@@ -89,6 +116,7 @@ fn ash_edits_and_new_files_are_visible_without_waiting_for_watcher() {
     assert!(search(&session, "before_marker").matches.is_empty());
     assert_eq!(search(&session, "after_marker").matches.len(), 2);
     fs::remove_file(&new).unwrap();
+    session.paths_changed(&[session.root.join("new.rs")]);
     assert_eq!(search(&session, "after_marker").matches.len(), 1);
 }
 
@@ -305,7 +333,8 @@ fn cancellation_invalid_regex_and_outside_paths_fail_explicitly() {
 fn dropping_session_reaps_server_and_allows_reopening_index() {
     let (root, index, session) = fixture();
     let info: Value =
-        serde_json::from_slice(&fs::read(index.path().join("serve.json")).unwrap()).unwrap();
+        serde_json::from_slice(&fs::read(root.path().join(".git/tgrep-daemon-v1.json")).unwrap())
+            .unwrap();
     let port = info["port"].as_u64().unwrap() as u16;
     drop(session);
     assert!(std::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port)).is_err());
@@ -445,21 +474,7 @@ fn indexed_case_flags_match_current_search() {
 
 #[test]
 fn linked_worktrees_share_one_process_and_keep_committed_changes_private() {
-    use std::process::Command;
     let root = tempfile::tempdir().unwrap();
-    let git = |root: &Path, args: &[&str]| {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
     git(root.path(), &["init", "-b", "main"]);
     git(root.path(), &["config", "user.name", "Search Test"]);
     git(
@@ -481,7 +496,12 @@ fn linked_worktrees_share_one_process_and_keep_committed_changes_private() {
     let first = Session::open(executable.clone(), root.path(), index.path(), &token).unwrap();
     let second = Session::open(executable, &worktree, index.path(), &token).unwrap();
     assert!(std::sync::Arc::ptr_eq(&first.process, &second.process));
-    assert_ne!(first.worktree_id, second.worktree_id);
+    match (&first.registration, &second.registration) {
+        (Registration::Shared { view: first, .. }, Registration::Shared { view: second, .. }) => {
+            assert_ne!(first, second)
+        }
+        _ => panic!("expected shared registrations"),
+    }
     assert_eq!(fs::read_dir(index.path().join("bases")).unwrap().count(), 1);
     fs::write(worktree.join("source.rs"), "branch_marker\n").unwrap();
     git(&worktree, &["add", "."]);
@@ -492,4 +512,151 @@ fn linked_worktrees_share_one_process_and_keep_committed_changes_private() {
     assert_eq!(search(&first, "base_marker").matches.len(), 1);
     drop(first);
     assert_eq!(search(&second, "branch_marker").matches.len(), 1);
+}
+
+#[test]
+fn plain_and_unborn_directories_use_the_single_directory_service() {
+    for unborn in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        if unborn {
+            git(root.path(), &["init", "-b", "main"]);
+        }
+        fs::write(root.path().join("source.txt"), "plain_marker\n".repeat(120)).unwrap();
+        fs::write(root.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(root.path().join("ignored.txt"), "plain_marker\n").unwrap();
+        let index = tempfile::tempdir().unwrap();
+        let token = CancellationSource::new().token();
+        let executable = Executable::resolve(&InstallContext::current()).unwrap();
+        assert_eq!(
+            executable.directory_identity(root.path(), &token).unwrap(),
+            fs::canonicalize(root.path()).unwrap()
+        );
+        let session = Session::open(executable, root.path(), index.path(), &token).unwrap();
+        assert!(matches!(session.registration, Registration::Directory));
+        let result = search(&session, "plain_marker");
+        assert!(result.indexed && result.limit_hit);
+        assert_eq!(result.matches.len(), 100);
+        assert!(
+            result
+                .matches
+                .iter()
+                .all(|m| m.path == Path::new("source.txt"))
+        );
+        fs::write(root.path().join("source.txt"), "updated_marker\n").unwrap();
+        session.paths_changed(&[session.root.join("source.txt")]);
+        assert!(search(&session, "plain_marker").matches.is_empty());
+        assert_eq!(search(&session, "updated_marker").matches.len(), 1);
+    }
+}
+
+#[test]
+fn independent_leases_release_only_their_own_registration() {
+    let (root, index, first) = fixture();
+    let token = CancellationSource::new().token();
+    let second =
+        Session::open(first.executable.clone(), root.path(), index.path(), &token).unwrap();
+    let (first_view, first_lease, generation) = match &first.registration {
+        Registration::Shared {
+            view,
+            lease,
+            generation,
+        } => (view, lease, generation),
+        _ => panic!("expected shared registration"),
+    };
+    match &second.registration {
+        Registration::Shared { view, lease, .. } => {
+            assert_eq!(view, first_view);
+            assert_ne!(lease, first_lease);
+        }
+        _ => panic!("expected shared registration"),
+    }
+    let original = first.process.rpc("attach", json!({"root":first.root,"revision":"HEAD","profile":profile(),"lease":"recoverable-test"}), &token, Instant::now()+TIMEOUT).unwrap();
+    let replayed = first.process.rpc("attach", json!({"root":first.root,"revision":"HEAD","profile":profile(),"lease":"recoverable-test"}), &token, Instant::now()+TIMEOUT).unwrap();
+    assert_eq!(original["view"], replayed["view"]);
+    assert_eq!(original["generation"], *generation);
+    first
+        .process
+        .rpc(
+            "detach",
+            json!({"root":first.root,"view":first_view,"lease":"recoverable-test"}),
+            &token,
+            Instant::now() + TIMEOUT,
+        )
+        .unwrap();
+    drop(first);
+    fs::write(root.path().join("source.rs"), "lease_marker\n").unwrap();
+    second.paths_changed(&[second.root.join("source.rs")]);
+    assert_eq!(search(&second, "lease_marker").matches.len(), 1);
+    let process = std::sync::Arc::clone(&second.process);
+    drop(second);
+    assert!(!root.path().join(".git/tgrep-view-v1.json").exists());
+    assert!(
+        process
+            .rpc(
+                "lookup",
+                json!({"root":fs::canonicalize(root.path()).unwrap()}),
+                &token,
+                Instant::now() + TIMEOUT
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn packaged_fixed_string_queries_preserve_unicode_case_folding() {
+    let (root, _index, session) = fixture();
+    fs::write(
+        root.path().join("unicode.txt"),
+        "CAFÉ\ncafé\nſhellſhocK\nSHELLSHOCK\n",
+    )
+    .unwrap();
+    let token = CancellationSource::new().token();
+    session.rebuild(&token).unwrap();
+    for pattern in ["café", "shellshock"] {
+        let value = session
+            .rpc(
+                "search",
+                json!({"pattern":pattern,"fixed_string":true,"case_insensitive":true,
+            "max_count":3,"max_results":3,"detail":false,"positions":false,"stats":true}),
+                &token,
+                Instant::now() + TIMEOUT,
+            )
+            .unwrap();
+        assert_eq!(rows(&value).unwrap().len(), 2, "{pattern}: {value}");
+    }
+}
+
+#[test]
+fn interrupted_attachment_releases_its_recoverable_lease() {
+    let (_root, _index, session) = fixture();
+    let token = CancellationSource::new().token();
+    let params = json!({"root":session.root,"revision":"HEAD","profile":profile(),"lease":"interrupted-test"});
+    let pending = PendingAttachment {
+        process: std::sync::Arc::clone(&session.process),
+        params: Some(params.clone()),
+    };
+    // Model a completed request whose response the caller lost before publishing its Session.
+    session
+        .process
+        .rpc("attach", params, &token, Instant::now() + TIMEOUT)
+        .unwrap();
+    assert_eq!(
+        session
+            .rpc("status", json!({}), &token, Instant::now() + TIMEOUT)
+            .unwrap()["leases"],
+        2
+    );
+    drop(pending);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let status = session.rpc("status", json!({}), &token, deadline).unwrap();
+        if status["leases"] == 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "attachment lease was not released: {status}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
 }

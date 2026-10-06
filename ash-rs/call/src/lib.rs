@@ -6,8 +6,12 @@ mod client;
 mod deployment;
 #[cfg(feature = "runtime")]
 mod runtime;
-mod session;
 mod store;
+pub use contract::CallConnection;
+pub use contract::CallControl;
+pub use contract::CallParticipant;
+pub use contract::CallStatus;
+pub use contract::ScreenTarget;
 #[cfg(feature = "runtime")]
 pub use runtime::Devices;
 #[cfg(feature = "runtime")]
@@ -20,11 +24,6 @@ pub use runtime::Operation;
 pub use runtime::SessionCommand;
 #[cfg(feature = "runtime")]
 pub use runtime::SessionRuntime;
-pub use session::CallConnection;
-pub use session::CallControl;
-pub use session::CallParticipant;
-pub use session::CallStatus;
-pub use session::ScreenTarget;
 
 #[cfg(feature = "runtime")]
 pub use client::CallClient;
@@ -36,13 +35,13 @@ pub use deployment::LocalDeployment;
 pub use deployment::ServicePaths;
 
 use ash_secrets::SecretValue;
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
+pub use contract::CallMember;
+pub use contract::CallRole;
+pub use contract::CallSnapshot;
+pub use contract::MediaState;
 use sha2::Digest;
 use sha2::Sha256;
 pub use store::CallStore;
-use ts_rs::TS;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
@@ -60,58 +59,6 @@ pub enum CallError {
     Transport,
     #[error("local call service could not start or stop")]
     Deployment,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum CallRole {
-    Owner,
-    Speaker,
-    Listener,
-    Agent,
-}
-
-impl CallRole {
-    pub fn can_publish_audio(self) -> bool {
-        self != Self::Listener
-    }
-    pub fn can_share_screen(self) -> bool {
-        matches!(self, Self::Owner | Self::Speaker)
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    tag = "state"
-)]
-pub enum MediaState {
-    Preparing,
-    Ready,
-    Rotating { previous_room: String },
-    Closing,
-    Closed,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct CallMember {
-    pub id: String,
-    pub role: CallRole,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct CallSnapshot {
-    pub id: String,
-    #[ts(type = "number")]
-    pub revision: u64,
-    #[ts(type = "number")]
-    pub media_epoch: u64,
-    pub media_room: String,
-    pub media_state: MediaState,
-    pub members: Vec<CallMember>,
 }
 
 /// Room authority credential. Only its SHA-256 digest is persisted.

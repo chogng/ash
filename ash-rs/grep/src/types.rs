@@ -70,7 +70,7 @@ pub struct SearchResult {
     pub index_stats: Option<IndexStats>,
 }
 
-/// Indexed file-selection diagnostics, excluding later content batches and observed writes.
+/// Indexed file-selection diagnostics, including acknowledged writes and excluding later content batches.
 /// Scans have no index statistics. The query plan is an engine diagnostic, not a stable grammar.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IndexStats {
@@ -132,7 +132,9 @@ impl From<tgrep::Error> for Error {
     fn from(error: tgrep::Error) -> Self {
         match error {
             tgrep::Error::Cancelled(reason) => Self::Cancelled(reason),
-            tgrep::Error::Failed(message) => Self::Failed(message),
+            tgrep::Error::Failed(message) | tgrep::Error::NotReady(message) => {
+                Self::Failed(message)
+            }
         }
     }
 }

@@ -6,13 +6,11 @@ license-file.workspace = true
 publish.workspace = true
 
 [dependencies]
+contract = { package = "ash-queue-contract", path = "../../queue-contract" }
 extension-api = { package = "ash-extension-api", path = "../extension-api" }
 extension-items = { workspace = true }
 rusqlite = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = { workspace = true }
-ts-rs = { workspace = true }
 thiserror = { workspace = true }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 

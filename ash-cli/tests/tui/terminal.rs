@@ -62,6 +62,29 @@ zh-CN = "运行 ash update 升级：ANNOUNCEMENT-PTY。"
     }
 }
 
+#[test]
+fn actual_tui_leases_its_generation_until_process_exit() {
+    let package = tempfile::tempdir().unwrap();
+    let bin = package.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let executable = bin.join(format!("ash{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(cargo_bin::cargo_bin!("ash").unwrap(), &executable).unwrap();
+    let lease = std::fs::OpenOptions::new()
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .open(package.path().join(".lease"))
+        .unwrap();
+    let server = ScenarioServer::start([]);
+    let fixture = Fixture::new().with_cli_executable(executable);
+    fixture.write_config(&server.base_url());
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_stable_screen("Enter send");
+    assert!(lease.try_lock().is_err());
+    process.quit();
+    lease.try_lock().unwrap();
+}
+
 #[cfg(unix)]
 fn assert_dictation_download_released(fixture: &Fixture) {
     let root = fixture.profile().join("dictation-models");

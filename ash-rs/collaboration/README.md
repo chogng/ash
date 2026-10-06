@@ -4,6 +4,11 @@
 structured-document rooms. It does not own HTTP, App Server JSON-RPC,
 Workbench state, sessions, users, or document-schema semantics.
 
+Shared room data and roles are defined in
+[`ash-collaboration-contract`](../collaboration-contract/src/lib.rs).
+The protocol depends directly on that contract; this crate uses and re-exports
+the same types while owning room authority and storage.
+
 `InMemoryDocumentCollaborationRooms` is composed by the App Server for clients
 in one process. `SqliteDocumentCollaborationRooms` is composed by the remote
 host and persists room snapshots and ordered submissions across restarts. Both

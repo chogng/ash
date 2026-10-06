@@ -5,6 +5,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +16,12 @@ from build.ash_rs.cargo import resolve_windows_sandbox_binary
 
 class CargoBuildTests(unittest.TestCase):
     def setUp(self) -> None:
+        cache = patch(
+            "build.ash_rs.cargo.leased_cache",
+            side_effect=lambda _root, **_options: nullcontext(),
+        )
+        cache.start()
+        self.addCleanup(cache.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()

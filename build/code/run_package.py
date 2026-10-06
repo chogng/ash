@@ -52,27 +52,28 @@ def main(arguments: list[str] | None = None) -> int:
     returncode, built = code_build.build_binaries(["ash"], environment)
     if returncode != 0:
         return returncode
-    executable = code_build.stage_runtime(built)["ash"]
-    environment = environment.copy()
-    environment["ASH_APP_SERVER_PATH"] = str(backend.resolve())
-    environment["ASH_PRODUCT_SERVICES_PATH"] = str(product_services.resolve())
-    arguments = arguments or []
-    if run.requires_selected_server(arguments):
-        prepared = subprocess.run(
-            [str(executable), "app-server", "daemon", "ensure-selected"],
+    with code_build.stage_runtime(built) as executables:
+        executable = executables["ash"]
+        environment = environment.copy()
+        environment["ASH_APP_SERVER_PATH"] = str(backend.resolve())
+        environment["ASH_PRODUCT_SERVICES_PATH"] = str(product_services.resolve())
+        arguments = arguments or []
+        if run.requires_selected_server(arguments):
+            prepared = subprocess.run(
+                [str(executable), "app-server", "daemon", "ensure-selected"],
+                cwd=run.REPOSITORY_ROOT,
+                env=environment,
+                stdout=subprocess.DEVNULL,
+                check=False,
+            )
+            if prepared.returncode != 0:
+                return prepared.returncode
+        return subprocess.run(
+            [str(executable), *arguments],
             cwd=run.REPOSITORY_ROOT,
             env=environment,
-            stdout=subprocess.DEVNULL,
             check=False,
-        )
-        if prepared.returncode != 0:
-            return prepared.returncode
-    return subprocess.run(
-        [str(executable), *arguments],
-        cwd=run.REPOSITORY_ROOT,
-        env=environment,
-        check=False,
-    ).returncode
+        ).returncode
 
 
 if __name__ == "__main__":

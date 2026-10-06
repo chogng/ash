@@ -45,6 +45,7 @@ use ash_app_server_protocol::protocol::syntax::SyntaxUpdateParams;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use ash_app_server_protocol::protocol::terminal::TerminalCreateParams;
 use ash_app_server_protocol::protocol::terminal::TerminalLifecycle;
+use ash_app_server_protocol::protocol::terminal::TerminalProcessReady;
 use ash_app_server_protocol::protocol::terminal::TerminalProfileSelection;
 use ash_app_server_protocol::protocol::terminal::TerminalReadParams;
 use ash_app_server_protocol::protocol::terminal::TerminalResizeParams;
@@ -330,8 +331,8 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
 #[test]
 fn client_drives_terminal_lifecycle_through_typed_methods() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
-        format!(r#"{{"jsonrpc":"2.0","id":1,"result":{{"terminalId":"terminal-1","profile":{{"profileId":"default","title":"Shell","isDefault":true}},"reconnect":{{"reconnectToken":"{}","reconnectGracePeriodMillis":30000}}}}}}"#, "a".repeat(64)),
-        format!(r#"{{"jsonrpc":"2.0","id":2,"result":{{"terminalId":"terminal-1","reconnect":{{"reconnectToken":"{}","reconnectGracePeriodMillis":30000}}}}}}"#, "b".repeat(64)),
+        format!(r#"{{"jsonrpc":"2.0","id":1,"result":{{"terminalId":"terminal-1","profile":{{"profileId":"default","title":"Shell","isDefault":true}},"ready":{{"pid":1234,"cwd":"/workspace"}},"reconnect":{{"reconnectToken":"{}","reconnectGracePeriodMillis":30000}}}}}}"#, "a".repeat(64)),
+        format!(r#"{{"jsonrpc":"2.0","id":2,"result":{{"terminalId":"terminal-1","ready":{{"pid":1234,"cwd":"/workspace"}},"reconnect":{{"reconnectToken":"{}","reconnectGracePeriodMillis":30000}}}}}}"#, "b".repeat(64)),
         r#"{"jsonrpc":"2.0","id":3,"result":null}"#.into(),
         r#"{"jsonrpc":"2.0","id":4,"result":null}"#.into(),
         r#"{"jsonrpc":"2.0","id":5,"result":{"terminalId":"terminal-1","chunks":[],"nextSequence":0,"outputGap":false,"commandEvents":[],"nextCommandSequence":0,"commandEventGap":false,"exited":false,"exitCode":null}}"#.into(),
@@ -348,6 +349,11 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
         })
         .unwrap();
     assert_eq!(created.terminal_id, "terminal-1");
+    let ready = TerminalProcessReady {
+        pid: 1234,
+        cwd: "/workspace".into(),
+    };
+    assert_eq!(created.ready, ready);
     let attached = client
         .terminal_attach(TerminalAttachParams {
             dir_id: None,
@@ -358,6 +364,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
         })
         .unwrap();
     assert_eq!(attached.reconnect.reconnect_token, "b".repeat(64));
+    assert_eq!(attached.ready, ready);
     client
         .terminal_write(TerminalWriteParams {
             dir_id: None,

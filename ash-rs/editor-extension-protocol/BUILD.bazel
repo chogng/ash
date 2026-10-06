@@ -3,4 +3,8 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "editor-extension-protocol",
     crate_name = "extension_protocol",
+    crate_features = ["export", "json-schema"],
+    # Protocol schema/export features propagate through Cargo, but Bazel needs
+    # them and their optional dependencies on this target explicitly.
+    extra_deps = ["@crates//:schemars", "@crates//:ts-rs"],
 )

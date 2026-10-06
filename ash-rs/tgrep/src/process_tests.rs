@@ -21,7 +21,7 @@ fn exited_server_returns_an_error_instead_of_using_its_stale_index() {
     }
     let error = server
         .rpc(
-            "capabilities",
+            "status",
             Value::Null,
             &cancellation.token(),
             Instant::now() + TIMEOUT,
@@ -101,4 +101,72 @@ fn normal_host_exit_reaps_servers_even_when_sessions_are_retained() {
     assert!(status.success());
     let address = std::fs::read_to_string(temporary.path().join("address")).unwrap();
     assert!(TcpStream::connect(address).is_err());
+}
+
+#[test]
+fn shared_rpc_validates_response_instances_ids_and_null_id_errors() {
+    use std::net::TcpListener;
+    let root = tempfile::tempdir().unwrap();
+    let index = tempfile::tempdir().unwrap();
+    let token = CancellationSource::new().token();
+    let mut server = Server::start(
+        &Executable::resolve(&InstallContext::current()).unwrap(),
+        root.path(),
+        index.path(),
+        &token,
+    )
+    .unwrap();
+    server.protocol = Protocol::Shared(Discovery {
+        pid: 0,
+        port: 1,
+        protocol: 1,
+        instance: "current".into(),
+        repository: "repository".into(),
+        storage: index.path().into(),
+    });
+    for (response, expected) in [
+        (
+            json!({"jsonrpc":"2.0","id":1,"result":{"protocol":1,"instance":"current","repository":"repository"}}),
+            None,
+        ),
+        (
+            json!({"jsonrpc":"2.0","id":1,"result":{"protocol":1,"instance":"old","repository":"repository"}}),
+            Some("stale or incompatible"),
+        ),
+        (
+            json!({"jsonrpc":"2.0","id":2,"result":{"protocol":1,"instance":"current","repository":"repository"}}),
+            Some("invalid tgrep response identity"),
+        ),
+        (
+            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32001,"message":"queue full"}}),
+            Some("queue full"),
+        ),
+        (
+            json!({"jsonrpc":"2.0","id":null,"error":{"code":"wrong","message":"queue full"}}),
+            Some("invalid tgrep error response"),
+        ),
+    ] {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        server.address = listener.local_addr().unwrap();
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                let (socket, _) = listener.accept().unwrap();
+                socket.set_nonblocking(false).unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = BufReader::new(socket);
+                let mut request = String::new();
+                reader.read_line(&mut request).unwrap();
+                let request: Value = serde_json::from_str(&request).unwrap();
+                assert_eq!(request["instance"], "current");
+                writeln!(reader.get_mut(), "{response}").unwrap();
+            });
+            let result = server.rpc("hello", json!({}), &token, Instant::now() + TIMEOUT);
+            match expected {
+                Some(message) => assert!(result.unwrap_err().to_string().contains(message)),
+                None => assert!(result.is_ok()),
+            }
+        });
+    }
 }

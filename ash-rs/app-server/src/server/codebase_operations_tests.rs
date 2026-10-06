@@ -218,6 +218,25 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
         .output()
         .unwrap();
     assert!(initialized.status.success());
+    assert!(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args([
+                "-c",
+                "user.name=Search Test",
+                "-c",
+                "user.email=search@example.test",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "initial"
+            ])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
     std::fs::write(dir.path().join("source.rs"), "tgrep_rpc_marker\n").unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let index_storage = Arc::new(ash_state::StateRuntime::open(profile.path()).unwrap());
@@ -288,7 +307,7 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     );
     assert_eq!(rebuilt["result"]["ready"], true);
     assert!(rebuilt["result"]["indexedFileCount"].as_u64().unwrap() >= 1);
-    assert!(index_directory.join("tgrep-1.0.12-ash.1").is_dir());
+    assert!(index_directory.join("tgrep-1.0.12-ash.e9d55db.1").is_dir());
 
     // A substring inside an FTS token must be supplied by the shared grep capability.
     server.codebase_service().unwrap().rebuild().unwrap();
