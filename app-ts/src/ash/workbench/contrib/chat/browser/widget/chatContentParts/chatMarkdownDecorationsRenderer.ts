@@ -1,4 +1,5 @@
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
+import { appendLabelIcon } from '../../../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -7,6 +8,8 @@ import { IHoverService } from '../../../../../../platform/hover/browser/hoverSer
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../../../nls.js';
+import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
+import { computePullRequestIcon, type ChatPullRequestState } from '../../../../../common/chatPullRequest.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
 
 /** Owns provider decorations for the sanitized anchors in one rendered Markdown block. */
@@ -83,6 +86,12 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 					presentation.changes ? `+${presentation.changes.insertions} −${presentation.changes.deletions}` : undefined,
 				].filter(value => value !== undefined && value !== '').join(' · ');
 				anchor.textContent = label;
+				if (presentation instanceof GitHubResourcePresentation && presentation.kind === 'pullRequest') {
+					const icon = computePullRequestIcon(presentation.status!.kind as ChatPullRequestState, { hasFailingChecks: presentation.secondaryStatus?.kind === 'error' });
+					const glyph = appendLabelIcon(anchor, icon);
+					glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
+					anchor.prepend(glyph);
+				}
 				const content = (): HTMLElement | string => {
 					card.clear();
 					if (presentation instanceof GitHubResourcePresentation) {

@@ -92,6 +92,7 @@ import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from "../..
 import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
 import { GitService } from '../../workbench/contrib/git/browser/gitService.js';
 import { IGitService } from '../../workbench/contrib/git/common/gitService.js';
+import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
 import { SessionFileService } from '../contrib/providers/appServer/browser/sessionFileService.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
@@ -376,6 +377,9 @@ export abstract class Workbench extends Disposable {
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(IGitHubService, options.api.github);
+		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
+		services.registerInstance(ISessionsGitHubService, sessionGitHub);
+		sessionGitHub.initialize();
 		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
 		this.lifecycleService = this._register(options.createLifecycleService(services));
 		services.registerInstance(ILifecycleService, this.lifecycleService);

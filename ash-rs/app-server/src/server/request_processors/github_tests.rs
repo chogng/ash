@@ -25,24 +25,27 @@ fn review_threads_map_nullable_lines_and_reply_pagination_to_the_frontend_contra
 }
 
 #[test]
-fn github_pull_request_branches_keep_fork_identity_and_deleted_sources() {
-    for (head_repository, expected) in [
+fn github_pull_request_branches_keep_fork_identity_and_mergeability() {
+    for (head_repository, expected, mergeable) in [
         (
             serde_json::json!({ "full_name": "contributor/fork" }),
             Some("contributor/fork"),
+            Some(true),
         ),
-        (serde_json::Value::Null, None),
+        (serde_json::Value::Null, None, Some(false)),
+        (serde_json::Value::Null, None, None),
     ] {
         let response: github::PullRequest = serde_json::from_value(serde_json::json!({
             "number": 7, "node_id": "PR_7", "title": "Fix links", "body": "Details",
             "html_url": "https://github.com/team/repo/pull/7", "state": "open", "draft": false,
-            "merged_at": null, "auto_merge": null,
+            "merged_at": null, "auto_merge": null, "mergeable": mergeable,
             "head": { "sha": "a".repeat(40), "ref": "feature/links", "repo": head_repository },
             "base": { "sha": "b".repeat(40), "ref": "main", "repo": { "full_name": "team/repo" } }
         }))
         .unwrap();
         let result = pull_request(response);
         assert_eq!(result.head_repository.as_deref(), expected);
+        assert_eq!(result.mergeable, mergeable);
         assert_eq!(result.head_branch, "feature/links");
     }
 }

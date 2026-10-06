@@ -35,6 +35,16 @@
 	font-size: var(--ash-font-size-label2);
 }
 
+.ash-github-hover-metadata {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-github-hover-metadata > .ash-icon {
+	order: -1;
+}
+
 .ash-github-hover-link {
 	color: var(--ash-accent-foreground);
 	overflow-wrap: anywhere;

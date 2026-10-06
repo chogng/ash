@@ -5,7 +5,7 @@ import type { AccountState, IAccountService } from '../../../../../platform/acco
 import { GitHubNotificationFilter, GitHubForkBranches, type GitHubNotification, GitHubDiffSide, GitHubError, GitHubErrorCode, GitHubIssueState, GitHubReviewEvent, type GitHubPullRequest, type GitHubReviewThread, type IGitHubService } from '../../../../../platform/github/common/githubService.js';
 import { GitHubReviewModel, isReviewLine } from '../../browser/githubReviewModel.js';
 
-const pr: GitHubPullRequest = { number: 7, title: 'Review this', body: '', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false };
+const pr: GitHubPullRequest = { number: 7, title: 'Review this', body: '', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', mergeable: null, autoMerge: false };
 function setup() {
 	const accounts = new Emitter<AccountState>();
 	const account: AccountState = { revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', status: 'ready', credentialRevision: 1n }] };

@@ -20,6 +20,7 @@ import { ITeamsManagementService } from '../../../services/teams/common/teamsMan
 import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
+import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
@@ -38,10 +39,10 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 
 class SessionsNavigationView extends ViewPane {
 	private readonly list: SessionsList;
-	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService) {
+	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
-		this.list = this._register(new SessionsList(this.contentElement, management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session')));
+		this.list = this._register(new SessionsList(this.contentElement, management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github));
 	}
 	public focus(): void { this.list.focus(); }
 }

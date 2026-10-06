@@ -65,6 +65,24 @@ pub(super) fn repository() -> Repository {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn branch_pull_request_discovery_sends_an_encoded_head_filter() {
+    let http = Arc::new(FakeHttp::default());
+    http.push(200, json!([]));
+    let client = github(http.clone());
+    let result = client
+        .pull_requests(&repository(), IssueState::Open, 2, Some("contributor:feature/links&checks"))
+        .await
+        .unwrap();
+    assert!(result.pull_requests.is_empty());
+    let requests = http.requests.lock().unwrap();
+    let url = url::Url::parse(&requests[0].url).unwrap();
+    let query: std::collections::BTreeMap<_, _> = url.query_pairs().collect();
+    assert_eq!(query.get("head").map(|value| value.as_ref()), Some("contributor:feature/links&checks"));
+    assert_eq!(query.get("page").map(|value| value.as_ref()), Some("2"));
+    assert_eq!(query.get("sort").map(|value| value.as_ref()), Some("updated"));
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn commit_reads_validate_identity_and_do_not_accept_branch_names() {
     let http = Arc::new(FakeHttp::default());
     let sha = "abcdef0123456789abcdef0123456789abcdef01";
@@ -132,6 +150,7 @@ pub(super) fn pull_request() -> PullRequest {
         state: "open".into(),
         draft: false,
         merged_at: None,
+        mergeable: None,
         auto_merge: None,
         head: PullRequestBranch {
             name: "feature".into(),

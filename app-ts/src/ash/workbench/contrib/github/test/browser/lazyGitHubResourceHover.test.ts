@@ -8,7 +8,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { LazyGitHubResourceResolver, parseGitHubReferenceTarget } from '../../browser/lazyGitHubResourceHover.js';
 
 const target = { owner: 'team', repo: 'repo', number: 7 };
-const pullRequest: GitHubPullRequest = { number: 7, title: 'Fix links', body: 'Details', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'contributor/fork', baseBranch: 'main', autoMerge: false };
+const pullRequest: GitHubPullRequest = { number: 7, title: 'Fix links', body: 'Details', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'contributor/fork', baseBranch: 'main', mergeable: null, autoMerge: false };
 
 test('public reference parsing rejects enterprise hosts and unsafe reference identities', () => {
 	assert.deepEqual(parseGitHubReferenceTarget(URI.parse('https://github.com/team/repo/pull/7?tab=files#discussion'), 'pullRequest'), target);

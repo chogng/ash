@@ -28021,6 +28021,12 @@
             "null"
           ]
         },
+        "mergeable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "mergedAt": {
           "type": [
             "string",
@@ -28175,6 +28181,13 @@
       "additionalProperties": false,
       "properties": {
         "accountId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head": {
+          "description": "GitHub head selector (`owner:branch`) for branch-associated PR discovery.",
           "type": [
             "string",
             "null"

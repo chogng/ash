@@ -83,8 +83,8 @@ export class AppServerGitHubService implements IGitHubService {
 	public async deleteComment(repository: GitHubRepository, commentId: number, token?: CancellationToken): Promise<void> {
 		await this.request('github/comment/delete', { repository, commentId }, RequestKind.Write, token);
 	}
-	public async listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubPullRequest>> {
-		const result = await this.request('github/pullRequest/list', { repository, state, page }, RequestKind.Read, token);
+	public async listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken, options?: { readonly head: string; }): Promise<GitHubPage<GitHubPullRequest>> {
+		const result = await this.request('github/pullRequest/list', { repository, state, page, ...options }, RequestKind.Read, token);
 		return { items: result.pullRequests.map(pullRequest => ({ ...pullRequest })), nextPage: result.nextPage };
 	}
 	public async readPullRequest(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubPullRequest> {

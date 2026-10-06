@@ -70,7 +70,7 @@ class ReviewTransport implements AppServerTransport {
 		if (request.method === this.heldMethod) { this.held = request; return; }
 		this.dispatch(request);
 	}
-	private pr(number = 7) { return { number, title: number === 7 ? '<img src=x onerror=alert(1)> Review change' : 'Another pull request', body: 'PR description', url: `https://github.com/team/repo/pull/${number}`, state: this.merged ? 'closed' : 'open', draft: false, mergedAt: this.merged ? 'now' : null, headCommit: this.commit, headBranch: 'feature', headRepository: 'contributor/fork', baseBranch: 'main', autoMerge: false }; }
+	private pr(number = 7) { return { number, title: number === 7 ? '<img src=x onerror=alert(1)> Review change' : 'Another pull request', body: 'PR description', url: `https://github.com/team/repo/pull/${number}`, state: this.merged ? 'closed' : 'open', draft: false, mergedAt: this.merged ? 'now' : null, headCommit: this.commit, headBranch: 'feature', headRepository: 'contributor/fork', baseBranch: 'main', mergeable: null, autoMerge: false }; }
 	private issue() { return { number: 9, title: 'Fix issue', url: 'https://github.com/team/repo/issues/9', state: 'open', labels: ['bug'], assignees: ['Alice'], updatedAt: 'now' }; }
 	private dispatch(request: Request): void {
 		if (this.failure && request.method === 'github/pullRequest/review') { this.respond(request, undefined, this.failure); return; }

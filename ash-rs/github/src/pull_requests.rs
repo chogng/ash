@@ -115,16 +115,25 @@ impl GitHub {
         repository: &Repository,
         state: IssueState,
         page: u32,
+        head: Option<&str>,
     ) -> Result<PullRequestPage> {
         validate_page(page)?;
+        let mut query = url::form_urlencoded::Serializer::new(String::new());
+        query
+            .append_pair("state", state.as_str())
+            .append_pair("sort", "updated")
+            .append_pair("direction", "desc")
+            .append_pair("per_page", "100")
+            .append_pair("page", &page.to_string());
+        if let Some(head) = head {
+            query.append_pair("head", head);
+        }
+        let query = query.finish();
         let pull_requests: Vec<PullRequest> = self
             .api(
                 repository,
                 HttpMethod::Get,
-                &repository.endpoint(&format!(
-                    "pulls?state={}&sort=updated&direction=desc&per_page=100&page={page}",
-                    state.as_str()
-                )),
+                &repository.endpoint(&format!("pulls?{query}")),
                 None,
             )
             .await?;

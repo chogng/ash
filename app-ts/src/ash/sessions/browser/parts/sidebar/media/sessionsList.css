@@ -123,10 +123,21 @@
 }
 
 .ash-sessions-list-label {
+	flex: 1;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.ash-sessions-list-pr {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+}
+
+.ash-sessions-list-pr[hidden] {
+	display: none;
 }
 
 .ash-sessions-list-item:hover {

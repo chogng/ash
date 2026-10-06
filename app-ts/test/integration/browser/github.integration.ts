@@ -6,7 +6,6 @@ import { IAccountService, type AccountState } from '../../../src/ash/platform/ac
 import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
-import { ILinkPresentationService } from '../../../src/ash/platform/dataChannel/common/dataChannel.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { AccessibleViewType, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
@@ -23,7 +22,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash
 import { GitHubLinkPresentationContribution } from '../../../src/ash/workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
-import { LinkPresentationService } from '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
+import '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
 
 interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
 const sha = 'abcdef0123456789abcdef0123456789abcdef01';
@@ -54,7 +53,12 @@ class GitHubTransport implements AppServerTransport {
 				if (request.params.number === 9) { this.heldIssue = request; }
 				else { this.respond(request, { issue: { number: 7, url: 'https://github.com/team/repo/issues/7', title: '<img src=x onerror=alert(1)>', state: 'open', labels: [], assignees: [], updatedAt: '2026-10-04T12:00:00Z' }, body: `**Issue details** ${'Long description '.repeat(30)}`, comments: [] }); }
 				break;
-			case 'github/pullRequest/read': this.respond(request, { number: 8, title: 'Fix GitHub links', body: 'Pull request details', url: 'https://github.com/team/repo/pull/8', state: 'open', draft: true, mergedAt: null, headCommit: sha, headBranch: 'feature/links', headRepository: new URL(location.href).searchParams.has('deletedSource') ? null : 'contributor/fork', baseBranch: 'main', autoMerge: false }); break;
+			case 'github/pullRequest/read': {
+				const query = new URL(location.href).searchParams;
+				const state = query.get('prState') ?? 'draft';
+				this.respond(request, { number: 8, title: 'Fix GitHub links', body: 'Pull request details', url: 'https://github.com/team/repo/pull/8', state: state === 'merged' || state === 'closed' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06T00:00:00Z' : null, headCommit: sha, headBranch: 'feature/links', headRepository: query.has('deletedSource') ? null : 'contributor/fork', baseBranch: 'main', mergeable: null, autoMerge: false });
+				break;
+			}
 			case 'github/checks': this.heldChecks = request; break;
 			case 'github/commit/read': this.respond(request, { sha, url: `https://github.com/team/repo/commit/${sha}`, message: 'Improve links\n\nCommit description', author: 'Alex', committedAt: '2026-10-04T12:00:00Z', additions: 12, deletions: 3 }); break;
 			case 'github/cancel': this.respond(request, { status: 'requested' }); break;
@@ -62,9 +66,9 @@ class GitHubTransport implements AppServerTransport {
 		}
 	}
 	private respond(request: Request, result: unknown): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) }); }
-	public releaseChecks(): void {
+	public releaseChecks(outcome: 'success' | 'failure' | 'mixed' = 'success'): void {
 		if (!this.heldChecks) { throw new Error('No pending checks'); }
-		this.respond(this.heldChecks, { state: 'success', statuses: [], checks: [{ id: 1, name: 'tests', status: 'completed', conclusion: 'success', detailsUrl: null }], nextPage: null });
+		this.respond(this.heldChecks, { state: outcome === 'success' ? 'success' : 'failure', statuses: outcome === 'mixed' ? [{ state: 'pending', context: 'build', description: null, targetUrl: null }] : [], checks: [{ id: 1, name: 'tests', status: 'completed', conclusion: outcome === 'success' ? 'success' : 'failure', detailsUrl: null }], nextPage: null });
 		this.heldChecks = undefined;
 	}
 	public releaseIssue(): void {
@@ -87,7 +91,6 @@ services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const accounts = resources.add(new Emitter<AccountState>());
 services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => { }, logout: async () => { } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
-services.registerInstance(ILinkPresentationService, resources.add(services.createInstance(LinkPresentationService)));
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
 host.advance(WorkbenchPhase.BlockRestore);
 resources.add(bindColorTheme(theme, document.body));
@@ -102,7 +105,7 @@ widget.setVisible(true);
 const render = (text: string): void => widget.render([{ id: 'message', type: 'agentMessage', text, transient: false }]);
 render(`[Repo](https://github.com/team/repo) [Issue](https://github.com/team/repo/issues/7) [PR](https://github.com/team/repo/pull/8) [Commit](https://github.com/team/repo/commit/${sha})`);
 window.ashGitHubIntegration = {
-	requests: transport.requests, opened, releaseChecks: () => transport.releaseChecks(), releaseIssue: () => transport.releaseIssue(),
+	requests: transport.requests, opened, releaseChecks: outcome => transport.releaseChecks(outcome), releaseIssue: () => transport.releaseIssue(),
 	render, replaceAccount: () => accounts.fire({ revision: 2n, accounts: [] }),
 	theme: name => theme.setColorTheme(name === 'light' ? lightColorTheme : highContrastDarkColorTheme),
 	setVerbosity: value => services.get(IConfigurationService).updateValue(AccessibilityVerbositySettingId.GitHub, value),
@@ -115,6 +118,6 @@ window.ashGitHubIntegration = {
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 declare global {
 	interface Window {
-		ashGitHubIntegration: { requests: Request[]; opened: string[]; releaseChecks(): void; releaseIssue(): void; render(text: string): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; setVerbosity(value: boolean): Promise<void>; accessibleContent(type: AccessibleViewType): string; dispose(): void; };
+		ashGitHubIntegration: { requests: Request[]; opened: string[]; releaseChecks(outcome?: 'success' | 'failure' | 'mixed'): void; releaseIssue(): void; render(text: string): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; setVerbosity(value: boolean): Promise<void>; accessibleContent(type: AccessibleViewType): string; dispose(): void; };
 	}
 }

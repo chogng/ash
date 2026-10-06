@@ -28,6 +28,7 @@ import { ILifecycleService } from '../../../../workbench/services/lifecycle/comm
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 
 /** Sessions owns its composer layout and editor policy while sharing input operations.
  * 
@@ -91,6 +92,9 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');
+		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, this.element, model));
+		this.element.insertBefore(pullRequests.domNode, this.inputContainer);
+		pullRequests.render();
 		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));

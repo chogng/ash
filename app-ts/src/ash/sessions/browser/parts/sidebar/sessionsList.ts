@@ -7,6 +7,11 @@ import { localize } from '../../../../nls.js';
 import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
+import type { IGitHubService } from '../../../contrib/github/browser/githubService.js';
+import { getPullRequestLabel } from '../../../contrib/github/common/types.js';
+import { getHighestPriorityPullRequestIcon } from '../../../../workbench/common/chatPullRequest.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends Disposable {
@@ -20,7 +25,7 @@ export class SessionsList extends Disposable {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly viewService: ISessionsService;
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string) {
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.sessionService = sessionService;
@@ -56,6 +61,7 @@ export class SessionsList extends Disposable {
 		this._register(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
 		this._register(addDisposableListener(this.searchInput, 'input', () => this.render()));
 		this._register(viewService.onDidChange(() => this.render()));
+		this._register(github.onDidChange(() => this.render()));
 		this.render();
 	}
 
@@ -92,6 +98,8 @@ export class SessionsList extends Disposable {
 			const key = `session:${session.sessionId}`;
 			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
 			item.update(session.title || "Untitled Session", current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId));
+			const requests = this.github.getSessionPullRequests(session.sessionId);
+			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			ordered.push(item);
 			present.add(key);
 		}
@@ -116,6 +124,7 @@ export class SessionsList extends Disposable {
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLButtonElement;
 	private readonly label: HTMLSpanElement;
+	private readonly pullRequest: HTMLSpanElement;
 	private open: () => void = () => { };
 	private readonly clickListener;
 
@@ -130,7 +139,11 @@ class SessionListItem extends AbstractDisposable {
 		appendIcon(Lxicon.chat4, avatar);
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
-		this.domNode.append(avatar, this.label);
+		this.pullRequest = h(ownerDocument, 'span');
+		this.pullRequest.className = 'ash-sessions-list-pr';
+		this.pullRequest.setAttribute('aria-hidden', 'true');
+		this.pullRequest.hidden = true;
+		this.domNode.append(avatar, this.label, this.pullRequest);
 		this.clickListener = addDisposableListener(this.domNode, "click", () => this.open());
 	}
 
@@ -140,6 +153,17 @@ class SessionListItem extends AbstractDisposable {
 		this.domNode.classList.toggle("selected", selected);
 		this.domNode.setAttribute("aria-current", selected ? "page" : "false");
 		this.open = open;
+	}
+
+	updatePullRequests(icon: ThemeIcon | undefined, description: string): void {
+		this.pullRequest.replaceChildren();
+		this.pullRequest.hidden = icon === undefined;
+		if (icon) {
+			appendIcon(icon, this.pullRequest);
+			this.pullRequest.style.color = `var(${colorCssVariable(icon.color!.id)})`;
+		}
+		this.domNode.title = description ? `${this.label.textContent}\n${description}` : this.label.textContent!;
+		this.domNode.setAttribute('aria-label', description ? `${this.label.textContent}. ${description}` : this.label.textContent!);
 	}
 
 	protected override disposeCore(): void {

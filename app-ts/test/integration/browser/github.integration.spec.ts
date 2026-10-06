@@ -92,3 +92,52 @@ test('rerendering duplicate cached links and retiring requests preserves data ow
 	await expect(page.getByRole('link', { name: 'Remaining' })).toBeVisible();
 	expect(errors).toEqual([]);
 });
+
+for (const [state, id, label] of [
+	['open', 'git-pull-request', 'Open'],
+	['draft', 'git-pull-request-draft', 'Draft'],
+	['closed', 'git-pull-request-closed', 'Closed'],
+	['merged', 'git-pull-request-done', 'Merged'],
+] as const) {
+	test(`${state} PRs use the same accessible state icon in the chat link and its keyboard details`, async ({ page }) => {
+		await page.goto(`/github.html?prState=${state}`);
+		const pr = page.locator('main a[href="https://github.com/team/repo/pull/8"]');
+		const glyph = pr.locator('svg');
+		await expect(pr).toHaveAccessibleName(`Fix GitHub links · #8 · team/repo · ${label}`);
+		await expect(glyph).toHaveAttribute('data-ash-icon-id', id);
+		await expect(glyph).toHaveAttribute('aria-hidden', 'true');
+		await pr.focus();
+		await page.keyboard.press('F2');
+		const card = page.locator('.ash-github-resource-hover');
+		await expect(card.locator('svg')).toHaveAttribute('data-ash-icon-id', id);
+		await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('failure'));
+		await expect(pr).toContainText('Checks failed');
+		const expectedIcon = state === 'open' ? 'git-pull-request-error' : id;
+		await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', expectedIcon);
+		await expect(card.locator('svg')).toHaveAttribute('data-ash-icon-id', expectedIcon);
+		await expect(card.getByRole('link', { name: 'team/repo', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(pr).toBeFocused();
+		for (const theme of ['light', 'highContrast'] as const) {
+			await page.evaluate(theme => window.ashGitHubIntegration.theme(theme), theme);
+			expect(await pr.locator('svg').evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
+			await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', expectedIcon);
+		}
+		const retainedAnchor = await pr.elementHandle();
+		await page.evaluate(() => window.ashGitHubIntegration.dispose());
+		await expect(pr).toHaveCount(0);
+		expect(await retainedAnchor!.evaluate(element => ({ text: element.textContent, icons: element.querySelectorAll('svg').length }))).toEqual({ text: 'PR', icons: 0 });
+		await retainedAnchor!.dispose();
+	});
+}
+
+test('a failed CI check remains visible while another check is pending', async ({ page }) => {
+	await page.goto('/github.html?prState=open');
+	const pr = page.locator('main a[href="https://github.com/team/repo/pull/8"]');
+	await expect(pr).toContainText('Open');
+	await pr.focus();
+	await page.keyboard.press('F2');
+	await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('mixed'));
+	await expect(pr).toContainText('Checks failed');
+	await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+});

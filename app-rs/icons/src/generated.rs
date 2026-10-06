@@ -117,6 +117,12 @@ mod artwork {
     pub(crate) const GIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git.svg"));
     pub(crate) const GIT_BRANCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-branch.svg"));
     pub(crate) const GIT_COMMIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-commit.svg"));
+    pub(crate) const GIT_PULL_REQUEST: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-pull-request.svg"));
+    pub(crate) const GIT_PULL_REQUEST_CLOSED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-pull-request-closed.svg"));
+    pub(crate) const GIT_PULL_REQUEST_COMMENT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-pull-request-comment.svg"));
+    pub(crate) const GIT_PULL_REQUEST_DONE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-pull-request-done.svg"));
+    pub(crate) const GIT_PULL_REQUEST_DRAFT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-pull-request-draft.svg"));
+    pub(crate) const GIT_PULL_REQUEST_ERROR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-pull-request-error.svg"));
     pub(crate) const GITHUB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/github.svg"));
     pub(crate) const GO_TO_FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/go-to-file.svg"));
     pub(crate) const H1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h1.svg"));
@@ -365,6 +371,12 @@ pub mod icons {
     pub const GIT: Icon = Icon::new(IconId::new("git"), artwork::GIT);
     pub const GIT_BRANCH: Icon = Icon::new(IconId::new("git-branch"), artwork::GIT_BRANCH);
     pub const GIT_COMMIT: Icon = Icon::new(IconId::new("git-commit"), artwork::GIT_COMMIT);
+    pub const GIT_PULL_REQUEST: Icon = Icon::new(IconId::new("git-pull-request"), artwork::GIT_PULL_REQUEST);
+    pub const GIT_PULL_REQUEST_CLOSED: Icon = Icon::new(IconId::new("git-pull-request-closed"), artwork::GIT_PULL_REQUEST_CLOSED);
+    pub const GIT_PULL_REQUEST_COMMENT: Icon = Icon::new(IconId::new("git-pull-request-comment"), artwork::GIT_PULL_REQUEST_COMMENT);
+    pub const GIT_PULL_REQUEST_DONE: Icon = Icon::new(IconId::new("git-pull-request-done"), artwork::GIT_PULL_REQUEST_DONE);
+    pub const GIT_PULL_REQUEST_DRAFT: Icon = Icon::new(IconId::new("git-pull-request-draft"), artwork::GIT_PULL_REQUEST_DRAFT);
+    pub const GIT_PULL_REQUEST_ERROR: Icon = Icon::new(IconId::new("git-pull-request-error"), artwork::GIT_PULL_REQUEST_ERROR);
     pub const GITHUB: Icon = Icon::new(IconId::new("github"), artwork::GITHUB);
     pub const GO_TO_FILE: Icon = Icon::new(IconId::new("go-to-file"), artwork::GO_TO_FILE);
     pub const H1: Icon = Icon::new(IconId::new("h1"), artwork::H1);
@@ -609,6 +621,12 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::GIT,
     icons::GIT_BRANCH,
     icons::GIT_COMMIT,
+    icons::GIT_PULL_REQUEST,
+    icons::GIT_PULL_REQUEST_CLOSED,
+    icons::GIT_PULL_REQUEST_COMMENT,
+    icons::GIT_PULL_REQUEST_DONE,
+    icons::GIT_PULL_REQUEST_DRAFT,
+    icons::GIT_PULL_REQUEST_ERROR,
     icons::GITHUB,
     icons::GO_TO_FILE,
     icons::H1,
@@ -854,6 +872,12 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("git", artwork::GIT),
     ("git-branch", artwork::GIT_BRANCH),
     ("git-commit", artwork::GIT_COMMIT),
+    ("git-pull-request", artwork::GIT_PULL_REQUEST),
+    ("git-pull-request-closed", artwork::GIT_PULL_REQUEST_CLOSED),
+    ("git-pull-request-comment", artwork::GIT_PULL_REQUEST_COMMENT),
+    ("git-pull-request-done", artwork::GIT_PULL_REQUEST_DONE),
+    ("git-pull-request-draft", artwork::GIT_PULL_REQUEST_DRAFT),
+    ("git-pull-request-error", artwork::GIT_PULL_REQUEST_ERROR),
     ("github", artwork::GITHUB),
     ("go-to-file", artwork::GO_TO_FILE),
     ("h1", artwork::H1),

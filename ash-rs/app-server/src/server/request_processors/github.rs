@@ -417,7 +417,7 @@ impl GitHubRequestProcessor {
             ClientMethod::GitHubPullRequestList => {
                 operation!(GitHubPullRequestListParams, |p, repository| {
                     let page = client
-                        .pull_requests(&repository, state(p.state), p.page)
+                        .pull_requests(&repository, state(p.state), p.page, p.head.as_deref())
                         .await?;
                     Ok::<_, github::Error>(GitHubPullRequestListResult {
                         pull_requests: page.pull_requests.into_iter().map(pull_request).collect(),
@@ -777,6 +777,7 @@ fn pull_request(value: github::PullRequest) -> GitHubPullRequest {
         state: value.state,
         draft: value.draft,
         merged_at: value.merged_at,
+        mergeable: value.mergeable,
         head_commit: value.head.sha,
         head_branch: value.head.name,
         head_repository: value.head.repo.map(|repository| repository.full_name),

@@ -204,6 +204,8 @@ pub struct PullRequest {
     pub state: String,
     pub draft: bool,
     pub merged_at: Option<String>,
+    /// GitHub returns null while computing mergeability; it is not a conflict verdict.
+    pub mergeable: Option<bool>,
     pub head: PullRequestBranch,
     pub base: PullRequestBranch,
     #[serde(default)]

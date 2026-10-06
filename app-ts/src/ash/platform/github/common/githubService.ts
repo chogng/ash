@@ -68,6 +68,8 @@ export interface GitHubPullRequest {
 	readonly state: string;
 	readonly draft: boolean;
 	readonly mergedAt: string | null;
+	/** Null means GitHub has not finished computing mergeability. */
+	readonly mergeable: boolean | null;
 	readonly headCommit: string;
 	readonly headBranch: string;
 	readonly headRepository: string | null;
@@ -146,7 +148,7 @@ export interface IGitHubService {
 	createComment(repository: GitHubRepository, number: number, body: string, token?: CancellationToken): Promise<GitHubComment>;
 	updateComment(repository: GitHubRepository, commentId: number, body: string, token?: CancellationToken): Promise<GitHubComment>;
 	deleteComment(repository: GitHubRepository, commentId: number, token?: CancellationToken): Promise<void>;
-	listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubPullRequest>>;
+	listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken, options?: { readonly head: string; }): Promise<GitHubPage<GitHubPullRequest>>;
 	readPullRequest(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubPullRequest>;
 	createPullRequest(repository: GitHubRepository, request: GitHubCreatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;
 	updatePullRequest(repository: GitHubRepository, number: number, update: GitHubUpdatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;

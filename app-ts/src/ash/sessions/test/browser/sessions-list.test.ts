@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../base/common/event.js";
+import { Emitter, Event } from "../../../base/common/event.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { SessionsList } from "../../browser/parts/sidebar/sessionsList.js";
@@ -27,7 +27,7 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
-	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session");
+	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session", { onDidChange: Event.None, getSessionPullRequests: () => [], initialize: () => { } });
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
 	buttons[0].focus();
 	untitledSessions = [

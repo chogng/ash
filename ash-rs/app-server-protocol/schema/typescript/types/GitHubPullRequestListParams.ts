@@ -2,4 +2,8 @@
 import type { IssueRepository } from './IssueRepository.js';
 import type { IssueState } from './IssueState.js';
 
-export type GitHubPullRequestListParams = { operationId: string, accountId?: string, repository: IssueRepository, state: IssueState, page: number, };
+export type GitHubPullRequestListParams = { operationId: string, accountId?: string, repository: IssueRepository, state: IssueState, page: number,
+/**
+ * GitHub head selector (`owner:branch`) for branch-associated PR discovery.
+ */
+head?: string, };

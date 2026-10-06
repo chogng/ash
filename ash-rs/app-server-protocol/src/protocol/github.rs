@@ -180,6 +180,10 @@ pub struct GitHubPullRequestListParams {
     pub repository: IssueRepository,
     pub state: IssueState,
     pub page: u32,
+    /// GitHub head selector (`owner:branch`) for branch-associated PR discovery.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub head: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -193,6 +197,7 @@ pub struct GitHubPullRequest {
     pub state: String,
     pub draft: bool,
     pub merged_at: Option<String>,
+    pub mergeable: Option<bool>,
     pub head_commit: String,
     pub head_branch: String,
     pub head_repository: Option<String>,

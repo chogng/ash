@@ -1,0 +1,54 @@
+import { expect, test } from '@playwright/test';
+
+test('branch PRs share state across composer and sidebar, retain focus, and open with Enter', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	page.on('console', message => { if (message.type() === 'error') { console.error(message.text()); } });
+	await page.goto('/sessionGitHub.html');
+	const pills = page.locator('.ash-session-chat-input-pr');
+	const first = pills.filter({ hasText: 'one #7' });
+	const sidebar = page.locator('.ash-sessions-list-item');
+	await expect(pills).toHaveCount(2);
+	await expect(first).toHaveAccessibleName(/Changes in one · Open/);
+	await expect(sidebar.locator('svg[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
+	expect(await pills.locator('svg').evaluateAll(elements => elements.every(element => element.getAttribute('aria-hidden') === 'true'))).toBe(true);
+	await first.focus();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual(['https://github.com/team/one/pull/7']);
+	await page.evaluate(() => window.ashSessionGitHub.setAttention('comments'));
+	await expect(first).toHaveAccessibleName(/Unresolved review comments/);
+	await expect(sidebar.locator('svg[data-ash-icon-id="git-pull-request-comment"]')).toHaveCount(1);
+	await expect(first).toBeFocused();
+	await page.evaluate(() => window.ashSessionGitHub.setAttention('checks'));
+	await expect(first).toHaveAccessibleName(/Checks failed/);
+	await expect(sidebar.locator('svg[data-ash-icon-id="git-pull-request-error"]')).toHaveCount(1);
+	await expect(first).toBeFocused();
+	await page.evaluate(() => window.ashSessionGitHub.setAttention('conflicts'));
+	await expect(first).toHaveAccessibleName(/Merge conflicts/);
+	await expect(first).toBeFocused();
+	await page.evaluate(() => window.ashSessionGitHub.setState('merged'));
+	await expect(first).toHaveAccessibleName(/Merged$/);
+	await expect(first.locator('svg[data-ash-icon-id="git-pull-request-done"]')).toHaveCount(1);
+	await expect(sidebar.locator('svg[data-ash-icon-id="git-pull-request-draft"]')).toHaveCount(1);
+	await expect(first).toBeFocused();
+	await page.evaluate(() => window.ashSessionGitHub.theme('light'));
+	await expect(first.locator('span').first()).toHaveCSS('color', 'rgb(101, 45, 144)');
+	await page.evaluate(() => window.ashSessionGitHub.theme('hc'));
+	await expect(first).toHaveCSS('outline-style', 'solid');
+	await expect(first).toHaveCSS('min-height', '28px');
+	expect(await first.evaluate(element => element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right)).toBe(true);
+	await page.evaluate(() => window.ashSessionGitHub.changeBranch());
+	await expect(pills).toHaveCount(0);
+	await expect(sidebar.locator('.ash-sessions-list-pr')).toBeHidden();
+	await page.evaluate(() => window.ashSessionGitHub.dispose());
+	await expect(page.locator('.ash-session-chat-input-prs')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+test('signing out clears private PR labels in both surfaces', async ({ page }) => {
+	await page.goto('/sessionGitHub.html');
+	await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
+	await page.evaluate(() => window.ashSessionGitHub.signOut());
+	await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(0);
+	await expect(page.locator('.ash-sessions-list-item')).not.toHaveAccessibleName(/Changes in/);
+});

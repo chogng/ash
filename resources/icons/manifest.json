@@ -547,6 +547,36 @@
       "rendering": "symbolic"
     },
     {
+      "id": "git-pull-request",
+      "file": "git-pull-request.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-pull-request-closed",
+      "file": "git-pull-request-closed.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-pull-request-comment",
+      "file": "git-pull-request-comment.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-pull-request-done",
+      "file": "git-pull-request-done.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-pull-request-draft",
+      "file": "git-pull-request-draft.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-pull-request-error",
+      "file": "git-pull-request-error.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "github",
       "file": "github.svg",
       "rendering": "symbolic"
