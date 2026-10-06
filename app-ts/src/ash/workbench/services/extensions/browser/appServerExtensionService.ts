@@ -28,6 +28,12 @@ import { normalizeTextMateScopeTheme } from "../../textMate/common/textMateScope
 import { projectExtensionTokenTheme } from "../../textMate/common/textMateThemeProjection.js";
 import { parseJsonc } from "../common/jsonc.js";
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
+import { getNLSLanguage } from '../../../../nls.js';
+import { match } from '../../../../base/common/glob.js';
+import { basename } from '../../../../base/common/resources.js';
+import { EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } from '../../../browser/editor.js';
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { isResourceDiffEditorInput } from '../../../common/editor.js';
 import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from "../common/extensionFileTemplate.js";
 import { createExtensionSnippetProvider, materializeExtensionFileTemplate, parseExtensionSnippetFile, type ExtensionSnippetDefinition } from "../common/extensionSnippetProvider.js";
 import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
@@ -57,6 +63,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private activeThemeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
 	private readonly changeEmitter = this._register(new Emitter<ExtensionCatalog>());
 	private readonly failureEmitter = this._register(new Emitter<ExtensionServiceFailure>());
+	private readonly editorPaneRegistration = this._register(EditorPanes.registerEditorPanes([]));
+	private activeEditorPanes: readonly IEditorPaneDescriptor[] = [];
 	private catalog: ExtensionCatalog = Object.freeze({
 		generation: 0,
 		extensions: Object.freeze([]),
@@ -194,6 +202,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const productIconThemes: IWorkbenchProductIconTheme[] = [];
 		const fileTemplates: ExtensionFileTemplateDefinition[] = [];
 		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
+		const editorPanes: IEditorPaneDescriptor[] = [];
 		let activeExtension: ExtensionDescriptor | undefined;
 		try {
 			const transportCatalog = await this.options.api.list("refresh");
@@ -204,6 +213,30 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				await verifyExtensionManifestDigest(extension);
 				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(extension.manifestJson, extension);
+				if (extension.sourceKind === 'builtIn') {
+					for (const editor of manifest.contributes.customEditors) {
+						const create = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
+						if (!create) { continue; }
+						let name = editor.displayName;
+						const key = /^%(.+)%$/.exec(name)?.[1];
+						if (key) {
+							const locale = getNLSLanguage() === 'zh-CN' ? '.zh-CN' : '';
+							const messages = parseJsonc(new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)), 'Editor labels') as Record<string, unknown>;
+							if (typeof messages[key] !== 'string') { throw new TypeError(`Missing editor label '${key}' in '${extension.id}'`); }
+							name = messages[key];
+						}
+						editorPanes.push({
+							id: editor.viewType, name, create: options => create(options, name),
+							canOpen: input => {
+								if (isResourceDiffEditorInput(input)) { return EditorPaneMatch.None; }
+								const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
+								const supported = editor.selector.some(selector => match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase()) || mediaType !== undefined && selector.mimeType === mediaType);
+								if (!supported) { return EditorPaneMatch.None; }
+								return editor.priority === 'default' ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
+							},
+						});
+					}
+				}
 				themeContributions.colors.push(...manifest.contributes.colors);
 				themeContributions.types.push(...manifest.contributes.semanticTokenTypes);
 				themeContributions.modifiers.push(...manifest.contributes.semanticTokenModifiers);
@@ -308,6 +341,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			try {
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
+					this.editorPaneRegistration.replace(editorPanes);
 					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions);
 					this.activeThemeContributions = themeContributions;
 					this.activeGrammars = Object.freeze([...grammars]);
@@ -321,9 +355,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.changeEmitter.fire(catalog);
 				});
 			} catch (error) {
+				this.editorPaneRegistration.replace(this.activeEditorPanes);
 				if (!this.isDisposed) await this.restoreActivation(previousGrammars, error);
 				throw error;
 			}
+			this.activeEditorPanes = editorPanes;
 		} catch (error) {
 			if (this.isDisposed) return;
 			this.failureEmitter.fire(Object.freeze({ extension: activeExtension, error }));

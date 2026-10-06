@@ -14,10 +14,10 @@ import { IContextMenuService } from '../../../../../platform/contextview/browser
 import { IFileService, FileKind, type IFileChangeEvent } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { inspectImage } from '../../../../../platform/media/browser/image.js';
-import { EditorPanes } from '../../../../browser/editor.js';
-import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
+import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { IMAGE_PREVIEW_ID, ImagePreview, matchImagePreview } from '../../browser/imagePreview.js';
+import { IMAGE_PREVIEW_ID, ImagePreview } from '../../browser/imagePreview.js';
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -41,6 +41,7 @@ class ImageFixture extends Disposable {
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], { createImageBitmap: () => this.decode() }));
 		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
+		registerTestComponentServices(this.services, this.browser.window.document);
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerInstance(IFileService, {
 			onDidChangeFiles: this.changes.event,
@@ -52,21 +53,16 @@ class ImageFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
-		this.preview = this._register(EditorPanes.getEditorPane({ resource })!.create({ instantiationService: this.services }) as ImagePreview);
+		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!({ instantiationService: this.services }, 'Image preview') as ImagePreview);
 		this.preview.create(this.browser.window.document.body);
 		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;
 		Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 300 } });
 	}
 }
 
-test('Image preview matches supported image resources and requires production services', () => {
-	assert.deepEqual([
-		matchImagePreview({ resource: URI.file('/PRODUCT.PNG') }),
-		matchImagePreview({ resource: URI.file('/asset'), contentType: 'image/webp; charset=binary' }),
-		matchImagePreview({ resource: URI.file('/movie.mp4') }),
-	], [EditorPaneMatch.Default, EditorPaneMatch.Default, EditorPaneMatch.None]);
+test('Image preview factory requires production services', () => {
 	using services = new InstantiationService();
-	assert.throws(() => EditorPanes.getEditorPane({ resource })!.create({ instantiationService: services }), /fileService/);
+	assert.throws(() => getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!({ instantiationService: services }, 'Image preview'), /fileService/);
 });
 
 test('Image preview opens through the registered pane, zooms and releases its URL on closure', async () => {

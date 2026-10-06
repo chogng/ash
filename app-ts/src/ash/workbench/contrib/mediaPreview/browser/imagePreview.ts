@@ -15,16 +15,9 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ImageResource, inspectImage, type ImageMetadata } from '../../../../platform/media/browser/image.js';
-import { EditorPaneMatch, EditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 
 export const IMAGE_PREVIEW_ID = 'ash.imagePreview';
-
-export function matchImagePreview(input: IResourceEditorInput): EditorPaneMatch {
-	const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-	return /\.(png|jpe?g|webp)$/i.test(input.resource.path) || mediaType === 'image/png' || mediaType === 'image/jpeg' || mediaType === 'image/webp'
-		? EditorPaneMatch.Default
-		: EditorPaneMatch.None;
-}
 
 export class ImagePreview extends EditorPane implements IEditorPane {
 	public readonly id = IMAGE_PREVIEW_ID;

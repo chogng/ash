@@ -44,6 +44,13 @@ export interface ExtensionDebugAdapterContribution {
 	readonly arguments: readonly string[];
 }
 
+export interface ExtensionCustomEditorContribution {
+	readonly viewType: string;
+	readonly displayName: string;
+	readonly priority: 'default' | 'option' | 'explicit';
+	readonly selector: readonly { readonly filenamePattern: string; readonly mimeType?: string; }[];
+}
+
 export interface ExtensionManifest {
 	readonly name: string;
 	readonly publisher: string;
@@ -62,6 +69,7 @@ export interface ExtensionManifest {
 		readonly semanticTokenModifiers: readonly TokenTypeOrModifierContribution[];
 		readonly semanticTokenScopes: readonly SemanticTokenScopeContribution[];
 		readonly icons: readonly ExtensionIconContribution[];
+		readonly customEditors: readonly ExtensionCustomEditorContribution[];
 	};
 }
 
@@ -115,9 +123,46 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			semanticTokenModifiers: parseClassifications(contributes.semanticTokenModifiers, false),
 			semanticTokenScopes: parseSemanticScopes(contributes.semanticTokenScopes),
 			icons: parseIcons(contributes.icons),
+			customEditors: parseCustomEditors(contributes.customEditors, descriptor.id),
 			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor.id)),
 		}),
 	});
+}
+
+function parseCustomEditors(value: unknown, extensionId: string): readonly ExtensionCustomEditorContribution[] {
+	if (value === undefined) {
+		return Object.freeze([]);
+	}
+	if (!Array.isArray(value) || value.length > 64) {
+		throw new TypeError(`Extension '${extensionId}' custom editors must be an array of at most 64 entries`);
+	}
+	const editors = value.map(candidate => {
+		const editor = record(candidate, 'Custom editor');
+		const priorities = typeof editor.priority === 'object' && editor.priority !== null ? record(editor.priority, 'Custom editor priorities') : undefined;
+		const priority = priorities ? priorities.textEditor : editor.priority ?? 'default';
+		if (priority !== 'default' && priority !== 'option' && priority !== 'explicit') {
+			throw new TypeError('Invalid custom editor priority');
+		}
+		if (!Array.isArray(editor.selector) || editor.selector.length === 0 || editor.selector.length > 64) {
+			throw new TypeError('Custom editor selectors must be a non-empty array of at most 64 entries');
+		}
+		const selector = editor.selector.map(candidate => {
+			const selector = record(candidate, 'Custom editor selector');
+			const mimeType = selector.mimeType === undefined ? undefined : requiredString(selector.mimeType, 'Custom editor MIME type', 256);
+			if (mimeType !== undefined && !/^[\w.+-]+\/[\w.+-]+$/.test(mimeType)) {
+				throw new TypeError('Invalid custom editor MIME type');
+			}
+			return Object.freeze({
+				filenamePattern: requiredString(selector.filenamePattern, 'Custom editor filename pattern', 1024),
+				...(mimeType === undefined ? {} : { mimeType: mimeType.toLowerCase() }),
+			});
+		});
+		return Object.freeze({ viewType: requiredString(editor.viewType, 'Custom editor view type', 256), displayName: requiredString(editor.displayName, 'Custom editor display name', 256), priority, selector: Object.freeze(selector) });
+	});
+	if (new Set(editors.map(editor => editor.viewType)).size !== editors.length) {
+		throw new TypeError(`Extension '${extensionId}' custom editor IDs must be unique`);
+	}
+	return Object.freeze(editors);
 }
 
 function parseLanguages(value: unknown, extensionId: string): readonly ExtensionLanguageContribution[] {

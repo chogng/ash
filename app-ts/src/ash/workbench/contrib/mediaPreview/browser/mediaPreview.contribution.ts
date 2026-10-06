@@ -1,4 +1,5 @@
 import './media/imagePreview.css';
+import './media/mediaPreview.css';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -7,18 +8,58 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { registerEditorPane } from '../../../browser/editor.js';
-import { IMAGE_PREVIEW_ID, ImagePreview, matchImagePreview } from './imagePreview.js';
+import { registerBuiltinEditorPane } from '../../../browser/editor.js';
+import { IMAGE_PREVIEW_ID, ImagePreview } from './imagePreview.js';
+import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from './mediaPreview.js';
 
-registerEditorPane({
-	id: IMAGE_PREVIEW_ID,
-	get name(): string { return localize('media.image.preview', 'Image preview'); },
-	canOpen: matchImagePreview,
-	create: options => {
-		if (!options.instantiationService) { throw new Error('Image preview requires Workbench instantiation services'); }
-		return options.instantiationService.createInstance(ImagePreview);
+registerBuiltinEditorPane('ash.media-preview', IMAGE_PREVIEW_ID, options => {
+	if (!options.instantiationService) { throw new Error('Image preview requires Workbench instantiation services'); }
+	return options.instantiationService.createInstance(ImagePreview);
+});
+
+for (const kind of ['audio', 'video'] as const) {
+	registerBuiltinEditorPane('ash.media-preview', kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID, (options, name) => {
+		if (!options.instantiationService) { throw new Error('Media preview requires Workbench instantiation services'); }
+		return options.instantiationService.createInstance(MediaPreview, kind, name);
+	});
+}
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.MediaPreview,
+	defaultValue: true,
+	setting: {
+		valueType: 'boolean',
+		get title(): string { return localize('media.playback.verbosityTitle', 'Media preview accessibility help'); },
+		get description(): string { return localize('media.playback.verbosityDescription', 'Announce how to open accessibility help when an audio or video preview receives focus.'); },
+	},
+	parse: value => {
+		if (typeof value !== 'boolean') { throw new TypeError('Media preview accessibility verbosity must be boolean'); }
+		return value;
 	},
 });
+
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		type,
+		priority: 100,
+		name: `mediaPreview.${type}`,
+		when: ContextKeyExpr.has('mediaPreviewFocused'),
+		getProvider: accessor => {
+			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+			const preview = MediaPreview.getFocused(focused);
+			if (!preview) { return undefined; }
+			return new AccessibleContentProvider(
+				AccessibleViewProviderId.MediaPreview,
+				{ type },
+				() => type === AccessibleViewType.Help
+					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
+					: preview.getAccessibleContent(),
+				() => focused.focus(),
+				AccessibilityVerbositySettingId.MediaPreview,
+			);
+		},
+	});
+}
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ImagePreview,

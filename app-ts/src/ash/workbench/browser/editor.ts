@@ -1,6 +1,6 @@
 import type { IResourceEditorInput } from '../common/editor.js';
 import { Emitter, type Event } from '../../base/common/event.js';
-import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { AbstractDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { EditorOpenOptions } from '../services/editor/common/editorService.js';
 import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
 
@@ -22,6 +22,22 @@ export interface IEditorPaneRegistry {
 	getEditorPanesForInput(input: IResourceEditorInput): readonly IEditorPaneDescriptor[];
 }
 
+/** Product renderers are selected only by declarations in their built-in package. */
+type BuiltinEditorPaneFactory = (options: EditorPaneCreationOptions, name: string) => EditorPane;
+const builtinEditorPaneFactories = new Map<string, BuiltinEditorPaneFactory>();
+
+export function getBuiltinEditorPaneFactory(extensionId: string, editorId: string): BuiltinEditorPaneFactory | undefined {
+	return builtinEditorPaneFactories.get(`${extensionId}/${editorId}`);
+}
+
+export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory): void {
+	const key = `${extensionId}/${editorId}`;
+	if (builtinEditorPaneFactories.has(key)) {
+		throw new Error(`Built-in editor factory is already registered: ${key}`);
+	}
+	builtinEditorPaneFactories.set(key, create);
+}
+
 /** Owns editor declarations and matching; editor groups own the created panes. */
 export class EditorPaneRegistry implements IEditorPaneRegistry {
 	private readonly descriptors = new Map<string, IEditorPaneDescriptor>();
@@ -29,13 +45,30 @@ export class EditorPaneRegistry implements IEditorPaneRegistry {
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	public registerEditorPane(descriptor: IEditorPaneDescriptor): IDisposable {
-		this.add(descriptor);
-		return toDisposable(() => {
-			if (this.descriptors.get(descriptor.id) === descriptor) {
-				this.descriptors.delete(descriptor.id);
-				this.changeEmitter.fire();
+		return this.registerEditorPanes([descriptor]);
+	}
+
+	/** Validate an entire package before changing the available editors. */
+	public registerEditorPanes(initial: readonly IEditorPaneDescriptor[]): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void; } {
+		let owned: readonly IEditorPaneDescriptor[] = [];
+		const replace = (descriptors: readonly IEditorPaneDescriptor[]): void => {
+			const identifiers = new Set<string>();
+			for (const descriptor of descriptors) {
+				validateDescriptor(descriptor);
+				const existing = this.descriptors.get(descriptor.id);
+				if (identifiers.has(descriptor.id) || existing && !owned.includes(existing)) {
+					throw new Error(`Editor pane is already registered: ${descriptor.id}`);
+				}
+				identifiers.add(descriptor.id);
 			}
-		});
+			if (owned.length === 0 && descriptors.length === 0) { return; }
+			for (const descriptor of owned) { this.descriptors.delete(descriptor.id); }
+			owned = [...descriptors];
+			for (const descriptor of owned) { this.descriptors.set(descriptor.id, descriptor); }
+			this.changeEmitter.fire();
+		};
+		replace(initial);
+		return new EditorPaneRegistration(replace);
 	}
 
 	/** Product contributions retain their declarations for the module lifetime. */
@@ -82,6 +115,21 @@ export class EditorPaneRegistry implements IEditorPaneRegistry {
 		}
 		this.descriptors.set(descriptor.id, descriptor);
 		this.changeEmitter.fire();
+	}
+}
+
+class EditorPaneRegistration extends AbstractDisposable {
+	constructor(private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void) {
+		super();
+	}
+
+	public replace(descriptors: readonly IEditorPaneDescriptor[]): void {
+		this.assertNotDisposed();
+		this.update(descriptors);
+	}
+
+	protected override disposeCore(): void {
+		this.update([]);
 	}
 }
 

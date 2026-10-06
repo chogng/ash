@@ -20,6 +20,8 @@ export class Menus {
 		}
 		await this.page.getByRole('menu').last().getByRole('menuitem', { name: path.at(-1)!, exact: true }).or(
 			this.page.getByRole('menu').last().getByRole('menuitemcheckbox', { name: path.at(-1)!, exact: true }),
+		).or(
+			this.page.getByRole('menu').last().getByRole('menuitemradio', { name: path.at(-1)!, exact: true }),
 		).click();
 	}
 

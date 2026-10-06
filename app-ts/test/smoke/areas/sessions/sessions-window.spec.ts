@@ -2729,14 +2729,22 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const sessionsPage = await sessionPagePromise;
 	await sessionsPage.waitForLoadState("domcontentloaded");
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toBeVisible();
-	const resources = await sessionsPage.evaluate(async () => {
+	const keybindingsResource = await sessionsPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
-		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly revision: number; readonly bindings: readonly unknown[]; };
-		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
-		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.revision, bindings: keybindings.bindings.length, connectionKind: connection.kind };
+		const home = await ipc.invoke('ash:files:userDataHome') as string;
+		return `${home.replace(/\/$/u, '')}/keybindings.json`;
 	});
-	expect(resources).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: expect.any(Number), bindings: expect.any(Number), connectionKind: 'local' });
+	// Shortcuts belong to the shared profile file, including after a window reload.
+	await writeFile(new URL(keybindingsResource), '[]');
+	const resources = await sessionsPage.evaluate(async resource => {
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+		const keybindings = await ipc.invoke('ash:files', { operation: 'readFile', resource }) as { readonly ok: true; readonly value: { readonly revision: string; readonly content: string; }; } | { readonly ok: false; readonly message: string; };
+		if (!keybindings.ok) throw new Error(keybindings.message);
+		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
+		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.value.revision, bindings: JSON.parse(keybindings.value.content), connectionKind: connection.kind };
+	}, keybindingsResource);
+	expect(resources).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: expect.any(String), bindings: [], connectionKind: 'local' });
 	const configurationChange = await sessionsPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as {
 			readonly ash: {
@@ -2800,16 +2808,20 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(titlebar.getByRole('button').first()).toHaveCSS('-webkit-app-region', 'no-drag');
 	await expect(titlebar.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
 	await expect(titlebar.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
-	const titlebarButtons = titlebar.locator('.ash-action-bar[role="toolbar"] button');
-	await expect(titlebar.locator('.ash-action-bar[role="toolbar"]')).toHaveAttribute('aria-label', 'Title bar left actions');
-	await expect(titlebarButtons).toHaveCount(4);
+	const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title bar left actions', exact: true });
+	await expect(titlebarActions).toBeVisible();
+	const titlebarButtons = titlebarActions.getByRole('button');
+	const expectedTitlebarActions = process.platform === 'darwin'
+		? ['Hide sidebar', 'Back', 'Forward']
+		: ['Application menu', 'Hide sidebar', 'Back', 'Forward'];
+	await expect(titlebarButtons).toHaveCount(expectedTitlebarActions.length);
 	const activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
 	await expect(titlebar.getByRole('navigation', { name: 'Chat and Code' })).toHaveCount(0);
 	await expect(activityNavigation.getByRole('button', { name: 'Chat' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'code');
 	await expect(sessionsPage.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 	const titlebarActionNames = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
-	expect(titlebarActionNames).toEqual(['Application menu', 'Hide sidebar', 'Back', 'Forward']);
+	expect(titlebarActionNames).toEqual(expectedTitlebarActions);
 	await expect(titlebar).toHaveCSS('height', '35px');
 	await expect(titlebar).toHaveCSS('border-bottom-width', '0px');
 	const titlebarBounds = await titlebar.boundingBox();
@@ -2878,8 +2890,12 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(showSidebar.locator('svg[data-ash-icon-id="layout-sidebar-left-off-2"]')).toBeVisible();
 	await showSidebar.click();
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
-	const applicationItems = await new Menus(sessionsPage).inspect(application, () => titlebar.getByRole('button', { name: 'Application menu' }).click());
-	expect(applicationItems.map(item => item.label)).toContain('File');
+	if (process.platform === 'darwin') {
+		expect(await application.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.map(item => item.label))).toContain('File');
+	} else {
+		const applicationItems = await new Menus(sessionsPage).inspect(application, () => titlebar.getByRole('button', { name: 'Application menu' }).click());
+		expect(applicationItems.map(item => item.label)).toContain('File');
+	}
 	await expect(sessionsPage.locator(".ash-sessions-list")).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot").first()).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator(":is(.ash-chat-input-part,.ash-cowork-input-part)")).toBeVisible();
@@ -2908,16 +2924,17 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await workbench.reloadWindow(sessionsPage);
 	await expect(sessionsPage.locator('.ash-code-sessions-window')).toBeVisible();
 	await expect.poll(() => application.windows().length).toBe(2);
-	const reloadedIpc = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+	const reloadedIpc = await sessionsPage.evaluate(async resource => {
+		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
-		const keybindings = await ipc.invoke('ash:keybindings-resource:read') as { readonly bindings: readonly unknown[]; };
+		const keybindings = await ipc.invoke('ash:files', { operation: 'readFile', resource }) as { readonly ok: true; readonly value: { readonly revision: string; readonly content: string; }; } | { readonly ok: false; readonly message: string; };
+		if (!keybindings.ok) throw new Error(keybindings.message);
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
 		await ipc.invoke('ash:native-host:open-agents-window');
 		const windows = await (ipc as { invoke(channel: string, params: unknown): Promise<unknown>; }).invoke('ash:window:operation', { kind: 'list' }) as readonly unknown[];
-		return { configurationRevision: configuration.revision, bindings: keybindings.bindings.length, connectionKind: connection.kind, windowCount: windows.length };
-	});
-	expect(reloadedIpc).toEqual({ configurationRevision: expect.any(Number), bindings: expect.any(Number), connectionKind: 'local', windowCount: 2 });
+		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.value.revision, bindings: JSON.parse(keybindings.value.content), connectionKind: connection.kind, windowCount: windows.length };
+	}, keybindingsResource);
+	expect(reloadedIpc).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: resources.keybindingsRevision, bindings: [], connectionKind: 'local', windowCount: 2 });
 	await expect(workbenchPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:sessions:return-to-workbench');

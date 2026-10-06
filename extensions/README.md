@@ -47,6 +47,14 @@ User-installed extensions are a separate profile-level root. Marketplace package
 
 ## Bundled packages
 
+`markdown-language-features` ships the Markdown preview browser extension. `media-preview`
+declares the image (PNG/JPEG/WebP), audio (MP3/WAV/OGG/OGA), and video (MP4/WebM) editors.
+The Rust catalog owns the media package snapshot and resources; the same package is included
+in the offline browser catalog. Its `customEditors` declarations select product-owned TS
+renderers, so it has no executable extension entry. File selectors and optional MIME types
+live in the manifest, and editor labels in its English and Chinese NLS resources. Playback
+and codec support belong to the browser/Electron media engine.
+
 The current declarative pack contains the following package directories:
 
 - `bazel` (Starlark/bazelrc), `css` (CSS/Less/SCSS), `diff`, `git-base`, `go`, `html`, `ini`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,

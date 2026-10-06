@@ -117,6 +117,8 @@ import { getBrowserTextModelService } from '../../workbench/services/textmodelRe
 import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import { BrowserTextMateService } from '../../workbench/services/textMate/browser/browserTextMateService.js';
 import { ITextMateService } from '../../workbench/services/textMate/common/textMateService.js';
+import { AppServerExtensionService } from '../../workbench/services/extensions/browser/appServerExtensionService.js';
+import { IExtensionService } from '../../workbench/services/extensions/common/extensionService.js';
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
@@ -341,6 +343,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyService, workingCopies);
 		const textMate = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMate);
+		const extensionService = this._register(new AppServerExtensionService({ api: options.api.extensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
+		services.registerInstance(IExtensionService, extensionService);
+		const extensionReady = extensionService.start();
+		void extensionReady.catch(error => logger.error('extensions', 'Declarative extension activation failed', error));
 		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
@@ -669,7 +675,7 @@ export abstract class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		const entryLayout = services.get(ISessionsLayoutService);
 		this.lifecycleService.phase = LifecyclePhase.Ready;
-		this.whenRestored = Promise.all([keybindingsReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
+		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(() => this.initialize(view, configurationService, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {

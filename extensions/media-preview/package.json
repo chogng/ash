@@ -1,0 +1,42 @@
+{
+  "name": "media-preview",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "Media Preview",
+  "engines": { "vscode": "*" },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "ash.imagePreview",
+        "displayName": "%image.preview%",
+        "priority": "default",
+        "selector": [
+          { "filenamePattern": "*.png", "mimeType": "image/png" },
+          { "filenamePattern": "*.jpg", "mimeType": "image/jpeg" },
+          { "filenamePattern": "*.jpeg", "mimeType": "image/jpeg" },
+          { "filenamePattern": "*.webp", "mimeType": "image/webp" }
+        ]
+      },
+      {
+        "viewType": "ash.audioPreview",
+        "displayName": "%audio.preview%",
+        "priority": "default",
+        "selector": [
+          { "filenamePattern": "*.mp3", "mimeType": "audio/mpeg" },
+          { "filenamePattern": "*.wav", "mimeType": "audio/wav" },
+          { "filenamePattern": "*.ogg", "mimeType": "audio/ogg" },
+          { "filenamePattern": "*.oga", "mimeType": "audio/ogg" }
+        ]
+      },
+      {
+        "viewType": "ash.videoPreview",
+        "displayName": "%video.preview%",
+        "priority": "default",
+        "selector": [
+          { "filenamePattern": "*.mp4", "mimeType": "video/mp4" },
+          { "filenamePattern": "*.webm", "mimeType": "video/webm" }
+        ]
+      }
+    ]
+  }
+}

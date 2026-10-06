@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { FileKind, type IFileChangeEvent, type IFileService } from '../../../../../platform/files/common/files.js';

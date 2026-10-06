@@ -1,6 +1,7 @@
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { afterEach, suiteTeardown, test } from 'mocha';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
@@ -38,6 +39,10 @@ import type { INativeHostApi } from '../../../../../platform/native/common/nativ
 import { REVEAL_IN_OS_COMMAND_ID } from '../../electron-browser/fileActions.contribution.js';
 import { NATIVE_HOST_REVEAL_FILE_CHANNEL } from '../../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../../../../platform/native/electron-main/nativeHostIpc.js';
+
+const configurations = new DisposableStore();
+afterEach(() => configurations.clear());
+suiteTeardown(() => configurations.dispose());
 
 // URI paths use '/' on every host; URI.file() interprets filesystem separators for the current OS.
 const fileCommandRoots = [
@@ -687,8 +692,5 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 });
 
 function createExplorerService(workspace: WorkspaceContextService): ExplorerService {
-	return new ExplorerService(workspace, { onDidChangeFiles: Event.None } as FileServiceContract, explorerConfiguration);
+	return new ExplorerService(workspace, { onDidChangeFiles: Event.None } as FileServiceContract, configurations.add(new InMemoryConfigurationService()));
 }
-
-const explorerConfiguration = new InMemoryConfigurationService();
-suiteTeardown(() => explorerConfiguration.dispose());

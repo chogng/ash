@@ -1,6 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Markdown extension owns preview commands and shares unsaved text across editor views', async ({ workbench }) => {
+test('Markdown extension owns preview commands and shares unsaved text across editor views', async ({ workbench, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -55,10 +55,9 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	await page.keyboard.press('Escape');
 	const previewBreadcrumb = source.title.getByRole('button', { name: 'Select editor: Markdown Preview', exact: true });
 	await previewBreadcrumb.focus();
-	await previewBreadcrumb.press('Enter');
-	const menu = page.getByRole('menu');
-	await expect(menu.getByRole('menuitemradio', { name: 'Markdown Preview', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await menu.getByRole('menuitemradio', { name: 'Text Editor', exact: true }).click();
+	const editors = await workbench.menus.inspect(application, () => previewBreadcrumb.press('Enter'));
+	expect(editors).toContainEqual(expect.objectContaining({ label: 'Markdown Preview', checked: true }));
+	await workbench.menus.select(application, () => previewBreadcrumb.press('Enter'), ['Text Editor']);
 	await source.editor.waitForEditorFocus();
 	await source.editor.waitForEditorContents(text => text.includes('# Shared draft'));
 	await page.keyboard.press('ControlOrMeta+End');
@@ -103,7 +102,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	expect(Math.abs(lowerBox!.x - thirdBox!.x)).toBeLessThan(2);
 });
 
-test('Markdown tab menus reopen the clicked document while another tab is active', async ({ workbench }) => {
+test('Markdown tab menus reopen the clicked document while another tab is active', async ({ workbench, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -118,17 +117,14 @@ test('Markdown tab menus reopen the clicked document while another tab is active
 	await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('# Second document'));
-	await group.tabs.filter({ hasText: 'first.md' }).click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Open Preview', exact: true }).click();
+	await workbench.menus.select(application, () => group.tabs.filter({ hasText: 'first.md' }).click({ button: 'right' }), ['Open Preview']);
 	const frame = group.content.frameLocator('iframe.ash-webview:visible');
 	await expect(frame.getByRole('heading', { name: 'First document', exact: true })).toBeVisible();
 	await expect(group.tabs).toHaveCount(4);
-	await group.tabs.filter({ hasText: 'second.md' }).click({ button: 'right' });
-	await page.getByRole('menuitem', { name: 'Reopen Editor With...', exact: true }).click();
+	await workbench.menus.select(application, () => group.tabs.filter({ hasText: 'second.md' }).click({ button: 'right' }), ['Reopen Editor With...']);
 	await workbench.quickaccess.select('Markdown Preview');
 	await expect(frame.getByRole('heading', { name: 'Second document', exact: true })).toBeVisible();
 	await expect(group.tabs).toHaveCount(4);
-	await group.title.getByRole('button', { name: 'Select editor: Markdown Preview', exact: true }).click();
-	await page.getByRole('menuitemradio', { name: 'Text Editor', exact: true }).click();
+	await workbench.menus.select(application, () => group.title.getByRole('button', { name: 'Select editor: Markdown Preview', exact: true }).click(), ['Text Editor']);
 	await group.editor.waitForEditorContents(text => text.includes('# Second document'));
 });

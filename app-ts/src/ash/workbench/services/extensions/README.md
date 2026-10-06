@@ -56,6 +56,15 @@ Both static contribution loaders refresh on Marketplace changes, including remov
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
 UI are not activated by this loader.
 
+Built-in `customEditors` declarations can select product renderers registered through
+`registerBuiltinEditorPane`. Both the package ID and view type must match an existing factory;
+user and Marketplace packages cannot select these factories. The loader prepares filename/MIME
+selectors and localized editor labels before replacing the package's pane registrations as one
+batch. A rejected batch preserves the previous available editors; removal or window shutdown
+releases the registrations. This mechanism activates the packaged `media-preview` editors and
+does not execute extension JavaScript or acquire text models for binary media. Workbench and
+Sessions both start this declarative loader.
+
 The Workbench composition root also creates `BrowserExtensionHostApi` for packaged `browser`
 entries. It owns the window's extension Workers alongside the App Server executable-host transport.
 `build/resources/extensions.ts` bundles each browser entry and its dependencies into an immutable ES
@@ -64,7 +73,9 @@ module. Activation receives the window language, registration callbacks, and com
 `MainThreadCustomEditors` installs text-backed editor providers in the shared pane registry.
 The Markdown package under `extensions/markdown-language-features` owns its preview rendering and
 actions. `WebviewEditor` hosts the content, and `CustomTextEditorModel` holds a reference to the same
-text state used by the source editor. Independent custom tabs retain their editor ID in working sets.
+text state used by the source editor. The host prepares HTML during input loading and creates
+the sandbox document when its pane first becomes visible; this keeps the first navigation out of
+a hidden editor host. Independent custom tabs retain their editor ID in working sets.
 Browser packages use Ash's bounded registration contract, not the complete VS Code extension API.
 
 Theme documents accept the four supported `uiTheme` values, hexadecimal colors, package-relative

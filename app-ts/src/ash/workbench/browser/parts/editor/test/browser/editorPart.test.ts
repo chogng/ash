@@ -1327,10 +1327,10 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor("ash.test.history", ".ts", () => new TestEditorPane("ash.test.history")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const contextKeys = new ContextKeyService();
-	using historyWorkspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:\\project') });
-	using historyConfiguration = new InMemoryConfigurationService();
-	const history = new HistoryService(editor, contextKeys, historyConfiguration, historyWorkspace);
+	using historyServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	const contextKeys = historyServices.get(IContextKeyService);
+	historyServices.registerInstance(IEditorPart, editor);
+	const history = historyServices.createInstance(HistoryService);
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
 	const third = input("C:\\project\\third.ts");
@@ -1350,7 +1350,6 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	await editor.openEditor(input("C:\\project\\new.ts"), { pinned: true });
 	assert.equal(contextKeys.getValue('canNavigateForward'), false);
 	history.dispose();
-	contextKeys.dispose();
 	editor.dispose();
 	dom.window.close();
 });
@@ -1396,10 +1395,10 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	let pane: TestSelectionPane | undefined;
 	registry.registerEditorPane(descriptor('ash.test.selectionHistory', '.ts', () => pane = new TestSelectionPane('ash.test.selectionHistory')));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const contextKeys = new ContextKeyService();
-	using historyWorkspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:\\project') });
-	using historyConfiguration = new InMemoryConfigurationService();
-	const history = new HistoryService(editor, contextKeys, historyConfiguration, historyWorkspace);
+	using historyServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	const contextKeys = historyServices.get(IContextKeyService);
+	historyServices.registerInstance(IEditorPart, editor);
+	const history = historyServices.createInstance(HistoryService);
 	await editor.openEditor(input('C:\\project\\locations.ts'), { pinned: true });
 	assert.ok(pane);
 	using services = new InstantiationService();
@@ -1453,7 +1452,6 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	assert.equal(nextPane.getSelection()?.startLineNumber, 12);
 
 	history.dispose();
-	contextKeys.dispose();
 	editor.dispose();
 	dom.window.close();
 });

@@ -18,6 +18,7 @@
     "multicursor.ChangeAll": "更改所有匹配项",
     "accessibility.editorContextMenu": "Shift+F10 打开编辑器右键菜单。用方向键选择操作或打开速览和复制为子菜单，按 Enter 执行，按 Escape 返回编辑器。当前语言支持时会显示导航、重命名和格式化操作。更改所有匹配项会选中匹配文本供编辑。",
     "configuration.readOnly": "设置 {0} 在此窗口中为只读。",
+    "files.configuredReadonly": "此文件与配置的只读规则匹配，因此为只读。",
     "list.smoothScrollingTitle": "列表平滑滚动",
     "list.smoothScrollingDescription": "控制列表和树形列表是否使用短动画滚动。",
     "list.smoothScrollingInvalid": "列表平滑滚动设置必须是布尔值",
@@ -782,6 +783,19 @@
     "editor.fontSize.description": "设置编辑器文字的像素大小，默认值为 {0}。",
     "editor.fontLigatures.title": "字体连字",
     "editor.fontLigatures.description": "所选字体支持时，启用编程连字。",
-    "editor.fontFamily.default": "系统默认"
+    "editor.fontFamily.default": "系统默认",
+    "media.playback.unsupported": "无法播放此媒体文件，文件内容或编解码格式可能不受支持。",
+    "media.playback.failed": "无法播放媒体：{0}",
+    "media.playback.loadFailed": "无法加载媒体：{0}",
+    "media.playback.empty": "尚未加载媒体。",
+    "media.playback.duration": "{0} 秒",
+    "media.playback.durationUnknown": "无法获取时长",
+    "media.playback.paused": "已暂停",
+    "media.playback.playing": "正在播放",
+    "media.playback.content": "{0}：{1}\n资源：{2}\n文件大小：{3} 字节\n时长：{4}\n播放状态：{5}",
+    "media.playback.summary": "{0} · {1} 字节",
+    "media.playback.verbosityTitle": "媒体预览无障碍帮助",
+    "media.playback.verbosityDescription": "在音频或视频预览获得焦点时，提示如何打开无障碍帮助。",
+    "media.playback.help": "音频和视频预览\n聚焦播放器后按空格播放或暂停。按 Tab 到达播放控件，可跳转进度、调节音量，以及在支持时进入全屏。<keybinding:editor.action.accessibleView> 读取文件名、文件大小、时长和播放状态，不转录音频或描述视频内容。切换到其他标签页会停止播放。文件变化会重新加载预览。关闭标签页会停止播放并释放资源，原文件仍然保留。"
   }
 }

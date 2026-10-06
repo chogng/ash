@@ -30,6 +30,8 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	private readonly renderRequest = this._register(new MutableDisposable());
 	private readonly webview = this._register(new MutableDisposable<WebviewElement>());
 	private model: CustomTextEditorModel | undefined;
+	private input: IResourceEditorInput | undefined;
+	private renderedHtml: string | undefined;
 	public get workingCopy(): CustomTextEditorModel | undefined { return this.model; }
 
 	constructor(
@@ -62,22 +64,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		const reference = await this.models.acquire(input, signal);
 		this.model = this.inputResources.add(this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled));
 		signal.throwIfAborted();
-		this.webview.value = new WebviewElement(this.container!, { title: this.provider.displayName, forwardKeyboardEvents: true });
-		const webview = this.webview.value;
-		// An opaque iframe cannot bubble its keyboard events into the owning editor group.
-		this.inputResources.add(webview.onDidKeyboardEvent(event => webview.element.dispatchEvent(event)));
-		const updateHint = (): void => {
-			const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.WebviewEditor);
-			const label = hint ? `${this.provider.displayName}\n${hint}` : this.provider.displayName;
-			webview.element.setAttribute('aria-label', label);
-		};
-		updateHint();
-		this.inputResources.add(this.keybindings.onDidUpdateKeybindings(updateHint));
-		this.inputResources.add(this.configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.WebviewEditor)) {
-				updateHint();
-			}
-		}));
+		this.input = input;
 		const model = this.model;
 		const render = async (): Promise<void> => {
 			const controller = new AbortController();
@@ -90,7 +77,12 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 					return;
 				}
 				const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
-				this.webview.value!.setHtml(`<style>:root{${variables}}</style>${html}`);
+				this.renderedHtml = `<style>:root{${variables}}</style>${html}`;
+				if (this.webview.value) {
+					this.webview.value.setHtml(this.renderedHtml);
+				} else if (this.isVisible()) {
+					this.createWebview(input, this.renderedHtml);
+				}
 			} catch (error) {
 				if (!controller.signal.aborted) {
 					throw error;
@@ -108,6 +100,34 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		}, 50));
 		this.inputResources.add(model.onDidChangeContent(() => schedule.schedule()));
 		this.inputResources.add(this.themes.onDidColorThemeChange(() => schedule.schedule()));
+		await render();
+	}
+
+	public override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		// A sandbox document must enter a visible pane before its first navigation.
+		if (visible && !this.webview.value && this.input && this.renderedHtml !== undefined) {
+			this.createWebview(this.input, this.renderedHtml);
+		}
+	}
+
+	private createWebview(input: IResourceEditorInput, html: string): void {
+		this.webview.value = new WebviewElement(this.container!, { title: this.provider.displayName, initialHtml: html, forwardKeyboardEvents: true });
+		const webview = this.webview.value;
+		// An opaque iframe cannot bubble its keyboard events into the owning editor group.
+		this.inputResources.add(webview.onDidKeyboardEvent(event => webview.element.dispatchEvent(event)));
+		const updateHint = (): void => {
+			const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.WebviewEditor);
+			const label = hint ? `${this.provider.displayName}\n${hint}` : this.provider.displayName;
+			webview.element.setAttribute('aria-label', label);
+		};
+		updateHint();
+		this.inputResources.add(this.keybindings.onDidUpdateKeybindings(updateHint));
+		this.inputResources.add(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AccessibilityVerbositySettingId.WebviewEditor)) {
+				updateHint();
+			}
+		}));
 		this.inputResources.add(this.webview.value.onDidMessage(message => {
 			if (typeof message !== 'object' || message === null || !('href' in message) || typeof message.href !== 'string') {
 				return;
@@ -120,12 +140,13 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				void this.opener.open(url.href);
 			}
 		}));
-		await render();
 	}
 
 	public override clearInput(): void {
 		this.renderRequest.clear();
 		this.model = undefined;
+		this.input = undefined;
+		this.renderedHtml = undefined;
 		this.inputResources.clear();
 		this.webview.clear();
 	}
