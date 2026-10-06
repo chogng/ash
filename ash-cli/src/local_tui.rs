@@ -37,6 +37,7 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
         env::current_exe().map_err(|error| format!("could not resolve ash executable: {error}"))?;
     let mut session =
         connect(&executable, &dir_root, &profile_root).map_err(|error| error.to_string())?;
+    let announcement = crate::announcement::start()?;
     let (updater, notices) = match crate::update::AutomaticUpdater::start(session.client()) {
         Some((updater, notices)) => (Some(updater), Some(notices)),
         None => (None, None),
@@ -49,6 +50,7 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
     let mut start_empty = false;
     loop {
         let mut options = ash_tui::TuiOptions::new("TUI conversation")
+            .with_announcement(announcement.clone())
             .with_dir_root(&dir_root)
             .with_profile_root(&profile_root);
         if let Some(process_id) = session.process_id() {

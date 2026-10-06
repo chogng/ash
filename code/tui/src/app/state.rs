@@ -170,6 +170,7 @@ pub(crate) struct App {
     pub(super) thread_presentations: ThreadPresentationStore,
     pub(super) sessions: SessionsState,
     welcome: WelcomeModel,
+    pub(super) announcement: Option<ash_product_update::Announcement>,
     status: Status,
     terminal_settings: TerminalSettings,
     subscriptions: [crate::config::Subscription; 7],
@@ -210,6 +211,7 @@ impl App {
             ),
             sessions: SessionsState::default(),
             welcome: WelcomeModel::for_workspace(Path::new(".")),
+            announcement: None,
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
             subscriptions: [
@@ -315,6 +317,7 @@ impl App {
             ),
             sessions: SessionsState::new(input_catalog),
             welcome: WelcomeModel::for_workspace(dir_root),
+            announcement: None,
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
             subscriptions: [
@@ -3177,6 +3180,12 @@ impl App {
             }
             HostEvent::TopTipNoticeShown(notice) => {
                 self.chat_panel.show_notice(notice, Instant::now());
+            }
+            HostEvent::AnnouncementReceived(announcement) => {
+                self.announcement = Some(announcement);
+                // Content arrival changes page geometry without changing keyboard focus.
+                self.fullscreen.pointer.clear();
+                self.fullscreen.selection.clear();
             }
         }
     }

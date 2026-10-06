@@ -1,5 +1,6 @@
 //! Command parsing and product composition for the shared Ash command.
 
+mod announcement;
 mod doctor;
 mod exec;
 mod local_tui;

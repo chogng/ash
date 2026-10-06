@@ -1,0 +1,17 @@
+# Ash announcements are fetched by Ash Code at startup from this file on main.
+# The last entry matching the client's product, version, OS and UTC date wins.
+# Keep this list empty until there is a real announcement to publish.
+announcements = []
+
+# To publish, remove `announcements = []` and uncomment/add entries like this:
+# [[announcements]]
+# target_app = "ashCode"
+# version_requirement = "<0.2.0"
+# from_date = "2026-10-05" # inclusive, UTC
+# to_date = "2026-11-05"   # exclusive, UTC
+# target_oses = ["macos", "linux", "windows"] # omit to include every OS
+# [announcements.content]
+# en = "A newer Ash version is available. Run ash update to upgrade."
+# zh-CN = "Ash 有新版本可用。运行 ash update 升级。"
+# ja = "新しい Ash を利用できます。ash update で更新してください。"
+# fr = "Une nouvelle version d’Ash est disponible. Lancez ash update pour la mise à jour."

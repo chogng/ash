@@ -1052,6 +1052,7 @@ dependencies = [
  "ash-utils-cargo-bin",
  "ash-utils-cli",
  "ash-utils-home-dir",
+ "chrono",
  "clap",
  "ed25519-dalek",
  "flate2",
@@ -2453,12 +2454,14 @@ name = "ash-product-update"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "ed25519-dalek",
  "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "toml 0.9.12+spec-1.1.0",
  "ureq",
  "url",
 ]

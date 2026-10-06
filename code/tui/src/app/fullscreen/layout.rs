@@ -8,7 +8,9 @@ use crate::thread::composer as chat_input;
 use ratatui::layout::Rect;
 
 pub(in crate::app) fn layout(app: &App, terminal_area: Rect) -> Layout {
-    let mut areas = page_layout(app, terminal_area);
+    let (announcement, page) = crate::app::announcement::split(app, terminal_area);
+    let mut areas = page_layout(app, page, terminal_area);
+    areas.announcement = announcement;
     if super::modal::is_open(app) {
         areas.session.footer.hintline = modal_hintline(app, terminal_area);
     }
@@ -25,8 +27,7 @@ pub(super) fn modal_hintline(app: &App, area: Rect) -> Rect {
     Rect::new(area.x, area.bottom() - height, area.width, height)
 }
 
-fn page_layout(app: &App, terminal_area: Rect) -> Layout {
-    let screen_area = terminal_area;
+fn page_layout(app: &App, terminal_area: Rect, screen_area: Rect) -> Layout {
     let header_rows = header_rows(terminal_area);
     let header = Rect::new(
         terminal_area.x + 2.min(terminal_area.width),
@@ -48,6 +49,7 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
         let tip_rows = u16::from(dock.surface.y > terminal_area.y);
         let tip_y = dock.surface.y.saturating_sub(tip_rows);
         return Layout {
+            announcement: Rect::default(),
             top_statusline: header,
             input: Rect::default(),
             session: SessionAreas {
@@ -62,6 +64,7 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
     }
     if app.session_manager_view().is_some() && app.session_preview().is_none() {
         return Layout {
+            announcement: Rect::default(),
             top_statusline: header,
             input: Rect::default(),
             session: session_areas(terminal_area, 0, 0, 0, 0, 0, 0, 1, 0, 0),
@@ -70,6 +73,7 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
     if app.issue_manager().is_some() {
         let footer_rows = terminal_area.height.min(1);
         return Layout {
+            announcement: Rect::default(),
             top_statusline: header,
             input: Rect::default(),
             session: SessionAreas {
@@ -90,6 +94,7 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
     if app.session_preview().is_some() {
         let session = session_areas(terminal_area, 0, 0, 0, 0, 0, 1, 1, 0, MIN_TRANSCRIPT_ROWS);
         return Layout {
+            announcement: Rect::default(),
             top_statusline: header,
             input: Rect::default(),
             session,
@@ -112,6 +117,7 @@ fn page_layout(app: &App, terminal_area: Rect) -> Layout {
         },
     );
     Layout {
+        announcement: Rect::default(),
         top_statusline: header,
         session: chat.session,
         input: chat.input,
@@ -123,6 +129,7 @@ pub(super) fn header_rows(area: Rect) -> u16 {
 }
 
 pub(in crate::app) struct Layout {
+    pub(in crate::app) announcement: Rect,
     pub(in crate::app) top_statusline: Rect,
     pub(in crate::app) session: SessionAreas,
     pub(in crate::app) input: Rect,

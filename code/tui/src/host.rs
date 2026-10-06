@@ -15,6 +15,7 @@ pub(crate) enum Event {
     OperationCompleted(Result<String, String>),
     ProcessResourcesSampled(ash_memory_diagnostics::ProcessResourcesReading),
     TopTipNoticeShown(String),
+    AnnouncementReceived(ash_product_update::Announcement),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

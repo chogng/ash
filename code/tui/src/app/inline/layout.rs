@@ -18,7 +18,10 @@ pub(in crate::app) fn layout(app: &App, area: Rect) -> Layout {
     } else {
         0
     };
-    layout_with_minimum(app, area, minimum)
+    let (announcement, page) = crate::app::announcement::split(app, area);
+    let mut areas = layout_with_minimum(app, page, minimum);
+    areas.announcement = announcement;
+    areas
 }
 
 pub(super) fn height(app: &App, screen: Rect) -> u16 {
@@ -39,6 +42,7 @@ pub(super) fn height(app: &App, screen: Rect) -> u16 {
 fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16) -> Layout {
     if let Some(panel) = app.command_panel() {
         return Layout {
+            announcement: Rect::default(),
             session: command_panel_areas(
                 terminal_area,
                 super::panel::desired_height(panel, terminal_area.width, app.render_context()),
@@ -50,12 +54,14 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
     if app.session_preview().is_some() {
         let session = session_areas(terminal_area, 0, 0, 0, 0, 0, 1, 1, 0, min_transcript_rows);
         return Layout {
+            announcement: Rect::default(),
             input: Rect::default(),
             session,
         };
     }
     if app.session_manager_view().is_some() {
         return Layout {
+            announcement: Rect::default(),
             input: Rect::default(),
             session: session_areas(terminal_area, 0, 0, 0, 0, 0, 0, 1, 0, 0),
         };
@@ -85,12 +91,14 @@ fn layout_with_minimum(app: &App, terminal_area: Rect, min_transcript_rows: u16)
         },
     );
     Layout {
+        announcement: Rect::default(),
         session: chat.session,
         input: chat.input,
     }
 }
 
 pub(in crate::app) struct Layout {
+    pub(in crate::app) announcement: Rect,
     pub(in crate::app) session: SessionAreas,
     pub(in crate::app) input: Rect,
 }

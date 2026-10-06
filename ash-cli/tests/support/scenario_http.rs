@@ -157,6 +157,7 @@ impl Drop for ScenarioServer {
 }
 
 pub enum HttpResponse {
+    Document(String),
     Streaming {
         events: Vec<Vec<u8>>,
         gate: Option<Gate>,
@@ -292,6 +293,10 @@ impl HttpResponse {
 
     fn write_to(self, stream: &mut TcpStream) {
         match self {
+            Self::Document(body) => {
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/toml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
+                stream.write_all(body.as_bytes()).unwrap();
+            }
             Self::Streaming { events, gate } => {
                 let length = events.iter().map(Vec::len).sum::<usize>();
                 write!(

@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 cli = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+chrono = { workspace = true }
 rand = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 ash-app-server-daemon = { workspace = true }

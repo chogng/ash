@@ -91,6 +91,15 @@ pub(crate) enum Language {
 }
 
 impl Language {
+    pub(crate) const fn locale(self) -> &'static str {
+        match self {
+            Self::English => "en",
+            Self::Japanese => "ja",
+            Self::Chinese => "zh-CN",
+            Self::French => "fr",
+        }
+    }
+
     pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::English => "English",
@@ -878,6 +887,12 @@ pub(crate) fn spinner_verb(index: usize) -> &'static str {
 /// Product-owned TUI chrome. Server-provided names, user content, model output, paths, command
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
+    translation(
+        "Announcement: {0}",
+        "お知らせ: {0}",
+        "公告：{0}",
+        "Annonce : {0}",
+    ),
     translation(
         "Keyboard shortcuts",
         "キーボードショートカット",

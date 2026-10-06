@@ -138,6 +138,7 @@ pub struct Fixture {
     app_server: PathBuf,
     product_services: Option<PathBuf>,
     voice_host: Option<PathBuf>,
+    announcement_url: String,
     #[cfg(unix)]
     model_download_proxy: Option<std::net::SocketAddr>,
 }
@@ -208,6 +209,7 @@ impl Fixture {
             app_server,
             product_services: None,
             voice_host: None,
+            announcement_url: String::new(),
             #[cfg(unix)]
             model_download_proxy: None,
         }
@@ -217,6 +219,11 @@ impl Fixture {
         let path = self.root.join("product-services.json");
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         self.product_services = Some(path);
+        self
+    }
+
+    pub fn with_announcement_url(mut self, endpoint: String) -> Self {
+        self.announcement_url = endpoint;
         self
     }
 
@@ -242,6 +249,7 @@ impl Fixture {
 
     fn environment(&self) -> Vec<(&'static str, std::ffi::OsString)> {
         let mut environment = vec![
+            ("ASH_ANNOUNCEMENT_URL", self.announcement_url.clone().into()),
             ("ASH_HOME", self.profile.clone().into_os_string()),
             (
                 "ASH_WORKSPACE_ROOT",

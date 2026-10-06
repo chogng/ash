@@ -1,0 +1,24 @@
+---
+source: code/tui/src/app/announcement_tests.rs
+expression: text
+---
+  Announcement: A newer Ash version is          
+  available. Run ash update to upgrade.         
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+────────────────────────────────────────────────
+> Keep this draft                               
+────────────────────────────────────────────────
+                                                
+  ⏸ Manual

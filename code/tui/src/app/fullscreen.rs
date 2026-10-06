@@ -161,6 +161,7 @@ pub(super) fn draw(
         frame.area(),
     );
     let areas = layout(app, frame.area());
+    crate::app::announcement::draw(frame, app, areas.announcement);
     header::draw(frame, areas.top_statusline, app, context);
     let hovered = app.fullscreen.pointer.hovered();
     let pressed = app.fullscreen.pointer.pressed();

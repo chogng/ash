@@ -28,6 +28,7 @@ pub(super) enum RuntimeEvent {
     Client(ClientEvent),
     ProcessResources(ProcessResourcesReading),
     HostNotice(String),
+    Announcement(ash_product_update::Announcement),
     TerminationRequested,
 }
 
@@ -39,6 +40,7 @@ pub(super) struct EventPump {
     process_resources: ProcessResourcesRuntime,
     process_resource_request: ProcessResourceRequest,
     notices: Option<crate::TuiNotices>,
+    announcement: std::cell::RefCell<Option<crate::TuiAnnouncement>>,
     _termination: TerminationSource,
 }
 
@@ -55,6 +57,7 @@ impl EventPump {
         events: AppServerEvents,
         resource_targets: ProcessResourceTargets,
         notices: Option<crate::TuiNotices>,
+        announcement: Option<crate::TuiAnnouncement>,
     ) -> Result<Self, io::Error> {
         let queue = Arc::new(RuntimeQueue::default());
         let stop = Arc::new(AtomicBool::new(false));
@@ -111,6 +114,7 @@ impl EventPump {
             process_resources,
             process_resource_request: ProcessResourceRequest::default(),
             notices,
+            announcement: std::cell::RefCell::new(announcement),
             _termination: termination,
         })
     }
@@ -161,6 +165,11 @@ impl EventPump {
     }
 
     fn notice(&self) -> Option<RuntimeEvent> {
+        let mut source = self.announcement.borrow_mut();
+        if let Some(announcement) = source.as_ref().and_then(crate::TuiAnnouncement::get) {
+            *source = None;
+            return Some(RuntimeEvent::Announcement(announcement));
+        }
         self.notices
             .as_ref()
             .and_then(|notices| notices.try_recv().ok())
@@ -383,6 +392,7 @@ fn mouse_kind(event: &RuntimeEvent) -> Option<MouseEventKind> {
         | RuntimeEvent::Client(_)
         | RuntimeEvent::ProcessResources(_)
         | RuntimeEvent::HostNotice(_)
+        | RuntimeEvent::Announcement(_)
         | RuntimeEvent::TerminationRequested => None,
     }
 }

@@ -52,6 +52,7 @@ pub(super) fn start(
         start_empty,
         drafts,
         notices,
+        announcement,
         ..
     } = options;
     let profile_root = match profile_root {
@@ -213,7 +214,7 @@ pub(super) fn start(
         },
     )
     .map_err(std::io::Error::other)?;
-    let pump = EventPump::start(events, resource_targets, notices)?;
+    let pump = EventPump::start(events, resource_targets, notices, announcement)?;
     Ok(StartedSession {
         driver,
         pump,

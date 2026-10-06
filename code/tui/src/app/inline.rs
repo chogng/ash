@@ -91,6 +91,7 @@ fn draw_content(
         frame.area(),
     );
     let areas = layout(app, frame.area());
+    crate::app::announcement::draw(frame, app, areas.announcement);
     if let Some(preview) = app.session_preview()
         && app.command_panel().is_none()
     {

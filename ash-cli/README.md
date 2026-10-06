@@ -137,6 +137,28 @@ Windows PowerShell uses:
 irm https://chogng.github.io/ash/cli/install.ps1 | iex
 ```
 
+### Startup announcements
+
+Ash Code fetches `announcement_tip.toml` from `chogng/ash`'s `main` branch once per
+interactive launch, in a background request. Local, resumed and SSH conversations
+use the installed local client's version and OS. Source builds also receive
+announcements; `[tui].autoUpdate = "never"` only disables automatic installation.
+Workspace changes and reconnects reuse the fetched announcement. Noninteractive
+commands do not fetch it.
+
+To publish a notice without releasing new binaries, edit the root
+[announcement list](../announcement_tip.toml) and publish the change to `main`.
+The checked-in list is empty until there is a real notice. Rules and limits are
+documented by [product-update](../ash-rs/product-update/README.md). Fullscreen and
+inline show the localized notice as wrapped plain text above the page; it stays
+visible during the launch and does not replace the current draft or steal focus.
+Very short terminals reserve at least four rows for the page and may clip the
+notice. A missing locale, failed request or invalid feed displays no notice.
+
+`ASH_ANNOUNCEMENT_URL` selects another announcement feed, including loopback HTTP
+for local verification. An empty value disables the request. It is independent of
+the authenticated software-update endpoints and cannot change what gets installed.
+
 The [Pages workflow](../.github/workflows/pages.yml) publishes the canonical installers from
 `build/code/` whenever they change on `main`. Its static artifact contains `.nojekyll`
 at the root and the two scripts at the public `/cli/` URL path; no Jekyll build runs. Installation packages

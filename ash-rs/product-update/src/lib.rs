@@ -1,4 +1,9 @@
-//! Shared signed product-update contract and verification.
+//! Shared release verification and product announcement selection.
+
+mod announcement;
+pub use announcement::Announcement;
+pub use announcement::AnnouncementContext;
+pub use announcement::AnnouncementDocument;
 
 use base64::Engine;
 use ed25519_dalek::Signature;

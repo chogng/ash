@@ -93,6 +93,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 | RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(_))
                 | RuntimeEvent::ProcessResources(_)
                 | RuntimeEvent::HostNotice(_)
+                | RuntimeEvent::Announcement(_)
                 | RuntimeEvent::TerminationRequested => {}
             }
             runtime_event = match runtime_event {
@@ -166,6 +167,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     driver
                         .app_mut()
                         .update(HostEvent::TopTipNoticeShown(notice));
+                    redraw.request(Instant::now(), RedrawPriority::Immediate);
+                    None
+                }
+                RuntimeEvent::Announcement(announcement) => {
+                    driver
+                        .app_mut()
+                        .update(HostEvent::AnnouncementReceived(announcement));
                     redraw.request(Instant::now(), RedrawPriority::Immediate);
                     None
                 }

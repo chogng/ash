@@ -1,3 +1,4 @@
+mod announcement;
 mod chat_panel;
 #[cfg(test)]
 #[path = "app/chat_panel_tests.rs"]

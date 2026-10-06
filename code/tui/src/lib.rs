@@ -149,6 +149,23 @@ impl TuiNotices {
     }
 }
 
+/// One startup announcement retained across workspace changes and reconnects.
+/// The host publishes once; the terminal reads the same value on each new event pump.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TuiAnnouncement(std::sync::Arc<std::sync::OnceLock<ash_product_update::Announcement>>);
+
+impl TuiAnnouncement {
+    pub fn publish(&self, announcement: ash_product_update::Announcement) {
+        self.0
+            .set(announcement)
+            .expect("startup announcement is published once");
+    }
+
+    pub(crate) fn get(&self) -> Option<ash_product_update::Announcement> {
+        self.0.get().cloned()
+    }
+}
+
 /// Startup values owned by the CLI host rather than by the terminal UI.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TuiOptions {
@@ -164,6 +181,7 @@ pub struct TuiOptions {
     start_empty: bool,
     drafts: Option<TuiRecoveryDrafts>,
     notices: Option<TuiNotices>,
+    announcement: Option<TuiAnnouncement>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -215,7 +233,13 @@ impl TuiOptions {
             start_empty: false,
             drafts: None,
             notices: None,
+            announcement: None,
         }
+    }
+
+    pub fn with_announcement(mut self, announcement: TuiAnnouncement) -> Self {
+        self.announcement = Some(announcement);
+        self
     }
 
     /// Uses `dir_root` for display and bounded local host file operations.

@@ -20,6 +20,7 @@ pub(super) fn run(
 ) -> Result<(), String> {
     let mut profile = ready.profile;
     let mut session = ready.session;
+    let announcement = crate::announcement::start()?;
     let mut recovery = match entry {
         RemoteConnectEntry::New => None,
         RemoteConnectEntry::Resume(recovery) => Some(recovery),
@@ -29,6 +30,7 @@ pub(super) fn run(
     loop {
         let mut options =
             ash_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
+                .with_announcement(announcement.clone())
                 .with_remote_dir(PathBuf::from(profile.target().dir().as_str()))
                 .with_profile_root(
                     ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,

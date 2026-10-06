@@ -12,6 +12,56 @@ use std::time::Instant;
 #[cfg(unix)]
 const DICTATION_MODEL_ID: &str = "paraformer-large-online-ec6a3c64";
 
+#[test]
+fn actual_tui_announcement_is_fetched_once_and_preserves_input_in_both_modes() {
+    for (mode, language, prefix) in [
+        ("fullscreen", "en", "Announcement:"),
+        ("inline", "zh-CN", "公告："),
+    ] {
+        let feed = format!(
+            r#"
+[[announcements]]
+target_app = "ashCode"
+[announcements.content]
+en = "OBSOLETE-ANNOUNCEMENT"
+zh-CN = "OBSOLETE-ANNOUNCEMENT"
+
+[[announcements]]
+target_app = "ashCode"
+version_requirement = "={}"
+from_date = "2000-01-01"
+to_date = "2100-01-01"
+[announcements.content]
+en = "Run ash update for ANNOUNCEMENT-PTY."
+zh-CN = "运行 ash update 升级：ANNOUNCEMENT-PTY。"
+"#,
+            env!("CARGO_PKG_VERSION")
+        );
+        let announcements = ScenarioServer::start([HttpResponse::Document(feed)]);
+        let fixture = Fixture::new().with_announcement_url(announcements.base_url());
+        let model = ScenarioServer::start([HttpResponse::streaming(["AFTER-ANNOUNCEMENT"], None)]);
+        fixture.write_config(&model.base_url());
+        fixture.append_config(&format!(
+            "\n[tui]\nscreenMode = \"{mode}\"\nlanguage = \"{language}\"\nautoUpdate = \"never\"\n"
+        ));
+        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        process.wait_for_stable_screen("ANNOUNCEMENT-PTY");
+        assert_eq!(process.screen().matches("ANNOUNCEMENT-PTY").count(), 1);
+        assert!(process.screen().contains(prefix));
+        assert!(!process.screen().contains("OBSOLETE-ANNOUNCEMENT"));
+        assert_eq!(announcements.request_count(), 1);
+        process.type_text("Keep this draft");
+        process.wait_for_stable_screen("Keep this draft");
+        process.assert_snapshot(&format!("real/02-terminal/announcement-{mode}"));
+        process.send(b"\r");
+        process.wait_for_stable_screen("AFTER-ANNOUNCEMENT");
+        assert_eq!(model.request_count(), 1);
+        assert_eq!(announcements.request_count(), 1);
+        assert_eq!(process.screen().matches("ANNOUNCEMENT-PTY").count(), 1);
+        process.quit();
+    }
+}
+
 #[cfg(unix)]
 fn assert_dictation_download_released(fixture: &Fixture) {
     let root = fixture.profile().join("dictation-models");
