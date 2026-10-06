@@ -2495,6 +2495,26 @@ impl ModelCatalog for ConfigBackedModelService {
             .get(&command.model.provider)
             .cloned()
             .unwrap_or_else(|| ModelProviderConfig::new(command.model.provider.clone()));
+        if let ash_protocol::Patch::Value(selected) = &command.update.acceleration {
+            let info = entry
+                .model_info(&provider)
+                .map_err(ModelPreferencesError::InvalidPreferences)?;
+            let options = self
+                .catalog_provider
+                .acceleration_options(&provider, &info)
+                .map_err(|error| {
+                    ModelPreferencesError::Catalog(CoreError::Model(error.to_string()))
+                })?;
+            if !options.iter().any(|option| &option.id == selected) {
+                return Err(ModelPreferencesError::InvalidPreferences(
+                    model_provider_info::ProviderConfigError::InvalidProvider {
+                        provider: provider.provider.clone(),
+                        message: "acceleration option is unavailable for this model connection"
+                            .into(),
+                    },
+                ));
+            }
+        }
         entry
             .apply_preferences(&mut provider, &command.update)
             .map_err(ModelPreferencesError::InvalidPreferences)?;
@@ -2569,8 +2589,9 @@ impl ModelCatalog for ConfigBackedModelService {
             .into_iter()
             .filter(|entry| entry.availability() == ash_protocol::ModelAvailability::Available)
             .map(|entry| {
-                let mut result = runtime_catalog_entry(&entry, &config, &registry)
-                    .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
+                let mut result =
+                    runtime_catalog_entry(&entry, &config, &registry, &self.catalog_provider)
+                        .map_err(|_| ModelCatalogRefreshError::InvalidConfiguration)?;
                 result.discovered = Some(true);
                 Ok(result)
             })
@@ -2603,7 +2624,7 @@ impl ModelCatalog for ConfigBackedModelService {
                         .entry()
                         .clone()
                 };
-                runtime_catalog_entry(&entry, &config, &registry)
+                runtime_catalog_entry(&entry, &config, &registry, &self.catalog_provider)
             })
             .collect::<Result<_, CoreError>>()?;
         let mut custom: Vec<_> = config
@@ -2620,7 +2641,8 @@ impl ModelCatalog for ConfigBackedModelService {
             for entry in contexts.discovered(&provider.provider) {
                 discovered.insert(entry.model().model.clone());
                 if !provider.model_context.contains_key(&entry.model().model) {
-                    let mut result = runtime_catalog_entry(entry, &config, &registry)?;
+                    let mut result =
+                        runtime_catalog_entry(entry, &config, &registry, &self.catalog_provider)?;
                     result.discovered = Some(true);
                     models.push(result);
                 }
@@ -2629,8 +2651,12 @@ impl ModelCatalog for ConfigBackedModelService {
             // catalog. They do not imply remote availability; the model probe verifies invocation.
             for id in provider.model_context.keys() {
                 let model = ash_protocol::ModelRef::new(provider.provider.clone(), id.clone());
-                let mut entry =
-                    runtime_catalog_entry(&contexts.entry(&model)?, &config, &registry)?;
+                let mut entry = runtime_catalog_entry(
+                    &contexts.entry(&model)?,
+                    &config,
+                    &registry,
+                    &self.catalog_provider,
+                )?;
                 entry.discovered = Some(discovered.contains(id));
                 models.push(entry);
             }
@@ -2722,6 +2748,7 @@ fn runtime_catalog_entry(
     entry: &ash_models_manager::ModelCatalogEntry,
     config: &ResolvedConfig,
     registry: &ProviderConfigRegistry,
+    runtime: &ModelProviderRuntime,
 ) -> Result<ash_app_server_protocol::protocol::model::ModelCatalogEntry, CoreError> {
     let default_config = ModelProviderConfig::new(entry.model().provider.clone());
     let provider_config = config
@@ -2735,7 +2762,13 @@ fn runtime_catalog_entry(
     );
     result.maximum_context_window = context.maximum_window;
     result.context_window_options = entry.context_window_options(provider_config);
-    result.fast_enabled = provider_config.fast_models.contains(&entry.model().model);
+    result.selected_acceleration = provider_config
+        .model_acceleration
+        .get(&entry.model().model)
+        .cloned();
+    result.acceleration_options = runtime
+        .acceleration_options(provider_config, &context.info)
+        .map_err(|error| CoreError::Model(error.to_string()))?;
     result.default_context_window = match entry.default_context_window(provider_config) {
         ContextWindow::Known(tokens) => Some(tokens),
         ContextWindow::Unknown => None,

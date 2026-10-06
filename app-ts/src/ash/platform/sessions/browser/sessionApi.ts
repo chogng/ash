@@ -109,7 +109,7 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 			const snapshot = await appServerRequest(connection, 'config/read', {});
 			await appServerRequest(connection, 'model/preferences/update', {
 				command_id: createUuid(), expected_revision: snapshot.revision, model,
-				...(update.fast !== undefined ? { fast: update.fast } : {}),
+				...(update.acceleration !== undefined ? { acceleration: update.acceleration } : {}),
 				...(update.contextWindow !== undefined ? { context_window: update.contextWindow } : {}),
 			});
 		},

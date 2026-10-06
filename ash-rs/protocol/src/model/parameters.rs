@@ -52,6 +52,16 @@ pub struct ModelServiceTier {
     pub description: String,
 }
 
+/// A selectable acceleration ID and its catalog-owned display metadata.
+/// IDs are scoped to one model connection; they are never translated or used as credentials.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ModelAccelerationOption {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
 /// The model catalog owns how the product's acceleration preference changes a call.
 /// A speed parameter and a different model ID must never be recorded as service tiers.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -69,6 +79,21 @@ pub enum ModelAcceleration {
         name: String,
         description: String,
     },
+}
+
+impl ModelAcceleration {
+    pub fn id(&self) -> String {
+        match self {
+            Self::ServiceTier { service_tier } => service_tier.clone(),
+            Self::Speed { speed, .. } => format!(
+                "speed:{}",
+                match speed {
+                    ModelSpeed::Fast => "fast",
+                }
+            ),
+            Self::Model { model, .. } => format!("model:{model}"),
+        }
+    }
 }
 
 /// Catalog declarations for supported parameters, Ash request defaults, and tool-result limits.
@@ -116,6 +141,55 @@ impl Default for ModelSettings {
 }
 
 impl ModelSettings {
+    /// Service tiers share their existing IDs. Speed and model substitutions use distinct
+    /// namespaces so a provider tier cannot accidentally select a different mechanism.
+    pub fn acceleration_options(&self) -> Vec<ModelAccelerationOption> {
+        let mut options = self
+            .service_tiers
+            .as_ref()
+            .into_iter()
+            .flatten()
+            .filter(|tier| Some(&tier.id) != self.default_service_tier.as_ref())
+            .map(|tier| ModelAccelerationOption {
+                id: tier.id.clone(),
+                name: tier.name.clone(),
+                description: tier.description.clone(),
+            })
+            .collect::<Vec<_>>();
+        if let Some(
+            acceleration @ (ModelAcceleration::Speed {
+                name, description, ..
+            }
+            | ModelAcceleration::Model {
+                name, description, ..
+            }),
+        ) = &self.acceleration
+        {
+            options.push(ModelAccelerationOption {
+                id: acceleration.id(),
+                name: name.clone(),
+                description: description.clone(),
+            });
+        }
+        options
+    }
+
+    pub fn resolve_acceleration(&self, id: &str) -> Option<ModelAcceleration> {
+        if self.service_tiers.as_ref().is_some_and(|tiers| {
+            tiers
+                .iter()
+                .any(|tier| tier.id == id && Some(&tier.id) != self.default_service_tier.as_ref())
+        }) {
+            return Some(ModelAcceleration::ServiceTier {
+                service_tier: id.to_owned(),
+            });
+        }
+        self.acceleration
+            .as_ref()
+            .filter(|acceleration| acceleration.id() == id)
+            .cloned()
+    }
+
     /// Validates declarations at JSON, discovery, or persistence boundaries.
     pub fn validate(&self) -> Result<(), &'static str> {
         if let Some(modalities) = &self.input_modalities
@@ -178,6 +252,14 @@ impl ModelSettings {
             && (name.trim().is_empty() || description.trim().is_empty())
         {
             return Err("acceleration requires non-empty display metadata");
+        }
+        let options = self.acceleration_options();
+        if options
+            .iter()
+            .enumerate()
+            .any(|(index, option)| options[..index].iter().any(|other| other.id == option.id))
+        {
+            return Err("acceleration option IDs must be unique across mechanisms");
         }
         if matches!(
             self.tool_output_limit,

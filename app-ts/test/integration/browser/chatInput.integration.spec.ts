@@ -252,3 +252,32 @@ for (const surface of ['chat', 'cowork']) {
 		await expect(page.locator('.ash-action-widget')).toHaveCount(0);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`model picker selects Fast and Ultra Fast independently in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}&acceleration=multiple`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await page.locator('[data-action-id="ash.chat.input.model"] button').press('ArrowDown');
+		await page.getByRole('combobox').press('ArrowRight');
+		const card = page.locator('.ash-chat-model-card');
+		const fast = card.getByRole('switch', { name: locale === 'zh-CN' ? '快速' : 'Fast', exact: true });
+		const ultra = card.getByRole('switch', { name: locale === 'zh-CN' ? '超快速' : 'Ultra Fast', exact: true });
+		await expect(fast).toBeFocused();
+		await fast.press('Space');
+		await expect(fast).toBeChecked();
+		await fast.press('Tab');
+		await expect(ultra).toBeFocused();
+		await ultra.press('Space');
+		await expect(ultra).toBeChecked();
+		await expect(fast).not.toBeChecked();
+		await expect(ultra).toBeFocused();
+		await page.evaluate(() => window.ashChatInputIntegration.denyAcceleration('priority'));
+		await expect(fast).toHaveCount(0);
+		await expect(ultra).toBeChecked();
+		await expect(ultra).toBeFocused();
+		await ultra.press('Space');
+		await expect(ultra).not.toBeChecked();
+		await ultra.press('Escape');
+		await expect(page.locator('.ash-chat-model-picker')).toHaveCount(0);
+	});
+}

@@ -4600,7 +4600,9 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
         },
     );
     let other = ModelId::new("gpt-6-sol").unwrap();
-    provider.fast_models.insert(other.clone());
+    provider
+        .model_acceleration
+        .insert(other.clone(), "priority".into());
     let original = provider.clone();
     let saved = config
         .apply(ConfigCommandRequest {
@@ -4633,7 +4635,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
         expected_revision: revision,
         model: model.clone(),
         update: ModelPreferencesUpdate {
-            fast: Some(true),
+            acceleration: ash_protocol::Patch::Value("priority".into()),
             context_window: Some(window),
         },
     };
@@ -4647,7 +4649,9 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
         .unwrap();
     let read = config.read_snapshot().unwrap();
     let mut expected = original;
-    expected.fast_models.insert(model.model.clone());
+    expected
+        .model_acceleration
+        .insert(model.model.clone(), "priority".into());
     expected
         .model_context
         .get_mut(&model.model)
@@ -4656,7 +4660,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
     assert_eq!(read.values.connections[&expected.connection], expected);
     let catalog = service.list().unwrap();
     let entry = catalog.iter().find(|entry| entry.model == model).unwrap();
-    assert!(entry.fast_enabled);
+    assert_eq!(entry.selected_acceleration.as_deref(), Some("priority"));
     assert_eq!(
         entry.settings.default_service_tier.as_deref(),
         Some("default")
@@ -4667,16 +4671,16 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
             service_tier: "priority".into()
         })
     );
-    let tiers = entry.settings.service_tiers.as_ref().unwrap();
+    let options = &entry.acceleration_options;
     assert_eq!(
-        tiers
+        options
             .iter()
-            .map(|tier| tier.id.as_str())
+            .map(|option| option.id.as_str())
             .collect::<Vec<_>>(),
-        vec!["default", "priority"]
+        vec!["priority"]
     );
-    assert_eq!(tiers[1].name, "Fast");
-    assert!(!tiers[1].description.is_empty());
+    assert_eq!(options[0].name, "Fast");
+    assert!(!options[0].description.is_empty());
     assert_eq!(entry.context_window, Some(1_000_000));
     assert_eq!(entry.default_context_window, Some(272_000));
     assert_eq!(entry.context_window_options, vec![272_000, 1_000_000]);
@@ -4692,7 +4696,197 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
         ))
     ));
     assert_eq!(config.read_snapshot().unwrap().revision, updated.revision);
+    let mut denied = expected.clone();
+    denied
+        .disabled_acceleration_options
+        .insert(model.model.clone(), ["priority".into()].into());
+    let restricted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("deny-fast").unwrap(),
+            expected_revision: updated.revision,
+            command: UserConfigCommand::SaveConnection {
+                connection: denied.connection.clone(),
+                config: denied.clone(),
+            },
+        })
+        .unwrap();
+    let restricted_catalog = service.list().unwrap();
+    let entry = restricted_catalog
+        .iter()
+        .find(|entry| entry.model == model)
+        .unwrap();
+    assert!(entry.acceleration_options.is_empty());
+    assert_eq!(entry.selected_acceleration.as_deref(), Some("priority"));
+    assert!(matches!(
+        service.set_preferences(command("denied-selection", restricted.revision, 272_000)),
+        Err(ModelPreferencesError::InvalidPreferences(_))
+    ));
+    assert_eq!(
+        config.read_snapshot().unwrap().values.connections[&denied.connection],
+        denied
+    );
+    service
+        .set_preferences(ModelPreferencesCommand {
+            command_id: CommandId::new("clear-denied-selection").unwrap(),
+            expected_revision: restricted.revision,
+            model: model.clone(),
+            update: ModelPreferencesUpdate {
+                acceleration: ash_protocol::Patch::Null,
+                context_window: None,
+            },
+        })
+        .unwrap();
+    denied.model_acceleration.remove(&model.model);
+    assert_eq!(
+        config.read_snapshot().unwrap().values.connections[&denied.connection],
+        denied
+    );
     remove_config_files(&path);
+}
+
+#[test]
+fn model_preferences_follow_chatgpt_ultrafast_permission_and_allow_clearing_revoked_choices() {
+    use crate::model_catalog::ModelPreferencesCommand;
+    use crate::model_catalog::ModelPreferencesError;
+    use ash_models_manager::ModelPreferencesUpdate;
+    use base64::Engine;
+
+    let profile = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let jwt = |value: serde_json::Value| {
+        format!(
+            "e30.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&value).unwrap())
+        )
+    };
+    std::fs::write(home.path().join("auth.json"), serde_json::to_vec(&serde_json::json!({"auth_mode":"chatgpt","tokens":{
+        "id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1","chatgpt_plan_type":"promax"}})),
+        "access_token":jwt(serde_json::json!({"exp":4_000_000_000_u64})),"refresh_token":"unused","account_id":"account-1"
+    }})).unwrap()).unwrap();
+    let bundle = |granted| {
+        serde_json::json!({"requirements_toml":{"enterprise_managed":[{
+            "id":"speed-permission","name":"speed-permission","contents":format!("[features]\nultrafast_mode={granted}")
+        }]}})
+    };
+    let client = Arc::new(AccountUsageClient {
+        response: Mutex::new((200, bundle(true))),
+        settings_response: None,
+        requests: Mutex::new(Vec::new()),
+        during_request: Mutex::new(None),
+    });
+    let secrets = Arc::new(MemorySecretStore::default());
+    let auth = ash_chatgpt::ChatGptOAuth::with_client(
+        home.path().into(),
+        secrets.clone(),
+        client.clone(),
+        ash_chatgpt::ChatGptAuthManagement::Codex,
+    );
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    auth.refresh_speed_access(&cancellation).unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    let provider = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap(),
+    );
+    let saved = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-subscription").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SaveConnection {
+                connection: provider.connection.clone(),
+                config: provider.clone(),
+            },
+        })
+        .unwrap();
+    let registry = ProviderConfigRegistry::builtin();
+    let runtime = Arc::new(
+        ModelProviderRuntime::with_client_and_secrets(registry.clone(), client.clone(), secrets)
+            .with_chatgpt_oauth(auth.clone()),
+    );
+    let service = ConfigBackedModelService {
+        config: config.clone(),
+        dir_config: None,
+        provider_configs: registry,
+        models_manager: runtime.models_manager(),
+        catalog_provider: runtime,
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(RecordingSnapshotResolver {
+            gate: Arc::new(ResponseGate::default()),
+        }),
+    };
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6-astra").unwrap(),
+    );
+    let entry = || {
+        service
+            .list()
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.model == model)
+            .unwrap()
+    };
+    let command = |id: &str, revision, acceleration| ModelPreferencesCommand {
+        command_id: CommandId::new(id).unwrap(),
+        expected_revision: revision,
+        model: model.clone(),
+        update: ModelPreferencesUpdate {
+            acceleration,
+            context_window: None,
+        },
+    };
+    assert!(
+        entry()
+            .acceleration_options
+            .iter()
+            .any(|option| option.id == "ultrafast")
+    );
+    let selected = service
+        .set_preferences(command(
+            "enable-ultrafast",
+            saved.revision,
+            ash_protocol::Patch::Value("ultrafast".into()),
+        ))
+        .unwrap();
+    assert_eq!(entry().selected_acceleration.as_deref(), Some("ultrafast"));
+    let snapshot = config.read_snapshot().unwrap();
+    // Account permissions never become editable option denials in the user's configuration.
+    assert!(
+        snapshot.values.connections[&provider.connection]
+            .disabled_acceleration_options
+            .is_empty()
+    );
+    *client.response.lock().unwrap() = (200, bundle(false));
+    auth.refresh_speed_access(&cancellation).unwrap();
+    let revoked = entry();
+    assert!(
+        !revoked
+            .acceleration_options
+            .iter()
+            .any(|option| option.id == "ultrafast")
+    );
+    assert_eq!(revoked.selected_acceleration.as_deref(), Some("ultrafast"));
+    assert!(matches!(
+        service.set_preferences(command(
+            "reject-revoked-ultrafast",
+            selected.revision,
+            ash_protocol::Patch::Value("ultrafast".into())
+        )),
+        Err(ModelPreferencesError::InvalidPreferences(_))
+    ));
+    assert_eq!(config.read_snapshot().unwrap(), snapshot);
+    service
+        .set_preferences(command(
+            "clear-revoked-ultrafast",
+            selected.revision,
+            ash_protocol::Patch::Null,
+        ))
+        .unwrap();
+    assert_eq!(entry().selected_acceleration, None);
+    assert_eq!(
+        config.read_snapshot().unwrap().values.connections[&provider.connection],
+        provider
+    );
 }
 
 #[test]

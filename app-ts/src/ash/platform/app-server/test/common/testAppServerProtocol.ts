@@ -55,7 +55,7 @@ export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'displa
 		default_context_window: null,
 		maximum_context_window: null,
 		context_window_options: [],
-		fast_enabled: false,
+		selected_acceleration: null, acceleration_options: [],
 		auto_compact_token_limit: null,
 		capabilities: {
 			tools: 'supported', reasoning: 'supported', parallel_tool_calls: 'unknown',

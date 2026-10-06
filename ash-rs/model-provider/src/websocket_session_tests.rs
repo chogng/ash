@@ -449,3 +449,117 @@ fn live_luna_websocket_uses_two_responses_on_one_caller_owned_session() {
         panic!("Luna WebSocket failed: {category}");
     }
 }
+
+#[tokio::test]
+async fn responses_socket_admits_each_acceleration_option_before_connect_and_warmup() {
+    let mut info = model_provider_info::find_static_model(&model_ref("openai", "gpt-6.1-sol"))
+        .unwrap()
+        .model();
+    let selected = model_ref("ws-fixture", "gpt-6.1-sol");
+    info.settings
+        .service_tiers
+        .as_mut()
+        .unwrap()
+        .push(ash_protocol::ModelServiceTier {
+            id: "ultrafast".into(),
+            name: "Ultra Fast".into(),
+            description: "Fastest processing".into(),
+        });
+    let mut definition = ProviderConfigRegistry::builtin()
+        .get(&provider_id("openai"))
+        .unwrap()
+        .clone();
+    definition.id = selected.provider.clone();
+    definition.models = vec![info];
+    let registry = ProviderConfigRegistry::from_definitions([definition]).unwrap();
+    let runtime = ModelProviderRuntime::with_client(registry, Arc::new(FailingTransport));
+    for disabled in [
+        vec![],
+        vec!["priority"],
+        vec!["ultrafast"],
+        vec!["priority", "ultrafast"],
+    ] {
+        for option in ["priority", "ultrafast"] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let mut config =
+                provider_config_with_endpoint("ws-fixture", format!("http://{address}/v1"));
+            config
+                .model_acceleration
+                .insert(selected.model.clone(), option.into());
+            config.disabled_acceleration_options.insert(
+                selected.model.clone(),
+                disabled.iter().map(|id| (*id).to_owned()).collect(),
+            );
+            let cancellation = CancellationSource::new().token();
+            if disabled.contains(&option) {
+                assert!(matches!(
+                    runtime
+                        .connect_responses(
+                            &config,
+                            &selected,
+                            None,
+                            local_connector(),
+                            WebSocketSessionConfig::default(),
+                            &cancellation
+                        )
+                        .await,
+                    Err(ModelProviderError::InvalidRequest(_))
+                ));
+                // The listener remains empty: admission failed before the handshake.
+                assert_eq!(
+                    listener.into_std().unwrap().accept().unwrap_err().kind(),
+                    std::io::ErrorKind::WouldBlock
+                );
+                continue;
+            }
+            let server = tokio::spawn(async move {
+                let (tcp, _) = listener.accept().await.unwrap();
+                let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+                for warm in [true, false] {
+                    let request: Value = serde_json::from_str(
+                        socket.next().await.unwrap().unwrap().to_text().unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(request["service_tier"], option);
+                    if warm {
+                        assert_eq!(request["generate"], false);
+                    }
+                    socket.send(Message::Text(json!({"type":"response.completed","response":{"id":"test","status":"completed","output":[{"type":"message","id":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}}).to_string().into())).await.unwrap();
+                }
+            });
+            let mut session = runtime
+                .connect_responses(
+                    &config,
+                    &selected,
+                    None,
+                    local_connector(),
+                    WebSocketSessionConfig::default(),
+                    &cancellation,
+                )
+                .await
+                .unwrap();
+            let mut denied = ModelRequest::text("hello");
+            if let Some(id) = disabled.first() {
+                denied.service_tier = Some((*id).into());
+                assert!(matches!(
+                    session.warm_up(&denied, &cancellation).await,
+                    Err(ModelProviderError::InvalidRequest(_))
+                ));
+                assert!(matches!(
+                    session
+                        .invoke(&denied, &cancellation, &mut RecordedModelEvents::default())
+                        .await,
+                    Err(ModelProviderError::InvalidRequest(_))
+                ));
+            }
+            let request = ModelRequest::text("hello");
+            session.warm_up(&request, &cancellation).await.unwrap();
+            session
+                .invoke(&request, &cancellation, &mut RecordedModelEvents::default())
+                .await
+                .unwrap();
+            server.await.unwrap();
+        }
+    }
+}

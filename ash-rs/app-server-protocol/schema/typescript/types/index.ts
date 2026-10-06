@@ -871,6 +871,7 @@ export type { MessageCheckpoint } from './MessageCheckpoint.js';
 export type { MessageCheckpointsParams } from './MessageCheckpointsParams.js';
 export type { MessageCheckpointsResult } from './MessageCheckpointsResult.js';
 export type { ModelAcceleration } from './ModelAcceleration.js';
+export type { ModelAccelerationOption } from './ModelAccelerationOption.js';
 export type { ModelAccess } from './ModelAccess.js';
 export type { ModelBillingEvidence } from './ModelBillingEvidence.js';
 export type { ModelBillingRecord } from './ModelBillingRecord.js';

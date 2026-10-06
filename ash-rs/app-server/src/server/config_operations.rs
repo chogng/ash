@@ -1144,11 +1144,8 @@ fn approval_review_model_update_from_dto(
 
 fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     ProviderConfigDto {
-        fast_models: config
-            .fast_models
-            .into_iter()
-            .map(|model| model.to_string())
-            .collect(),
+        model_acceleration: config.model_acceleration.into_iter().map(|(model, option)| (model.to_string(), option)).collect(),
+        disabled_acceleration_options: config.disabled_acceleration_options.into_iter().map(|(model, options)| (model.to_string(), options)).collect(),
         connection: config.connection.to_string(),
         provider: config.provider.to_string(),
         custom: config.custom.map(|custom| ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
@@ -1233,14 +1230,12 @@ pub(super) fn provider_config_from_dto(
         .transpose()?
         .unwrap_or_default();
     Ok(ModelProviderConfig {
-        fast_models: config
-            .fast_models
-            .into_iter()
-            .map(|model| {
-                ModelId::new(model)
-                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
-            })
-            .collect::<Result<_, _>>()?,
+        model_acceleration: config.model_acceleration.into_iter().map(|(model, option)| {
+            Ok((ModelId::new(model).map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?, option))
+        }).collect::<Result<_, RpcError>>()?,
+        disabled_acceleration_options: config.disabled_acceleration_options.into_iter().map(|(model, options)| {
+            Ok((ModelId::new(model).map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?, options))
+        }).collect::<Result<_, RpcError>>()?,
         connection: ash_protocol::ModelConnectionId::new(config.connection)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
         custom: config.custom.map(|custom| model_provider_info::CustomProviderConfig {

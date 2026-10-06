@@ -30,7 +30,8 @@ fn catalog_entry(provider: &str, model: &str, name: &str) -> ModelCatalogEntry {
 
 fn provider_config(provider: &str) -> ProviderConfigDto {
     ProviderConfigDto {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: provider.into(),
         provider: provider.into(),
         custom: None,
@@ -413,6 +414,11 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
     use crossterm::event::KeyModifiers;
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+        id: "priority".into(),
+        name: "Fast".into(),
+        description: "Priority processing, increased usage".into(),
+    }];
     entry.maximum_context_window = Some(1_050_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
@@ -424,7 +430,11 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
     let mut picker = ListSelection::new(choices.model, choices.actions);
     let id = crate::widgets::list_selection::ListSelectionItemId::new("openai/gpt-6-astra");
     for (index, control, option) in [
-        (0, "fast", super::ModelOption::FastOn),
+        (
+            0,
+            "acceleration",
+            super::ModelOption::Acceleration(Some("priority".into())),
+        ),
         (1, "context", super::ModelOption::Context1m),
     ] {
         if index > 0 {
@@ -487,6 +497,11 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
     use ratatui::layout::{Position, Rect};
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+        id: "priority".into(),
+        name: "Fast".into(),
+        description: "Priority processing, increased usage".into(),
+    }];
     entry.maximum_context_window = Some(1_050_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
@@ -519,7 +534,7 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
                 assert_eq!(y, 3, "controls only belong to the supported model row");
                 // Wide glyph continuation cells carry no independently rendered style.
                 if buffer[(x, y)].symbol() != " " {
-                    let focused = matches!(&target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "fast");
+                    let focused = matches!(&target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "acceleration");
                     assert_eq!(
                         buffer[(x, y)]
                             .modifier
@@ -534,7 +549,7 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
             }
         }
     }
-    assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "fast")));
+    assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "acceleration")));
     assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "context")));
     assert!(!terminal.backend().to_string().contains('—'));
     assert!(
@@ -590,6 +605,14 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                 let mut entry = catalog_entry(provider, model, name);
                 if *fast {
                     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+                    entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+                        id: "priority".into(),
+                        name: "Fast".into(),
+                        description: "Priority processing, increased usage".into(),
+                    }];
+                }
+                if *provider == "google" {
+                    entry.selected_acceleration = Some("priority".into());
                 }
                 entry.maximum_context_window = *window;
                 entry.context_window = if *provider == "kimi" {
@@ -604,7 +627,9 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
     let mut config = crate::test_support::empty_config_snapshot();
     config.revision = 9;
     let mut google = provider_config("google");
-    google.fast_models.push("gemini-3.8-flash".into());
+    google
+        .model_acceleration
+        .insert("gemini-3.8-flash".into(), "priority".into());
     config.providers.insert("google".into(), google);
     let mut kimi = provider_config("kimi");
     kimi.model_context.insert(
@@ -627,11 +652,11 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
         let mut visited = false;
         for (control, option) in [
             (
-                "fast",
+                "acceleration",
                 fast.then_some(if provider == "google" {
-                    super::ModelOption::FastOff
+                    super::ModelOption::Acceleration(None)
                 } else {
-                    super::ModelOption::FastOn
+                    super::ModelOption::Acceleration(Some("priority".into()))
                 }),
             ),
             (
@@ -653,7 +678,7 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                 let expected = ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
                     preference: preference.clone(),
                     revision: 9,
-                    option,
+                    option: option.clone(),
                 });
                 assert_eq!(
                     picker.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
@@ -719,6 +744,11 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
         entry.default_reasoning_effort = Some(ReasoningEffort::None);
         if bits & 2 != 0 {
             entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+            entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+                id: "priority".into(),
+                name: "Fast".into(),
+                description: "Priority processing, increased usage".into(),
+            }];
         }
         if bits & 4 != 0 {
             entry.maximum_context_window = Some(1_000_000);
@@ -743,7 +773,7 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
             order.push(ListSelectionItemFocus::Segmented);
         }
         if bits & 2 != 0 {
-            order.push(ListSelectionItemFocus::Control("fast".into()));
+            order.push(ListSelectionItemFocus::Control("acceleration".into()));
         }
         if bits & 4 != 0 {
             order.push(ListSelectionItemFocus::Control("context".into()));
@@ -848,6 +878,11 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
     entry.supported_reasoning_efforts =
         vec![ReasoningEffort::Low.into(), ReasoningEffort::High.into()];
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+        id: "priority".into(),
+        name: "Fast".into(),
+        description: "Priority processing, increased usage".into(),
+    }];
     entry.maximum_context_window = Some(1_050_000);
     entry.context_window = Some(272_000);
     let mut catalog = ModelListResult {
@@ -861,13 +896,16 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
     picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let id = ListSelectionItemId::new("openai/gpt-6-astra");
     let mut provider = provider_config("openai");
-    provider.fast_models.push("gpt-6-astra".into());
+    provider
+        .model_acceleration
+        .insert("gpt-6-astra".into(), "priority".into());
+    catalog.models[0].selected_acceleration = Some("priority".into());
     config.providers.insert("openai".into(), provider);
     config.revision = 8;
     picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
     assert_eq!(
         picker.state().focused_item_setting(),
-        Some(ListSelectionItemFocus::Control("fast".into()))
+        Some(ListSelectionItemFocus::Control("acceleration".into()))
     );
     assert!(matches!(
         picker.action(&id),
@@ -881,10 +919,12 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
         ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
             preference: "openai/gpt-6-astra".into(),
             revision: 8,
-            option: super::ModelOption::FastOff
+            option: super::ModelOption::Acceleration(None)
         })
     );
     catalog.models[0].capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
+    catalog.models[0].acceleration_options.clear();
+    catalog.models[0].selected_acceleration = None;
     picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
     assert_eq!(
         picker.state().focused_item_setting(),
@@ -912,6 +952,11 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
     ];
     entry.default_reasoning_effort = Some(ReasoningEffort::Medium);
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+    entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+        id: "priority".into(),
+        name: "Fast".into(),
+        description: "Priority processing, increased usage".into(),
+    }];
     entry.maximum_context_window = Some(1_050_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
@@ -923,7 +968,7 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
             model_choices(&catalog, &crate::test_support::empty_config_snapshot()).unwrap();
         let mut picker = ListSelection::new(choices.model, choices.actions);
         picker.state_mut().localize(crate::nls::Language::Chinese);
-        for setting in ["effort", "fast", "context"] {
+        for setting in ["effort", "acceleration", "context"] {
             let mut terminal = Terminal::new(TestBackend::new(width, 7)).unwrap();
             terminal
                 .draw(|frame| {
@@ -993,6 +1038,11 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
                 }
                 if bits & 2 != 0 {
                     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
+                    entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+                        id: "priority".into(),
+                        name: "Fast".into(),
+                        description: "Priority processing, increased usage".into(),
+                    }];
                 }
                 if bits & 4 != 0 {
                     entry.maximum_context_window = Some(1_000_000);
@@ -1036,7 +1086,7 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
             .unwrap();
         for (mask, text, x, control) in [
             (1, "Medium", effort_x, None),
-            (2, "[Fast off]", fast_x, Some("fast")),
+            (2, "[Fast off]", fast_x, Some("acceleration")),
             (4, "[1m]", context_x, Some("context")),
         ] {
             if bits & mask != 0 {
@@ -1083,6 +1133,169 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
     }
     crate::tui_assert_snapshot!(
         "missing_model_capabilities_aligned",
+        terminal.backend().to_string()
+    );
+}
+
+#[test]
+fn acceleration_control_cycles_catalog_ids_in_both_directions() {
+    use crate::keymap::KeyEvent;
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+    entry.supported_reasoning_efforts = vec![
+        ash_protocol::ReasoningEffort::High.into(),
+        ash_protocol::ReasoningEffort::Max.into(),
+    ];
+    entry.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
+    entry.acceleration_options = [("priority", "Fast"), ("ultrafast", "Ultra Fast")]
+        .into_iter()
+        .map(|(id, name)| ash_protocol::ModelAccelerationOption {
+            id: id.into(),
+            name: name.into(),
+            description: "Processing option".into(),
+        })
+        .collect();
+    let mut catalog = ModelListResult {
+        models: vec![entry],
+    };
+    let mut config = crate::test_support::empty_config_snapshot();
+    config.model = Some(ModelRefDto {
+        provider: "openai".into(),
+        model: "gpt-6-astra".into(),
+    });
+    config.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Max);
+    let choices = model_choices(&catalog, &config).unwrap();
+    let mut picker = ListSelection::new(choices.model, choices.actions);
+    picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    for (direction, selected) in [
+        (KeyCode::Right, Some("priority")),
+        (KeyCode::Right, Some("ultrafast")),
+        (KeyCode::Right, None),
+        (KeyCode::Left, Some("ultrafast")),
+        (KeyCode::Left, Some("priority")),
+        (KeyCode::Left, None),
+    ] {
+        let option = super::ModelOption::Acceleration(selected.map(str::to_owned));
+        assert_eq!(
+            picker.handle_model_key(KeyEvent::new(direction, KeyModifiers::NONE)),
+            ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+                preference: "openai/gpt-6-astra".into(),
+                revision: config.revision,
+                option
+            })
+        );
+        catalog.models[0].selected_acceleration = selected.map(str::to_owned);
+        picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
+        let mut effort = ModelPickerData::new(catalog.clone(), config.clone())
+            .effort_selector(ash_protocol::CollaborationMode::Multitask)
+            .unwrap();
+        assert!(matches!(
+            effort.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            crate::models::effort_selector::Outcome::Apply {
+                effort: ash_protocol::ReasoningEffort::Max,
+                mode: ash_protocol::CollaborationMode::Multitask,
+            }
+        ));
+    }
+    catalog.models[0].acceleration_options.remove(0);
+    picker.replace_model_choices(model_choices(&catalog, &config).unwrap());
+    assert_eq!(
+        picker.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+            preference: "openai/gpt-6-astra".into(),
+            revision: config.revision,
+            option: super::ModelOption::Acceleration(Some("ultrafast".into()))
+        })
+    );
+}
+
+#[test]
+fn selected_acceleration_uses_catalog_names_in_english_and_chinese() {
+    let mut frames = Vec::new();
+    for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
+        for selected in [None, Some("priority"), Some("ultrafast")] {
+            let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+            entry.acceleration_options = [("priority", "Fast"), ("ultrafast", "Ultra Fast")]
+                .into_iter()
+                .map(|(id, name)| ash_protocol::ModelAccelerationOption {
+                    id: id.into(),
+                    name: name.into(),
+                    description: "Processing option".into(),
+                })
+                .collect();
+            entry.selected_acceleration = selected.map(str::to_owned);
+            let choices = model_choices(
+                &ModelListResult {
+                    models: vec![entry],
+                },
+                &crate::test_support::empty_config_snapshot(),
+            )
+            .unwrap();
+            let mut view = ListSelectionState::new(choices.model);
+            view.localize(language);
+            let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
+            terminal
+                .draw(|frame| {
+                    draw_body_with_pointer(
+                        frame,
+                        frame.area(),
+                        &view,
+                        None,
+                        None,
+                        crate::render::test_context(),
+                    )
+                })
+                .unwrap();
+            frames.push(format!("{language:?} {selected:?}\n{}", terminal.backend()));
+        }
+    }
+    crate::tui_assert_snapshot!("selected_acceleration_catalog_names", frames.join("\n"));
+}
+
+#[test]
+fn denied_saved_acceleration_can_be_cleared_without_any_available_options() {
+    use crate::keymap::KeyEvent;
+    use crate::widgets::list_selection::ListSelection;
+    use crate::widgets::list_selection::ListSelectionOutcome;
+    use crossterm::event::KeyCode;
+    use crossterm::event::KeyModifiers;
+    let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
+    entry.selected_acceleration = Some("ultrafast".into());
+    let config = crate::test_support::empty_config_snapshot();
+    let choices = model_choices(
+        &ModelListResult {
+            models: vec![entry],
+        },
+        &config,
+    )
+    .unwrap();
+    let mut picker = ListSelection::new(choices.model, choices.actions);
+    assert_eq!(
+        picker.handle_model_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        ListSelectionOutcome::Activate(ModelSelectionAction::Configure {
+            preference: "openai/gpt-6-astra".into(),
+            revision: config.revision,
+            option: super::ModelOption::Acceleration(None)
+        })
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(
+                frame,
+                frame.area(),
+                picker.state(),
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    crate::tui_assert_snapshot!(
+        "denied_acceleration_can_be_cleared",
         terminal.backend().to_string()
     );
 }

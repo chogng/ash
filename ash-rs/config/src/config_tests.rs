@@ -367,7 +367,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 8"));
+    assert!(encoded.contains("schemaVersion = 9"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -409,7 +409,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 8"));
+    assert!(persisted.contains("schemaVersion = 9"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -662,7 +662,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 8"));
+    assert!(persisted.contains("schemaVersion = 9"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -775,11 +775,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 9\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 10\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 8"));
+    assert!(error.0.contains("newer than supported version 9"));
     remove_config_files(&database_path);
 }
 
@@ -1633,7 +1633,8 @@ fn provider_entries_validate_their_key_and_static_settings() {
             command: UserConfigCommand::ConfigureConnection {
                 connection: connection_id("openai"),
                 config: ModelProviderConfig {
-                    fast_models: Default::default(),
+                    model_acceleration: Default::default(),
+                    disabled_acceleration_options: Default::default(),
                     connection: connection_id("anthropic"),
                     custom: None,
                     provider: provider_id("anthropic"),
@@ -2742,7 +2743,7 @@ model = "glm-5.1"
     );
     assert_eq!(migrated.document.tui["pinnedModels"][0]["provider"], "glm");
     let encoded = crate::document_migration::encode(&migrated.document).unwrap();
-    assert!(encoded.contains("schemaVersion = 8"));
+    assert!(encoded.contains("schemaVersion = 9"));
     assert!(!encoded.contains("activeConnections"));
     let with_old_selection = format!("{encoded}\n[activeConnections]\nglm = \"zai-coding-plan\"\n");
     let rewritten = crate::document_migration::decode(&with_old_selection).unwrap();
@@ -2922,4 +2923,88 @@ fn message_board_remote_configuration_roundtrips_without_credentials() {
         credential_env: "invalid name".into(),
     };
     assert!(document.validate().is_err());
+}
+
+#[test]
+fn fast_model_migration_preserves_each_connection_and_declared_mechanism() {
+    let source = r#"
+schemaVersion = 8
+[connections.openai]
+provider = "openai"
+connection = "openai"
+maxOutputTokens = 1234
+fastModels = ["gpt-6.1-sol"]
+[connections.chatgpt-subscription]
+provider = "openai"
+connection = "chatgpt-subscription"
+[connections.anthropic]
+provider = "anthropic"
+connection = "anthropic"
+fastModels = ["claude-opus-5-5"]
+[connections.kimi-subscription]
+provider = "kimi"
+connection = "kimi-subscription"
+fastModels = ["kimi-k2.7-code"]
+"#;
+    let decoded = crate::document_migration::decode(source).unwrap();
+    assert!(decoded.rewrite_required);
+    for (connection, model, option) in [
+        ("openai", "gpt-6.1-sol", "priority"),
+        ("anthropic", "claude-opus-5-5", "speed:fast"),
+        (
+            "kimi-subscription",
+            "kimi-k2.7-code",
+            "model:kimi-k2.7-code-highspeed",
+        ),
+    ] {
+        assert_eq!(
+            decoded.document.connections[&connection_id(connection)].model_acceleration
+                [&ash_protocol::ModelId::new(model).unwrap()],
+            option
+        );
+    }
+    assert!(
+        decoded.document.connections[&connection_id("chatgpt-subscription")]
+            .model_acceleration
+            .is_empty()
+    );
+    assert_eq!(
+        decoded.document.connections[&connection_id("openai")].max_output_tokens,
+        Some(1234)
+    );
+    let encoded = crate::document_migration::encode(&decoded.document).unwrap();
+    assert!(!encoded.contains("fastModels"));
+    let reopened = crate::document_migration::decode(&encoded).unwrap();
+    assert!(!reopened.rewrite_required);
+    assert_eq!(reopened.document, decoded.document);
+}
+
+#[test]
+fn fast_model_migration_merges_equal_values_and_rejects_conflicts_without_writing() {
+    for (model, current, succeeds) in [
+        ("gpt-6.1-sol", "priority", true),
+        ("gpt-6.1-sol", "ultrafast", false),
+        ("unlisted-model", "priority", false),
+    ] {
+        let path = config_path("acceleration-migration");
+        let source = format!(
+            "schemaVersion = 8\n[connections.openai]\nprovider = 'openai'\nconnection = 'openai'\nfastModels = ['{model}']\n[connections.openai.modelAcceleration]\n'{model}' = '{current}'\n'gpt-6-astra' = 'ultrafast'\n"
+        );
+        std::fs::write(path.with_extension("toml"), &source).unwrap();
+        let result = ConfigStore::open(&path).and_then(|store| store.read_snapshot());
+        if succeeds {
+            let values = result.unwrap().values;
+            assert_eq!(
+                values.connections[&connection_id("openai")].model_acceleration
+                    [&ash_protocol::ModelId::new("gpt-6-astra").unwrap()],
+                "ultrafast"
+            );
+            assert!(!persisted_config_document(&path).contains("fastModels"));
+        } else {
+            assert!(result.is_err());
+            assert_eq!(persisted_config_document(&path), source);
+        }
+        remove_config_files(&path);
+    }
+    assert!(crate::document_migration::decode("schemaVersion = 9\n[connections.openai]\nprovider = 'openai'\nconnection = 'openai'\nfastModels = []\n").is_err());
 }

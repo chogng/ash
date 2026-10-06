@@ -215,7 +215,8 @@ fn advisor_model_command_selects_a_configured_provider_model() {
     current.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
-            fast_models: Default::default(),
+            model_acceleration: Default::default(),
+            disabled_acceleration_options: Default::default(),
             connection: "openai".into(),
             provider: "openai".into(),
             custom: None,
@@ -246,7 +247,8 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             maximum_context_window: None,
             default_context_window: None,
             context_window_options: Vec::new(),
-            fast_enabled: false,
+            selected_acceleration: None,
+            acceleration_options: Vec::new(),
             auto_compact_token_limit: None,
             available_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
@@ -353,7 +355,8 @@ fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
                 id: crate::client::new_command_id("probe"),
                 revision: 7,
                 config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
-                    fast_models: Default::default(),
+                    model_acceleration: Default::default(),
+                    disabled_acceleration_options: Default::default(),
                     connection: "custom-test".into(),
                     provider: "custom-test".into(),
                     custom: None,
@@ -421,7 +424,8 @@ fn probe_transport_failure_returns_without_writing_or_refreshing() {
             id: crate::client::new_command_id("test"),
             revision: 0,
             config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
-                fast_models: Default::default(),
+                model_acceleration: Default::default(),
+                disabled_acceleration_options: Default::default(),
                 connection: "custom-test".into(),
                 provider: "custom-test".into(),
                 custom: None,
@@ -440,7 +444,8 @@ fn probe_transport_failure_returns_without_writing_or_refreshing() {
 #[test]
 fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: "custom-one".into(),
         provider: "custom-one".into(),
         custom: Some(
@@ -538,7 +543,8 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
             id: crate::client::new_command_id("test"),
             revision: 7,
             config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
-                fast_models: Default::default(),
+                model_acceleration: Default::default(),
+                disabled_acceleration_options: Default::default(),
                 connection: "openai-compatible".into(),
                 provider: "openai-compatible".into(),
                 custom: None,
@@ -628,7 +634,8 @@ fn failed_model_discovery_does_not_report_api_key_save_as_failed() {
 fn saving_unchanged_connection_with_no_model_still_configures_provider() {
     let mut current = empty_config_snapshot();
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: "openai".into(),
         provider: "openai".into(),
         custom: None,

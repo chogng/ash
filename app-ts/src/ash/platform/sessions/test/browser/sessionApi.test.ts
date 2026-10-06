@@ -16,13 +16,13 @@ test('Model preferences send a targeted update with the current revision', async
 	} as unknown as AppServerProtocolClient;
 	const api = createAppServerModelApi(connection);
 	const model = { provider: 'openai', model: 'test-model' };
-	await api.setModelPreferences(model, { fast: true });
+	await api.setModelPreferences(model, { acceleration: 'priority' });
 	await api.setModelPreferences(model, { contextWindow: 1_000_000 });
-	await api.setModelPreferences(model, { fast: false });
+	await api.setModelPreferences(model, { acceleration: null });
 	assert.deepEqual(writes.map(({ command_id, ...update }) => { assert.ok(command_id); return update; }), [
-		{ expected_revision: 7, model, fast: true },
+		{ expected_revision: 7, model, acceleration: 'priority' },
 		{ expected_revision: 7, model, context_window: 1_000_000 },
-		{ expected_revision: 7, model, fast: false },
+		{ expected_revision: 7, model, acceleration: null },
 	]);
 	assert.equal(new Set(writes.map(write => write.command_id)).size, 3);
 });

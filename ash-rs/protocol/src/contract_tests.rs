@@ -1261,3 +1261,59 @@ fn context_source_catalog_count_round_trips_without_changing_identity() {
         );
     }
 }
+
+#[test]
+fn acceleration_options_use_exact_tier_ids_and_reject_ambiguous_mechanisms() {
+    let mut settings = ModelSettings {
+        service_tiers: Some(
+            [
+                ("default", "Standard"),
+                ("priority", "Fast"),
+                ("ultrafast", "Ultra Fast"),
+            ]
+            .into_iter()
+            .map(|(id, name)| ModelServiceTier {
+                id: id.into(),
+                name: name.into(),
+                description: "Processing option".into(),
+            })
+            .collect(),
+        ),
+        default_service_tier: Some("default".into()),
+        ..Default::default()
+    };
+    settings.validate().unwrap();
+    assert_eq!(
+        settings
+            .acceleration_options()
+            .iter()
+            .map(|option| option.id.as_str())
+            .collect::<Vec<_>>(),
+        ["priority", "ultrafast"]
+    );
+    assert_eq!(
+        settings.resolve_acceleration("ultrafast"),
+        Some(ModelAcceleration::ServiceTier {
+            service_tier: "ultrafast".into()
+        })
+    );
+    assert_eq!(settings.resolve_acceleration("default"), None);
+    settings.acceleration = Some(ModelAcceleration::Speed {
+        speed: ModelSpeed::Fast,
+        name: "Fast".into(),
+        description: "Inference speed".into(),
+    });
+    settings
+        .service_tiers
+        .as_mut()
+        .unwrap()
+        .push(ModelServiceTier {
+            id: "speed:fast".into(),
+            name: "Speed tier".into(),
+            description: "Different processing mechanism".into(),
+        });
+    assert_eq!(
+        settings.validate(),
+        Err("acceleration option IDs must be unique across mechanisms")
+    );
+}

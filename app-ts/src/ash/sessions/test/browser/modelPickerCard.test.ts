@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import type { ModelPreferencesUpdate } from '../../../../../platform/sessions/common/sessionApi.js';
-import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { ModelCard } from '../../browser/widget/input/modelPicker/modelPickerCard.js';
+import type { ModelPreferencesUpdate } from '../../../platform/sessions/common/sessionApi.js';
+import type { ModelCatalogEntry } from '../../../workbench/services/chat/common/modelCatalog.js';
+import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { ModelCard } from '../../contrib/cowork/browser/widget/input/modelPicker/modelPickerCard.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
 suiteTeardown(() => environment.window.close());
@@ -72,7 +72,7 @@ test('Model card hides fixed capacity and disables unsupported preferences', () 
 	using card = new ModelCard(environment.window.document);
 	card.update({ entry: { ...entry, contextWindow: 500_000, contextWindowOptions: [500_000], maximumContextWindow: 500_000, accelerationOptions: [] }, setPreferences: async () => { } });
 	assert.equal(card.domNode.querySelector('input[aria-label="Fast"]'), null);
-	assert.equal((card.domNode.querySelector('.ash-chat-model-card-context') as HTMLElement).hidden, true);
+	assert.equal((card.domNode.querySelector('.ash-cowork-model-card-context') as HTMLElement).hidden, true);
 	assert.equal(card.domNode.textContent, '');
 	assert.equal(card.domNode.querySelectorAll('[role="radio"]').length, 0);
 });
@@ -112,7 +112,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const description = locale === 'zh-CN' ? '响应更快，用量增加' : 'Faster responses, increased usage';
 			assert.equal(input.getAttribute('aria-label'), locale === 'zh-CN' ? '快速' : 'Fast');
 			assert.equal(input.getAttribute('aria-description'), description);
-			assert.equal(card.domNode.querySelector('.ash-chat-model-card-description')!.textContent, description);
+			assert.equal(card.domNode.querySelector('.ash-cowork-model-card-description')!.textContent, description);
 			assert.equal(input.checked, false);
 		} finally { resetNlsResolver(); }
 	});

@@ -754,6 +754,11 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
                 model, &info,
             );
             entry.context_window = Some(272_000);
+            entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
+                id: "priority".into(),
+                name: "Fast".into(),
+                description: "Priority processing".into(),
+            }];
             entry
         }],
     };
@@ -766,7 +771,10 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         app.update(ModelEvent::PickerOpened(
             crate::models::model_choices(&catalog, &config).unwrap(),
         ));
-        for option in [ModelOption::FastOn, ModelOption::Context1m] {
+        for option in [
+            ModelOption::Acceleration(Some("priority".into())),
+            ModelOption::Context1m,
+        ] {
             assert_eq!(
                 app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
                 None

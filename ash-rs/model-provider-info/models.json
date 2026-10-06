@@ -279,6 +279,11 @@
             "id": "priority",
             "name": "Fast",
             "description": "Faster responses, increased usage"
+          },
+          {
+            "id": "ultrafast",
+            "name": "Ultra Fast",
+            "description": "Faster responses, increased usage"
           }
         ],
         "default_service_tier": "default",

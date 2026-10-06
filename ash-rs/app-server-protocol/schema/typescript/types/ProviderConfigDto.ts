@@ -4,6 +4,6 @@ import type { ModelContextConfigDto } from './ModelContextConfigDto.js';
 
 export type ProviderConfigDto = { connection: string, provider: string, custom?: CustomProviderConfigDto | null, baseUrl?: string | null, maxOutputTokens?: number | null, modelContext?: { [key in string]: ModelContextConfigDto },
 /**
- * Per-connection model IDs requesting Fast service on subsequent invocations.
+ * Explicit acceleration option IDs saved separately for each model connection.
  */
-fastModels?: Array<string>, };
+modelAcceleration?: { [key in string]: string }, disabledAccelerationOptions?: { [key in string]: Array<string> }, };

@@ -496,7 +496,7 @@ impl AppServer {
                 expected_revision: ash_config::ConfigRevision::new(params.expected_revision),
                 model: params.model,
                 update: ash_models_manager::ModelPreferencesUpdate {
-                    fast: params.fast,
+                    acceleration: params.acceleration,
                     context_window: params.context_window,
                 },
             })

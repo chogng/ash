@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 8;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 9;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -76,6 +76,8 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     let migrate_subscription =
         !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 6);
     let migrate_glm = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 8);
+    let migrate_acceleration =
+        !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 9);
     let obsolete_selection = root.remove("activeConnections").is_some();
     let rewrite_required = (match version {
         None => {
@@ -127,6 +129,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             }
         }
     }
+    if migrate_acceleration {
+        migrate_fast_models(root)?;
+    }
     let mut document = value
         .try_into::<UserConfigDocument>()
         .map_err(|error| ConfigError(error.to_string()))?;
@@ -138,6 +143,55 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         document,
         rewrite_required,
     })
+}
+
+/// This is a one-way file-schema migration. Normal readers never interpret the old boolean
+/// list; an unknown mapping or conflicting target leaves the user's file untouched.
+fn migrate_fast_models(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
+    let Some(connections) = root
+        .get_mut("connections")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return Ok(());
+    };
+    for (connection, value) in connections {
+        let config = value
+            .as_table_mut()
+            .ok_or_else(|| ConfigError("connection must be a table".into()))?;
+        let Some(legacy) = config.remove("fastModels") else {
+            continue;
+        };
+        let models = legacy
+            .try_into::<Vec<ash_protocol::ModelId>>()
+            .map_err(|error| ConfigError(error.to_string()))?;
+        let provider = config
+            .get("provider")
+            .and_then(toml::Value::as_str)
+            .ok_or_else(|| ConfigError(format!("connection {connection} requires a provider")))?;
+        let provider = ash_protocol::ProviderId::new(provider)
+            .map_err(|error| ConfigError(error.to_string()))?;
+        let mut migrated = toml::map::Map::new();
+        for model in models {
+            let option = model_provider_info::find_static_model(&ModelRef::new(provider.clone(), model.clone()))
+                .and_then(|spec| spec.model().settings.acceleration.as_ref().map(ash_protocol::ModelAcceleration::id))
+                .ok_or_else(|| ConfigError(format!("cannot migrate Fast preference for {connection}/{model}: no declared acceleration")))?;
+            migrated.insert(model.to_string(), toml::Value::String(option));
+        }
+        let target = config
+            .entry("modelAcceleration")
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+            .as_table_mut()
+            .ok_or_else(|| ConfigError("modelAcceleration must be a table".into()))?;
+        for (model, option) in migrated {
+            if target.get(&model).is_some_and(|current| current != &option) {
+                return Err(ConfigError(format!(
+                    "conflicting acceleration preferences for {connection}/{model}"
+                )));
+            }
+            target.insert(model, option);
+        }
+    }
+    Ok(())
 }
 
 fn migrate_glm_identity(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {

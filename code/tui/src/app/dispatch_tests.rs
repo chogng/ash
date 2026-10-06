@@ -697,7 +697,8 @@ fn model_command_updates_and_clears_model_with_config_revision() {
             command_id: CommandId::new("configure-test-provider").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
-                fast_models: Default::default(),
+                model_acceleration: Default::default(),
+                disabled_acceleration_options: Default::default(),
                 connection: "test".into(),
                 custom: None,
                 provider: "test".into(),
@@ -1306,7 +1307,8 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
         client.configure_provider(ProviderConfigureParams {
             command_id: CommandId::new(format!("configure-{id}")).unwrap(), expected_revision: revision,
             config: ProviderConfigDto {
- fast_models: Default::default(),
+ model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
  connection: id.into(),
                 provider: id.into(), base_url: Some("https://example.invalid/v1".into()), max_output_tokens: None, model_context: Default::default(),
                 custom: Some(ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
@@ -1389,7 +1391,8 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
 fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: "custom-gateway".into(),
         provider: "custom-gateway".into(),
         base_url: Some("https://example.invalid/v1".into()),
@@ -1444,7 +1447,8 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
             command_id: CommandId::new("configure-openai-picker").unwrap(),
             expected_revision: revision,
             config: ProviderConfigDto {
-                fast_models: Default::default(),
+                model_acceleration: Default::default(),
+                disabled_acceleration_options: Default::default(),
                 connection: "openai".into(),
                 provider: "openai".into(),
                 base_url: None,
@@ -1471,7 +1475,8 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
 fn set_model_sets_and_clears_model_reasoning_effort() {
     let (mut client, root, transport) = client_with_model_probe();
     let config = ProviderConfigDto {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: "openai".into(),
         provider: "openai".into(),
         base_url: None,
@@ -1650,7 +1655,8 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
             command_id: CommandId::new("model-options-provider").unwrap(),
             expected_revision: config.revision,
             config: ProviderConfigDto {
-                fast_models: Vec::new(),
+                model_acceleration: Default::default(),
+                disabled_acceleration_options: Default::default(),
                 connection: "openai".into(),
                 provider: "openai".into(),
                 custom: None,
@@ -1678,10 +1684,10 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
     let before = client.read_config().unwrap();
     let mut catalog = catalog;
     for option in [
-        crate::models::ModelOption::FastOn,
+        crate::models::ModelOption::Acceleration(Some("priority".into())),
         crate::models::ModelOption::Context272k,
         crate::models::ModelOption::Context1m,
-        crate::models::ModelOption::FastOff,
+        crate::models::ModelOption::Acceleration(None),
     ] {
         let config = client.read_config().unwrap();
         let update = crate::models::execute(
@@ -1689,7 +1695,7 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
             ModelCommand::Configure {
                 preference: "openai/gpt-6-astra".into(),
                 revision: config.revision,
-                option,
+                option: option.clone(),
             },
             &catalog,
         )
@@ -1716,7 +1722,7 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
         }
     }
     let after = client.read_config().unwrap();
-    assert!(after.providers["openai"].fast_models.is_empty());
+    assert!(after.providers["openai"].model_acceleration.is_empty());
     assert_eq!(
         after.providers["openai"].model_context["gpt-6-astra"].context_window,
         1_000_000
@@ -1726,22 +1732,22 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
         ModelCommand::Configure {
             preference: "openai/gpt-6-sol".into(),
             revision: after.revision,
-            option: crate::models::ModelOption::FastOn,
+            option: crate::models::ModelOption::Acceleration(Some("priority".into())),
         },
         &catalog,
     )
     .unwrap();
     assert_eq!(other_model.config.model, before.model);
     assert_eq!(
-        other_model.config.providers["openai"].fast_models,
-        vec!["gpt-6-sol"]
+        other_model.config.providers["openai"].model_acceleration,
+        std::collections::BTreeMap::from([("gpt-6-sol".into(), "priority".into())])
     );
     let stale = crate::models::execute(
         &mut *client,
         ModelCommand::Configure {
             preference: "openai/gpt-6-astra".into(),
             revision: before.revision,
-            option: crate::models::ModelOption::FastOn,
+            option: crate::models::ModelOption::Acceleration(Some("priority".into())),
         },
         &catalog,
     );
@@ -1775,7 +1781,8 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
                 command_id: crate::client::new_command_id("other-model-options"),
                 expected_revision: config.revision,
                 config: ProviderConfigDto {
-                    fast_models: Vec::new(),
+                    model_acceleration: Default::default(),
+                    disabled_acceleration_options: Default::default(),
                     connection: connection.into(),
                     provider: provider.into(),
                     custom: None,
@@ -1801,10 +1808,21 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
             .unwrap()
             .maximum_context_window;
         let options = [
-            fast.then_some(crate::models::ModelOption::FastOn),
+            fast.then(|| {
+                crate::models::ModelOption::Acceleration(
+                    catalog
+                        .models
+                        .iter()
+                        .find(|entry| entry.model.model.as_str() == id)
+                        .unwrap()
+                        .acceleration_options
+                        .first()
+                        .map(|option| option.id.clone()),
+                )
+            }),
             context.then_some(crate::models::ModelOption::Context272k),
             context.then_some(crate::models::ModelOption::Context1m),
-            fast.then_some(crate::models::ModelOption::FastOff),
+            fast.then_some(crate::models::ModelOption::Acceleration(None)),
         ];
         for option in options.into_iter().flatten() {
             let config = client.read_config().unwrap();
@@ -1813,7 +1831,7 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
                 ModelCommand::Configure {
                     preference: format!("{provider}/{id}"),
                     revision: config.revision,
-                    option,
+                    option: option.clone(),
                 },
                 &catalog,
             )
@@ -1825,13 +1843,10 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
             );
             assert!(update.picker.is_some());
             let provider_config = &update.config.providers[provider];
-            if matches!(
-                option,
-                crate::models::ModelOption::FastOn | crate::models::ModelOption::FastOff
-            ) {
+            if let crate::models::ModelOption::Acceleration(selected) = &option {
                 assert_eq!(
-                    provider_config.fast_models.iter().any(|model| model == id),
-                    option == crate::models::ModelOption::FastOn
+                    provider_config.model_acceleration.get(id),
+                    selected.as_ref()
                 );
             }
             catalog = update.catalog.unwrap();

@@ -1112,6 +1112,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::PluginUninstall, params)
     }
 
+    pub fn update_model_preferences(
+        &mut self,
+        params: ash_app_server_protocol::protocol::model::ModelPreferencesUpdateParams,
+    ) -> Result<ConfigCommandResult, ClientError> {
+        self.call(ClientMethod::ModelPreferencesUpdate, params)
+    }
+
     pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
         self.call(
             ClientMethod::ModelList,

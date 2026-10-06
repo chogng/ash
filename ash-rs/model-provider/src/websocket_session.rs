@@ -196,14 +196,15 @@ impl ModelProviderRuntime {
             None
         };
         let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
-        provider.resolve_model(&model.model)?;
+        let resolved = provider.resolve_model(&model.model)?;
+        provider.selected_acceleration(&resolved)?;
         let target = provider.target.resolve()?.into_api_target();
         let endpoint = provider.target.endpoint(provider.adapter.endpoint());
         let session = ResponsesWebSocketSession::connect(
             &connector,
             &target,
             endpoint,
-            model.model.as_str(),
+            provider.upstream_model(&resolved),
             cache_key.clone(),
             limits,
             cancellation,
@@ -284,11 +285,11 @@ impl ResponsesModelSession {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
-        self.refresh_auth(cancellation).await?;
         let model = self.provider.resolve_model(
             &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
         )?;
         let request = self.provider.prepare_request(&model, request)?;
+        self.refresh_auth(cancellation).await?;
         let mut events = Events {
             inner: sink,
             failure: None,
@@ -307,11 +308,11 @@ impl ResponsesModelSession {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ash_api::ResponsesWarmup, ModelProviderError> {
-        self.refresh_auth(cancellation).await?;
         let model = self.provider.resolve_model(
             &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
         )?;
         let request = self.provider.prepare_request(&model, request)?;
+        self.refresh_auth(cancellation).await?;
         self.session
             .warm_up(&request, cancellation)
             .await
@@ -332,13 +333,16 @@ impl ResponsesModelSession {
         };
         if target != self.target {
             self.session.abort();
+            let model = self.provider.resolve_model(
+                &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
+            )?;
             self.session = ResponsesWebSocketSession::connect(
                 &self.connector,
                 &target,
                 self.provider
                     .target
                     .endpoint(self.provider.adapter.endpoint()),
-                &self.model,
+                self.provider.upstream_model(&model),
                 self.cache_key.clone(),
                 self.limits,
                 cancellation,

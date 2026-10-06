@@ -2612,7 +2612,8 @@ fn configured_model_summary() -> ModelSummary {
                 maximum_context_window: Some(200_000),
                 default_context_window: Some(200_000),
                 context_window_options: vec![200_000],
-                fast_enabled: false,
+                selected_acceleration: None,
+                acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(180_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
@@ -2702,7 +2703,8 @@ fn custom_model_choices(
     config.providers.insert(
         "custom-gateway".into(),
         ProviderConfigDto {
-            fast_models: Default::default(),
+            model_acceleration: Default::default(),
+            disabled_acceleration_options: Default::default(),
             connection: "custom-gateway".into(),
             provider: "custom-gateway".into(),
             base_url: Some("https://example.test/v1".into()),
@@ -2744,7 +2746,8 @@ fn custom_model_choices(
                 maximum_context_window: Some(272_000),
                 default_context_window: Some(272_000),
                 context_window_options: vec![272_000],
-                fast_enabled: false,
+                selected_acceleration: None,
+                acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(240_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
@@ -2799,7 +2802,8 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
         config.providers.insert(
             provider.into(),
             ProviderConfigDto {
-                fast_models: Default::default(),
+                model_acceleration: Default::default(),
+                disabled_acceleration_options: Default::default(),
                 connection: provider.into(),
                 provider: provider.into(),
                 custom: None,

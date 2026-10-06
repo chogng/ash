@@ -528,7 +528,8 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     config.providers.insert(
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
-            fast_models: Default::default(),
+            model_acceleration: Default::default(),
+            disabled_acceleration_options: Default::default(),
             connection: "openai".into(),
             provider: "openai".into(),
             custom: None,

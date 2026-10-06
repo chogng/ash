@@ -156,3 +156,28 @@ fn remote_model_catalog_imports_request_defaults_and_capabilities() {
         Some(ash_protocol::ModelToolOutputLimit::Tokens(10000))
     );
 }
+
+#[test]
+fn a_catalog_with_only_ultrafast_does_not_require_a_priority_tier() {
+    let model: CodexModel = serde_json::from_value(serde_json::json!({
+        "id":"tier-fixture", "displayName":"Tier fixture", "hidden":false, "supportedReasoningEfforts":[],
+        "serviceTiers":[
+            {"id":"default", "name":"Standard", "description":"Default processing"},
+            {"id":"ultrafast", "name":"Ultra Fast", "description":"Fastest processing"}
+        ], "defaultServiceTier":"default"
+    }))
+    .unwrap();
+    let models = normalize_models(vec![model.into_catalog_entry()]).unwrap();
+    assert_eq!(
+        models[0].metadata.capabilities.fast_mode,
+        Some(ash_protocol::CapabilitySupport::Supported)
+    );
+    assert_eq!(
+        models[0].metadata.settings.acceleration_options(),
+        vec![ash_protocol::ModelAccelerationOption {
+            id: "ultrafast".into(),
+            name: "Ultra Fast".into(),
+            description: "Fastest processing".into(),
+        }]
+    );
+}

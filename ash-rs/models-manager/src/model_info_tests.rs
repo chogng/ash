@@ -348,7 +348,7 @@ fn declared_budgets_follow_observed_capacity_and_keep_compaction_limits() {
         .apply_preferences(
             &mut config,
             &crate::ModelPreferencesUpdate {
-                fast: None,
+                acceleration: ash_protocol::Patch::Missing,
                 context_window: Some(80_000),
             },
         )
@@ -399,7 +399,9 @@ fn model_preferences_update_is_atomic_and_preserves_other_settings() {
     );
     config.max_output_tokens = Some(24_000);
     let other = ModelId::new("gpt-6-sol").unwrap();
-    config.fast_models.insert(other.clone());
+    config
+        .model_acceleration
+        .insert(other.clone(), "priority".into());
     config.model_context.insert(
         other,
         ModelContextConfig {
@@ -421,7 +423,7 @@ fn model_preferences_update_is_atomic_and_preserves_other_settings() {
             .apply_preferences(
                 &mut config,
                 &crate::ModelPreferencesUpdate {
-                    fast: Some(true),
+                    acceleration: ash_protocol::Patch::Value("priority".into()),
                     context_window: Some(500_000)
                 }
             )
@@ -433,13 +435,15 @@ fn model_preferences_update_is_atomic_and_preserves_other_settings() {
         .apply_preferences(
             &mut config,
             &crate::ModelPreferencesUpdate {
-                fast: Some(true),
+                acceleration: ash_protocol::Patch::Value("priority".into()),
                 context_window: Some(1_000_000),
             },
         )
         .unwrap();
     let mut expected = original;
-    expected.fast_models.insert(model.model.clone());
+    expected
+        .model_acceleration
+        .insert(model.model.clone(), "priority".into());
     expected
         .model_context
         .get_mut(&model.model)
@@ -451,12 +455,12 @@ fn model_preferences_update_is_atomic_and_preserves_other_settings() {
         .apply_preferences(
             &mut config,
             &crate::ModelPreferencesUpdate {
-                fast: Some(false),
+                acceleration: ash_protocol::Patch::Null,
                 context_window: Some(272_000),
             },
         )
         .unwrap();
-    assert!(!config.fast_models.contains(&model.model));
+    assert!(!config.model_acceleration.contains_key(&model.model));
     assert_eq!(
         config.model_context[&model.model].auto_compact_token_limit,
         Some(200_000)
@@ -467,7 +471,7 @@ fn model_preferences_update_is_atomic_and_preserves_other_settings() {
             .apply_preferences(
                 &mut config,
                 &crate::ModelPreferencesUpdate {
-                    fast: None,
+                    acceleration: ash_protocol::Patch::Missing,
                     context_window: None
                 }
             )
@@ -495,11 +499,82 @@ fn model_preferences_reject_fast_on_an_unsupported_connection() {
             .apply_preferences(
                 &mut config,
                 &crate::ModelPreferencesUpdate {
-                    fast: Some(true),
+                    acceleration: ash_protocol::Patch::Value("priority".into()),
                     context_window: None
                 }
             )
             .is_err()
     );
     assert_eq!(config, original);
+}
+
+#[test]
+fn acceleration_selections_and_denials_remain_scoped_to_the_connection() {
+    let model = model_ref();
+    let mut info = ModelInfo::new(model.model.clone(), "Model");
+    info.settings.service_tiers = Some(
+        [("priority", "Fast"), ("ultrafast", "Ultra Fast")]
+            .into_iter()
+            .map(|(id, name)| ash_protocol::ModelServiceTier {
+                id: id.into(),
+                name: name.into(),
+                description: "Processing option".into(),
+            })
+            .collect(),
+    );
+    let entry = manager(info)
+        .resolve_static(&model, &ModelRequirements::agent())
+        .unwrap();
+    let mut other = ModelProviderConfig::new(model.provider.clone());
+    other.connection = ash_protocol::ModelConnectionId::new("another-account").unwrap();
+    other
+        .model_acceleration
+        .insert(model.model.clone(), "priority".into());
+    let untouched = other.clone();
+    for disabled in [
+        vec![],
+        vec!["priority"],
+        vec!["ultrafast"],
+        vec!["priority", "ultrafast"],
+    ] {
+        let mut config = ModelProviderConfig::new(model.provider.clone());
+        config.disabled_acceleration_options.insert(
+            model.model.clone(),
+            disabled.iter().map(|id| (*id).to_owned()).collect(),
+        );
+        let available = config.acceleration_options(entry.entry().info());
+        for option in ["priority", "ultrafast"] {
+            let before = config.clone();
+            let result = entry.entry().apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    acceleration: ash_protocol::Patch::Value(option.into()),
+                    context_window: None,
+                },
+            );
+            assert_eq!(
+                available.iter().any(|entry| entry.id == option),
+                !disabled.contains(&option)
+            );
+            if disabled.contains(&option) {
+                assert!(result.is_err());
+                assert_eq!(config, before);
+            } else {
+                result.unwrap();
+                assert_eq!(config.model_acceleration[&model.model], option);
+            }
+        }
+        entry
+            .entry()
+            .apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    acceleration: ash_protocol::Patch::Null,
+                    context_window: None,
+                },
+            )
+            .unwrap();
+        assert!(!config.model_acceleration.contains_key(&model.model));
+        assert_eq!(other, untouched);
+    }
 }

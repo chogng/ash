@@ -44,7 +44,7 @@ pub(crate) fn chatgpt_catalog_binding(
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
     let account_id = auth
-        .model_execution_identity()
+        .model_catalog_identity()
         .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
     let Some(account_id) = account_id else {
         return Ok(None);
@@ -100,6 +100,10 @@ impl ModelCatalogSource for ChatGptCatalogSource {
             let token = cancellation.token();
             let cancel_on_drop = cancellation.cancel_on_drop();
             let result = tokio::task::spawn_blocking(move || {
+                auth.refresh_speed_access(&token).map_err(|error| {
+                    CatalogSourceError::new(CatalogSourceErrorKind::Permission, error.to_string())
+                })?;
+                ensure_account(&auth, &account_id)?;
                 if let Some(models) = auth
                     .codex_model_cache_path()
                     .and_then(|path| local_models(&path))
@@ -222,7 +226,7 @@ impl ModelCatalogSource for ChatGptCatalogSource {
 }
 
 fn ensure_account(auth: &ChatGptOAuth, account_id: &str) -> Result<(), CatalogSourceError> {
-    let current = auth.model_execution_identity().map_err(|_| {
+    let current = auth.model_catalog_identity().map_err(|_| {
         CatalogSourceError::new(
             CatalogSourceErrorKind::Authentication,
             "ChatGPT login changed during catalog discovery",
@@ -277,10 +281,8 @@ fn normalize_models(
             settings.validate().map_err(|message| {
                 CatalogSourceError::new(CatalogSourceErrorKind::InvalidPayload, message)
             })?;
-            let fast_mode = settings
-                .acceleration
-                .as_ref()
-                .map(|_| CapabilitySupport::Supported);
+            let fast_mode = (!settings.acceleration_options().is_empty())
+                .then_some(CapabilitySupport::Supported);
             Ok(DiscoveredModel::new(id).with_metadata(ModelMetadataPatch {
                 settings,
                 access: Some(ModelAccess::Subscription),

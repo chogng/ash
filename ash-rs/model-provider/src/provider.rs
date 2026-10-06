@@ -453,18 +453,38 @@ impl Provider {
     ) -> Result<ModelRequest, ModelProviderError> {
         let mut request = request.clone();
         request.max_output_tokens = request.max_output_tokens.or(self.config.max_output_tokens);
-        // Explicit request controls take precedence over the stored product preference.
-        // The immutable model declaration owns the mechanism, not provider/model-name branches.
+        let acceleration = self.selected_acceleration(model)?;
+        // An explicit request may override the saved choice, but it cannot bypass this
+        // connection's option restrictions. Default tiers are not acceleration choices.
+        let declared = model.settings.acceleration_options();
+        let available = self.acceleration_options(model)?;
+        let requested = request
+            .service_tier
+            .as_deref()
+            .into_iter()
+            .chain(request.speed.map(|speed| match speed {
+                ash_protocol::ModelSpeed::Fast => "speed:fast",
+            }));
+        if requested.into_iter().any(|id| {
+            declared.iter().any(|option| option.id == id)
+                && !available.iter().any(|option| option.id == id)
+        }) {
+            return Err(ModelProviderError::InvalidRequest(
+                "acceleration option is unavailable for this model connection".into(),
+            ));
+        }
         if request.service_tier.is_none() && self.config.connection.as_str() != "xai-subscription" {
-            if request.speed.is_none() && self.config.fast_models.contains(&model.id) {
-                match &model.settings.acceleration {
-                    Some(ash_protocol::ModelAcceleration::ServiceTier { service_tier }) => {
-                        request.service_tier = Some(service_tier.clone());
+            if request.speed.is_none()
+                && let Some(acceleration) = acceleration
+            {
+                match acceleration {
+                    ash_protocol::ModelAcceleration::ServiceTier { service_tier } => {
+                        request.service_tier = Some(service_tier)
                     }
-                    Some(ash_protocol::ModelAcceleration::Speed { speed, .. }) => {
-                        request.speed = Some(*speed);
+                    ash_protocol::ModelAcceleration::Speed { speed, .. } => {
+                        request.speed = Some(speed)
                     }
-                    Some(ash_protocol::ModelAcceleration::Model { .. }) | None => {}
+                    ash_protocol::ModelAcceleration::Model { .. } => {}
                 }
             }
             request.service_tier = request
@@ -472,6 +492,20 @@ impl Provider {
                 .or_else(|| model.settings.default_service_tier.clone());
         }
         crate::request_settings::apply_settings(model, self.protocol(), &mut request)?;
+        if let ProviderTarget::ChatGpt(auth) = &self.target {
+            let access = auth
+                .speed_access()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+            if match request.service_tier.as_deref() {
+                Some("priority") => access.fast == Some(false),
+                Some("ultrafast") => access.ultrafast != Some(true),
+                _ => false,
+            } {
+                return Err(ModelProviderError::InvalidRequest(
+                    "speed tier is unavailable for the current ChatGPT account".into(),
+                ));
+            }
+        }
         crate::image_request::normalize_image_details(
             &mut request,
             model.capabilities.image_detail_original,
@@ -479,10 +513,43 @@ impl Provider {
         Ok(request)
     }
 
+    fn acceleration_options(
+        &self,
+        model: &Model,
+    ) -> Result<Vec<ash_protocol::ModelAccelerationOption>, ModelProviderError> {
+        let auth = match &self.target {
+            ProviderTarget::ChatGpt(auth) => Some(auth.as_ref()),
+            _ => None,
+        };
+        connection_acceleration_options(&self.config, model, auth)
+    }
+
+    fn selected_acceleration(
+        &self,
+        model: &Model,
+    ) -> Result<Option<ash_protocol::ModelAcceleration>, ModelProviderError> {
+        let Some(option) = self.config.model_acceleration.get(&model.id) else {
+            return Ok(None);
+        };
+        if !self
+            .acceleration_options(model)?
+            .iter()
+            .any(|entry| &entry.id == option)
+        {
+            return Err(ModelProviderError::InvalidRequest(
+                "selected acceleration option is unavailable for this model connection".into(),
+            ));
+        }
+        Ok(model.settings.resolve_acceleration(option))
+    }
+
     fn upstream_model<'a>(&'a self, model: &'a Model) -> &'a str {
-        let id = if self.config.fast_models.contains(&model.id)
-            && let Some(ash_protocol::ModelAcceleration::Model { model, .. }) =
-                &model.settings.acceleration
+        let id = if let Some(option) = self.config.model_acceleration.get(&model.id)
+            && let Some(ash_protocol::ModelAcceleration::Model { model, .. }) = model
+                .settings
+                .acceleration
+                .as_ref()
+                .filter(|acceleration| acceleration.id() == *option)
         {
             model.as_str()
         } else {
@@ -839,15 +906,13 @@ impl Provider {
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
         self.ensure_account()?;
         let model_ref = ModelRef::new(self.definition.id.clone(), model_id.clone());
-        // Built-in membership is independent of a remote listing, including an empty or stale one.
-        let mut model = if let Some(spec) = model_provider_info::find_static_model(&model_ref) {
-            spec.model()
-        } else {
-            self.models
-                .resolve_static(&model_ref, &ModelRequirements::agent())
-                .map(|resolved| resolved.entry().info().clone())
-                .map_err(model_resolution_error)?
-        };
+        // The provider registry seeds built-in membership independently of remote listings.
+        // Resolve through its catalog so every transport observes the same declarations.
+        let mut model = self
+            .models
+            .resolve_static(&model_ref, &ModelRequirements::agent())
+            .map(|resolved| resolved.entry().info().clone())
+            .map_err(model_resolution_error)?;
         model.access = match self.config.access_mode {
             ProviderAccessMode::Api => ash_protocol::ModelAccess::ApiKey,
             ProviderAccessMode::Subscription => ash_protocol::ModelAccess::Subscription,
@@ -1415,6 +1480,21 @@ impl ModelProviderRuntime {
         let runtime = self.with_configs([config])?;
         let normalized = runtime.configs.normalize(config)?;
         runtime.instantiate_normalized(normalized)
+    }
+
+    /// Effective choices combine model capability, connection restrictions and current account
+    /// permissions. Reading this list never fetches an endpoint or persists account permissions.
+    pub fn acceleration_options(
+        &self,
+        config: &ModelProviderConfig,
+        model: &Model,
+    ) -> Result<Vec<ash_protocol::ModelAccelerationOption>, ModelProviderError> {
+        if config.connection.as_str() != "chatgpt-subscription" {
+            return Ok(config.acceleration_options(model));
+        }
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize(config)?;
+        connection_acceleration_options(&normalized, model, runtime.chatgpt_oauth.as_deref())
     }
 
     pub fn model_info(
@@ -2007,4 +2087,29 @@ impl ApiStreamSink for ProviderApiStreamSink<'_> {
         }
         Ok(())
     }
+}
+
+fn connection_acceleration_options(
+    config: &NormalizedModelProviderConfig,
+    model: &Model,
+    auth: Option<&ChatGptOAuth>,
+) -> Result<Vec<ash_protocol::ModelAccelerationOption>, ModelProviderError> {
+    let mut options = config.acceleration_options(model);
+    if config.connection.as_str() == "chatgpt-subscription" {
+        let access = match auth {
+            Some(auth) => auth
+                .speed_access()
+                .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+            None => ash_chatgpt::ChatGptSpeedAccess {
+                fast: None,
+                ultrafast: None,
+            },
+        };
+        options.retain(|option| match option.id.as_str() {
+            "priority" => access.fast != Some(false),
+            "ultrafast" => access.ultrafast == Some(true),
+            _ => true,
+        });
+    }
+    Ok(options)
 }

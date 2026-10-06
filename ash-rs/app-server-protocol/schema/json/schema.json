@@ -37239,6 +37239,27 @@
         }
       ]
     },
+    "ModelAccelerationOption": {
+      "additionalProperties": false,
+      "description": "A selectable acceleration ID and its catalog-owned display metadata.\nIDs are scoped to one model connection; they are never translated or used as credentials.",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "type": "object"
+    },
     "ModelAccess": {
       "description": "How a user gains access to a model.\n\n[`ModelRef::provider`] identifies the model vendor. Product composition may use this access\nmode to choose an execution backend, but it is not proof of authentication, entitlement, or\nremote availability.",
       "enum": [
@@ -37336,6 +37357,13 @@
     },
     "ModelCatalogEntry": {
       "properties": {
+        "acceleration_options": {
+          "description": "Effective choices after connection restrictions and per-option denials.",
+          "items": {
+            "$ref": "#/$defs/ModelAccelerationOption"
+          },
+          "type": "array"
+        },
         "auto_compact_token_limit": {
           "format": "uint32",
           "minimum": 0,
@@ -37418,10 +37446,6 @@
         "display_name": {
           "type": "string"
         },
-        "fast_enabled": {
-          "description": "Current preference on the active connection; capability support is reported separately.",
-          "type": "boolean"
-        },
         "maximum_context_window": {
           "description": "Model or custom connection ceiling before applying its context budget preference.",
           "format": "uint32",
@@ -37433,6 +37457,13 @@
         },
         "model": {
           "$ref": "#/$defs/ModelRef"
+        },
+        "selected_acceleration": {
+          "description": "Current preference on the active connection; capability support is reported separately.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "settings": {
           "$ref": "#/$defs/ModelSettings",
@@ -37459,7 +37490,7 @@
         "model",
         "display_name",
         "context_window_options",
-        "fast_enabled",
+        "acceleration_options",
         "capabilities",
         "supported_reasoning_efforts"
       ],
@@ -37947,6 +37978,12 @@
     "ModelPreferencesUpdateParams": {
       "additionalProperties": false,
       "properties": {
+        "acceleration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "command_id": {
           "$ref": "#/$defs/CommandId"
         },
@@ -37962,12 +37999,6 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
-        },
-        "fast": {
-          "type": [
-            "boolean",
-            "null"
-          ]
         },
         "model": {
           "$ref": "#/$defs/ModelRef"
@@ -39894,6 +39925,7 @@
       "type": "object"
     },
     "ProviderConfigDto": {
+      "additionalProperties": false,
       "description": "Non-secret declarative provider settings exposed through the App Server contract.",
       "properties": {
         "baseUrl": {
@@ -39915,12 +39947,15 @@
             }
           ]
         },
-        "fastModels": {
-          "description": "Per-connection model IDs requesting Fast service on subsequent invocations.",
-          "items": {
-            "type": "string"
+        "disabledAccelerationOptions": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
           },
-          "type": "array"
+          "type": "object"
         },
         "maxOutputTokens": {
           "format": "uint32",
@@ -39929,6 +39964,13 @@
             "integer",
             "null"
           ]
+        },
+        "modelAcceleration": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Explicit acceleration option IDs saved separately for each model connection.",
+          "type": "object"
         },
         "modelContext": {
           "additionalProperties": {

@@ -231,9 +231,6 @@ fn configure_model<T: JsonRpcTransport>(
     catalog: &ModelListResult,
 ) -> Result<ModelUpdate, ModelCommandError> {
     use super::ModelOption;
-    use ash_app_server_protocol::protocol::config::ModelContextConfigDto;
-    use ash_app_server_protocol::protocol::config::ProviderConfigureParams;
-
     let config = client.read_config()?;
     if config.revision != revision {
         return Err(ModelCommandError(
@@ -245,22 +242,27 @@ fn configure_model<T: JsonRpcTransport>(
         .iter()
         .find(|entry| format!("{}/{}", entry.model.provider, entry.model.model) == preference)
         .ok_or_else(|| ModelCommandError("Model no longer available".into()))?;
-    let provider_id = entry.model.provider.as_str();
-    let model_id = entry.model.model.as_str();
-    let mut provider = config.providers.get(provider_id).cloned().ok_or_else(|| {
-        ModelCommandError("Configure a provider in /config before changing model settings".into())
-    })?;
     match option {
-        ModelOption::FastOn | ModelOption::FastOff => {
-            if entry.capabilities.fast_mode != ash_protocol::CapabilitySupport::Supported {
+        ModelOption::Acceleration(selected) => {
+            if selected.as_ref().is_some_and(|selected| {
+                !entry
+                    .acceleration_options
+                    .iter()
+                    .any(|option| &option.id == selected)
+            }) {
                 return Err(ModelCommandError(
-                    "Fast mode is not supported by this model".into(),
+                    "Acceleration option is unavailable for this model connection".into(),
                 ));
             }
-            provider.fast_models.retain(|model| model != model_id);
-            if option == ModelOption::FastOn {
-                provider.fast_models.push(model_id.into());
-            }
+            client.update_model_preferences(
+                ash_app_server_protocol::protocol::model::ModelPreferencesUpdateParams {
+                    command_id: new_command_id("model-options"),
+                    expected_revision: revision,
+                    model: entry.model.clone(),
+                    acceleration: selected.map_or(Patch::Null, Patch::Value),
+                    context_window: None,
+                },
+            )?;
         }
         ModelOption::Context272k | ModelOption::Context1m => {
             if !entry
@@ -271,6 +273,15 @@ fn configure_model<T: JsonRpcTransport>(
                     "This model does not support the 1m context preset".into(),
                 ));
             }
+            let mut provider = config
+                .providers
+                .get(entry.model.provider.as_str())
+                .cloned()
+                .ok_or_else(|| {
+                    ModelCommandError(
+                        "Configure a provider in /config before changing model settings".into(),
+                    )
+                })?;
             let context_window = if option == ModelOption::Context1m {
                 1_000_000
             } else {
@@ -280,21 +291,23 @@ fn configure_model<T: JsonRpcTransport>(
                 custom.context_window = context_window;
             } else {
                 provider.model_context.insert(
-                    model_id.into(),
-                    ModelContextConfigDto {
+                    entry.model.model.to_string(),
+                    ash_app_server_protocol::protocol::config::ModelContextConfigDto {
                         context_window,
-                        // Recompute the backend's recommendation for the newly selected window.
+                        // A changed budget requires a fresh compaction recommendation.
                         auto_compact_token_limit: None,
                     },
                 );
             }
+            client.configure_provider(
+                ash_app_server_protocol::protocol::config::ProviderConfigureParams {
+                    command_id: new_command_id("model-options"),
+                    expected_revision: revision,
+                    config: provider,
+                },
+            )?;
         }
     }
-    client.configure_provider(ProviderConfigureParams {
-        command_id: new_command_id("model-options"),
-        expected_revision: revision,
-        config: provider,
-    })?;
     let config = client.read_config()?;
     // Input capacity includes output reservation and compaction policy; only the backend
     // computes it. Refresh effective catalog metadata after changing its budget preference.

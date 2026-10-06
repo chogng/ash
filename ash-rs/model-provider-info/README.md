@@ -211,11 +211,15 @@ just generate-model-catalog-schema --check
 
 | 加速机制 | `settings.acceleration`                                                                                                               | 真实请求                                                               |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 服务等级 | `{"type":"service_tier","service_tier":"priority"}`                                                                                     | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID    |
+| 服务等级 | `{"type":"service_tier","service_tier":"priority"}`                                                                                   | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID    |
 | 速度参数 | `{"type":"speed","speed":"fast","name":"Fast","description":"Faster responses, increased usage"}`                                     | 独立的 `speed=fast` 和所属接口的 beta Header；不伪造一个 Fast 服务等级 |
 | 高速型号 | `{"type":"model","model":"kimi-k2.7-code-highspeed","name":"Fast","description":"Uses a separate high-speed model, increased usage"}` | 从冻结的模型声明选择高速型号，再应用所选连接的上游 ID 别名             |
 
-用户的加速开关仍以连接上的 `fastModels` 保存。显式请求等级或速度优先于同类参数的加速偏好；关闭开关使用声明的请求默认等级。服务等级 ID 原样传到请求字段，只有 ChatGPT 订阅的显式 `default` 按接口约定省略。预先计数不发送等级、速度或加速 beta Header。订阅连接仍单独限制是否可加速，不能从公开 API 能力推断。
+Astra 的 `settings.service_tiers` 声明 `ultrafast`；这是模型能力，不能直接赋予 ChatGPT 账号资格。订阅账号还需要通过[套餐及工作区授权](../../docs/models/plans-and-pricing.md#astra-ultra-fast-的套餐资格)，API Key 按 API 条件处理。
+
+每个接入的 `modelAcceleration` 按模型保存准确的选项 ID。服务等级沿用原始 ID，速度参数使用 `speed:fast`，高速型号使用 `model:<型号>`。目录中的非默认服务等级以及速度或型号声明形成可选列表；`disabledAccelerationOptions` 按模型独立禁用各档位，禁用 Fast 不会连带禁用 Ultra Fast。后端在保存、HTTP 调用、WebSocket 连接和预热前校验选项。显式请求等级或速度优先于同类参数的加速偏好，也必须通过接入限制；清除选择使用声明的请求默认等级。配置文件 schema 9 将旧 `fastModels` 一次性迁移成原声明的选项 ID，未知映射或冲突会报错并保留原文件。服务等级 ID 原样传到请求字段，只有 ChatGPT 订阅的显式 `default` 按接口约定省略。预先计数不发送等级、速度或加速 beta Header。订阅连接仍单独限制是否可加速，不能从公开 API 能力推断。
+
+Ultra Fast 是加速档位，与 Ultra 的协作意图分别设置。TUI 的 `/effort` 负责推理档位和 Multitask；更改加速档位不会修改这两项，Max、Multitask 和加速可以同时使用。
 
 前端模型设置卡读取加速选项的名称和说明，保留键盘开关、焦点和保存行为，并把说明提供给读屏。内置文案通过现有 NLS 提供英文和中文；供应商自定义文案保留原文。实际型号、实际服务等级与证据进入调用/计价记录，详情见 [模型计价](../docs/model-accounting.md#加速调用如何进入计价)。
 

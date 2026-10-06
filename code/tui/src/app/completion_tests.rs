@@ -222,7 +222,7 @@ fn model_option_failure_is_visible_without_interrupting_the_turn_or_draft() {
                 command: crate::models::Command::Configure {
                     preference: "openai/gpt-6-astra".into(),
                     revision: 7,
-                    option: crate::models::ModelOption::FastOn,
+                    option: crate::models::ModelOption::Acceleration(Some("priority".into())),
                 },
                 result: Err("Model settings changed; reopen /model and try again".into()),
             },
@@ -315,7 +315,8 @@ fn status_line_context_follows_thread_snapshots() {
                 maximum_context_window: Some(100),
                 default_context_window: Some(100),
                 context_window_options: vec![100],
-                fast_enabled: false,
+                selected_acceleration: None,
+                acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(100),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,

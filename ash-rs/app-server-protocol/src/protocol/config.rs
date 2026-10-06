@@ -156,7 +156,7 @@ pub enum ApprovalReviewModelSelectionDto {
 
 /// Non-secret declarative provider settings exposed through the App Server contract.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProviderConfigDto {
     pub connection: String,
     #[schemars(length(min = 1))]
@@ -172,9 +172,11 @@ pub struct ProviderConfigDto {
     pub max_output_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_context: BTreeMap<String, ModelContextConfigDto>,
-    /// Per-connection model IDs requesting Fast service on subsequent invocations.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub fast_models: Vec<String>,
+    /// Explicit acceleration option IDs saved separately for each model connection.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_acceleration: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub disabled_acceleration_options: BTreeMap<String, std::collections::BTreeSet<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

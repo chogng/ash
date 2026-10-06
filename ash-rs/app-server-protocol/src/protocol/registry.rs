@@ -2151,6 +2151,8 @@ use ash_protocol::MessageCheckpoint;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelAcceleration;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelAccelerationOption;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelAccess;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelBillingEvidence;
@@ -5587,6 +5589,7 @@ typescript_bindings! {
     ModelServiceTier,
     ModelSpeed,
     ModelAcceleration,
+    ModelAccelerationOption,
     ModelToolOutputLimit,
     ReasoningEffort,
     ModelReasoningEffortOption,

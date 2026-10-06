@@ -78,7 +78,7 @@ export interface CustomModelProvider {
 export type ModelProviderTestResult = { readonly type: 'passed'; } | { readonly type: 'failed'; readonly message: string; };
 
 export interface ModelPreferencesUpdate {
-	readonly fast?: boolean;
+	readonly acceleration?: string | null;
 	readonly contextWindow?: number;
 }
 

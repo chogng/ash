@@ -164,19 +164,14 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 }
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
-	const declaration = entry.settings.acceleration;
-	const acceleration = declaration?.type === 'service_tier'
-		? entry.settings.service_tiers?.find(tier => tier.id === declaration.service_tier)
-		: declaration;
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.display_name,
 		description: entry.description,
 		defaultContextWindow: entry.default_context_window,
 		maximumContextWindow: entry.maximum_context_window,
-		supportsFast: entry.capabilities.fast_mode === 'supported' && acceleration != null,
-		...(acceleration ? { acceleration: Object.freeze({ name: acceleration.name, description: acceleration.description }) } : {}),
-		fast: entry.fast_enabled,
+		accelerationOptions: Object.freeze(entry.acceleration_options.map(option => Object.freeze({ ...option }))),
+		selectedAcceleration: entry.selected_acceleration,
 		contextWindowOptions: Object.freeze([...entry.context_window_options]),
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
@@ -196,10 +191,9 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.contextWindow === candidate.contextWindow
 			&& entry.defaultContextWindow === candidate.defaultContextWindow
 			&& entry.maximumContextWindow === candidate.maximumContextWindow
-			&& entry.supportsFast === candidate.supportsFast
-			&& entry.fast === candidate.fast
-			&& entry.acceleration?.name === candidate.acceleration?.name
-			&& entry.acceleration?.description === candidate.acceleration?.description
+			&& entry.selectedAcceleration === candidate.selectedAcceleration
+			&& entry.accelerationOptions?.length === candidate.accelerationOptions?.length
+			&& (entry.accelerationOptions?.every((option, index) => option.id === candidate.accelerationOptions?.[index]?.id && option.name === candidate.accelerationOptions?.[index]?.name && option.description === candidate.accelerationOptions?.[index]?.description) ?? true)
 			&& entry.contextWindowOptions.join('\0') === candidate.contextWindowOptions.join('\0')
 			&& entry.defaultReasoningEffort === candidate.defaultReasoningEffort
 			&& entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length

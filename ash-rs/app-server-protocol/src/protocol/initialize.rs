@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 16;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 17;
 // Version 12 uses manual/auto permission IDs. Clients must reject older contracts before
 // sending a Turn, rather than silently selecting an unintended permission mode.
 // Version 13 requires separate current observations in Guardian environment responses.
@@ -21,7 +21,8 @@ pub const APP_SERVER_PROTOCOL_REVISION: u32 = 16;
 // Version 17 requires model catalogs with service-tier and reasoning-effort descriptors.
 // Version 18 requires snake_case model metadata and model preference request fields.
 // Version 19 distinguishes catalog defaults from selected reasoning effort.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 19;
+// Version 20 selects catalog acceleration IDs and restricts each option independently.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 20;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

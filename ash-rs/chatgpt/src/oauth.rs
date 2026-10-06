@@ -119,6 +119,7 @@ pub struct ChatGptOAuth {
     active: Mutex<BTreeMap<LoginId, CancellationSource>>,
     auth: CodexAuthStore,
     maintenance: AuthMaintenance,
+    pub(crate) speed_access: Mutex<Option<crate::speed::SpeedObservation>>,
 }
 
 impl ChatGptOAuth {
@@ -150,6 +151,7 @@ impl ChatGptOAuth {
             active: Mutex::new(BTreeMap::new()),
             auth: CodexAuthStore::new(codex_home),
             maintenance: AuthMaintenance::new(management),
+            speed_access: Mutex::new(None),
         })
     }
 

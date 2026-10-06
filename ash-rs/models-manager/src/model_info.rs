@@ -83,24 +83,33 @@ impl ModelCatalogEntry {
             provider: config.provider.clone(),
             message: message.to_owned(),
         };
-        if update.fast.is_none() && update.context_window.is_none() {
+        if update.acceleration.is_missing() && update.context_window.is_none() {
             return Err(invalid("model preference update must contain a change"));
         }
-        if update.fast == Some(true)
-            && info.capabilities.fast_mode != ash_protocol::CapabilitySupport::Supported
+        if let ash_protocol::Patch::Value(option) = &update.acceleration
+            && !config
+                .acceleration_options(&info)
+                .iter()
+                .any(|entry| &entry.id == option)
         {
-            return Err(invalid("Fast is unavailable for this model connection"));
+            return Err(invalid(
+                "acceleration option is unavailable for this model connection",
+            ));
         }
         if let Some(window) = update.context_window
             && !self.context_window_options(config).contains(&window)
         {
             return Err(invalid("context window is not a selectable budget"));
         }
-        if let Some(fast) = update.fast {
-            if fast {
-                config.fast_models.insert(info.id.clone());
-            } else {
-                config.fast_models.remove(&info.id);
+        match &update.acceleration {
+            ash_protocol::Patch::Missing => {}
+            ash_protocol::Patch::Null => {
+                config.model_acceleration.remove(&info.id);
+            }
+            ash_protocol::Patch::Value(option) => {
+                config
+                    .model_acceleration
+                    .insert(info.id.clone(), option.clone());
             }
         }
         if let Some(window) = update.context_window {
@@ -147,8 +156,10 @@ impl ModelCatalogEntry {
         }
         config.validate_static()?;
         let mut info = self.info().clone();
-        if info.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported {
-            info.capabilities.fast_mode = config.fast_mode_support(&info.id);
+        if info.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported
+            && config.acceleration_options(&info).is_empty()
+        {
+            info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
         }
         let context = config.model_context.get(&info.id).copied().or_else(|| {
             config.custom.as_ref().map(|custom| ModelContextConfig {
@@ -180,7 +191,7 @@ impl ModelCatalogEntry {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModelPreferencesUpdate {
-    pub fast: Option<bool>,
+    pub acceleration: ash_protocol::Patch<String>,
     pub context_window: Option<u32>,
 }
 

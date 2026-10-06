@@ -5,6 +5,7 @@ mod credential;
 mod device_flow;
 mod maintenance;
 mod oauth;
+mod speed;
 mod storage;
 
 pub use maintenance::ChatGptAuthManagement;
@@ -24,6 +25,7 @@ pub use oauth::ChatGptApiTarget;
 pub use oauth::ChatGptError;
 pub use oauth::ChatGptOAuth;
 pub use oauth::sign_in_endpoint;
+pub use speed::ChatGptSpeedAccess;
 
 #[cfg(test)]
 #[path = "chatgpt_tests.rs"]

@@ -1055,6 +1055,7 @@
       "type": "string"
     },
     "ModelProviderConfig": {
+      "additionalProperties": false,
       "properties": {
         "baseUrl": {
           "type": ["string", "null"]
@@ -1072,18 +1073,28 @@
             }
           ]
         },
-        "fastModels": {
-          "description": "Models whose subsequent invocations use the connection's accelerated inference option.",
-          "items": {
-            "$ref": "#/$defs/ModelId"
+        "disabledAccelerationOptions": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
           },
-          "type": "array",
-          "uniqueItems": true
+          "description": "Each option can be denied independently of the saved selection.",
+          "type": "object"
         },
         "maxOutputTokens": {
           "format": "uint32",
           "minimum": 0,
           "type": ["integer", "null"]
+        },
+        "modelAcceleration": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Explicit option IDs, scoped to this connection and model. Absence uses request defaults.",
+          "type": "object"
         },
         "modelContext": {
           "additionalProperties": {
@@ -1500,7 +1511,7 @@
       }
     },
     "schemaVersion": {
-      "const": 8,
+      "const": 9,
       "type": "integer"
     },
     "skills": {

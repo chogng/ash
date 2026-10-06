@@ -22,7 +22,7 @@ import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; dispose(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; denyAcceleration(id: string): void; dispose(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -39,13 +39,14 @@ services.registerInstance(IAccessibleViewService, accessibleView);
 const modelChanged = resources.add(new Emitter<void>());
 let selectedReasoningEffort: ModelReasoningEffort | undefined;
 const modelOptions = new URLSearchParams(location.search).get('modelOptions');
+const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
 let models: readonly ModelCatalogEntry[] = [{
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
 	contextWindowOptions: [272_000, 1_000_000], contextWindow: 272_000, defaultContextWindow: 272_000,
 	description: 'A model for everyday tasks',
 	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
 	defaultReasoningEffort: 'low',
-	supportsFast: true, fast: false, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' },
+	selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Fast', description: 'Faster responses, increased usage' }, ...(multipleAcceleration ? [{ id: 'ultrafast', name: 'Ultra Fast', description: 'Priority processing, increased usage' }] : [])],
 }];
 if (modelOptions === 'effort' || modelOptions === 'none') {
 	models = models.map(entry => ({ ...entry, contextWindowOptions: [] }));
@@ -63,7 +64,11 @@ services.registerInstance(ILanguageModelsService, {
 	setApprovalReviewModel: async () => { },
 	onDidChangeModels: modelChanged.event,
 	setModelPreferences: async (model, update) => {
-		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? { ...entry, fast: update.fast ?? entry.fast, contextWindow: update.contextWindow ?? entry.contextWindow } : entry);
+		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? {
+			...entry,
+			selectedAcceleration: update.acceleration !== undefined ? update.acceleration : entry.selectedAcceleration,
+			contextWindow: update.contextWindow ?? entry.contextWindow,
+		} : entry);
 		renderModels();
 		modelChanged.fire();
 	},
@@ -135,8 +140,13 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
-	dispose: () => resources.dispose(),
+	denyAcceleration: id => {
+		models = models.map(entry => ({ ...entry, accelerationOptions: entry.accelerationOptions!.filter(option => option.id !== id) }));
+		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined });
+		modelChanged.fire();
+	},
 	showModels: renderModels,
+	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
 	showQuestions: () => part.render({
 		...state, interaction: {

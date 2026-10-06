@@ -76,7 +76,9 @@ pub struct ModelCatalogEntry {
     /// or two for a compact/expanded switch. Clients must not infer choices from the ceiling.
     pub context_window_options: Vec<u32>,
     /// Current preference on the active connection; capability support is reported separately.
-    pub fast_enabled: bool,
+    pub selected_acceleration: Option<String>,
+    /// Effective choices after connection restrictions and per-option denials.
+    pub acceleration_options: Vec<ash_protocol::ModelAccelerationOption>,
     /// Model or custom connection ceiling before applying its context budget preference.
     pub maximum_context_window: Option<u32>,
     pub auto_compact_token_limit: Option<u32>,
@@ -117,7 +119,14 @@ impl ModelCatalogEntry {
                 ContextWindow::Known(tokens) => vec![tokens],
                 ContextWindow::Unknown => Vec::new(),
             },
-            fast_enabled: false,
+            selected_acceleration: None,
+            acceleration_options: if info.capabilities.fast_mode
+                == ash_protocol::CapabilitySupport::Unsupported
+            {
+                Vec::new()
+            } else {
+                info.settings.acceleration_options()
+            },
             auto_compact_token_limit: info.auto_compact_token_limit,
             available_context_window: None,
             capabilities: info.capabilities,
@@ -141,9 +150,10 @@ pub struct ModelPreferencesUpdateParams {
     #[ts(type = "number")]
     pub expected_revision: u64,
     pub model: ModelRef,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub fast: Option<bool>,
+    #[serde(default, skip_serializing_if = "ash_protocol::Patch::is_missing")]
+    #[schemars(with = "Option<String>")]
+    #[ts(as = "Option<String>", optional = nullable)]
+    pub acceleration: ash_protocol::Patch<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub context_window: Option<u32>,

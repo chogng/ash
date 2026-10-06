@@ -138,6 +138,7 @@ pub use model::Message;
 pub use model::MessageRole;
 pub use model::Model;
 pub use model::ModelAcceleration;
+pub use model::ModelAccelerationOption;
 pub use model::ModelAccess;
 pub use model::ModelAvailability;
 pub use model::ModelBillingEvidence;

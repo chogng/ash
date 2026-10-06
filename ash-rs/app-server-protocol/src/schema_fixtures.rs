@@ -450,7 +450,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
         "context_window: number | null,",
         "default_context_window: number | null,",
         "context_window_options: Array<number>,",
-        "fast_enabled: boolean,",
+        "selected_acceleration: string | null,",
         "maximum_context_window: number | null,",
         "capabilities: ModelCapabilities,",
         "description: string | null,",

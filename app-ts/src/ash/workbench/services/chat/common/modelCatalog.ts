@@ -8,6 +8,7 @@ export interface ModelReasoningEffortOption {
 }
 
 export interface ModelAccelerationOption {
+	readonly id: string;
 	readonly name: string;
 	readonly description: string;
 }
@@ -21,9 +22,8 @@ export interface ModelCatalogEntry {
 	readonly contextWindow?: number | null;
 	readonly defaultContextWindow?: number | null;
 	readonly maximumContextWindow?: number | null;
-	readonly supportsFast?: boolean;
-	readonly acceleration?: ModelAccelerationOption;
-	readonly fast?: boolean;
+	readonly accelerationOptions?: readonly ModelAccelerationOption[];
+	readonly selectedAcceleration?: string | null;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
 	readonly defaultReasoningEffort?: ModelReasoningEffort;
 }

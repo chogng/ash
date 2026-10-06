@@ -284,7 +284,8 @@ fn provider_config_with_endpoint(
     base_url: impl Into<String>,
 ) -> ModelProviderConfig {
     ModelProviderConfig {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: ash_protocol::ModelConnectionId::new(provider).unwrap(),
         custom: None,
         provider: model_provider_info::connection_provider(
@@ -1113,9 +1114,10 @@ fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
     assert_eq!(request["model"], "kimi-for-coding");
 
     let mut fast_config = provider_config("kimi-subscription");
-    fast_config
-        .fast_models
-        .insert(ModelId::new("kimi-k2.7-code").unwrap());
+    fast_config.model_acceleration.insert(
+        ModelId::new("kimi-k2.7-code").unwrap(),
+        "model:kimi-k2.7-code-highspeed".into(),
+    );
     let fast_model = runtime
         .build_model(&fast_config, &model_ref("kimi", "kimi-k2.7-code"))
         .unwrap();
@@ -2543,8 +2545,8 @@ fn fast_model_preference_reaches_openai_requests_and_off_selects_standard() {
         let mut config = provider_config("openai");
         if enabled {
             config
-                .fast_models
-                .insert(ModelId::new("gpt-6-astra").unwrap());
+                .model_acceleration
+                .insert(ModelId::new("gpt-6-astra").unwrap(), "priority".into());
         }
         let model = runtime
             .build_model(&config, &model_ref("openai", "gpt-6-astra"))
@@ -2582,7 +2584,16 @@ fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference
         for enabled in [true, false] {
             let mut config = provider_config(provider);
             if enabled {
-                config.fast_models.insert(ModelId::new(id).unwrap());
+                config.model_acceleration.insert(
+                    ModelId::new(id).unwrap(),
+                    model_provider_info::find_static_model(&model_ref(provider, id))
+                        .unwrap()
+                        .model()
+                        .settings
+                        .acceleration
+                        .unwrap()
+                        .id(),
+                );
             }
             let model = runtime
                 .build_model(&config, &model_ref(provider, id))
@@ -2733,7 +2744,9 @@ fn catalog_tier_ids_drive_acceleration_and_explicit_choices_override_the_prefere
         service_tier: "flex".into(),
     });
     let mut config = provider_config("openai");
-    config.fast_models.insert(selected.model.clone());
+    config
+        .model_acceleration
+        .insert(selected.model.clone(), "flex".into());
     let model = runtime
         .runtime(ModelRuntimeRequest::new(selected, config).with_info(info))
         .unwrap();
@@ -2765,9 +2778,10 @@ fn explicit_standard_tier_disables_stored_speed_and_speed_requires_model_support
     ));
     let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
     let mut config = provider_config("anthropic");
-    config
-        .fast_models
-        .insert(ModelId::new("claude-opus-5-5").unwrap());
+    config.model_acceleration.insert(
+        ModelId::new("claude-opus-5-5").unwrap(),
+        "speed:fast".into(),
+    );
     let model = runtime
         .build_model(&config, &model_ref("anthropic", "claude-opus-5-5"))
         .unwrap();
@@ -2798,4 +2812,274 @@ fn explicit_standard_tier_disables_stored_speed_and_speed_requires_model_support
         Err(ModelProviderError::InvalidRequest(_))
     ));
     assert!(transport.request.lock().unwrap().is_none());
+}
+
+#[test]
+fn acceleration_options_are_admitted_independently_before_http_requests() {
+    let selected = model_ref("openai", "gpt-6.1-sol");
+    let mut info = model_provider_info::find_static_model(&selected)
+        .unwrap()
+        .model();
+    info.settings
+        .service_tiers
+        .as_mut()
+        .unwrap()
+        .push(ash_protocol::ModelServiceTier {
+            id: "ultrafast".into(),
+            name: "Ultra Fast".into(),
+            description: "Fastest processing".into(),
+        });
+    for disabled in [
+        vec![],
+        vec!["priority"],
+        vec!["ultrafast"],
+        vec!["priority", "ultrafast"],
+    ] {
+        for option in ["priority", "ultrafast"] {
+            for stored in [false, true] {
+                let transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+                let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+                let mut config = provider_config("openai");
+                config.disabled_acceleration_options.insert(
+                    selected.model.clone(),
+                    disabled.iter().map(|id| (*id).to_owned()).collect(),
+                );
+                let mut request = ModelRequest::text("hello");
+                if stored {
+                    config
+                        .model_acceleration
+                        .insert(selected.model.clone(), option.into());
+                } else {
+                    request.service_tier = Some(option.into());
+                }
+                let model = runtime
+                    .runtime(
+                        ModelRuntimeRequest::new(selected.clone(), config).with_info(info.clone()),
+                    )
+                    .unwrap();
+                let result = model.invoke(&request);
+                if disabled.contains(&option) {
+                    assert!(
+                        matches!(result, Err(ModelProviderError::InvalidRequest(_))),
+                        "{disabled:?}/{option}/{stored}"
+                    );
+                    assert!(transport.request.lock().unwrap().is_none());
+                } else {
+                    result.unwrap();
+                    assert_eq!(
+                        transport.request.lock().unwrap().as_ref().unwrap().2["service_tier"],
+                        option
+                    );
+                }
+            }
+        }
+    }
+}
+
+struct SpeedTransport {
+    bundle: Mutex<Value>,
+    models: CapturingSubscriptionTransport,
+}
+
+impl OperationClient for SpeedTransport {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        if request.url().ends_with("/config/bundle") {
+            return Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                serde_json::to_vec(&*self.bundle.lock().unwrap()).unwrap(),
+            ));
+        }
+        self.models.execute(request)
+    }
+    fn execute_streaming(
+        &self,
+        request: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.models.execute_streaming(request, sink)
+    }
+}
+
+fn speed_credentials(home: &std::path::Path, plan: &str) {
+    use base64::Engine;
+    let jwt = |value| {
+        format!(
+            "e30.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&value).unwrap())
+        )
+    };
+    std::fs::write(home.join("auth.json"), serde_json::to_vec(&json!({"auth_mode":"chatgpt","tokens":{
+        "id_token":jwt(json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1","chatgpt_plan_type":plan}})),
+        "access_token":jwt(json!({"exp":4_000_000_000_u64})),"refresh_token":"unused","account_id":"account-1"
+    }})).unwrap()).unwrap();
+}
+
+struct ChatGptSpeedFixture {
+    home: tempfile::TempDir,
+    auth: Arc<ChatGptOAuth>,
+    runtime: ModelProviderRuntime,
+    transport: Arc<SpeedTransport>,
+}
+
+fn chatgpt_speed_fixture(plan: &str, ultrafast: bool) -> ChatGptSpeedFixture {
+    let home = tempfile::tempdir().unwrap();
+    speed_credentials(home.path(), plan);
+    let transport = Arc::new(SpeedTransport {
+        bundle: Mutex::new(
+            json!({"requirements_toml":{"enterprise_managed":[{"id":"speed-permission","name":"speed-permission","contents":format!("[features]\nultrafast_mode={ultrafast}")}]}}),
+        ),
+        models: CapturingSubscriptionTransport(CapturingTransport::new(responses_response("ok"))),
+    });
+    let secrets = Arc::new(MemorySecretStore::default());
+    let auth = ChatGptOAuth::with_client(
+        home.path().into(),
+        secrets.clone(),
+        transport.clone(),
+        ash_chatgpt::ChatGptAuthManagement::Codex,
+    );
+    auth.refresh_speed_access(&CancellationSource::new().token())
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets,
+    )
+    .with_chatgpt_oauth(auth.clone());
+    ChatGptSpeedFixture {
+        home,
+        auth,
+        runtime,
+        transport,
+    }
+}
+
+#[test]
+fn astra_ultrafast_subscription_choices_and_http_calls_follow_the_current_plan_and_permission() {
+    let astra = model_ref("openai", "gpt-6-astra");
+    let config = provider_config("chatgpt-subscription");
+    let info = model_provider_info::find_static_model(&astra)
+        .unwrap()
+        .model();
+    for (plan, granted, allowed) in [
+        ("plus", true, false),
+        ("prolite", true, false),
+        ("pro", true, false),
+        ("promax", true, true),
+        ("promax", false, false),
+        ("business", true, false),
+        ("enterprise", true, true),
+        ("enterprise", false, false),
+        ("edu", true, true),
+        ("edu", false, false),
+    ] {
+        let fixture = chatgpt_speed_fixture(plan, granted);
+        let choices = fixture
+            .runtime
+            .acceleration_options(&config, &info)
+            .unwrap();
+        assert_eq!(
+            choices.iter().any(|option| option.id == "ultrafast"),
+            allowed,
+            "{plan}/{granted}"
+        );
+        let other = model_provider_info::find_static_model(&model_ref("openai", "gpt-6-sol"))
+            .unwrap()
+            .model();
+        assert!(
+            !fixture
+                .runtime
+                .acceleration_options(&config, &other)
+                .unwrap()
+                .iter()
+                .any(|option| option.id == "ultrafast")
+        );
+        for stored in [false, true] {
+            let mut config = config.clone();
+            let mut request = ModelRequest::text("hello");
+            if stored {
+                config
+                    .model_acceleration
+                    .insert(astra.model.clone(), "ultrafast".into());
+            } else {
+                request.service_tier = Some("ultrafast".into());
+            }
+            let model = fixture.runtime.build_model(&config, &astra).unwrap();
+            let result = model.invoke(&request);
+            if allowed {
+                result.unwrap();
+                assert_eq!(
+                    fixture
+                        .transport
+                        .models
+                        .0
+                        .request
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .2["service_tier"],
+                    "ultrafast"
+                );
+            } else {
+                assert!(
+                    matches!(result, Err(ModelProviderError::InvalidRequest(_))),
+                    "{plan}/{granted}/{stored}"
+                );
+                assert!(fixture.transport.models.0.request.lock().unwrap().is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn astra_ultrafast_revocation_rejects_an_already_bound_runtime_and_api_keys_use_api_capability() {
+    let fixture = chatgpt_speed_fixture("promax", true);
+    let astra = model_ref("openai", "gpt-6-astra");
+    let mut config = provider_config("chatgpt-subscription");
+    config
+        .model_acceleration
+        .insert(astra.model.clone(), "ultrafast".into());
+    let model = fixture.runtime.build_model(&config, &astra).unwrap();
+    *fixture.transport.bundle.lock().unwrap() = json!({"requirements_toml":{"enterprise_managed":[{"id":"revoked","name":"revoked","contents":"[features]\nultrafast_mode=false"}]}});
+    fixture
+        .auth
+        .refresh_speed_access(&CancellationSource::new().token())
+        .unwrap();
+    assert!(matches!(
+        model.invoke(&ModelRequest::text("hello")),
+        Err(ModelProviderError::InvalidRequest(_))
+    ));
+    speed_credentials(fixture.home.path(), "pro");
+    assert!(matches!(
+        model.invoke(&ModelRequest::text("hello")),
+        Err(ModelProviderError::InvalidRequest(_))
+    ));
+    assert!(fixture.transport.models.0.request.lock().unwrap().is_none());
+    let api = provider_config("openai");
+    let info = model_provider_info::find_static_model(&astra)
+        .unwrap()
+        .model();
+    assert!(
+        fixture
+            .runtime
+            .acceleration_options(&api, &info)
+            .unwrap()
+            .iter()
+            .any(|option| option.id == "ultrafast")
+    );
+    let api_transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let api_runtime = ModelProviderRuntime::builtin_with_client(api_transport.clone());
+    let mut request = ModelRequest::text("hello");
+    request.service_tier = Some("ultrafast".into());
+    api_runtime
+        .build_model(&api, &astra)
+        .unwrap()
+        .invoke(&request)
+        .unwrap();
+    assert_eq!(
+        api_transport.request.lock().unwrap().as_ref().unwrap().2["service_tier"],
+        "ultrafast"
+    );
 }

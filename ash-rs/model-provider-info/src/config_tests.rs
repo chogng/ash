@@ -168,7 +168,8 @@ fn model_ref(provider: &str, model: &str) -> ash_protocol::ModelRef {
 #[test]
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("openai").unwrap(),
         custom: None,
         provider: provider_id("openai"),
@@ -296,7 +297,8 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let registry = ProviderConfigRegistry::builtin();
     let openai = registry
         .normalize(&ModelProviderConfig {
-            fast_models: Default::default(),
+            model_acceleration: Default::default(),
+            disabled_acceleration_options: Default::default(),
             connection: ModelConnectionId::new("openai").unwrap(),
             custom: None,
             provider: provider_id("openai"),
@@ -310,7 +312,8 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
         .unwrap();
     let google_override = registry
         .normalize(&ModelProviderConfig {
-            fast_models: Default::default(),
+            model_acceleration: Default::default(),
+            disabled_acceleration_options: Default::default(),
             connection: ModelConnectionId::new("google").unwrap(),
             custom: None,
             provider: provider_id("google"),
@@ -472,7 +475,8 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 
     let normalized = registry
         .normalize(&ModelProviderConfig {
-            fast_models: Default::default(),
+            model_acceleration: Default::default(),
+            disabled_acceleration_options: Default::default(),
             connection: ModelConnectionId::new("custom").unwrap(),
             custom: None,
             provider: provider_id("custom"),
@@ -487,7 +491,8 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 #[test]
 fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     let invalid_url = ModelProviderConfig {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
@@ -501,7 +506,8 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     ));
 
     let invalid_tokens = ModelProviderConfig {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
@@ -519,7 +525,8 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
 fn static_validation_rejects_zero_model_context_limits() {
     let model = ModelId::new("model").unwrap();
     let config = ModelProviderConfig {
-        fast_models: Default::default(),
+        model_acceleration: Default::default(),
+        disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
         provider: provider_id("custom"),
@@ -1032,7 +1039,7 @@ fn transcription_protocol_is_explicit_for_each_direct_api_provider() {
 }
 
 #[test]
-fn fast_models_are_persisted_per_connection_and_validated_against_model_support() {
+fn acceleration_preferences_are_persisted_per_connection_and_catalog_controls_availability() {
     for model in [
         "gpt-6-astra",
         "gpt-6.1-sol",
@@ -1055,11 +1062,14 @@ fn fast_models_are_persisted_per_connection_and_validated_against_model_support(
     }
     let mut config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
     config
-        .fast_models
-        .insert(ModelId::new("gpt-6-astra").unwrap());
+        .model_acceleration
+        .insert(ModelId::new("gpt-6-astra").unwrap(), "priority".into());
     config.validate_static().unwrap();
     let encoded = serde_json::to_value(&config).unwrap();
-    assert_eq!(encoded["fastModels"], serde_json::json!(["gpt-6-astra"]));
+    assert_eq!(
+        encoded["modelAcceleration"],
+        serde_json::json!({"gpt-6-astra":"priority"})
+    );
     assert_eq!(
         serde_json::from_value::<ModelProviderConfig>(encoded).unwrap(),
         config
@@ -1067,19 +1077,37 @@ fn fast_models_are_persisted_per_connection_and_validated_against_model_support(
     let normalized = ProviderConfigRegistry::builtin()
         .normalize(&config)
         .unwrap();
-    assert_eq!(normalized.fast_models, config.fast_models);
-    config.fast_models.insert(ModelId::new("gpt-4o").unwrap());
-    assert!(config.validate_static().is_err());
+    assert_eq!(normalized.model_acceleration, config.model_acceleration);
+    config
+        .model_acceleration
+        .insert(ModelId::new("gpt-4o").unwrap(), "priority".into());
+    config.validate_static().unwrap();
+    assert!(
+        config
+            .acceleration_options(&ash_protocol::ModelInfo::new(
+                ModelId::new("gpt-4o").unwrap(),
+                "GPT-4o"
+            ))
+            .is_empty()
+    );
     let mut other = ModelProviderConfig::new(ProviderId::new("deepseek").unwrap());
     other
-        .fast_models
-        .insert(ModelId::new("deepseek-v4-pro").unwrap());
-    assert!(other.validate_static().is_err());
+        .model_acceleration
+        .insert(ModelId::new("deepseek-v4-pro").unwrap(), "priority".into());
+    other.validate_static().unwrap();
+    assert!(
+        other
+            .acceleration_options(
+                &crate::find_static_model(&model_ref("deepseek", "deepseek-v4-pro"))
+                    .unwrap()
+                    .model()
+            )
+            .is_empty()
+    );
 }
 
 #[test]
 fn fast_preferences_preserve_connection_aliases_and_use_declared_model_support() {
-    use ash_protocol::CapabilitySupport;
     use ash_protocol::ModelConnectionId;
     for (connection, model, expected_upstream) in [
         ("anthropic", "claude-opus-5-5", "claude-opus-5-5"),
@@ -1092,8 +1120,25 @@ fn fast_preferences_preserve_connection_aliases_and_use_declared_model_support()
         let mut config =
             ModelProviderConfig::for_connection(ModelConnectionId::new(connection).unwrap());
         let id = ModelId::new(model).unwrap();
-        assert_eq!(config.fast_mode_support(&id), CapabilitySupport::Supported);
-        config.fast_models.insert(id);
+        assert!(
+            !config
+                .acceleration_options(
+                    &crate::find_static_model(&model_ref(config.provider.as_str(), model))
+                        .unwrap()
+                        .model()
+                )
+                .is_empty()
+        );
+        config.model_acceleration.insert(
+            id,
+            crate::find_static_model(&model_ref(config.provider.as_str(), model))
+                .unwrap()
+                .model()
+                .settings
+                .acceleration
+                .unwrap()
+                .id(),
+        );
         let normalized = ProviderConfigRegistry::builtin()
             .normalize(&config)
             .unwrap();
@@ -1103,7 +1148,7 @@ fn fast_preferences_preserve_connection_aliases_and_use_declared_model_support()
             serde_json::from_value::<ModelProviderConfig>(encoded).unwrap(),
             config
         );
-        config.fast_models.clear();
+        config.model_acceleration.clear();
         let normalized = ProviderConfigRegistry::builtin()
             .normalize(&config)
             .unwrap();
@@ -1125,8 +1170,17 @@ fn fast_preferences_preserve_connection_aliases_and_use_declared_model_support()
     ] {
         let mut config =
             ModelProviderConfig::for_connection(ModelConnectionId::new(connection).unwrap());
-        config.fast_models.insert(ModelId::new(model).unwrap());
-        assert!(config.validate_static().is_err(), "{connection}/{model}");
+        config
+            .model_acceleration
+            .insert(ModelId::new(model).unwrap(), "priority".into());
+        config.validate_static().unwrap();
+        let info = crate::find_static_model(&model_ref(config.provider.as_str(), model))
+            .map(|spec| spec.model())
+            .unwrap_or_else(|| ash_protocol::ModelInfo::new(ModelId::new(model).unwrap(), model));
+        assert!(
+            config.acceleration_options(&info).is_empty(),
+            "{connection}/{model}"
+        );
     }
 }
 

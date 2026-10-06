@@ -62,6 +62,7 @@ pub use message::ToolChoice;
 pub use message::ToolDefinition;
 pub use message::ToolResult;
 pub use parameters::ModelAcceleration;
+pub use parameters::ModelAccelerationOption;
 pub use parameters::ModelInputModality;
 pub use parameters::ModelReasoningSummary;
 pub use parameters::ModelServiceTier;

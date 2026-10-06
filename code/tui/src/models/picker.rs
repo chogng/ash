@@ -32,7 +32,8 @@ pub(crate) enum ModelSelectionAction {
         default_effort: Option<ReasoningEffort>,
         supported_efforts: Vec<ReasoningEffort>,
         revision: u64,
-        fast: Option<bool>,
+        acceleration_options: Vec<ash_protocol::ModelAccelerationOption>,
+        selected_acceleration: Option<String>,
         context: Option<u32>,
     },
     Configure {
@@ -47,20 +48,20 @@ pub(crate) enum ModelSelectionAction {
 }
 
 /// Per-model execution settings saved independently of the selected model and draft effort.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ModelOption {
-    FastOn,
-    FastOff,
+    Acceleration(Option<String>),
     Context272k,
     Context1m,
 }
 
 impl ModelSelectionAction {
-    fn configure(&self, control: &str) -> Option<Self> {
+    fn configure(&self, control: &str, direction: isize) -> Option<Self> {
         let Self::Select {
             preference,
             revision,
-            fast,
+            acceleration_options,
+            selected_acceleration,
             context,
             ..
         } = self
@@ -68,12 +69,25 @@ impl ModelSelectionAction {
             return None;
         };
         let option = match control {
-            "fast" => {
-                if (*fast)? {
-                    ModelOption::FastOff
-                } else {
-                    ModelOption::FastOn
+            "acceleration" => {
+                if acceleration_options.is_empty() && selected_acceleration.is_none() {
+                    return None;
                 }
+                let index = selected_acceleration
+                    .as_ref()
+                    .and_then(|selected| {
+                        acceleration_options
+                            .iter()
+                            .position(|option| &option.id == selected)
+                    })
+                    .map_or(0, |index| index + 1);
+                let next = (index as isize + direction)
+                    .rem_euclid(acceleration_options.len() as isize + 1)
+                    as usize;
+                ModelOption::Acceleration(
+                    next.checked_sub(1)
+                        .map(|index| acceleration_options[index].id.clone()),
+                )
             }
             "context" => {
                 if (*context)? == 272_000 {
@@ -274,7 +288,12 @@ impl ListSelection<ModelSelectionAction> {
                     Some(ListSelectionItemFocus::Control(control)) => {
                         return self
                             .action(&id)
-                            .and_then(|action| action.configure(&control))
+                            .and_then(|action| {
+                                action.configure(
+                                    &control,
+                                    if key.code == KeyCode::Right { 1 } else { -1 },
+                                )
+                            })
                             .map_or(
                                 ListSelectionOutcome::Consumed,
                                 ListSelectionOutcome::Activate,
@@ -328,7 +347,8 @@ impl ListSelection<ModelSelectionAction> {
         let Some(
             action @ ModelSelectionAction::Select {
                 pinned,
-                fast,
+                acceleration_options,
+                selected_acceleration,
                 context,
                 ..
             },
@@ -360,7 +380,7 @@ impl ListSelection<ModelSelectionAction> {
                     .collect()
             });
         let settings = usize::from(action.supports_effort())
-            + usize::from(fast.is_some())
+            + usize::from(!acceleration_options.is_empty() || selected_acceleration.is_some())
             + usize::from(context.is_some());
         &HINTS[usize::from(settings > 0) | (usize::from(*pinned) << 1)]
     }
@@ -441,9 +461,8 @@ pub(crate) fn model_choices(
             .default_reasoning_effort
             .filter(|effort| supported_efforts.contains(effort))
             .or_else(|| supported_efforts.first().copied());
-        let provider = config.providers.get(&model.provider);
-        let fast = (entry.capabilities.fast_mode == ash_protocol::CapabilitySupport::Supported)
-            .then(|| provider.is_some_and(|config| config.fast_models.contains(&model.model)));
+        let acceleration_options = entry.acceleration_options.clone();
+        let selected_acceleration = entry.selected_acceleration.clone();
         let context = entry
             .maximum_context_window
             .filter(|window| *window >= 1_000_000)
@@ -457,7 +476,8 @@ pub(crate) fn model_choices(
                 default_effort,
                 supported_efforts: supported_efforts.clone(),
                 revision: config.revision,
-                fast,
+                acceleration_options: acceleration_options.clone(),
+                selected_acceleration: selected_acceleration.clone(),
                 context,
             },
         );
@@ -466,12 +486,24 @@ pub(crate) fn model_choices(
             let value = effort_display(&supported_efforts, effort.or(default_effort));
             item = item.with_segmented_value(value);
         }
-        item = match fast {
-            Some(enabled) => {
-                item.with_control("fast", if enabled { "Fast on" } else { "Fast off" })
-            }
-            None => item,
-        };
+        if !acceleration_options.is_empty() || selected_acceleration.is_some() {
+            let label = selected_acceleration
+                .as_ref()
+                .and_then(|selected| {
+                    acceleration_options
+                        .iter()
+                        .find(|option| &option.id == selected)
+                })
+                .map_or(
+                    if selected_acceleration.is_some() {
+                        "Unavailable"
+                    } else {
+                        "Fast off"
+                    },
+                    |option| option.name.as_str(),
+                );
+            item = item.with_control("acceleration", label);
+        }
         item = match context {
             Some(window) => item.with_control(
                 "context",

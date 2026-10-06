@@ -53,6 +53,51 @@ impl ChatGptAccount {
         account_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<RateLimits, ChatGptUsageError> {
+        let (result, identity) = self.read(account_id, cancellation, |target| {
+            Client::new(
+                self.auth.client.as_ref(),
+                target.api_target(),
+                RouteStyle::ChatGpt,
+            )?
+            .read_rate_limit_status(cancellation)
+        })?;
+        if result
+            .usage
+            .account_id
+            .as_deref()
+            .is_some_and(|id| id != identity.account_id)
+            || result
+                .user_id
+                .as_deref()
+                .is_some_and(|id| id != identity.user_id)
+        {
+            return Err(ChatGptUsageError::AccountChanged);
+        }
+        Ok(result.usage)
+    }
+
+    pub(crate) fn read_config_bundle(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<backend_client::chatgpt::ConfigBundle, ChatGptUsageError> {
+        self.read(account_id, cancellation, |target| {
+            Client::new(
+                self.auth.client.as_ref(),
+                target.api_target(),
+                RouteStyle::Codex,
+            )?
+            .read_config_bundle(cancellation)
+        })
+        .map(|(bundle, _)| bundle)
+    }
+
+    fn read<T>(
+        &self,
+        account_id: &str,
+        cancellation: &CancellationToken,
+        read: impl Fn(&ChatGptApiTarget) -> Result<T, RequestError>,
+    ) -> Result<(T, AccountIdentity), ChatGptUsageError> {
         if account_id.trim().is_empty() {
             return Err(ChatGptUsageError::InvalidAccount);
         }
@@ -65,14 +110,6 @@ impl ChatGptAccount {
         let target = target.map_err(|_| ChatGptUsageError::AccountUnavailable)?;
         // The target must still identify the requested account after a concurrent refresh.
         check_target_account(&target, &identity)?;
-        let read = |target: &ChatGptApiTarget| {
-            Client::new(
-                self.auth.client.as_ref(),
-                target.api_target(),
-                RouteStyle::ChatGpt,
-            )?
-            .read_rate_limit_status(cancellation)
-        };
         let result = match read(&target) {
             Err(RequestError::HttpStatus(401)) => {
                 check_cancelled(cancellation)?;
@@ -96,24 +133,13 @@ impl ChatGptAccount {
         };
         check_cancelled(cancellation)?;
         self.check_usage_account(&identity)?;
-        let result = result.map_err(|error| match error {
-            RequestError::Cancelled => ChatGptUsageError::Cancelled,
-            RequestError::HttpStatus(401) => ChatGptUsageError::AuthenticationRequired,
-            _ => ChatGptUsageError::RequestFailed,
-        })?;
-        if result
-            .usage
-            .account_id
-            .as_deref()
-            .is_some_and(|id| id != identity.account_id)
-            || result
-                .user_id
-                .as_deref()
-                .is_some_and(|id| id != identity.user_id)
-        {
-            return Err(ChatGptUsageError::AccountChanged);
-        }
-        Ok(result.usage)
+        result
+            .map(|value| (value, identity))
+            .map_err(|error| match error {
+                RequestError::Cancelled => ChatGptUsageError::Cancelled,
+                RequestError::HttpStatus(401) => ChatGptUsageError::AuthenticationRequired,
+                _ => ChatGptUsageError::RequestFailed,
+            })
     }
 
     fn account_identity(&self, account_id: &str) -> Result<AccountIdentity, ChatGptUsageError> {

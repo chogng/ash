@@ -91,14 +91,17 @@ fn model_preferences_catalog_fields_keep_unknown_capacity_explicit() {
     let value = serde_json::to_value(&entry).unwrap();
     assert_eq!(value["default_context_window"], serde_json::Value::Null);
     assert_eq!(value["context_window_options"], serde_json::json!([]));
-    assert_eq!(value["fast_enabled"], false);
+    assert_eq!(value["selected_acceleration"], serde_json::Value::Null);
 }
 
 #[test]
 fn model_preferences_request_is_strict_and_accepts_targeted_updates() {
-    let request = serde_json::json!({ "command_id": "model-settings", "expected_revision": 1, "model": { "provider": "openai", "model": "gpt-6-astra" }, "fast": true });
+    let request = serde_json::json!({ "command_id": "model-settings", "expected_revision": 1, "model": { "provider": "openai", "model": "gpt-6-astra" }, "acceleration": "priority" });
     let params: ModelPreferencesUpdateParams = serde_json::from_value(request.clone()).unwrap();
-    assert_eq!(params.fast, Some(true));
+    assert_eq!(
+        params.acceleration,
+        ash_protocol::Patch::Value("priority".into())
+    );
     assert_eq!(params.context_window, None);
     let mut invalid = request;
     invalid["config"] = serde_json::json!({});
@@ -136,4 +139,26 @@ fn context_read_requires_an_explicit_detail_and_preserves_tool_schemas() {
             .unwrap(),
         definition
     );
+}
+
+#[test]
+fn acceleration_patch_distinguishes_omission_clear_and_selected_id() {
+    let base = serde_json::json!({"command_id":"settings", "expected_revision":1, "model":{"provider":"openai", "model":"model"}});
+    let omitted: ModelPreferencesUpdateParams = serde_json::from_value(base.clone()).unwrap();
+    assert_eq!(omitted.acceleration, ash_protocol::Patch::Missing);
+    assert!(
+        serde_json::to_value(omitted)
+            .unwrap()
+            .get("acceleration")
+            .is_none()
+    );
+    for value in [serde_json::Value::Null, serde_json::json!("ultrafast")] {
+        let mut wire = base.clone();
+        wire["acceleration"] = value.clone();
+        let params: ModelPreferencesUpdateParams = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(params).unwrap()["acceleration"], value);
+    }
+    let mut old = base;
+    old["fast"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<ModelPreferencesUpdateParams>(old).is_err());
 }

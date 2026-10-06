@@ -1,9 +1,10 @@
 import { h } from '../../../../../../../base/browser/dom.js';
+import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
-import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import type { ModelPreferencesUpdate } from '../../../../../../../platform/sessions/common/sessionApi.js';
 import { localize } from '../../../../../../../nls.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import type { ModelAccelerationOption, ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 
 export interface IModelCardOptions {
 	readonly entry: ModelCatalogEntry;
@@ -13,9 +14,8 @@ export interface IModelCardOptions {
 /** Configures provider-owned model preferences while retaining the focused switch across catalog refreshes. */
 export class ModelCard extends Disposable {
 	public readonly domNode: HTMLElement;
-	private readonly fast: Switch;
-	private readonly fastLabelDomNode: HTMLElement;
-	private readonly fastDescriptionDomNode: HTMLElement;
+	private readonly accelerationControls = this._register(new DisposableMap<string, AccelerationControl>());
+	private readonly resetAcceleration = this._register(new MutableDisposable<Button>());
 	private readonly context: Switch;
 	private readonly contextRow: HTMLElement;
 	private readonly contextLabelDomNode: HTMLElement;
@@ -28,15 +28,6 @@ export class ModelCard extends Disposable {
 		this.domNode = h(ownerDocument, 'section');
 		this.domNode.className = 'ash-chat-model-card';
 		this.domNode.tabIndex = -1;
-		this.fastLabelDomNode = h(ownerDocument, 'span');
-		this.fast = this._register(new Switch(this.domNode, {
-			content: this.fastLabelDomNode,
-			ariaLabel: localize('chat.modelPicker.fast', 'Fast'),
-			contentPlacement: 'before-control',
-		}));
-		this.fastDescriptionDomNode = h(ownerDocument, 'p');
-		this.fastDescriptionDomNode.className = 'ash-chat-model-card-description';
-		this.domNode.append(this.fastDescriptionDomNode);
 		this.contextRow = h(ownerDocument, 'div');
 		this.contextRow.className = 'ash-chat-model-card-context';
 		this.domNode.append(this.contextRow);
@@ -51,7 +42,6 @@ export class ModelCard extends Disposable {
 		this.errorDomNode.setAttribute('role', 'status');
 		this.errorDomNode.hidden = true;
 		this.domNode.append(this.errorDomNode);
-		this._register(this.fast.onDidChange(fast => { void this.save({ fast }); }));
 		this._register(this.context.onDidChange(large => { void this.save({ contextWindow: this.options!.entry.contextWindowOptions[large ? 1 : 0] }); }));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
@@ -63,7 +53,9 @@ export class ModelCard extends Disposable {
 	}
 
 	public focus(): void {
-		if (this.fast.enabled) { this.fast.focus(); }
+		const first = [...this.accelerationControls].map(([, control]) => control).find(control => control.toggle.enabled);
+		if (first) { first.toggle.focus(); }
+		else if (this.resetAcceleration.value) { this.resetAcceleration.value.domNode.focus(); }
 		else if (this.context.enabled && !this.contextRow.hidden) { this.context.focus(); }
 		else { this.domNode.focus(); }
 	}
@@ -74,16 +66,34 @@ export class ModelCard extends Disposable {
 		const expanded = entry.contextWindowOptions[1];
 		const label = canExpand ? (expanded >= 1_000_000 ? `${Number((expanded / 1_000_000).toFixed(2))}M` : `${Number((expanded / 1_000).toFixed(1))}k`) : '';
 		const capacity = entry.contextWindow;
-		const name = entry.acceleration ? localizeModelOption(entry.acceleration.name) : localize('chat.modelPicker.fast', 'Fast');
-		const description = entry.acceleration ? localizeModelOption(entry.acceleration.description) : '';
-		this.fastLabelDomNode.textContent = name;
-		this.fast.setAriaLabel(name);
-		this.fast.input.setAttribute('aria-description', description);
-		this.fastDescriptionDomNode.textContent = description;
-		this.fastDescriptionDomNode.hidden = description.length === 0;
-		this.fast.checked = entry.fast === true;
-		this.fast.enabled = entry.supportsFast === true && !this.isSaving;
-		this.fast.busy = this.isSaving;
+		const options = entry.accelerationOptions ?? [];
+		for (const [id] of this.accelerationControls) {
+			if (!options.some(option => option.id === id)) { this.accelerationControls.deleteAndDispose(id); }
+		}
+		let position: ChildNode | null = this.domNode.firstChild;
+		for (const option of options) {
+			let control = this.accelerationControls.get(option.id);
+			if (!control) {
+				control = new AccelerationControl(this.domNode, checked => { void this.save({ acceleration: checked ? option.id : null }); });
+				this.accelerationControls.set(option.id, control);
+			}
+			control.update(option, entry.selectedAcceleration === option.id, this.isSaving);
+			// Moving a focused input drops focus in Chromium even when its owner is retained.
+			for (const element of [control.toggle.element, control.descriptionDomNode]) {
+				if (element !== position) { this.domNode.insertBefore(element, position); }
+				position = element.nextSibling;
+			}
+		}
+		if (entry.selectedAcceleration && !options.some(option => option.id === entry.selectedAcceleration)) {
+			if (!this.resetAcceleration.value) {
+				this.resetAcceleration.value = new Button(this.domNode, {
+					label: localize('chat.modelPicker.resetAcceleration', 'Turn off acceleration'),
+					onClick: () => { void this.save({ acceleration: null }); },
+				});
+				this.domNode.insertBefore(this.resetAcceleration.value.domNode, this.contextRow);
+			}
+			this.resetAcceleration.value.enabled = !this.isSaving;
+		} else { this.resetAcceleration.clear(); }
 		this.context.checked = canExpand && capacity === expanded;
 		this.context.setAriaLabel(localize('chat.modelPicker.contextChoice', '{0} context', label));
 		this.context.enabled = canExpand && !this.isSaving;
@@ -94,7 +104,7 @@ export class ModelCard extends Disposable {
 
 	private async save(update: ModelPreferencesUpdate): Promise<void> {
 		if (this.isSaving) { this.render(); return; }
-		const focusedInput = [this.fast.input, this.context.input].find(input => input === this.domNode.ownerDocument.activeElement);
+		const focusedInput = [...[...this.accelerationControls].map(([, control]) => control.toggle.input), this.context.input, this.resetAcceleration.value?.domNode].find(input => input === this.domNode.ownerDocument.activeElement);
 		this.isSaving = true;
 		this.domNode.setAttribute('aria-busy', 'true');
 		this.errorDomNode.hidden = true;
@@ -111,15 +121,47 @@ export class ModelCard extends Disposable {
 				this.domNode.removeAttribute('aria-busy');
 				this.render();
 				// Busy switches release focus; do not steal it if the user moved to another control.
-				if (focusedInput && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) { focusedInput.focus(); }
+				if (focusedInput && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) { if (focusedInput.isConnected) { focusedInput.focus(); } else { this.focus(); } }
 			}
 		}
+	}
+}
+
+/** Retains each option's focus and owns the switch and its explanatory text together. */
+class AccelerationControl extends Disposable {
+	public readonly toggle: Switch;
+	public readonly descriptionDomNode: HTMLElement;
+	private readonly labelDomNode: HTMLElement;
+
+	constructor(container: HTMLElement, changed: (checked: boolean) => void) {
+		super();
+		this.labelDomNode = h(container.ownerDocument, 'span');
+		this.toggle = this._register(new Switch(container, { content: this.labelDomNode, ariaLabel: '', contentPlacement: 'before-control' }));
+		this.descriptionDomNode = h(container.ownerDocument, 'p');
+		this.descriptionDomNode.className = 'ash-chat-model-card-description';
+		container.append(this.descriptionDomNode);
+		this._register(this.toggle.onDidChange(changed));
+		this._register(toDisposable(() => { this.toggle.element.remove(); this.descriptionDomNode.remove(); }));
+	}
+
+	public update(option: ModelAccelerationOption, selected: boolean, busy: boolean): void {
+		const name = localizeModelOption(option.name);
+		const description = localizeModelOption(option.description);
+		this.labelDomNode.textContent = name;
+		this.toggle.setAriaLabel(name);
+		this.toggle.input.setAttribute('aria-description', description);
+		this.descriptionDomNode.textContent = description;
+		this.descriptionDomNode.hidden = description.length === 0;
+		this.toggle.checked = selected;
+		this.toggle.enabled = !busy;
+		this.toggle.busy = busy;
 	}
 }
 
 // Translate Ash-owned catalog copy; text supplied by a custom provider retains its own wording.
 function localizeModelOption(value: string): string {
 	switch (value) {
+		case 'Ultra Fast': return localize('chat.modelPicker.ultrafast', 'Ultra Fast');
 		case 'Fast': return localize('chat.modelPicker.fast', 'Fast');
 		case 'Faster responses, increased usage': return localize('chat.modelPicker.fasterUsage', 'Faster responses, increased usage');
 		case 'Priority processing, increased usage': return localize('chat.modelPicker.priorityUsage', 'Priority processing, increased usage');

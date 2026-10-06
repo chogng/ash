@@ -24,7 +24,7 @@ pub struct ModelContextConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelProviderConfig {
     pub provider: ProviderId,
     pub connection: ModelConnectionId,
@@ -36,9 +36,12 @@ pub struct ModelProviderConfig {
     pub max_output_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_context: BTreeMap<ModelId, ModelContextConfig>,
-    /// Models whose subsequent invocations use the connection's accelerated inference option.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub fast_models: BTreeSet<ModelId>,
+    /// Explicit option IDs, scoped to this connection and model. Absence uses request defaults.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_acceleration: BTreeMap<ModelId, String>,
+    /// Each option can be denied independently of the saved selection.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub disabled_acceleration_options: BTreeMap<ModelId, BTreeSet<String>>,
 }
 
 impl ModelProviderConfig {
@@ -50,7 +53,8 @@ impl ModelProviderConfig {
             base_url: None,
             max_output_tokens: None,
             model_context: BTreeMap::new(),
-            fast_models: BTreeSet::new(),
+            model_acceleration: BTreeMap::new(),
+            disabled_acceleration_options: BTreeMap::new(),
         }
     }
 
@@ -75,27 +79,18 @@ impl ModelProviderConfig {
         }
     }
 
-    /// Combines model support with the selected connection's invocation contract.
-    /// Subscription proxies do not inherit features from their vendor's public API.
-    pub fn fast_mode_support(&self, model: &ModelId) -> ash_protocol::CapabilitySupport {
-        use ash_protocol::CapabilitySupport;
-        match self.connection.as_str() {
-            "xai-subscription" => CapabilitySupport::Unsupported,
-            connection
-                if self.provider.as_str() == "kimi"
-                    && model.as_str() == "kimi-k2.7-code"
-                    && connection != "kimi-subscription" =>
-            {
-                CapabilitySupport::Unsupported
-            }
-            _ => crate::find_static_model(&ash_protocol::ModelRef::new(
-                self.provider.clone(),
-                model.clone(),
-            ))
-            .map_or(CapabilitySupport::Unknown, |model| {
-                model.capabilities.fast_mode
-            }),
-        }
+    /// Catalog declarations describe request contracts, not account entitlement. Connection
+    /// restrictions and independent option denials apply before choices reach clients.
+    pub fn acceleration_options(
+        &self,
+        model: &ash_protocol::ModelInfo,
+    ) -> Vec<ash_protocol::ModelAccelerationOption> {
+        acceleration_options(
+            &self.connection,
+            &self.provider,
+            &self.disabled_acceleration_options,
+            model,
+        )
     }
 
     pub fn validate_static(&self) -> Result<(), ProviderConfigError> {
@@ -131,11 +126,23 @@ impl ModelProviderConfig {
                 });
             }
         }
-        for model in &self.fast_models {
-            if self.fast_mode_support(model) != ash_protocol::CapabilitySupport::Supported {
+        // Catalog membership is resolved from current discovery by the preference/invocation
+        // owner. File validation cannot reject a tier absent from the bundled catalog.
+        if self
+            .model_acceleration
+            .values()
+            .any(|option| option.trim().is_empty())
+        {
+            return Err(ProviderConfigError::InvalidProvider {
+                provider: self.provider.clone(),
+                message: "acceleration option must not be empty".into(),
+            });
+        }
+        for options in self.disabled_acceleration_options.values() {
+            if options.iter().any(|option| option.trim().is_empty()) {
                 return Err(ProviderConfigError::InvalidProvider {
                     provider: self.provider.clone(),
-                    message: "Fast mode is not supported by this model and connection".into(),
+                    message: "disabled acceleration option must not be empty".into(),
                 });
             }
         }
@@ -296,7 +303,8 @@ pub struct NormalizedModelProviderConfig {
     pub access_mode: ProviderAccessMode,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_aliases: BTreeMap<ModelId, ModelId>,
-    pub fast_models: BTreeSet<ModelId>,
+    pub model_acceleration: BTreeMap<ModelId, String>,
+    pub disabled_acceleration_options: BTreeMap<ModelId, BTreeSet<String>>,
     pub api_profile: ApiProfile,
     pub base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -347,4 +355,44 @@ pub(crate) fn is_http_url(value: &str) -> bool {
 
 fn default_custom_context_window() -> u32 {
     272_000
+}
+
+fn acceleration_options(
+    connection: &ModelConnectionId,
+    provider: &ProviderId,
+    disabled: &BTreeMap<ModelId, BTreeSet<String>>,
+    model: &ash_protocol::ModelInfo,
+) -> Vec<ash_protocol::ModelAccelerationOption> {
+    if model.capabilities.fast_mode == ash_protocol::CapabilitySupport::Unsupported
+        || connection.as_str() == "xai-subscription"
+        || (provider.as_str() == "kimi"
+            && model.id.as_str() == "kimi-k2.7-code"
+            && connection.as_str() != "kimi-subscription")
+    {
+        return Vec::new();
+    }
+    model
+        .settings
+        .acceleration_options()
+        .into_iter()
+        .filter(|option| {
+            !disabled
+                .get(&model.id)
+                .is_some_and(|disabled| disabled.contains(&option.id))
+        })
+        .collect()
+}
+
+impl NormalizedModelProviderConfig {
+    pub fn acceleration_options(
+        &self,
+        model: &ash_protocol::ModelInfo,
+    ) -> Vec<ash_protocol::ModelAccelerationOption> {
+        acceleration_options(
+            &self.connection,
+            &self.provider,
+            &self.disabled_acceleration_options,
+            model,
+        )
+    }
 }
