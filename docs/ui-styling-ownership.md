@@ -65,6 +65,26 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 - 网格间距、Sash 命中区域和 TabList 展示能力仍由各自组件实现，Modern UI 只选择这些公开能力。
 - 其他 contribution 不得借这个例外修改 Workbench Part；新增全局外观方案必须拥有独立根 class 和独立 media 目录。
 
+## Chat 输入区的模型与 effort 按钮
+
+Model 与 effort 都是输入区的选择控件，使用相同的字号、胶囊圆角、高度和左右内边距。
+Effort 显示当前思考强度，不应以更小的字号或更方的轮廓表现成附属信息。
+Mode–model 与 model–effort 的按钮边缘间距必须相同；两处都消费 `actionBar.gap`，
+避免外层工具栏与内部组合控件各自定义间距，或由样式加载顺序决定最终结果。
+
+| 范围                         | 所有者与实现位置                                     | 约定                                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 输入区工具栏排列             | `ChatInputPart` 的 `chat.css`                        | 相邻 action 使用 `--ash-action-bar-gap`                                                                                              |
+| Model 与 effort 内部布局     | `ModelPickerWidget` 的 `modelPicker.css`             | 两个入口共用 `fontSize.body1`、`cornerRadius.circle`、`toolbar.actionSize` 和左右 `spacing.size80`；内部间距同样使用 `actionBar.gap` |
+| 两个入口的标签与交互         | `ModelPickerWidget` 与 `ModelPickerConfiguration`    | 各自保留按钮语义、Tab 停靠点和浮层焦点恢复                                                                                           |
+| 入口悬停、键盘焦点与文本截断 | `chatInputPickerActionItem` 的 `chatInputPicker.css` | 各入口独立高亮；文本保留省略号，完整内容由 hover 提供                                                                                |
+
+宽度不足时，模型名称可收缩并显示省略号，effort 保留自身宽度约束；
+不通过缩小其中一个按钮的字号、内边距或间距来腾出空间。
+相关回归由 [Chat 输入区 Playwright 测试](../app-ts/test/integration/browser/chatInput.integration.spec.ts)
+覆盖：中英文下的 800、400、280px 窗口检查计算样式与实际边缘间距，
+另有悬停、Tab、方向键、菜单选择及焦点恢复验证。
+
 ## Retained DOM 写入所有权
 
 `FastDomNode` 是 retained DOM 的局部样式写缓存，不是 `HTMLElement` 的替代接口。创建稳定节点的组件同时创建并保留唯一 wrapper；允许宿主投影根节点几何时，组件传递这个 wrapper，不得让宿主重新包装同一节点。wrapper 从构造时开始拥有其缓存属性，不读取 DOM 猜测初值；同一属性之后只能继续通过这个 wrapper 修改。文本、子树、`hidden`、tab order 和 ARIA 仍由具体组件直接拥有，不进入样式缓存。

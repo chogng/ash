@@ -1,6 +1,38 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`model and effort buttons share typography, pill corners and adjacent spacing in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const mode = page.locator('.ash-chat-input-mode-action');
+		const model = page.locator('.ash-chat-input-model-action');
+		const effort = page.locator('.ash-chat-input-configuration-action');
+		for (const width of [800, 400, 280]) {
+			await page.setViewportSize({ width, height: 600 });
+			await expect.poll(async () => {
+				const metrics = await Promise.all([mode, model, effort].map(trigger => trigger.evaluate(element => {
+					const style = getComputedStyle(element);
+					const bounds = element.getBoundingClientRect();
+					return {
+						left: bounds.left, right: bounds.right, height: bounds.height,
+						fontSize: style.fontSize, fontWeight: style.fontWeight,
+						radius: style.borderRadius, padding: style.padding,
+					};
+				})));
+				const [modeMetrics, modelMetrics, effortMetrics] = metrics;
+				return {
+					matchingTypography: modelMetrics.fontSize === effortMetrics.fontSize && modelMetrics.fontWeight === effortMetrics.fontWeight,
+					matchingPillCorners: modelMetrics.radius === effortMetrics.radius && parseFloat(effortMetrics.radius) >= effortMetrics.height / 2,
+					matchingPadding: modelMetrics.padding === effortMetrics.padding,
+					matchingSpacing: Math.abs((modelMetrics.left - modeMetrics.right) - (effortMetrics.left - modelMetrics.right)) < 1,
+					fits: effortMetrics.right <= width,
+				};
+			}).toEqual({ matchingTypography: true, matchingPillCorners: true, matchingPadding: true, matchingSpacing: true, fits: true });
+		}
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
 	test(`mode menu fits its contents and retains keyboard selection in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());

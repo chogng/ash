@@ -242,7 +242,8 @@
 	height: var(--ash-toolbar-action-size);
 	min-height: var(--ash-toolbar-action-size);
 	flex: 0 0 var(--ash-toolbar-action-size);
-	gap: 12px;
+	/* Match the model picker's internal gap; a separate value makes spacing depend on stylesheet load order. */
+	gap: var(--ash-action-bar-gap);
 	margin-top: var(--ash-chat-input-toolbar-gap, var(--ash-spacing-size40));
 	padding: 0;
 }

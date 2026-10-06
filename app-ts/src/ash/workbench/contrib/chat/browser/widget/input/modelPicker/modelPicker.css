@@ -4,15 +4,16 @@
 	max-width: 100%;
 }
 
+/* The paired triggers share the toolbar's gap so mode, model and effort keep the same spacing rhythm. */
 .ash-chat-model-picker-control {
 	min-width: 0;
 	max-width: 100%;
-	gap: var(--ash-spacing-size120);
+	gap: var(--ash-action-bar-gap);
 }
 
-.ash-chat-model-picker-control > .ash-chat-input-model-action {
+/* Effort is a peer control, so both triggers share typography and pill geometry, including in narrow layouts. */
+.ash-chat-model-picker-control > .ash-chat-input-picker-button {
 	min-width: 0;
-	flex: 1 1 auto;
 	height: var(--ash-toolbar-action-size);
 	min-height: var(--ash-toolbar-action-size);
 	padding: 0 var(--ash-spacing-size80);
@@ -20,27 +21,17 @@
 	font-size: var(--ash-font-size-body1);
 }
 
+.ash-chat-model-picker-control > .ash-chat-input-model-action {
+	flex: 1 1 auto;
+}
+
 .ash-chat-model-picker-control > .ash-chat-input-configuration-action {
-	min-width: 0;
 	max-width: 96px;
 	flex: 0 0 auto;
-	height: var(--ash-toolbar-action-size);
-	min-height: var(--ash-toolbar-action-size);
-	padding: 0 var(--ash-spacing-size40);
-	border-radius: var(--ash-corner-radius-small);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
 }
 
 @media (max-width: 420px) {
-	.ash-chat-model-picker-control {
-		gap: var(--ash-spacing-size80);
-	}
-
-	.ash-chat-model-picker-control > .ash-chat-input-model-action {
-		padding-inline: var(--ash-spacing-size60);
-	}
-
 	.ash-chat-model-picker-control > .ash-chat-input-configuration-action {
 		max-width: 68px;
 	}
