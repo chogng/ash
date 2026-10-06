@@ -23,7 +23,7 @@ import { createChatSkillCompletionProvider } from "./chatSkillCompletion.js";
 
 const CHAT_INPUT_LINE_HEIGHT = 20;
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
-// The input container supplies the 6px top inset; editor heights exclude it to keep the composer height stable.
+// The input container owns the inset; editor heights exclude it to avoid applying it twice.
 const CHAT_INPUT_MIN_HEIGHT = 100;
 const CHAT_INPUT_MAX_HEIGHT = 314;
 

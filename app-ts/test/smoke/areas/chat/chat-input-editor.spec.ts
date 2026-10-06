@@ -13,11 +13,14 @@ test('Empty chat keeps its input near the pane edges', async ({ workbench }) => 
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
 		const composer = element.querySelector<HTMLElement>('.ash-chat-input-container');
 		const toolbar = element.querySelector<HTMLElement>('.ash-chat-input-toolbars');
+		const editor = element.querySelector<HTMLElement>('.ash-chat-input-editor');
 		const action = element.querySelector<HTMLElement>('.ash-chat-input-mode-action');
-		if (!list || !input || !composer || !toolbar || !action) throw new Error('Chat layout is incomplete');
+		if (!list || !input || !composer || !toolbar || !editor || !action) throw new Error('Chat layout is incomplete');
 		const chatBounds = element.getBoundingClientRect();
 		const inputBounds = input.getBoundingClientRect();
 		const composerBounds = composer.getBoundingClientRect();
+		const editorBounds = editor.getBoundingClientRect();
+		const toolbarBounds = toolbar.getBoundingClientRect();
 		return {
 			listHeight: list.getBoundingClientRect().height,
 			inputTopInset: inputBounds.top - chatBounds.top,
@@ -26,6 +29,11 @@ test('Empty chat keeps its input near the pane edges', async ({ workbench }) => 
 			composerLeftInset: composerBounds.left - inputBounds.left,
 			composerRightInset: inputBounds.right - composerBounds.right,
 			composerHeight: composerBounds.height,
+			editorTopInset: editorBounds.top - composerBounds.top,
+			editorLeftInset: editorBounds.left - composerBounds.left,
+			editorRightInset: composerBounds.right - editorBounds.right,
+			toolbarLeftInset: toolbarBounds.left - composerBounds.left,
+			toolbarRightInset: composerBounds.right - toolbarBounds.right,
 			toolbarHeight: toolbar.getBoundingClientRect().height,
 			actionHeight: action.getBoundingClientRect().height,
 			actionBottomInset: composerBounds.bottom - action.getBoundingClientRect().bottom,
@@ -38,10 +46,15 @@ test('Empty chat keeps its input near the pane edges', async ({ workbench }) => 
 		composerBottomInset: 4,
 		composerLeftInset: 12,
 		composerRightInset: 12,
-		composerHeight: 140,
+		composerHeight: 144,
+		editorTopInset: 9,
+		editorLeftInset: 9,
+		editorRightInset: 9,
+		toolbarLeftInset: 9,
+		toolbarRightInset: 9,
 		toolbarHeight: 22,
 		actionHeight: 22,
-		actionBottomInset: 7,
+		actionBottomInset: 9,
 	});
 });
 
@@ -246,9 +259,9 @@ test('Chat input omits the unused find control and keeps the prompt evenly inset
 		};
 	});
 	expect(editorChrome.textInset).toBe(0);
-	expect(editorChrome.textTopInset).toBe(7);
-	expect(editorChrome.textLeftInset).toBe(7);
-	expect(editorChrome.editorTopInset).toBe(7);
+	expect(editorChrome.textTopInset).toBe(9);
+	expect(editorChrome.textLeftInset).toBe(9);
+	expect(editorChrome.editorTopInset).toBe(9);
 	expect(editorChrome.textInsetWithinEditor).toBe(0);
 	expect(editorChrome.attachmentsDisplay).toBe('none');
 	expect(editorChrome.rulerDisplay).toBe('none');
@@ -341,7 +354,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		const composer = chat.locator('.ash-chat-input-container');
 		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
-		await expect(composer).toHaveCSS('height', '140px');
+		await expect(composer).toHaveCSS('height', '144px');
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Keep this draft');
@@ -372,7 +385,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
-		await expect(composer).toHaveCSS('height', '140px');
+		await expect(composer).toHaveCSS('height', '144px');
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
 		await button.focus();
 		await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
