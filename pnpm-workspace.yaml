@@ -1,6 +1,7 @@
 packages:
   - build
   - app-ts
+  - extensions/markdown-language-features
   - test/scenario
 engineStrict: true
 allowBuilds:
@@ -11,3 +12,7 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   workerd: true
+
+# The Markdown language service runs in a browser Worker; picomatch 4 has no Node-only imports.
+overrides:
+  vscode-markdown-languageservice>picomatch: ^4.0.5

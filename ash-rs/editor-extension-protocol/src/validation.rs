@@ -122,6 +122,7 @@ pub(super) fn validate_registrations(
             RegistrationKind::LanguageProvider {
                 language_ids,
                 operations,
+                completion_trigger_characters,
             } => {
                 validate_unique_selectors(language_ids, MAX_LANGUAGE_IDS, "language IDs")?;
                 if operations.is_empty() || operations.len() > MAX_PROVIDER_OPERATIONS {
@@ -131,6 +132,20 @@ pub(super) fn validate_registrations(
                     return Err(protocol_error(
                         "language provider operations must be unique",
                     ));
+                }
+                if completion_trigger_characters.len() > 64
+                    || completion_trigger_characters
+                        .iter()
+                        .any(|value| value.chars().count() != 1 || value.contains('\0'))
+                    || completion_trigger_characters
+                        .iter()
+                        .collect::<BTreeSet<_>>()
+                        .len()
+                        != completion_trigger_characters.len()
+                    || !completion_trigger_characters.is_empty()
+                        && !operations.contains(&super::LanguageProviderOperation::Completion)
+                {
+                    return Err(protocol_error("invalid completion trigger characters"));
                 }
                 ExtensionCapability::LanguageProvider
             }

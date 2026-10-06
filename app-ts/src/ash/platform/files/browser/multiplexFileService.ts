@@ -46,6 +46,10 @@ export class MultiplexFileService extends Disposable implements IFileService, IF
 		});
 	}
 
+	public hasProvider(scheme: string): boolean {
+		return this.providers.has(scheme);
+	}
+
 	public stat(resource: URI): Promise<IFileStat> {
 		return this.provider(resource).stat(resource);
 	}

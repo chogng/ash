@@ -1,0 +1,117 @@
+html,
+body {
+	margin: 0;
+	height: 100%;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+	font:
+		14px/1.6 system-ui,
+		sans-serif;
+}
+body {
+	display: flex;
+	flex-direction: column;
+}
+.ash-markdown-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 8px;
+	border-bottom: 1px solid var(--ash-panel-border);
+}
+.ash-markdown-toolbar button,
+.ash-markdown-link-form button {
+	color: var(--ash-button-secondaryForeground);
+	background: var(--ash-button-secondaryBackground);
+	border: 1px solid var(--ash-widget-border);
+	border-radius: 4px;
+	padding: 4px 8px;
+	font: inherit;
+	cursor: pointer;
+}
+.ash-markdown-toolbar button:hover {
+	background: var(--ash-button-secondaryHoverBackground);
+}
+.ash-markdown-toolbar button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+.ash-markdown-content:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+.ash-markdown-main {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+.ash-markdown-content {
+	box-sizing: border-box;
+	min-height: 100%;
+	padding: 24px;
+	--md-cursor-background: var(--ash-editorCursor-foreground);
+	--md-block-active-background: var(--ash-editor-lineHighlightBackground);
+	--md-html-comment-foreground: var(--ash-descriptionForeground);
+	--md-html-comment-hover-foreground: var(--ash-editor-foreground);
+}
+.ash-markdown-content h1 {
+	font-size: 2em;
+}
+.ash-markdown-content h2 {
+	font-size: 1.5em;
+}
+.ash-markdown-content h3 {
+	font-size: 1.25em;
+}
+.ash-markdown-content .md-paragraph,
+.ash-markdown-content .md-heading {
+	margin: 0.5em 0;
+}
+.ash-markdown-content .md-code-block {
+	background: var(--ash-textCodeBlock-background);
+	padding: 12px;
+	border-radius: 4px;
+}
+.ash-markdown-content code {
+	font-family: ui-monospace, monospace;
+}
+.ash-markdown-content .md-blockquote {
+	border-left: 3px solid var(--ash-textBlockQuote-border);
+	padding-left: 16px;
+}
+.ash-markdown-content a,
+.ash-markdown-content [role="link"] {
+	color: var(--ash-textLink-foreground);
+}
+.ash-markdown-content table {
+	border-collapse: collapse;
+}
+.ash-markdown-content td,
+.ash-markdown-content th {
+	border: 1px solid var(--ash-panel-border);
+	padding: 4px 8px;
+}
+.ash-markdown-status {
+	padding-inline: 12px;
+	color: var(--ash-errorForeground);
+}
+.ash-markdown-link-form {
+	padding: 8px;
+	gap: 8px;
+}
+.ash-markdown-link-form:not([hidden]) {
+	display: flex;
+}
+.ash-markdown-link-form input {
+	flex: 1;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: 1px solid var(--ash-input-border);
+	font: inherit;
+	padding: 4px 8px;
+}
+[hidden] {
+	display: none !important;
+}

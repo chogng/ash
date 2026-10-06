@@ -17,7 +17,7 @@ import { Icon } from '../../../base/common/icon.js';
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IConfigurationService, ConfigurationTarget } from '../../../platform/configuration/common/configuration.js';
-import { IModelService } from '../../../editor/common/services/model.js';
+import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { IBulkEditService, ResourceTextEdit } from '../../../editor/browser/services/bulkEditService.js';
 import { INotificationService, NotificationSeverity } from '../../../platform/notification/common/notification.js';
@@ -85,7 +85,7 @@ export class MainThreadExtensionApi extends Disposable {
 		@IInstantiationService instantiation: IInstantiationService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IModelService private readonly models: IModelService,
+		@IFileTextModelService private readonly models: IFileTextModelService,
 		@ITextModelService private readonly textModels: ITextModelService,
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -470,21 +470,70 @@ function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: E
 	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(", ")} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
 }
 
-function mutableLanguageBatch(): { completions: NonNullable<LanguageProviderBatch["completions"]>[number][]; hovers: NonNullable<LanguageProviderBatch["hovers"]>[number][]; formatting: NonNullable<LanguageProviderBatch["formatting"]>[number][]; inlayHints: NonNullable<LanguageProviderBatch["inlayHints"]>[number][]; linkedEditing: NonNullable<LanguageProviderBatch["linkedEditing"]>[number][]; parameterHints: NonNullable<LanguageProviderBatch["parameterHints"]>[number][]; } {
-	return { completions: [], hovers: [], formatting: [], inlayHints: [], linkedEditing: [], parameterHints: [] };
+type MutableLanguageBatch = { -readonly [K in keyof Required<LanguageProviderBatch>]: NonNullable<LanguageProviderBatch[K]>[number][]; };
+
+function mutableLanguageBatch(): MutableLanguageBatch {
+	return {
+		documentHighlights: [],
+		completions: [],
+		hovers: [],
+		formatting: [],
+		inlayHints: [],
+		linkedEditing: [],
+		parameterHints: [],
+		syntax: [],
+		workspaceSymbols: [],
+		definitions: [],
+		references: [],
+		renames: [],
+		documentSymbols: [],
+		foldingRanges: [],
+		documentLinks: [],
+		codeActions: [],
+		selectionRanges: [],
+	};
 }
 
-function appendLanguageBatch(target: ReturnType<typeof mutableLanguageBatch>, source: LanguageProviderBatch): void {
+function appendLanguageBatch(target: MutableLanguageBatch, source: LanguageProviderBatch): void {
 	target.completions.push(...(source.completions ?? []));
 	target.hovers.push(...(source.hovers ?? []));
 	target.formatting.push(...(source.formatting ?? []));
 	target.inlayHints.push(...(source.inlayHints ?? []));
 	target.linkedEditing.push(...(source.linkedEditing ?? []));
 	target.parameterHints.push(...(source.parameterHints ?? []));
+	target.documentHighlights.push(...(source.documentHighlights ?? []));
+	target.syntax.push(...(source.syntax ?? []));
+	target.workspaceSymbols.push(...(source.workspaceSymbols ?? []));
+	target.definitions.push(...(source.definitions ?? []));
+	target.references.push(...(source.references ?? []));
+	target.renames.push(...(source.renames ?? []));
+	target.documentSymbols.push(...(source.documentSymbols ?? []));
+	target.foldingRanges.push(...(source.foldingRanges ?? []));
+	target.documentLinks.push(...(source.documentLinks ?? []));
+	target.codeActions.push(...(source.codeActions ?? []));
+	target.selectionRanges.push(...(source.selectionRanges ?? []));
 }
 
-function freezeLanguageBatch(value: ReturnType<typeof mutableLanguageBatch>): Required<LanguageProviderBatch> {
-	return Object.freeze({ completions: Object.freeze(value.completions), hovers: Object.freeze(value.hovers), formatting: Object.freeze(value.formatting), inlayHints: Object.freeze(value.inlayHints), linkedEditing: Object.freeze(value.linkedEditing), parameterHints: Object.freeze(value.parameterHints) });
+function freezeLanguageBatch(value: MutableLanguageBatch): Required<LanguageProviderBatch> {
+	return Object.freeze({
+		documentHighlights: Object.freeze(value.documentHighlights),
+		syntax: Object.freeze(value.syntax),
+		workspaceSymbols: Object.freeze(value.workspaceSymbols),
+		completions: Object.freeze(value.completions),
+		hovers: Object.freeze(value.hovers),
+		formatting: Object.freeze(value.formatting),
+		inlayHints: Object.freeze(value.inlayHints),
+		linkedEditing: Object.freeze(value.linkedEditing),
+		parameterHints: Object.freeze(value.parameterHints),
+		definitions: Object.freeze(value.definitions),
+		references: Object.freeze(value.references),
+		renames: Object.freeze(value.renames),
+		documentSymbols: Object.freeze(value.documentSymbols),
+		foldingRanges: Object.freeze(value.foldingRanges),
+		documentLinks: Object.freeze(value.documentLinks),
+		codeActions: Object.freeze(value.codeActions),
+		selectionRanges: Object.freeze(value.selectionRanges),
+	});
 }
 
 function combineSignals(first: AbortSignal, second: AbortSignal): { readonly signal: AbortSignal; dispose(): void; } {

@@ -7,7 +7,6 @@ import { FileKind, type IFileChangeEvent, type IFileService } from '../../../../
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
-import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 
 test('Explorer service exposes the current view and releases it on disposal', () => {
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });

@@ -7,6 +7,7 @@ export interface IFileSystemProvider extends IFileService { }
 
 /** Installs window-scoped virtual resource providers without changing workspace storage. */
 export interface IFileSystemProviderService {
+	hasProvider(scheme: string): boolean;
 	registerProvider(scheme: string, provider: IFileSystemProvider): IDisposable;
 }
 

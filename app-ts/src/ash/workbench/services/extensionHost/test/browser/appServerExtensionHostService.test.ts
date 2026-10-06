@@ -39,6 +39,19 @@ import { ILanguageService } from '../../../../../editor/common/languages/languag
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
+test('document highlights translate protocol kinds into editor kinds', async () => {
+	using languages = new LanguageFeaturesService();
+	using model = new TextModel('heading', { languageId: 'markdown' });
+	using source = new CancellationTokenSource();
+	using registration = languages.registerProviderBatch(createExtensionHostLanguageProviderBatch({
+		kind: 'languageProvider', registrationId: 'highlights', languageIds: ['markdown'], operations: ['documentHighlights'],
+	}, 'markdown', 'highlights', async () => [1, 2, 3].map(kind => ({
+		kind, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 7 } },
+	}))));
+	const result = await languages.documentHighlightProvider.ordered(model)[0]!.provideDocumentHighlights(model, new Position(1, 3), source.token);
+	assert.deepEqual(result?.map(highlight => highlight.kind), [0, 1, 2]);
+});
+
 test('extension editor menus capture the clicked input and reject malformed replacement menus before commit', async () => {
 	const placement = { menu: 'editor/title/context', when: 'resourceLangId == markdown', group: 'navigation@1' };
 	const registration = { kind: 'command' as const, registrationId: 'preview', command: 'acme.preview', title: 'Preview', menus: [placement] };
@@ -192,7 +205,7 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 });
 
 test("projects supported language operations while diagnosing unsupported operations", async () => {
-	const current = snapshot(1, "acme.run", [{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["hover", "parameterHints", "definition"] }]);
+	const current = snapshot(1, "acme.run", [{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["hover", "parameterHints", "definition", "documentColors"] }]);
 	const api = new FakeExtensionHostApi(current);
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();

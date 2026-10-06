@@ -37,7 +37,11 @@
         "filenamePatterns": [
           "**/.cursor/**/*.mdc"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "mimetypes": [
+          "text/markdown",
+          "text/x-markdown"
+        ]
       }
     ],
     "grammars": [

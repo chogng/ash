@@ -150,6 +150,7 @@ impl Languages {
         let descriptor = RegistrationDescriptor {
             registration_id: id.clone(),
             kind: RegistrationKind::LanguageProvider {
+                completion_trigger_characters: Vec::new(),
                 language_ids,
                 operations: vec![LanguageProviderOperation::Hover],
             },

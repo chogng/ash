@@ -164,6 +164,10 @@ pub enum ExtensionCapability {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LanguageProviderOperation {
+    Diagnostics,
+    SelectionRanges,
+    DocumentHighlights,
+    WorkspaceSymbols,
     Completion,
     ParameterHints,
     Definition,
@@ -239,6 +243,8 @@ pub enum RegistrationKind {
     LanguageProvider {
         language_ids: Vec<String>,
         operations: Vec<LanguageProviderOperation>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        completion_trigger_characters: Vec<String>,
     },
     DebugAdapter {
         debugger_type: String,

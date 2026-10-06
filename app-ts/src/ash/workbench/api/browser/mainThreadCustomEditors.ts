@@ -88,6 +88,7 @@ export class MainThreadCustomEditors extends Disposable {
 	public registerCustomTextEditorProvider(
 		registration: ExtensionHostCustomEditorRegistration,
 		invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>): IDisposable {
+		const resourceCache = new Map<string, string>();
 		return EditorPanes.registerEditorPane({
 			id: registration.viewType,
 			name: registration.displayName,
@@ -105,13 +106,39 @@ export class MainThreadCustomEditors extends Disposable {
 				viewType: registration.viewType,
 				displayName: registration.displayName,
 				render: async (document, signal) => {
-					const result = await invoke('resolveCustomTextEditor', { document }, signal);
+					const result = await invoke('resolveCustomTextEditor', { document: { ...document } }, signal);
 					if (typeof result !== 'object' || result === null || Array.isArray(result) || !('html' in result) || typeof result.html !== 'string') {
 						throw new TypeError('Custom editor provider must return HTML');
 					}
-					return result.html;
+					let html = result.html;
+					if ('resources' in result) {
+						const resources = result.resources;
+						if (!resources || typeof resources !== 'object' || Array.isArray(resources) || Object.keys(resources).sort().join(',') !== 'script,style') {
+							throw new TypeError('Custom editor resources require a script and stylesheet');
+						}
+						const assets = resources as Readonly<Record<string, JsonValue>>;
+						const [script, style] = await Promise.all([readWebviewResource(assets.script, resourceCache, signal), readWebviewResource(assets.style, resourceCache, signal)]);
+						// Resource bytes execute only inside the opaque sandbox, outside the JSON edit channel.
+						html = `<style>${style.replaceAll(/<\/style/gi, '<\\/style')}</style>${html}<script>${script.replaceAll(/<\/script/gi, '<\\/script')}</script>`;
+					}
+					return 'update' in result ? { html, update: result.update } : { html };
 				},
 			} satisfies CustomTextEditorProvider, options.onSave),
 		});
 	}
+}
+
+async function readWebviewResource(value: JsonValue | undefined, resources: Map<string, string>, signal: AbortSignal): Promise<string> {
+	if (typeof value !== 'string' || !URL.canParse(value) || new URL(value).protocol !== 'blob:') {
+		throw new TypeError('Custom editor resource must belong to its browser Worker');
+	}
+	signal.throwIfAborted();
+	const cached = resources.get(value);
+	if (cached !== undefined) return cached;
+	const response = await fetch(value, { signal });
+	if (!response.ok) throw new Error('Cannot load custom editor resource');
+	const content = await response.text();
+	if (content.length > 16 * 1024 * 1024) throw new RangeError('Custom editor resource is too large');
+	resources.set(value, content);
+	return content;
 }

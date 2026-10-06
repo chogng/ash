@@ -618,3 +618,13 @@ test('extension theme contributions activate together, retain the last valid cat
 	assert.equal(getTokenClassificationRegistry().getTokenTypes().some(type => type.id === 'testCustomFunction'), false);
 	assert.equal(getIconRegistry().getIcon('test-extension-alias'), undefined);
 });
+
+test('the packaged browser catalog activates Markdown grammar and configuration as one generation', async () => {
+	const bundle = JSON.parse(await readFile('src/ash/platform/extensions/common/generated/browser.json', 'utf8'));
+	using languages = new LanguageFeaturesService();
+	using languageService = new LanguageService();
+	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, readResource: async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64')) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
+	await service.start();
+	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/draft.md')), 'markdown');
+	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');
+});

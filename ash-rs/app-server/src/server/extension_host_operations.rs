@@ -385,9 +385,11 @@ fn registration_dto(
             RegistrationKind::LanguageProvider {
                 language_ids,
                 operations,
+                completion_trigger_characters,
             } => ExtensionHostRegistrationKindDto::LanguageProvider {
                 language_ids,
                 operations: operations.into_iter().map(language_operation).collect(),
+                completion_trigger_characters,
             },
             RegistrationKind::DebugAdapter { debugger_type } => {
                 ExtensionHostRegistrationKindDto::DebugAdapter { debugger_type }
@@ -406,6 +408,18 @@ fn language_operation(
     operation: LanguageProviderOperation,
 ) -> ExtensionHostLanguageProviderOperationDto {
     match operation {
+        LanguageProviderOperation::Diagnostics => {
+            ExtensionHostLanguageProviderOperationDto::Diagnostics
+        }
+        LanguageProviderOperation::SelectionRanges => {
+            ExtensionHostLanguageProviderOperationDto::SelectionRanges
+        }
+        LanguageProviderOperation::DocumentHighlights => {
+            ExtensionHostLanguageProviderOperationDto::DocumentHighlights
+        }
+        LanguageProviderOperation::WorkspaceSymbols => {
+            ExtensionHostLanguageProviderOperationDto::WorkspaceSymbols
+        }
         LanguageProviderOperation::Completion => {
             ExtensionHostLanguageProviderOperationDto::Completion
         }

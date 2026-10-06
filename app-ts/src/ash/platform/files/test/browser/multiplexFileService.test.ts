@@ -15,6 +15,7 @@ test('MultiplexFileService routes exact schemes and forwards provider invalidati
 	const virtualResource = URI.parse('ash-test:/resource.txt');
 	const observed: string[] = [];
 	using listener = service.onDidChangeFiles(event => observed.push(event.resources?.[0]?.toString() ?? '*'));
+	assert.deepEqual([service.hasProvider('ash-test'), service.hasProvider('file')], [true, false]);
 
 	assert.equal((await service.readFile(workspaceResource)).content, 'fallback:file:///workspace/file.txt');
 	assert.equal((await service.readFile(virtualResource)).content, 'virtual:ash-test:/resource.txt');
@@ -24,6 +25,7 @@ test('MultiplexFileService routes exact schemes and forwards provider invalidati
 	assert.throws(() => service.registerProvider('ash-test', virtual), /already registered/);
 
 	registration.dispose();
+	assert.equal(service.hasProvider('ash-test'), false);
 	assert.equal((await service.readFile(virtualResource)).content, 'fallback:ash-test:/resource.txt');
 });
 

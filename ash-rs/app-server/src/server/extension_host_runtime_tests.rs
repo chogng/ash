@@ -108,6 +108,7 @@ fn invocation_operations_are_brokered_by_registration_kind() {
         title: "Run".into(),
     };
     let language = RegistrationKind::LanguageProvider {
+        completion_trigger_characters: Vec::new(),
         language_ids: vec!["rust".into()],
         operations: vec![LanguageProviderOperation::Hover],
     };

@@ -1,4 +1,6 @@
 import { JSDOM } from 'jsdom';
+import { Event } from '../../../base/common/event.js';
+import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { IModelService } from '../../../editor/common/services/model.js';
@@ -18,7 +20,7 @@ import { BrowserStorageService } from '../../services/storage/browser/storageSer
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
 import { TextResourcePropertiesService } from '../../services/textresourceProperties/common/textResourcePropertiesService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
-import { ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
 
@@ -46,10 +48,13 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
-	services.registerInstance(ITextModelResourceService, {
-		...toDisposable(() => { }),
-		acquire: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
-	});
+	const fileModels = resources.add(new BrowserTextModelService({
+		onDidChange: Event.None,
+		resolve: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
+		save: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
+	}));
+	services.registerInstance(ITextModelResourceService, fileModels);
+	services.registerInstance(IFileTextModelService, fileModels);
 	services.registerInstance(ITextModelService, services.createInstance(TextModelResolverService));
 	if (overrides.output) {
 		services.registerInstance(IOutputService, overrides.output);

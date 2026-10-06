@@ -18,7 +18,6 @@
     "multicursor.ChangeAll": "更改所有匹配项",
     "accessibility.editorContextMenu": "Shift+F10 打开编辑器右键菜单。用方向键选择操作或打开速览和复制为子菜单，按 Enter 执行，按 Escape 返回编辑器。当前语言支持时会显示导航、重命名和格式化操作。更改所有匹配项会选中匹配文本供编辑。",
     "configuration.readOnly": "设置 {0} 在此窗口中为只读。",
-    "files.configuredReadonly": "此文件与配置的只读规则匹配，因此为只读。",
     "list.smoothScrollingTitle": "列表平滑滚动",
     "list.smoothScrollingDescription": "控制列表和树形列表是否使用短动画滚动。",
     "list.smoothScrollingInvalid": "列表平滑滚动设置必须是布尔值",

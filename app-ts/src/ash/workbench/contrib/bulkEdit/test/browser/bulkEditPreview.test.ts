@@ -234,6 +234,9 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	getModel(resource: URI): TextModel | null {
 		return this.persistentModels.get(resource.toString()) ?? null;
 	}
+	getModels(): readonly TextModel[] {
+		return [...this.persistentModels.values()];
+	}
 	async refresh(): Promise<void> { }
 }
 

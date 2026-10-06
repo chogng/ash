@@ -9,7 +9,7 @@ import { parseLinkPresentation, type LinkPresentationKind } from '../../dataChan
 export type ExtensionHostReconcileMode = "refresh" | "restartFailed";
 export type ExtensionHostRuntimeLifecycle = "dormant" | "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
 export type ExtensionHostFailureCode = "authorityDenied" | "staleSnapshot" | "isolationUnavailable" | "launchFailed" | "handshakeFailed" | "activationFailed" | "registrationNotFound" | "operationNotSupported" | "cancelled" | "deadlineExceeded" | "quotaExceeded" | "hostExited" | "hostRestarted" | "outcomeIndeterminate" | "crashLoop" | "invalidProtocol" | "internal";
-export type ExtensionHostLanguageProviderOperation = "completion" | "definition" | "hover" | "references" | "rename" | "formatting" | "codeAction" | "codeLens" | "documentSymbols" | "foldingRanges" | "documentLinks" | "documentColors" | "semanticTokens" | "inlayHints" | "linkedEditing" | "parameterHints";
+export type ExtensionHostLanguageProviderOperation = "diagnostics" | "selectionRanges" | "documentHighlights" | "workspaceSymbols" | "completion" | "definition" | "hover" | "references" | "rename" | "formatting" | "codeAction" | "codeLens" | "documentSymbols" | "foldingRanges" | "documentLinks" | "documentColors" | "semanticTokens" | "inlayHints" | "linkedEditing" | "parameterHints";
 export type ExtensionHostCancellationReason = "caller" | "deadline" | "authorityRevoked" | "shutdown";
 export type ExtensionHostOutputSeverity = "trace" | "debug" | "information" | "warning" | "error" | "log";
 export type ExtensionHostOutputOperation =
@@ -58,6 +58,7 @@ export interface ExtensionHostLanguageRegistration extends ExtensionHostRegistra
 	readonly kind: "languageProvider";
 	readonly languageIds: readonly string[];
 	readonly operations: readonly ExtensionHostLanguageProviderOperation[];
+	readonly completionTriggerCharacters?: readonly string[];
 }
 
 export interface ExtensionHostDebugAdapterRegistration extends ExtensionHostRegistrationBase {
@@ -209,7 +210,7 @@ export class ExtensionHostInvocationError extends Error {
 
 const FAILURE_CODES = ["authorityDenied", "staleSnapshot", "isolationUnavailable", "launchFailed", "handshakeFailed", "activationFailed", "registrationNotFound", "operationNotSupported", "cancelled", "deadlineExceeded", "quotaExceeded", "hostExited", "hostRestarted", "outcomeIndeterminate", "crashLoop", "invalidProtocol", "internal"] as const;
 const LIFECYCLES = ["dormant", "stopped", "starting", "handshaking", "ready", "recovering", "crashLoop", "failed"] as const;
-const LANGUAGE_OPERATIONS = ["completion", "definition", "hover", "references", "rename", "formatting", "codeAction", "codeLens", "documentSymbols", "foldingRanges", "documentLinks", "documentColors", "semanticTokens", "inlayHints", "linkedEditing", "parameterHints"] as const;
+const LANGUAGE_OPERATIONS = ["diagnostics", "selectionRanges", "documentHighlights", "workspaceSymbols", "completion", "definition", "hover", "references", "rename", "formatting", "codeAction", "codeLens", "documentSymbols", "foldingRanges", "documentLinks", "documentColors", "semanticTokens", "inlayHints", "linkedEditing", "parameterHints"] as const;
 const CANCELLATION_REASONS = ["caller", "deadline", "authorityRevoked", "shutdown"] as const;
 const OUTPUT_SEVERITIES = ["trace", "debug", "information", "warning", "error", "log"] as const;
 const MAX_PAYLOAD_BYTES = 512 * 1024;
@@ -409,13 +410,20 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		});
 	}
 	if (kind === "languageProvider") {
-		exactKeys(input, "Extension Host language registration", ["kind", "languageIds", "operations", "registrationId"]);
+		exactKeys(input, "Extension Host language registration", ["kind", "languageIds", "operations", "registrationId"], ["completionTriggerCharacters"]);
 		const languageIds = boundedArray(input.languageIds, "Extension Host language IDs", 64).map((languageId, index) => boundedText(languageId, `Extension Host language ID ${index}`, 256));
 		const operations = boundedArray(input.operations, "Extension Host language operations", 32).map(operation => stringEnum(operation, "Extension Host language operation", LANGUAGE_OPERATIONS));
 		if (languageIds.length === 0 || operations.length === 0) throw new TypeError("Extension Host language registration must not be empty");
 		assertUnique(languageIds, "Extension Host language IDs");
 		assertUnique(operations, "Extension Host language operations");
-		return Object.freeze({ kind, registrationId, languageIds: Object.freeze(languageIds), operations: Object.freeze(operations) });
+		const triggers = input.completionTriggerCharacters === undefined ? [] : boundedArray(input.completionTriggerCharacters, 'Completion trigger characters', 64).map(value => {
+			const character = boundedText(value, 'Completion trigger character', 8);
+			if ([...character].length !== 1) throw new TypeError('Completion trigger must contain one character');
+			return character;
+		});
+		assertUnique(triggers, 'Completion trigger characters');
+		if (triggers.length && !operations.includes('completion')) throw new TypeError('Completion triggers require a completion provider');
+		return Object.freeze({ kind, registrationId, ...(triggers.length ? { completionTriggerCharacters: Object.freeze(triggers) } : {}), languageIds: Object.freeze(languageIds), operations: Object.freeze(operations) });
 	}
 	if (kind === "debugAdapter") {
 		exactKeys(input, "Extension Host Debug Adapter registration", ["debuggerType", "kind", "registrationId"]);

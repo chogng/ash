@@ -562,6 +562,10 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
 
 fn language_operation_name(operation: LanguageProviderOperation) -> &'static str {
     match operation {
+        LanguageProviderOperation::Diagnostics => "diagnostics",
+        LanguageProviderOperation::SelectionRanges => "selectionRanges",
+        LanguageProviderOperation::DocumentHighlights => "documentHighlights",
+        LanguageProviderOperation::WorkspaceSymbols => "workspaceSymbols",
         LanguageProviderOperation::Completion => "completion",
         LanguageProviderOperation::ParameterHints => "parameterHints",
         LanguageProviderOperation::Definition => "definition",

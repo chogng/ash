@@ -1,3 +1,4 @@
+import { URI } from '../../../base/common/uri.js';
 import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
 import { encodeHex, VSBuffer } from "../../../base/common/buffer.js";
 import { type CancellationToken } from '../../../base/common/cancellation.js';
@@ -10,23 +11,61 @@ import { type TextSnapshot } from "../../../editor/common/core/textChange.js";
 import type { LanguageProviderBatch } from '../../../editor/common/services/languageFeatures.js';
 import type { ExtensionHostLanguageRegistration, JsonValue } from "../../../platform/extensionHost/common/extensionHostApi.js";
 
-export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(["completion", "hover", "formatting", "inlayHints", "linkedEditing", "parameterHints"] as const);
+export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(["diagnostics", "selectionRanges", "documentHighlights", "workspaceSymbols", "completion", "hover", "formatting", "inlayHints", "linkedEditing", "parameterHints", "definition", "references", "rename", "documentSymbols", "foldingRanges", "documentLinks", "codeAction"] as const);
 
 export type ExtensionHostProviderInvoker = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
 
 /** Projects one all-or-nothing Host registration into the canonical language provider batch. */
-export function createExtensionHostLanguageProviderBatch(registration: ExtensionHostLanguageRegistration, extensionId: string, providerId: string, invoke: ExtensionHostProviderInvoker): LanguageProviderBatch {
+export function createExtensionHostLanguageProviderBatch(
+	registration: ExtensionHostLanguageRegistration,
+	extensionId: string,
+	providerId: string,
+	invoke: ExtensionHostProviderInvoker,
+): LanguageProviderBatch {
 	const operations = new Set(registration.operations);
 	const languageIds = registration.languageIds;
 	return Object.freeze({
-		completions: Object.freeze(operations.has("completion") ? [completionProvider(providerId, languageIds, invoke)] : []),
-		hovers: Object.freeze(operations.has("hover") ? [Object.freeze({ selector: languageIds, provider: hoverProvider(invoke) })] : []),
-		formatting: Object.freeze(operations.has("formatting") ? [Object.freeze({ selector: languageIds, provider: formattingProvider(new ExtensionIdentifier(extensionId), invoke) })] : []),
-		inlayHints: Object.freeze(operations.has("inlayHints") ? [Object.freeze({ selector: languageIds, provider: inlayHintsProvider(invoke) })] : []),
-		linkedEditing: Object.freeze(operations.has("linkedEditing") ? [Object.freeze({ selector: languageIds, provider: linkedEditingProvider(invoke) })] : []),
-		parameterHints: Object.freeze(operations.has("parameterHints") ? [Object.freeze({ selector: languageIds, provider: parameterHintsProvider(invoke) })] : []),
+		documentHighlights: operations.has('documentHighlights')
+			? [{ selector: languageIds, provider: documentHighlightsProvider(invoke) }]
+			: [],
+		syntax: operations.has('diagnostics') ? [syntaxProvider(providerId, languageIds, extensionId, invoke)] : [],
+		workspaceSymbols: operations.has('workspaceSymbols') ? [{ selector: languageIds, provider: workspaceSymbolsProvider(invoke) }] : [],
+		selectionRanges: operations.has('selectionRanges') ? [{ selector: languageIds, provider: selectionRangesProvider(invoke) }] : [],
+		definitions: operations.has('definition') ? [{ selector: languageIds, provider: definitionsProvider(invoke) }] : [],
+		references: operations.has('references') ? [{ selector: languageIds, provider: referencesProvider(invoke) }] : [],
+		renames: operations.has('rename') ? [{ selector: languageIds, provider: renamesProvider(invoke) }] : [],
+		documentSymbols: operations.has('documentSymbols') ? [{ selector: languageIds, provider: documentSymbolsProvider(invoke) }] : [],
+		foldingRanges: operations.has('foldingRanges') ? [{ selector: languageIds, provider: foldingRangesProvider(invoke) }] : [],
+		documentLinks: operations.has('documentLinks') ? [{ selector: languageIds, provider: documentLinksProvider(invoke) }] : [],
+		codeActions: operations.has('codeAction') ? [{ selector: languageIds, provider: codeActionsProvider(invoke) }] : [],
+		completions: Object.freeze(
+			operations.has('completion')
+				? [completionProvider(providerId, languageIds, registration.completionTriggerCharacters ?? [], invoke)]
+				: [],
+		),
+		hovers: Object.freeze(operations.has('hover') ? [Object.freeze({ selector: languageIds, provider: hoverProvider(invoke) })] : []),
+		formatting: Object.freeze(
+			operations.has('formatting')
+				? [
+					Object.freeze({
+						selector: languageIds,
+						provider: formattingProvider(new ExtensionIdentifier(extensionId), invoke),
+					}),
+				]
+				: [],
+		),
+		inlayHints: Object.freeze(
+			operations.has('inlayHints') ? [Object.freeze({ selector: languageIds, provider: inlayHintsProvider(invoke) })] : [],
+		),
+		linkedEditing: Object.freeze(
+			operations.has('linkedEditing') ? [Object.freeze({ selector: languageIds, provider: linkedEditingProvider(invoke) })] : [],
+		),
+		parameterHints: Object.freeze(
+			operations.has('parameterHints') ? [Object.freeze({ selector: languageIds, provider: parameterHintsProvider(invoke) })] : [],
+		),
 	});
 }
+
 
 export function unsupportedExtensionHostLanguageOperations(registration: ExtensionHostLanguageRegistration): readonly string[] {
 	const supported = new Set<string>(SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS);
@@ -37,10 +76,229 @@ export function extensionHostLanguageProviderId(extensionId: string, registratio
 	return `extensionHost.${hexIdentifier(extensionId)}.${hexIdentifier(registrationId)}`;
 }
 
-function completionProvider(id: string, languageIds: readonly string[], invoke: ExtensionHostProviderInvoker): languages.LanguageCompletionProvider {
+function documentHighlightsProvider(invoke: ExtensionHostProviderInvoker): languages.DocumentHighlightProvider {
+	return {
+		provideDocumentHighlights: async (model, position, token) => {
+			const request = modelRequest(model);
+			const value = await withAbortSignal(token, signal =>
+				invoke('documentHighlights', featurePayload(request, { position: positionValue(position) }), signal),
+			);
+			return boundedArray(value, 'Extension highlights', 8192).map(value => {
+				const highlight = exactObject(value, 'Extension highlight', ['range', 'kind']);
+				const kind = nonNegativeInteger(highlight.kind, 'Extension highlight kind');
+				if (kind < 1 || kind > 3) throw new TypeError('Invalid extension highlight kind');
+				return {
+					range: normalizeRange(highlight.range, request.snapshot, 'Extension highlight range'),
+					kind: kind - 1,
+				};
+			});
+		},
+	};
+}
+
+function syntaxProvider(
+	providerId: string,
+	languageIds: readonly string[],
+	extensionId: string,
+	invoke: ExtensionHostProviderInvoker,
+): languages.SyntaxProvider {
+	return {
+		id: providerId,
+		languageIds,
+		diagnosticPriority: 10,
+		provideDiagnostics: async (request, signal) => {
+			const value = exactObject(await invoke('diagnostics', featurePayload(request, {}), signal), 'Extension diagnostics', [
+				'diagnostics',
+			]);
+			return {
+				diagnostics: boundedArray(value.diagnostics, 'Extension diagnostics', 8192).map(value => {
+					const diagnostic = object(value, 'Extension diagnostic');
+					assertAllowedKeys(
+						diagnostic,
+						'Extension diagnostic',
+						['range', 'severity', 'message', 'code'],
+						['range', 'severity', 'message'],
+					);
+					return {
+						range: normalizeRange(diagnostic.range, request.snapshot, 'Extension diagnostic range'),
+						severity: textEnum(
+							diagnostic.severity,
+							'Extension diagnostic severity',
+							Object.values(languages.LanguageDiagnosticSeverity),
+						),
+						message: boundedString(diagnostic.message, 'Extension diagnostic message', 16384, false),
+						...optionalString(diagnostic.code, 'Extension diagnostic code', 256, 'code'),
+						source: extensionId,
+					};
+				}),
+			};
+		},
+	};
+}
+
+function workspaceSymbolsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageWorkspaceSymbolProvider {
+	return {
+		provideWorkspaceSymbols: async (query, signal) =>
+			boundedArray(await invoke('workspaceSymbols', { query }, signal), 'Extension workspace symbols', 8192).map(value => {
+				const symbol = exactObject(value, 'Extension workspace symbol', ['name', 'kind', 'resource', 'range']);
+				return {
+					name: boundedString(symbol.name, 'Extension symbol name', 4096, false),
+					kind: nonNegativeInteger(symbol.kind, 'Extension symbol kind'),
+					resource: URI.parse(boundedString(symbol.resource, 'Extension symbol resource', 8192, false)),
+					range: normalizeExternalRange(symbol.range),
+				};
+			}),
+	};
+}
+
+function selectionRangesProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageSelectionRangeProvider {
+	return {
+		provideSelectionRanges: async (request, signal) =>
+			boundedArray(
+				await invoke(
+					'selectionRanges',
+					featurePayload(request, {
+						positions: request.ranges.map(range => positionValue(range.getStartPosition())),
+					}),
+					signal,
+				),
+				'Extension selections',
+				8192,
+			).map(value => normalizeRange(value, request.snapshot, 'Extension selection range')),
+	};
+}
+
+function definitionsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageDefinitionProvider {
+	return {
+		provideDefinition: async (request, signal) =>
+			normalizeLocations(await invoke('definition', featurePayload(request, { position: positionValue(request.position) }), signal)),
+	};
+}
+
+function referencesProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageReferenceProvider {
+	return {
+		provideReferences: async (request, signal) =>
+			normalizeLocations(
+				await invoke(
+					'references',
+					featurePayload(request, {
+						position: positionValue(request.position),
+						includeDeclaration: request.includeDeclaration,
+					}),
+					signal,
+				),
+			),
+	};
+}
+
+function renamesProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageRenameProvider {
+	return {
+		prepareRename: async (request, signal) => {
+			const value = await invoke(
+				'rename',
+				featurePayload(request, {
+					position: positionValue(request.position),
+					kind: 'prepare',
+				}),
+				signal,
+			);
+			if (value === null) return undefined;
+			const result = exactObject(value, 'Extension rename preparation', ['range', 'placeholder']);
+			return {
+				range: normalizeRange(result.range, request.snapshot, 'Extension rename range'),
+				placeholder: boundedString(result.placeholder, 'Extension rename placeholder', 4096, true),
+			};
+		},
+		provideRenameEdits: async (request, signal) =>
+			normalizeWorkspaceEdit(
+				await invoke(
+					'rename',
+					featurePayload(request, {
+						position: positionValue(request.position),
+						kind: 'edit',
+						newName: request.newName ?? '',
+					}),
+					signal,
+				),
+			),
+	};
+}
+
+function documentSymbolsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageDocumentSymbolProvider {
+	return {
+		provideDocumentSymbols: async (request, signal) =>
+			normalizeSymbols(await invoke('documentSymbols', featurePayload(request, {}), signal), request.snapshot),
+	};
+}
+
+function foldingRangesProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageFoldingRangeProvider {
+	return {
+		provideFoldingRanges: async (request, signal) =>
+			boundedArray(await invoke('foldingRanges', featurePayload(request, {}), signal), 'Extension folds', 8192).map(value => {
+				const fold = object(value, 'Extension fold');
+				assertAllowedKeys(fold, 'Extension fold', ['startLineIndex', 'endLineIndex', 'kind'], ['startLineIndex', 'endLineIndex']);
+				const startLineIndex = nonNegativeInteger(fold.startLineIndex, 'Extension fold start');
+				const endLineIndex = nonNegativeInteger(fold.endLineIndex, 'Extension fold end');
+				if (endLineIndex < startLineIndex || endLineIndex >= request.snapshot.lineCount)
+					throw new RangeError('Extension fold is outside the document');
+				return {
+					startLineIndex,
+					endLineIndex,
+					...(fold.kind === undefined
+						? {}
+						: {
+							kind: textEnum(fold.kind, 'Extension fold kind', ['comment', 'imports', 'region'] as const),
+						}),
+				};
+			}),
+	};
+}
+
+function documentLinksProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageLinkProvider {
+	return {
+		provideLinks: async (request, signal) =>
+			boundedArray(await invoke('documentLinks', featurePayload(request, {}), signal), 'Extension links', 8192).map(value => {
+				const link = exactObject(value, 'Extension link', ['range', 'target']);
+				return {
+					range: normalizeRange(link.range, request.snapshot, 'Extension link range'),
+					target: boundedString(link.target, 'Extension link target', 8192, false),
+				};
+			}),
+	};
+}
+
+function codeActionsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageCodeActionProvider {
+	return {
+		provideCodeActions: async (request, signal) =>
+			boundedArray(
+				await invoke(
+					'codeAction',
+					featurePayload(request, {
+						range: rangeValue(request.range),
+						only: request.only ?? [],
+					}),
+					signal,
+				),
+				'Extension code actions',
+				1024,
+			).map(value => {
+				const action = object(value, 'Extension code action');
+				assertAllowedKeys(action, 'Extension code action', ['title', 'kind', 'edit', 'disabledReason'], ['title']);
+				return {
+					title: boundedString(action.title, 'Extension action title', 4096, false),
+					...optionalString(action.kind, 'Extension action kind', 256, 'kind'),
+					...optionalString(action.disabledReason, 'Extension action disabled', 4096, 'disabledReason'),
+					...(action.edit === undefined ? {} : { edit: normalizeWorkspaceEdit(action.edit) }),
+				};
+			}),
+	};
+}
+
+function completionProvider(id: string, languageIds: readonly string[], triggerCharacters: readonly string[], invoke: ExtensionHostProviderInvoker): languages.LanguageCompletionProvider {
 	return Object.freeze({
 		id,
 		languageIds,
+		triggerCharacters,
 		provideCompletions: async (request: languages.LanguageCompletionProviderRequest, signal: AbortSignal): Promise<languages.LanguageCompletionProviderResult> => normalizeCompletionResult(await invoke("completion", completionPayload(request), signal), request.snapshot),
 	});
 }
@@ -122,12 +380,12 @@ function completionPayload(request: languages.LanguageCompletionProviderRequest)
 	});
 }
 
-function featurePayload(request: { readonly languageId: string; readonly resource?: { toString(): string; }; readonly snapshot: TextSnapshot; }, fields: Record<string, JsonValue>): JsonValue {
+function featurePayload(request: { readonly languageId: string; readonly resource?: { toString(): string; }; readonly snapshot: TextSnapshot; readonly model?: { readonly uri: URI; }; }, fields: Record<string, JsonValue>): JsonValue {
 	return Object.freeze({
 		languageId: request.languageId,
 		version: request.snapshot.version,
 		text: request.snapshot.getText(),
-		...(request.resource ? { resource: request.resource.toString() } : {}),
+		...((request.resource ?? request.model?.uri) ? { resource: (request.resource ?? request.model!.uri).toString() } : {}),
 		...fields,
 	});
 }
@@ -364,4 +622,97 @@ function boundedIndex(value: JsonValue | undefined, length: number, owner: strin
 
 function hexIdentifier(value: string): string {
 	return encodeHex(VSBuffer.fromString(value));
+}
+
+function normalizeExternalRange(value: JsonValue | undefined): Range {
+	const range = exactObject(value, 'Extension target range', ['start', 'end']);
+	const point = (value: JsonValue | undefined): Position => {
+		const input = exactObject(value, 'Extension target position', ['lineIndex', 'columnIndex']);
+		return new Position(nonNegativeInteger(input.lineIndex, 'Extension target line') + 1, nonNegativeInteger(input.columnIndex, 'Extension target column') + 1);
+	};
+	const start = point(range.start);
+	const end = point(range.end);
+	if (Position.compare(start, end) > 0) throw new RangeError('Extension target range is reversed');
+	return Range.fromPositions(start, end);
+}
+
+function normalizeLocations(value: JsonValue): readonly languages.LanguageLocation[] {
+	return boundedArray(value, 'Extension locations', 8192).map(value => {
+		const location = exactObject(value, 'Extension location', ['resource', 'range']);
+		return { resource: URI.parse(boundedString(location.resource, 'Extension location resource', 8192, false)), range: normalizeExternalRange(location.range) };
+	});
+}
+
+function normalizeSymbols(
+	value: JsonValue,
+	snapshot: TextSnapshot,
+	depth = 0,
+): readonly languages.LanguageDocumentSymbol[] {
+	if (depth > 32) throw new RangeError('Extension symbol hierarchy is too deep');
+	return boundedArray(value, 'Extension symbols', 8192).map((value) => {
+		const symbol = object(value, 'Extension symbol');
+		assertAllowedKeys(
+			symbol,
+			'Extension symbol',
+			['name', 'kind', 'range', 'selectionRange', 'children'],
+			['name', 'kind', 'range', 'selectionRange'],
+		);
+		return {
+			name: boundedString(symbol.name, 'Extension symbol name', 4096, false),
+			kind: nonNegativeInteger(symbol.kind, 'Extension symbol kind'),
+			range: normalizeRange(symbol.range, snapshot, 'Extension symbol range'),
+			selectionRange: normalizeRange(symbol.selectionRange, snapshot, 'Extension symbol selection'),
+			...(symbol.children === undefined
+				? {}
+				: { children: normalizeSymbols(symbol.children, snapshot, depth + 1) }),
+		};
+	});
+}
+
+function normalizeWorkspaceEdit(value: JsonValue): languages.LanguageWorkspaceEdit {
+	const result = exactObject(value, 'Extension workspace edit', ['entries']);
+	return languages.normalizeLanguageWorkspaceEdit({
+		entries: boundedArray(result.entries, 'Extension edit documents', 8192).map((value) => {
+			const entry = object(value, 'Extension edit document');
+			if (entry.kind === 'rename') {
+				assertAllowedKeys(entry, 'Extension file rename', ['kind', 'source', 'target', 'existing'], ['kind', 'source', 'target', 'existing']);
+				return {
+					kind: 'rename' as const,
+					source: URI.parse(boundedString(entry.source, 'Extension rename source', 8192, false)),
+					target: URI.parse(boundedString(entry.target, 'Extension rename target', 8192, false)),
+					existing: boundedString(entry.existing, 'Extension rename target behavior', 16, false) as languages.LanguageExistingTargetBehavior,
+				};
+			}
+			if (entry.kind !== 'textDocument') throw new TypeError('Unsupported extension workspace edit kind');
+			assertAllowedKeys(
+				entry,
+				'Extension edit document',
+				['kind', 'resource', 'version', 'expectedText', 'edits'],
+				['kind', 'resource', 'expectedText', 'edits'],
+			);
+			const expectedText = boundedString(entry.expectedText, 'Extension edit baseline', 1_048_576, true);
+			const snapshot: TextSnapshot = {
+				version: 1,
+				length: expectedText.length,
+				lineCount: expectedText.split('\n').length,
+				getText: () => expectedText,
+				getTextBetweenOffsets: (start, end) => expectedText.slice(start, end),
+			};
+			return {
+				kind: 'textDocument',
+				resource: URI.parse(boundedString(entry.resource, 'Extension edit resource', 8192, false)),
+				expectedText,
+				...(entry.version === undefined
+					? {}
+					: { version: nonNegativeInteger(entry.version, 'Extension edit version') }),
+				edits: boundedArray(entry.edits, 'Extension text edits', 8192).map((value) => {
+					const edit = exactObject(value, 'Extension text edit', ['range', 'text']);
+					return {
+						range: normalizeRange(edit.range, snapshot, 'Extension edit range'),
+						text: boundedString(edit.text, 'Extension edit text', 1_048_576, true),
+					};
+				}),
+			};
+		}),
+	});
 }

@@ -901,7 +901,8 @@
     "localHistory.sizeDescription": "记录本地历史时允许的最大文件大小，单位为 KB。",
     "localHistory.invalidEntries": "本地历史记录数必须是 1 到 1000 之间的整数。",
     "localHistory.entriesTitle": "本地历史记录数上限",
-    "localHistory.entriesDescription": "为每个文件保留的最大已保存版本数。"
+    "localHistory.entriesDescription": "为每个文件保留的最大已保存版本数。",
+    "webview.richEditorAccessibilityHelp": "你正在使用 Markdown 富文本编辑器。未编辑的段落以排版后的形式显示，当前段落显示 Markdown 源码。使用方向键移动，按住 Shift 选择文本。Control 或 Command 加 Home 或 End 跳到文档开头或末尾。Alt+F10 聚焦格式工具栏，左右方向键在按钮间移动，Escape 返回文档。Control 或 Command 加 S 保存共享文档，Z 撤销，Shift+Z 重做。面包屑中的编辑器选择按钮可切换到源码或预览。如果编辑期间另一个编辑器更改了源码，你的草稿会保留，“重新载入文档”可采用最新源码。<keybinding:editor.action.accessibleView> 可朗读 Markdown 源码。Escape 关闭无障碍帮助并返回编辑器。"
   },
   "ash.menu": {
     "file": "文件",

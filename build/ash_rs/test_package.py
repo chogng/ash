@@ -21,6 +21,7 @@ from build.ash_rs.build import parse_arguments as parse_build_arguments
 from build.ash_rs.bubblewrap import load_vendored_source, resolve_bubblewrap
 from build.ash_rs.layout import (
     build_package_directory,
+    copy_builtin_extensions,
     file_sha256,
     load_protocol_metadata,
     validate_product_services,
@@ -218,6 +219,8 @@ class PackageTests(unittest.TestCase):
         "javascript",
         "json",
         "markdown-basics",
+        "markdown-language-features",
+        "media-preview",
         "python",
         "rust",
         "shellscript",
@@ -667,6 +670,28 @@ class PackageTests(unittest.TestCase):
 
     def test_repository_builtin_extension_contract(self) -> None:
         self.assert_extension_resources(REPOSITORY_ROOT / "extensions")
+
+    def test_builtin_extension_packaging_excludes_build_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "extensions" / "markdown"
+            package.mkdir(parents=True)
+            (package / "package.json").write_text('{"name":"markdown"}', encoding="utf-8")
+            (package / "extension.js").write_text("export function activate() {}", encoding="utf-8")
+            dependencies = package / "node_modules"
+            dependencies.mkdir()
+            (dependencies / "markdown-library").symlink_to(package, target_is_directory=True)
+            output = root / "packaged-extensions"
+
+            copy_builtin_extensions(root, output)
+
+            self.assertEqual(
+                ["extension.js", "package.json"],
+                sorted(path.name for path in (output / "markdown").iterdir()),
+            )
+            (package / "linked.js").symlink_to(package / "extension.js")
+            with self.assertRaisesRegex(RuntimeError, "not a regular unlinked file"):
+                copy_builtin_extensions(root, root / "rejected-extensions")
 
     def test_linux_package_contains_built_sandbox_resource_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

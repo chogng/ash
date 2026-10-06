@@ -62,6 +62,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
 
 	public getModel(resource: URI): TextModel | null { return this.entries.get(resource.toString())?.model ?? null; }
+	public getModels(): readonly TextModel[] { return [...this.entries.values()].map(entry => entry.model); }
 
 	public addSaveParticipant(participant: ITextModelSaveParticipant): IDisposable {
 		this.assertNotDisposed();

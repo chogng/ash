@@ -105,3 +105,21 @@ test('exclusive language feature selectors replace ordinary matches except durin
 	assert.deepEqual(registry.ordered(model), ['exclusive']);
 	assert.deepEqual(registry.ordered(model, true), ['language', 'wildcard']);
 });
+
+test('extension provider replacement updates diagnostics and navigation atomically', () => {
+	using service = new LanguageFeaturesService();
+	using model = new TextModel('# Heading', { languageId: 'markdown' });
+	const diagnostics = { id: 'markdown', languageIds: ['markdown'], provideDiagnostics: () => ({ diagnostics: [] }) };
+	const definitions = { selector: 'markdown', provider: { provideDefinition: () => [] } };
+	using registration = service.registerProviderBatch({ syntax: [diagnostics], definitions: [definitions] });
+	const observations: number[] = [];
+	using listener = service.syntaxProvider.onDidChange(() => observations.push(service.definitionProvider.all(model).length));
+	registration.replace({ syntax: [diagnostics], documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }] });
+	assert.deepEqual(observations, [0]);
+	assert.equal(service.documentSymbolProvider.all(model).length, 1);
+	assert.throws(() => registration.replace({ syntax: [{ ...diagnostics, id: 'bad id' }] }), /Syntax provider ID/);
+	assert.equal(service.syntaxProvider.getDiagnosticProviders('markdown').length, 1);
+	assert.equal(service.documentSymbolProvider.all(model).length, 1);
+	registration.dispose();
+	assert.deepEqual([service.syntaxProvider.getDiagnosticProviders('markdown').length, service.documentSymbolProvider.all(model).length], [0, 0]);
+});

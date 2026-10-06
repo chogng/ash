@@ -51,6 +51,17 @@ export interface LanguageProviderBatchEntry<TProvider> {
 }
 
 export interface LanguageProviderBatch {
+	readonly documentHighlights?: readonly LanguageProviderBatchEntry<languages.DocumentHighlightProvider>[];
+	readonly syntax?: readonly languages.SyntaxProvider[];
+	readonly workspaceSymbols?: readonly LanguageProviderBatchEntry<languages.LanguageWorkspaceSymbolProvider>[];
+	readonly definitions?: readonly LanguageProviderBatchEntry<languages.LanguageDefinitionProvider>[];
+	readonly references?: readonly LanguageProviderBatchEntry<languages.LanguageReferenceProvider>[];
+	readonly renames?: readonly LanguageProviderBatchEntry<languages.LanguageRenameProvider>[];
+	readonly documentSymbols?: readonly LanguageProviderBatchEntry<languages.LanguageDocumentSymbolProvider>[];
+	readonly foldingRanges?: readonly LanguageProviderBatchEntry<languages.LanguageFoldingRangeProvider>[];
+	readonly documentLinks?: readonly LanguageProviderBatchEntry<languages.LanguageLinkProvider>[];
+	readonly codeActions?: readonly LanguageProviderBatchEntry<languages.LanguageCodeActionProvider>[];
+	readonly selectionRanges?: readonly LanguageProviderBatchEntry<languages.LanguageSelectionRangeProvider>[];
 	readonly completions?: readonly languages.LanguageCompletionProvider[];
 	readonly hovers?: readonly LanguageProviderBatchEntry<languages.LanguageHoverProvider>[];
 	readonly formatting?: readonly LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider | languages.DocumentRangeFormattingEditProvider | languages.OnTypeFormattingEditProvider>[];

@@ -364,30 +364,42 @@ export class SyntaxProviderRegistry extends Disposable {
 	}
 
 	registerMany(providers: readonly SyntaxProvider[]): IDisposable {
-		this.assertNotDisposed();
-		if (!isNonEmptyArray(providers)) {
-			throw new TypeError("Syntax provider batch must not be empty");
-		}
-		const registered = providers.map(normalizeSyntaxProvider);
-		const identities = new Set<string>();
-		for (const provider of registered) {
-			if (identities.has(provider.id) || this.providers.has(provider.id)) {
-				throw new RangeError(`Syntax provider '${provider.id}' is already registered`);
-			}
-			identities.add(provider.id);
-		}
-		for (const provider of registered) this.providers.set(provider.id, provider);
-		this.changeEmitter.fire();
-		return toDisposable(() => {
-			let changed = false;
-			for (const provider of registered) {
-				if (this.providers.get(provider.id) === provider) {
-					this.providers.delete(provider.id);
-					changed = true;
+		if (!isNonEmptyArray(providers)) throw new TypeError('Syntax provider batch must not be empty');
+		return this.registerGroup(providers);
+	}
+
+	/** Replaces one extension's providers without exposing a partially retired generation. */
+	registerGroup(providers: readonly SyntaxProvider[]): IDisposable & { replace(providers: readonly SyntaxProvider[]): void; } {
+		let current: readonly RegisteredSyntaxProvider[] = [];
+		let disposed = false;
+		const replace = (values: readonly SyntaxProvider[]): void => {
+			this.assertNotDisposed();
+			if (disposed) throw new ReferenceError('Syntax provider group is disposed');
+			const next = values.map(normalizeSyntaxProvider);
+			const identities = new Set<string>();
+			for (const provider of next) {
+				const existing = this.providers.get(provider.id);
+				if (identities.has(provider.id) || existing && !current.includes(existing)) {
+					throw new RangeError(`Syntax provider '${provider.id}' is already registered`);
 				}
+				identities.add(provider.id);
 			}
-			if (changed) this.changeEmitter.fire();
-		});
+			for (const provider of current) this.providers.delete(provider.id);
+			for (const provider of next) this.providers.set(provider.id, provider);
+			current = next;
+			this.changeEmitter.fire();
+		};
+		replace(providers);
+		const registration = toDisposable(() => {
+			disposed = true;
+			for (const provider of current) {
+				if (this.providers.get(provider.id) === provider) this.providers.delete(provider.id);
+			}
+			current = [];
+			this.changeEmitter.fire();
+		}) as IDisposable & { replace(providers: readonly SyntaxProvider[]): void; };
+		registration.replace = replace;
+		return registration;
 	}
 
 	getTokenProvider(languageId: string): RegisteredSyntaxProvider | undefined {

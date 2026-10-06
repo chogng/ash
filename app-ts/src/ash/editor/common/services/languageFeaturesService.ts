@@ -86,6 +86,9 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	}
 
 	public registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration {
+		const syntax = this.syntaxProvider.registerGroup([]);
+		const documentHighlights = new LanguageFeatureBatchRegistration(this.documentHighlightProvider);
+		const workspaceSymbols = new LanguageFeatureBatchRegistration(this.workspaceSymbolProvider);
 		const completions = this.completionProvider.registerGroup([]);
 		const hovers = new LanguageFeatureBatchRegistration(this.hoverProvider);
 		const documentFormatting = new LanguageFeatureBatchRegistration(this.documentFormattingEditProvider);
@@ -94,7 +97,27 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		const inlayHints = new LanguageFeatureBatchRegistration(this.inlayHintsProvider);
 		const linkedEditing = new LanguageFeatureBatchRegistration(this.linkedEditingRangeProvider);
 		const parameterHints = new LanguageFeatureBatchRegistration(this.signatureHelpProvider);
+		const definitions = new LanguageFeatureBatchRegistration(this.definitionProvider);
+		const references = new LanguageFeatureBatchRegistration(this.referenceProvider);
+		const renames = new LanguageFeatureBatchRegistration(this.renameProvider);
+		const documentSymbols = new LanguageFeatureBatchRegistration(this.documentSymbolProvider);
+		const foldingRanges = new LanguageFeatureBatchRegistration(this.foldingRangeProvider);
+		const documentLinks = new LanguageFeatureBatchRegistration(this.linkProvider);
+		const codeActions = new LanguageFeatureBatchRegistration(this.codeActionProvider);
+		const selectionRanges = new LanguageFeatureBatchRegistration(this.selectionRangeProvider);
 		const registrations = {
+			syntax,
+			documentHighlights,
+			workspaceSymbols,
+			definitions,
+			references,
+			renames,
+			documentSymbols,
+			foldingRanges,
+			documentLinks,
+			codeActions,
+			selectionRanges,
+
 			completions,
 			hovers,
 			documentFormatting,
@@ -121,13 +144,23 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 			});
 			current = next;
 		};
-		replace(providers);
 		const registration = toDisposable(() => {
 			if (disposed) {
 				return;
 			}
 			disposed = true;
 			runWithBufferedEvents(() => {
+				syntax.dispose();
+				documentHighlights.dispose();
+				workspaceSymbols.dispose();
+				definitions.dispose();
+				references.dispose();
+				renames.dispose();
+				documentSymbols.dispose();
+				foldingRanges.dispose();
+				documentLinks.dispose();
+				codeActions.dispose();
+				selectionRanges.dispose();
 				parameterHints.dispose();
 				linkedEditing.dispose();
 				inlayHints.dispose();
@@ -139,11 +172,29 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 			});
 		}) as LanguageProviderBatchRegistration;
 		registration.replace = replace;
+		try {
+			replace(providers);
+		} catch (error) {
+			registration.dispose();
+			throw error;
+		}
 		return registration;
 	}
 }
 
 interface LanguageProviderRegistrations {
+	readonly documentHighlights: LanguageFeatureBatchRegistration<languages.DocumentHighlightProvider>;
+	readonly syntax: IDisposable & { replace(providers: readonly languages.SyntaxProvider[]): void; };
+	readonly workspaceSymbols: LanguageFeatureBatchRegistration<languages.LanguageWorkspaceSymbolProvider>;
+	readonly definitions: LanguageFeatureBatchRegistration<languages.LanguageDefinitionProvider>;
+	readonly references: LanguageFeatureBatchRegistration<languages.LanguageReferenceProvider>;
+	readonly renames: LanguageFeatureBatchRegistration<languages.LanguageRenameProvider>;
+	readonly documentSymbols: LanguageFeatureBatchRegistration<languages.LanguageDocumentSymbolProvider>;
+	readonly foldingRanges: LanguageFeatureBatchRegistration<languages.LanguageFoldingRangeProvider>;
+	readonly documentLinks: LanguageFeatureBatchRegistration<languages.LanguageLinkProvider>;
+	readonly codeActions: LanguageFeatureBatchRegistration<languages.LanguageCodeActionProvider>;
+	readonly selectionRanges: LanguageFeatureBatchRegistration<languages.LanguageSelectionRangeProvider>;
+
 	readonly completions: languages.LanguageCompletionProviderRegistration;
 	readonly hovers: LanguageFeatureBatchRegistration<languages.LanguageHoverProvider>;
 	readonly documentFormatting: LanguageFeatureBatchRegistration<languages.DocumentFormattingEditProvider>;
@@ -194,6 +245,17 @@ function disposeRegistrations(registrations: readonly IDisposable[]): void {
 }
 
 function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>): void {
+	registrations.syntax.replace(providers.syntax);
+	registrations.documentHighlights.replace(providers.documentHighlights);
+	registrations.workspaceSymbols.replace(providers.workspaceSymbols);
+	registrations.definitions.replace(providers.definitions);
+	registrations.references.replace(providers.references);
+	registrations.renames.replace(providers.renames);
+	registrations.documentSymbols.replace(providers.documentSymbols);
+	registrations.foldingRanges.replace(providers.foldingRanges);
+	registrations.documentLinks.replace(providers.documentLinks);
+	registrations.codeActions.replace(providers.codeActions);
+	registrations.selectionRanges.replace(providers.selectionRanges);
 	registrations.completions.replace(providers.completions);
 	registrations.hovers.replace(providers.hovers);
 	registrations.documentFormatting.replace(providers.formatting.filter((entry): entry is LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider> => 'provideDocumentFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentFormattingEdits === 'function'));
@@ -209,11 +271,22 @@ function normalizeProviderBatch(value: LanguageProviderBatch): Required<Language
 		throw new TypeError('Language provider batch must be an object');
 	}
 	const record = value as Record<string, unknown>;
-	const supported = new Set(['completions', 'hovers', 'formatting', 'inlayHints', 'linkedEditing', 'parameterHints']);
+	const supported = new Set(['documentHighlights', 'syntax', 'workspaceSymbols', 'completions', 'hovers', 'formatting', 'inlayHints', 'linkedEditing', 'parameterHints', 'definitions', 'references', 'renames', 'documentSymbols', 'foldingRanges', 'documentLinks', 'codeActions', 'selectionRanges']);
 	if (Object.keys(record).some(key => !supported.has(key))) {
 		throw new TypeError('Language provider batch contains an unsupported provider kind');
 	}
 	return Object.freeze({
+		documentHighlights: frozenLanguageFeatureEntries(value.documentHighlights, 'documentHighlights'),
+		syntax: frozenProviderArray(value.syntax, 'syntax'),
+		workspaceSymbols: frozenLanguageFeatureEntries(value.workspaceSymbols, 'workspaceSymbols'),
+		definitions: frozenLanguageFeatureEntries(value.definitions, 'definitions'),
+		references: frozenLanguageFeatureEntries(value.references, 'references'),
+		renames: frozenLanguageFeatureEntries(value.renames, 'renames'),
+		documentSymbols: frozenLanguageFeatureEntries(value.documentSymbols, 'documentSymbols'),
+		foldingRanges: frozenLanguageFeatureEntries(value.foldingRanges, 'foldingRanges'),
+		documentLinks: frozenLanguageFeatureEntries(value.documentLinks, 'documentLinks'),
+		codeActions: frozenLanguageFeatureEntries(value.codeActions, 'codeActions'),
+		selectionRanges: frozenLanguageFeatureEntries(value.selectionRanges, 'selectionRanges'),
 		completions: frozenProviderArray(value.completions, 'completion'),
 		hovers: frozenLanguageFeatureEntries(value.hovers, 'hover'),
 		formatting: frozenLanguageFeatureEntries(value.formatting, 'formatting'),
@@ -225,7 +298,25 @@ function normalizeProviderBatch(value: LanguageProviderBatch): Required<Language
 
 function emptyProviderBatch(): Required<LanguageProviderBatch> {
 	const empty = Object.freeze([]);
-	return Object.freeze({ completions: empty, hovers: empty, formatting: empty, inlayHints: empty, linkedEditing: empty, parameterHints: empty });
+	return Object.freeze({
+		documentHighlights: empty,
+		syntax: empty,
+		workspaceSymbols: empty,
+		definitions: empty,
+		references: empty,
+		renames: empty,
+		documentSymbols: empty,
+		foldingRanges: empty,
+		documentLinks: empty,
+		codeActions: empty,
+		selectionRanges: empty,
+		completions: empty,
+		hovers: empty,
+		formatting: empty,
+		inlayHints: empty,
+		linkedEditing: empty,
+		parameterHints: empty,
+	});
 }
 
 function frozenProviderArray<T>(value: readonly T[] | undefined, owner: string): readonly T[] {

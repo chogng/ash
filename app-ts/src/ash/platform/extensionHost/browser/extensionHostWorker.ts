@@ -27,6 +27,25 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 		const extension = await import(/* @vite-ignore */ message.entryPoint);
 		await extension.activate({
 			language: message.language,
+			createWebviewResource(content: string, mediaType: 'text/javascript' | 'text/css'): string {
+				if (typeof content !== 'string' || content.length > 16 * 1024 * 1024 || !['text/javascript', 'text/css'].includes(mediaType)) {
+					throw new TypeError('Invalid extension webview resource');
+				}
+				const url = URL.createObjectURL(new Blob([content], { type: mediaType }));
+				// The window owns revocation, including abrupt Worker retirement.
+				scope.postMessage({ type: 'webviewResource', url });
+				return url;
+			},
+			clientRequest(request: JsonValue, signal?: AbortSignal): Promise<JsonValue> {
+				signal?.throwIfAborted();
+				const id = nextCommand++;
+				return new Promise((resolve, reject) => {
+					const abort = (): void => { commands.delete(id); scope.postMessage({ type: 'clientCancel', id }); reject(signal!.reason); };
+					signal?.addEventListener('abort', abort, { once: true });
+					commands.set(id, { resolve: value => { signal?.removeEventListener('abort', abort); resolve(value); }, reject: error => { signal?.removeEventListener('abort', abort); reject(error); } });
+					scope.postMessage({ type: 'clientRequest', id, request });
+				});
+			},
 			executeCommand(command: string, ...args: readonly JsonValue[]): Promise<JsonValue> {
 				const id = nextCommand++;
 				return new Promise((resolve, reject) => {

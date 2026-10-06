@@ -1,0 +1,22 @@
+{
+  "Remove unused link definition": "删除未使用的链接定义",
+  "Remove duplicate link definition": "删除重复的链接定义",
+  "Renaming is not supported here. Try renaming a header or link.": "此处不支持重命名，请选择标题或链接。",
+  "Reference link '{0}'": "引用链接“{0}”",
+  "Link to '{0}'": "链接到“{0}”",
+  "Link to HTML id '{0}'": "链接到 HTML 标识“{0}”",
+  "Link to '# {0}' in '{1}'": "链接到“{1}”中的标题“{0}”",
+  "Follow link": "打开链接",
+  "Go to link definition": "转到链接定义",
+  "Extract to link definition": "提取为链接定义",
+  "Not on link": "请选择链接",
+  "Link is already a reference": "此链接已经是引用链接",
+  "No header found: '{0}'": "找不到标题：“{0}”",
+  "No link definition found: '{0}'": "找不到链接定义：“{0}”",
+  "Link definition is unused": "此链接定义未被使用",
+  "Link definition for '{0}' already exists": "“{0}”的链接定义已经存在",
+  "Link is also defined here": "此处也定义了该链接",
+  "File does not exist at path: {0}": "文件不存在：{0}",
+  "Header does not exist in file: {0}": "文件中不存在此标题：{0}",
+  "Organize Link Definitions": "整理链接定义"
+}

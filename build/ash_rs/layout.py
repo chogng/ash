@@ -183,16 +183,20 @@ def build_package_directory(
         raise
 
 
-def copy_regular_tree(source: Path, destination: Path, kind: str) -> None:
+def copy_regular_tree(
+    source: Path, destination: Path, kind: str, *, excluded_names: tuple[str, ...] = ()
+) -> None:
     metadata = source.lstat()
     if not stat.S_ISDIR(metadata.st_mode):
         raise RuntimeError(f"Built-in {kind} source is not a real directory: {source}")
     destination.mkdir()
     for entry in source.iterdir():
+        if entry.name in excluded_names:
+            continue
         target = destination / entry.name
         metadata = entry.lstat()
         if stat.S_ISDIR(metadata.st_mode):
-            copy_regular_tree(entry, target, kind)
+            copy_regular_tree(entry, target, kind, excluded_names=excluded_names)
         elif stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
             shutil.copyfile(entry, target)
         else:
@@ -242,7 +246,13 @@ def copy_builtin_extensions(source_root: Path, destination: Path) -> None:
             raise RuntimeError(
                 f"Built-in extension package.json is not a regular file: {entry.name}"
             )
-        copy_regular_tree(entry, destination / entry.name, "extension package")
+        # Browser libraries are compiled into renderer assets, not backend package dependencies.
+        copy_regular_tree(
+            entry,
+            destination / entry.name,
+            "extension package",
+            excluded_names=("node_modules",),
+        )
 
 
 def copy_executable(source: Path, destination: Path, is_windows: bool) -> None:

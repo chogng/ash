@@ -7,7 +7,14 @@ import { APP_SERVER_SERVER_REQUESTS } from '../../app-server/common/generated/in
 import type { JsonValue as ProtocolJsonValue } from '../../app-server/common/generated/index.js';
 import type { ExtensionClientHandler } from '../common/extensionHostApi.js';
 import { inertSubscription } from "../../renderer/browser/disconnectedHost.js";
-import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
+import { IFileService, FileKind, FileNotFoundError } from '../../files/common/files.js';
+import { IFileSystemProviderService } from '../../files/common/fileSystemProviderService.js';
+import { IAppServerApi } from '../../app-server/common/appServerApi.js';
+import { IWorkspaceContextService } from '../../workspace/common/workspace.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import type { ExtensionClientOperation } from '../common/extensionHostApi.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IExtensionApi, ExtensionDescriptor } from '../../extensions/common/extensionApi.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
@@ -24,8 +31,12 @@ export type BrowserExtensionHostRequest =
 /** A package snapshot is executed in a window-owned Worker, never in the Workbench realm. */
 export class BrowserExtensionHostApi extends Disposable implements IExtensionHostApi {
 	public registerClientHandler(handler: ExtensionClientHandler): ReturnType<IExtensionHostApi['registerClientHandler']> {
-		return this.remote.registerClientHandler(handler);
+		if (this.clientHandler) throw new Error('An extension client handler is already registered');
+		const remote = this.remote.registerClientHandler(handler);
+		this.clientHandler = handler;
+		return combinedDisposable(toDisposable(() => remote.dispose()), toDisposable(() => { this.clientHandler = undefined; }));
 	}
+	private clientHandler: ExtensionClientHandler | undefined;
 	private readonly workers = this._register(new DisposableMap<string, BrowserExtensionWorker>());
 	private readonly changes = this._register(new Emitter<number>());
 	private generation = 0;
@@ -36,7 +47,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 	private remoteConnectionRevision = 0;
 
 	constructor(private readonly extensions: IExtensionApi, private readonly remote: IExtensionHostApi,
-		@ICommandService private readonly commandService: ICommandService) {
+		@IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		const changes = remote.onDidChange(() => { void this.refreshRemote().catch(error => console.error('Extension Host refresh failed', error)); });
 		this._register(toDisposable(() => changes.dispose()));
@@ -123,7 +134,10 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 				const path = manifest.browser.replace(/^\.\//, '');
 				const source = await this.extensions.readResource({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
-				worker = new BrowserExtensionWorker(source, this.commandService);
+				worker = this.instantiation.createInstance(BrowserExtensionWorker, source, (operation: ExtensionClientOperation, signal: AbortSignal) => {
+					if (!this.clientHandler) throw new Error('No extension client handler is registered');
+					return this.clientHandler(operation, signal);
+				});
 				this.workers.set(extension.id, worker);
 				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage() }, Date.now() + 30_000);
 				this.assertNotDisposed();
@@ -166,8 +180,16 @@ class BrowserExtensionWorker extends Disposable {
 	private nextId = 1;
 	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 
-	constructor(source: Uint8Array, commandService: ICommandService) {
+	constructor(source: Uint8Array, clientHandler: ExtensionClientHandler,
+		@ICommandService commandService: ICommandService,
+		@IFileService files: IFileService,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@IFileSystemProviderService fileProviders: IFileSystemProviderService,
+		@IAppServerApi appServer: IAppServerApi) {
 		super();
+		const clients = new Map<number, AbortController>();
+		const lifetime = new AbortController();
+		this._register(toDisposable(() => { lifetime.abort(); for (const client of clients.values()) client.abort(); clients.clear(); }));
 		this.entryPoint = URL.createObjectURL(new Blob([Uint8Array.from(source)], { type: 'text/javascript' }));
 		this._register(toDisposable(() => URL.revokeObjectURL(this.entryPoint)));
 		this.worker = new Worker(new URL('./extensionHostWorker.ts', import.meta.url), { type: 'module', name: 'Ash Web Extension Host' });
@@ -178,6 +200,61 @@ class BrowserExtensionWorker extends Disposable {
 		}));
 		const onMessage = (event: MessageEvent): void => {
 			const message = event.data;
+			if (message?.type === 'webviewResource') {
+				if (typeof message.url !== 'string' || !URL.canParse(message.url) || !message.url.startsWith('blob:') || new URL(message.url).origin !== new URL(this.entryPoint).origin) {
+					this.fail(new TypeError('Invalid extension webview resource URL'));
+					return;
+				}
+				const url = message.url;
+				this._register(toDisposable(() => URL.revokeObjectURL(url)));
+				return;
+			}
+			if (message?.type === 'clientCancel') { clients.get(message.id)?.abort(); return; }
+			if (message?.type === 'clientRequest') {
+				if (!Number.isSafeInteger(message.id) || message.id <= 0 || clients.has(message.id)) {
+					this.fail(new TypeError('Invalid browser extension client request ID'));
+					return;
+				}
+				const client = new AbortController();
+				clients.set(message.id, client);
+				void (async (): Promise<JsonValue> => {
+					const payload = normalizeExtensionHostPayload(message.request);
+					if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Invalid browser extension client request');
+					const value = payload as Record<string, JsonValue>;
+					if (typeof value.operation !== 'string') throw new TypeError('Invalid browser extension client request');
+					if (value.operation === 'workspaceFolders') {
+						const connected = await appServer.getConnectionState() === 'ready';
+						// Browser-owned folders remain readable offline; backend roots require their connection.
+						return workspace.getWorkspace().folders
+							.filter(folder => connected || fileProviders.hasProvider(folder.uri.scheme))
+							.map(folder => folder.uri.toString());
+					}
+					if (value.operation === 'stat' || value.operation === 'readDirectory') {
+						if (typeof value.resource !== 'string') throw new TypeError('Expected a resource URI');
+						const resource = URI.parse(value.resource);
+						try {
+							if (value.operation === 'stat') return { isDirectory: (await files.stat(resource)).kind === FileKind.Directory };
+							return (await files.readDirectory(resource)).map(entry => [entry.name, { isDirectory: entry.kind === FileKind.Directory }]);
+						} catch (error) {
+							if (error instanceof FileNotFoundError) return value.operation === 'stat' ? null : [];
+							throw error;
+						}
+					}
+					if (value.operation !== 'listDocuments' && value.operation !== 'readDocument' && value.operation !== 'readConfiguration') throw new TypeError('Unsupported browser extension client operation');
+					if (value.operation === 'readDocument' && typeof value.uri !== 'string') throw new TypeError('Expected a document URI');
+					if (value.operation === 'readConfiguration' && (typeof value.section !== 'string' || value.resource !== null && typeof value.resource !== 'string')) throw new TypeError('Expected a configuration section and resource');
+					return await clientHandler(value as unknown as ExtensionClientOperation, AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
+				})().then(result => {
+					clients.delete(message.id);
+					if (client.signal.aborted) return;
+					if (!this.isDisposed) this.worker.postMessage({ type: 'commandResult', id: message.id, success: true, result: normalizeExtensionHostPayload(result) });
+				}, error => {
+					clients.delete(message.id);
+					if (client.signal.aborted) return;
+					if (!this.isDisposed) this.worker.postMessage({ type: 'commandResult', id: message.id, success: false, error: String(error) });
+				});
+				return;
+			}
 			if (message?.type === 'executeCommand') {
 				const payload = normalizeExtensionHostPayload(message);
 				if (typeof payload !== 'object' || payload === null || Array.isArray(payload) || !Number.isSafeInteger(message.id) || typeof message.command !== 'string' || !Array.isArray(message.args)) {

@@ -58,9 +58,10 @@ Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/resource
 `ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
 提供同一目录与资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
 `extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口，调用
-`activate({ register, executeCommand, language })`。注册与调用使用 Ash 的有界扩展契约，不提供完整的 `vscode` 模块或 Node API。
+`activate({ register, executeCommand, clientRequest, createWebviewResource, language })`。注册与调用使用 Ash 的有界扩展契约，不提供完整的 `vscode` 模块或 Node API。
 Worker 持有调用的取消信号；到达截止时间后终止 Worker 并撤销该 incarnation 的注册。
 刷新、替换和关闭页面释放 Worker 与入口 Blob URL。Vite 监听开发包文件并重新生成快照、刷新页面。
+依赖编译进入浏览器资源，后端内置包目录不复制 `node_modules`。
 该路径仅执行内置或开发者显式指定的可信资源，不属于 Marketplace 执行许可或生产第三方隔离路径。
 Worker 无法访问 Workbench DOM，但仍是同源代码，不宣称具备生产 launcher 的 hard limits。
 
@@ -68,9 +69,22 @@ Worker 无法访问 Workbench DOM，但仍是同源代码，不宣称具备生�
 工作台组合入口同时持有浏览器 Worker 与 App Server 可执行扩展的注册快照；同一扩展 ID 只能由一个
 运行宿主持有。`MainThreadExtensionApi` 把扩展命令和编辑器菜单接入工作台，
 `MainThreadCustomEditors` 注册文本自定义编辑器。内置 `extensions/markdown-language-features`
-提供 Markdown 预览和打开、侧边打开、重新打开、显示源码动作；工作台通用 `WebviewEditor`
-承载预览，`CustomTextEditorModel` 引用源码的共享文本模型。源码和独立预览标签可以同时打开，
-未保存文本、保存状态和关闭确认仍由同一文档状态决定。此入口没有扩大第三方扩展的生产执行许可。
+使用 `vscode-markdown-languageservice` 提供路径和标题补全、定义、引用、标题与链接重命名、
+文档及工作区符号、折叠、链接、悬停、快速修复、链接诊断、扩大选择和引用高亮。
+每次请求固定文档快照，打开的未保存文档先于磁盘内容；跨文件编辑附带原文，由编辑器批量编辑服务检查冲突。
+Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resource`、`expectedText` 和 `edits`；
+`kind: rename` 带 `source`、`target` 和 `existing`。链接路径重命名将文件改名和引用修改交给同一批量编辑事务，
+预览确认后才执行，目标冲突与撤销由该服务处理。
+文档扫描只使用文件服务可访问的工作区目录；后端未连接时，仅扫描本地浏览器已授权的目录。
+补全触发字符属于语言 Provider 注册契约。取消和扩展退出会终止对应请求。
+
+该扩展还提供 Markdown 预览及富文本编辑器，使用 `@vscode/markdown-editor` 以 Markdown 源码驱动排版。
+工作台通用 `WebviewEditor` 承载这些视图，`CustomTextEditorModel` 引用源码的共享文本模型。
+富文本视图只保留当前显示内容，编辑必须带上共享模型的版本；撤销、重做、保存和关闭确认均由同一文档状态决定。
+版本冲突保留视图中的草稿，并提供重新载入操作。库资源由 Worker 创建、工作台在沙箱内加载，
+不占用文档编辑消息的 JSON 限额；Worker 退出时释放资源 URL。
+“打开富文本编辑器”（`markdown.showRichEditor`）保留源码标签；“重新打开为富文本”替换当前视图。
+源码、预览与富文本标签可以同时打开。此入口没有扩大第三方扩展的生产执行许可。
 
 ## 0. 确定的产品方向
 

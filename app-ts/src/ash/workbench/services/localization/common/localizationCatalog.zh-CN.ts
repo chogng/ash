@@ -3005,6 +3005,7 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"update.settingsGroup": "更新",
 			"update.settingsGroupDescription": "选择 Ash 桌面版检查产品更新的方式。",
 			"webview.accessibilityHelp": "你正在查看文档预览。用 Tab 在链接间移动。面包屑中的编辑器选择菜单可以切换源码和预览。标题栏操作可以另开预览，也可以把当前标签重新打开为预览。<keybinding:workbench.action.splitEditor> 新建编辑器分组。<keybinding:editor.action.accessibleView> 以文本方式朗读文档。按 Escape 关闭无障碍帮助并返回预览。",
+			"webview.richEditorAccessibilityHelp": "你正在使用 Markdown 富文本编辑器。未编辑的段落以排版后的形式显示，当前段落显示 Markdown 源码。使用方向键移动，按住 Shift 选择文本。Control 或 Command 加 Home 或 End 跳到文档开头或末尾。Alt+F10 聚焦格式工具栏，左右方向键在按钮间移动，Escape 返回文档。Control 或 Command 加 S 保存共享文档，Z 撤销，Shift+Z 重做。面包屑中的编辑器选择按钮可切换到源码或预览。如果编辑期间另一个编辑器更改了源码，你的草稿会保留，“重新载入文档”可采用最新源码。<keybinding:editor.action.accessibleView> 可朗读 Markdown 源码。Escape 关闭无障碍帮助并返回编辑器。",
 			"webview.verbosity.description": "网页视图编辑器获得焦点时，提示如何打开无障碍帮助。",
 			"webview.verbosity.invalid": "网页视图编辑器的无障碍提示开关必须为布尔值。",
 			"webview.verbosity.title": "网页视图编辑器无障碍帮助",

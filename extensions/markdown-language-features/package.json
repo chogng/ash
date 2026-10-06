@@ -33,6 +33,16 @@
         "command": "markdown.reopenAsSource",
         "title": "%markdown.reopenAsSource.title%",
         "icon": "$(file-code)"
+      },
+      {
+        "command": "markdown.reopenAsRichEditor",
+        "title": "%markdown.reopenAsRichEditor.title%",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "markdown.showRichEditor",
+        "title": "%markdown.showRichEditor.title%",
+        "icon": "$(edit)"
       }
     ],
     "menus": {
@@ -52,6 +62,11 @@
           "command": "markdown.reopenAsSource",
           "when": "activeEditor == vscode.markdown.preview.editor",
           "group": "navigation@2"
+        },
+        {
+          "command": "markdown.reopenAsSource",
+          "when": "activeEditor == vscode.markdown.editor",
+          "group": "navigation@2"
         }
       ],
       "editor/title/context": [
@@ -64,6 +79,16 @@
           "command": "markdown.showSource",
           "when": "activeEditor == vscode.markdown.preview.editor",
           "group": "1_open@10"
+        },
+        {
+          "command": "markdown.reopenAsRichEditor",
+          "when": "resourceLangId == markdown",
+          "group": "1_open@11"
+        },
+        {
+          "command": "markdown.showRichEditor",
+          "when": "resourceLangId == markdown",
+          "group": "1_open@12"
         }
       ]
     },
@@ -89,7 +114,39 @@
             "filenamePattern": "*.mkdn"
           }
         ]
+      },
+      {
+        "viewType": "vscode.markdown.editor",
+        "displayName": "%markdown.rich.editor%",
+        "priority": "option",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          },
+          {
+            "filenamePattern": "*.mdown"
+          },
+          {
+            "filenamePattern": "*.mkd"
+          },
+          {
+            "filenamePattern": "*.mkdn"
+          }
+        ]
       }
     ]
+  },
+  "private": true,
+  "dependencies": {
+    "@vscode/l10n": "^0.0.18",
+    "@vscode/markdown-editor": "0.0.2-107",
+    "@vscode/observables": "0.1.1-0",
+    "markdown-it": "^15.0.2",
+    "vscode-languageserver-textdocument": "^1.0.15",
+    "vscode-markdown-languageservice": "^0.5.0",
+    "vscode-uri": "^3.2.0"
   }
 }

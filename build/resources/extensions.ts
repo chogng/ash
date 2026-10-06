@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, relative, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
+import { gzipSync } from 'node:zlib';
 
 const root = resolve(import.meta.dirname, '../..');
 const directory = resolve(root, 'extensions/theme-defaults');
@@ -34,6 +36,33 @@ export async function prepareBrowserExtensions(): Promise<void> {
 			const entry = manifest.browser.replace(/^\.\//, '');
 			const result = await build({
 				configFile: false, logLevel: 'error',
+				plugins: [{
+					name: 'ash-extension-webview',
+					async resolveId(source, importer) {
+						if (!source.endsWith('?webview')) return;
+						const resolved = await this.resolve(source.slice(0, -8), importer);
+						if (!resolved) throw new Error(`Cannot resolve extension webview: ${source}`);
+						return resolved.id + '?webview';
+					},
+					async load(id) {
+						if (!id.endsWith('?webview')) return;
+						const webview = await build({
+							configFile: false, logLevel: 'error',
+							build: {
+								write: false, minify: true, assetsInlineLimit: Infinity,
+								lib: { entry: id.slice(0, -8), formats: ['iife'], name: 'AshExtensionWebview' },
+							},
+						});
+						const outputs = Array.isArray(webview) ? webview.flatMap(output => output.output) : 'output' in webview ? webview.output : [];
+						const script = outputs.filter(output => output.type === 'chunk').map(output => output.code).join('\n');
+						const style = outputs.flatMap(output => output.type === 'asset' && output.fileName.endsWith('.css') ? [String(output.source)] : []).join('\n');
+						// Library assets stay in the Worker package; editor messages retain their existing JSON limit.
+						const payload = gzipSync(JSON.stringify({ script, style })).toString('base64');
+						return `export default ${JSON.stringify(payload)}`;
+					},
+				}],
+				// Browser language libraries operate on URI paths without a Node runtime.
+				resolve: { alias: { 'node:path': createRequire(import.meta.url).resolve('path-browserify'), 'path': createRequire(import.meta.url).resolve('path-browserify') } },
 				build: { write: false, minify: false, lib: { entry: resolve(packageRoot, entry), formats: ['es'], fileName: 'extension' } }
 			});
 			const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];

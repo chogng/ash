@@ -275,6 +275,7 @@ fn registration_fields_are_bounded_and_provider_sets_are_unique() {
             registrations: vec![RegistrationDescriptor {
                 registration_id: "review.language".into(),
                 kind: RegistrationKind::LanguageProvider {
+                    completion_trigger_characters: Vec::new(),
                     language_ids: vec!["rust".into(), "rust".into()],
                     operations: vec![
                         super::LanguageProviderOperation::Hover,
@@ -321,6 +322,7 @@ fn registration_variant_fields_serialize_in_camel_case() {
     let registration = RegistrationDescriptor {
         registration_id: "review.language".into(),
         kind: RegistrationKind::LanguageProvider {
+            completion_trigger_characters: Vec::new(),
             language_ids: vec!["rust".into()],
             operations: vec![
                 super::LanguageProviderOperation::ParameterHints,
@@ -390,5 +392,107 @@ fn external_uri_opener_rejects_empty_duplicate_and_privileged_schemes() {
     }
     for scheme in ["file", "javascript", "ash"] {
         assert!(serde_json::from_value::<RegistrationDescriptor>(json!({"registrationId":"browser","kind":"externalUriOpener","schemes":[scheme],"label":"Acme browser"})).is_err());
+    }
+}
+
+#[test]
+fn markdown_language_operations_round_trip() {
+    for (operation, spelling) in [
+        (super::LanguageProviderOperation::Diagnostics, "diagnostics"),
+        (
+            super::LanguageProviderOperation::SelectionRanges,
+            "selectionRanges",
+        ),
+        (
+            super::LanguageProviderOperation::DocumentHighlights,
+            "documentHighlights",
+        ),
+        (
+            super::LanguageProviderOperation::WorkspaceSymbols,
+            "workspaceSymbols",
+        ),
+    ] {
+        let encoded = serde_json::to_value(operation).unwrap();
+        assert_eq!(encoded, serde_json::json!(spelling));
+        assert_eq!(
+            serde_json::from_value::<super::LanguageProviderOperation>(encoded).unwrap(),
+            operation
+        );
+    }
+}
+
+#[test]
+fn completion_triggers_round_trip_and_require_unique_single_characters() {
+    let mut params = activation();
+    params.capabilities = vec![ExtensionCapability::LanguageProvider];
+    let request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params),
+    };
+    for (operations, triggers, valid) in [
+        (
+            vec![super::LanguageProviderOperation::Completion],
+            vec!["#", "/", "中"],
+            true,
+        ),
+        (
+            vec![super::LanguageProviderOperation::Completion],
+            vec!["#", "#"],
+            false,
+        ),
+        (
+            vec![super::LanguageProviderOperation::Completion],
+            vec![""],
+            false,
+        ),
+        (
+            vec![super::LanguageProviderOperation::Completion],
+            vec!["##"],
+            false,
+        ),
+        (
+            vec![super::LanguageProviderOperation::Completion],
+            vec!["\0"],
+            false,
+        ),
+        (
+            vec![super::LanguageProviderOperation::Hover],
+            vec!["#"],
+            false,
+        ),
+    ] {
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "markdown.language".into(),
+                    kind: RegistrationKind::LanguageProvider {
+                        language_ids: vec!["markdown".into()],
+                        operations,
+                        completion_trigger_characters: triggers
+                            .iter()
+                            .map(|value| (*value).into())
+                            .collect(),
+                    },
+                }],
+            })),
+        };
+        assert_eq!(
+            response
+                .validate_for(&request, &ProtocolLimits::default())
+                .is_ok(),
+            valid
+        );
+        if valid {
+            let encoded = serde_json::to_value(&response).unwrap();
+            assert_eq!(
+                encoded["body"]["body"]["registrations"][0]["completionTriggerCharacters"],
+                json!(triggers)
+            );
+            assert_eq!(
+                serde_json::from_value::<ExtensionHostResponse>(encoded).unwrap(),
+                response
+            );
+        }
     }
 }

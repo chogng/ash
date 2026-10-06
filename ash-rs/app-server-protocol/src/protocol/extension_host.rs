@@ -313,6 +313,9 @@ pub enum ExtensionHostRegistrationKindDto {
         language_ids: Vec<String>,
         #[schemars(length(min = 1, max = 32))]
         operations: Vec<ExtensionHostLanguageProviderOperationDto>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[schemars(length(max = 64))]
+        completion_trigger_characters: Vec<String>,
     },
     DebugAdapter {
         #[schemars(length(min = 1, max = 256))]
@@ -342,6 +345,10 @@ pub enum ExtensionHostExternalUriSchemeDto {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionHostLanguageProviderOperationDto {
+    Diagnostics,
+    SelectionRanges,
+    DocumentHighlights,
+    WorkspaceSymbols,
     Completion,
     ParameterHints,
     Definition,

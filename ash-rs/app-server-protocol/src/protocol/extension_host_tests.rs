@@ -47,6 +47,7 @@ fn registration_descriptor_matches_host_rpc_v1_shape() {
     let descriptor = ExtensionHostRegistrationDescriptorDto {
         registration_id: "rust-language".into(),
         kind: ExtensionHostRegistrationKindDto::LanguageProvider {
+            completion_trigger_characters: Vec::new(),
             language_ids: vec!["rust".into()],
             operations: vec![
                 ExtensionHostLanguageProviderOperationDto::ParameterHints,

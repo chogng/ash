@@ -23873,6 +23873,10 @@
     "ExtensionHostLanguageProviderOperationDto": {
       "description": "Language provider operations supported by the v1 invocation broker seam.",
       "enum": [
+        "diagnostics",
+        "selectionRanges",
+        "documentHighlights",
+        "workspaceSymbols",
         "completion",
         "parameterHints",
         "definition",
@@ -24230,6 +24234,13 @@
         },
         {
           "properties": {
+            "completionTriggerCharacters": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
             "kind": {
               "const": "languageProvider",
               "type": "string"
