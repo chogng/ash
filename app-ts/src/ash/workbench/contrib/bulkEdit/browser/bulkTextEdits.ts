@@ -21,6 +21,7 @@ export class BulkTextEdits {
 		private readonly failedSaves: DisposableMap<string, TextModelReference>,
 		private readonly signal: AbortSignal,
 		private readonly reason: TextModelEditSource | undefined,
+		private readonly skipSave: boolean,
 	) { }
 
 	public async apply(): Promise<readonly URI[]> {
@@ -38,9 +39,10 @@ export class BulkTextEdits {
 		model.version = model.reference.model.version;
 		const appliedVersion = model.reference.model.getAlternativeVersionId();
 		this.inverses.push(() => this.undoText(appliedVersion));
-		if (!model.wasOpen) {
+		if (!model.wasOpen && !this.skipSave) {
 			try {
-				await model.reference.save(this.signal);
+				// These writes persist the workspace transaction, rather than starting a user save.
+				await model.reference.save(this.signal, { skipSaveParticipants: true });
 			} catch (error) {
 				this.failedSaves.set(entry.resource.toString(), model.reference);
 				throw error;
@@ -61,8 +63,8 @@ export class BulkTextEdits {
 		if (!reference.model.undo() || reference.model.getText() !== before) {
 			throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' is no longer the latest undo step`);
 		}
-		if (!model.wasOpen) {
-			await reference.save(new AbortController().signal);
+		if (!model.wasOpen && !this.skipSave) {
+			await reference.save(new AbortController().signal, { skipSaveParticipants: true });
 			if (this.failedSaves.get(entry.resource.toString()) === model.reference) {
 				this.failedSaves.deleteAndDispose(entry.resource.toString());
 			}

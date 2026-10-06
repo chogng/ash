@@ -59,6 +59,16 @@ exposes their common lifecycle without requiring a second editor model authority
 
 ## Tests and modification impact
 
+Code Action save participants belong to `codeEditor/browser/saveParticipants.ts` and register with
+`IFileTextModelService`. `BrowserTextModelService` runs them inside its save queue before capturing
+the bytes to persist. `SaveReason` distinguishes explicit, delayed, focus-change and window-change
+saves; language-scoped `editor.codeActionsOnSave` selects the actions, with delayed saves excluded.
+Save As uses the destination model and the same save pipeline. Workspace edits leave the current
+resource's persistence to that queue; their own writes for other closed resources and rollbacks
+skip participants. Cancellation, stale query/resolve results and failures leave local text dirty.
+`contrib/codeEditor/test/browser/saveParticipants.test.ts` and the text-model Playwright page
+cover action order, modes, language overrides, diagnostics, persistence, undo and cancellation.
+
 `test/common/textFileService.test.ts` covers bootstrap precedence, byte delegation, cancellation, UTF-8 BOM handling, binary/invalid UTF-8 rejection, size limits, and failure propagation.
 `../../../platform/files/test/browser/fileService.test.ts` covers App Server
 invalidation projection.

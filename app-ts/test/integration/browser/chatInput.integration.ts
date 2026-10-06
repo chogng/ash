@@ -1,3 +1,14 @@
+import '../../../src/ash/base/browser/ui/styles.css';
+import { URI } from '../../../src/ash/base/common/uri.js';
+import { FileKind, IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
+import { IChatContextPickService } from '../../../src/ash/workbench/services/chat/common/chatContextService.js';
+import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../src/ash/workbench/services/chat/common/modelCatalog.js';
@@ -93,8 +104,43 @@ services.registerInstance(IDictationService, undefined);
 services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
+services.registerInstance(INotificationService, notifications);
+const quickInput = resources.add(new QuickInputController(document.body));
+services.registerInstance(IQuickInputService, quickInput);
+const contextPicks = new ChatContextPickService();
+services.registerInstance(IChatContextPickService, contextPicks);
+resources.add(contextPicks.registerPicker({
+	id: 'integration.context', label: 'Test source', isEnabled: () => true,
+	providePicks: async query => {
+		if (query === 'error') { throw new Error('Context source failed'); }
+		return [{ label: 'Source context', attachment: { id: 'source', kind: 'source', name: 'Source context', resolve: async () => ({ name: 'Source context', content: 'Registered context content' }) } }];
+	},
+}));
+const root = URI.file('/workspace');
+const edited = URI.file('/workspace/edited.ts');
+services.registerInstance(IWorkspaceContextService, { getWorkspace: () => ({ folders: [{ uri: root, name: 'workspace' }] }) } as unknown as IWorkspaceContextService);
+services.registerInstance(IEditorGroupsService, { groups: [{ inputs: [{ resource: edited }] }] } as unknown as IEditorGroupsService);
+services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
+services.registerInstance(IFileService, {
+	readDirectory: async (resource: URI) => resource.path === '/workspace' ? [
+		{ resource: URI.file('/workspace/src'), name: 'src', kind: FileKind.Directory },
+		{ resource: URI.file('/workspace/brief.txt'), name: 'brief.txt', kind: FileKind.File },
+	] : [{ resource: URI.file('/workspace/src/nested.txt'), name: 'nested.txt', kind: FileKind.File }],
+	readFile: async (resource: URI) => ({ resource, content: 'Workspace file content', revision: '1' }),
+} as unknown as IFileService);
+const submission = document.createElement('output');
+submission.setAttribute('aria-label', 'Submission');
+document.body.append(submission);
+const errorOutput = document.createElement('output');
+errorOutput.setAttribute('aria-label', 'Context error');
+document.body.append(errorOutput);
+resources.add(notifications.onDidAdd(item => { errorOutput.textContent = item.message; }));
+
 const delegate: ChatInputDelegate = {
-	send: async () => { }, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+	send: async (_text, _mode, _skills, contexts) => {
+		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
+		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
+	}, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
 	selectModel: async model => {
 		selectedModel = model;
 		automatic = false;

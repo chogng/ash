@@ -288,7 +288,7 @@ test('Model acceleration copy follows the catalog and its preference survives a 
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
 		}
-		await page.locator('.ash-chat-view-pane [data-action-id="ash.chat.input.model"] button').press('ArrowDown');
+		await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
 		const picker = page.locator('.ash-chat-model-picker');
 		const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
 		if (await automatic.isChecked()) { await automatic.press('Space'); }

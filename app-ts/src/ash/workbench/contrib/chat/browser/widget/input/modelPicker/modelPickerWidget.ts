@@ -13,18 +13,93 @@ import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import { ModelPickerDetailsMenu } from './modelPickerHover.js';
 import { buildModelPickerItems } from './modelPickerItems.js';
+import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 
 let nextPickerId = 0;
 
 /** Model controls retain business state; ActionWidget owns the popup and its action list. */
 export class ModelPickerWidget extends Disposable {
+	private nameButton: Button | undefined;
+	private configurationButton: Button | undefined;
+	private configuration: ModelPickerConfiguration | undefined;
+	private tabbable = false;
 	private readonly popup: MutableDisposable<DisposableStore>;
 
-	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService) {
+	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		// Close the service-owned popup before releasing the controls attached to it.
 		this._register(toDisposable(() => this.hide()));
 		this.popup = this._register(new MutableDisposable<DisposableStore>());
+	}
+
+	public render(container: HTMLElement): void {
+		const control = h(container.ownerDocument, 'div');
+		control.className = 'ash-chat-model-picker-control';
+		container.append(control);
+		this._register(toDisposable(() => control.remove()));
+		const name = this.nameButton = this._register(new Button(control, { label: '', hoverGroupId: 'actions' }));
+		const options = this.configurationButton = this._register(new Button(control, { label: '', hoverGroupId: 'actions' }));
+		name.toggleClassName('ash-chat-input-model-action', true);
+		options.toggleClassName('ash-chat-input-configuration-action', true);
+		name.domNode.setAttribute('aria-haspopup', 'dialog');
+		name.domNode.setAttribute('aria-expanded', 'false');
+		options.domNode.setAttribute('aria-haspopup', 'menu');
+		options.domNode.setAttribute('aria-expanded', 'false');
+		this.configuration = this._register(this.instantiationService.createInstance(ModelPickerConfiguration, this.delegate, options));
+		this._register(name.onDidClick(() => {
+			if (this.visible) { this.hide(); }
+			else { this.show(name.domNode); }
+		}));
+		this._register(options.onDidClick(() => {
+			this.hide();
+			options.focus();
+			this.configuration!.show();
+		}));
+		this._register(addDisposableListener(control, 'keydown', event => {
+			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+				stopEvent(event);
+				if (event.target === name.domNode) { this.show(name.domNode); }
+				else { this.configuration!.show(); }
+			} else if (event.key === 'ArrowRight' && event.target === name.domNode && !options.hidden) {
+				stopEvent(event);
+				options.focus();
+			} else if (event.key === 'ArrowLeft' && event.target === options.domNode) {
+				stopEvent(event);
+				name.focus();
+			}
+		}));
+		// ActionBar tracks the composite item; the widget tracks its current trigger.
+		this._register(addDisposableListener(control, 'focusin', () => this.setTabbable(this.tabbable)));
+		this._register(this.delegate.onDidChangePresentation(() => this.updateButtons()));
+		this.updateButtons();
+	}
+
+	public focus(): void {
+		this.nameButton?.focus();
+	}
+
+	public setTabbable(tabbable: boolean): void {
+		this.tabbable = tabbable;
+		if (this.nameButton && this.configurationButton) {
+			const configurationFocused = this.configurationButton.hasFocus() && !this.configurationButton.hidden;
+			this.nameButton.domNode.tabIndex = tabbable && !configurationFocused ? 0 : -1;
+			this.configurationButton.domNode.tabIndex = tabbable && configurationFocused ? 0 : -1;
+		}
+	}
+
+	private updateButtons(): void {
+		const selected = this.delegate.getSelectedModel();
+		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
+		const label = this.delegate.isAutomaticModel()
+			? localize('chat.modelPicker.auto', 'Auto')
+			: model?.displayName ?? localize('chat.modelPicker.selectModel', 'Select model');
+		this.nameButton!.label = label;
+		this.nameButton!.domNode.setAttribute('aria-label', label);
+		this.nameButton!.setTitle(label);
+		this.configuration!.renderButton();
+		if (this.configurationButton!.hidden && this.configurationButton!.hasFocus()) { this.focus(); }
+		this.setTabbable(this.tabbable);
 	}
 
 	public get visible(): boolean {
@@ -245,7 +320,7 @@ export class ModelPickerWidget extends Disposable {
 						{ type },
 						() => {
 							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Tab moves between model settings. Space selects one acceleration option, turns it off, or toggles the context window. Only one acceleration option can be selected. The model settings description explains how acceleration affects processing and usage. Use the thinking effort menu beside the model button to change thinking level. Alt+Left Arrow returns to search. Escape closes the menu.');
+								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Tab moves between model settings. Space selects one acceleration option, turns it off, or toggles the context window. Only one acceleration option can be selected. The model settings description explains how acceleration affects processing and usage. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu.');
 							}
 							return content.innerText;
 						},

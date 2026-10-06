@@ -7,6 +7,18 @@ import { toError } from '../../base/common/errors.js';
 import type Severity from '../../base/common/severity.js';
 import { URI } from '../../base/common/uri.js';
 
+export enum SaveReason {
+	EXPLICIT = 1,
+	AUTO = 2,
+	FOCUS_CHANGE = 3,
+	WINDOW_CHANGE = 4,
+}
+
+export interface ISaveOptions {
+	readonly reason?: SaveReason;
+	readonly skipSaveParticipants?: boolean;
+}
+
 /** A resource requested through the Workbench editor service. */
 export interface IResourceEditorInput {
 	/** Distinguishes an independent custom editor tab from a text tab for the same resource. */

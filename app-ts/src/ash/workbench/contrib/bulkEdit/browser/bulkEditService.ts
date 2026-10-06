@@ -212,7 +212,8 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				for (const operation of operations) {
 					throwIfCancelled(signal, "Workspace edit was cancelled");
 					if (operation.kind === 'textDocument') {
-						await new BulkTextEdits(operation, this.models, undo, this.retainedFailedSaves, signal, options.reason).apply();
+						const skipSave = options.skipSaveForResources?.some(resource => resource.toString() === operation.entry.resource.toString()) === true;
+						await new BulkTextEdits(operation, this.models, undo, this.retainedFailedSaves, signal, options.reason, skipSave).apply();
 					} else {
 						await new BulkFileEdits(operation, this.files, undo).apply();
 					}
@@ -226,6 +227,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			if (options.respectAutoSaveConfig && this.configuration.getValue<boolean>(autoSaveSetting) === true && touched.size > 1) {
 				try {
 					for (const resource of touched.values()) {
+						if (options.skipSaveForResources?.some(skipped => skipped.toString() === resource.toString())) continue;
 						for (const copy of this.workingCopies.get(resource)) {
 							if (copy.isDirty) {
 								await copy.save(signal);

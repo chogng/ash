@@ -2775,12 +2775,13 @@ window.ashStandaloneIntegration = {
 			acquire: async (input, signal) => input.resource.toString() === callerModel.uri.toString() ? ({
 				resource: callerModel.uri, model: callerModel, isDirty: false, hasExternalChange: false,
 				onDidChangeDirty: EventUtils.None, onDidChangeExternalChange: EventUtils.None,
-				save: async () => { }, revert: async () => { }, dispose: () => { }, [Symbol.dispose]: () => { },
+				save: async () => { }, saveAs: async () => { throw new Error('Preview must not save copies'); }, revert: async () => { }, dispose: () => { }, [Symbol.dispose]: () => { },
 			}) : await snapshots.acquire(input, signal),
 			dispose: () => { }, [Symbol.dispose]: () => { },
 		});
 		services.registerInstance(IFileTextModelService, {
 			...services.get(ITextModelResourceService),
+			addSaveParticipant: participant => snapshots.addSaveParticipant(participant),
 			getModel: resource => resource.toString() === callerModel.uri.toString() ? callerModel : null,
 			onModelRemoved: EventUtils.None,
 			onModelLanguageChanged: EventUtils.None,

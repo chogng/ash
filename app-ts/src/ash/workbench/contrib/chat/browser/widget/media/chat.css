@@ -219,41 +219,6 @@
 	height: 24px;
 }
 
-.ash-chat-input-attachment-item {
-	display: flex;
-	align-items: center;
-	min-width: 0;
-	max-width: 100%;
-	height: 24px;
-	padding-left: 8px;
-	color: var(--ash-foreground);
-	background: var(--ash-button-secondary-background);
-	border-radius: var(--ash-corner-radius-small);
-}
-
-.ash-chat-input-attachment-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.ash-chat-input-attachment-remove {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 24px;
-	height: 24px;
-	padding: 0;
-	color: inherit;
-	background: transparent;
-	border: 0;
-	border-radius: var(--ash-corner-radius-small);
-}
-
-.ash-chat-input-attachment-remove:hover {
-	background: var(--ash-toolbar-hover-background);
-}
-
 .ash-chat-textarea-input {
 	box-sizing: border-box;
 	width: 100%;
@@ -377,40 +342,6 @@
 	white-space: nowrap;
 }
 
-.ash-chat-input-action.ash-chat-input-model-action {
-	min-width: 0;
-	max-width: 100%;
-	padding: 0 var(--ash-spacing-size80);
-	border-radius: var(--ash-corner-radius-circle);
-	font-size: 13px;
-}
-
-.ash-chat-input-toolbars .ash-chat-input-model-selector {
-	min-width: 0;
-}
-
-.ash-chat-input-toolbars .ash-chat-input-effort-selector {
-	min-width: 0;
-	max-width: 96px;
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-effort-selector
-	.ash-chat-input-effort-action {
-	min-width: 0;
-	padding: 0 var(--ash-spacing-size40);
-	border-radius: var(--ash-corner-radius-small);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
-}
-
-.ash-chat-input-toolbars .ash-chat-input-effort-label {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .ash-chat-input-mic-action {
 	width: var(--ash-toolbar-action-size);
 	min-width: var(--ash-toolbar-action-size);
@@ -498,14 +429,5 @@
 		.ash-chat-input-action.ash-chat-input-mode-action {
 		padding-inline: var(--ash-spacing-size60);
 		font-size: 12px;
-	}
-
-	.ash-chat-input-toolbars .ash-chat-input-effort-selector {
-		max-width: 68px;
-	}
-
-	.ash-chat-input-action.ash-chat-input-model-action {
-		padding-inline: var(--ash-spacing-size60);
-		font-size: 13px;
 	}
 }

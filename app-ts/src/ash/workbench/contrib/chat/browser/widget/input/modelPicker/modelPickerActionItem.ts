@@ -1,62 +1,43 @@
-import { ButtonActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { addDisposableListener, stopEvent } from '../../../../../../../base/browser/dom.js';
+import { ActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../../../../../base/common/actions.js';
 import type { Event } from '../../../../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
 	readonly onDidChangePresentation: Event<void>;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
+	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
 	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
+	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	openSettings(): Promise<void>;
 }
 
-/** Presents the model picker as a Chat input action. */
-export class ModelPickerActionItem extends ButtonActionViewItem {
+/** Adapts the combined picker to the input toolbar's focus contract. */
+export class ModelPickerActionItem extends ActionViewItem {
 	private readonly pickerWidget: ModelPickerWidget;
 
-	constructor(action: IAction, private readonly delegate: IModelPickerDelegate, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(action: IAction, delegate: IModelPickerDelegate, @IInstantiationService instantiationService: IInstantiationService) {
 		super(action);
 		this.pickerWidget = this._register(instantiationService.createInstance(ModelPickerWidget, delegate));
 	}
 
-	override render(container: HTMLElement): void {
-		super.render(container);
-		container.classList.add('ash-chat-input-selector', 'ash-chat-input-model-selector');
-		this.button.toggleClassName('ash-chat-input-action', true);
-		this.button.toggleClassName('ash-chat-input-model-action', true);
-		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
-		this.button.domNode.setAttribute('aria-expanded', 'false');
-		this._register(this.delegate.onDidChangePresentation(() => {
-			this.button.label = this.action.label;
-			this.button.domNode.setAttribute('aria-label', this.action.tooltip);
-			this.setupTooltip();
-		}));
-		this._register(addDisposableListener(this.button.domNode, 'keydown', this.handleKeydown));
+	public override render(container: HTMLElement): void {
+		container.classList.add('ash-chat-input-model-selector');
+		this.pickerWidget.render(container);
 	}
 
-	protected override runAction(): void {
-		if (this.pickerWidget.visible) {
-			this.pickerWidget.hide();
-			return;
-		}
-		this.show();
+	public override focus(): void {
+		this.pickerWidget.focus();
 	}
 
-	public show(): void {
-		this.pickerWidget.show(this.button.domNode);
+	public override setTabbable(tabbable: boolean): void {
+		this.pickerWidget.setTabbable(tabbable);
 	}
-
-	private readonly handleKeydown = (event: KeyboardEvent): void => {
-		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-		stopEvent(event);
-		this.show();
-	};
 }

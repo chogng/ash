@@ -457,6 +457,21 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
+test('save code actions apply fixes and organize imports before the keyboard save writes the file', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(async () => {
+		await window.ashTextModelIntegration.enableSaveCodeActions();
+		window.ashTextModelIntegration.setValue('use z;\nuse a;\nfn main() { let unused = 1; }\n');
+	});
+	await page.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+s');
+	const saved = 'use a;\nuse z;\nfn main() { let _unused = 1; }\n';
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe(saved);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(saved);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('use z;\nuse a;\nfn main() { let _unused = 1; }\n');
+});
+
 test("text-model editor public API, pane, undo, save, and browser worker", async ({ page }) => {
 	const workers: string[] = [];
 	page.on("worker", worker => workers.push(worker.url()));

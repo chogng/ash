@@ -11,6 +11,38 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 	}, source);
 }
 
+test('Code Action settings offer save modes and persist file and notebook configuration', async ({ workbench, reloadWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	let group = workbench.editors.groupAt(0);
+	await expect(group.editor.input).toBeFocused();
+	await group.editor.input.press('ControlOrMeta+A');
+	await pasteJson(group.editor.input, JSON.stringify({
+		'editor.codeActionsOnSave': { 'source.organizeImports': '' },
+		'notebook.codeActionsOnSave': { 'notebook.source.fixAll': 'explicit' },
+	}, null, 2));
+	await group.editor.input.press('ControlOrMeta+Home');
+	await group.editor.input.press('ArrowDown');
+	await group.editor.input.press('ArrowDown');
+	await group.editor.input.press('End');
+	await group.editor.input.press('ArrowLeft');
+	await group.editor.input.press('Control+Space');
+	await expect(group.content.getByRole('option', { name: /^"always" /u })).toBeVisible();
+	await expect(group.content.getByRole('option', { name: /^"never" /u })).toBeVisible();
+	await group.editor.input.press('ArrowDown');
+	await group.editor.input.press('Enter');
+	await group.editor.input.press('ControlOrMeta+S');
+	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
+	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	({ workbench } = await reloadWorkbench());
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorContents(content => {
+		const settings = JSON.parse(content);
+		return settings['editor.codeActionsOnSave']?.['source.organizeImports'] === 'explicit'
+			&& settings['notebook.codeActionsOnSave']?.['notebook.source.fixAll'] === 'explicit';
+	});
+});
+
 test('Preferred paste and drop commands reveal editable settings and persist their order', async ({ workbench }) => {
 	const group = workbench.editors.groupAt(0);
 	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });

@@ -7,7 +7,7 @@ test('Model options combine thinking effort and context size and save the contex
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const model = page.locator("[data-action-id='ash.chat.input.model'] button");
+	const model = page.locator(".ash-chat-input-model-action");
 	await model.click();
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 	const auto = picker.getByRole('switch', { name: 'Auto' });
@@ -19,23 +19,25 @@ test('Model options combine thinking effort and context size and save the contex
 	await search.fill('Astra');
 	await search.press('Enter');
 	await expect(model).toHaveText(/^GPT-6[- ]Astra$/);
-	const configuration = page.locator("[data-action-id='ash.chat.input.effort'] button");
-	await expect(configuration).toHaveText(/272K$/);
+	const configuration = page.locator(".ash-chat-input-configuration-action");
+	await expect(configuration).not.toContainText(/\d/u);
 	await configuration.press('ArrowDown');
 	const menu = page.locator('.ash-chat-model-configuration-menu');
 	await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(['Thinking Level', 'Context Size']);
 	await expect(menu.getByRole('separator')).toHaveCount(1);
 	const high = menu.getByRole('menuitemradio', { name: 'High', exact: true });
 	await high.click();
-	await expect(configuration).toHaveText('High 272K');
+	await expect(menu).toBeHidden();
+	await expect(configuration).toHaveText('High');
 	await configuration.press('ArrowDown');
 	await menu.getByRole('menuitemradio', { name: '1M', exact: true }).click();
-	await expect(configuration).toHaveText('High 1M');
+	await expect(menu).toBeHidden();
+	await expect(configuration).toHaveText('High');
 	await expect(configuration).toBeFocused();
 	await configuration.press('ArrowDown');
 	await expect(high).toHaveAttribute('aria-checked', 'true');
 	await expect(menu.getByRole('menuitemradio', { name: '1M', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await expect(menu.getByRole('menuitemradio', { name: '272K', exact: true }).locator('.ash-menu-badge')).toHaveText('Default');
+	await expect(menu.locator('.ash-menu-badge')).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await model.click();
 	await search.fill('Astra');
@@ -45,7 +47,8 @@ test('Model options combine thinking effort and context size and save the contex
 	await page.keyboard.press('Escape');
 	await configuration.press('ArrowDown');
 	await menu.getByRole('menuitemradio', { name: '272K', exact: true }).click();
-	await expect(configuration).toHaveText('High 272K');
+	await expect(menu).toBeHidden();
+	await expect(configuration).toHaveText('High');
 	await expect(configuration).toBeFocused();
 });
 
@@ -55,7 +58,7 @@ test('Model picker keeps search quiet and aligns menu rows and the chosen icon',
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	const selector = page.locator(".ash-chat-input-model-action");
 	await selector.focus();
 	await selector.press('Enter');
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
@@ -163,7 +166,7 @@ test('Disconnected model picker explains the empty catalog and opens settings', 
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	const selector = page.locator(".ash-chat-input-model-action");
 	await expect(selector).toBeEnabled();
 	await expect(selector.locator('.ash-dropdown-menu-indicator')).toHaveCount(0);
 	const modeSelector = page.locator("[data-action-id='ash.chat.input.mode'] button");
@@ -201,7 +204,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	}
 	// Close the startup editor before checking focus across asynchronous saves.
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
-	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	const selector = page.locator(".ash-chat-input-model-action");
 	await selector.focus();
 	await selector.press('Enter');
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
@@ -224,10 +227,11 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	const fast = card.getByRole('switch', { name: 'Fast', exact: true });
 	const context = card.getByRole('switch', { name: '1M context', exact: true });
 	await expect(fast).toBeFocused();
-	await expect(card.getByRole('switch')).toHaveCount(2);
+	await expect(card.getByRole('switch')).toHaveCount(3);
+	await expect(card.getByRole('switch', { name: 'Ultra Fast', exact: true })).not.toBeChecked();
 	await expect(card.getByRole('radio')).toHaveCount(0);
-	await expect(card.locator('.ash-toggle-content').filter({ visible: true })).toHaveText(['Fast', '1M']);
-	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Faster responses, increased usage');
+	await expect(card.locator('.ash-toggle-content').filter({ visible: true })).toHaveText(['Fast', 'Ultra Fast', '1M']);
+	await expect(card.locator('.ash-chat-model-card-description')).toHaveText(['Faster responses, increased usage', 'Faster responses, increased usage']);
 	const surfaces = await picker.evaluate(element => {
 		const main = element.getBoundingClientRect();
 		const side = element.querySelector('.ash-chat-model-picker-details-menu')!.getBoundingClientRect();
@@ -244,8 +248,8 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	await expect(context).not.toHaveAttribute('aria-busy', 'true');
 	await expect(context).toBeChecked();
 	await expect(context).toBeFocused();
-	await expect(card.locator('.ash-toggle-content').filter({ visible: true })).toHaveText(['Fast', '1M']);
-	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Faster responses, increased usage');
+	await expect(card.locator('.ash-toggle-content').filter({ visible: true })).toHaveText(['Fast', 'Ultra Fast', '1M']);
+	await expect(card.locator('.ash-chat-model-card-description')).toHaveText(['Faster responses, increased usage', 'Faster responses, increased usage']);
 	await expect(search).toHaveValue('Astra');
 	await context.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help' });
@@ -273,24 +277,27 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	await expect(context).not.toHaveAttribute('aria-busy', 'true');
 	await expect(context).not.toBeChecked();
 	await expect(context).toBeFocused();
-	await expect(card.locator('.ash-toggle-content').filter({ visible: true })).toHaveText(['Fast', '1M']);
-	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Faster responses, increased usage');
+	await expect(card.locator('.ash-toggle-content').filter({ visible: true })).toHaveText(['Fast', 'Ultra Fast', '1M']);
+	await expect(card.locator('.ash-chat-model-card-description')).toHaveText(['Faster responses, increased usage', 'Faster responses, increased usage']);
 	await fast.press('Space');
 	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
 	await expect(fast).not.toBeChecked();
 	await fast.press('Escape');
-	const configuration = page.locator("[data-action-id='ash.chat.input.effort'] button");
-	await expect(configuration).toHaveText(/272K$/);
+	const configuration = page.locator(".ash-chat-input-configuration-action");
+	const thinkingLevel = await configuration.innerText();
+	await expect(configuration).not.toContainText(/\d/u);
 	await configuration.press('ArrowDown');
 	const configurationMenu = page.locator('.ash-chat-model-configuration-menu');
 	await expect(configurationMenu.locator('.ash-chat-model-configuration-heading')).toHaveText(['Thinking Level', 'Context Size']);
 	await configurationMenu.getByRole('menuitemradio', { name: '1M', exact: true }).click();
-	await expect(configuration).toHaveText(/1M$/);
+	await expect(configurationMenu).toBeHidden();
+	await expect(configuration).toHaveText(thinkingLevel);
 	await expect(configuration).toBeFocused();
 	await configuration.press('ArrowDown');
 	await expect(configurationMenu.getByRole('menuitemradio', { name: '1M', exact: true })).toHaveAttribute('aria-checked', 'true');
 	await configurationMenu.getByRole('menuitemradio', { name: '272K', exact: true }).click();
-	await expect(configuration).toHaveText(/272K$/);
+	await expect(configurationMenu).toBeHidden();
+	await expect(configuration).toHaveText(thinkingLevel);
 	await selector.click();
 	await search.fill('Grok 4.7');
 	await search.press('ArrowRight');
@@ -303,15 +310,15 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	await search.fill('Grok 4.7');
 	await search.press('Enter');
 	await expect(selector).toHaveText('Grok 4.7');
-	const effort = page.locator("[data-action-id='ash.chat.input.effort'] button");
-	await expect(effort).toHaveText('Default 500K');
+	const effort = page.locator(".ash-chat-input-configuration-action");
+	await expect(effort).toHaveText('Default');
 	await effort.press('ArrowDown');
 	const effortMenu = page.locator('.ash-chat-model-configuration-menu');
 	await expectModelPickerAnchored(effortMenu, effort);
 	await expect(effortMenu.locator('.ash-chat-model-configuration-heading')).toHaveText(['Thinking Level', 'Context Size']);
-	await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['Default', 'Low', 'Medium', 'High', 'Extra High', '500KDefault']);
+	await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['Default', 'Low', 'Medium', 'High', 'Extra High', '500K']);
 	await effortMenu.getByRole('menuitemradio', { name: 'High', exact: true }).click();
-	await expect(effort).toHaveText('High 500K');
+	await expect(effort).toHaveText('High');
 	await expect(effort).toBeFocused();
 	await selector.click();
 	const finalPicker = page.getByRole('dialog', { name: 'Choose a chat model' });
@@ -320,7 +327,7 @@ test('Model picker saves Fast and context settings separately from thinking effo
 	const autoSwitch = finalPicker.getByRole('switch', { name: 'Auto' });
 	await autoSwitch.press('Space');
 	await expect(selector).toHaveText('Auto');
-	await expect(effort).toHaveCount(0);
+	await expect(effort).toBeHidden();
 	await expect(autoSwitch).toHaveAttribute('aria-checked', 'true');
 	await expect(autoSwitch).toBeFocused();
 	await expect(finalPicker.getByRole('combobox')).toHaveCount(0);
@@ -357,7 +364,7 @@ test('Model picker details and keyboard help follow the Chinese display language
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: '显示辅助侧栏', exact: true }).click();
 	}
-	const selector = page.locator("[data-action-id='ash.chat.input.model'] button");
+	const selector = page.locator(".ash-chat-input-model-action");
 	await selector.click();
 	const picker = page.getByRole('dialog', { name: '选择聊天模型' });
 	const auto = picker.getByRole('switch', { name: '自动' });
@@ -389,7 +396,7 @@ test('New Chat starts with the last model chosen in the picker', async ({ target
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const selector = page.locator('.ash-chat-pane-host > .ash-chat:not([hidden]) [data-action-id="ash.chat.input.model"] button');
+	const selector = page.locator('.ash-chat-pane-host > .ash-chat:not([hidden]) .ash-chat-input-model-action');
 	await expect(selector).toBeEnabled();
 	await selector.click();
 	const auto = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('switch', { name: 'Auto' });

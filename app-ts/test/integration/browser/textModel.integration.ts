@@ -28,7 +28,10 @@ import { createBrowserEditorPart } from "../../../src/ash/workbench/contrib/code
 import { TextResourceEditor, type EditorPaneOptions } from "../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js";
 import { ILanguageConfigurationService, LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
-import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { SaveParticipantsContribution } from '../../../src/ash/workbench/contrib/codeEditor/browser/saveParticipants.js';
+import '../../../src/ash/workbench/contrib/codeActions/browser/codeActions.contribution.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../../src/ash/editor/common/services/languageFeaturesService.js";
@@ -73,6 +76,7 @@ interface IntegrationHarness {
 	getValue(): string;
 	setValue(value: string): void;
 	save(): Promise<void>;
+	enableSaveCodeActions(): Promise<void>;
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
 	getBundleIds(): readonly string[];
@@ -168,6 +172,8 @@ services.registerSingleton(IMarkerDecorationsService, () => services.createInsta
 services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 services.registerInstance(ITextModelResourceService, models);
+services.registerInstance(IFileTextModelService, models);
+services.registerInstance(IConfigurationService, configurationService);
 services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 const themeService = disposables.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themeService);
@@ -181,6 +187,7 @@ services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuick
 	contextKeyService: services.get(IContextKeyService),
 })));
 registerCodeEditorServices(services);
+disposables.add(services.createInstance(SaveParticipantsContribution));
 services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);
 const pane = disposables.add(services.createInstance(TextResourceEditor, resourceStore, {
@@ -202,6 +209,18 @@ window.ashTextModelIntegration = {
 	getValue: () => pane.getValue(),
 	setValue: value => requiredEditorPart().setValue(value),
 	save: () => pane.save(),
+	enableSaveCodeActions: async () => {
+		await configurationService.updateValue('editor.codeActionsOnSave', { 'source.fixAll': 'explicit', 'source.organizeImports': 'explicit' });
+		disposables.add(languageFeaturesService.codeActionProvider.register('rust', {
+			provideCodeActions: request => {
+				const kind = request.only?.[0];
+				const text = kind === 'source.fixAll'
+					? request.snapshot.getText().replace('let unused = 1;', 'let _unused = 1;')
+					: request.snapshot.getText().replace('use z;\nuse a;', 'use a;\nuse z;');
+				return [{ title: kind!, kind, edit: { entries: [{ kind: 'textDocument', resource: request.resource, version: request.snapshot.version, edits: [{ range: request.range, text }] }] } }];
+			},
+		}));
+	},
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
 	getBundleIds: () => [

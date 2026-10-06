@@ -1,4 +1,6 @@
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
 import type { IQuickPickItem, IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import type { ChatContextAttachment, ChatContextPick, ChatContextPicker, IChatContextPickService } from '../common/chatContextService.js';
 
@@ -13,6 +15,10 @@ interface ContextItem extends IQuickPickItem {
 export class ChatContextPickService implements IChatContextPickService {
 	private readonly pickers = new Map<string, ChatContextPicker>();
 
+	public get items(): readonly ChatContextPicker[] {
+		return [...this.pickers.values()];
+	}
+
 	registerPicker(picker: ChatContextPicker): IDisposable {
 		if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/u.test(picker.id) || !picker.label.trim()) {
 			throw new TypeError('Chat context picker requires a valid ID and label');
@@ -24,30 +30,32 @@ export class ChatContextPickService implements IChatContextPickService {
 		});
 	}
 
-	async pickContext(quickInputService: IQuickInputService): Promise<ChatContextAttachment | undefined> {
+	async pickContext(quickInputService: IQuickInputService, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
 		const enabled: ChatContextPicker[] = [];
 		for (const picker of this.pickers.values()) {
 			if (await picker.isEnabled()) enabled.push(picker);
 		}
-		if (enabled.length === 0) return undefined;
+		if (signal?.aborted || enabled.length === 0) return undefined;
 		const picker = enabled.length === 1 ? enabled[0] : await selectItem<PickerItem>(
 			quickInputService,
 			enabled.map(candidate => ({ label: candidate.label, picker: candidate })),
-			'Select context source',
+			localize('chat.context.selectSource', 'Select context source'),
+			signal,
 		).then(item => item?.picker);
 		if (!picker) return undefined;
-		return selectContext(quickInputService, picker);
+		return selectContext(quickInputService, picker, signal);
 	}
 }
 
-async function selectContext(quickInputService: IQuickInputService, provider: ChatContextPicker): Promise<ChatContextAttachment | undefined> {
+async function selectContext(quickInputService: IQuickInputService, provider: ChatContextPicker, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
 	const quickPick = quickInputService.createQuickPick<ContextItem>();
-	quickPick.placeholder = `Select ${provider.label.toLocaleLowerCase()}`;
+	quickPick.placeholder = localize('chat.context.select', 'Select {0}', provider.label);
+	quickPick.ariaLabel = quickPick.placeholder;
 	const resources = new DisposableStore();
 	resources.add(quickPick);
 	let generation = 0;
 	let settled = false;
-	return new Promise<ChatContextAttachment | undefined>(resolve => {
+	return new Promise<ChatContextAttachment | undefined>((resolve, reject) => {
 		const finish = (attachment: ChatContextAttachment | undefined): void => {
 			if (settled) return;
 			settled = true;
@@ -60,22 +68,29 @@ async function selectContext(quickInputService: IQuickInputService, provider: Ch
 				const picks = await provider.providePicks(query);
 				if (settled || current !== generation) return;
 				quickPick.items = picks.map(toContextItem);
-			} catch {
-				if (!settled && current === generation) quickPick.items = [];
+			} catch (error) {
+				if (!settled && current === generation) {
+					settled = true;
+					reject(error);
+					resources.dispose();
+				}
 			}
 		};
 		resources.add(quickPick.onDidChangeValue(value => void load(value)));
 		resources.add(quickPick.onDidAccept(item => finish(item.attachment)));
 		resources.add(quickPick.onDidHide(() => finish(undefined)));
+		if (signal?.aborted) { finish(undefined); return; }
+		if (signal) resources.add(addDisposableListener(signal, 'abort', () => finish(undefined)));
 		quickPick.show();
 		void load('');
 	});
 }
 
-function selectItem<T extends IQuickPickItem>(quickInputService: IQuickInputService, items: readonly T[], placeholder: string): Promise<T | undefined> {
+function selectItem<T extends IQuickPickItem>(quickInputService: IQuickInputService, items: readonly T[], placeholder: string, signal?: AbortSignal): Promise<T | undefined> {
 	const quickPick = quickInputService.createQuickPick<T>();
 	quickPick.items = items;
 	quickPick.placeholder = placeholder;
+	quickPick.ariaLabel = placeholder;
 	const resources = new DisposableStore();
 	resources.add(quickPick);
 	let settled = false;
@@ -88,6 +103,8 @@ function selectItem<T extends IQuickPickItem>(quickInputService: IQuickInputServ
 		};
 		resources.add(quickPick.onDidAccept(item => finish(item)));
 		resources.add(quickPick.onDidHide(() => finish(undefined)));
+		if (signal?.aborted) { finish(undefined); return; }
+		if (signal) resources.add(addDisposableListener(signal, 'abort', () => finish(undefined)));
 		quickPick.show();
 	});
 }

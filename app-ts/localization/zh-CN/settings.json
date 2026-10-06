@@ -275,7 +275,17 @@
     "settings.chatInput.label": "消息输入",
     "settings.chatInput.description": "设置消息输入框的字体、字号和行间距。",
     "settings.chatCodeBlocks.label": "代码块",
-    "settings.chatCodeBlocks.description": "设置回复中整段代码的显示方式。"
+    "settings.chatCodeBlocks.description": "设置回复中整段代码的显示方式。",
+    "codeActions.save.always": "手动保存，以及因焦点或窗口切换而自动保存时运行。",
+    "codeActions.save.explicit": "仅在手动保存时运行。",
+    "codeActions.save.never": "保存时不运行。",
+    "codeActions.save.true": "仅在手动保存时运行。请使用“explicit”代替 true。",
+    "codeActions.save.false": "保存时不运行。请使用“never”代替 false。",
+    "codeActions.save.invalid": "{0} 必须将代码操作类型对应到支持的保存模式。",
+    "codeActions.save.editor": "保存文件时运行的代码操作。例如：`\"source.organizeImports\": \"explicit\"`。延迟自动保存时不运行这些操作。",
+    "codeActions.save.notebook": "保存笔记本时运行的代码操作。例如：`\"notebook.source.organizeImports\": \"explicit\"`。延迟自动保存时不运行这些操作。",
+    "codeActions.save.kind": "选择保存时何时运行 {0}。",
+    "codeActions.save.changed": "准备保存期间代码发生了变化。请再次保存，以便对最新内容执行代码操作。"
   },
   "ash.workbench": {
     "command.ChangeKeyboardLayoutAction": "首选项：更改键盘布局",

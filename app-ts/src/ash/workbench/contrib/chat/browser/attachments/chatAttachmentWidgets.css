@@ -1,0 +1,27 @@
+.ash-chat-input-attachment-item {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+	max-width: 100%;
+	padding-left: var(--ash-spacing-size80);
+	color: var(--ash-foreground);
+	background: var(--ash-button-secondary-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	border-radius: var(--ash-corner-radius-small);
+}
+
+.ash-chat-attachment-label {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-chat-input-attachment-item > .ash-button {
+	flex-shrink: 0;
+}
+
+.ash-chat-attachment-image {
+	width: 32px;
+	height: 32px;
+	object-fit: contain;
+}

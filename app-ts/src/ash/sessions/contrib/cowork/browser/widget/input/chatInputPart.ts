@@ -27,11 +27,9 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } fro
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import type { IChatInputEditor, IChatInputEditorProvider } from "./chatInputEditorTypes.js";
-import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
-import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
-import { modelPickerEffortLabel } from './modelPicker/modelPickerModelConfig.js';
+import { ModelPickerActionItem } from '../../../../../../workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.js';
 
-type ChatInputToolbarPresentation = "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
+type ChatInputToolbarPresentation = "model" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
 	readonly canSubmit: boolean;
@@ -287,7 +285,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	openModelSelector(): void {
-		const button = this.modelToolbar.element.querySelector<HTMLButtonElement>(".ash-cowork-input-model-action");
+		const button = this.modelToolbar.element.querySelector<HTMLButtonElement>(".ash-chat-input-model-action");
 		if (!button || button.disabled || button.classList.contains("disabled")) {
 			this.focus();
 			return;
@@ -351,21 +349,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private renderToolbarActions(): void {
-		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
-		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.defaultReasoningEffort);
-		this.modelAction.label = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model";
-		this.modelAction.tooltip = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model";
-		const effortAction = !this.toolbarState.isAutomaticModel && selectedModel?.supportedReasoningEfforts?.length
-			? new ChatInputAction(
-				'ash.chat.input.effort',
-				selectedEffortLabel,
-				localize('chat.modelPicker.effortAriaLabel', 'Thinking Effort: {0}', selectedEffortLabel),
-				undefined,
-				true,
-				'effort',
-				() => { },
-			)
-			: undefined;
 		const micAction = { ...this.dictationSession.action };
 		let sendAction: ChatInputAction;
 		if (this.toolbarState.hasInput) {
@@ -384,7 +367,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const additionalActions = this.additionalActions.map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
 		const inputActions = this.toolbarState.inputKind === "command" ? [] : [...additionalActions, micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
-		this.modelToolbar.setActions([this.modelAction, ...(effortAction ? [effortAction] : [])]);
+		this.modelToolbar.setActions([this.modelAction]);
 		this.modelPickerPresentationChanged.fire();
 	}
 
@@ -429,19 +412,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
+				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
 				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
+				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),
-			});
-		}
-		if (action.presentation === 'effort') {
-			const entry = this.state.models.find(model => sameModel(model.model, this.state.selectedModel))!;
-			return this.instantiationService.createInstance(ModelPickerConfiguration, action, entry, this.state.selectedReasoningEffort, async (effort: ModelReasoningEffort | undefined) => {
-				await this.delegate.selectReasoningEffort(effort);
-				// Updating the effort replaces the toolbar action, so return focus to its new button.
-				this.modelToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
 			});
 		}
 		return new ChatInputButtonViewItem(action);

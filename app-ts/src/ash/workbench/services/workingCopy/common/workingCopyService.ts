@@ -2,6 +2,7 @@ import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { ISaveOptions } from '../../../common/editor.js';
 
 /**
  * Format-neutral persistence lifecycle exposed by an editor domain to the Workbench.
@@ -24,7 +25,7 @@ export interface IWorkingCopy extends IDisposable {
 	backup(): string;
 	/** Replaces current content with a crash backup while retaining the persisted baseline. */
 	restoreBackup(content: string): void;
-	save(signal: AbortSignal): Promise<void>;
+	save(signal: AbortSignal, options?: ISaveOptions): Promise<void>;
 	saveAs(resource: URI, signal: AbortSignal): Promise<void>;
 	revert(signal: AbortSignal): Promise<void>;
 }

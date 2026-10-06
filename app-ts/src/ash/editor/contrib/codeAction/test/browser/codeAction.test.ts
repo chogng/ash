@@ -11,9 +11,42 @@ import { IBulkEditService } from '../../../../browser/services/bulkEditService.j
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BulkEditTestServices } from '../../../../../workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
 await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
+
+for (const [command, kind] of [['editor.action.refactor', 'refactor.extract'], ['editor.action.sourceAction', 'source.organizeImports']] as const) {
+	for (const matching of [true, false]) {
+		test(`${command} honors kind, preferred and apply arguments${matching ? '' : ' without crossing action families'}`, async () => {
+			const dom = new JSDOM('<body><main></main></body>');
+			using close = toDisposable(() => dom.window.close());
+			dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+			using model = new TextModel('before', { languageId: 'typescript' });
+			using features = new LanguageFeaturesService();
+			using provider = features.codeActionProvider.register('typescript', {
+				providedCodeActionKinds: [kind],
+				provideCodeActions: () => [false, true].map(isPreferred => ({
+					title: isPreferred ? 'Preferred' : 'Other', kind, isPreferred,
+					edit: { entries: [{ kind: 'textDocument' as const, resource: model.uri, edits: [{ range: new Range(1, 1, 1, 7), text: isPreferred ? 'preferred' : 'other' }] }] },
+				})),
+			});
+			using editor = createTestCodeEditor({
+				container: dom.window.document.querySelector<HTMLElement>('main')!, model,
+				languageFeaturesService: features, dimension: { width: 320, height: 80 },
+			});
+			await editor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand(command, {
+				kind: matching ? kind : 'quickfix', preferred: true, apply: 'first',
+			}));
+			assert.equal(model.getText(), matching ? 'preferred' : 'before');
+			if (matching) {
+				model.undo();
+				assert.equal(model.getText(), 'before');
+			}
+		});
+	}
+}
 
 
 

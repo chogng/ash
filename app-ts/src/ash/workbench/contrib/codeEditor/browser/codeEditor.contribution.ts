@@ -22,6 +22,10 @@ import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { TextFileSaveErrorHandler } from '../../files/browser/editors/textFileSaveErrorHandler.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { localize } from '../../../../nls.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { SaveParticipantsContribution } from './saveParticipants.js';
+
+registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
 
 registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
 

@@ -113,6 +113,8 @@ export interface IBulkEditOptions {
 	readonly undoRedoGroupId?: number;
 	readonly confirmBeforeUndo?: boolean;
 	readonly respectAutoSaveConfig?: boolean;
+	/** The caller owns persistence of these resources, including rollback writes. */
+	readonly skipSaveForResources?: readonly URI[];
 	readonly reason?: TextModelEditSource;
 }
 

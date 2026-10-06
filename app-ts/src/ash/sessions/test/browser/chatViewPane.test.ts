@@ -515,22 +515,22 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		assert.deepEqual(
 			[...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),
 			[
+				"ash.chat.input.attach",
 				"ash.chat.input.mode",
 				"ash.chat.input.model",
-				"ash.chat.input.effort",
 				"ash.chat.input.mic",
 				"ash.chat.input.voice",
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button .ash-button-label")?.textContent, "GPT-6.1 Sol");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label'), 'Model options: Medium');
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>(".ash-chat-input-model-action .ash-button-label")?.textContent, "GPT-6.1 Sol");
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mic'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
-	const modelButton = firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button");
+	const modelButton = firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-model-action");
 	modelButton?.click();
 	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker[role="dialog"]');
 	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
@@ -551,19 +551,19 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.model'] button")?.getAttribute('aria-expanded'), 'false');
-	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.click();
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-model-action")?.getAttribute('aria-expanded'), 'false');
+	firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.click();
 	const effortMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-configuration-menu');
 	assert.equal(effortMenu?.querySelector('.ash-chat-model-configuration-heading')?.textContent, 'Thinking Level');
-	assert.deepEqual([...effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []].map(button => button.textContent), ['Low', 'MediumDefault', 'High']);
-	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'MediumDefault');
-	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), 'Default');
+	assert.deepEqual([...effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []].map(button => button.textContent), ['Low', 'Medium', 'High']);
+	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'Medium');
+	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), null);
 	effortMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.high'] button")?.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label') === 'Model options: High');
-	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.click();
+	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: High');
+	firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.click();
 	assert.equal(dom.window.document.querySelector('.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]')?.textContent, 'High');
 	dom.window.document.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")?.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.getAttribute('aria-label') === 'Model options: Medium');
+	await waitFor(() => firstChatPane.querySelector<HTMLButtonElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: Medium');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);

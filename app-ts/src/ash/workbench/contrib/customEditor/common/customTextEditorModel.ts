@@ -1,8 +1,7 @@
-import type { IResourceEditorInput } from '../../../common/editor.js';
+import type { IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
-import { ITextFileService } from '../../../services/textfile/common/textFileService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 
 /** Borrows the canonical text state; changing editor types must not create another document. */
@@ -19,7 +18,6 @@ export class CustomTextEditorModel extends Disposable implements IWorkingCopy {
 		public readonly reference: TextModelReference,
 		input: IResourceEditorInput,
 		private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
-		@ITextFileService private readonly files: ITextFileService,
 		@IWorkingCopyService workingCopies: IWorkingCopyService,
 	) {
 		super();
@@ -37,7 +35,7 @@ export class CustomTextEditorModel extends Disposable implements IWorkingCopy {
 	public get hasExternalChange(): boolean { return this.reference.hasExternalChange; }
 	public backup(): string { return this.reference.model.getText(); }
 	public restoreBackup(content: string): void { this.reference.model.reset(content); }
-	public async save(signal: AbortSignal): Promise<void> {
+	public async save(signal: AbortSignal, options?: ISaveOptions): Promise<void> {
 		signal.throwIfAborted();
 		if (this.resource.scheme === 'untitled') {
 			if (!this.saveUntitled) {
@@ -45,12 +43,12 @@ export class CustomTextEditorModel extends Disposable implements IWorkingCopy {
 			}
 			await this.saveUntitled();
 		} else {
-			await this.reference.save(signal);
+			await this.reference.save(signal, options);
 		}
 	}
 
 	public async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
-		await this.files.save({ resource, text: this.reference.model.getText() }, signal);
+		await this.reference.saveAs(resource, signal);
 	}
 	public revert(signal: AbortSignal): Promise<void> { return this.reference.revert(signal); }
 }

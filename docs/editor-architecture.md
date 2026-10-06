@@ -91,9 +91,16 @@ Workbench BrowserTextResourceStore → Workbench BrowserTextModelService → Sta
 Stanza language session → Analysis/completion workers
         ↓
 Stanza viewport / input
-        ↓ Ctrl/Cmd+S
+        ↓ Ctrl/Cmd+S / 焦点或窗口切换保存
+BrowserTextModelService 保存队列 → Code Action 保存参与者 → 同一 TextModel
+        ↓ 操作完成后取文本快照
 ITextFileService.save → IFileService.writeFile → App Server
 ```
+
+`codeEditor/browser/saveParticipants.ts` 注册保存参与者，由共享文件模型服务在写入前调用。
+`editor.codeActionsOnSave` 的 `explicit` 只处理手动保存，`always` 也处理焦点或窗口切换，延迟自动保存不执行代码操作。
+提供者依次读取当前模型，通过现有 Bulk Edit 应用；当前文件由外层保存队列写入，未打开的其他文件由工作区编辑写入并跳过保存参与者。
+查询或解析期间继续编辑会取消这次保存，避免应用旧结果；失败保留 dirty 状态。另存为在目标文件模型上执行这条保存链。
 
 `preferredEditorId` 只是 Workbench 在 code、document、diff、PDF 等现有 pane 间做显式选择的通用机制，不再承载旧 editor 兼容入口。
 

@@ -15,7 +15,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput } from '../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -356,7 +356,6 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			}
 			if (modelReference) workingCopy = new EditorWorkingCopy(
 				modelReference,
-				this.resourceStore,
 				input,
 				this.options.workingCopyService,
 				input.resource.scheme === "untitled" ? this.options.onSave : undefined,
@@ -494,7 +493,6 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 
 	constructor(
 		private readonly reference: TextModelReference,
-		private readonly resourceStore: ITextResourceStore,
 		private readonly input: IResourceEditorInput,
 		workingCopyService: IWorkingCopyService | undefined,
 		private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
@@ -530,14 +528,14 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 		this.reference.model.reset(content);
 	}
 
-	save(signal: AbortSignal): Promise<void> {
+	save(signal: AbortSignal, options?: ISaveOptions): Promise<void> {
 		throwIfCancelled(signal, "Code editor working-copy save was cancelled");
 		if (this.resource.scheme === "untitled") return this.saveUntitledDocument();
-		return this.reference.save(signal);
+		return this.reference.save(signal, options);
 	}
 
 	async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
-		await this.resourceStore.save({ resource, text: this.reference.model.getText() }, signal);
+		await this.reference.saveAs(resource, signal);
 	}
 
 	revert(signal: AbortSignal): Promise<void> {

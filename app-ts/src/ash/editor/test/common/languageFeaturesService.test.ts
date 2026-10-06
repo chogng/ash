@@ -1,11 +1,27 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { URI } from '../../../base/common/uri.js';
 import { LanguageFeatureRegistry } from '../../common/languageFeatureRegistry.js';
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { LanguageService } from '../../common/services/languageService.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
+
+test('disposing the language service releases provider registrations and change listeners', () => {
+	using service = new LanguageFeaturesService();
+	let changes = 0;
+	using listener = service.codeActionProvider.onDidChange(() => changes++);
+	using registration = service.codeActionProvider.register('*', { provideCodeActions: () => [] });
+	assert.equal(changes, 1);
+	service.dispose();
+	assert.deepEqual(service.codeActionProvider.allNoModel(), []);
+	registration.dispose();
+	assert.equal(changes, 1);
+	assert.throws(() => service.codeActionProvider.register('*', { provideCodeActions: () => [] }), /disposed/);
+});
 
 test('language identity, configuration, and feature providers have separate owners', () => {
 	using languageService = new LanguageService();
@@ -61,14 +77,14 @@ test('language feature registries report effective provider changes', () => {
 
 test('language feature registries preserve canonical selector ordering and candidate invalidation', () => {
 	using model = new TextModel('value', { languageId: 'typescript', resource: URI.parse('file:///workspace/value.ts') });
-	const registry = new LanguageFeatureRegistry<string>();
+	using registry = new LanguageFeatureRegistry<string>();
 	const counts: number[] = [];
 	using listener = registry.onDidChange(count => counts.push(count));
 
-	registry.register('*', 'wildcard');
-	registry.register('typescript', 'first');
-	const second = registry.register('typescript', 'second');
-	registry.register({ language: 'typescript', isBuiltin: true }, 'builtin');
+	using wildcard = registry.register('*', 'wildcard');
+	using first = registry.register('typescript', 'first');
+	using second = registry.register('typescript', 'second');
+	using builtin = registry.register({ language: 'typescript', isBuiltin: true }, 'builtin');
 	assert.deepEqual(registry.ordered(model), ['second', 'first', 'builtin', 'wildcard']);
 	assert.deepEqual(registry.orderedGroups(model), [['second', 'first', 'builtin'], ['wildcard']]);
 	assert.equal(registry.has(model), true);
@@ -81,10 +97,10 @@ test('language feature registries preserve canonical selector ordering and candi
 
 test('exclusive language feature selectors replace ordinary matches except during recursive lookup', () => {
 	using model = new TextModel('value', { languageId: 'typescript' });
-	const registry = new LanguageFeatureRegistry<string>();
-	registry.register('*', 'wildcard');
-	registry.register('typescript', 'language');
-	registry.register({ language: 'typescript', exclusive: true }, 'exclusive');
+	using registry = new LanguageFeatureRegistry<string>();
+	using wildcard = registry.register('*', 'wildcard');
+	using language = registry.register('typescript', 'language');
+	using exclusive = registry.register({ language: 'typescript', exclusive: true }, 'exclusive');
 
 	assert.deepEqual(registry.ordered(model), ['exclusive']);
 	assert.deepEqual(registry.ordered(model, true), ['language', 'wildcard']);

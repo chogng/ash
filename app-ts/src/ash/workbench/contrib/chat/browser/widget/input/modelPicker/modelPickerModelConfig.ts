@@ -1,15 +1,12 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
+/** Context capacity is shown in the menu; the toolbar reserves its space for thinking level. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
-	const labels: string[] = [];
 	if (entry.supportedReasoningEfforts?.length) {
-		labels.push(modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort));
+		return modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort);
 	}
-	if (entry.contextWindowOptions.length && entry.contextWindow) {
-		labels.push(getModelConfigValueLabel(entry.contextWindow));
-	}
-	return labels.join(' ');
+	return entry.contextWindowOptions.length ? localize('chat.modelPicker.configuration', 'Model options') : '';
 }
 
 export function getModelConfigValueLabel(tokens: number): string {
@@ -23,7 +20,7 @@ export function getModelConfigValueLabel(tokens: number): string {
 }
 
 /** Both configuration surfaces write undefined when the configured default is chosen. */
-export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; isDefault: boolean; }[] {
+export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; }[] {
 	const defaultEffort = entry.defaultReasoningEffort;
 	const efforts = defaultEffort === undefined
 		? [{ effort: undefined, description: undefined }, ...(entry.supportedReasoningEfforts ?? [])]
@@ -34,7 +31,6 @@ export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffor
 		label: modelPickerEffortLabel(effort),
 		description: modelPickerEffortDescription(description),
 		checked: effort === (selectedEffort ?? defaultEffort),
-		isDefault: defaultEffort !== undefined && effort === defaultEffort,
 	}));
 }
 

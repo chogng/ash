@@ -1,3 +1,53 @@
+/* One toolbar item contains both triggers; the model name takes the flexible space. */
+.ash-chat-input-model-selector {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.ash-chat-model-picker-control {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-chat-model-picker-control > .ash-chat-input-model-action {
+	min-width: 0;
+	flex: 1 1 auto;
+	height: var(--ash-toolbar-action-size);
+	min-height: var(--ash-toolbar-action-size);
+	padding: 0 var(--ash-spacing-size80);
+	border-radius: var(--ash-corner-radius-circle);
+	font-size: var(--ash-font-size-body1);
+}
+
+.ash-chat-model-picker-control > .ash-chat-input-configuration-action {
+	min-width: 0;
+	max-width: 96px;
+	flex: 0 0 auto;
+	height: var(--ash-toolbar-action-size);
+	min-height: var(--ash-toolbar-action-size);
+	padding: 0 var(--ash-spacing-size40);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
+}
+
+@media (max-width: 420px) {
+	.ash-chat-model-picker-control {
+		gap: var(--ash-spacing-size80);
+	}
+
+	.ash-chat-model-picker-control > .ash-chat-input-model-action {
+		padding-inline: var(--ash-spacing-size60);
+	}
+
+	.ash-chat-model-picker-control > .ash-chat-input-configuration-action {
+		max-width: 68px;
+	}
+}
+
 .ash-chat-model-picker {
 	max-width: calc(100vw - var(--ash-spacing-size160));
 	max-height: min(420px, calc(100vh - var(--ash-spacing-size240)));

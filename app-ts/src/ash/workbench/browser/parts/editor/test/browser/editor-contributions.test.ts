@@ -1,4 +1,5 @@
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
+import { SaveReason, type ISaveOptions } from '../../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -35,6 +36,7 @@ test("EditorAutoSave saves dirty copies after the configured delay and skips con
 
 	workingCopy.markDirty();
 	await waitFor(() => workingCopy.saveCount === 1);
+	assert.deepEqual(workingCopy.saveReasons, [SaveReason.AUTO]);
 	workingCopy.setExternalChange(true);
 	workingCopy.markDirty();
 	workingCopy.fireContentChange();
@@ -68,6 +70,7 @@ test("EditorAutoSave observes auxiliary editor window blur", async () => {
 	workingCopy.markDirty();
 	auxiliary.window.dispatchEvent(new auxiliary.window.Event("blur"));
 	await waitFor(() => workingCopy.saveCount === 1);
+	assert.deepEqual(workingCopy.saveReasons, [SaveReason.WINDOW_CHANGE]);
 
 	editorChanges.dispose();
 	configuration.dispose();
@@ -93,6 +96,7 @@ test("EditorAutoSave saves dirty working copies when focus mode loses window foc
 	workingCopy.markDirty();
 	dom.window.dispatchEvent(new dom.window.Event("blur"));
 	await waitFor(() => workingCopy.saveCount === 1);
+	assert.deepEqual(workingCopy.saveReasons, [SaveReason.FOCUS_CHANGE]);
 
 	editorChanges.dispose();
 	configuration.dispose();
@@ -272,7 +276,8 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	markDirty(): void { this.dirty = true; this.dirtyEmitter.fire(); }
 	setExternalChange(value: boolean): void { this.external = value; this.externalEmitter.fire(); }
 	fireContentChange(): void { this.contentEmitter.fire(); }
-	async save(): Promise<void> { this.saveCount += 1; this.dirty = false; this.dirtyEmitter.fire(); }
+	readonly saveReasons: SaveReason[] = [];
+	async save(_signal?: AbortSignal, options?: ISaveOptions): Promise<void> { this.saveReasons.push(options?.reason ?? SaveReason.EXPLICIT); this.saveCount += 1; this.dirty = false; this.dirtyEmitter.fire(); }
 	async saveAs(): Promise<void> { await this.save(); }
 	async revert(): Promise<void> { this.dirty = false; this.dirtyEmitter.fire(); }
 }

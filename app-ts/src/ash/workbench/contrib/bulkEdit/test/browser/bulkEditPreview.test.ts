@@ -16,7 +16,8 @@ import { ConflictDetector } from '../../browser/conflicts.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
 import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
-import { IFileTextModelService, ITextModelResourceService, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { SaveReason } from '../../../../common/editor.js';
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
 import { FileKind, FileNotFoundError, IFileService } from "../../../../../platform/files/common/files.js";
 import { IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
@@ -178,6 +179,11 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 }
 
 class PreviewTextModelService extends Disposable implements IFileTextModelService {
+	private readonly participants = new Set<ITextModelSaveParticipant>();
+	addSaveParticipant(participant: ITextModelSaveParticipant) {
+		this.participants.add(participant);
+		return toDisposable(() => this.participants.delete(participant));
+	}
 	readonly references: TextModelReference[] = [];
 	private readonly resources: ReadonlyMap<string, string>;
 	private readonly persistentResources: ReadonlySet<string>;
@@ -212,8 +218,12 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 			onDidChangeDirty: emptyEvent,
 			hasExternalChange: false,
 			onDidChangeExternalChange: emptyEvent,
-			save: async () => undefined,
+			save: async (signal, options) => {
+				if (options?.skipSaveParticipants) return;
+				for (const participant of this.participants) await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
+			},
 			revert: async () => undefined,
+			saveAs: async () => { throw new Error('Preview must not save copies'); },
 			dispose: () => { if (!persistent) model.dispose(); },
 			[Symbol.dispose]() { if (!persistent) model.dispose(); },
 		};

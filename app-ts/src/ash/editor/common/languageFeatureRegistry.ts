@@ -51,16 +51,23 @@ class MatchCandidate {
 	}
 }
 
-export class LanguageFeatureRegistry<T> {
+export class LanguageFeatureRegistry<T> extends Disposable {
 	private _clock = 0;
 	private readonly _entries: Entry<T>[] = [];
 
-	private readonly _onDidChange = new Emitter<number>();
+	private readonly _onDidChange = this._register(new Emitter<number>());
 	get onDidChange() { return this._onDidChange.event; }
 
-	constructor(private readonly _notebookInfoResolver?: NotebookInfoResolver) { }
+	constructor(private readonly _notebookInfoResolver?: NotebookInfoResolver) { super(); }
+
+	protected override disposeCore(): void {
+		this._entries.length = 0;
+		this._lastCandidate = undefined;
+		super.disposeCore();
+	}
 
 	register(selector: LanguageSelector, provider: T): IDisposable {
+		this.assertNotDisposed();
 		let entry: Entry<T> | undefined = {
 			selector,
 			provider,

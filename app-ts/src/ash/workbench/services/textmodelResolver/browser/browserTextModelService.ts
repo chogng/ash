@@ -1,7 +1,7 @@
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
@@ -16,6 +16,9 @@ import { RetainedModelUndoRedoHistory } from '../common/retainedModelUndoRedoHis
 import { type IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import { type ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { type SyntaxServiceOptions } from '../../../../editor/common/languages.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { SaveReason, type ISaveOptions } from '../../../common/editor.js';
+import type { ITextModelSaveParticipant } from '../common/textModelResourceService.js';
 
 interface TextModelEntry {
 	readonly resource: URI;
@@ -49,6 +52,7 @@ export interface BrowserTextModelServiceOptions {
 /** Shares text models by exact resource identity while references are open. */
 export class BrowserTextModelService extends Disposable implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
+	private readonly saveParticipants = new Set<ITextModelSaveParticipant>();
 	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory());
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
@@ -58,6 +62,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
 
 	public getModel(resource: URI): TextModel | null { return this.entries.get(resource.toString())?.model ?? null; }
+
+	public addSaveParticipant(participant: ITextModelSaveParticipant): IDisposable {
+		this.assertNotDisposed();
+		this.saveParticipants.add(participant);
+		return toDisposable(() => this.saveParticipants.delete(participant));
+	}
 
 	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions = {}) {
 		super();
@@ -140,6 +150,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	protected override disposeCore(): void {
+		this.saveParticipants.clear();
 		// Remove identities before notifying observers so they cannot resolve a closed model.
 		for (const [key, entry] of this.entries) {
 			this.entries.delete(key);
@@ -184,19 +195,44 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				return entry.hasExternalChange;
 			},
 			onDidChangeExternalChange: entry.externalChangeEmitter.event,
-			save: (signal: AbortSignal) => this.save(entry, signal),
+			save: (signal: AbortSignal, options?: ISaveOptions) => this.save(entry, signal, options),
+			saveAs: (resource: URI, signal: AbortSignal) => this.saveAs(entry, resource, signal),
 			revert: (signal: AbortSignal) => this.revert(entry, signal),
 			dispose,
 			[Symbol.dispose]: dispose,
 		});
 	}
 
-	private save(entry: TextModelEntry, signal: AbortSignal): Promise<void> {
+	private async saveAs(entry: TextModelEntry, resource: URI, signal: AbortSignal): Promise<void> {
+		this.ensureEntryAlive(entry);
+		if (resource.toString() === entry.resource.toString()) return this.save(entry, signal);
+		const text = entry.model.getText();
+		const languageId = entry.model.getLanguageId();
+		// Save As runs against the destination so providers receive its URI and inferred language.
+		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal);
+		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
+		await target.save(signal);
+	}
+
+	private save(entry: TextModelEntry, signal: AbortSignal, options: ISaveOptions = {}): Promise<void> {
 		this.ensureEntryAlive(entry);
 		throwIfCancelled(signal, "Text model save was cancelled");
-		const savedText = entry.model.getText();
+		// A queued save owns the model until its participants and write finish, even if the pane closes.
+		const lifetime = this.reference(entry.resource.toString(), entry);
+		let savedText = entry.model.getText();
 		const encoding = entry.encoding;
 		const save = entry.saveQueue.then(async () => {
+			if (!options.skipSaveParticipants && this.saveParticipants.size > 0) {
+				this.ensureEntryAlive(entry);
+				for (const participant of this.saveParticipants) {
+					throwIfCancelled(signal, 'Text model save was cancelled');
+					await raceCancellationError(participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal), signal);
+				}
+				// Participant edits belong to this save, not a later dirty snapshot.
+				this.ensureEntryAlive(entry);
+				savedText = entry.model.getText();
+			}
+			throwIfCancelled(signal, 'Text model save was cancelled');
 			let saved;
 			try {
 				saved = await this.resourceStore.save({
@@ -219,7 +255,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			this.refreshDirty(entry);
 		});
 		entry.saveQueue = save.catch(() => undefined);
-		return save;
+		return save.finally(() => lifetime.dispose());
 	}
 
 	private async revert(entry: TextModelEntry, signal: AbortSignal): Promise<void> {

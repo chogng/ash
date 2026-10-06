@@ -498,6 +498,8 @@ export interface LanguageCodeActionRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageCodeActionProvider {
+	/** Declared kinds supply configuration suggestions without requesting actions from a document. */
+	readonly providedCodeActionKinds?: readonly string[];
 	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | Promise<readonly LanguageCodeAction[]>;
 	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
 }

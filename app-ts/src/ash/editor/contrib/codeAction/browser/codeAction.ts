@@ -4,7 +4,7 @@ import { CodeActionItem, CodeActionKind, filtersAction, type CodeActionFilter, t
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
 
 export async function getCodeActions(
-	registry: LanguageFeatureRegistry<LanguageCodeActionProvider>,
+	registry: Pick<LanguageFeatureRegistry<LanguageCodeActionProvider>, 'ordered'>,
 	request: LanguageCodeActionRequest,
 	filter: CodeActionFilter,
 	onError: (error: unknown) => void,

@@ -270,7 +270,7 @@ test('Workbench Models switches control the model picker', async ({ target, work
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const modelButton = page.locator('.ash-chat-view-pane [data-action-id="ash.chat.input.model"] button');
+	const modelButton = page.locator('.ash-chat-view-pane .ash-chat-input-model-action');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	let modelName: string | undefined;
 	for (const visible of [false, true]) {

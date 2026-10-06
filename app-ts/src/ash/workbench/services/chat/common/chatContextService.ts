@@ -38,8 +38,9 @@ export interface ChatContextPicker {
 
 /** Registry and searchable selector for Chat context providers. */
 export interface IChatContextPickService {
+	readonly items: readonly ChatContextPicker[];
 	registerPicker(picker: ChatContextPicker): IDisposable;
-	pickContext(quickInputService: IQuickInputService): Promise<ChatContextAttachment | undefined>;
+	pickContext(quickInputService: IQuickInputService, signal?: AbortSignal): Promise<ChatContextAttachment | undefined>;
 }
 
 export const IChatContextPickService = createServiceIdentifier<IChatContextPickService>('chatContextPickService');

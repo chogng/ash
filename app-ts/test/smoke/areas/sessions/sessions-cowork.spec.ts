@@ -7,13 +7,13 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	const card = composer.locator('.ash-chat-input-container');
 	const editor = new Editor(card);
 	const actions = card.getByRole('toolbar', { name: 'Chat input actions', exact: true });
-	const model = actions.locator('[data-action-id="ash.chat.input.model"] button');
+	const model = actions.locator('.ash-chat-input-model-action');
 	await expect(card).toBeVisible();
 	await expect(card.locator('.stanza-editor-placeholder-text:visible')).toHaveCount(0);
 	await expect(composer.locator('[data-action-id="ash.chat.input.mode"]')).toHaveCount(0);
 	await expect(composer.getByRole('button', { name: /^Permissions:/u })).toHaveCount(0);
 	await expect(card.locator('[data-action-id="ash.chat.input.model"]')).toHaveCount(1);
-	await expect(actions.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Attach files');
+	await expect(actions.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Add context');
 	await expect(actions.locator('[data-action-id="ash.chat.input.voice"] button')).toBeDisabled();
 	await expect(model).toBeVisible();
 	for (const width of [680, 280]) {
@@ -47,14 +47,25 @@ test('Cowork shares Chat input operations with model settings on the right and n
 		const selectedModelName = await picker.getByRole('menuitemradio').locator('.ash-icon-label-text').innerText();
 		await search.press('Enter');
 		await expect(model).toHaveText(selectedModelName);
-		const effort = actions.locator('[data-action-id="ash.chat.input.effort"] button');
+		const effort = actions.locator('.ash-chat-input-configuration-action');
 		await effort.press('ArrowDown');
 		const effortMenu = page.getByRole('menu', { name: 'Model options', exact: true });
+		await expect(effortMenu.locator('.ash-menu-badge')).toHaveCount(0);
 		await effortMenu.getByRole('menuitemradio', { name: 'High', exact: true }).click();
 		await expect(effortMenu).toBeHidden();
-		await expect(effort).toHaveText('High 272K');
+		await expect(effort).toHaveText('High');
 		await expect(effort).toBeFocused();
-		await expect(card.locator('[data-action-id="ash.chat.input.effort"]')).toHaveCount(1);
+		await expect(card.locator('.ash-chat-model-picker-control > button')).toHaveCount(2);
+		await effort.press('ArrowDown');
+		const contexts = effortMenu.locator('[data-action-id^="ash.chat.input.context."] button');
+		await contexts.last().click();
+		await expect(effortMenu).toBeHidden();
+		await expect(effort).toHaveText('High');
+		await effort.press('ArrowDown');
+		await expect(contexts.last()).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await expect(effort).toBeFocused();
+
 		await composer.evaluate(element => { element.style.width = '280px'; });
 		await expect.poll(() => actions.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		await expect(model).toBeVisible();
@@ -73,7 +84,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	await expect(model).toBeVisible();
 	await page.keyboard.press('Alt+F1');
 	const help = page.locator('.ash-accessible-view-content');
-	await expect(help).toHaveValue(/model, thinking effort, dictation, and Send are on the right/u);
+	await expect(help).toHaveValue(/model, model options, dictation, and Send are on the right/u);
 	await expect(help).not.toHaveValue(/reach attachments, Agent|Permissions menu/u);
 	await page.keyboard.press('Escape');
 	await editor.waitForEditorFocus();
@@ -90,7 +101,7 @@ test('Cowork shared input toolbar and help use the Chinese display language', as
 	await expect(composer.getByRole('toolbar', { name: '聊天输入操作', exact: true })).toBeVisible();
 	await new Editor(composer).input.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/模型、思考强度、听写和发送位于右侧/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/模型、模型选项、听写和发送位于右侧/u);
 	await page.keyboard.press('Escape');
 });
 

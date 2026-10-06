@@ -49,6 +49,8 @@
 
 ## 2026-10-06：编辑器右键菜单批次
 
+`workbench/contrib/codeActions` 已接入共同启动入口，登记 `editor.codeActionsOnSave` 和 `notebook.codeActionsOnSave`。设置 JSON 与快捷键 JSON 从 `LanguageCodeActionProvider.providedCodeActionKinds` 获取类型提示，随提供者注册和释放更新；未声明的类型仍可填写。编辑器设置支持语言覆盖，旧布尔值和类型数组解析成保存模式对象。重构与源码操作命令读取 `kind`、`preferred`、`apply` 参数，限制在各自的操作类别内。`codeEditor/browser/saveParticipants.ts` 已通过共享文件模型保存队列接通编辑器文件的保存操作，包括手动保存、焦点／窗口切换保存和另存为；延迟自动保存跳过这些操作。查询与解析检查当前版本，Bulk Edit 负责修改与撤销，完成后再写入文件。Notebook 此处只有设置登记，App Server 语言适配器仍尚未传入操作类型声明。
+
 入口为 Editor Context Menu，经菜单注册表、当前编辑器的 ContextKey 与 EditorAction 进入既有功能控制器。请求、选区、编辑和 Peek 生命周期继续由原 owner 持有。本批范围与验证如下；未运行的验证不能记为通过。
 
 | 准确路径（相对 `app-ts/`）                                                                                                                                       | 修改前文件关系与调用方                     | 本批动作与验证                                                                            |

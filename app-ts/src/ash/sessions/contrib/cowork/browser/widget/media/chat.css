@@ -287,40 +287,6 @@
 	min-height: var(--ash-toolbar-action-size);
 }
 
-.ash-cowork-input-action.ash-cowork-input-model-action {
-	min-width: 0;
-	max-width: 100%;
-	padding: 0 var(--ash-spacing-size80);
-	border-radius: var(--ash-corner-radius-circle);
-	font-size: var(--ash-font-size-body1);
-}
-
-.ash-cowork-input-toolbars .ash-cowork-input-model-selector {
-	min-width: 0;
-}
-
-.ash-cowork-input-toolbars .ash-cowork-input-effort-selector {
-	min-width: 0;
-	max-width: 96px;
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-cowork-input-effort-selector
-	.ash-cowork-input-effort-action {
-	min-width: 0;
-	padding: 0 var(--ash-spacing-size40);
-	border-radius: var(--ash-corner-radius-small);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
-}
-
-.ash-cowork-input-toolbars .ash-cowork-input-effort-label {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .ash-cowork-input-mic-action {
 	width: var(--ash-toolbar-action-size);
 	min-width: var(--ash-toolbar-action-size);
@@ -395,14 +361,6 @@
 		padding: 0;
 	}
 
-	.ash-cowork-input-toolbars .ash-cowork-input-effort-selector {
-		max-width: 68px;
-	}
-
-	.ash-cowork-input-action.ash-cowork-input-model-action {
-		padding-inline: var(--ash-spacing-size60);
-		font-size: var(--ash-font-size-body1);
-	}
 }
 
 .ash-cowork-input-settings {

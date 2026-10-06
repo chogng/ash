@@ -5,15 +5,17 @@ import { DictationSession } from '../../speechToText/dictationSession.js';
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
 import { WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
+import { createUuid } from '../../../../../../base/common/uuid.js';
+import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IInstantiationService } from "../../../../../../platform/instantiation/common/instantiation.js";
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
@@ -22,6 +24,9 @@ import type { IContextMenuService } from "../../../../../../platform/contextview
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
+import { AttachContextAction } from '../../actions/chatContextActions.js';
+import { DefaultChatAttachmentWidget, ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
+import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
@@ -32,11 +37,9 @@ import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from "./chatInputEditorRegistry.js";
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
-import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
-import { getModelConfigSummary } from './modelPicker/modelPickerModelConfig.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 
-type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
+type ChatInputToolbarPresentation = "mode" | "model" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
 	readonly mode: ChatInputMode;
@@ -89,7 +92,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private renderedInteraction: ChatInputState['interaction'];
-	private readonly attachmentListeners = this._register(new DisposableStore());
+	private readonly attachmentWidgets = this._register(new DisposableMap<string, DefaultChatAttachmentWidget>());
+	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
 	protected readonly attachmentModel = this._register(new ChatAttachmentModel());
 	private readonly status: HTMLDivElement;
 	private readonly dictationPreview: HTMLDivElement;
@@ -149,7 +153,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputContainer.className = "ash-chat-input-container";
 		this.attachmentList = h(ownerDocument, "div");
 		this.attachmentList.className = "ash-chat-input-attachments";
-		this.attachmentList.setAttribute("aria-label", "Attached context");
+		this.attachmentList.setAttribute('role', 'list');
+		this.attachmentList.setAttribute('aria-label', localize('chat.context.attached', 'Attached context'));
 		const editorHost = h(ownerDocument, "div");
 		editorHost.className = "ash-chat-input-editor-host";
 		this.input = this._register(editorProvider.create({
@@ -167,12 +172,33 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			this._register(AccessibleViewRegistry.register({
+				type, priority: 95, name: `chatAttachments-${type}-${createUuid()}`,
+				getProvider: () => {
+					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
+					if (!focused || (!this.attachmentList.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
+					if (type === AccessibleViewType.View && this.attachmentModel.size === 0) { return undefined; }
+					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
+						const names = this.attachmentModel.attachments.map(attachment => attachment.name).join('\n');
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to attach files or images, browse workspace files, choose open editors including unsaved text, or select another context source. Type to filter, use arrow keys to choose, Enter to accept, and Escape to cancel. Use Tab to reach the Remove button on each attachment. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + names;
+					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
+				},
+			}));
+		}
+
 		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
 		this._register(this.speechToText.onDidChangeState(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
 		this._register(this.dictationSession.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
 		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
-		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
+		this._register(addDisposableListener(this.inputContainer, "focusin", event => {
+			this.inputContainer.classList.add("focused");
+			if (this.attachmentList.contains(event.target as Node)) {
+				const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
+				if (hint) { announceStatus(hint); }
+			}
+		}));
 		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			this.inputContainer.classList.remove("focused");
@@ -322,6 +348,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.visible = visible;
 		if (visible) this.input.layout();
 		if (!visible) {
+			this.attachContext.clear();
 			this.onboarding.hide(this.element);
 			void this.dictationSession.cancel().catch(error => {
 				if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
@@ -437,21 +464,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					return agentOptions.length > 0 ? [...options, new Separator(), ...agentOptions] : options;
 				},
 			);
-		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
-		const configurationLabel = selectedModel ? getModelConfigSummary(selectedModel, this.toolbarState.selectedReasoningEffort) : '';
-		this.modelAction.label = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model";
-		this.modelAction.tooltip = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model";
-		const effortAction = !this.toolbarState.isAutomaticModel && configurationLabel
-			? new ChatInputAction(
-				'ash.chat.input.effort',
-				configurationLabel,
-				localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', configurationLabel),
-				undefined,
-				true,
-				'effort',
-				() => { },
-			)
-			: undefined;
 		const micAction = { ...this.dictationSession.action };
 		let sendAction: ChatInputAction;
 		if (this.toolbarState.hasInput) {
@@ -467,9 +479,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			]
 			: [sendAction];
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
-		const additionalActions = this.additionalActions.map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
+		const additionalActions = this.additionalActions.filter(action => action.id !== 'ash.chat.input.attach').map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
+		additionalActions.unshift({
+			id: 'ash.chat.input.attach', label: localize('chat.context.add', 'Add context'), tooltip: localize('chat.context.add', 'Add context'), icon: Lxicon.add, enabled: true,
+			run: () => {
+				// The command creates the picker owner only when this composer opens it.
+				this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, { container: this.inputContainer, target: this, focusInput: () => this.focus() });
+				return this.attachContext.value.run();
+			},
+		});
 		const modeActions = modeAction ? [modeAction] : [];
-		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(effortAction ? [effortAction] : []), micAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 		this.modelPickerPresentationChanged.fire();
 		this.pickerResponsiveLayout.layout();
@@ -483,27 +503,29 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private renderAttachments(): void {
-		this.attachmentListeners.clear();
-		const children: HTMLElement[] = [];
-		for (const attachment of this.attachmentModel.attachments) {
-			const item = h(this.element.ownerDocument, "div");
-			item.className = "ash-chat-input-attachment-item";
-			const label = h(this.element.ownerDocument, "span");
-			label.className = "ash-chat-input-attachment-label";
-			label.textContent = attachment.name;
-			const remove = h(this.element.ownerDocument, "button");
-			remove.type = "button";
-			remove.className = "ash-chat-input-attachment-remove";
-			remove.setAttribute('aria-label', localize('chat.attach.remove', 'Remove {0}', attachment.name));
-			appendIcon(Lxicon.close, remove);
-			this.attachmentListeners.add(addDisposableListener(remove, "click", () => {
-				this.attachmentModel.delete(attachment.id);
-			}));
-			item.append(label, remove);
-			children.push(item);
+		const attachments = this.attachmentModel.attachments;
+		for (const [id, widget] of this.attachmentWidgets) {
+			if (!attachments.includes(widget.attachment)) { this.attachmentWidgets.deleteAndDispose(id); }
 		}
-		this.attachmentList.replaceChildren(...children);
-		const isEmpty = children.length === 0;
+		for (const attachment of attachments) {
+			if (this.attachmentWidgets.has(attachment.id)) { continue; }
+			const Widget = attachment.kind === 'image' ? ImageAttachmentWidget : DefaultChatAttachmentWidget;
+			const widget = new Widget(this.attachmentList, attachment, () => {
+				const index = this.attachmentModel.attachments.indexOf(attachment);
+				this.attachmentModel.delete(attachment.id);
+				const remaining = this.attachmentModel.attachments;
+				const next = remaining[Math.min(index, remaining.length - 1)];
+				if (next) { this.attachmentWidgets.get(next.id)!.removeButton.domNode.focus(); }
+				else { this.focus(); }
+				announceStatus(localize('chat.context.removed', 'Removed {0}', attachment.name));
+			});
+			this.attachmentWidgets.set(attachment.id, widget);
+		}
+		for (const [index, attachment] of attachments.entries()) {
+			const domNode = this.attachmentWidgets.get(attachment.id)!.domNode;
+			if (this.attachmentList.children[index] !== domNode) { this.attachmentList.insertBefore(domNode, this.attachmentList.children[index] ?? null); }
+		}
+		const isEmpty = attachments.length === 0;
 		this.attachmentList.classList.toggle('empty', isEmpty);
 		this.attachmentList.hidden = isEmpty;
 	}
@@ -516,20 +538,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
+				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
 				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
+				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),
-			});
-		}
-		if (action.presentation === 'effort') {
-			const entry = this.state.models.find(model => sameModel(model.model, this.state.selectedModel))!;
-			return this.instantiationService.createInstance(ModelPickerConfiguration, action, entry, this.state.selectedReasoningEffort, async (effort: ModelReasoningEffort | undefined) => {
-				await this.delegate.selectReasoningEffort(effort);
-			}, () => {
-				// Saving either option replaces the toolbar action, so focus its new button.
-				this.inputToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
 			});
 		}
 		if (action instanceof SelectorAction) {
