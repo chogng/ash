@@ -287,96 +287,6 @@
 	min-height: var(--ash-toolbar-action-size);
 }
 
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-cowork-input-mode-selector
-	.ash-cowork-input-action.ash-cowork-input-mode-action {
-	width: auto;
-	min-width: 0;
-	gap: 0;
-	padding: 0 var(--ash-spacing-size80);
-	border-radius: var(--ash-corner-radius-circle);
-	background: color-mix(
-		in srgb,
-		var(--ash-button-foreground) 10%,
-		transparent
-	);
-	font-size: var(--ash-font-size-label1);
-}
-
-.ash-cowork-input-toolbars .ash-cowork-input-mode-selector {
-	min-width: 0;
-	flex-shrink: 0;
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-action-view-item.icon.ash-cowork-input-mode-selector
-	.ash-icon-label-container {
-	display: inline-flex;
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-action-view-item.icon.ash-cowork-input-mode-selector.compact
-	.ash-icon-label-container {
-	display: none;
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-cowork-input-mode-selector.mode-plan
-	.ash-cowork-input-mode-action {
-	color: var(--ash-charts-orange);
-	background: color-mix(in srgb, var(--ash-charts-orange) 16%, transparent);
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-cowork-input-mode-selector.mode-debug
-	.ash-cowork-input-mode-action {
-	color: var(--ash-charts-red);
-	background: color-mix(in srgb, var(--ash-charts-red) 16%, transparent);
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-cowork-input-mode-selector.mode-multitask
-	.ash-cowork-input-mode-action {
-	color: var(--ash-charts-purple);
-	background: color-mix(in srgb, var(--ash-charts-purple) 16%, transparent);
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-cowork-input-mode-selector.mode-ask
-	.ash-cowork-input-mode-action {
-	color: var(--ash-charts-green);
-	background: color-mix(in srgb, var(--ash-charts-green) 16%, transparent);
-}
-
-.ash-cowork-input-mode-indicator {
-	flex: 0 0 auto;
-	margin-left: 6px;
-}
-
-.ash-cowork-input-toolbars.ash-toolbar
-	.ash-action-view-item.ash-cowork-input-mode-selector
-	.ash-cowork-input-mode-indicator {
-	display: inline-flex;
-}
-
-.ash-cowork-input-mode-indicator > .ash-icon {
-	width: var(--ash-lxicon-font-size-compact);
-	height: var(--ash-lxicon-font-size-compact);
-}
-
-.ash-cowork-input-toolbars
-	.ash-cowork-input-mode-selector
-	.ash-cowork-input-action.ash-cowork-input-mode-action
-	.ash-cowork-input-mode-action-label {
-	position: static;
-	overflow: hidden;
-	width: auto;
-	height: auto;
-	clip-path: none;
-	text-overflow: clip;
-	white-space: nowrap;
-}
-
 .ash-cowork-input-action.ash-cowork-input-model-action {
 	min-width: 0;
 	max-width: 100%;
@@ -485,13 +395,6 @@
 		padding: 0;
 	}
 
-	.ash-cowork-input-toolbars.ash-toolbar
-		.ash-cowork-input-mode-selector
-		.ash-cowork-input-action.ash-cowork-input-mode-action {
-		padding-inline: var(--ash-spacing-size60);
-		font-size: var(--ash-font-size-label1);
-	}
-
 	.ash-cowork-input-toolbars .ash-cowork-input-effort-selector {
 		max-width: 68px;
 	}
@@ -500,4 +403,9 @@
 		padding-inline: var(--ash-spacing-size60);
 		font-size: var(--ash-font-size-body1);
 	}
+}
+
+.ash-cowork-input-settings {
+	margin-top: var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size80);
 }

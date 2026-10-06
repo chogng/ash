@@ -1364,6 +1364,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	const composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first();
 	const editor = new Editor(composer);
 	await expect(composer.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Attach files');
@@ -1386,7 +1387,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeFocused();
 	const modeButton = composer.getByRole('button', { name: 'Mode: Agent', exact: true });
 	await modeButton.click();
-	const modes = page.locator(':is(.ash-chat-input-mode-menu,.ash-cowork-input-mode-menu)');
+	const modes = page.locator('.ash-chat-input-mode-menu');
 	await expect(modes.getByRole('menuitemradio', { name: 'Execute', exact: true })).toHaveCount(0);
 	await modes.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
@@ -1812,25 +1813,26 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		page = await sessionPagePromise;
 	}
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
 	const modeButton = page.locator("[data-action-id='ash.chat.input.mode'] button").first();
 	await expect(modeButton).toBeVisible();
 	await expect(modeButton.locator('svg[data-ash-icon-id="unlimited"]')).toHaveCount(1);
-	const chevron = modeButton.locator(':is(.ash-chat-input-mode-indicator,.ash-cowork-input-mode-indicator) svg[data-ash-icon-id="chevron-down"]');
+	const chevron = modeButton.locator('.ash-chat-input-mode-indicator svg[data-ash-icon-id="chevron-down"]');
 	await expect(chevron).toBeVisible();
-	await expect(modeButton.locator(':is(.ash-chat-input-mode-action-label,.ash-cowork-input-mode-action-label)')).toBeVisible();
-	const labelBounds = await modeButton.locator(':is(.ash-chat-input-mode-action-label,.ash-cowork-input-mode-action-label)').boundingBox();
+	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
+	const labelBounds = await modeButton.locator('.ash-chat-input-mode-action-label').boundingBox();
 	const chevronBounds = await chevron.boundingBox();
 	expect(labelBounds).not.toBeNull();
 	expect(chevronBounds).not.toBeNull();
 	expect(chevronBounds!.x).toBeGreaterThan(labelBounds!.x + labelBounds!.width);
 	const inputContainer = page.locator(':is(.ash-chat-input-container,.ash-cowork-input-container)').filter({ has: modeButton });
 	await inputContainer.evaluate(element => element.style.width = '230px');
-	await expect(modeButton.locator(':is(.ash-chat-input-mode-action-label,.ash-cowork-input-mode-action-label)')).toBeHidden();
+	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeHidden();
 	await expect(modeButton).toHaveAttribute('aria-label', 'Mode: Agent');
 	await inputContainer.evaluate(element => element.style.width = '');
-	await expect(modeButton.locator(':is(.ash-chat-input-mode-action-label,.ash-cowork-input-mode-action-label)')).toBeVisible();
+	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
 	await modeButton.click();
-	const menu = page.locator(':is(.ash-chat-input-mode-menu,.ash-cowork-input-mode-menu)');
+	const menu = page.locator('.ash-chat-input-mode-menu');
 	await expect(menu).toBeVisible();
 	await expect(menu).toHaveClass(/\bash-action-widget\b/);
 	await expect(menu).toHaveCSS('box-shadow', 'rgba(0, 0, 0, 0.14) 0px 0px 12px 0px');
@@ -1870,7 +1872,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	await modeButton.focus();
 	await page.keyboard.press('ArrowDown');
 	await expect(modeButton).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.locator(':is(.ash-chat-input-mode-menu,.ash-cowork-input-mode-menu)').getByRole('menuitemradio', { name: 'Agent', exact: true })).toBeFocused();
+	await expect(page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(modeButton).toHaveAttribute('aria-expanded', 'false');
 	await expect(modeButton).toBeFocused();
@@ -1882,7 +1884,7 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 	] as const) {
 		if (mode !== 'plan') {
 			await modeButton.click();
-			await page.locator(':is(.ash-chat-input-mode-menu,.ash-cowork-input-mode-menu)').getByRole('menuitemradio', { name: label, exact: true }).click();
+			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: label, exact: true }).click();
 		}
 		await expect(modeButton.locator('..')).toHaveClass(new RegExp(`\\bmode-${mode}\\b`));
 		const foreground = await modeButton.evaluate((button, variable) => {

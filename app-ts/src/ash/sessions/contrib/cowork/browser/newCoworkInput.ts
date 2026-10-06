@@ -16,8 +16,6 @@ import { ChatInputPart } from './widget/input/chatInputPart.js';
 import { ChatInputEditor } from './widget/input/chatInputEditor.js';
 import { ChatDragAndDrop } from './widget/chatDragAndDrop.js';
 import { NewChatContextAttachments } from './newChatContextAttachments.js';
-import { NewChatPermissionPicker } from './newChatPermissionPicker.js';
-import { approvalModeDefinition } from '../../../../platform/sessions/common/approvalModes.js';
 import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from './widget/input/chatInputTipPresenter.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -29,7 +27,7 @@ import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChat
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
-/** Cowork owns the welcome layout, input operations, attachments and permissions for its panes. */
+/** Cowork owns the welcome layout, input operations and attachments for its panes. */
 export class NewCoworkInputWidget extends ChatInputPart {
 	private readonly heading: HTMLHeadingElement;
 	private submittedMessage = false;
@@ -37,7 +35,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 	private displayedDraftId: string;
 	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly tips: ChatInputTipPresenter;
-	private readonly permissionButton: HTMLButtonElement;
 	private draftVisible = false;
 	private restoringDraft = false;
 	private readonly draftWriteRevisions = new Map<string, number>();
@@ -103,15 +100,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				&& !this.model.inputState.interaction,
 			focusInput: () => this.focus(),
 		}));
-		const footer = h(container.ownerDocument, 'div');
-		footer.className = 'ash-sessions-cowork-input-footer';
-		this.permissionButton = h(container.ownerDocument, 'button');
-		this.permissionButton.type = 'button';
-		this.permissionButton.setAttribute('aria-haspopup', 'menu');
-		this.permissionButton.setAttribute('aria-expanded', 'false');
-		footer.append(this.permissionButton);
-		this.element.append(footer);
-		this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
 		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -216,11 +204,5 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.element.classList.toggle('has-conversation', hasConversation);
 		this.heading.hidden = hasConversation;
 		this.tips.update();
-		const permission = this.model.inputState.approvalMode;
-		const definition = approvalModeDefinition(permission);
-		const label = localize(definition.label.key, definition.label.text);
-		this.permissionButton.textContent = label;
-		this.permissionButton.setAttribute('aria-label', localize('sessions.chat.permission.label', 'Permissions: {0}', label));
-		this.permissionButton.disabled = this.model.inputState.phase === 'submitting';
 	}
 }

@@ -6,7 +6,6 @@ import { addDisposableListener, h } from "../../../../../../base/browser/dom.js"
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
-import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../../../base/common/event.js';
@@ -20,7 +19,6 @@ import type { INotificationService } from '../../../../../../platform/notificati
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../../../workbench/services/chat/common/chatService.js";
-import type { ChatAgent } from '../../../../../../workbench/services/chat/common/chatService.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import type { ModelReasoningEffort } from '../../../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment } from "../../../../../../workbench/services/chat/common/chatContextService.js";
@@ -29,16 +27,13 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } fro
 import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import type { IChatInputEditor, IChatInputEditorProvider } from "./chatInputEditorTypes.js";
-import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
 import { modelPickerEffortLabel } from './modelPicker/modelPickerModelConfig.js';
-import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 
-type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
+type ChatInputToolbarPresentation = "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
 
 interface ChatInputToolbarState {
-	readonly mode: ChatInputMode;
 	readonly canSubmit: boolean;
 	readonly hasInput: boolean;
 	readonly canInterrupt: boolean;
@@ -47,18 +42,7 @@ interface ChatInputToolbarState {
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly isAutomaticModel: boolean;
-	readonly selectedAgent?: ChatAgent;
-	readonly agentName?: string;
-	readonly canSelectAgent: boolean;
 }
-
-const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string; readonly icon?: Icon; }[] = [
-	{ id: "agent", label: "Agent", icon: Lxicon.unlimited },
-	{ id: "plan", label: "Plan", icon: Lxicon.plan },
-	{ id: "debug", label: "Debug", icon: Lxicon.debug },
-	{ id: "multitask", label: "Multitask", icon: Lxicon.multitask },
-	{ id: "ask", label: "Ask", icon: Lxicon.chat4 },
-];
 
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
@@ -91,18 +75,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected readonly inputContainer: HTMLFormElement;
 	protected readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
+	private readonly modelToolbar: WorkbenchToolBar;
 	// Retaining this action keeps the open picker and its focused switch alive when the selection changes.
 	private readonly modelAction = new ChatInputAction('ash.chat.input.model', '', '', undefined, true, 'model', () => { });
 	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
-	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
 	private state: ChatInputState = { mode: "agent", queuedMessages: 0, approvalMode: 'manual', phase: "loading", canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	private toolbarState: ChatInputToolbarState = { mode: "agent", canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], isAutomaticModel: false, canSelectAgent: false };
+	private toolbarState: ChatInputToolbarState = { canSubmit: false, hasInput: false, canInterrupt: false, inputKind: "message", models: [], isAutomaticModel: false };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
-	private get mode(): ChatInputMode { return this.state.mode; }
-	private pendingAgentSelection: { readonly agent: ChatAgent | undefined; } | undefined;
+	private get mode(): ChatInputState['mode'] { return this.state.mode; }
 	private readonly dictationSession: DictationSession;
 	private visible = true;
 	private draftRevision = 0;
@@ -146,7 +129,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		editorHost.className = "ash-cowork-input-editor-host";
 		this.input = this._register(editorProvider.create({
 			container: editorHost,
-			placeholder: "Ask Ash",
+			placeholder: "",
 			ariaLabel: "Chat message",
 			slashCommands: this.slashCommands,
 			skills: this.skills,
@@ -156,12 +139,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
 		this.inputToolbar.element.classList.add("ash-cowork-input-toolbars");
-		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
+		this.modelToolbar = this._register(new WorkbenchToolBar(this.element, contextMenuService, {
+			ariaLabel: localize('cowork.input.modelActions', 'Model and thinking effort'),
+			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
+		}));
+		this.modelToolbar.element.classList.add('ash-cowork-input-toolbars', 'ash-cowork-input-settings');
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
 		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
 		this._register(this.speechToText.onDidChangeState(() => { this.status.textContent = this.statusText(this.state); this.renderToolbarActions(); }));
 		this._register(this.dictationSession.onDidEnd(error => { if (error) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', error)); } }));
-		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer);
+		this.element.append(this.status, this.dictationPreview, this.interaction, this.inputContainer, this.modelToolbar.element);
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: this.element, isVisible: () => this.visible }));
 		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
 		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
@@ -300,7 +287,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	openModelSelector(): void {
-		const button = this.inputToolbar.element.querySelector<HTMLButtonElement>(".ash-cowork-input-model-action");
+		const button = this.modelToolbar.element.querySelector<HTMLButtonElement>(".ash-cowork-input-model-action");
 		if (!button || button.disabled || button.classList.contains("disabled")) {
 			this.focus();
 			return;
@@ -340,7 +327,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.size > 0 : this.input.value.trim().length > 0;
 		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {
-			mode: this.mode,
 			canSubmit: canSubmitIntent && !this.submitting && this.state.phase !== 'submitting' && (localCommand || this.state.phase === 'ready' || this.state.phase === 'error'),
 			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
@@ -349,12 +335,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			selectedModel: this.state.selectedModel,
 			selectedReasoningEffort: this.state.selectedReasoningEffort,
 			isAutomaticModel: this.state.isAutomaticModel,
-			selectedAgent: this.state.selectedAgent,
-			agentName: this.state.agentName,
-			canSelectAgent: this.state.canSelectAgent,
 		};
 		if (
-			state.mode === this.toolbarState.mode &&
 			state.canSubmit === this.toolbarState.canSubmit &&
 			state.hasInput === this.toolbarState.hasInput &&
 			state.canInterrupt === this.toolbarState.canInterrupt &&
@@ -362,72 +344,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.models === this.toolbarState.models &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
 			state.selectedReasoningEffort === this.toolbarState.selectedReasoningEffort &&
-			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
-			state.selectedAgent?.name === this.toolbarState.selectedAgent?.name &&
-			state.selectedAgent?.sourceId === this.toolbarState.selectedAgent?.sourceId &&
-			state.agentName === this.toolbarState.agentName &&
-			state.canSelectAgent === this.toolbarState.canSelectAgent
+			state.isAutomaticModel === this.toolbarState.isAutomaticModel
 		) return;
 		this.toolbarState = state;
 		this.renderToolbarActions();
 	}
 
 	private renderToolbarActions(): void {
-		const mode = modeOptions.find(option => option.id === this.mode) ?? modeOptions[0]!;
-		const modeLabel = this.mode === 'agent' ? this.state.selectedAgent?.name ?? this.state.agentName ?? mode.label : mode.label;
-		const modeTooltip = this.mode === 'agent' && modeLabel !== mode.label
-			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
-			: localize('chat.modePicker.mode', 'Mode: {0}', modeLabel);
-		const modeAction = this.toolbarState.inputKind === "command"
-			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => { })
-			: new SelectorAction(
-				"ash.chat.input.mode",
-				modeLabel,
-				modeTooltip,
-				mode.icon,
-				"mode",
-				async () => {
-					let agents: readonly ChatAgent[] = [];
-					if (this.state.canSelectAgent) {
-						try {
-							agents = await this.delegate.listAgents();
-						} catch {
-							// Built-in modes remain available when custom Agents cannot be listed.
-						}
-					}
-					const options = modeOptions.map(option => new ChatInputAction(
-						`ash.chat.input.mode.${option.id}`,
-						option.label,
-						localize('chat.modePicker.use', 'Use {0} mode', option.label),
-						option.icon,
-						true,
-						"mode",
-						() => {
-							this.draftRevision++;
-							this.delegate.selectMode(option.id);
-						},
-						option.id === this.mode,
-					));
-					const agentOptions: IAction[] = [];
-					if (this.state.canSelectAgent) {
-						const label = localize('chat.agentPicker.default', 'Default Agent');
-						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => { this.pendingAgentSelection = { agent: undefined }; }, !this.state.selectedAgent));
-					} else if (this.state.agentName) {
-						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => { }, true));
-					}
-					agentOptions.push(...agents.map(agent => new ChatInputAction(
-						`ash.chat.input.agent.${agent.sourceId}.${agent.name}`,
-						agent.name,
-						agent.description,
-						undefined,
-						true,
-						'mode',
-						() => { this.pendingAgentSelection = { agent }; },
-						this.state.selectedAgent?.name === agent.name && this.state.selectedAgent.sourceId === agent.sourceId,
-					)));
-					return agentOptions.length > 0 ? [...options, new Separator(), ...agentOptions] : options;
-				},
-			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
 		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.modelReasoningEffort);
 		this.modelAction.label = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model";
@@ -459,10 +382,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			: [sendAction];
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
 		const additionalActions = this.additionalActions.map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...additionalActions, modeAction, this.modelAction, ...(effortAction ? [effortAction] : []), micAction];
+		const inputActions = this.toolbarState.inputKind === "command" ? [] : [...additionalActions, micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+		this.modelToolbar.setActions([this.modelAction, ...(effortAction ? [effortAction] : [])]);
 		this.modelPickerPresentationChanged.fire();
-		this.pickerResponsiveLayout.layout();
 	}
 
 	private async stopDictation(): Promise<void> {
@@ -518,19 +441,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			return this.instantiationService.createInstance(ModelPickerConfiguration, action, entry, this.state.selectedReasoningEffort, async (effort: ModelReasoningEffort | undefined) => {
 				await this.delegate.selectReasoningEffort(effort);
 				// Updating the effort replaces the toolbar action, so return focus to its new button.
-				this.inputToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
-			});
-		}
-		if (action instanceof SelectorAction) {
-			return this.instantiationService.createInstance(ModePickerActionItem, action, this.mode, () => {
-				const selected = this.pendingAgentSelection;
-				this.pendingAgentSelection = undefined;
-				if (selected) {
-					const changed = selected.agent?.name !== this.state.selectedAgent?.name || selected.agent?.sourceId !== this.state.selectedAgent?.sourceId;
-					this.delegate.selectAgent(selected.agent);
-					if (changed) return;
-				}
-				this.renderToolbarActions();
+				this.modelToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
 			});
 		}
 		return new ChatInputButtonViewItem(action);
@@ -679,15 +590,6 @@ class ChatInputAction implements IAction {
 
 	run(): void {
 		this.callback();
-	}
-}
-
-class SelectorAction extends ChatInputAction {
-	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
-
-	constructor(id: string, label: string, tooltip: string, icon: Icon | undefined, presentation: "mode" | "model", actions: readonly IAction[] | (() => Promise<readonly IAction[]>), enabled = true) {
-		super(id, label, tooltip, icon, enabled, presentation, () => { });
-		this.actions = actions;
 	}
 }
 
