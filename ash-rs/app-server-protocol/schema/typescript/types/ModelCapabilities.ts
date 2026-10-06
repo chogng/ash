@@ -2,8 +2,8 @@
 import type { CapabilitySupport } from './CapabilitySupport.js';
 import type { ModelSettings } from './ModelSettings.js';
 
-export type ModelCapabilities = { tools: CapabilitySupport, reasoning: CapabilitySupport, parallelToolCalls: CapabilitySupport, personality: CapabilitySupport, imageDetailOriginal: CapabilitySupport,
+export type ModelCapabilities = { tools: CapabilitySupport, reasoning: CapabilitySupport, parallel_tool_calls: CapabilitySupport, personality: CapabilitySupport, image_detail_original: CapabilitySupport,
 /**
  * Whether acceleration is supported; [`crate::ModelSettings::acceleration`] declares its mechanism.
  */
-fastMode: CapabilitySupport, };
+fast_mode: CapabilitySupport, };

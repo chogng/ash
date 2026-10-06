@@ -41,7 +41,7 @@ fn subscription_events_preserve_account_identity_and_map_catalog_outcomes() {
     assert_eq!(notifications[0]["params"]["plan"], "Plus");
     assert_eq!(notifications[0]["params"]["result"]["type"], "models");
     assert_eq!(
-        notifications[0]["params"]["result"]["models"][0]["displayName"],
+        notifications[0]["params"]["result"]["models"][0]["display_name"],
         "Test Model"
     );
     assert_eq!(notifications[1]["params"]["result"]["type"], "failed");

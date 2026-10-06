@@ -32,7 +32,7 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("default_context_window", json!(272000)),
         ("default_personality", json!(null)),
         ("capabilities", json!({"personality":true})),
-        ("capabilities", json!({"fast_mode":true})),
+        ("capabilities", json!({"fastMode":true})),
         ("capabilities", json!({"tools":"invalid"})),
         ("model_reasoning_effort", json!("minimal")),
         ("instructions", json!({"revision":"v1", "body":" "})),
@@ -125,7 +125,7 @@ fn sparse_declarations_preserve_unknowns_and_known_capacity_without_presets() {
 
     let mut fixed = minimal;
     fixed["context_window"] = json!(300000);
-    fixed["capabilities"] = json!({"tools":false, "imageDetailOriginal":true});
+    fixed["capabilities"] = json!({"tools":false, "image_detail_original":true});
     fixed["auto_compact_token_limit"] = json!(160000);
     let parsed = parse_catalog(&json!({"models":[fixed]}).to_string()).unwrap();
     let spec = &parsed[0];
@@ -160,26 +160,26 @@ fn editing_one_models_base_prompt_keeps_other_entries_independent() {
 #[test]
 fn invalid_request_defaults_fail_before_catalog_publication() {
     for settings in [
-        json!({"inputModalities":[]}),
-        json!({"inputModalities":["image"]}),
-        json!({"inputModalities":["text","text"]}),
-        json!({"defaultVerbosity":"low"}),
-        json!({"verbosity":false,"defaultVerbosity":"low"}),
-        json!({"verbosity":null,"defaultVerbosity":"low"}),
-        json!({"defaultReasoningSummary":"auto"}),
-        json!({"reasoningSummary":false,"defaultReasoningSummary":"auto"}),
-        json!({"reasoningSummary":null,"defaultReasoningSummary":"auto"}),
-        json!({"serviceTiers":[{"id":"default","name":"Standard","description":"Standard processing"}],"defaultServiceTier":"priority"}),
-        json!({"serviceTiers":[{"id":"default","name":"Standard","description":"One"},{"id":"default","name":"Other name","description":"Two"}]}),
-        json!({"serviceTiers":[{"id":"","name":"Fast","description":"Fast processing"}]}),
-        json!({"serviceTiers":[{"id":"priority","name":"","description":"Fast processing"}]}),
-        json!({"serviceTiers":[{"id":"priority","name":"Fast","description":""}]}),
-        json!({"acceleration":{"type":"serviceTier","serviceTier":"priority"}}),
+        json!({"input_modalities":[]}),
+        json!({"input_modalities":["image"]}),
+        json!({"input_modalities":["text","text"]}),
+        json!({"default_verbosity":"low"}),
+        json!({"verbosity":false,"default_verbosity":"low"}),
+        json!({"verbosity":null,"default_verbosity":"low"}),
+        json!({"default_reasoning_summary":"auto"}),
+        json!({"reasoning_summary":false,"default_reasoning_summary":"auto"}),
+        json!({"reasoning_summary":null,"default_reasoning_summary":"auto"}),
+        json!({"service_tiers":[{"id":"default","name":"Standard","description":"Standard processing"}],"default_service_tier":"priority"}),
+        json!({"service_tiers":[{"id":"default","name":"Standard","description":"One"},{"id":"default","name":"Other name","description":"Two"}]}),
+        json!({"service_tiers":[{"id":"","name":"Fast","description":"Fast processing"}]}),
+        json!({"service_tiers":[{"id":"priority","name":"","description":"Fast processing"}]}),
+        json!({"service_tiers":[{"id":"priority","name":"Fast","description":""}]}),
+        json!({"acceleration":{"type":"service_tier","service_tier":"priority"}}),
         json!({"acceleration":{"type":"speed","speed":"fast","name":"Fast","description":""}}),
         json!({"acceleration":{"type":"model","model":"","name":"Fast","description":"Faster model"}}),
-        json!({"toolOutputLimit":{"mode":"tokens","limit":0}}),
-        json!({"toolOutputLimit":{"mode":"words","limit":100}}),
-        json!({"defautVerbosity":"low"}),
+        json!({"tool_output_limit":{"mode":"tokens","limit":0}}),
+        json!({"tool_output_limit":{"mode":"words","limit":100}}),
+        json!({"defaut_verbosity":"low"}),
     ] {
         let mut model = row();
         model["settings"] = settings.clone();
@@ -201,10 +201,10 @@ fn nullable_boolean_capabilities_reach_runtime_metadata_without_losing_unknowns(
     ] {
         let mut model = row();
         model["capabilities"] = json!({
-            "tools":value, "reasoning":value, "parallelToolCalls":value,
-            "imageDetailOriginal":value, "fastMode":value
+            "tools":value, "reasoning":value, "parallel_tool_calls":value,
+            "image_detail_original":value, "fast_mode":value
         });
-        model["settings"] = json!({"verbosity":value, "reasoningSummary":value});
+        model["settings"] = json!({"verbosity":value, "reasoning_summary":value});
         let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
         let model = parsed[0].model();
         assert_eq!(model.capabilities.tools, expected);
@@ -246,12 +246,12 @@ fn capability_declarations_reject_strings_and_other_non_boolean_values() {
                 &[
                     "tools",
                     "reasoning",
-                    "parallelToolCalls",
-                    "imageDetailOriginal",
-                    "fastMode",
+                    "parallel_tool_calls",
+                    "image_detail_original",
+                    "fast_mode",
                 ][..],
             ),
-            ("settings", &["verbosity", "reasoningSummary"][..]),
+            ("settings", &["verbosity", "reasoning_summary"][..]),
         ] {
             for field in fields {
                 let mut model = row();
@@ -267,27 +267,95 @@ fn capability_declarations_reject_strings_and_other_non_boolean_values() {
 }
 
 #[test]
-fn catalog_settings_use_booleans_without_changing_the_runtime_contract() {
+fn catalog_settings_preserve_snake_case_fields_in_runtime_metadata() {
     let mut model = row();
-    let mut settings = json!({
-        "inputModalities":["text","image","audio"],
+    model["settings"] = json!({
+        "input_modalities":["text","image","audio"],
         "verbosity":true,
-        "defaultVerbosity":"high",
-        "reasoningSummary":true,
-        "defaultReasoningSummary":"detailed",
-        "serviceTiers":[{"id":"default","name":"Standard","description":"Standard processing"},{"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
-        "acceleration":{"type":"serviceTier","serviceTier":"priority"},
-        "defaultServiceTier":"priority",
-        "toolOutputLimit":{"mode":"bytes","limit":4096}
+        "default_verbosity":"high",
+        "reasoning_summary":true,
+        "default_reasoning_summary":"detailed",
+        "service_tiers":[{"id":"default","name":"Standard","description":"Standard processing"},{"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
+        "acceleration":{"type":"service_tier","service_tier":"priority"},
+        "default_service_tier":"priority",
+        "tool_output_limit":{"mode":"bytes","limit":4096}
     });
-    model["settings"] = settings.clone();
     let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
-    settings["verbosity"] = json!("supported");
-    settings["reasoningSummary"] = json!("supported");
+    let settings = json!({
+        "input_modalities":["text","image","audio"],
+        "verbosity":"supported",
+        "default_verbosity":"high",
+        "reasoning_summary":"supported",
+        "default_reasoning_summary":"detailed",
+        "service_tiers":[{"id":"default","name":"Standard","description":"Standard processing"},{"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
+        "acceleration":{"type":"service_tier","service_tier":"priority"},
+        "default_service_tier":"priority",
+        "tool_output_limit":{"mode":"bytes","limit":4096}
+    });
     let runtime_settings =
         serde_json::from_value::<ash_protocol::ModelSettings>(settings.clone()).unwrap();
     assert_eq!(parsed[0].model().settings, runtime_settings);
     assert_eq!(serde_json::to_value(&runtime_settings).unwrap(), settings);
+}
+
+#[test]
+fn camel_case_catalog_fields_and_acceleration_tags_are_rejected() {
+    for (group, fields) in [
+        (
+            "capabilities",
+            &["fastMode", "parallelToolCalls", "imageDetailOriginal"][..],
+        ),
+        (
+            "settings",
+            &[
+                "inputModalities",
+                "defaultVerbosity",
+                "reasoningSummary",
+                "defaultReasoningSummary",
+                "serviceTiers",
+                "defaultServiceTier",
+                "toolOutputLimit",
+            ][..],
+        ),
+    ] {
+        for field in fields {
+            let mut model = row();
+            model[group][field] = json!(null);
+            let error = parse_catalog(&json!({"models":[model]}).to_string()).unwrap_err();
+            assert!(
+                error.to_string().contains("unknown field"),
+                "{group}.{field}: {error}"
+            );
+        }
+    }
+    for acceleration in [
+        json!({"type":"serviceTier","serviceTier":"priority"}),
+        json!({"type":"service_tier","serviceTier":"priority"}),
+        json!({"type":"service_tier","service_tier":"priority","serviceTier":"priority"}),
+    ] {
+        let mut model = row();
+        model["settings"]["acceleration"] = acceleration.clone();
+        assert!(
+            parse_catalog(&json!({"models":[model]}).to_string()).is_err(),
+            "{acceleration}"
+        );
+    }
+}
+
+#[test]
+fn speed_and_model_acceleration_declarations_reach_runtime_metadata() {
+    for acceleration in [
+        json!({"type":"speed","speed":"fast","name":"Fast","description":"Faster responses"}),
+        json!({"type":"model","model":"highspeed-model","name":"Fast","description":"High-speed model"}),
+    ] {
+        let mut model = row();
+        model["settings"]["acceleration"] = acceleration.clone();
+        let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
+        assert_eq!(
+            serde_json::to_value(parsed[0].model().settings.acceleration.unwrap()).unwrap(),
+            acceleration
+        );
+    }
 }
 
 #[test]

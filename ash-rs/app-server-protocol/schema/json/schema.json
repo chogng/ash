@@ -37175,17 +37175,17 @@
       "oneOf": [
         {
           "properties": {
-            "serviceTier": {
+            "service_tier": {
               "type": "string"
             },
             "type": {
-              "const": "serviceTier",
+              "const": "service_tier",
               "type": "string"
             }
           },
           "required": [
             "type",
-            "serviceTier"
+            "service_tier"
           ],
           "type": "object"
         },
@@ -37304,16 +37304,16 @@
     },
     "ModelCapabilities": {
       "properties": {
-        "fastMode": {
+        "fast_mode": {
           "$ref": "#/$defs/CapabilitySupport",
           "default": "unknown",
           "description": "Whether acceleration is supported; [`crate::ModelSettings::acceleration`] declares its mechanism."
         },
-        "imageDetailOriginal": {
+        "image_detail_original": {
           "$ref": "#/$defs/CapabilitySupport",
           "default": "unknown"
         },
-        "parallelToolCalls": {
+        "parallel_tool_calls": {
           "$ref": "#/$defs/CapabilitySupport"
         },
         "personality": {
@@ -37329,14 +37329,14 @@
       "required": [
         "tools",
         "reasoning",
-        "parallelToolCalls",
+        "parallel_tool_calls",
         "personality"
       ],
       "type": "object"
     },
     "ModelCatalogEntry": {
       "properties": {
-        "autoCompactTokenLimit": {
+        "auto_compact_token_limit": {
           "format": "uint32",
           "minimum": 0,
           "type": [
@@ -37344,7 +37344,7 @@
             "null"
           ]
         },
-        "availableContextWindow": {
+        "available_context_window": {
           "format": "uint32",
           "minimum": 0,
           "type": [
@@ -37355,7 +37355,7 @@
         "capabilities": {
           "$ref": "#/$defs/ModelCapabilities"
         },
-        "contextWindow": {
+        "context_window": {
           "format": "uint32",
           "minimum": 0,
           "type": [
@@ -37363,7 +37363,7 @@
             "null"
           ]
         },
-        "contextWindowOptions": {
+        "context_window_options": {
           "description": "Selectable budgets in ascending order: empty for unknown, one for fixed capacity,\nor two for a compact/expanded switch. Clients must not infer choices from the ceiling.",
           "items": {
             "format": "uint32",
@@ -37372,7 +37372,7 @@
           },
           "type": "array"
         },
-        "defaultContextWindow": {
+        "default_context_window": {
           "description": "Context budget without a per-model preference, distinct from the effective budget and ceiling.",
           "format": "uint32",
           "minimum": 0,
@@ -37381,7 +37381,7 @@
             "null"
           ]
         },
-        "defaultPersonality": {
+        "default_personality": {
           "anyOf": [
             {
               "$ref": "#/$defs/Personality"
@@ -37404,14 +37404,14 @@
             "null"
           ]
         },
-        "displayName": {
+        "display_name": {
           "type": "string"
         },
-        "fastEnabled": {
+        "fast_enabled": {
           "description": "Current preference on the active connection; capability support is reported separately.",
           "type": "boolean"
         },
-        "maximumContextWindow": {
+        "maximum_context_window": {
           "description": "Model or custom connection ceiling before applying its context budget preference.",
           "format": "uint32",
           "minimum": 0,
@@ -37423,7 +37423,7 @@
         "model": {
           "$ref": "#/$defs/ModelRef"
         },
-        "modelReasoningEffort": {
+        "model_reasoning_effort": {
           "anyOf": [
             {
               "$ref": "#/$defs/ReasoningEffort"
@@ -37437,17 +37437,17 @@
           "$ref": "#/$defs/ModelSettings",
           "default": {
             "acceleration": null,
-            "defaultReasoningSummary": null,
-            "defaultServiceTier": null,
-            "defaultVerbosity": null,
-            "inputModalities": null,
-            "reasoningSummary": "unknown",
-            "serviceTiers": null,
-            "toolOutputLimit": null,
+            "default_reasoning_summary": null,
+            "default_service_tier": null,
+            "default_verbosity": null,
+            "input_modalities": null,
+            "reasoning_summary": "unknown",
+            "service_tiers": null,
+            "tool_output_limit": null,
             "verbosity": "unknown"
           }
         },
-        "supportedReasoningEfforts": {
+        "supported_reasoning_efforts": {
           "items": {
             "$ref": "#/$defs/ModelReasoningEffortOption"
           },
@@ -37456,11 +37456,11 @@
       },
       "required": [
         "model",
-        "displayName",
-        "contextWindowOptions",
-        "fastEnabled",
+        "display_name",
+        "context_window_options",
+        "fast_enabled",
         "capabilities",
-        "supportedReasoningEfforts"
+        "supported_reasoning_efforts"
       ],
       "type": "object"
     },
@@ -37946,10 +37946,10 @@
     "ModelPreferencesUpdateParams": {
       "additionalProperties": false,
       "properties": {
-        "commandId": {
+        "command_id": {
           "$ref": "#/$defs/CommandId"
         },
-        "contextWindow": {
+        "context_window": {
           "format": "uint32",
           "minimum": 0,
           "type": [
@@ -37957,7 +37957,7 @@
             "null"
           ]
         },
-        "expectedRevision": {
+        "expected_revision": {
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -37973,8 +37973,8 @@
         }
       },
       "required": [
-        "commandId",
-        "expectedRevision",
+        "command_id",
+        "expected_revision",
         "model"
       ],
       "type": "object"
@@ -38281,7 +38281,7 @@
           "default": null,
           "description": "Mechanism selected by the product's acceleration preference; distinct from explicit request values."
         },
-        "defaultReasoningSummary": {
+        "default_reasoning_summary": {
           "anyOf": [
             {
               "$ref": "#/$defs/ModelReasoningSummary"
@@ -38293,7 +38293,7 @@
           "default": null,
           "description": "Ash summary default; omission leaves it unspecified, while [`ModelReasoningSummary::None`] suppresses summaries."
         },
-        "defaultServiceTier": {
+        "default_service_tier": {
           "default": null,
           "description": "Ash request default referencing a declared tier ID; absence sends no default override.",
           "type": [
@@ -38301,7 +38301,7 @@
             "null"
           ]
         },
-        "defaultVerbosity": {
+        "default_verbosity": {
           "anyOf": [
             {
               "$ref": "#/$defs/ModelVerbosity"
@@ -38313,7 +38313,7 @@
           "default": null,
           "description": "Ash request default; requires confirmed verbosity support."
         },
-        "inputModalities": {
+        "input_modalities": {
           "default": null,
           "description": "Declared input kinds; `None` means unknown, while a declared list includes text.",
           "items": {
@@ -38324,12 +38324,12 @@
             "null"
           ]
         },
-        "reasoningSummary": {
+        "reasoning_summary": {
           "$ref": "#/$defs/CapabilitySupport",
           "default": "unknown",
           "description": "Support for returning reasoning summaries, separate from effort and replayable reasoning state."
         },
-        "serviceTiers": {
+        "service_tiers": {
           "default": null,
           "description": "Exact provider request IDs and display copy; a listed tier does not establish entitlement.",
           "items": {
@@ -38340,7 +38340,7 @@
             "null"
           ]
         },
-        "toolOutputLimit": {
+        "tool_output_limit": {
           "anyOf": [
             {
               "$ref": "#/$defs/ModelToolOutputLimit"

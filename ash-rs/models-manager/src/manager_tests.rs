@@ -676,6 +676,17 @@ async fn disk_cache_restores_each_subscription_scope_after_restart() {
                     [DiscoveredModel::new(model_id(model_name)).with_metadata(
                         ModelMetadataPatch {
                             display_name: Some(format!("Model {model_name}")),
+                            settings: ash_protocol::ModelSettings {
+                                input_modalities: Some(vec![
+                                    ash_protocol::ModelInputModality::Text,
+                                ]),
+                                acceleration: Some(ash_protocol::ModelAcceleration::Speed {
+                                    speed: ash_protocol::ModelSpeed::Fast,
+                                    name: "Fast".into(),
+                                    description: "Faster responses".into(),
+                                }),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         },
                     )],
@@ -701,6 +712,17 @@ async fn disk_cache_restores_each_subscription_scope_after_restart() {
             format!("Model {model_name}")
         );
         assert_eq!(
+            snapshot.entries()[0].info().settings.input_modalities,
+            Some(vec![ash_protocol::ModelInputModality::Text])
+        );
+        assert!(matches!(
+            &snapshot.entries()[0].info().settings.acceleration,
+            Some(ash_protocol::ModelAcceleration::Speed {
+                speed: ash_protocol::ModelSpeed::Fast,
+                ..
+            })
+        ));
+        assert_eq!(
             restarted
                 .list_discovered(&[scope], &CatalogQuery::selectable())
                 .unwrap()
@@ -716,6 +738,50 @@ async fn disk_cache_restores_each_subscription_scope_after_restart() {
             .unwrap()
             .entries()
             .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn previous_catalog_cache_version_requires_a_new_observation() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("models");
+    let scope = dynamic_scope("flexible", "account-a");
+    let manager = ModelsManager::new(registry()).with_disk_cache(directory.clone());
+    manager
+        .refresh(
+            scope.clone(),
+            Arc::new(QueueSource::new([Ok(modified(
+                &scope,
+                DiscoveryCoverage::CompleteAgentCatalog,
+                [DiscoveredModel::new(model_id("previous-model"))],
+            ))])),
+        )
+        .await
+        .unwrap();
+    let path = directory.join("flexible.json");
+    let mut document: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    document["schema_version"] = serde_json::json!(2);
+    std::fs::write(path, serde_json::to_vec(&document).unwrap()).unwrap();
+
+    let restarted = ModelsManager::new(registry()).with_disk_cache(directory);
+    assert!(restarted.snapshot(&scope).unwrap().entries().is_empty());
+    restarted
+        .refresh(
+            scope.clone(),
+            Arc::new(QueueSource::new([Ok(modified(
+                &scope,
+                DiscoveryCoverage::CompleteAgentCatalog,
+                [DiscoveredModel::new(model_id("current-model"))],
+            ))])),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        restarted.snapshot(&scope).unwrap().entries()[0]
+            .model()
+            .model,
+        model_id("current-model")
     );
 }
 

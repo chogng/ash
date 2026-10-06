@@ -6,25 +6,25 @@ import type { ModelSettings } from './ModelSettings.js';
 import type { Personality } from './Personality.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 
-export type ModelCatalogEntry = { model: ModelRef, displayName: string, description: string | null,
+export type ModelCatalogEntry = { model: ModelRef, display_name: string, description: string | null,
 /**
  * True only when this ID belongs to the last successful endpoint observation.
  */
-discovered?: boolean | null, contextWindow: number | null,
+discovered?: boolean | null, context_window: number | null,
 /**
  * Context budget without a per-model preference, distinct from the effective budget and ceiling.
  */
-defaultContextWindow: number | null,
+default_context_window: number | null,
 /**
  * Selectable budgets in ascending order: empty for unknown, one for fixed capacity,
  * or two for a compact/expanded switch. Clients must not infer choices from the ceiling.
  */
-contextWindowOptions: Array<number>,
+context_window_options: Array<number>,
 /**
  * Current preference on the active connection; capability support is reported separately.
  */
-fastEnabled: boolean,
+fast_enabled: boolean,
 /**
  * Model or custom connection ceiling before applying its context budget preference.
  */
-maximumContextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ModelReasoningEffortOption>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, settings: ModelSettings, };
+maximum_context_window: number | null, auto_compact_token_limit: number | null, available_context_window?: number | null, capabilities: ModelCapabilities, supported_reasoning_efforts: Array<ModelReasoningEffortOption>, model_reasoning_effort: ReasoningEffort | null, default_personality: Personality | null, settings: ModelSettings, };

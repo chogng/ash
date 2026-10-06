@@ -2,4 +2,4 @@
 import type { ModelId } from './ModelId.js';
 import type { ModelSpeed } from './ModelSpeed.js';
 
-export type ModelAcceleration = { "type": "serviceTier", serviceTier: string, } | { "type": "speed", speed: ModelSpeed, name: string, description: string, } | { "type": "model", model: ModelId, name: string, description: string, };
+export type ModelAcceleration = { "type": "service_tier", service_tier: string, } | { "type": "speed", speed: ModelSpeed, name: string, description: string, } | { "type": "model", model: ModelId, name: string, description: string, };

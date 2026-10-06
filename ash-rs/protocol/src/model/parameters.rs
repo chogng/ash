@@ -10,7 +10,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum ModelInputModality {
     Text,
     Image,
@@ -18,7 +18,7 @@ pub enum ModelInputModality {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum ModelVerbosity {
     Low,
     Medium,
@@ -26,7 +26,7 @@ pub enum ModelVerbosity {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum ModelReasoningSummary {
     None,
     Auto,
@@ -37,7 +37,7 @@ pub enum ModelReasoningSummary {
 /// Limits model-visible tool text; original durable tool results remain intact.
 /// Token limits use the shared output utility's UTF-8 byte approximation, not token measurement.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(tag = "mode", content = "limit", rename_all = "camelCase")]
+#[serde(tag = "mode", content = "limit", rename_all = "snake_case")]
 pub enum ModelToolOutputLimit {
     Bytes(u32),
     Tokens(u32),
@@ -45,7 +45,7 @@ pub enum ModelToolOutputLimit {
 
 /// A provider service tier ID is a request value; its label and explanation are display metadata.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ModelServiceTier {
     pub id: String,
     pub name: String,
@@ -55,9 +55,9 @@ pub struct ModelServiceTier {
 /// The model catalog owns how the product's acceleration preference changes a call.
 /// A speed parameter and a different model ID must never be recorded as service tiers.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ModelAcceleration {
-    #[serde(rename_all = "camelCase")]
+    #[serde(rename_all = "snake_case")]
     ServiceTier { service_tier: String },
     Speed {
         speed: ModelSpeed,
@@ -77,7 +77,7 @@ pub enum ModelAcceleration {
 /// `Unknown` support are absence of evidence. They do not grant endpoint support or account access.
 /// The invocation owner resolves user choices into [`crate::ModelRequest`] separately.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+#[serde(rename_all = "snake_case", default, deny_unknown_fields)]
 pub struct ModelSettings {
     /// Declared input kinds; `None` means unknown, while a declared list includes text.
     pub input_modalities: Option<Vec<ModelInputModality>>,

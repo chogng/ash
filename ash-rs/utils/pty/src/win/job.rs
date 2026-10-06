@@ -22,7 +22,8 @@ use winapi::um::winnt::JobObjectExtendedLimitInformation;
 
 #[link(name = "ntdll")]
 unsafe extern "system" {
-    fn NtResumeProcess(process_handle: HANDLE) -> NTSTATUS;
+    #[link_name = "NtResumeProcess"]
+    fn nt_resume_process(process_handle: HANDLE) -> NTSTATUS;
 }
 
 /// Owns a Windows Job Object used to terminate a spawned process tree.
@@ -106,7 +107,7 @@ impl JobObject {
                 .ok_or_else(|| io::Error::other("missing child process handle"))?;
             self.assign_process(handle)?;
             // The child owns this handle and remains suspended until the job assignment succeeds.
-            let status = unsafe { NtResumeProcess(handle.cast()) };
+            let status = unsafe { nt_resume_process(handle.cast()) };
             if !NT_SUCCESS(status) {
                 return Err(io::Error::other(format!(
                     "failed to resume contained process: NTSTATUS {status:#x}"

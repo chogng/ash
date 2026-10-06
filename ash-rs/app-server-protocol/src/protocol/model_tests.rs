@@ -56,7 +56,7 @@ fn catalog_metadata_does_not_expose_an_execution_path() {
         serde_json::from_value::<ModelCatalogEntry>(value.clone()).unwrap(),
         entry
     );
-    assert_eq!(value["contextWindow"], 1_000_000);
+    assert_eq!(value["context_window"], 1_000_000);
     assert!(value.get("access").is_none());
     assert!(value.get("outputTransport").is_none());
 }
@@ -72,8 +72,8 @@ fn catalog_exposes_fast_support_and_the_declared_context_ceiling() {
     info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     let entry = ModelCatalogEntry::from_info(model, &info);
     let value = serde_json::to_value(&entry).unwrap();
-    assert_eq!(value["maximumContextWindow"], 1_050_000);
-    assert_eq!(value["capabilities"]["fastMode"], "supported");
+    assert_eq!(value["maximum_context_window"], 1_050_000);
+    assert_eq!(value["capabilities"]["fast_mode"], "supported");
     assert_eq!(
         serde_json::from_value::<ModelCatalogEntry>(value).unwrap(),
         entry
@@ -89,14 +89,14 @@ fn model_preferences_catalog_fields_keep_unknown_capacity_explicit() {
     let info = ModelInfo::new(model.model.clone(), "Unknown");
     let entry = ModelCatalogEntry::from_info(model, &info);
     let value = serde_json::to_value(&entry).unwrap();
-    assert_eq!(value["defaultContextWindow"], serde_json::Value::Null);
-    assert_eq!(value["contextWindowOptions"], serde_json::json!([]));
-    assert_eq!(value["fastEnabled"], false);
+    assert_eq!(value["default_context_window"], serde_json::Value::Null);
+    assert_eq!(value["context_window_options"], serde_json::json!([]));
+    assert_eq!(value["fast_enabled"], false);
 }
 
 #[test]
 fn model_preferences_request_is_strict_and_accepts_targeted_updates() {
-    let request = serde_json::json!({ "commandId": "model-settings", "expectedRevision": 1, "model": { "provider": "openai", "model": "gpt-6-astra" }, "fast": true });
+    let request = serde_json::json!({ "command_id": "model-settings", "expected_revision": 1, "model": { "provider": "openai", "model": "gpt-6-astra" }, "fast": true });
     let params: ModelPreferencesUpdateParams = serde_json::from_value(request.clone()).unwrap();
     assert_eq!(params.fast, Some(true));
     assert_eq!(params.context_window, None);

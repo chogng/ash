@@ -48,24 +48,24 @@ export function createTestInitializeResult(): InitializeResult {
 	};
 }
 
-export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'displayName'> & Partial<ModelCatalogEntry>): ModelCatalogEntry {
+export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'display_name'> & Partial<ModelCatalogEntry>): ModelCatalogEntry {
 	return {
 		discovered: false,
-		contextWindow: null,
-		defaultContextWindow: null,
-		maximumContextWindow: null,
-		contextWindowOptions: [],
-		fastEnabled: false,
-		autoCompactTokenLimit: null,
+		context_window: null,
+		default_context_window: null,
+		maximum_context_window: null,
+		context_window_options: [],
+		fast_enabled: false,
+		auto_compact_token_limit: null,
 		capabilities: {
-			tools: 'supported', reasoning: 'supported', parallelToolCalls: 'unknown',
-			personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown',
+			tools: 'supported', reasoning: 'supported', parallel_tool_calls: 'unknown',
+			personality: 'unknown', image_detail_original: 'unknown', fast_mode: 'unknown',
 		},
 		description: null,
-		supportedReasoningEfforts: [],
-		modelReasoningEffort: null,
-		defaultPersonality: null,
-		settings: { inputModalities: null, verbosity: 'unknown', defaultVerbosity: null, reasoningSummary: 'unknown', defaultReasoningSummary: null, serviceTiers: null, defaultServiceTier: null, acceleration: null, toolOutputLimit: null },
+		supported_reasoning_efforts: [],
+		model_reasoning_effort: null,
+		default_personality: null,
+		settings: { input_modalities: null, verbosity: 'unknown', default_verbosity: null, reasoning_summary: 'unknown', default_reasoning_summary: null, service_tiers: null, default_service_tier: null, acceleration: null, tool_output_limit: null },
 		...entry,
 	};
 }

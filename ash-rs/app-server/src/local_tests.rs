@@ -745,7 +745,7 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
             .find(|entry| {
                 entry["model"]["provider"] == "openai" && entry["model"]["model"] == "gpt-5.6"
             })
-            .unwrap()["contextWindow"]
+            .unwrap()["context_window"]
             .as_u64()
     };
     assert_eq!(window(&initial), Some(100_000));
@@ -2560,9 +2560,9 @@ fn configured_model_context_enables_core_managed_compaction() {
     assert_eq!(entry.auto_compact_token_limit, Some(15_000));
     assert_eq!(entry.available_context_window, Some(15_000 - 2_048 - 1_024));
     let serialized = serde_json::to_value(entry).unwrap();
-    assert_eq!(serialized["contextWindow"], 20_000);
-    assert_eq!(serialized["autoCompactTokenLimit"], 15_000);
-    assert!(serialized.get("availableContextWindow").is_some());
+    assert_eq!(serialized["context_window"], 20_000);
+    assert_eq!(serialized["auto_compact_token_limit"], 15_000);
+    assert!(serialized.get("available_context_window").is_some());
     let frozen = service
         .snapshot(ModelSelection::ConfiguredDefault)
         .unwrap()

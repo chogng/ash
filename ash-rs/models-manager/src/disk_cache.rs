@@ -11,7 +11,8 @@ use std::io;
 use std::io::Write;
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: u32 = 2;
+// Version 3 stores model settings with snake_case keys; earlier observations must be refreshed.
+const SCHEMA_VERSION: u32 = 3;
 
 /// Ash-owned catalog files, one per provider and multiple account scopes per file.
 pub(crate) struct DiskCatalogCache {

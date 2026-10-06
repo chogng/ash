@@ -115,6 +115,9 @@ ModelsManager::refresh(scope, source)
 
 App Server 的列表返回有效 `settings`，每轮调用把同一目录中的预算、能力、推理默认值和请求配置传给 provider 并冻结。后续刷新不改写已接受执行；凭据撤销和账号切换仍由 provider 在每次调用前检查。
 
+目录缓存第 3 版保存 `snake_case` 模型设置字段。第 2 版及更早的观察数据不再读取，
+下一次目录发现会重新写入；静态模型声明与用户配置不存放在这个缓存中。
+
 Freshness 使用 manager policy 与 source 明确给出的 cache hint 中更保守的时长：
 
 | 状态          | `CachePreferred`                     | `RequireFresh`             | `CacheOnly`  |

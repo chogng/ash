@@ -300,5 +300,5 @@ fn package_format() -> PackageFormat {
 }
 
 #[cfg(all(test, feature = "signing"))]
-#[path = "ash-update-host/tests.rs"]
+#[path = "ash_update_host/tests.rs"]
 mod tests;

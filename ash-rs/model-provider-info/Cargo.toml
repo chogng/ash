@@ -10,6 +10,10 @@ doctest = false
 name = "model_provider_info"
 path = "src/lib.rs"
 
+[[bin]]
+name = "generate-model-catalog-schema"
+path = "src/bin/generate_model_catalog_schema.rs"
+
 [dependencies]
 schemars = { workspace = true }
 serde = { workspace = true }

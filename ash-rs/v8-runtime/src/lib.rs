@@ -90,11 +90,12 @@ fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, Stri
 
 fn linked_v8_sandbox_enabled() -> bool {
     unsafe extern "C" {
-        fn v8__V8__IsSandboxEnabled() -> bool;
+        #[link_name = "v8__V8__IsSandboxEnabled"]
+        fn v8_is_sandbox_enabled() -> bool;
     }
 
     // `rusty_v8` exposes this symbol even when the linked archive was built without sandboxing.
-    unsafe { v8__V8__IsSandboxEnabled() }
+    unsafe { v8_is_sandbox_enabled() }
 }
 
 impl V8JitMode {

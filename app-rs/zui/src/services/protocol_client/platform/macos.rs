@@ -62,7 +62,8 @@ fn set_handler(
 
     #[link(name = "CoreServices", kind = "framework")]
     unsafe extern "C" {
-        fn LSSetDefaultHandlerForURLScheme(
+        #[link_name = "LSSetDefaultHandlerForURLScheme"]
+        fn ls_set_default_handler_for_url_scheme(
             url_scheme: *const c_void,
             handler_bundle_identifier: *const c_void,
         ) -> i32;
@@ -71,7 +72,7 @@ fn set_handler(
     // SAFETY: NSString and CFString are toll-free bridged. Both retained objects remain alive for
     // the synchronous LaunchServices call.
     let status = unsafe {
-        LSSetDefaultHandlerForURLScheme(
+        ls_set_default_handler_for_url_scheme(
             std::ptr::from_ref(scheme).cast(),
             std::ptr::from_ref(identifier).cast(),
         )

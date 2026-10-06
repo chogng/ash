@@ -14,6 +14,7 @@ use ash_protocol::ModelReasoningSummary;
 use ash_protocol::ModelRef;
 use ash_protocol::ModelServiceTier;
 use ash_protocol::ModelSettings;
+use ash_protocol::ModelSpeed;
 use ash_protocol::ModelToolOutputLimit;
 use ash_protocol::ModelVerbosity;
 use ash_protocol::ProviderId;
@@ -133,7 +134,7 @@ fn model_capabilities<'de, D: serde::Deserializer<'de>>(
 }
 
 #[derive(Default, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 struct ModelCapabilitiesDeclaration {
     tools: Option<bool>,
     reasoning: Option<bool>,
@@ -147,7 +148,7 @@ struct ModelCapabilitiesDeclaration {
 // These are the parsed editable fields, not a separate schema definition. JSON Schema derives
 // from this declaration; protocol settings continue to own runtime defaults and validation.
 #[derive(Default, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 struct ModelSettingsDeclaration {
     /// Declared input kinds; a declared list must include text. Omission means unknown.
     input_modalities: Option<Vec<ModelInputModality>>,
@@ -161,12 +162,48 @@ struct ModelSettingsDeclaration {
     default_reasoning_summary: Option<ModelReasoningSummary>,
     /// Exact provider tier IDs with display names and explanations; these do not grant account access.
     service_tiers: Option<Vec<ModelServiceTier>>,
-    /// Ash's request default referencing a declared serviceTiers ID.
+    /// Ash's request default referencing a declared service_tiers ID.
     default_service_tier: Option<String>,
     /// How the acceleration preference changes a request: tier, speed parameter, or exact model ID.
+    #[serde(default, deserialize_with = "model_acceleration")]
+    #[schemars(with = "Option<ModelAccelerationDeclaration>")]
     acceleration: Option<ModelAcceleration>,
     /// Core's tool-result truncation budget; not a provider inference parameter or output-token limit.
     tool_output_limit: Option<ModelToolOutputLimit>,
+}
+
+// Catalog edits reject unknown fields. Serde's remote derive parses directly into the shared
+// enum, while retaining this boundary's strict validation without another runtime representation.
+#[derive(Deserialize, JsonSchema)]
+#[serde(
+    remote = "ModelAcceleration",
+    tag = "type",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+enum ModelAccelerationDeclaration {
+    ServiceTier {
+        service_tier: String,
+    },
+    Speed {
+        speed: ModelSpeed,
+        name: String,
+        description: String,
+    },
+    Model {
+        model: ModelId,
+        name: String,
+        description: String,
+    },
+}
+
+fn model_acceleration<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ModelAcceleration>, D::Error> {
+    #[derive(Deserialize)]
+    struct Declaration(#[serde(with = "ModelAccelerationDeclaration")] ModelAcceleration);
+
+    Ok(Option::<Declaration>::deserialize(deserializer)?.map(|declaration| declaration.0))
 }
 
 fn model_settings<'de, D: serde::Deserializer<'de>>(

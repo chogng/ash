@@ -82,7 +82,7 @@ pub enum ModelAccess {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ModelCapabilities {
     pub tools: CapabilitySupport,
     pub reasoning: CapabilitySupport,
@@ -115,7 +115,7 @@ fn unknown_capability_support() -> CapabilitySupport {
 /// Capacity and parameter declarations guide request construction; this row does not prove account
 /// access or endpoint compatibility. The editable bundled row is owned by model-provider-info.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ModelInfo {
     pub id: ModelId,
     pub display_name: String,
@@ -192,7 +192,7 @@ impl ModelInfo {
 pub type Model = ModelInfo;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ModelPreset {
     pub id: String,
     pub name: String,

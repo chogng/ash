@@ -7,13 +7,15 @@ use std::io;
 
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
-    fn IOPMAssertionCreateWithName(
+    #[link_name = "IOPMAssertionCreateWithName"]
+    fn iopm_assertion_create_with_name(
         kind: CFStringRef,
         level: u32,
         reason: CFStringRef,
         id: *mut u32,
     ) -> i32;
-    fn IOPMAssertionRelease(id: u32) -> i32;
+    #[link_name = "IOPMAssertionRelease"]
+    fn iopm_assertion_release(id: u32) -> i32;
 }
 
 struct Assertion(u32);
@@ -24,7 +26,7 @@ pub(super) fn acquire(reason: &str) -> io::Result<Box<dyn Send>> {
     let mut id = 0;
     // SAFETY: Both CFStrings and the writable assertion ID live through the synchronous call.
     let result = unsafe {
-        IOPMAssertionCreateWithName(
+        iopm_assertion_create_with_name(
             kind.as_concrete_TypeRef(),
             1,
             reason.as_concrete_TypeRef(),
@@ -42,7 +44,7 @@ pub(super) fn acquire(reason: &str) -> io::Result<Box<dyn Send>> {
 impl Drop for Assertion {
     fn drop(&mut self) {
         // SAFETY: This ID was created successfully and is released exactly once by its owner.
-        let result = unsafe { IOPMAssertionRelease(self.0) };
+        let result = unsafe { iopm_assertion_release(self.0) };
         if result != 0 {
             log::warn!("IOPMAssertionRelease returned {result:#x}");
         }

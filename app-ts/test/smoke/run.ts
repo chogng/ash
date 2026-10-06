@@ -17,7 +17,7 @@ try {
 	let languageServer: string | undefined;
 	if (fixtureDirectory) {
 		languageServer = join(fixtureDirectory, process.platform === 'win32' ? 'ash-test-language-server.exe' : 'ash-test-language-server');
-		const result = await run('rustc', ['--edition=2024', 'test/fixtures/language-server.rs', '-o', languageServer], process.env);
+		const result = await run('rustc', ['--edition=2024', 'test/fixtures/language_server.rs', '-o', languageServer], process.env);
 		if (result !== 0) { throw new Error(`Language-server fixture compilation failed: ${result}`); }
 	}
 	process.exitCode = await run(process.execPath, [

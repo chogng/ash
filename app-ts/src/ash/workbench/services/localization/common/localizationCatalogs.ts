@@ -3192,7 +3192,6 @@ export const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [
 				"manageMarketplaceExtensions": "Manage Marketplace extension execution",
 				"marketplaceExecutionNotice": "Authorize commands, hover providers and editor document access, including unsaved text. This JavaScript host supports a subset of the VS Code API; Node modules, direct file access, networking and child processes are unavailable. Unsupported APIs fail explicitly. Disable execution before uninstalling. A new package version requires new authorization.",
 				"marketplaceExtensionState": "Enabled: {0}. Execution authorized: {1}.",
-				"missingCommandAfterActivation": "Extension command '{0}' was not registered after activation.",
 				"no": "No",
 				"noExecutableEntry": "Script execution is unavailable for this package or platform.",
 				"noLocalExtensions": "No local editor extensions are installed. Use Install extension from workspace to add one.",

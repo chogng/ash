@@ -4,6 +4,9 @@
 - Verifies release identity before product hosts download or install an artifact.
 - Exposes signing only to release tooling; it does not own UI, scheduling or installation.
 
+The update helper is implemented in [`ash_update_host.rs`](src/bin/ash_update_host.rs).
+Cargo declares the executable name `ash-update-host` explicitly for product packaging.
+
 `AnnouncementDocument` owns parsing, bounded HTTP fetching and client selection for
 the remote [announcement list](../../announcement_tip.toml). This is a plain-text
 notice feed; it cannot download or install a product update. Client hosts own

@@ -34,29 +34,38 @@ const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
 
 #[link(name = "CoreGraphics", kind = "framework")]
 unsafe extern "C" {
-    fn CGPreflightScreenCaptureAccess() -> bool;
-    fn CGRequestScreenCaptureAccess() -> bool;
-    fn CGRectMakeWithDictionaryRepresentation(dict: *const c_void, rect: *mut CGRect) -> bool;
+    #[link_name = "CGPreflightScreenCaptureAccess"]
+    fn cg_preflight_screen_capture_access() -> bool;
+    #[link_name = "CGRequestScreenCaptureAccess"]
+    fn cg_request_screen_capture_access() -> bool;
+    #[link_name = "CGRectMakeWithDictionaryRepresentation"]
+    fn cg_rect_make_with_dictionary_representation(dict: *const c_void, rect: *mut CGRect) -> bool;
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
-    fn CFStringCreateWithBytes(
+    #[link_name = "CFStringCreateWithBytes"]
+    fn cf_string_create_with_bytes(
         alloc: *const c_void,
         bytes: *const u8,
         num_bytes: isize,
         encoding: u32,
         is_external_representation: bool,
     ) -> *const c_void;
-    fn CFRelease(cf: *const c_void);
-    fn CFDictionaryGetValueIfPresent(
+    #[link_name = "CFRelease"]
+    fn cf_release(cf: *const c_void);
+    #[link_name = "CFDictionaryGetValueIfPresent"]
+    fn cf_dictionary_get_value_if_present(
         the_dict: *const c_void,
         key: *const c_void,
         value: *mut *const c_void,
     ) -> bool;
-    fn CFNumberGetValue(number: *const c_void, the_type: i32, value_ptr: *mut c_void) -> bool;
-    fn CFBooleanGetValue(boolean: *const c_void) -> bool;
-    fn CFStringGetCString(
+    #[link_name = "CFNumberGetValue"]
+    fn cf_number_get_value(number: *const c_void, the_type: i32, value_ptr: *mut c_void) -> bool;
+    #[link_name = "CFBooleanGetValue"]
+    fn cf_boolean_get_value(boolean: *const c_void) -> bool;
+    #[link_name = "CFStringGetCString"]
+    fn cf_string_get_c_string(
         the_string: *const c_void,
         buffer: *mut u8,
         buffer_size: isize,
@@ -65,7 +74,7 @@ unsafe extern "C" {
 }
 
 pub fn check_permission() -> PermissionStatus {
-    if unsafe { CGPreflightScreenCaptureAccess() } {
+    if unsafe { cg_preflight_screen_capture_access() } {
         PermissionStatus::Granted
     } else {
         PermissionStatus::Denied
@@ -73,7 +82,7 @@ pub fn check_permission() -> PermissionStatus {
 }
 
 pub fn request_permission() -> bool {
-    unsafe { CGRequestScreenCaptureAccess() }
+    unsafe { cg_request_screen_capture_access() }
 }
 
 pub fn enumerate_displays() -> Result<Vec<DisplayInfo>, CaptureError> {
@@ -147,16 +156,16 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>, CaptureError> {
         let mut bounds_val: *const c_void = ptr::null();
         let (width, height) = unsafe {
             let present = if !cf_bounds_key.is_null() {
-                CFDictionaryGetValueIfPresent(dict_ref, cf_bounds_key, &mut bounds_val)
+                cf_dictionary_get_value_if_present(dict_ref, cf_bounds_key, &mut bounds_val)
             } else {
                 false
             };
             if !cf_bounds_key.is_null() {
-                CFRelease(cf_bounds_key);
+                cf_release(cf_bounds_key);
             }
 
             if present && !bounds_val.is_null() {
-                if CGRectMakeWithDictionaryRepresentation(bounds_val, &mut rect) {
+                if cg_rect_make_with_dictionary_representation(bounds_val, &mut rect) {
                     (
                         rect.size.width.max(0.0) as u32,
                         rect.size.height.max(0.0) as u32,
@@ -390,7 +399,7 @@ fn capture_display_frame(
 ) -> Result<CapturedFrame, CaptureError> {
     let display = CGDisplay::new(display_id);
     let image = display.image().ok_or_else(|| {
-        if !unsafe { CGPreflightScreenCaptureAccess() } {
+        if !unsafe { cg_preflight_screen_capture_access() } {
             CaptureError::PermissionDenied
         } else {
             CaptureError::Backend(format!("failed to capture image for display {display_id}"))
@@ -412,7 +421,7 @@ fn capture_window_frame(
         kCGWindowImageBestResolution,
     )
     .ok_or_else(|| {
-        if !unsafe { CGPreflightScreenCaptureAccess() } {
+        if !unsafe { cg_preflight_screen_capture_access() } {
             CaptureError::PermissionDenied
         } else {
             CaptureError::Backend(format!("failed to capture image for window {window_id}"))
@@ -468,7 +477,7 @@ fn cgimage_to_rgba_frame(
 
 unsafe fn make_cf_string(s: &str) -> *const c_void {
     unsafe {
-        CFStringCreateWithBytes(
+        cf_string_create_with_bytes(
             ptr::null(),
             s.as_ptr(),
             s.len() as isize,
@@ -484,13 +493,13 @@ unsafe fn get_string_value(dict: *const c_void, key_str: &str) -> Option<String>
         return None;
     }
     let mut val: *const c_void = ptr::null();
-    let present = unsafe { CFDictionaryGetValueIfPresent(dict, cf_key, &mut val) };
-    unsafe { CFRelease(cf_key) };
+    let present = unsafe { cf_dictionary_get_value_if_present(dict, cf_key, &mut val) };
+    unsafe { cf_release(cf_key) };
 
     if present && !val.is_null() {
         let mut buf = vec![0u8; 256];
         if unsafe {
-            CFStringGetCString(
+            cf_string_get_c_string(
                 val,
                 buf.as_mut_ptr(),
                 buf.len() as isize,
@@ -513,13 +522,14 @@ unsafe fn get_i64_value(dict: *const c_void, key_str: &str) -> Option<i64> {
         return None;
     }
     let mut val: *const c_void = ptr::null();
-    let present = unsafe { CFDictionaryGetValueIfPresent(dict, cf_key, &mut val) };
-    unsafe { CFRelease(cf_key) };
+    let present = unsafe { cf_dictionary_get_value_if_present(dict, cf_key, &mut val) };
+    unsafe { cf_release(cf_key) };
 
     if present && !val.is_null() {
         let mut out: i64 = 0;
-        if unsafe { CFNumberGetValue(val, K_CF_NUMBER_S_INT64_TYPE, (&mut out as *mut i64).cast()) }
-        {
+        if unsafe {
+            cf_number_get_value(val, K_CF_NUMBER_S_INT64_TYPE, (&mut out as *mut i64).cast())
+        } {
             Some(out)
         } else {
             None
@@ -535,11 +545,11 @@ unsafe fn get_bool_value(dict: *const c_void, key_str: &str) -> Option<bool> {
         return None;
     }
     let mut val: *const c_void = ptr::null();
-    let present = unsafe { CFDictionaryGetValueIfPresent(dict, cf_key, &mut val) };
-    unsafe { CFRelease(cf_key) };
+    let present = unsafe { cf_dictionary_get_value_if_present(dict, cf_key, &mut val) };
+    unsafe { cf_release(cf_key) };
 
     if present && !val.is_null() {
-        Some(unsafe { CFBooleanGetValue(val) })
+        Some(unsafe { cf_boolean_get_value(val) })
     } else {
         None
     }

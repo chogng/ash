@@ -60,7 +60,7 @@ pub struct ContextToolDefinition {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
@@ -129,11 +129,11 @@ impl ModelCatalogEntry {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ModelListParams {}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ModelPreferencesUpdateParams {
     pub command_id: ash_protocol::CommandId,
     #[schemars(range(min = 0))]
@@ -149,7 +149,7 @@ pub struct ModelPreferencesUpdateParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct ModelListResult {
     pub models: Vec<ModelCatalogEntry>,
 }

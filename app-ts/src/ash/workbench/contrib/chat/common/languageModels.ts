@@ -165,23 +165,23 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
 	const declaration = entry.settings.acceleration;
-	const acceleration = declaration?.type === 'serviceTier'
-		? entry.settings.serviceTiers?.find(tier => tier.id === declaration.serviceTier)
+	const acceleration = declaration?.type === 'service_tier'
+		? entry.settings.service_tiers?.find(tier => tier.id === declaration.service_tier)
 		: declaration;
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
-		displayName: entry.displayName,
+		displayName: entry.display_name,
 		description: entry.description,
-		defaultContextWindow: entry.defaultContextWindow,
-		maximumContextWindow: entry.maximumContextWindow,
-		supportsFast: entry.capabilities.fastMode === 'supported' && acceleration != null,
+		defaultContextWindow: entry.default_context_window,
+		maximumContextWindow: entry.maximum_context_window,
+		supportsFast: entry.capabilities.fast_mode === 'supported' && acceleration != null,
 		...(acceleration ? { acceleration: Object.freeze({ name: acceleration.name, description: acceleration.description }) } : {}),
-		fast: entry.fastEnabled,
-		contextWindowOptions: Object.freeze([...entry.contextWindowOptions]),
+		fast: entry.fast_enabled,
+		contextWindowOptions: Object.freeze([...entry.context_window_options]),
 		...(entry.discovered === true ? { discovered: true } : {}),
-		contextWindow: entry.contextWindow,
-		supportedReasoningEfforts: Object.freeze(entry.supportedReasoningEfforts.map(option => Object.freeze({ ...option }))),
-		...(entry.modelReasoningEffort != null ? { modelReasoningEffort: entry.modelReasoningEffort } : {}),
+		contextWindow: entry.context_window,
+		supportedReasoningEfforts: Object.freeze(entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option }))),
+		...(entry.model_reasoning_effort != null ? { modelReasoningEffort: entry.model_reasoning_effort } : {}),
 	});
 }
 

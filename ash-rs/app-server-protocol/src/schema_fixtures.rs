@@ -446,15 +446,15 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
 
     assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
     for field in [
-        "export type ModelCatalogEntry = { model: ModelRef, displayName: string,",
-        "contextWindow: number | null,",
-        "defaultContextWindow: number | null,",
-        "contextWindowOptions: Array<number>,",
-        "fastEnabled: boolean,",
-        "maximumContextWindow: number | null,",
+        "export type ModelCatalogEntry = { model: ModelRef, display_name: string,",
+        "context_window: number | null,",
+        "default_context_window: number | null,",
+        "context_window_options: Array<number>,",
+        "fast_enabled: boolean,",
+        "maximum_context_window: number | null,",
         "capabilities: ModelCapabilities,",
         "description: string | null,",
-        "supportedReasoningEfforts: Array<ModelReasoningEffortOption>,",
+        "supported_reasoning_efforts: Array<ModelReasoningEffortOption>,",
     ] {
         assert!(typescript.contains(field), "missing catalog field: {field}");
     }

@@ -7,6 +7,19 @@ applyTo: "**/*.rs,**/Cargo.toml,Cargo.toml,Cargo.lock,.cargo/**,justfile,scripts
 
 Reference: [Codex Rust guidance](../../../codex/AGENTS.md). Ash ownership, dependency, and validation rules remain authoritative.
 
+## Naming and JSON contracts
+
+| Surface | Convention |
+| --- | --- |
+| Rust files, modules, functions, variables, and fields | `snake_case` |
+| Rust types, traits, and enum variants | `PascalCase` |
+| Rust constants and statics | `SCREAMING_SNAKE_CASE` |
+| Model declarations, catalog metadata, model lists, and preference-update JSON fields | `snake_case` |
+| TypeScript business fields | `camelCase`, converted by the frontend adapter |
+
+- Rust identifiers and serialized JSON names are separate contracts. Parameter values retain their declared spelling, such as reasoning effort `extraHigh` and provider tier ID `priority`.
+- Extend naming conventions one complete interface contract at a time. Other existing interfaces, persisted formats, and external provider payloads follow their owning contracts. A JSON rename must update callers, validation, serialization tests, generated schemas and client types, documentation, and affected protocol or storage versions together. See the [model contract scope](../../ash-rs/protocol/README.md#modelsjson-从哪里定义).
+
 ## Formatting and control flow
 
 - Inline variables in format strings when possible: `format!("{value}")`.

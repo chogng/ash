@@ -29,6 +29,17 @@
 [`models.schema.json`](../model-provider-info/models.schema.json)，为编辑器提供字段解释。
 协议模块的划分帮助说明含义，但不会自动决定 JSON 的层级和字段命名。
 
+模型规格和参数声明的 JSON 字段使用 `snake_case`：`ModelInfo`、`ModelCapabilities`、
+`ModelPreset`、`ModelSettings` 和 `ModelAcceleration` 与静态目录使用相同命名。
+模型列表与偏好更新协议也遵循这一约定，前端适配器负责转换为业务类型的驼峰字段。
+推理档位等参数值保留各自约定，例如 `extraHigh`；供应商接口按其自身协议编码。
+
+Rust 文件、模块、函数和字段使用 `snake_case`，类型和枚举成员使用 `PascalCase`，
+完整规则见 [Rust 命名规范](../../.github/instructions/rust-coding-guidelines.instructions.md#naming-and-json-contracts)。
+JSON 命名按完整接口契约推广；当前统一范围是模型声明、目录元数据、模型列表和偏好更新。
+模型调用、消息、用量、配置存储及供应商报文按各自契约编码。修改其他接口的 JSON 字段时，
+同步调用方、校验、序列化测试、生成产物、文档和受影响的协议或存储版本。
+
 | 编辑内容                     | 类型及阅读入口                                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `provider_id`、`model_id`    | `StaticModelSpec` 保存编辑值，`model/identity.rs` 定义准确身份；连接 ID 不属于模型身份                                   |

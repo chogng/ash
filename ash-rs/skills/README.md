@@ -52,6 +52,10 @@ Catalog scanner 通过 [`ash-file-identity`](../file-identity/README.md) 从已�
 
 ## 文件、限制与真实调用路径
 
+[`catalog.rs`](src/catalog.rs) owns catalog discovery and refresh; its child modules live under
+`src/catalog/`. [`format.rs`](src/format.rs) owns frontmatter parsing. Their tests are sibling
+files, `src/catalog_tests.rs` and `src/format_tests.rs`.
+
 ```text
 SkillCatalog::discover / refresh
   → catalog::scanner::scan_sources

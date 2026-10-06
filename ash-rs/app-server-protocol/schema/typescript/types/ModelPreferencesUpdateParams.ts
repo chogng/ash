@@ -2,4 +2,4 @@
 import type { CommandId } from './CommandId.js';
 import type { ModelRef } from './ModelRef.js';
 
-export type ModelPreferencesUpdateParams = { commandId: CommandId, expectedRevision: number, model: ModelRef, fast?: boolean | null, contextWindow?: number | null, };
+export type ModelPreferencesUpdateParams = { command_id: CommandId, expected_revision: number, model: ModelRef, fast?: boolean | null, context_window?: number | null, };

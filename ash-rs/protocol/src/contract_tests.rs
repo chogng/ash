@@ -4,15 +4,15 @@ use serde_json::json;
 #[test]
 fn model_settings_and_explicit_request_controls_round_trip() {
     let value = json!({
-        "inputModalities": ["text", "image"],
+        "input_modalities": ["text", "image"],
         "verbosity": "supported",
-        "defaultVerbosity": "low",
-        "reasoningSummary": "supported",
-        "defaultReasoningSummary": "none",
-        "serviceTiers": [{"id":"default","name":"Standard","description":"Standard processing"}, {"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
-        "defaultServiceTier": "default",
-        "acceleration": {"type":"serviceTier","serviceTier":"priority"},
-        "toolOutputLimit": {"mode": "tokens", "limit": 10000}
+        "default_verbosity": "low",
+        "reasoning_summary": "supported",
+        "default_reasoning_summary": "none",
+        "service_tiers": [{"id":"default","name":"Standard","description":"Standard processing"}, {"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
+        "default_service_tier": "default",
+        "acceleration": {"type":"service_tier","service_tier":"priority"},
+        "tool_output_limit": {"mode": "tokens", "limit": 10000}
     });
     let settings: ModelSettings = serde_json::from_value(value.clone()).unwrap();
     settings.validate().unwrap();
@@ -29,6 +29,38 @@ fn model_settings_and_explicit_request_controls_round_trip() {
         serde_json::from_value::<ModelRequest>(value).unwrap(),
         request
     );
+}
+
+#[test]
+fn model_declarations_and_presets_use_snake_case_json_fields() {
+    let model = ModelInfo::new(ModelId::new("model").unwrap(), "Model");
+    let value = json!({
+        "id":"model", "display_name":"Model", "description":null, "access":"unknown",
+        "context_window":"unknown", "auto_compact_token_limit":null,
+        "capabilities":{
+            "tools":"unknown", "reasoning":"unknown", "parallel_tool_calls":"unknown",
+            "personality":"unknown", "image_detail_original":"unknown", "fast_mode":"unknown"
+        },
+        "supported_reasoning_efforts":[], "model_reasoning_effort":null, "default_personality":null,
+        "settings":{
+            "input_modalities":null, "verbosity":"unknown", "default_verbosity":null,
+            "reasoning_summary":"unknown", "default_reasoning_summary":null, "service_tiers":null,
+            "default_service_tier":null, "acceleration":null, "tool_output_limit":null
+        }
+    });
+    assert_eq!(serde_json::to_value(&model).unwrap(), value);
+    assert_eq!(serde_json::from_value::<ModelInfo>(value).unwrap(), model);
+
+    let value = json!({
+        "id":"preset", "name":"Preset", "model":{"provider":"example","model":"model"},
+        "model_reasoning_effort":"extraHigh", "personality":null
+    });
+    let preset: ModelPreset = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(
+        preset.model_reasoning_effort,
+        Some(ReasoningEffort::ExtraHigh)
+    );
+    assert_eq!(serde_json::to_value(preset).unwrap(), value);
 }
 
 #[test]

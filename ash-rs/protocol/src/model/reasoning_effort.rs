@@ -55,7 +55,7 @@ impl fmt::Display for ReasoningEffort {
 /// A selectable effort and its catalog explanation. Missing copy is unknown metadata;
 /// the effort remains a request value and never implies a fixed token budget.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ModelReasoningEffortOption {
     pub effort: ReasoningEffort,
     pub description: Option<String>,
