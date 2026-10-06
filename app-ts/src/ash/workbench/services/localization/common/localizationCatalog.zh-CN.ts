@@ -667,6 +667,7 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"color.selection.background": "选中文字的背景色。",
 			"color.selection.foreground": "选中文字的前景色。",
 			"color.sessions.accentGlow": "Sessions 标题栏强调区域周围的光晕颜色。",
+			"color.sessions.activityBar.hoverBackground": "Sessions 窗口中活动栏项目悬停时的背景色。",
 			"color.sessions.design.chromeBackground": "Design 工具栏和菜单的背景色。",
 			"color.sessions.design.chromeForeground": "Design 工具栏和菜单的前景色。",
 			"color.sessions.inputShadow": "Sessions 输入卡片周围的阴影。",

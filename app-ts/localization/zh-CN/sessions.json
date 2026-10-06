@@ -375,6 +375,7 @@
     "sessions.teams.title": "团队",
     "sessions.teams.working": "处理中…",
     "color.sessions.accentGlow": "Sessions 标题栏强调区域周围的光晕颜色。",
+    "color.sessions.activityBar.hoverBackground": "Sessions 窗口中活动栏项目悬停时的背景色。",
     "color.sessions.selectionBackground": "Sessions 窗口中已选中项目的背景色。",
     "color.sessions.tooltip.background": "Sessions 窗口中悬浮提示的背景色。",
     "color.sessions.tooltip.border": "Sessions 窗口中悬浮提示的边框颜色。",

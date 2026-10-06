@@ -88,6 +88,8 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 			[...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
 		), [['Chat', 'Collaboration', 'Library', 'Code', 'Creator'], ['Accounts']]);
 		assert.ok(buttons.every(button => button.classList.contains('icon-only')));
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
 		assert.deepEqual([buttons[0], buttons[1], buttons[2]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
@@ -98,7 +100,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 			['chat-2', null], ['colab', null], ['projects-filled', 'page'],
 		]);
 		buttons[3]?.click();
-		assert.deepEqual(buttons.slice(0, 4).map(button => [button.classList.contains('selected'), button.getAttribute('aria-current')]), [
+		assert.deepEqual(buttons.slice(0, 4).map(button => [button.parentElement!.classList.contains('checked'), button.getAttribute('aria-current')]), [
 			[false, null], [false, null], [false, null], [true, 'page'],
 		]);
 		buttons[4]?.click();

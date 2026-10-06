@@ -9,6 +9,9 @@ import { assertDefined } from "../../../base/common/types.js";
 import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.js';
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
+import { Button } from '../../../base/browser/ui/button/button.js';
+import type { Event } from '../../../base/common/event.js';
+import { onUnexpectedError } from '../../../base/common/errors.js';
 import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
 
 export interface IActivityHoverOptions {
@@ -26,6 +29,10 @@ export function getActivityHoverPosition(location: ActivityBarPosition, sideBarL
 
 export interface ICompositeBarActionViewItemOptions extends ActionViewItemOptions {
 	readonly hoverOptions: IActivityHoverOptions;
+	readonly presentation?: 'tab' | 'navigation';
+	/** Navigation hosts supply their independent button skin; tab styling stays with CompositeBar. */
+	readonly navigationClassName?: string;
+	readonly onDidChange?: Event<unknown>;
 }
 
 /** Inputs for one View Container selector rendered by a CompositeBar. */
@@ -73,11 +80,12 @@ export class CompositeBarAction implements IAction {
 	}
 }
 
-/** DOM representation of one CompositeBar action inside its ActionBar tablist. */
+/** Renders Composite tabs and page-navigation actions while preserving each host's skin. */
 export class CompositeActionViewItem extends ActionViewItem {
 	private renderedContainer: HTMLElement | undefined;
+	private button: Button | undefined;
 
-	constructor(private readonly compositeAction: CompositeBarAction, private readonly options: ICompositeBarActionViewItemOptions) {
+	constructor(private readonly compositeAction: IAction, private readonly options: ICompositeBarActionViewItemOptions) {
 		super(compositeAction, { ...options, draggable: true });
 	}
 
@@ -89,10 +97,35 @@ export class CompositeActionViewItem extends ActionViewItem {
 		if (this.renderedContainer) {
 			throw new Error(`CompositeBar action is already rendered: ${this.action.id}`);
 		}
-		const options = this.compositeAction.options;
 		this.renderedContainer = container;
+		if (this.options.presentation === 'navigation') {
+			container.classList.add('ash-composite-bar-navigation-item');
+			this.button = this._register(new Button(container, {
+				label: this.action.label,
+				icon: this.action.icon,
+				iconOnly: true,
+				onClick: () => { void Promise.resolve(this.action.run()).catch(onUnexpectedError); },
+			}));
+			if (this.options.navigationClassName) { this.button.domNode.classList.add(this.options.navigationClassName); }
+			const update = (): void => {
+				const button = this.button!;
+				button.label = this.action.label;
+				button.icon = this.action.icon;
+				button.enabled = this.action.enabled;
+				container.classList.toggle('checked', this.action.checked === true);
+				button.toggleClassName('selected', this.action.checked === true);
+				if (this.action.checked) { button.domNode.setAttribute('aria-current', 'page'); }
+				else { button.domNode.removeAttribute('aria-current'); }
+			};
+			update();
+			if (this.options.onDidChange) { this._register(this.options.onDidChange(update)); }
+			this.setupDelayedHover(this.button.domNode, this.action.tooltip);
+			return;
+		}
 		container.classList.add("ash-composite-bar-item");
 		container.classList.add("ash-composite-bar-destination");
+		if (!(this.compositeAction instanceof CompositeBarAction)) { throw new TypeError('Composite tabs require a CompositeBarAction'); }
+		const options = this.compositeAction.options;
 		container.classList.toggle("checked", options.checked);
 		container.id = options.tabId;
 		container.setAttribute("role", "tab");
@@ -126,11 +159,12 @@ export class CompositeActionViewItem extends ActionViewItem {
 	}
 
 	override focus(): void {
-		this.container.focus();
+		if (this.button) { this.button.focus(); }
+		else { this.container.focus(); }
 	}
 
 	override setTabbable(tabbable: boolean): void {
-		this.container.tabIndex = tabbable ? 0 : -1;
+		(this.button?.domNode ?? this.container).tabIndex = tabbable ? 0 : -1;
 	}
 
 	private get container(): HTMLElement {

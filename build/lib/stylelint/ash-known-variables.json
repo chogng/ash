@@ -204,6 +204,7 @@
     "--ash-selection-background",
     "--ash-selection-foreground",
     "--ash-sessions-accent-glow",
+    "--ash-sessions-activity-bar-hover-background",
     "--ash-sessions-design-chrome-background",
     "--ash-sessions-design-chrome-foreground",
     "--ash-sessions-input-shadow",

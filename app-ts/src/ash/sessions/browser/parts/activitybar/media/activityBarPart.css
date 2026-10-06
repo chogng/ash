@@ -48,6 +48,8 @@
 }
 
 .ash-sessions-activity-item {
+	/* Sessions deliberately keeps 36px targets in default vertical navigation.
+	 * Its hover, selection background and radius remain independent of Workbench. */
 	display: grid;
 	width: var(--ash-spacing-size360);
 	height: var(--ash-spacing-size360);
@@ -65,9 +67,15 @@
 	border-radius: var(--ash-corner-radius-medium);
 }
 
+.ash-sessions-activity-content.horizontal .ash-sessions-activity-item {
+	width: var(--ash-spacing-size240);
+	height: var(--ash-spacing-size240);
+	min-height: var(--ash-spacing-size240);
+}
+
 .ash-sessions-activity-item:not(:disabled):hover {
 	color: var(--ash-foreground);
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-sessions-activity-bar-hover-background);
 }
 
 .ash-sessions-activity-item.selected:not(:disabled) {

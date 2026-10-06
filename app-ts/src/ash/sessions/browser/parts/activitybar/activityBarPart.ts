@@ -1,4 +1,3 @@
-import { onUnexpectedError } from '../../../../base/common/errors.js';
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -10,15 +9,14 @@ import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import { getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
+import { CompositeActionViewItem, getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import { WorkbenchPart } from '../../../../workbench/browser/part.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { autorun, observableValue } from '../../../../base/common/observable.js';
+import { observableValue } from '../../../../base/common/observable.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -54,7 +52,6 @@ export class ActivityBarPart extends WorkbenchPart {
 		@IMenuService menus: IMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService private readonly storage: IStorageService,
-		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super(container, 'activitybar');
 		this.domNode.classList.replace('ash-workbench-activitybar', 'ash-sessions-activitybar');
@@ -69,7 +66,12 @@ export class ActivityBarPart extends WorkbenchPart {
 		this.navigation = this._register(new ActionBar(top, {
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
-			actionViewItemProvider: action => instantiation.createInstance(ActivityActionViewItem, action as ActivityAction),
+			actionViewItemProvider: action => new CompositeActionViewItem(action, {
+				presentation: 'navigation',
+				navigationClassName: 'ash-sessions-activity-item',
+				onDidChange: (action as ActivityAction).current.onDidChange,
+				hoverOptions: { position: () => getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
+			}),
 			dragAndDrop: {
 				canDrop: () => this.draggedActionId !== undefined,
 				onDragStart: (action, event) => {
@@ -282,40 +284,4 @@ class ActivityAction implements IAction {
 	public get enabled(): boolean { return this.current.get().enabled; }
 	public get checked(): boolean | undefined { return this.current.get().checked; }
 	public run(...args: readonly unknown[]): unknown { return this.current.get().run(...args); }
-}
-
-class ActivityActionViewItem extends ActionViewItem {
-	private button!: Button;
-
-	constructor(
-		private readonly activityAction: ActivityAction,
-		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IHoverService private readonly hover: IHoverService,
-	) {
-		super(activityAction, { draggable: true });
-	}
-
-	public override render(container: HTMLElement): void {
-		this.button = this._register(new Button(container, {
-			label: this.action.label, icon: this.action.icon, iconOnly: true, onClick: () => { void Promise.resolve(this.action.run()).catch(onUnexpectedError); },
-		}));
-		this.button.domNode.classList.add('ash-sessions-activity-item');
-		this._register(this.hover.setupDelayedHover(this.button.domNode, () => ({
-			content: this.action.label,
-			position: { hoverPosition: getActivityHoverPosition(this.configuration.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
-		}), { groupId: 'actions' }));
-		this._register(autorun(reader => {
-			const action = this.activityAction.current.read(reader);
-			this.button.label = action.label;
-			this.button.icon = action.icon;
-			this.button.enabled = action.enabled;
-			const selected = action.checked === true;
-			this.button.toggleClassName('selected', selected);
-			if (selected) { this.button.domNode.setAttribute('aria-current', 'page'); }
-			else { this.button.domNode.removeAttribute('aria-current'); }
-		}));
-	}
-
-	public override focus(): void { this.button.focus(); }
-	public override setTabbable(tabbable: boolean): void { this.button.domNode.tabIndex = tabbable ? 0 : -1; }
 }

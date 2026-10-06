@@ -32,6 +32,15 @@ export const sessionsAccentGlow = registerColor("sessions.accentGlow", {
 	highContrastLight: null,
 }, { description: "Glow around the sessions title bar accent.", owner: "sessions.titlebar", needsTransparency: true });
 
+// Sessions owns navigation feedback independently of Workbench. Keep explicit defaults
+// instead of aliasing toolbar colors so changes to either window do not recolor the other.
+registerColor('sessions.activityBar.hoverBackground', {
+	dark: '#5a5d5e50',
+	light: '#5a5d5e29',
+	highContrastDark: '#333333',
+	highContrastLight: '#dddddd',
+}, { description: 'Hovered Activity Bar item background in the Sessions window.', owner: 'sessions.activitybar' });
+
 registerColor('sessions.selectionBackground', {
 	dark: '#303030',
 	light: '#f0f0f0',

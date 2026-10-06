@@ -1786,6 +1786,12 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	await expect.poll(() => navigation.evaluate(element => getComputedStyle(element).flexDirection === (element.classList.contains('horizontal') ? 'row' : 'column'))).toBe(true);
 	const icons = navigation.locator('button svg.ash-icon');
 	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
+	const compact = await navigation.evaluate(element => element.classList.contains('compact'));
+	const itemSize = horizontal ? 24 : compact ? 28 : 36;
+	for (const item of await navigation.locator('.ash-composite-bar-navigation-item > button').all()) {
+		await expect(item).toHaveCSS('width', `${itemSize}px`);
+		await expect(item).toHaveCSS('height', `${itemSize}px`);
+	}
 	await expect(icons).toHaveCount(horizontal ? 5 : 6);
 	const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 	await expect(accounts).toHaveCount(1);
@@ -1908,6 +1914,101 @@ test('Code chat mode menu shows the available icons and selection', async ({ app
 		}, color);
 		expect(foreground.actual).toBe(foreground.expected);
 	}
+});
+
+test('Sessions navigation retains its own selection and hover skin while changing target sizes', async ({ application, target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
+	const originalChat = await chat.elementHandle();
+	await chat.click();
+	await expect(chat).toHaveAttribute('aria-current', 'page');
+	await expectActivityIconSize(navigation, 24);
+	await expect(chat).toHaveCSS('width', '36px');
+	await expect(chat).toHaveCSS('height', '36px');
+	// Shared toolbar theme overrides must not change Sessions navigation feedback.
+	const hoverVariables = ['--ash-toolbar-hover-background', '--ash-sessions-activity-bar-hover-background'];
+	const previousHoverStyles = await navigation.evaluate((element, variables) => {
+		const style = (element as HTMLElement).style;
+		const previous = variables.map(variable => ({ variable, value: style.getPropertyValue(variable), priority: style.getPropertyPriority(variable) }));
+		style.setProperty(variables[0], 'rgb(255, 0, 255)');
+		style.setProperty(variables[1], 'rgb(12, 34, 56)');
+		return previous;
+	}, hoverVariables);
+	try {
+		await navigation.getByRole('button', { name: 'Library', exact: true }).hover();
+		await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveCSS('background-color', 'rgb(12, 34, 56)');
+		await chat.hover();
+		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+	} finally {
+		await navigation.evaluate((element, previous) => {
+			const style = (element as HTMLElement).style;
+			for (const { variable, value, priority } of previous) {
+				if (value) style.setProperty(variable, value, priority);
+				else style.removeProperty(variable);
+			}
+		}, previousHoverStyles);
+	}
+	for (const position of ['Top', 'Bottom', 'Default']) {
+		if ('windows' in application && process.platform === 'darwin') {
+			await captureElectronMenu(application, () => chat.click({ button: 'right' }), { label: position });
+		} else {
+			await chat.click({ button: 'right' });
+			await page.getByRole('menuitem', { name: 'Activity Bar Position', exact: true }).click();
+			await page.getByRole('menuitemcheckbox', { name: position, exact: true }).click();
+		}
+		await expectActivityIconSize(navigation, position === 'Default' ? 24 : 16);
+		const selected = navigation.locator('.ash-composite-bar-navigation-item.checked > button.selected');
+		await expect(selected).toHaveCount(1);
+		await expect(selected).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(selected).toHaveCSS('border-radius', '8px');
+		await page.mouse.move(600, 400);
+		await chat.hover();
+		const tooltip = page.getByRole('tooltip');
+		await expect(tooltip).toHaveText('Chat');
+		const anchorBounds = await chat.boundingBox();
+		const hoverBounds = await page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox();
+		if (position === 'Top') expect(hoverBounds!.y).toBeGreaterThanOrEqual(anchorBounds!.y + anchorBounds!.height);
+		if (position === 'Bottom') expect(hoverBounds!.y + hoverBounds!.height).toBeLessThanOrEqual(anchorBounds!.y);
+		if (position === 'Default') expect(hoverBounds!.x).toBeGreaterThanOrEqual(anchorBounds!.x + anchorBounds!.width);
+		await page.keyboard.press('Escape');
+		if (position !== 'Default') {
+			await expect(chat).toHaveCSS('width', '24px');
+			await expect(chat).toHaveCSS('height', '24px');
+		}
+		const library = navigation.getByRole('button', { name: 'Library', exact: true });
+		await library.hover();
+		const hoverBackground = await library.evaluate(button => getComputedStyle(button).backgroundColor);
+		expect(hoverBackground).not.toBe('rgba(0, 0, 0, 0)');
+		expect(hoverBackground).not.toBe('rgb(240, 240, 240)');
+		await chat.focus();
+		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
+		await expect(navigation.getByRole('button', { name: 'Collaboration', exact: true })).toBeFocused();
+		await library.focus();
+		await library.press('Enter');
+		await expect(library).toHaveAttribute('aria-current', 'page');
+		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
+		await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
+		await expect(chat).not.toHaveAttribute('aria-current');
+		await chat.press('Enter');
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		expect(await chat.evaluate((element, original) => element === original, originalChat)).toBe(true);
+	}
+	if ('windows' in application && process.platform === 'darwin') {
+		await captureElectronMenu(application, () => chat.click({ button: 'right' }), { label: 'Compact' });
+	} else {
+		await chat.click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Activity Bar Size', exact: true }).click();
+		await page.getByRole('menuitemcheckbox', { name: 'Compact', exact: true }).click();
+	}
+	await expectActivityIconSize(navigation, 16);
+	await expect(chat).toHaveCSS('width', '28px');
+	await expect(chat).toHaveCSS('height', '28px');
+	await expect(chat).toHaveCSS('border-radius', '6px');
+	await workbench.setAppearance(application, 'dark', page);
+	await expect(chat).toHaveCSS('background-color', 'rgb(48, 48, 48)');
+	await expect(chat).toHaveCSS('border-radius', '6px');
+	await originalChat!.dispose();
 });
 
 test('Browser Code Sessions Activity Bar centers icons and changes size and position through its menu', async ({ target, workbench }) => {
