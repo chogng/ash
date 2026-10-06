@@ -64,7 +64,8 @@ fn effective_model_info_caps_context_and_compaction_without_changing_catalog_evi
             config.model_context.insert(
                 model.model.clone(),
                 ModelContextConfig {
-                    context_window,
+                    context_window: Some(context_window),
+                    long_context: None,
                     auto_compact_token_limit,
                 },
             );
@@ -92,7 +93,8 @@ fn unlisted_model_metadata_requires_an_exact_explicit_context_configuration() {
     config.model_context.insert(
         ModelId::new("model").unwrap(),
         ModelContextConfig {
-            context_window: 100_000,
+            context_window: Some(100_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
@@ -103,7 +105,8 @@ fn unlisted_model_metadata_requires_an_exact_explicit_context_configuration() {
     config.model_context.insert(
         unlisted.model,
         ModelContextConfig {
-            context_window: 32_000,
+            context_window: Some(32_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
@@ -142,7 +145,8 @@ fn model_info_rejects_configuration_for_another_provider_and_invalid_limits() {
         config.model_context.insert(
             model.model.clone(),
             ModelContextConfig {
-                context_window,
+                context_window: Some(context_window),
+                long_context: None,
                 auto_compact_token_limit,
             },
         );
@@ -173,7 +177,8 @@ fn per_model_context_overrides_the_custom_connection_default() {
     config.model_context.insert(
         model.model.clone(),
         ModelContextConfig {
-            context_window: 20_000,
+            context_window: Some(20_000),
+            long_context: None,
             auto_compact_token_limit: Some(15_000),
         },
     );
@@ -258,66 +263,163 @@ fn effective_fast_mode_support_follows_the_connection_without_mutating_static_ev
 }
 
 #[test]
-fn every_builtin_uses_its_json_context_preferences_and_preserves_explicit_budgets() {
+fn catalog_defaults_and_long_context_are_model_and_connection_scoped() {
     let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
-    let mut count = 0;
     for spec in model_provider_info::STATIC_MODEL_CATALOG.iter() {
-        count += 1;
         let model = spec.model_ref();
-        let resolved = manager
+        let entry = manager
             .resolve_static(&model, &ModelRequirements::agent())
             .unwrap();
         let mut config = ModelProviderConfig::new(model.provider.clone());
-        let default = resolved.entry().model_info(&config).unwrap();
-        let expected_window = spec
-            .context_window_options
-            .first()
-            .copied()
-            .map_or(ContextWindow::Unknown, ContextWindow::Known);
-        assert_eq!(default.context_window, expected_window, "{}", spec.model_id);
         assert_eq!(
-            resolved.entry().context_window_options(&config),
-            spec.context_window_options
+            entry.entry().model_info(&config).unwrap().context_window,
+            spec.context_window
         );
-        let compact = match expected_window {
-            ContextWindow::Known(window) => {
-                let recommended = (u64::from(window) * 9 / 10) as u32;
-                Some(
-                    spec.auto_compact_token_limit
-                        .unwrap_or(recommended)
-                        .min(recommended),
-                )
+        let can_expand = spec.model().context_window != spec.context_window;
+        if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-5.5" {
+            assert_eq!(spec.context_window, ContextWindow::Known(272_000));
+            assert!(!can_expand);
+        }
+        if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-6-astra" {
+            assert_eq!(
+                entry
+                    .entry()
+                    .model_info(&config)
+                    .unwrap()
+                    .auto_compact_token_limit,
+                Some(244_800)
+            );
+        }
+        assert_eq!(
+            entry.entry().long_context(&config),
+            can_expand.then_some(false)
+        );
+        let original = config.clone();
+        let update = crate::ModelPreferencesUpdate {
+            acceleration: ash_protocol::Patch::Missing,
+            long_context: Some(true),
+        };
+        let result = entry.entry().apply_preferences(&mut config, &update);
+        if can_expand {
+            result.unwrap();
+            if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-6-astra" {
+                let effective = entry.entry().model_info(&config).unwrap();
+                assert_eq!(effective.context_window, ContextWindow::Known(872_000));
+                assert_eq!(effective.auto_compact_token_limit, Some(784_800));
             }
-            ContextWindow::Unknown => None,
-        };
-        assert_eq!(default.auto_compact_token_limit, compact);
-        assert_eq!(resolved.entry().info().context_window, spec.context_window);
-        config.model_context.insert(
-            model.model,
-            ModelContextConfig {
-                context_window: 1_000_000,
-                auto_compact_token_limit: None,
-            },
-        );
-        let selected_window = match spec.context_window {
-            ContextWindow::Known(capacity) => capacity.min(1_000_000),
-            ContextWindow::Unknown => 1_000_000,
-        };
-        assert_eq!(
-            resolved.entry().model_info(&config).unwrap().context_window,
-            ContextWindow::Known(selected_window)
-        );
+            assert_eq!(
+                entry.entry().model_info(&config).unwrap().context_window,
+                spec.model().context_window
+            );
+            assert_eq!(entry.entry().long_context(&original), Some(false));
+            entry
+                .entry()
+                .apply_preferences(
+                    &mut config,
+                    &crate::ModelPreferencesUpdate {
+                        acceleration: ash_protocol::Patch::Missing,
+                        long_context: Some(false),
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                entry.entry().model_info(&config).unwrap().context_window,
+                spec.context_window
+            );
+        } else {
+            assert!(result.is_err());
+            assert_eq!(config, original);
+        }
     }
-    assert!(count > 0);
 }
 
 #[test]
-fn discovered_gpt_names_do_not_acquire_undeclared_budget_presets() {
+fn long_context_tracks_current_capacity_and_preserves_compaction() {
+    let mut info = ModelInfo::new(model_ref().model, "Model");
+    info.context_window = ContextWindow::Known(200_000);
+    let manager = manager(info);
+    let resolved = manager
+        .resolve_static(&model_ref(), &ModelRequirements::agent())
+        .unwrap();
+    let mut entry = resolved.entry().clone();
+    entry.declared_default_context_window = ContextWindow::Known(80_000);
+    let mut config = ModelProviderConfig::new(model_ref().provider);
+    config.model_context.insert(
+        model_ref().model,
+        ModelContextConfig {
+            context_window: Some(70_000),
+            long_context: None,
+            auto_compact_token_limit: Some(45_000),
+        },
+    );
+    let original = config.clone();
+    assert!(
+        entry
+            .apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    acceleration: ash_protocol::Patch::Value("unavailable".into()),
+                    long_context: Some(true)
+                }
+            )
+            .is_err()
+    );
+    assert_eq!(config, original);
+    for (enabled, window) in [(true, 200_000), (false, 80_000)] {
+        entry
+            .apply_preferences(
+                &mut config,
+                &crate::ModelPreferencesUpdate {
+                    acceleration: ash_protocol::Patch::Missing,
+                    long_context: Some(enabled),
+                },
+            )
+            .unwrap();
+        let effective = entry.model_info(&config).unwrap();
+        assert_eq!(effective.context_window, ContextWindow::Known(window));
+        assert_eq!(effective.auto_compact_token_limit, Some(45_000));
+        assert_eq!(
+            config.model_context[&model_ref().model].context_window,
+            None
+        );
+    }
+    entry
+        .apply_preferences(
+            &mut config,
+            &crate::ModelPreferencesUpdate {
+                acceleration: ash_protocol::Patch::Missing,
+                long_context: Some(true),
+            },
+        )
+        .unwrap();
+    // A different connection observation changes the maximum without changing the saved intent.
+    let mut info = ModelInfo::new(model_ref().model, "Model");
+    info.context_window = ContextWindow::Known(120_000);
+    let changed = super::ModelCatalogEntry::new(
+        model_ref(),
+        info,
+        None,
+        entry.availability(),
+        entry.lifecycle(),
+        entry.metadata_quality(),
+        entry.provenance().clone(),
+        vec![],
+    );
+    let mut changed = changed;
+    changed.declared_default_context_window = ContextWindow::Known(80_000);
+    assert_eq!(
+        changed.model_info(&config).unwrap().context_window,
+        ContextWindow::Known(120_000)
+    );
+    assert_eq!(changed.long_context(&config), Some(true));
+}
+
+#[test]
+fn unlisted_models_do_not_acquire_long_context_by_name() {
     let mut info = ModelInfo::new(ModelId::new("gpt-undocumented").unwrap(), "Observed model");
     info.context_window = ContextWindow::Known(600_000);
     let model = ModelRef::new(model_ref().provider, info.id.clone());
-    let manager = manager(info);
-    let entry = manager
+    let entry = manager(info)
         .resolve_static(&model, &ModelRequirements::agent())
         .unwrap();
     let config = ModelProviderConfig::new(model.provider);
@@ -325,158 +427,7 @@ fn discovered_gpt_names_do_not_acquire_undeclared_budget_presets() {
         entry.entry().default_context_window(&config),
         ContextWindow::Known(600_000)
     );
-    assert_eq!(entry.entry().context_window_options(&config), [600_000]);
-}
-
-#[test]
-fn declared_budgets_follow_observed_capacity_and_keep_compaction_limits() {
-    let mut info = ModelInfo::new(model_ref().model, "Model");
-    info.context_window = ContextWindow::Known(200_000);
-    info.auto_compact_token_limit = Some(45_000);
-    let manager = manager(info);
-    let resolved = manager
-        .resolve_static(&model_ref(), &ModelRequirements::agent())
-        .unwrap();
-    let mut entry = resolved.entry().clone();
-    entry.declared_context_window_options = vec![80_000, 240_000];
-    let mut config = ModelProviderConfig::new(model_ref().provider);
-    assert_eq!(entry.context_window_options(&config), [80_000]);
-    let effective = entry.model_info(&config).unwrap();
-    assert_eq!(effective.context_window, ContextWindow::Known(80_000));
-    assert_eq!(effective.auto_compact_token_limit, Some(45_000));
-    entry
-        .apply_preferences(
-            &mut config,
-            &crate::ModelPreferencesUpdate {
-                acceleration: ash_protocol::Patch::Missing,
-                context_window: Some(80_000),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        entry.model_info(&config).unwrap().context_window,
-        ContextWindow::Known(80_000)
-    );
-    entry.declared_context_window_options = vec![240_000, 300_000];
-    assert_eq!(
-        entry.default_context_window(&config),
-        ContextWindow::Known(200_000)
-    );
-    assert_eq!(entry.context_window_options(&config), [200_000]);
-}
-
-#[test]
-fn model_preferences_choices_distinguish_expansion_from_fixed_capacity() {
-    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
-    for (provider, id, expected) in [
-        ("openai", "gpt-6-astra", vec![272_000, 1_000_000]),
-        ("xai", "grok-4.7", vec![500_000]),
-    ] {
-        let model = ModelRef::new(
-            ProviderId::new(provider).unwrap(),
-            ModelId::new(id).unwrap(),
-        );
-        let entry = manager
-            .resolve_static(&model, &ModelRequirements::agent())
-            .unwrap();
-        let config = ModelProviderConfig::new(model.provider.clone());
-        assert_eq!(entry.entry().context_window_options(&config), expected);
-    }
-}
-
-#[test]
-fn model_preferences_update_is_atomic_and_preserves_other_settings() {
-    let model = ModelRef::new(
-        ProviderId::new("openai").unwrap(),
-        ModelId::new("gpt-6-astra").unwrap(),
-    );
-    let manager = ModelsManager::new(ProviderConfigRegistry::builtin());
-    let entry = manager
-        .resolve_static(&model, &ModelRequirements::agent())
-        .unwrap();
-    let mut config = ModelProviderConfig::for_connection(
-        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap(),
-    );
-    config.max_output_tokens = Some(24_000);
-    let other = ModelId::new("gpt-6-sol").unwrap();
-    config
-        .model_acceleration
-        .insert(other.clone(), "priority".into());
-    config.model_context.insert(
-        other,
-        ModelContextConfig {
-            context_window: 272_000,
-            auto_compact_token_limit: None,
-        },
-    );
-    config.model_context.insert(
-        model.model.clone(),
-        ModelContextConfig {
-            context_window: 272_000,
-            auto_compact_token_limit: Some(200_000),
-        },
-    );
-    let original = config.clone();
-    assert!(
-        entry
-            .entry()
-            .apply_preferences(
-                &mut config,
-                &crate::ModelPreferencesUpdate {
-                    acceleration: ash_protocol::Patch::Value("priority".into()),
-                    context_window: Some(500_000)
-                }
-            )
-            .is_err()
-    );
-    assert_eq!(config, original);
-    entry
-        .entry()
-        .apply_preferences(
-            &mut config,
-            &crate::ModelPreferencesUpdate {
-                acceleration: ash_protocol::Patch::Value("priority".into()),
-                context_window: Some(1_000_000),
-            },
-        )
-        .unwrap();
-    let mut expected = original;
-    expected
-        .model_acceleration
-        .insert(model.model.clone(), "priority".into());
-    expected
-        .model_context
-        .get_mut(&model.model)
-        .unwrap()
-        .context_window = 1_000_000;
-    assert_eq!(config, expected);
-    entry
-        .entry()
-        .apply_preferences(
-            &mut config,
-            &crate::ModelPreferencesUpdate {
-                acceleration: ash_protocol::Patch::Null,
-                context_window: Some(272_000),
-            },
-        )
-        .unwrap();
-    assert!(!config.model_acceleration.contains_key(&model.model));
-    assert_eq!(
-        config.model_context[&model.model].auto_compact_token_limit,
-        Some(200_000)
-    );
-    assert!(
-        entry
-            .entry()
-            .apply_preferences(
-                &mut config,
-                &crate::ModelPreferencesUpdate {
-                    acceleration: ash_protocol::Patch::Missing,
-                    context_window: None
-                }
-            )
-            .is_err()
-    );
+    assert_eq!(entry.entry().long_context(&config), None);
 }
 
 #[test]
@@ -500,7 +451,7 @@ fn model_preferences_reject_fast_on_an_unsupported_connection() {
                 &mut config,
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Value("priority".into()),
-                    context_window: None
+                    long_context: None
                 }
             )
             .is_err()
@@ -549,7 +500,7 @@ fn acceleration_selections_and_denials_remain_scoped_to_the_connection() {
                 &mut config,
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Value(option.into()),
-                    context_window: None,
+                    long_context: None,
                 },
             );
             assert_eq!(
@@ -570,7 +521,7 @@ fn acceleration_selections_and_denials_remain_scoped_to_the_connection() {
                 &mut config,
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Null,
-                    context_window: None,
+                    long_context: None,
                 },
             )
             .unwrap();

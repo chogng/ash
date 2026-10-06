@@ -141,23 +141,18 @@
         "audio"
       ]
     },
-    "ModelInstructions": {
-      "description": "Complete base instructions owned by one model entry, independently editable and versioned.",
+    "ModelMessages": {
+      "description": "Model-owned prompt text, assembled with runtime instructions before provider encoding.",
       "type": "object",
       "properties": {
-        "body": {
+        "system_instructions": {
           "description": "Complete model-specific Agent instructions; runtime permission and project instructions are separate.",
-          "type": "string"
-        },
-        "revision": {
-          "description": "Version of this complete base prompt, frozen with its body when a Turn is accepted.",
           "type": "string"
         }
       },
       "additionalProperties": false,
       "required": [
-        "revision",
-        "body"
+        "system_instructions"
       ]
     },
     "ModelReasoningEffortOption": {
@@ -387,23 +382,13 @@
           "$ref": "#/$defs/ModelCapabilitiesDeclaration"
         },
         "context_window": {
-          "description": "Declared model capacity in tokens; null or omission means unknown, not unlimited.",
+          "description": "Default context budget in tokens; null or omission means unknown, not unlimited.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint32",
           "minimum": 0
-        },
-        "context_window_options": {
-          "description": "One or two ascending execution budgets within capacity; the first is Ash's default.\nOmission uses declared capacity. These budgets do not change the model's capacity.",
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          }
         },
         "default_reasoning_effort": {
           "description": "Ash's default effort; when present it must reference a declared selectable value.",
@@ -425,12 +410,21 @@
         "display_name": {
           "type": "string"
         },
-        "instructions": {
-          "$ref": "#/$defs/ModelInstructions"
+        "max_context_window": {
+          "description": "Maximum context budget when long context is enabled; omission means no larger budget.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         },
         "model_id": {
           "description": "Exact catalog model ID; connection-specific upstream aliases are configured separately.",
           "type": "string"
+        },
+        "model_messages": {
+          "$ref": "#/$defs/ModelMessages"
         },
         "provider_id": {
           "description": "Exact model vendor ID, independent of API-key or subscription connection identity.",
@@ -454,7 +448,7 @@
         "provider_id",
         "model_id",
         "display_name",
-        "instructions"
+        "model_messages"
       ]
     }
   }

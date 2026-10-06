@@ -79,7 +79,7 @@ export type ModelProviderTestResult = { readonly type: 'passed'; } | { readonly 
 
 export interface ModelPreferencesUpdate {
 	readonly acceleration?: string | null;
-	readonly contextWindow?: number;
+	readonly longContext?: boolean;
 }
 
 /** Review selection does not change the model or effort used by the Agent. */

@@ -314,7 +314,7 @@ fn status_line_context_follows_thread_snapshots() {
 
                 maximum_context_window: Some(100),
                 default_context_window: Some(100),
-                context_window_options: vec![100],
+                long_context: None,
                 selected_acceleration: None,
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,

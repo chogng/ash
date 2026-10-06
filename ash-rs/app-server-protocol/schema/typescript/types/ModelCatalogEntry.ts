@@ -17,10 +17,9 @@ discovered?: boolean | null, context_window: number | null,
  */
 default_context_window: number | null,
 /**
- * Selectable budgets in ascending order: empty for unknown, one for fixed capacity,
- * or two for a compact/expanded switch. Clients must not infer choices from the ceiling.
+ * Long context selection on the active connection; null means no larger budget is available.
  */
-context_window_options: Array<number>,
+long_context: boolean | null,
 /**
  * Current preference on the active connection; capability support is reported separately.
  */

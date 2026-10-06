@@ -1685,8 +1685,8 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
     let mut catalog = catalog;
     for option in [
         crate::models::ModelOption::Acceleration(Some("priority".into())),
-        crate::models::ModelOption::Context272k,
-        crate::models::ModelOption::Context1m,
+        crate::models::ModelOption::LongContext(false),
+        crate::models::ModelOption::LongContext(true),
         crate::models::ModelOption::Acceleration(None),
     ] {
         let config = client.read_config().unwrap();
@@ -1712,20 +1712,20 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
             .iter()
             .find(|entry| entry.model.model.as_str() == "gpt-6-astra")
             .unwrap();
-        assert_eq!(entry.maximum_context_window, Some(1_050_000));
-        if option == crate::models::ModelOption::Context272k {
+        assert_eq!(entry.maximum_context_window, Some(872_000));
+        if option == crate::models::ModelOption::LongContext(false) {
             assert_eq!(entry.context_window, Some(272_000));
             assert!(update.summary.context_capacity().unwrap() < 272_000);
         }
-        if option == crate::models::ModelOption::Context1m {
-            assert_eq!(entry.context_window, Some(1_000_000));
+        if option == crate::models::ModelOption::LongContext(true) {
+            assert_eq!(entry.context_window, Some(872_000));
         }
     }
     let after = client.read_config().unwrap();
     assert!(after.providers["openai"].model_acceleration.is_empty());
     assert_eq!(
-        after.providers["openai"].model_context["gpt-6-astra"].context_window,
-        1_000_000
+        after.providers["openai"].model_context["gpt-6-astra"].long_context,
+        Some(true)
     );
     let other_model = crate::models::execute(
         &mut *client,
@@ -1762,13 +1762,13 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
     let (mut client, root, model) = client_with_model_probe();
     let before = client.read_config().unwrap();
     for (provider, id, fast, context) in [
-        ("anthropic", "claude-opus-5-5", true, true),
-        ("google", "gemini-3.8-flash", true, true),
+        ("anthropic", "claude-opus-5-5", true, false),
+        ("google", "gemini-3.8-flash", true, false),
         ("xai", "grok-4.7", true, false),
-        ("kimi", "kimi-k3", false, true),
-        ("deepseek", "deepseek-v4-pro", false, true),
-        ("glm", "glm-5.3", false, true),
-        ("meta", "muse-spark-1.3", false, true),
+        ("kimi", "kimi-k3", false, false),
+        ("deepseek", "deepseek-v4-pro", false, false),
+        ("glm", "glm-5.3", false, false),
+        ("meta", "muse-spark-1.3", false, false),
     ] {
         let connection = if provider == "glm" {
             "bigmodel"
@@ -1807,6 +1807,29 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
             })
             .unwrap()
             .maximum_context_window;
+        let entry = catalog
+            .models
+            .iter()
+            .find(|entry| {
+                entry.model.provider.as_str() == provider && entry.model.model.as_str() == id
+            })
+            .unwrap();
+        assert_eq!(entry.long_context, None);
+        assert_eq!(entry.context_window, maximum);
+        let revision = client.read_config().unwrap().revision;
+        assert!(
+            crate::models::execute(
+                &mut *client,
+                ModelCommand::Configure {
+                    preference: format!("{provider}/{id}"),
+                    revision,
+                    option: crate::models::ModelOption::LongContext(true),
+                },
+                &catalog
+            )
+            .is_err()
+        );
+        assert_eq!(client.read_config().unwrap().revision, revision);
         let options = [
             fast.then(|| {
                 crate::models::ModelOption::Acceleration(
@@ -1820,8 +1843,8 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
                         .map(|option| option.id.clone()),
                 )
             }),
-            context.then_some(crate::models::ModelOption::Context272k),
-            context.then_some(crate::models::ModelOption::Context1m),
+            context.then_some(crate::models::ModelOption::LongContext(false)),
+            context.then_some(crate::models::ModelOption::LongContext(true)),
             fast.then_some(crate::models::ModelOption::Acceleration(None)),
         ];
         for option in options.into_iter().flatten() {
@@ -1860,14 +1883,18 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
             assert_eq!(entry.maximum_context_window, maximum);
             if matches!(
                 option,
-                crate::models::ModelOption::Context272k | crate::models::ModelOption::Context1m
+                crate::models::ModelOption::LongContext(false)
+                    | crate::models::ModelOption::LongContext(true)
             ) {
-                let window = if option == crate::models::ModelOption::Context272k {
+                let window = if option == crate::models::ModelOption::LongContext(false) {
                     272_000
                 } else {
-                    1_000_000
+                    maximum.unwrap()
                 };
-                assert_eq!(provider_config.model_context[id].context_window, window);
+                assert_eq!(
+                    provider_config.model_context[id].long_context,
+                    Some(option == crate::models::ModelOption::LongContext(true))
+                );
                 assert_eq!(entry.context_window, Some(window));
                 assert!(entry.available_context_window.unwrap() < window);
             }

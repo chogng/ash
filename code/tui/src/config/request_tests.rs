@@ -246,7 +246,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
 
             maximum_context_window: None,
             default_context_window: None,
-            context_window_options: Vec::new(),
+            long_context: None,
             selected_acceleration: None,
             acceleration_options: Vec::new(),
             auto_compact_token_limit: None,
@@ -365,7 +365,8 @@ fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
                     model_context: [(
                         "alias".into(),
                         ash_app_server_protocol::protocol::config::ModelContextConfigDto {
-                            context_window: 272_000,
+                            context_window: Some(272_000),
+                            long_context: None,
                             auto_compact_token_limit: None,
                         },
                     )]

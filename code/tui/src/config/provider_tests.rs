@@ -110,7 +110,8 @@ fn editing_provider_name_preserves_model_aliases_and_context_declarations() {
     config.model_context.insert(
         "local-model".into(),
         ModelContextConfigDto {
-            context_window: 128_000,
+            context_window: Some(128_000),
+            long_context: None,
             auto_compact_token_limit: Some(100_000),
         },
     );
@@ -227,7 +228,8 @@ fn saved_model_selection_survives_other_model_ids_and_can_be_cleared() {
     panel.settings.config.model_context.insert(
         "aaa-old-model".into(),
         ModelContextConfigDto {
-            context_window: 272_000,
+            context_window: Some(272_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );

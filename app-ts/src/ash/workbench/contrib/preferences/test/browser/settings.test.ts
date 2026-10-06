@@ -529,10 +529,10 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	using resources = new DisposableStore();
 	const root = h(browserEnvironment.window.document, 'div');
 	const catalog = [
-		{ model: { provider: 'first', model: 'newest' }, displayName: 'First newest', contextWindowOptions: [] },
-		{ model: { provider: 'first', model: 'older' }, displayName: 'First older', contextWindowOptions: [] },
-		{ model: { provider: 'second', model: 'newest' }, displayName: 'Second', contextWindowOptions: [] },
-		{ model: { provider: 'third', model: 'newest' }, displayName: 'Third', contextWindowOptions: [] },
+		{ model: { provider: 'first', model: 'newest' }, displayName: 'First newest', longContext: null },
+		{ model: { provider: 'first', model: 'older' }, displayName: 'First older', longContext: null },
+		{ model: { provider: 'second', model: 'newest' }, displayName: 'Second', longContext: null },
+		{ model: { provider: 'third', model: 'newest' }, displayName: 'Third', longContext: null },
 	];
 	const enabled = new Set<string>();
 	const changed = resources.add(new Emitter<void>());

@@ -23,11 +23,8 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
             json!([{"effort":"low"},{"effort":"low","description":"Other copy"}]),
         ),
         ("context_window", json!(0)),
-        ("context_window_options", json!([272000, 0])),
-        ("context_window_options", json!([272000, 1_050_001])),
-        ("context_window_options", json!([1_000_000, 272000])),
-        ("context_window_options", json!([272000, 272000])),
-        ("context_window_options", json!([272000, 400000, 1000000])),
+        ("max_context_window", json!(0)),
+        ("max_context_window", json!(200_000)),
         ("auto_compact_token_limit", json!(0)),
         ("default_context_window", json!(272000)),
         ("default_personality", json!(null)),
@@ -36,11 +33,17 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("capabilities", json!({"tools":"invalid"})),
         ("default_reasoning_effort", json!("minimal")),
         ("model_reasoning_effort", json!("medium")),
-        ("instructions", json!({"revision":"v1", "body":" "})),
-        ("instructions", json!({"revision":" ", "body":"base"})),
+        ("model_messages", json!({"system_instructions":" "})),
+        ("model_messages", json!({})),
+        ("model_messages", json!({"system_instructions":null})),
         (
-            "instructions",
-            json!({"revision":"v1", "body":"x".repeat(65537)}),
+            "model_messages",
+            json!({"system_instructions":"base", "revision":"v1"}),
+        ),
+        ("instructions", json!({"revision":"v1", "body":"base"})),
+        (
+            "model_messages",
+            json!({"system_instructions":"x".repeat(65537)}),
         ),
     ] {
         let mut model = row();
@@ -51,7 +54,7 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         );
     }
     let mut missing = row();
-    missing.as_object_mut().unwrap().remove("instructions");
+    missing.as_object_mut().unwrap().remove("model_messages");
     assert!(parse_catalog(&json!({"models":[missing]}).to_string()).is_err());
     let mut typo = row();
     typo["instruction"] = json!("wrong field");
@@ -71,6 +74,12 @@ fn editable_catalog_schema_matches_its_generated_file_and_wire_defaults() {
     }
     assert!(fields.get("default_reasoning_effort").is_some());
     assert!(fields.get("model_reasoning_effort").is_none());
+    assert!(fields.get("instructions").is_none());
+    assert_eq!(fields["model_messages"]["$ref"], "#/$defs/ModelMessages");
+    assert_eq!(
+        generated["$defs"]["ModelMessages"]["required"],
+        json!(["system_instructions"])
+    );
     assert_eq!(
         generated["$defs"]["ModelCapabilitiesDeclaration"]["properties"]["tools"]["type"],
         json!(["boolean", "null"])
@@ -84,10 +93,7 @@ fn duplicate_identities_fail_and_unknown_metadata_stays_unknown() {
     let mut model = row();
     model.as_object_mut().unwrap().remove("context_window");
     assert!(parse_catalog(&json!({"models":[model.clone()]}).to_string()).is_err());
-    model
-        .as_object_mut()
-        .unwrap()
-        .remove("context_window_options");
+    model.as_object_mut().unwrap().remove("max_context_window");
     let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
     assert_eq!(
         parsed[0].context_window,
@@ -100,10 +106,10 @@ fn context_preferences_are_explicit_data_independent_of_the_model_name() {
     for name in ["gpt-independent", "plain-model"] {
         let mut model = row();
         model["model_id"] = json!(name);
-        model["context_window"] = json!(300000);
-        model["context_window_options"] = json!([80000, 160000]);
+        model["context_window"] = json!(80000);
+        model["max_context_window"] = json!(300000);
         let parsed = parse_catalog(&json!({"models":[model]}).to_string()).unwrap();
-        assert_eq!(parsed[0].context_window_options, [80000, 160000]);
+        assert_eq!(parsed[0].context_window, ContextWindow::Known(80_000));
         assert_eq!(
             parsed[0].model().context_window,
             ash_protocol::ContextWindow::Known(300000)
@@ -115,12 +121,12 @@ fn context_preferences_are_explicit_data_independent_of_the_model_name() {
 fn sparse_declarations_preserve_unknowns_and_known_capacity_without_presets() {
     let minimal = json!({
         "provider_id":"example", "model_id":"plain-model", "display_name":"Plain Model",
-        "instructions":{"revision":"v1", "body":"Independent base instructions"}
+        "model_messages":{"system_instructions":"Independent base instructions"}
     });
     let parsed = parse_catalog(&json!({"models":[minimal.clone()]}).to_string()).unwrap();
     let spec = &parsed[0];
     assert_eq!(spec.context_window, ash_protocol::ContextWindow::Unknown);
-    assert!(spec.context_window_options.is_empty());
+    assert_eq!(spec.max_context_window, ContextWindow::Unknown);
     assert_eq!(spec.capabilities, ash_protocol::ModelCapabilities::UNKNOWN);
     assert!(spec.supported_reasoning_efforts.is_empty());
     assert_eq!(spec.default_reasoning_effort, None);
@@ -132,7 +138,7 @@ fn sparse_declarations_preserve_unknowns_and_known_capacity_without_presets() {
     fixed["auto_compact_token_limit"] = json!(160000);
     let parsed = parse_catalog(&json!({"models":[fixed]}).to_string()).unwrap();
     let spec = &parsed[0];
-    assert_eq!(spec.context_window_options, [300000]);
+    assert_eq!(spec.max_context_window, ContextWindow::Unknown);
     assert_eq!(
         spec.capabilities.tools,
         ash_protocol::CapabilitySupport::Unsupported
@@ -153,11 +159,16 @@ fn editing_one_models_base_prompt_keeps_other_entries_independent() {
     let first = row();
     let mut second = first.clone();
     second["model_id"] = json!("different-model");
-    second["instructions"] = json!({"revision":"v2", "body":"Independent model prompt"});
+    second["model_messages"] = json!({"system_instructions":"Independent model prompt"});
     let parsed = parse_catalog(&json!({"models":[first, second]}).to_string()).unwrap();
-    assert_ne!(parsed[0].instructions.body, parsed[1].instructions.body);
-    assert_eq!(parsed[0].instructions.revision, "model-base-v2");
-    assert_eq!(parsed[1].instructions.revision, "v2");
+    assert_ne!(
+        parsed[0].model_messages.system_instructions,
+        parsed[1].model_messages.system_instructions
+    );
+    assert_eq!(
+        parsed[1].model_messages.system_instructions,
+        "Independent model prompt"
+    );
 }
 
 #[test]
@@ -382,8 +393,8 @@ fn bundled_openai_settings_reach_runtime_model_metadata() {
         ash_protocol::CapabilitySupport::Supported
     );
     assert!(
-        spec.instructions
-            .body
+        spec.model_messages
+            .system_instructions
             .contains("## Handling context and output budgets")
     );
 }

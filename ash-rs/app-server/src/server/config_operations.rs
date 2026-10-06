@@ -1174,6 +1174,7 @@ fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
                     model.to_string(),
                     ModelContextConfigDto {
                         context_window: context.context_window,
+                        long_context: context.long_context,
                         auto_compact_token_limit: context.auto_compact_token_limit,
                     },
                 )
@@ -1194,6 +1195,7 @@ pub(super) fn provider_config_from_dto(
                     .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
                 ModelContextConfig {
                     context_window: context.context_window,
+                    long_context: context.long_context,
                     auto_compact_token_limit: context.auto_compact_token_limit,
                 },
             ))

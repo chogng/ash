@@ -26,7 +26,7 @@ test('Advisor focuses its saved model, Disable when disabled and the menu when t
 		using resources = new DisposableStore();
 		const document = dom.window.document;
 		const model: ModelCatalogEntry = {
-			model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'GPT-6.1 Sol', contextWindowOptions: [],
+			model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'GPT-6.1 Sol', longContext: null,
 		};
 		let saved: AdvisorConfig = { model: model.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
 		let modelVisible = true;

@@ -124,9 +124,9 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 ## 内置模型指导初版
 
-当前内置模型的完整基础提示词与规格统一登记在 [`models.json`](../model-provider-info/models.json)。每条正文和 revision 都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
+当前内置模型的完整基础提示词与规格统一登记在 [`models.json`](../model-provider-info/models.json)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
 
-当前 JSON 正文 revision 为 `model-base-v2`：保留原有模型指导，并扩充任务完成、环境调查、工具使用、编辑、验证、权限、委托、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
+目录不填写 revision，`models-manager` 按正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。当前正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、委托、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
 
 这些初始正文尚未做真实模型效果评测。以下保留原指导的设计假设与来源，来源复核日期为 2026-09-09，不代表本轮验证了远端型号的在线可用性。
 
@@ -141,7 +141,7 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 
 ### 修改、生效与检查
 
-- 修改一个模型只编辑 JSON 中它的 `instructions.body` 与 `instructions.revision`；新增沿用现有协议的模型只增加 JSON 条目。具体入口见 [crate README](../models-manager/README.md#初版模板与修改入口)。
+- 修改一个模型只编辑 JSON 中它的 `model_messages.system_instructions` 字符串；新增沿用现有协议的模型只增加 JSON 条目。具体入口见 [crate README](../models-manager/README.md#初版模板与修改入口)。
 - `model-provider-info` 校验 JSON 并提供共享规格；`models-manager` 生成准确指令目录和内容摘要。选择不扫描目录、不查询网络；未知型号、自定义 provider 与不同大小写不会自动套用已知模型正文。
 - `for_turn` 在新 Turn 接受前选好完整基础正文；宿主自定义基础正文优先，产品任务只替换共享 Agent 基础正文。Core 渲染冻结资产，选中模型正文不会重复加入；已保存的独立指导资产仍按其保存含义组合。
 - `ModelInstructionCatalog::default()` 为明确的空目录。嵌入方通过 `with_model_instructions` 整体替换目录，也可用空目录建立同模型 Generic 对照。

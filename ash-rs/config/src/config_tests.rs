@@ -367,7 +367,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 9"));
+    assert!(encoded.contains("schemaVersion = 10"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -409,7 +409,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 9"));
+    assert!(persisted.contains("schemaVersion = 10"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -662,7 +662,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 9"));
+    assert!(persisted.contains("schemaVersion = 10"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -775,11 +775,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 10\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 11\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 9"));
+    assert!(error.0.contains("newer than supported version 10"));
     remove_config_files(&database_path);
 }
 
@@ -2743,7 +2743,7 @@ model = "glm-5.1"
     );
     assert_eq!(migrated.document.tui["pinnedModels"][0]["provider"], "glm");
     let encoded = crate::document_migration::encode(&migrated.document).unwrap();
-    assert!(encoded.contains("schemaVersion = 9"));
+    assert!(encoded.contains("schemaVersion = 10"));
     assert!(!encoded.contains("activeConnections"));
     let with_old_selection = format!("{encoded}\n[activeConnections]\nglm = \"zai-coding-plan\"\n");
     let rewritten = crate::document_migration::decode(&with_old_selection).unwrap();
@@ -3007,4 +3007,47 @@ fn fast_model_migration_merges_equal_values_and_rejects_conflicts_without_writin
         remove_config_files(&path);
     }
     assert!(crate::document_migration::decode("schemaVersion = 9\n[connections.openai]\nprovider = 'openai'\nconnection = 'openai'\nfastModels = []\n").is_err());
+}
+
+#[test]
+fn long_context_migration_preserves_selection_compaction_and_manual_budgets() {
+    let source = r#"schemaVersion = 9
+[connections.openai]
+provider = "openai"
+connection = "openai"
+[connections.openai.modelContext.gpt-6-astra]
+contextWindow = 1000000
+autoCompactTokenLimit = 200000
+[connections.openai.modelContext.gpt-6-sol]
+contextWindow = 272000
+[connections.openai.modelContext.gpt-6-luna]
+contextWindow = 128000
+"#;
+    let decoded = crate::document_migration::decode(source).unwrap();
+    assert!(decoded.rewrite_required);
+    let connection =
+        &decoded.document.connections[&ash_protocol::ModelConnectionId::new("openai").unwrap()];
+    let context = &connection.model_context[&ash_protocol::ModelId::new("gpt-6-astra").unwrap()];
+    assert_eq!(context.context_window, None);
+    assert_eq!(context.long_context, Some(true));
+    assert_eq!(context.auto_compact_token_limit, Some(200000));
+    assert_eq!(
+        connection.model_context[&ash_protocol::ModelId::new("gpt-6-sol").unwrap()].long_context,
+        Some(false)
+    );
+    assert_eq!(
+        connection.model_context[&ash_protocol::ModelId::new("gpt-6-luna").unwrap()].context_window,
+        Some(128000)
+    );
+    let encoded = crate::document_migration::encode(&decoded.document).unwrap();
+    let reopened = crate::document_migration::decode(&encoded).unwrap();
+    assert!(!reopened.rewrite_required);
+    assert_eq!(reopened.document, decoded.document);
+    assert!(
+        crate::document_migration::decode(&source.replace(
+            "contextWindow = 1000000",
+            "contextWindow = 1000000\nlongContext = true"
+        ))
+        .is_err()
+    );
 }

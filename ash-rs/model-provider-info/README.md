@@ -150,7 +150,7 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 
 JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.rs) 的解析类型定义，字段注释进入生成 Schema。目录、共享模型声明、模型列表结果和模型偏好请求的字段统一使用 `snake_case`，包括嵌套字段和加速机制标签 `service_tier`；目录与模型设置拒绝旧的驼峰字段。前端适配器转换为 TypeScript 业务类型的 `camelCase` 字段。请求参数值和推理档位值保留各自约定，例如等级 ID `priority` 和档位 `extraHigh`。共享协议按数据职责组织，阅读关系见 [protocol 目录说明](../protocol/README.md#modelsjson-从哪里定义)。这两个入口一起维护：修改文件名不会自动改变 JSON，修改解析声明必须重新生成 Schema。
 
-产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和完整的 `instructions.body`，每个模型的正文与 revision 可以独立修改。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
+产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和完整的 `model_messages.system_instructions` 字符串，每个模型的正文可以独立修改。目录不填写 revision；`models-manager` 根据完整正文的 SHA-256 摘要生成冻结资产的版本标识。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
 
 ```json
 {
@@ -158,8 +158,8 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
   "model_id": "model-id",
   "display_name": "Display Name",
   "description": "A short description of the model",
-  "context_window": 1000000,
-  "context_window_options": [200000, 1000000],
+  "context_window": 200000,
+  "max_context_window": 1000000,
   "capabilities": {
     "tools": true,
     "reasoning": true
@@ -170,9 +170,8 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
     { "effort": "high", "description": "Greater reasoning depth for complex problems" }
   ],
   "default_reasoning_effort": "medium",
-  "instructions": {
-    "revision": "model-base-v2",
-    "body": "Complete Agent base instructions for this model.\n"
+  "model_messages": {
+    "system_instructions": "Complete Agent base instructions for this model.\n"
   }
 }
 ```
@@ -186,7 +185,7 @@ just generate-model-catalog-schema --check
 
 `description` 是可选的模型简介；每个推理选项包含请求值 `effort` 和可选的 `description`。缺少说明表示未知，不生成型号能力或固定 token 预算；已填写说明不能空白，同一档位不能重复。App Server revision 16／capability version 19 使用 `snake_case` 模型字段，并以 `default_reasoning_effort` 表示目录默认档位，旧客户端会在初始化时拒绝不兼容的版本，服务端与客户端需一起更新。目录、App Server、桌面和 TUI 保留这些信息，模型选择器显示简介，推理菜单向读屏提供档位说明，TUI 推理面板显示档位说明。已与 Codex 准确匹配的型号保留原始简介和说明，其他型号使用 Ash 的通用档位说明；同名档位不保证跨供应商有相同推理投入。
 
-只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallel_tool_calls`、`image_detail_original` 或 `fast_mode`，没有已知能力时省略整个对象。没有推理档位、默认推理档位或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`default_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理档位会使目录校验失败。
+只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallel_tool_calls`、`image_detail_original` 或 `fast_mode`，没有已知能力时省略整个对象。没有推理档位、默认推理档位或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`default_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文、零上下文窗口或不支持的默认推理档位会使目录校验失败。
 
 `default_reasoning_effort` 声明该模型在 Ash 中的默认档位，省略后没有目录默认值，不会自动设为 `medium`。用户配置中的 `model_reasoning_effort` 保存用户选择，单次请求中的 `reasoning_effort` 保存本次选择；优先级为单次请求、用户配置、模型目录默认值。目录解析器只接受 `default_reasoning_effort`；Codex 返回的 `default_reasoning_level` 和 `supported_reasoning_levels` 由供应商接入层转换。
 
@@ -223,9 +222,11 @@ Ultra Fast 是加速档位，与 Ultra 的协作意图分别设置。TUI 的 `/e
 
 前端模型设置卡读取加速选项的名称和说明，保留键盘开关、焦点和保存行为，并把说明提供给读屏。内置文案通过现有 NLS 提供英文和中文；供应商自定义文案保留原文。实际型号、实际服务等级与证据进入调用/计价记录，详情见 [模型计价](../docs/model-accounting.md#加速调用如何进入计价)。
 
-内置完整正文提升为 `model-base-v2`，在保留各模型原有指导的基础上，补入任务完成、环境调查、工具使用、编辑、验证、权限、委托和结果报告规则。正文长度不证明模型效果，质量与额外输入成本仍需真实模型对照评测。
+内置完整正文在保留各模型原有指导的基础上，包含任务完成、环境调查、工具使用、编辑、验证、权限、委托和结果报告规则。正文长度不证明模型效果，质量与额外输入成本仍需真实模型对照评测。
 
-`context_window` 是模型容量。执行预算就是容量时，无需填写 `context_window_options`；解析后的唯一档位和默认预算都等于容量。需要较小的普通预算或扩展预算时，选项按升序声明一或两个值，第一项就是默认预算，所有值不得超过容量，不再单独维护 `default_context_window`。未知容量不能声明档位。目录只在解析边界补全运行时元数据，新增协议字段不会要求逐模型填写。用户覆盖仍由 `models-manager` 合并，并受当前目录容量限制；压缩推荐使用有效预算的 90%，条目的显式压缩阈值与用户覆盖也受这一上限限制。
+`context_window` 是默认上下文预算，`max_context_window` 是长上下文开启后的最大预算；最大值不得小于默认值，未知默认值不能声明最大值。省略最大值表示没有更大的档位。长上下文默认关闭，用户偏好保存 `modelContext.<model>.longContext` 布尔值；手工 `contextWindow` 数值与布尔偏好互斥。后端根据当前连接的目录容量限制有效预算，GUI 和 TUI 不根据型号或容量猜测开关。压缩推荐使用有效预算的 90%，显式压缩阈值也受这一上限限制。
+
+`model_messages` 是本地模型指令声明，不是聊天消息数组，也不会整块发给供应商。Core 将 `system_instructions` 与运行时指令组装成 `ModelRequest.instructions`；Responses 编码为顶层 `instructions`，Claude Messages 编码为顶层 `system`，Chat Completions 编码为 `system` 消息。当前 Gemini 接入使用 Chat Completions；官方 Gemini 协议的字段对照见通用模型声明规范。
 
 `ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、协作模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，资源清单在 `BUILD.bazel`，修改后需重编译并重启。
 

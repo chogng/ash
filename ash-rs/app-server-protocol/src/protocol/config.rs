@@ -208,7 +208,13 @@ pub enum CustomProviderProtocolDto {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelContextConfigDto {
-    pub context_window: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub context_window: Option<u32>,
+    /// Select the model default (false) or its current connection maximum (true).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub long_context: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub auto_compact_token_limit: Option<u32>,

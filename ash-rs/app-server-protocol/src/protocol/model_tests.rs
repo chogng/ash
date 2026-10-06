@@ -68,11 +68,11 @@ fn catalog_exposes_fast_support_and_the_declared_context_ceiling() {
         ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
     );
     let mut info = ModelInfo::new(model.model.clone(), "GPT-6 Astra");
-    info.context_window = ContextWindow::Known(1_050_000);
+    info.context_window = ContextWindow::Known(872_000);
     info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     let entry = ModelCatalogEntry::from_info(model, &info);
     let value = serde_json::to_value(&entry).unwrap();
-    assert_eq!(value["maximum_context_window"], 1_050_000);
+    assert_eq!(value["maximum_context_window"], 872_000);
     assert_eq!(value["capabilities"]["fast_mode"], "supported");
     assert_eq!(
         serde_json::from_value::<ModelCatalogEntry>(value).unwrap(),
@@ -90,7 +90,7 @@ fn model_preferences_catalog_fields_keep_unknown_capacity_explicit() {
     let entry = ModelCatalogEntry::from_info(model, &info);
     let value = serde_json::to_value(&entry).unwrap();
     assert_eq!(value["default_context_window"], serde_json::Value::Null);
-    assert_eq!(value["context_window_options"], serde_json::json!([]));
+    assert_eq!(value["long_context"], serde_json::Value::Null);
     assert_eq!(value["selected_acceleration"], serde_json::Value::Null);
 }
 
@@ -102,7 +102,19 @@ fn model_preferences_request_is_strict_and_accepts_targeted_updates() {
         params.acceleration,
         ash_protocol::Patch::Value("priority".into())
     );
-    assert_eq!(params.context_window, None);
+    assert_eq!(params.long_context, None);
+    for enabled in [false, true] {
+        let mut update = request.clone();
+        update["long_context"] = serde_json::json!(enabled);
+        let parsed: ModelPreferencesUpdateParams = serde_json::from_value(update.clone()).unwrap();
+        assert_eq!(parsed.long_context, Some(enabled));
+        assert_eq!(
+            serde_json::to_value(parsed).unwrap()["long_context"],
+            enabled
+        );
+        update["context_window"] = serde_json::json!(272000);
+        assert!(serde_json::from_value::<ModelPreferencesUpdateParams>(update).is_err());
+    }
     let mut invalid = request;
     invalid["config"] = serde_json::json!({});
     assert!(serde_json::from_value::<ModelPreferencesUpdateParams>(invalid).is_err());

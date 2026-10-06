@@ -260,50 +260,18 @@ fn configure_model<T: JsonRpcTransport>(
                     expected_revision: revision,
                     model: entry.model.clone(),
                     acceleration: selected.map_or(Patch::Null, Patch::Value),
-                    context_window: None,
+                    long_context: None,
                 },
             )?;
         }
-        ModelOption::Context272k | ModelOption::Context1m => {
-            if !entry
-                .maximum_context_window
-                .is_some_and(|maximum| maximum >= 1_000_000)
-            {
-                return Err(ModelCommandError(
-                    "This model does not support the 1m context preset".into(),
-                ));
-            }
-            let mut provider = config
-                .providers
-                .get(entry.model.provider.as_str())
-                .cloned()
-                .ok_or_else(|| {
-                    ModelCommandError(
-                        "Configure a provider in /config before changing model settings".into(),
-                    )
-                })?;
-            let context_window = if option == ModelOption::Context1m {
-                1_000_000
-            } else {
-                272_000
-            };
-            if let Some(custom) = &mut provider.custom {
-                custom.context_window = context_window;
-            } else {
-                provider.model_context.insert(
-                    entry.model.model.to_string(),
-                    ash_app_server_protocol::protocol::config::ModelContextConfigDto {
-                        context_window,
-                        // A changed budget requires a fresh compaction recommendation.
-                        auto_compact_token_limit: None,
-                    },
-                );
-            }
-            client.configure_provider(
-                ash_app_server_protocol::protocol::config::ProviderConfigureParams {
+        ModelOption::LongContext(enabled) => {
+            client.update_model_preferences(
+                ash_app_server_protocol::protocol::model::ModelPreferencesUpdateParams {
                     command_id: new_command_id("model-options"),
                     expected_revision: revision,
-                    config: provider,
+                    model: entry.model.clone(),
+                    acceleration: Patch::Missing,
+                    long_context: Some(enabled),
                 },
             )?;
         }

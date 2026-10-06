@@ -13,7 +13,7 @@ import type { ModelCatalogEntry } from '../../../../../../services/chat/common/m
 import type { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
-import { getModelConfigSummary, getModelConfigValueLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { getModelConfigSummary, modelPickerEffortOptions } from './modelPickerModelConfig.js';
 import './modelPicker.css';
 
 let nextConfigurationId = 0;
@@ -44,7 +44,13 @@ export class ModelPickerConfiguration extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.ChatModelConfiguration,
 					{ type: AccessibleViewType.Help },
-					() => localize('chat.modelPicker.configurationHelp', 'Model options menu. Thinking level and context size are separate groups. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.'),
+					() => {
+						const entry = this.selectedEntry;
+						return [
+							localize('chat.modelPicker.configurationHelp', 'Model options menu. Thinking level and long context are separate groups. Long context is off by default. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button.'),
+							...(entry ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).filter(option => option.description).map(option => `${option.label}: ${option.description}`) : []),
+						].join('\n');
+					},
 					() => button.focus(),
 					AccessibilityVerbositySettingId.ChatModelConfiguration,
 				);
@@ -108,21 +114,22 @@ export class ModelPickerConfiguration extends Disposable {
 				}
 			},
 		})));
-		if (entry.contextWindowOptions.length) {
+		if (entry.longContext !== null) {
 			if (actions.length) { actions.push(new Separator()); }
 			const heading = { id: 'ash.chat.context.heading', label: localize('chat.modelPicker.contextSize', 'Context Size'), tooltip: '', enabled: false, run: () => { } };
 			headings.add(heading);
 			actions.push(heading);
-			for (const contextWindow of entry.contextWindowOptions) {
+			for (const longContext of [false, true]) {
+				const label = longContext ? localize('chat.modelPicker.longContextOn', 'Long context on') : localize('chat.modelPicker.longContextOff', 'Long context off');
 				actions.push({
-					id: `ash.chat.input.context.${contextWindow}`,
-					label: getModelConfigValueLabel(contextWindow),
-					tooltip: localize('chat.modelPicker.contextChoice', '{0} context', getModelConfigValueLabel(contextWindow)),
+					id: `ash.chat.input.context.${longContext}`,
+					label,
+					tooltip: label,
 					enabled: true,
-					checked: contextWindow === entry.contextWindow,
+					checked: longContext === entry.longContext,
 					run: async () => {
 						try {
-							await this.languageModels.setModelPreferences(entry.model, { contextWindow });
+							await this.languageModels.setModelPreferences(entry.model, { longContext });
 						} catch {
 							status(localize('chat.modelPicker.preferencesFailed', 'Could not update model settings'));
 						} finally {
@@ -144,9 +151,9 @@ export class ModelPickerConfiguration extends Disposable {
 		for (const option of options) {
 			if (option.description) menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`)?.setAttribute('aria-description', option.description);
 		}
-		for (const contextWindow of entry.contextWindowOptions) {
-			const description = localize('chat.modelPicker.contextChoice', '{0} context', getModelConfigValueLabel(contextWindow));
-			menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.context.${contextWindow}'] button`)!.setAttribute('aria-description', description);
+		for (const longContext of [false, true]) {
+			const description = longContext ? localize('chat.modelPicker.longContextOn', 'Long context on') : localize('chat.modelPicker.longContextOff', 'Long context off');
+			menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.context.${longContext}'] button`)?.setAttribute('aria-description', description);
 		}
 		this.menu.value = menu;
 		const shown = this.contextView.show({

@@ -1,12 +1,12 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
-/** Context capacity is shown in the menu; the toolbar reserves its space for thinking level. */
+/** The toolbar shows thinking level when available and otherwise signals model options. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
 	if (entry.supportedReasoningEfforts?.length) {
 		return modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort);
 	}
-	return entry.contextWindowOptions.length ? localize('chat.modelPicker.configuration', 'Model options') : '';
+	return entry.longContext !== null ? localize('chat.modelPicker.configuration', 'Model options') : '';
 }
 
 export function getModelConfigValueLabel(tokens: number): string {

@@ -419,7 +419,8 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
         name: "Fast".into(),
         description: "Priority processing, increased usage".into(),
     }];
-    entry.maximum_context_window = Some(1_050_000);
+    entry.long_context = Some(false);
+    entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
         models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
@@ -435,7 +436,7 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
             "acceleration",
             super::ModelOption::Acceleration(Some("priority".into())),
         ),
-        (1, "context", super::ModelOption::Context1m),
+        (1, "context", super::ModelOption::LongContext(true)),
     ] {
         if index > 0 {
             picker.handle_model_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -502,7 +503,8 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
         name: "Fast".into(),
         description: "Priority processing, increased usage".into(),
     }];
-    entry.maximum_context_window = Some(1_050_000);
+    entry.long_context = Some(false);
+    entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
         models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
@@ -553,7 +555,7 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
     assert!(hits.iter().any(|target| matches!(target, ListSelectionPointerTarget::ItemControl { control, .. } if control == "context")));
     assert!(!terminal.backend().to_string().contains('—'));
     assert!(
-        (40..width).all(|x| buffer[(x, 3)].symbol() == " "),
+        (70..width).all(|x| buffer[(x, 3)].symbol() == " "),
         "settings stay next to the model instead of stretching to the edge"
     );
     crate::tui_assert_snapshot!(
@@ -615,6 +617,9 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                     entry.selected_acceleration = Some("priority".into());
                 }
                 entry.maximum_context_window = *window;
+                entry.long_context = window
+                    .filter(|maximum| *maximum >= 1_000_000)
+                    .map(|_| *provider != "kimi");
                 entry.context_window = if *provider == "kimi" {
                     Some(272_000)
                 } else {
@@ -635,7 +640,8 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
     kimi.model_context.insert(
         "kimi-k3".into(),
         ash_app_server_protocol::protocol::config::ModelContextConfigDto {
-            context_window: 272_000,
+            context_window: Some(272_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
@@ -663,9 +669,9 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                 "context",
                 window.filter(|maximum| *maximum >= 1_000_000).map(|_| {
                     if provider == "kimi" {
-                        super::ModelOption::Context1m
+                        super::ModelOption::LongContext(true)
                     } else {
-                        super::ModelOption::Context272k
+                        super::ModelOption::LongContext(false)
                     }
                 }),
             ),
@@ -751,6 +757,7 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
             }];
         }
         if bits & 4 != 0 {
+            entry.long_context = Some(true);
             entry.maximum_context_window = Some(1_000_000);
             entry.context_window = Some(1_000_000);
         }
@@ -883,7 +890,8 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
         name: "Fast".into(),
         description: "Priority processing, increased usage".into(),
     }];
-    entry.maximum_context_window = Some(1_050_000);
+    entry.long_context = Some(false);
+    entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let mut catalog = ModelListResult {
         models: vec![entry],
@@ -957,7 +965,8 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
         name: "Fast".into(),
         description: "Priority processing, increased usage".into(),
     }];
-    entry.maximum_context_window = Some(1_050_000);
+    entry.long_context = Some(false);
+    entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
         models: vec![entry],
@@ -1045,6 +1054,7 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
                     }];
                 }
                 if bits & 4 != 0 {
+                    entry.long_context = Some(true);
                     entry.maximum_context_window = Some(1_000_000);
                     entry.context_window = Some(1_000_000);
                 }
@@ -1078,7 +1088,9 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
     let fast_x = complete[..complete.find("[Fast off]").unwrap()]
         .chars()
         .count();
-    let context_x = complete[..complete.find("[1m]").unwrap()].chars().count();
+    let context_x = complete[..complete.find("[Long context on]").unwrap()]
+        .chars()
+        .count();
     for bits in 0..8 {
         let y = lines
             .iter()
@@ -1087,7 +1099,7 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
         for (mask, text, x, control) in [
             (1, "Medium", effort_x, None),
             (2, "[Fast off]", fast_x, Some("acceleration")),
-            (4, "[1m]", context_x, Some("context")),
+            (4, "[Long context on]", context_x, Some("context")),
         ] {
             if bits & mask != 0 {
                 assert_eq!(

@@ -10,7 +10,7 @@ fn model_declaration_preserves_metadata_without_an_access_path() {
     .unwrap();
     let model = spec.model();
     assert_eq!(model.id.as_str(), "gpt-6.1-sol");
-    assert_eq!(model.context_window, ContextWindow::Known(1_050_000));
+    assert_eq!(model.context_window, ContextWindow::Known(872_000));
     assert_eq!(model.capabilities.tools, CapabilitySupport::Supported);
     assert_eq!(
         model.default_reasoning_effort,

@@ -740,7 +740,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
     );
     let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "GPT-6 Astra");
-    info.context_window = ash_protocol::ContextWindow::Known(1_050_000);
+    info.context_window = ash_protocol::ContextWindow::Known(872_000);
     info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     info.supported_reasoning_efforts = vec![
         ash_protocol::ReasoningEffort::Low.into(),
@@ -754,6 +754,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
                 model, &info,
             );
             entry.context_window = Some(272_000);
+            entry.long_context = Some(false);
             entry.acceleration_options = vec![ash_protocol::ModelAccelerationOption {
                 id: "priority".into(),
                 name: "Fast".into(),
@@ -773,7 +774,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
         ));
         for option in [
             ModelOption::Acceleration(Some("priority".into())),
-            ModelOption::Context1m,
+            ModelOption::LongContext(true),
         ] {
             assert_eq!(
                 app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
@@ -795,7 +796,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
             .unwrap();
         let output = terminal.backend().to_string();
         assert!(output.contains("[Fast off]"));
-        assert!(output.contains("[272k]"));
+        assert!(output.contains("[Long context off]"));
         crate::tui_assert_snapshot!(app = &app; format!("model_options_{mode:?}"), output);
         for modifiers in [KeyModifiers::NONE, KeyModifiers::SHIFT] {
             app.handle_key(KeyEvent::new(KeyCode::Char('/'), modifiers));

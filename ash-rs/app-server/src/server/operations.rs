@@ -497,7 +497,7 @@ impl AppServer {
                 model: params.model,
                 update: ash_models_manager::ModelPreferencesUpdate {
                     acceleration: params.acceleration,
-                    context_window: params.context_window,
+                    long_context: params.long_context,
                 },
             })
             .map_err(|error| match error {

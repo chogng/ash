@@ -17,7 +17,7 @@
 | 请求编码       | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用   | `reasoning.effort` 与 `output_config.effort` 的不同结构  |
 | 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验 | 模型会看图，但所选接入没有图像输入协议                   |
 | Ash 执行策略   | 模型条目的独立 `host_policy` 部分；Core 和宿主执行            | 执行上下文预算、压缩阈值、工具结果截断预算               |
-| 基础提示词     | 模型条目的 `instructions`，版本化完整正文                     | 工作原则、工具使用和结果报告                             |
+| 基础提示词     | 模型条目的 `model_messages.system_instructions`，完整正文                     | 工作原则、工具使用和结果报告                             |
 | 运行时事实     | 账户、凭据、会话与调用记录的各自负责方                        | 账户权限、实际服务等级、缓存命中、token 用量             |
 
 有效能力必须同时满足模型声明、所选接入协议和 Ash 已实现的调用能力；账户权限在运行时确认。API、订阅代理和第三方托管接入分别声明，不能从厂商公共 API 继承全部能力。
@@ -232,7 +232,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 }
 ```
 
-示例把声明和绑定并列展示，便于阅读；长期存储仍按第 1 节职责归属。`enum_identity` 与 `history_codec` 表示协议层注册的有类型行为，不能把普通字符串当作可执行代码。`host_policy` 和 `instructions` 独立维护，不因 API 中存在同名字段而混在一起。
+示例把声明和绑定并列展示，便于阅读；长期存储仍按第 1 节职责归属。`enum_identity` 与 `history_codec` 表示协议层注册的有类型行为，不能把普通字符串当作可执行代码。`host_policy` 和 `model_messages` 独立维护，不因 API 中存在同名字段而混在一起。
 
 证据至少区分官方文档、脱敏协议测试和真实服务验证。查到文档只能证明来源；本次未持有六家账户逐个实连，也未验证所有旧型号和区域组合。厂商总表的参数全集不能直接复制成每个型号的能力。
 
@@ -244,7 +244,9 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 | 自动压缩     | `host_policy.auto_compact_token_limit`                  | Core 使用预算阈值；区别于厂商压缩 API                                                    |
 | 工具输出限额 | `host_policy.tool_output_limit`，带计量方法和单位       | 保留完整原始结果，限制给模型的文本；当前 token 限额使用 UTF-8 字节近似，不能标为准确计数 |
 | 请求偏好     | `host_policy.request_defaults`                          | Ash 默认 effort/verbosity 等必须通过所选接入校验；不改写官方默认值                       |
-| 基础指导     | `instructions.revision`、`instructions.body`            | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态                     |
+| 基础指导     | `model_messages.system_instructions`            | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态                     |
+
+`model_messages` 保存本地模型指令声明；当前只包含必填字符串 `system_instructions`，没有手写版本号。`models-manager` 按正文的 SHA-256 摘要标识冻结资产，历史保留当时的全文。该容器不直接作为供应商请求发送；Core 组装指令后由接入层编码，具体字段见第 2 节。Codex 的 `persistent_instructions` 是 persistent mode 的额外 developer 指令，省略或 `null` 使用其内置正文，空字符串关闭这项指导；Ash 当前没有对应字段，不为了名字相似而增加空声明；Role、权限、项目、工具和协作指导仍由各自负责方维护。
 
 基础正文可以统一包含工作目标、工具和结果使用、编辑与验证、权限边界、任务完成和报告规则。型号专用指导只写有官方依据或评测证据的差异。Role、权限、项目指令、动态工具和用户当前任务由运行时加入；提示词不能开启推理档位、扩大 API 上限或授予工具权限。现有规则见 [Agent 指令设计](../../docs/agent-instructions.md)。
 
@@ -254,7 +256,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 | 范围           | 当前状态                                                                  | 规范要求补充                                                         |
 | -------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词和 revision                     | 字段级来源、适用型号/接入版本与复核状态                              |
+| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词；冻结版本由正文摘要生成                     | 字段级来源、适用型号/接入版本与复核状态                              |
 | 上下文         | 已有容量、执行预算选项、压缩阈值                                          | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组         |
 | 模态           | `ModelSettings` 有 text/image/audio 输入列表                              | video/document、输出模态、组合、媒体限制与操作范围                   |
 | 推理           | 已有带可选说明的支持档位与默认档位                                        | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则               |
@@ -277,26 +279,32 @@ Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_m
 | `additional_speed_tiers`                                                                                    | `settings.acceleration`                                                       | Ash 用明确的等级、速度参数或高速型号声明加速；不复制另一份速度列表        |
 | `input_modalities`                                                                                          | `settings.input_modalities`                                                    | 现有 text/image/audio；不推断尚无协议的模态                               |
 | `support_verbosity`、`default_verbosity`                                                                    | `settings.verbosity`、`default_verbosity`                                      | 支持情况与默认值分开，未知状态保持未知                                    |
-| `supports_reasoning_summary_parameter`、`default_reasoning_summary`                                         | `settings.reasoning_summary`、`default_reasoning_summary`                        | 参数能力与返回的推理历史分别处理                                          |
+| `supports_reasoning_summary_parameter`、`default_reasoning_summary`                                         | `settings.reasoning_summary`、`settings.default_reasoning_summary`               | 已接入声明、动态导入和请求；`none` 表示不请求推理摘要，不关闭推理          |
 | `supports_image_detail_original`                                                                            | `capabilities.image_detail_original`                                            | 保留明确能力声明                                                          |
-| `context_window`、`max_context_window`                                                                      | `context_window`、`context_window_options`                                    | 容量和 Ash 执行预算分开；动态 Codex 导入用已声明最大容量作为上限          |
-| `auto_compact_token_limit`                                                                                  | `auto_compact_token_limit`                                                    | 由 Core 与配置合并执行，并受有效预算约束                                  |
+| `context_window`、`max_context_window`                                                                      | `context_window`、`max_context_window`                                    | 容量和 Ash 执行预算分开；动态 Codex 导入用已声明最大容量作为上限          |
+| `auto_compact_token_limit`                                                                                  | `auto_compact_token_limit`                                                    | 已接入；省略或 `null` 时按有效上下文的 90% 计算，显式值受该阈值限制     |
 | `effective_context_window_percent`                                                                          | Core 上下文预算计算                                                           | 目录没有同名字段；预算算法由 Core 维护，不能直接搬入 Codex 的保留比例     |
-| `comp_hash`                                                                                                 | Core 压缩兼容性与历史协议                                                     | 尚无对应消费链，不声明为已支持                                            |
+| `comp_hash`                                                                                                 | Core 压缩兼容性与历史协议                                                     | 尚未接入；Codex 用于判定压缩历史兼容性，不是 token 阈值，也不复制固定值 `3000` |
 | `truncation_policy`                                                                                         | `settings.tool_output_limit`                                                    | 保留计量方式与限额；token 限额的当前估算语义见模型计价文档                |
 | `visibility`、`priority`                                                                                    | 动态目录适配与客户端可见性设置                                                | Codex 订阅导入过滤隐藏项并保留排序；不把账户展示策略写进静态型号规格      |
 | `supported_in_api`、`available_access_programs`                                                             | 接入定义、凭据与运行时权限                                                    | API 和订阅接入独立校验；型号元数据不证明账户权益                          |
-| `availability_nux`、`upgrade`、`model_specialty`                                                            | 产品展示与型号生命周期                                                        | 尚无对应的 Ash 展示消费者，不复制 Codex 提示                              |
-| `model_messages`                                                                                            | `instructions`、Core 指令组装与各功能负责方                                   | 仅模型基础正文进入目录；工具、权限、协作和运行时指导由其所属模块组装      |
+| `availability_nux`、`upgrade`                                                                              | 产品展示与型号生命周期                                                        | 尚无对应的 Ash 展示消费者，不复制 Codex 提示                              |
+| `model_specialty`                                                                                           | 专用型号分类，以及权限和审批策略                                              | 尚未接入；Codex 的 `cyber` 会影响前缀规则和审批行为，不作为普通展示标签导入 |
+| `model_messages`                                                                                            | `model_messages.system_instructions`、Core 指令组装与各功能负责方                                   | 仅模型基础正文进入目录；工具、权限、协作和运行时指导由其所属模块组装      |
 | `include_skills_usage_instructions`、`include_plugin_usage_instructions`、`include_apps_usage_instructions` | Skills、插件和连接工具指令组装                                                | 属于 Ash 功能策略，不从型号名字或 Codex 标志开关功能                      |
 | `shell_type`、`apply_patch_tool_type`                                                                       | Shell、文件修改工具与工具运行时                                               | 使用 Ash 工具契约，不复制 Codex 工具实现选择                              |
 | `web_search_tool_type`、`supports_search_tool`、`experimental_supported_tools`                              | 搜索和工具声明、工具注册                                                      | 工具开放、协议和权限由工具负责方校验，不由静态目录授权                    |
 | `supports_experimental_context`                                                                             | Core 上下文管理                                                               | 尚无对应型号开关，不声称支持 Codex 的实验协议                             |
 | `use_responses_lite`                                                                                        | 接入 API profile 与 `ash-api`                                                 | 尚未实现该协议，不能只增加目录布尔值                                      |
 | `supports_reasoning_effort_updates`                                                                         | 接入历史编码与请求构造器                                                      | 尚无同名能力声明；当前 effort 通过普通请求参数发送                        |
-| `guardian`、`node_repl_auto_review_required`、`node_repl_disabled`、`auto_review_model_override`            | Guardian、权限、审批模型和 REPL 功能                                          | 属于 Ash 执行策略；不能从外部目录改写安全或工具配置                       |
+| `auto_review_model_override`                                                                               | Provider 审批模型默认值、`agent.approvalReviewModel`                           | 已有自动／显式选择；显式引用包含 provider、model 和可选连接，不导入 Codex 的型号覆盖字段 |
+| `guardian`、`node_repl_auto_review_required`、`node_repl_disabled`                                            | Guardian、权限和 REPL 功能                                                    | 属于 Ash 执行策略；不能从外部目录改写安全或工具配置                       |
 | `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort`                                          | 工具模式与协作功能                                                            | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位                      |
 | `used_fallback_model_metadata`                                                                              | Codex 内部解析标记                                                            | 不属于 JSON 型号声明，也不写入 Ash 目录                                   |
+
+当前 GPT 长上下文声明使用默认 `272000`、最大 `872000`；与相邻 Codex 目录一致的旧型号 `gpt-5.5` 保持默认和最大均为 `272000`。容量按具体型号声明，不能给整个 provider 统一开启长上下文。`long_context = true` 使用所选连接的最大容量，`false` 使用默认容量；最大容量不高于默认容量时不提供开关。
+
+`comp_hash` 若要成为 Ash 的跨 provider 契约，需要同时接入目录合并、压缩历史保存、恢复和切换模型时的兼容性判断。兼容性必须包含 provider 和连接来源，不能因为两个厂商都返回 `3000` 就认定它们的历史可互用。审批模型与专用型号的限制则由各自的执行策略负责；目录中的 `null` 不能代替这些调用链。
 
 Codex 示例 JSON 还可能含有不在这份 `ModelInfo` 中的字段，例如 `prefer_websockets`、`supports_parallel_tool_calls`、`minimal_client_version`、`requires_sandboxed_review`。因此复制示例不能代替核对实际消费类型。Ash 已有并行工具声明；传输由接入定义负责，客户端版本与审批限制由相应功能负责。Ash 的 Schema 拒绝未声明字段。
 

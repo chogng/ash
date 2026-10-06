@@ -79,7 +79,8 @@ fn custom_context_presets_set_internal_output_limits() {
             config.model_context.insert(
                 model,
                 ModelContextConfig {
-                    context_window: window,
+                    context_window: Some(window),
+                    long_context: None,
                     auto_compact_token_limit: None,
                 },
             );
@@ -178,7 +179,8 @@ fn model_provider_config_is_serializable_and_has_a_schema() {
         model_context: BTreeMap::from([(
             ModelId::new("gpt-test").unwrap(),
             ModelContextConfig {
-                context_window: 16_384,
+                context_window: Some(16_384),
+                long_context: None,
                 auto_compact_token_limit: Some(12_000),
             },
         )]),
@@ -535,7 +537,8 @@ fn static_validation_rejects_zero_model_context_limits() {
         model_context: BTreeMap::from([(
             model.clone(),
             ModelContextConfig {
-                context_window: 0,
+                context_window: Some(0),
+                long_context: None,
                 auto_compact_token_limit: None,
             },
         )]),
@@ -1056,8 +1059,8 @@ fn acceleration_preferences_are_persisted_per_connection_and_catalog_controls_av
             ash_protocol::CapabilitySupport::Supported
         );
         assert_eq!(
-            model.context_window,
-            ash_protocol::ContextWindow::Known(1_050_000)
+            model.max_context_window,
+            ash_protocol::ContextWindow::Known(872_000)
         );
     }
     let mut config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
@@ -1269,7 +1272,8 @@ fn custom_model_aliases_resolve_once_and_keep_the_local_context_declaration() {
     config.model_context.insert(
         ModelId::new("local-id").unwrap(),
         ModelContextConfig {
-            context_window: 128_000,
+            context_window: Some(128_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
@@ -1286,6 +1290,6 @@ fn custom_model_aliases_resolve_once_and_keep_the_local_context_declaration() {
     assert_eq!(normalized.upstream_model("unlisted-id"), "unlisted-id");
     assert_eq!(
         decoded.model_context[&ModelId::new("local-id").unwrap()].context_window,
-        128_000
+        Some(128_000)
     );
 }

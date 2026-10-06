@@ -34,7 +34,7 @@ pub(crate) enum ModelSelectionAction {
         revision: u64,
         acceleration_options: Vec<ash_protocol::ModelAccelerationOption>,
         selected_acceleration: Option<String>,
-        context: Option<u32>,
+        context: Option<bool>,
     },
     Configure {
         preference: String,
@@ -51,8 +51,7 @@ pub(crate) enum ModelSelectionAction {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ModelOption {
     Acceleration(Option<String>),
-    Context272k,
-    Context1m,
+    LongContext(bool),
 }
 
 impl ModelSelectionAction {
@@ -89,13 +88,7 @@ impl ModelSelectionAction {
                         .map(|index| acceleration_options[index].id.clone()),
                 )
             }
-            "context" => {
-                if (*context)? == 272_000 {
-                    ModelOption::Context1m
-                } else {
-                    ModelOption::Context272k
-                }
-            }
+            "context" => ModelOption::LongContext(!(*context)?),
             _ => return None,
         };
         Some(Self::Configure {
@@ -463,10 +456,7 @@ pub(crate) fn model_choices(
             .or_else(|| supported_efforts.first().copied());
         let acceleration_options = entry.acceleration_options.clone();
         let selected_acceleration = entry.selected_acceleration.clone();
-        let context = entry
-            .maximum_context_window
-            .filter(|window| *window >= 1_000_000)
-            .and(entry.context_window);
+        let context = entry.long_context;
         actions.insert(
             id.clone(),
             ModelSelectionAction::Select {
@@ -505,12 +495,12 @@ pub(crate) fn model_choices(
             item = item.with_control("acceleration", label);
         }
         item = match context {
-            Some(window) => item.with_control(
+            Some(enabled) => item.with_control(
                 "context",
-                match window {
-                    272_000 => "272k".into(),
-                    1_000_000.. => "1m".into(),
-                    window => format!("{}k", window / 1000),
+                if enabled {
+                    "Long context on"
+                } else {
+                    "Long context off"
                 },
             ),
             None => item,

@@ -22,14 +22,12 @@ use ash_protocol::ReasoningEffort;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-/// Complete base instructions owned by one model entry, independently editable and versioned.
+/// Model-owned prompt text, assembled with runtime instructions before provider encoding.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct ModelInstructions {
-    /// Version of this complete base prompt, frozen with its body when a Turn is accepted.
-    pub revision: String,
+pub struct ModelMessages {
     /// Complete model-specific Agent instructions; runtime permission and project instructions are separate.
-    pub body: String,
+    pub system_instructions: String,
 }
 
 /// One row in Ash's bundled JSON model catalog, independent of account access.
@@ -42,18 +40,21 @@ pub struct StaticModelSpec {
     pub model_id: String,
     pub display_name: String,
     pub description: Option<String>,
-    pub instructions: ModelInstructions,
-    /// Declared model capacity in tokens; null or omission means unknown, not unlimited.
+    pub model_messages: ModelMessages,
+    /// Default context budget in tokens; null or omission means unknown, not unlimited.
     #[serde(
         default = "unknown_context_window",
         deserialize_with = "context_window"
     )]
     #[schemars(with = "Option<u32>", transform = remove_runtime_default)]
     pub context_window: ContextWindow,
-    /// One or two ascending execution budgets within capacity; the first is Ash's default.
-    /// Omission uses declared capacity. These budgets do not change the model's capacity.
-    #[serde(default)]
-    pub context_window_options: Vec<u32>,
+    /// Maximum context budget when long context is enabled; omission means no larger budget.
+    #[serde(
+        default = "unknown_context_window",
+        deserialize_with = "context_window"
+    )]
+    #[schemars(with = "Option<u32>", transform = remove_runtime_default)]
+    pub max_context_window: ContextWindow,
     /// Optional model-specific compaction threshold, constrained by the effective execution budget.
     pub auto_compact_token_limit: Option<u32>,
     /// Confirmed model capabilities; omitted members and null mean unknown, not false.
@@ -89,7 +90,11 @@ impl StaticModelSpec {
             ModelId::new(&self.model_id).expect("catalog model ID is valid"),
             &self.display_name,
         );
-        model.context_window = self.context_window;
+        // Catalog observations carry capacity. The default execution budget stays in the spec.
+        model.context_window = match self.max_context_window {
+            ContextWindow::Known(_) => self.max_context_window,
+            ContextWindow::Unknown => self.context_window,
+        };
         model.description = self.description.clone();
         model.auto_compact_token_limit = self.auto_compact_token_limit;
         model.capabilities = self.capabilities;

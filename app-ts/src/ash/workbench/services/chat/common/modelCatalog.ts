@@ -14,7 +14,7 @@ export interface ModelAccelerationOption {
 }
 
 export interface ModelCatalogEntry {
-	readonly contextWindowOptions: readonly number[];
+	readonly longContext: boolean | null;
 	readonly model: ModelRef;
 	readonly displayName: string;
 	readonly description?: string | null;

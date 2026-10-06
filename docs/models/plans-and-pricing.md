@@ -18,7 +18,7 @@ ChatGPT 的 Student 是学生优惠，不是独立套餐。Kimi 仅在 `/coding/
 
 ## Astra Ultra Fast 的套餐资格
 
-Ultra Fast 目前仅用于 GPT-6 Astra。模型支持与账号资格分别判断；API Key 不使用 ChatGPT 套餐作为资格条件。
+Ash 的内置目录目前为 GPT-6 Astra 提供 Ultra Fast。模型支持与账号资格分别判断；API Key 不使用 ChatGPT 套餐作为资格条件。
 
 | 连接与套餐                                           | Ultra Fast 资格                                                           |
 | ---------------------------------------------------- | ------------------------------------------------------------------------- |

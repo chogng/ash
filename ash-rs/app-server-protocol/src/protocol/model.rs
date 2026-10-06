@@ -72,9 +72,8 @@ pub struct ModelCatalogEntry {
     pub context_window: Option<u32>,
     /// Context budget without a per-model preference, distinct from the effective budget and ceiling.
     pub default_context_window: Option<u32>,
-    /// Selectable budgets in ascending order: empty for unknown, one for fixed capacity,
-    /// or two for a compact/expanded switch. Clients must not infer choices from the ceiling.
-    pub context_window_options: Vec<u32>,
+    /// Long context selection on the active connection; null means no larger budget is available.
+    pub long_context: Option<bool>,
     /// Current preference on the active connection; capability support is reported separately.
     pub selected_acceleration: Option<String>,
     /// Effective choices after connection restrictions and per-option denials.
@@ -115,10 +114,7 @@ impl ModelCatalogEntry {
                 ContextWindow::Known(tokens) => Some(tokens),
                 ContextWindow::Unknown => None,
             },
-            context_window_options: match info.context_window {
-                ContextWindow::Known(tokens) => vec![tokens],
-                ContextWindow::Unknown => Vec::new(),
-            },
+            long_context: None,
             selected_acceleration: None,
             acceleration_options: if info.capabilities.fast_mode
                 == ash_protocol::CapabilitySupport::Unsupported
@@ -156,7 +152,7 @@ pub struct ModelPreferencesUpdateParams {
     pub acceleration: ash_protocol::Patch<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub context_window: Option<u32>,
+    pub long_context: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

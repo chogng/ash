@@ -377,7 +377,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
 
             maximum_context_window: None,
             default_context_window: None,
-            context_window_options: Vec::new(),
+            long_context: None,
             selected_acceleration: None,
             acceleration_options: Vec::new(),
             auto_compact_token_limit: None,

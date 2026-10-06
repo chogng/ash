@@ -2500,7 +2500,8 @@ fn configured_model_context_enables_core_managed_compaction() {
     provider_config.model_context = BTreeMap::from([(
         model.clone(),
         ModelContextConfig {
-            context_window: 20_000,
+            context_window: Some(20_000),
+            long_context: None,
             auto_compact_token_limit: Some(15_000),
         },
     )]);
@@ -2569,7 +2570,7 @@ fn configured_model_context_enables_core_managed_compaction() {
         .find(|entry| entry.model == ModelRef::new(provider.clone(), model.clone()))
         .unwrap();
     assert_eq!(entry.context_window, Some(20_000));
-    assert_eq!(entry.maximum_context_window, Some(1_050_000));
+    assert_eq!(entry.maximum_context_window, Some(872_000));
     assert_eq!(entry.discovered, None);
     assert_eq!(entry.auto_compact_token_limit, Some(15_000));
     assert_eq!(entry.available_context_window, Some(15_000 - 2_048 - 1_024));
@@ -2596,7 +2597,7 @@ fn configured_model_context_enables_core_managed_compaction() {
         .model_context
         .get_mut(&model)
         .unwrap()
-        .context_window = 1_000;
+        .context_window = Some(1_000);
     service
         .config
         .apply(ConfigCommandRequest {
@@ -2638,7 +2639,7 @@ fn configured_model_context_enables_core_managed_compaction() {
         .unwrap();
     let selected = ModelRef::new(provider, model);
     let spec = model_provider_info::find_static_model(&selected).unwrap();
-    let Some(default_window) = spec.context_window_options.first().copied() else {
+    let ash_protocol::ContextWindow::Known(default_window) = spec.context_window else {
         panic!("the selected model declares its default budget");
     };
     let compact = (u64::from(default_window) * 9 / 10) as u32;
@@ -2657,7 +2658,7 @@ fn configured_model_context_enables_core_managed_compaction() {
     let entry = listed.iter().find(|entry| entry.model == selected).unwrap();
     assert_eq!(entry.context_window, Some(default_window));
     assert_eq!(entry.default_context_window, Some(default_window));
-    assert_eq!(entry.context_window_options, spec.context_window_options);
+    assert_eq!(entry.long_context, Some(false));
     assert_eq!(
         frozen
             .context_budget(ModelSelection::ConfiguredDefault)
@@ -2807,7 +2808,8 @@ fn missing_context_blocks_execution_until_the_exact_model_is_configured() {
     connection.model_context.insert(
         ModelId::new("unknown-model").unwrap(),
         ModelContextConfig {
-            context_window: 32_000,
+            context_window: Some(32_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
@@ -3576,7 +3578,16 @@ fn built_in_catalog_excludes_configured_custom_models() {
         })
         .unwrap();
     assert_eq!(openai.context_window, Some(272_000));
-    assert_eq!(openai.maximum_context_window, Some(1_050_000));
+    assert_eq!(openai.maximum_context_window, Some(872_000));
+    let legacy = models
+        .iter()
+        .find(|entry| {
+            entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.5"
+        })
+        .unwrap();
+    assert_eq!(legacy.context_window, Some(272_000));
+    assert_eq!(legacy.maximum_context_window, Some(272_000));
+    assert_eq!(legacy.long_context, None);
     assert_eq!(
         openai.capabilities.image_detail_original,
         ash_protocol::CapabilitySupport::Supported
@@ -3628,14 +3639,16 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
     connection.model_context.insert(
         ModelId::new("private-first").unwrap(),
         model_provider_info::ModelContextConfig {
-            context_window: 272_000,
+            context_window: Some(272_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
     connection.model_context.insert(
         ModelId::new("private-second").unwrap(),
         model_provider_info::ModelContextConfig {
-            context_window: 1_000_000,
+            context_window: Some(1_000_000),
+            long_context: None,
             auto_compact_token_limit: None,
         },
     );
@@ -4508,7 +4521,8 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
                         config.model_context.insert(
                             model.model.clone(),
                             ModelContextConfig {
-                                context_window: 1_000_000,
+                                context_window: Some(1_000_000),
+                                long_context: None,
                                 auto_compact_token_limit: None,
                             },
                         );
@@ -4595,7 +4609,8 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
     provider.model_context.insert(
         model.model.clone(),
         ModelContextConfig {
-            context_window: 272_000,
+            context_window: Some(272_000),
+            long_context: None,
             auto_compact_token_limit: Some(200_000),
         },
     );
@@ -4630,22 +4645,29 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
             gate: Arc::new(ResponseGate::default()),
         }),
     };
-    let command = |id: &str, revision, window| ModelPreferencesCommand {
+    let command = |id: &str, revision, enabled| ModelPreferencesCommand {
         command_id: CommandId::new(id).unwrap(),
         expected_revision: revision,
         model: model.clone(),
         update: ModelPreferencesUpdate {
-            acceleration: ash_protocol::Patch::Value("priority".into()),
-            context_window: Some(window),
+            acceleration: ash_protocol::Patch::Value(
+                if id == "invalid-option" {
+                    "unavailable"
+                } else {
+                    "priority"
+                }
+                .into(),
+            ),
+            long_context: Some(enabled),
         },
     };
     assert!(matches!(
-        service.set_preferences(command("invalid-budget", saved.revision, 500_000)),
+        service.set_preferences(command("invalid-option", saved.revision, false)),
         Err(ModelPreferencesError::InvalidPreferences(_))
     ));
     assert_eq!(config.read_snapshot().unwrap().revision, saved.revision);
     let updated = service
-        .set_preferences(command("expand", saved.revision, 1_000_000))
+        .set_preferences(command("expand", saved.revision, true))
         .unwrap();
     let read = config.read_snapshot().unwrap();
     let mut expected = original;
@@ -4656,7 +4678,12 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
         .model_context
         .get_mut(&model.model)
         .unwrap()
-        .context_window = 1_000_000;
+        .context_window = None;
+    expected
+        .model_context
+        .get_mut(&model.model)
+        .unwrap()
+        .long_context = Some(true);
     assert_eq!(read.values.connections[&expected.connection], expected);
     let catalog = service.list().unwrap();
     let entry = catalog.iter().find(|entry| entry.model == model).unwrap();
@@ -4681,16 +4708,27 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
     );
     assert_eq!(options[0].name, "Fast");
     assert!(!options[0].description.is_empty());
-    assert_eq!(entry.context_window, Some(1_000_000));
+    assert_eq!(entry.context_window, Some(872_000));
     assert_eq!(entry.default_context_window, Some(272_000));
-    assert_eq!(entry.context_window_options, vec![272_000, 1_000_000]);
+    assert_eq!(entry.long_context, Some(true));
+    assert_eq!(
+        service
+            .context_budget(ModelSelection::Session(&model))
+            .unwrap(),
+        ContextBudget::core_managed(
+            ContextTokenCount::new(872_000),
+            ContextTokenCount::new(24_000),
+            ContextTokenCount::new(1_024),
+            ContextCompactionLimit::Tokens(ContextTokenCount::new(200_000)),
+        )
+    );
     let grok = catalog
         .iter()
         .find(|entry| entry.model.model.as_str() == "grok-4.7")
         .unwrap();
-    assert_eq!(grok.context_window_options, vec![500_000]);
+    assert_eq!(grok.long_context, None);
     assert!(matches!(
-        service.set_preferences(command("stale", saved.revision, 272_000)),
+        service.set_preferences(command("stale", saved.revision, false)),
         Err(ModelPreferencesError::Configuration(
             ash_config::ConfigCommandError::RevisionConflict { .. }
         ))
@@ -4718,7 +4756,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
     assert!(entry.acceleration_options.is_empty());
     assert_eq!(entry.selected_acceleration.as_deref(), Some("priority"));
     assert!(matches!(
-        service.set_preferences(command("denied-selection", restricted.revision, 272_000)),
+        service.set_preferences(command("denied-selection", restricted.revision, true)),
         Err(ModelPreferencesError::InvalidPreferences(_))
     ));
     assert_eq!(
@@ -4732,7 +4770,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
             model: model.clone(),
             update: ModelPreferencesUpdate {
                 acceleration: ash_protocol::Patch::Null,
-                context_window: None,
+                long_context: None,
             },
         })
         .unwrap();
@@ -4832,7 +4870,7 @@ fn model_preferences_follow_chatgpt_ultrafast_permission_and_allow_clearing_revo
         model: model.clone(),
         update: ModelPreferencesUpdate {
             acceleration,
-            context_window: None,
+            long_context: None,
         },
     };
     assert!(

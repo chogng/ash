@@ -4500,6 +4500,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Cette option d’accélération est indisponible pour cette connexion",
     ),
     translation("Fast on", "高速 オン", "加速 开", "Rapide oui"),
+    translation(
+        "Long context on",
+        "長いコンテキスト オン",
+        "长上下文 开",
+        "Contexte long oui",
+    ),
+    translation(
+        "Long context off",
+        "長いコンテキスト オフ",
+        "长上下文 关",
+        "Contexte long non",
+    ),
     translation("Fast off", "高速 オフ", "加速 关", "Rapide non"),
     translation("context", "コンテキスト", "上下文", "contexte"),
     translation(

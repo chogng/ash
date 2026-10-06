@@ -1,6 +1,6 @@
 {
-  "capabilityVersion": 20,
+  "capabilityVersion": 21,
   "major": 7,
-  "revision": 17,
-  "schemaHash": "sha256:7a647f58fc26e147f790dbfc7c1ebe3f54ef229da2a49b4641d002b3887e7328"
+  "revision": 18,
+  "schemaHash": "sha256:416e36a05e0c78f4bf3b9881b3d36b82b5a7b414d1dff8b1767bdfbae340d6d5"
 }

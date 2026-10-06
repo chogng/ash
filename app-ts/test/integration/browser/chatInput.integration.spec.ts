@@ -134,11 +134,11 @@ for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'co
 		await trigger.press('ArrowDown');
 		await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(chinese ? ['推理强度', '上下文大小'] : ['Thinking Level', 'Context Size']);
 		await expect(menu.getByRole('separator')).toHaveCount(1);
-		const contextDefault = menu.locator('[data-action-id="ash.chat.input.context.272000"] button');
-		const expanded = menu.locator('[data-action-id="ash.chat.input.context.1000000"] button');
+		const contextDefault = menu.locator('[data-action-id="ash.chat.input.context.false"] button');
+		const expanded = menu.locator('[data-action-id="ash.chat.input.context.true"] button');
 		await expect(contextDefault).toHaveAttribute('aria-checked', 'true');
-		await expect(menu.locator('.ash-menu-badge')).toHaveCount(0);
-		await expect(contextDefault).toHaveAttribute('aria-description', chinese ? '272K 上下文' : '272K context');
+		await expect(contextDefault).toHaveText(chinese ? '关闭长上下文' : 'Long context off');
+		await expect(expanded).toHaveText(chinese ? '开启长上下文' : 'Long context on');
 		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
 		await page.keyboard.press('ArrowDown');
 		await expect(high).toBeFocused();

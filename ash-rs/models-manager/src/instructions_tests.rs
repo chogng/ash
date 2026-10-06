@@ -117,7 +117,7 @@ fn built_in_guidance_covers_the_static_catalog_with_valid_exact_registrations() 
 }
 
 #[test]
-fn exact_json_entry_supplies_the_complete_versioned_base_prompt() {
+fn exact_json_entry_supplies_the_complete_base_prompt_with_automatic_revision() {
     let catalog = ModelInstructionCatalog::built_in();
     for spec in model_provider_info::STATIC_MODEL_CATALOG.iter() {
         let ModelInstructionSelection::Specialized { instructions, .. } =
@@ -129,9 +129,40 @@ fn exact_json_entry_supplies_the_complete_versioned_base_prompt() {
             instructions.id,
             format!("model/{}/{}", spec.provider_id, spec.model_id)
         );
-        assert_eq!(instructions.revision, spec.instructions.revision);
-        assert_eq!(instructions.body, spec.instructions.body);
+        assert_eq!(
+            instructions.revision,
+            ContentDigest::sha256(spec.model_messages.system_instructions.as_bytes()).as_str()
+        );
+        assert_eq!(instructions.body, spec.model_messages.system_instructions);
     }
+}
+
+#[test]
+fn editing_catalog_text_changes_new_turn_revision_without_rewriting_frozen_history() {
+    let target = model("openai", "gpt-6-astra");
+    let mut spec = model_provider_info::find_static_model(&target)
+        .unwrap()
+        .clone();
+    let original = ModelInstructionCatalog::built_in()
+        .for_turn(ash_prompts::AGENT_INSTRUCTIONS.freeze(), Some(&target));
+    let saved = serde_json::to_string(&original).unwrap();
+
+    spec.model_messages.system_instructions = "Updated instructions for this exact model.\n".into();
+    let updated =
+        ModelInstructionCatalog::new([ModelInstructionProfile::from_spec(&spec)]).unwrap();
+    let restored: TurnInstructions = serde_json::from_str(&saved).unwrap();
+    restored.validate().unwrap();
+    assert_eq!(restored, original);
+
+    let next = updated.for_turn(restored.clone(), Some(&target));
+    assert_eq!(next.id(), original.id());
+    assert_eq!(next.body(), spec.model_messages.system_instructions);
+    assert_ne!(next.revision(), restored.revision());
+    assert_eq!(
+        next.revision(),
+        ContentDigest::sha256(next.body().as_bytes()).as_str()
+    );
+    assert_eq!(serde_json::to_string(&restored).unwrap(), saved);
 }
 
 #[test]
@@ -210,8 +241,8 @@ fn turn_freezes_the_selected_base_and_preserves_tasks_modes_and_custom_bases() {
         frozen.body(),
         model_provider_info::find_static_model(&first)
             .unwrap()
-            .instructions
-            .body
+            .model_messages
+            .system_instructions
     );
     assert_eq!(frozen.mode_instructions(), default.mode_instructions());
     assert_eq!(
@@ -224,8 +255,8 @@ fn turn_freezes_the_selected_base_and_preserves_tasks_modes_and_custom_bases() {
         switched.body(),
         model_provider_info::find_static_model(&second)
             .unwrap()
-            .instructions
-            .body
+            .model_messages
+            .system_instructions
     );
     let generic = catalog.for_turn(switched, Some(&unknown));
     assert_eq!(generic.body(), ash_prompts::AGENT_INSTRUCTIONS.body());

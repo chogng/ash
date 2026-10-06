@@ -16,6 +16,22 @@ pub struct ModelInstructionProfile {
     pub instructions: InstructionText,
 }
 
+impl ModelInstructionProfile {
+    fn from_spec(spec: &model_provider_info::StaticModelSpec) -> Self {
+        let body = &spec.model_messages.system_instructions;
+        Self {
+            model: spec.model_ref(),
+            instructions: InstructionText {
+                owner: "models-manager".into(),
+                id: format!("model/{}/{}", spec.provider_id, spec.model_id),
+                // Frozen history retains the exact body; its identity changes without an authored version.
+                revision: ContentDigest::sha256(body.as_bytes()).to_string(),
+                body: body.clone(),
+            },
+        }
+    }
+}
+
 /// Immutable, indexed model guidance. It does not load files, select models, or grant tools.
 #[derive(Clone, Debug, Default)]
 pub struct ModelInstructionCatalog {
@@ -29,15 +45,7 @@ impl ModelInstructionCatalog {
         static CATALOG: LazyLock<Arc<ModelInstructionCatalog>> = LazyLock::new(|| {
             let profiles = model_provider_info::STATIC_MODEL_CATALOG
                 .iter()
-                .map(|spec| ModelInstructionProfile {
-                    model: spec.model_ref(),
-                    instructions: InstructionText {
-                        owner: "models-manager".into(),
-                        id: format!("model/{}/{}", spec.provider_id, spec.model_id),
-                        revision: spec.instructions.revision.clone(),
-                        body: spec.instructions.body.clone(),
-                    },
-                });
+                .map(ModelInstructionProfile::from_spec);
             Arc::new(
                 ModelInstructionCatalog::new(profiles)
                     .expect("built-in model instruction profiles are valid"),

@@ -2611,7 +2611,7 @@ fn configured_model_summary() -> ModelSummary {
 
                 maximum_context_window: Some(200_000),
                 default_context_window: Some(200_000),
-                context_window_options: vec![200_000],
+                long_context: None,
                 selected_acceleration: None,
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
@@ -2745,7 +2745,7 @@ fn custom_model_choices(
 
                 maximum_context_window: Some(272_000),
                 default_context_window: Some(272_000),
-                context_window_options: vec![272_000],
+                long_context: None,
                 selected_acceleration: None,
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,

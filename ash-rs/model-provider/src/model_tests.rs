@@ -2890,6 +2890,14 @@ impl OperationClient for SpeedTransport {
                 serde_json::to_vec(&*self.bundle.lock().unwrap()).unwrap(),
             ));
         }
+        if request.url().contains("/codex/models?") {
+            return Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                serde_json::to_vec(&json!({"models":[{"slug":"gpt-6-astra","visibility":"list"}]}))
+                    .unwrap(),
+            ));
+        }
         self.models.execute(request)
     }
     fn execute_streaming(
@@ -3082,4 +3090,51 @@ fn astra_ultrafast_revocation_rejects_an_already_bound_runtime_and_api_keys_use_
         api_transport.request.lock().unwrap().as_ref().unwrap().2["service_tier"],
         "ultrafast"
     );
+}
+
+#[test]
+fn astra_ultrafast_catalog_refresh_observes_revocation_and_isolates_plan_scopes() {
+    let fixture = chatgpt_speed_fixture("promax", true);
+    let astra = model_ref("openai", "gpt-6-astra");
+    let config = provider_config("chatgpt-subscription");
+    let binding = fixture.runtime.catalog_binding(&config).unwrap().unwrap();
+    let manager = fixture.runtime.models_manager_for_config(&config).unwrap();
+    let executor = tokio::runtime::Runtime::new().unwrap();
+    *fixture.transport.bundle.lock().unwrap() = json!({"requirements_toml":{"enterprise_managed":[{
+        "id":"revoked","name":"revoked","contents":"[features]\nultrafast_mode=false"
+    }]}});
+    executor
+        .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+        .unwrap();
+    assert_eq!(fixture.auth.speed_access().unwrap().ultrafast, Some(false));
+    let info = manager
+        .list(
+            &[binding.scope().clone()],
+            &ash_models_manager::CatalogQuery::all(),
+        )
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.model() == &astra)
+        .unwrap()
+        .info()
+        .clone();
+    assert_eq!(
+        fixture
+            .runtime
+            .acceleration_options(&config, &info)
+            .unwrap()
+            .iter()
+            .map(|option| option.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["priority"]
+    );
+    speed_credentials(fixture.home.path(), "pro");
+    let changed = fixture.runtime.catalog_binding(&config).unwrap().unwrap();
+    assert_ne!(binding.scope(), changed.scope());
+    assert!(
+        executor
+            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .is_err()
+    );
+    assert_eq!(fixture.auth.speed_access().unwrap().ultrafast, Some(false));
 }

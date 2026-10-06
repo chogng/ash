@@ -134,7 +134,7 @@ fn gpt_6_1_sol_is_selectable_and_resolves_its_declared_metadata() {
         .unwrap();
     let info = resolved.entry().info();
     assert_eq!(info.display_name, "GPT-6.1 Sol");
-    assert_eq!(info.context_window, ContextWindow::Known(1_050_000));
+    assert_eq!(info.context_window, ContextWindow::Known(872_000));
     assert_eq!(info.capabilities.tools, CapabilitySupport::Supported);
     assert_eq!(info.default_reasoning_effort, Some(ReasoningEffort::Medium));
     assert!(
@@ -211,7 +211,8 @@ async fn effective_model_info_uses_the_live_window_without_rewriting_the_scope()
     config.model_context.insert(
         model_id("alpha"),
         model_provider_info::ModelContextConfig {
-            context_window: 100_000,
+            context_window: Some(100_000),
+            long_context: None,
             auto_compact_token_limit: Some(90_000),
         },
     );

@@ -48,27 +48,26 @@ impl ResolvedModel {
 }
 
 impl ModelCatalogEntry {
-    /// Selectable declared budgets, constrained by the current capacity observation.
-    /// A custom connection specifies its own fixed budget; unknown capacity has no choices.
-    pub fn context_window_options(&self, config: &ModelProviderConfig) -> Vec<u32> {
-        let ContextWindow::Known(default) = self.default_context_window(config) else {
-            return Vec::new();
-        };
-        let mut options = vec![default];
-        if config.custom.is_none() {
-            options.extend(
-                self.declared_context_window_options
-                    .iter()
-                    .copied()
-                    .filter(|tokens| match self.info().context_window {
-                        ContextWindow::Known(limit) => *tokens <= limit,
-                        ContextWindow::Unknown => true,
-                    }),
-            );
+    /// None means this connection has no larger context budget; false is the product default.
+    pub fn long_context(&self, config: &ModelProviderConfig) -> Option<bool> {
+        if config.custom.is_some() {
+            return None;
         }
-        options.sort_unstable();
-        options.dedup();
-        options
+        match (
+            self.default_context_window(config),
+            self.info().context_window,
+        ) {
+            (ContextWindow::Known(default), ContextWindow::Known(maximum)) if maximum > default => {
+                Some(
+                    config
+                        .model_context
+                        .get(&self.info().id)
+                        .and_then(|context| context.long_context)
+                        .unwrap_or(false),
+                )
+            }
+            _ => None,
+        }
     }
 
     /// Validates the complete update before changing the selected model's preferences.
@@ -83,7 +82,7 @@ impl ModelCatalogEntry {
             provider: config.provider.clone(),
             message: message.to_owned(),
         };
-        if update.acceleration.is_missing() && update.context_window.is_none() {
+        if update.acceleration.is_missing() && update.long_context.is_none() {
             return Err(invalid("model preference update must contain a change"));
         }
         if let ash_protocol::Patch::Value(option) = &update.acceleration
@@ -96,10 +95,10 @@ impl ModelCatalogEntry {
                 "acceleration option is unavailable for this model connection",
             ));
         }
-        if let Some(window) = update.context_window
-            && !self.context_window_options(config).contains(&window)
-        {
-            return Err(invalid("context window is not a selectable budget"));
+        if update.long_context.is_some() && self.long_context(config).is_none() {
+            return Err(invalid(
+                "long context is unavailable for this model connection",
+            ));
         }
         match &update.acceleration {
             ash_protocol::Patch::Missing => {}
@@ -112,38 +111,39 @@ impl ModelCatalogEntry {
                     .insert(info.id.clone(), option.clone());
             }
         }
-        if let Some(window) = update.context_window {
-            config
+        if let Some(enabled) = update.long_context {
+            let context = config
                 .model_context
                 .entry(info.id)
                 .or_insert(ModelContextConfig {
-                    context_window: window,
+                    context_window: None,
+                    long_context: None,
                     auto_compact_token_limit: None,
-                })
-                .context_window = window;
+                });
+            context.context_window = None;
+            context.long_context = Some(enabled);
         }
         Ok(())
     }
 
-    /// Context budget before a per-model preference, capped by known catalog capacity.
+    /// Product default constrained by the current connection's observed capacity.
     pub fn default_context_window(&self, config: &ModelProviderConfig) -> ContextWindow {
-        let window = if let Some(custom) = &config.custom {
-            Some(custom.context_window)
-        } else {
-            self.declared_context_window_options.first().copied()
-        };
-        match (self.info().context_window, window) {
-            (ContextWindow::Known(limit), Some(window)) => ContextWindow::Known(limit.min(window)),
+        let default = config
+            .custom
+            .as_ref()
+            .map(|custom| custom.context_window)
+            .or_else(|| match self.declared_default_context_window {
+                ContextWindow::Known(window) => Some(window),
+                ContextWindow::Unknown => None,
+            });
+        match (self.info().context_window, default) {
+            (ContextWindow::Known(limit), Some(window)) => ContextWindow::Known(window.min(limit)),
             (ContextWindow::Unknown, Some(window)) => ContextWindow::Known(window),
             (catalog, _) => catalog,
         }
     }
 
-    /// Builds effective metadata for this catalog entry using provider-scoped configuration.
-    ///
-    /// The catalog entry, provenance, generation, and warnings remain the original evidence.
-    /// Configuration only changes the returned copy. A known catalog window caps the configured
-    /// window; unknown metadata remains unknown unless the configuration supplies it explicitly.
+    /// Effective execution metadata; observations and saved compaction thresholds stay intact.
     pub fn model_info(
         &self,
         config: &ModelProviderConfig,
@@ -161,24 +161,29 @@ impl ModelCatalogEntry {
         {
             info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
         }
-        let context = config.model_context.get(&info.id).copied().or_else(|| {
-            config.custom.as_ref().map(|custom| ModelContextConfig {
-                context_window: custom.context_window,
-                auto_compact_token_limit: None,
-            })
-        });
+        let context = config.model_context.get(&info.id);
+        info.context_window = match context.and_then(|context| context.long_context) {
+            // The selected budget follows capacity changes on this connection; no size is saved.
+            Some(true) => self.info().context_window,
+            Some(false) => self.default_context_window(config),
+            None => {
+                let manual = context
+                    .and_then(|context| context.context_window)
+                    .or_else(|| config.custom.as_ref().map(|custom| custom.context_window));
+                match (self.info().context_window, manual) {
+                    (ContextWindow::Known(limit), Some(window)) => {
+                        ContextWindow::Known(window.min(limit))
+                    }
+                    (ContextWindow::Unknown, Some(window)) => ContextWindow::Known(window),
+                    _ => self.default_context_window(config),
+                }
+            }
+        };
         if let Some(context) = context {
-            info.context_window = ContextWindow::Known(match info.context_window {
-                ContextWindow::Known(limit) => context.context_window.min(limit),
-                ContextWindow::Unknown => context.context_window,
-            });
             info.auto_compact_token_limit = context.auto_compact_token_limit;
-        } else {
-            info.context_window = self.default_context_window(config);
         }
         if let ContextWindow::Known(window) = info.context_window {
-            // Ash's automatic compaction recommendation reserves ten percent of the context.
-            // Widen before multiplying so every u32 context window keeps the same ratio.
+            // Reserve ten percent; widening keeps the same ratio for every u32 window.
             let limit = (u64::from(window) * 9 / 10) as u32;
             info.auto_compact_token_limit = Some(
                 info.auto_compact_token_limit
@@ -192,7 +197,7 @@ impl ModelCatalogEntry {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModelPreferencesUpdate {
     pub acceleration: ash_protocol::Patch<String>,
-    pub context_window: Option<u32>,
+    pub long_context: Option<bool>,
 }
 
 pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCatalogEntry {

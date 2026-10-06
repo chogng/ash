@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 9;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 10;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -78,6 +78,7 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     let migrate_glm = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 8);
     let migrate_acceleration =
         !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 9);
+    let migrate_context = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 10);
     let obsolete_selection = root.remove("activeConnections").is_some();
     let rewrite_required = (match version {
         None => {
@@ -131,6 +132,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     }
     if migrate_acceleration {
         migrate_fast_models(root)?;
+    }
+    if migrate_context {
+        migrate_long_context(root)?;
     }
     let mut document = value
         .try_into::<UserConfigDocument>()
@@ -189,6 +193,73 @@ fn migrate_fast_models(root: &mut toml::map::Map<String, toml::Value>) -> Result
                 )));
             }
             target.insert(model, option);
+        }
+    }
+    Ok(())
+}
+
+/// Only the former picker presets become booleans. Manual budgets and custom connections
+/// retain their token counts, and compaction settings remain in the same model record.
+fn migrate_long_context(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
+    let Some(connections) = root
+        .get_mut("connections")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return Ok(());
+    };
+    for (connection, value) in connections {
+        let Some(config) = value.as_table_mut() else {
+            continue;
+        };
+        if config.contains_key("custom") {
+            continue;
+        }
+        let Some(provider) = config.get("provider").and_then(toml::Value::as_str) else {
+            continue;
+        };
+        let provider = ProviderId::new(provider).map_err(|error| ConfigError(error.to_string()))?;
+        let Some(contexts) = config
+            .get_mut("modelContext")
+            .and_then(toml::Value::as_table_mut)
+        else {
+            continue;
+        };
+        for (model, value) in contexts {
+            let id = ash_protocol::ModelId::new(model)
+                .map_err(|error| ConfigError(error.to_string()))?;
+            let Some(spec) =
+                model_provider_info::find_static_model(&ModelRef::new(provider.clone(), id))
+            else {
+                continue;
+            };
+            let (
+                ash_protocol::ContextWindow::Known(default),
+                ash_protocol::ContextWindow::Known(maximum),
+            ) = (spec.context_window, spec.max_context_window)
+            else {
+                continue;
+            };
+            if maximum <= default {
+                continue;
+            }
+            let Some(context) = value.as_table_mut() else {
+                continue;
+            };
+            let enabled = match context
+                .get("contextWindow")
+                .and_then(toml::Value::as_integer)
+            {
+                Some(window) if window == i64::from(default) => false,
+                Some(1_000_000) => true,
+                _ => continue,
+            };
+            if context.contains_key("longContext") {
+                return Err(ConfigError(format!(
+                    "conflicting context preferences for {connection}/{model}"
+                )));
+            }
+            context.remove("contextWindow");
+            context.insert("longContext".into(), toml::Value::Boolean(enabled));
         }
     }
     Ok(())

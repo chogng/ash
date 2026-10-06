@@ -18,7 +18,11 @@ use std::collections::BTreeSet;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelContextConfig {
-    pub context_window: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
+    /// Select the model default (false) or its current connection maximum (true).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub long_context: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_compact_token_limit: Option<u32>,
 }
@@ -119,7 +123,14 @@ impl ModelProviderConfig {
             ));
         }
         for (model, context) in &self.model_context {
-            if context.context_window == 0 || context.auto_compact_token_limit == Some(0) {
+            if context.context_window == Some(0)
+                || context.auto_compact_token_limit == Some(0)
+                || (self.custom.is_some() && context.long_context.is_some())
+                || (context.context_window.is_some() && context.long_context.is_some())
+                || (context.context_window.is_none()
+                    && context.long_context.is_none()
+                    && context.auto_compact_token_limit.is_none())
+            {
                 return Err(ProviderConfigError::InvalidModelContext {
                     provider: self.provider.clone(),
                     model: model.clone(),

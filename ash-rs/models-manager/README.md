@@ -161,7 +161,7 @@ App Server DTO/schema fixture。
 ## 有效模型信息与职责
 
 - `entry.info()` 返回原始目录信息；`entry.model_info(&provider_config)` 返回配置生效后的独立副本。
-- 先校验 provider 身份和配置。按准确 ModelId 读取 `model_context`，未声明时才使用自定义连接的默认窗口。内置模型没有用户覆盖时，使用 `models.json` 的 `context_window_options` 第一项作为默认预算；未声明档位时，目录解析统一生成等于容量的唯一档位。目录证据仍保留 `context_window` 的最大容量，实际预算受当前容量限制；发现结果不根据型号前缀生成预算档位。
+- 先校验 provider 身份和配置。按准确 ModelId 读取 `model_context`；`long_context=false` 使用 `models.json` 的 `context_window`，`true` 使用当前连接的最大容量。没有偏好时默认关闭；手工 `context_window` 数值与布尔偏好互斥，自定义连接继续使用其配置数值。目录证据保留最大容量，默认预算独立保存并受当前容量限制；发现结果不根据型号前缀生成长上下文能力。
 - 配置窗口不能超过目录已知窗口。未配置压缩阈值时建议使用有效窗口的 90%；显式阈值同样受此上限限制。
 - 未知窗口保持未知，除非配置明确提供。配置不推断工具能力、不改变 availability，也不改写 snapshot、provenance 或 generation。
 - App Server 的模型列表与调用预算读取同一批静态规格和当前连接的已缓存发现结果，统一计算输出预留、安全余量及压缩阈值。每轮开始时冻结目录证据和配置；刷新只影响后续执行。未知容量可以展示，但必须声明窗口后才能请求模型；真正执行分配和压缩由 Core 负责。
@@ -182,7 +182,7 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 ## Agent 指令边界
 
 - 模型规格和完整基础提示词统一来自 [`models.json`](../model-provider-info/models.json)，本 crate 不维护第二份模型 ID 清单。
-- `ModelInstructionCatalog::built_in()` 从 JSON 条目建立共享目录；每个模型的正文、revision 和资产身份独立。`resolve` 按准确 provider/model 匹配，不按型号前缀、显示名或 API 地址推断。
+- `ModelInstructionCatalog::built_in()` 从 JSON 条目建立共享目录；每个模型的正文与资产身份独立，冻结资产 revision 由正文的 SHA-256 摘要生成。`resolve` 按准确 provider/model 匹配，不按型号前缀、显示名或 API 地址推断。
 - `for_turn` 在接受新 Turn 前选好并冻结基础提示词。命中模型条目时替换默认 Agent 正文；未登记时使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。宿主显式指定的基础正文优先；产品任务保留自己的正文，只替换共享的 Agent 基础正文。
 - 权限、Role、协作模式、项目指令、历史和工具定义仍由对应运行时组合。模型提示词不授予工具或权限。
 - App Server 和委托工具默认使用内置目录。嵌入方可在环境创建前通过 `with_model_instructions` 整体替换它，传入空目录建立 Generic 对照。
@@ -190,7 +190,7 @@ Codex 针对未知模型写入的固定规格不适用于这里的多供应商�
 
 ### 初版模板与修改入口
 
-1. 调整某个模型：编辑 `models.json` 中该模型的 `instructions.body`，提升同一条目的 `instructions.revision`。它是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。
+1. 调整某个模型：编辑 `models.json` 中该模型的 `model_messages.system_instructions` 字符串，正文修改会自动改变冻结资产的 revision，无需填写版本号。它是完整基础正文，不会自动拼入 `base_prompt.md`；公共要求的修改要同步相关模型条目。
 2. 新增沿用现有协议的模型：只在 JSON 的 `models` 数组增加规格与完整提示词；无需增加模板枚举、Markdown 或指令选择分支。新增供应商协议仍需实现对应接入。
 3. 修改未登记模型的默认行为：编辑 `base_prompt.md` 并提升 `prompts/src/agent.rs` 的资产 revision，不会影响已有模型条目的正文。
 4. 编译并重启宿主。新建 Agent 按新目录选择基础提示词；已有 Agent 在模型未变时沿用保存的正文，已接受的 Turn 保留本轮快照。验证新正文时创建新的相应 Agent。

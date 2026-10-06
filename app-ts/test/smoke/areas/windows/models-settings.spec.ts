@@ -294,8 +294,10 @@ test('Model acceleration copy follows the catalog and its preference survives a 
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
 		await search.fill(modelName);
-		await search.press('ArrowDown');
-		await search.press('ArrowRight');
+		await picker.getByText(modelName, { exact: true }).hover();
+		const card = page.locator('.ash-chat-model-card');
+		await expect(card).toHaveAttribute('aria-label', modelName);
+		await card.getByRole('switch').first().focus();
 	};
 	await openModelCard(false);
 	let card = workbench.page.locator('.ash-chat-model-card');
@@ -304,6 +306,14 @@ test('Model acceleration copy follows the catalog and its preference survives a 
 	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Faster responses, increased usage');
 	await expect(fast).toHaveAttribute('aria-description', /Faster responses, increased usage/);
 	await expect(fast).toBeFocused();
+	const longContext = card.getByRole('switch', { name: 'Long context', exact: true });
+	await expect(longContext).not.toBeChecked();
+	await longContext.focus();
+	await longContext.press('Space');
+	await expect(longContext).toBeChecked();
+	await expect(longContext).not.toHaveAttribute('aria-busy', 'true');
+	await expect(longContext).toBeFocused();
+	await fast.focus();
 	await fast.press('Space');
 	await expect(fast).toBeChecked();
 	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
@@ -330,6 +340,13 @@ test('Model acceleration copy follows the catalog and its preference survives a 
 	await openModelCard(true);
 	card = workbench.page.locator('.ash-chat-model-card');
 	fast = card.getByRole('switch', { name: '快速', exact: true });
+	const restoredContext = card.getByRole('switch', { name: '长上下文', exact: true });
+	await expect(restoredContext).toBeChecked();
+	await restoredContext.focus();
+	await restoredContext.press('Space');
+	await expect(restoredContext).not.toBeChecked();
+	await expect(restoredContext).not.toHaveAttribute('aria-busy', 'true');
+	await fast.focus();
 	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('响应更快，用量增加');
 	await expect(fast).toHaveAttribute('aria-description', /响应更快，用量增加/);
 	await expect(fast).toBeChecked();

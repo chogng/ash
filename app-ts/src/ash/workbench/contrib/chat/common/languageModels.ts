@@ -172,7 +172,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		maximumContextWindow: entry.maximum_context_window,
 		accelerationOptions: Object.freeze(entry.acceleration_options.map(option => Object.freeze({ ...option }))),
 		selectedAcceleration: entry.selected_acceleration,
-		contextWindowOptions: Object.freeze([...entry.context_window_options]),
+		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
 		supportedReasoningEfforts: Object.freeze(entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option }))),
@@ -194,7 +194,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.selectedAcceleration === candidate.selectedAcceleration
 			&& entry.accelerationOptions?.length === candidate.accelerationOptions?.length
 			&& (entry.accelerationOptions?.every((option, index) => option.id === candidate.accelerationOptions?.[index]?.id && option.name === candidate.accelerationOptions?.[index]?.name && option.description === candidate.accelerationOptions?.[index]?.description) ?? true)
-			&& entry.contextWindowOptions.join('\0') === candidate.contextWindowOptions.join('\0')
+			&& entry.longContext === candidate.longContext
 			&& entry.defaultReasoningEffort === candidate.defaultReasoningEffort
 			&& entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length
 			&& (entry.supportedReasoningEfforts?.every((option, index) => option.effort === candidate.supportedReasoningEfforts?.[index]?.effort && option.description === candidate.supportedReasoningEfforts?.[index]?.description) ?? true);

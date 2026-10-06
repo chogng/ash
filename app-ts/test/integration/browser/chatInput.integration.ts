@@ -53,14 +53,14 @@ const modelOptions = new URLSearchParams(location.search).get('modelOptions');
 const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
 let models: readonly ModelCatalogEntry[] = [{
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
-	contextWindowOptions: [272_000, 1_000_000], contextWindow: 272_000, defaultContextWindow: 272_000,
+	longContext: false, contextWindow: 272_000, defaultContextWindow: 272_000, maximumContextWindow: 872_000,
 	description: 'A model for everyday tasks',
 	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
 	defaultReasoningEffort: 'low',
 	selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Fast', description: 'Faster responses, increased usage' }, ...(multipleAcceleration ? [{ id: 'ultrafast', name: 'Ultra Fast', description: 'Priority processing, increased usage' }] : [])],
 }];
 if (modelOptions === 'effort' || modelOptions === 'none') {
-	models = models.map(entry => ({ ...entry, contextWindowOptions: [] }));
+	models = models.map(entry => ({ ...entry, longContext: null }));
 }
 if (modelOptions === 'context' || modelOptions === 'none') {
 	models = models.map(entry => ({ ...entry, supportedReasoningEfforts: [] }));
@@ -78,7 +78,8 @@ services.registerInstance(ILanguageModelsService, {
 		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? {
 			...entry,
 			selectedAcceleration: update.acceleration !== undefined ? update.acceleration : entry.selectedAcceleration,
-			contextWindow: update.contextWindow ?? entry.contextWindow,
+			longContext: update.longContext ?? entry.longContext,
+			contextWindow: update.longContext === undefined ? entry.contextWindow : update.longContext ? entry.maximumContextWindow : entry.defaultContextWindow,
 		} : entry);
 		renderModels();
 		modelChanged.fire();

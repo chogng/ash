@@ -2761,7 +2761,7 @@ fn runtime_catalog_entry(
         &context.info,
     );
     result.maximum_context_window = context.maximum_window;
-    result.context_window_options = entry.context_window_options(provider_config);
+    result.long_context = entry.long_context(provider_config);
     result.selected_acceleration = provider_config
         .model_acceleration
         .get(&entry.model().model)

@@ -34,7 +34,7 @@ export class ModelCard extends Disposable {
 		this.contextLabelDomNode = h(ownerDocument, 'span');
 		this.context = this._register(new Switch(this.contextRow, {
 			content: this.contextLabelDomNode,
-			ariaLabel: localize('chat.modelPicker.contextChoice', '{0} context', ''),
+			ariaLabel: localize('chat.modelPicker.longContext', 'Long context'),
 			contentPlacement: 'before-control',
 		}));
 		this.errorDomNode = h(ownerDocument, 'p');
@@ -42,7 +42,7 @@ export class ModelCard extends Disposable {
 		this.errorDomNode.setAttribute('role', 'status');
 		this.errorDomNode.hidden = true;
 		this.domNode.append(this.errorDomNode);
-		this._register(this.context.onDidChange(large => { void this.save({ contextWindow: this.options!.entry.contextWindowOptions[large ? 1 : 0] }); }));
+		this._register(this.context.onDidChange(longContext => { void this.save({ longContext }); }));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
@@ -62,10 +62,8 @@ export class ModelCard extends Disposable {
 
 	private render(): void {
 		const entry = this.options!.entry;
-		const canExpand = entry.contextWindowOptions.length === 2;
-		const expanded = entry.contextWindowOptions[1];
-		const label = canExpand ? (expanded >= 1_000_000 ? `${Number((expanded / 1_000_000).toFixed(2))}M` : `${Number((expanded / 1_000).toFixed(1))}k`) : '';
-		const capacity = entry.contextWindow;
+		const canExpand = entry.longContext !== null;
+		const label = localize('chat.modelPicker.longContext', 'Long context');
 		const options = entry.accelerationOptions ?? [];
 		for (const [id] of this.accelerationControls) {
 			if (!options.some(option => option.id === id)) { this.accelerationControls.deleteAndDispose(id); }
@@ -94,12 +92,13 @@ export class ModelCard extends Disposable {
 			}
 			this.resetAcceleration.value.enabled = !this.isSaving;
 		} else { this.resetAcceleration.clear(); }
-		this.context.checked = canExpand && capacity === expanded;
-		this.context.setAriaLabel(localize('chat.modelPicker.contextChoice', '{0} context', label));
+		this.context.checked = entry.longContext === true;
+		this.context.setAriaLabel(label);
+		this.context.input.setAttribute('aria-description', localize('chat.modelPicker.longContextHelp', 'Off by default. Turn on to use the maximum context capacity of the current model connection.'));
 		this.context.enabled = canExpand && !this.isSaving;
 		this.context.busy = this.isSaving;
-		this.contextLabelDomNode.textContent = label;
-		this.contextRow.hidden = !canExpand || !capacity;
+		this.contextLabelDomNode.textContent = canExpand ? label : '';
+		this.contextRow.hidden = !canExpand;
 	}
 
 	private async save(update: ModelPreferencesUpdate): Promise<void> {

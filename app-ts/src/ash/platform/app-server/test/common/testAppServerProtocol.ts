@@ -54,7 +54,7 @@ export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'displa
 		context_window: null,
 		default_context_window: null,
 		maximum_context_window: null,
-		context_window_options: [],
+		long_context: null,
 		selected_acceleration: null, acceleration_options: [],
 		auto_compact_token_limit: null,
 		capabilities: {

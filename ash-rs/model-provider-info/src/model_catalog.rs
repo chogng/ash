@@ -3,7 +3,6 @@ use ash_protocol::ContextWindow;
 use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
-use ash_protocol::TurnInstructions;
 use serde::Deserialize;
 use serde::de::Error;
 use std::collections::HashSet;
@@ -61,34 +60,18 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
             &spec.supported_reasoning_efforts,
         )
         .map_err(serde_json::Error::custom)?;
-        match spec.context_window {
-            ContextWindow::Known(capacity) => {
-                // Without separate presets the full declared capacity is the only budget.
-                // Normalize once so every consumer uses the same default and selectable values.
-                if spec.context_window_options.is_empty() {
-                    spec.context_window_options.push(capacity);
-                }
-                if spec.context_window_options.len() > 2
-                    || spec
-                        .context_window_options
-                        .iter()
-                        .any(|tokens| *tokens == 0 || *tokens > capacity)
-                    || spec
-                        .context_window_options
-                        .windows(2)
-                        .any(|pair| pair[0] >= pair[1])
-                {
-                    return Err(serde_json::Error::custom(
-                        "invalid model context window defaults or options",
-                    ));
-                }
-            }
-            ContextWindow::Unknown if spec.context_window_options.is_empty() => {}
-            ContextWindow::Unknown => {
+        match (spec.context_window, spec.max_context_window) {
+            (ContextWindow::Known(default), ContextWindow::Known(maximum)) if maximum < default => {
                 return Err(serde_json::Error::custom(
-                    "context options require declared capacity",
+                    "maximum context window is below the default",
                 ));
             }
+            (ContextWindow::Unknown, ContextWindow::Known(_)) => {
+                return Err(serde_json::Error::custom(
+                    "maximum context window requires a default",
+                ));
+            }
+            _ => {}
         }
         if spec.auto_compact_token_limit == Some(0) {
             return Err(serde_json::Error::custom(
@@ -105,18 +88,16 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
                 "default reasoning effort is not supported",
             ));
         }
-        if spec.instructions.body.len() > 64 * 1024 {
+        if spec.model_messages.system_instructions.trim().is_empty() {
+            return Err(serde_json::Error::custom(
+                "model system instructions are empty",
+            ));
+        }
+        if spec.model_messages.system_instructions.len() > 64 * 1024 {
             return Err(serde_json::Error::custom(
                 "model instructions exceed 64 KiB",
             ));
         }
-        TurnInstructions::new(
-            "models-manager",
-            format!("model/{}/{}", spec.provider_id, spec.model_id),
-            &spec.instructions.revision,
-            &spec.instructions.body,
-        )
-        .map_err(serde_json::Error::custom)?;
     }
     Ok(catalog.models)
 }

@@ -2137,7 +2137,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	const discovered: Awaited<ReturnType<IRendererHost['model']['listProviderModels']>>[number] = createTestModel({
 		model: { provider: 'custom-gateway', model: 'private-model' }, display_name: 'Private model', discovered: true,
 		description: 'Private model overview',
-		context_window: null, default_context_window: null, maximum_context_window: null, context_window_options: [], selected_acceleration: null, acceleration_options: [],
+		context_window: null, default_context_window: null, maximum_context_window: null, long_context: null, selected_acceleration: null, acceleration_options: [],
 		auto_compact_token_limit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallel_tool_calls: 'unknown', personality: 'unknown', image_detail_original: 'unknown', fast_mode: 'unknown' },
 		supported_reasoning_efforts: [{ effort: 'low', description: 'Quick tasks' }], default_reasoning_effort: null, default_personality: null,
 	});
@@ -2162,7 +2162,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
 		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
-		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [],
+		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
 		selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }],
 		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],
 	};

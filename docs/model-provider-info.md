@@ -95,7 +95,7 @@ ash-http-client      负责底层网络传输
 - `EndpointPolicy`；
 - `ModelCatalogPolicy`；
 - built-in Provider definitions；
-- `STATIC_MODEL_CATALOG`、`StaticModelSpec` 与 `ModelInstructions`；
+- `STATIC_MODEL_CATALOG`、`StaticModelSpec` 与 `ModelMessages`（`system_instructions` 正文）；
 - 静态校验、registry merge 和 schema tests。
 
 当前需要演进的地方：
