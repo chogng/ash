@@ -1,9 +1,9 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutlineOptions } from "../../../../editor/common/model/documentOutline.js";
 import type { DocumentPlugin } from "../../../../editor/common/model/documentPlugin.js";
 import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
-import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
 import type { EditorPaneOptions } from "./documentEditorPane.js";
 import { matchDocumentEditor, type EditorInputMatcher } from "./documentEditorInput.js";
@@ -42,12 +42,12 @@ export function registerEditorProfile(profile: EditorProfile): void {
 export function getEditorProfiles(): readonly EditorProfile[] { return profiles; }
 
 /** Selects the first profile that claims one Workbench input. */
-export function findEditorProfile(input: EditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
+export function findEditorProfile(input: IResourceEditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
 	return profiles.find(profile => matchDocumentEditor(input, profile.input) !== EditorPaneMatch.None);
 }
 
 /** Produces the editor-pane match used by a profile registry contribution. */
-export function matchEditorProfiles(input: EditorInput, profiles: readonly EditorProfile[]): EditorPaneMatch {
+export function matchEditorProfiles(input: IResourceEditorInput, profiles: readonly EditorProfile[]): EditorPaneMatch {
 	return findEditorProfile(input, profiles) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 

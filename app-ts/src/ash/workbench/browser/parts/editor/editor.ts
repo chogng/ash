@@ -1,6 +1,7 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
-import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
+import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import type { EditorGroupId, EditorInstanceId } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import type { IEditorPane } from './editorPane.js';
@@ -13,13 +14,13 @@ export const CONNECTED_EDITOR_TABS_SELECTOR = `.${CONNECTED_EDITOR_TABS_CLASS}`;
 export interface IEditorGroupView extends IEditorGroup {
 	readonly domNode: HTMLElement;
 	readonly activePane: IEditorPane | undefined;
-	saveEditorViewState(input: EditorInput): SerializedEditorViewState | undefined;
-	restoreEditorViewState(input: EditorInput, state: SerializedEditorViewState | undefined): boolean;
-	openEditor(input: EditorInput, options?: EditorOpenOptions, instanceId?: EditorInstanceId): Promise<IEditorPane>;
-	activateEditor(input: EditorInput): IEditorPane;
-	confirmCloseEditor(input: EditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean>;
-	replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void>;
-	moveEditorTo(input: EditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
+	saveEditorViewState(input: IResourceEditorInput): SerializedEditorViewState | undefined;
+	restoreEditorViewState(input: IResourceEditorInput, state: SerializedEditorViewState | undefined): boolean;
+	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, instanceId?: EditorInstanceId): Promise<IEditorPane>;
+	activateEditor(input: IResourceEditorInput): IEditorPane;
+	confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean>;
+	replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
+	moveEditorTo(input: IResourceEditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
 	setContent(content: Element): Promise<boolean>;
 	layout(dimension: IDimension): void;
 }

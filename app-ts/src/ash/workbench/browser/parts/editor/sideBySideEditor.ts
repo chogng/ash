@@ -2,9 +2,8 @@ import "./media/sidebysideeditor.css";
 import { h, type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { EditorInput } from "./editorInput.js";
 import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
-import { isResourceDiffEditorInput } from '../../../common/editor.js';
+import { isResourceDiffEditorInput, type IResourceEditorInput } from '../../../common/editor.js';
 
 /** Hosts two resource panes with independent lifetimes and a shared editor tab. */
 export class SideBySideEditor extends Disposable implements IEditorPane {
@@ -38,7 +37,7 @@ export class SideBySideEditor extends Disposable implements IEditorPane {
 		this._register(toDisposable(() => container.remove()));
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isResourceDiffEditorInput(input)) throw new TypeError("Side-by-side editor requires two inputs");
 		if (!this.container) throw new ReferenceError("Side-by-side editor has not been created");
 		throwIfCancelled(signal, "Side-by-side editor loading was cancelled");

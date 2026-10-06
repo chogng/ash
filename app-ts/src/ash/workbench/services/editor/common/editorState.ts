@@ -1,5 +1,5 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
-import type { EditorInput } from './editorService.js';
 
 export type EditorGroupId = string;
 export type EditorInstanceId = string;
@@ -9,7 +9,7 @@ export interface EditorIdentifier {
 	readonly groupId: EditorGroupId;
 	readonly instanceId: EditorInstanceId;
 	readonly paneId: string;
-	readonly input: EditorInput;
+	readonly input: IResourceEditorInput;
 }
 
 /** Observable state of one editor instance without exposing its browser pane. */

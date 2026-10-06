@@ -1,6 +1,6 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { ITextFileService } from '../../../services/textfile/common/textFileService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -17,7 +17,7 @@ export class CustomTextEditorModel extends Disposable implements IWorkingCopy {
 
 	constructor(
 		public readonly reference: TextModelReference,
-		input: EditorInput,
+		input: IResourceEditorInput,
 		private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
 		@ITextFileService private readonly files: ITextFileService,
 		@IWorkingCopyService workingCopies: IWorkingCopyService,

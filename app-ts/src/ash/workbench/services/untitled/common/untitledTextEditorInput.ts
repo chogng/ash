@@ -1,19 +1,20 @@
+import { EditorInput } from '../../../common/editor/editorInput.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { EditorInput } from '../../editor/common/editorService.js';
 import type { IUntitledTextEditorModel } from './untitledTextEditorModel.js';
 
 /** Editor-facing metadata borrows the draft model; closing one view does not close other views. */
-export class UntitledTextEditorInput implements EditorInput {
+export class UntitledTextEditorInput extends EditorInput {
 	public static readonly ID = 'workbench.editors.untitledEditorInput';
 	public readonly typeId = UntitledTextEditorInput.ID;
 	public readonly resource: URI;
 
 	constructor(private readonly model: IUntitledTextEditorModel) {
+		super();
 		this.resource = model.resource;
 	}
 
-	public get label(): string {
+	public getName(): string {
 		return this.model.name;
 	}
 

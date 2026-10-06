@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/issueReporter.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -10,7 +11,6 @@ import { IAccountService } from '../../../../platform/accounts/common/accountSer
 import { IGitHubService } from '../../../../platform/github/common/githubService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IIssueFormService, IssueType, type IssueReporterState } from '../common/issue.js';
 import { issueReporterEditorId } from './issueService.js';
@@ -121,7 +121,7 @@ export class IssueReporterEditorPane extends Disposable implements IEditorPane {
 		this.render(this.form.state);
 	}
 
-	async setInput(_input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (signal.aborted) { throw new CancellationError(); }
 		await this.form.initialize({});
 		if (signal.aborted) { throw new CancellationError(); }

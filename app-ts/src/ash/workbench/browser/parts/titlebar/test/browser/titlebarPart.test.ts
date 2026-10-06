@@ -133,7 +133,7 @@ test('title service shares the resolved title with its registered part and relea
 	const contextKeys = resources.add(new ContextKeyService());
 	const workspace = resources.add(new WorkspaceContextService({ id: 'title-service', folders: [] }));
 	const activeChanged = resources.add(new Emitter<void>());
-	let activeEditor: import('../../../../../services/editor/common/editorService.js').EditorInput | undefined;
+	let activeEditor: import('../../../../../common/editor.js').IResourceEditorInput | undefined;
 	const editors: import('../../../../../services/editor/common/editorService.js').IEditorService = {
 		get activeEditor() { return activeEditor; },
 		visibleEditors: [],

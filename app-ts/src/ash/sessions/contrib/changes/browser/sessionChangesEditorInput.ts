@@ -1,13 +1,12 @@
 import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
+import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 
 /** Session identity persists independently of the resolved diff documents. */
-export class SessionChangesEditorInput implements EditorInput {
+export class SessionChangesEditorInput implements IResourceEditorInput {
 	public capabilities = EditorInputCapabilities.None;
 	public readonly contentType = 'application/vnd.ash.session-changes';
 	public readonly readOnly = true;

@@ -43,3 +43,43 @@ test('binary comparison reloads both byte previews and resolves their file paths
 		expect(boxes[1]!.left).toBeGreaterThanOrEqual(boxes[0]!.right);
 	}
 });
+
+test('comparison groups update their accessible names and release source listeners before reload', async ({ page }) => {
+	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	await page.evaluate(() => window.ashFilesIntegration.showComparisonGroups(false));
+	await expect(page.getByRole('tab', { name: 'Before ↔ After', exact: true })).toHaveCount(2);
+	await page.evaluate(() => window.ashFilesIntegration.renameComparison('Renamed'));
+	await expect(page.getByRole('tab', { name: 'Renamed ↔ After', exact: true })).toHaveCount(2);
+	await page.evaluate(() => window.ashFilesIntegration.closeFirstComparisonGroup());
+	await page.evaluate(() => window.ashFilesIntegration.renameComparison('Still open'));
+	await expect(page.getByRole('tab', { name: 'Still open ↔ After', exact: true })).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashFilesIntegration.saveAndCloseComparisons())).toBe(false);
+	await expect(page.getByRole('tab')).toHaveCount(0);
+	await page.reload();
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	await page.evaluate(() => window.ashFilesIntegration.showComparisonGroups(true));
+	await expect(page.getByRole('tab', { name: 'Still open ↔ After', exact: true })).toHaveCount(1);
+	await expect(page.locator('#comparison-groups .ash-binary-editor-content').last()).toContainText('48 69 ff');
+});
+
+test('text groups share provider content and release it only after the last view closes', async ({ page }) => {
+	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	await page.evaluate(() => window.ashFilesIntegration.showTextGroups());
+	expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 2, values: ['Provider content', 'Provider content'], sameModel: true });
+	await expect(page.getByRole('tab', { name: 'Provider text', exact: true })).toHaveCount(2);
+	const controls = page.locator('#text-groups .stanza-editor-input');
+	await controls.last().focus();
+	await page.keyboard.insertText('must not change');
+	expect((await page.evaluate(() => window.ashFilesIntegration.getTextState())).values).toEqual(['Provider content', 'Provider content']);
+	await page.evaluate(() => window.ashFilesIntegration.closeFirstTextGroup());
+	await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 2, values: ['Remaining view'], sameModel: true });
+	await expect(page.locator('#text-groups .view-lines')).toContainText('Remaining view');
+	await page.evaluate(() => window.ashFilesIntegration.closeTextGroups());
+	expect((await page.evaluate(() => window.ashFilesIntegration.getTextState())).disposed).toBe(true);
+	await expect(page.getByRole('tab')).toHaveCount(0);
+	await page.evaluate(() => window.ashFilesIntegration.reopenText());
+	await expect(page.locator('#text-groups .view-lines')).toContainText('Provider content');
+	expect(await page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 3, values: ['Provider content'], sameModel: true });
+});

@@ -1,8 +1,8 @@
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import './media/emptyFileEditor.css';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import type { IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -43,7 +43,7 @@ export class EmptyFileEditor extends Disposable implements IEditorPane {
 		}));
 		updateHint();
 	}
-	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	public async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
 	public clearInput(): void { }
 	public setVisible(): void { }
 	public layout(_dimension: IDimension): void { }

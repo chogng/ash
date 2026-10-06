@@ -1,12 +1,12 @@
 import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
-import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
+
+import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { EditorInputSerializers } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 
 /** The Files landing tab has no document or working copy of its own. */
-export class EmptyFileEditorInput implements EditorInput {
+export class EmptyFileEditorInput implements IResourceEditorInput {
 	public capabilities = EditorInputCapabilities.None;
 	public readonly resource = URI.parse('ash-sessions-files:/');
 	public readonly contentType = 'application/vnd.ash.sessions-files';

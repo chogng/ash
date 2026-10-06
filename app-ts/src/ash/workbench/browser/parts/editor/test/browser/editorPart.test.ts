@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { WorkbenchWindowBarHeight } from '../../../workbenchPartDimensions.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { EditorInputSerializerRegistry } from '../../../../../services/editor/common/editorInputSerializer.js';
@@ -61,9 +62,7 @@ import {
 	type IDialogService,
 	type IFileDialogService,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
-import type {
-	EditorInput,
-} from "../../../../../../workbench/browser/parts/editor/editorInput.js";
+
 import {
 	EditorPaneMatch,
 	EditorPaneVisibility,
@@ -1180,7 +1179,7 @@ test('EditorPart does not reopen discarded untitled template content', async () 
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const editor = createEditorPart(dom.window.document.body, { registry });
-	const template: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1', initialText: 'template body' };
+	const template: IResourceEditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1', initialText: 'template body' };
 	await editor.openEditor(template);
 	assert.equal(await editor.closeEditor(template), true);
 	assert.deepEqual({ recentlyClosed: editor.recentlyClosedEditors.length, reopened: await editor.reopenClosedEditor() }, { recentlyClosed: 0, reopened: false });
@@ -1196,7 +1195,7 @@ test('EditorPart refreshes the tab when an input changes its label and custom ic
 	using labelChanges = new Emitter<void>();
 	let label = 'Untitled-1';
 	let icon = URI.parse('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>');
-	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), get label() { return label; }, getIcon: () => icon, onDidChangeLabel: labelChanges.event };
+	const untitled: IResourceEditorInput = { resource: URI.parse('untitled:/Untitled-1'), get label() { return label; }, getIcon: () => icon, onDidChangeLabel: labelChanges.event };
 	await editor.openEditor(untitled);
 	assert.equal(editor.domNode.querySelector<HTMLImageElement>('.ash-icon-label-image')?.src, icon.toString());
 	label = 'Scratch';
@@ -1212,10 +1211,38 @@ test('EditorPart refreshes the tab when an input changes its label and custom ic
 	dom.window.close();
 });
 
+test('comparison labels update in every group, survive restoration and release listeners after the last close', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor('stanza.editor.diff', '', () => new TestEditorPane('stanza.editor.diff')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	using changes = new Emitter<void>();
+	let name = 'Before';
+	const original = { resource: URI.file('/project/before.txt'), get label() { return name; }, onDidChangeLabel: changes.event };
+	using comparison = createDiffEditorInput(original, { resource: URI.file('/project/after.txt'), label: 'After' });
+	try {
+		await editor.openEditor(comparison);
+		await editor.openEditor(comparison, {}, 'sideGroup');
+		name = 'Renamed';
+		changes.fire();
+		assert.deepEqual([...editor.domNode.querySelectorAll('.ash-tab-label .ash-icon-label-text')].map(label => label.textContent), ['Renamed ↔ After', 'Renamed ↔ After']);
+		await editor.groups[0]!.closeEditor(comparison);
+		name = 'Still open';
+		changes.fire();
+		assert.equal(editor.domNode.querySelector('.ash-tab .ash-icon-label-text')?.textContent, 'Still open ↔ After');
+		const workingSet = JSON.parse(JSON.stringify(editor.saveWorkingSet('comparison-labels')));
+		await editor.closeAllEditors();
+		assert.equal(changes.hasListeners(), false);
+		await editor.applyWorkingSet(workingSet);
+		assert.equal(editor.domNode.querySelector('.ash-tab .ash-icon-label-text')?.textContent, 'Still open ↔ After');
+		assert.equal(changes.isDisposed, false);
+	} finally { editor.dispose(); dom.window.close(); }
+});
+
 test('editor input snapshots preserve semantic icon colors and reject malformed icons', () => {
 	const registry = new EditorInputSerializerRegistry();
 	const icon = { id: 'home', color: { id: 'editor.foreground' } };
-	const input: EditorInput = { resource: URI.parse('ash-welcome:/welcome'), getIcon: () => icon };
+	const input: IResourceEditorInput = { resource: URI.parse('ash-welcome:/welcome'), getIcon: () => icon };
 	const snapshot = JSON.parse(JSON.stringify(registry.serialize(input)));
 	assert.deepEqual(registry.deserialize(snapshot).getIcon?.(), icon);
 	snapshot.value.icon = { id: 'home', color: 42 };
@@ -1659,7 +1686,7 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 	assert.equal(editorProjectionChanges.length, 1);
 	assert.equal(editorProjectionChanges[0]?.includes('activeEditor'), true);
 	assert.equal(contextKeys.getValue('activeEditorGroupIndex'), 1);
-	const activeInput: EditorInput = { resource, languageId: 'typescript', readOnly: true };
+	const activeInput: IResourceEditorInput = { resource, languageId: 'typescript', readOnly: true };
 	await editor.openEditor(activeInput, { pinned: false });
 
 	assert.deepEqual({
@@ -1919,8 +1946,8 @@ test('EditorParts restores main and auxiliary editor windows with their active p
 	using firstStorage = new BrowserStorageService({ ownerWindow: firstDom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
 	using firstParts = new EditorParts(firstMain, firstWindows, container => createAuxiliaryPart(container, registry), accessibility, firstStorage);
 	await firstParts.restoreSavedState(true);
-	const mainInput: EditorInput = { resource: URI.parse('file:///C:/project/main.txt') };
-	const detachedInput: EditorInput = { resource: URI.parse('file:///C:/project/detached.txt') };
+	const mainInput: IResourceEditorInput = { resource: URI.parse('file:///C:/project/main.txt') };
+	const detachedInput: IResourceEditorInput = { resource: URI.parse('file:///C:/project/detached.txt') };
 	await firstMain.openEditor(mainInput);
 	const detached = await firstParts.createAuxiliaryEditorPart();
 	await detached.openEditor(detachedInput);
@@ -1959,8 +1986,8 @@ test('EditorParts replaces an untitled resource in every group and window', asyn
 		onDidChangeScreenReaderOptimized: Event.None,
 		isScreenReaderOptimized: () => false,
 	} as unknown as IAccessibilityService, storage);
-	const untitled: EditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1' };
-	const saved: EditorInput = { resource: URI.file('C:\\project\\draft.txt'), label: 'draft.txt' };
+	const untitled: IResourceEditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1' };
+	const saved: IResourceEditorInput = { resource: URI.file('C:\\project\\draft.txt'), label: 'draft.txt' };
 	await editorParts.openEditor(untitled);
 	await main.openEditor(untitled, {}, 'sideGroup');
 	const auxiliary = await editorParts.createAuxiliaryEditorPart();
@@ -2055,7 +2082,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 test('workspace shutdown saves an untitled editor through Save As before accepting the transition', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
-	const untitled: EditorInput = { resource: URI.parse('untitled:/Draft'), label: 'Draft' };
+	const untitled: IResourceEditorInput = { resource: URI.parse('untitled:/Draft'), label: 'Draft' };
 	const destination = URI.file('/project/draft.txt');
 	using copy = new TestWorkingCopy(untitled.resource);
 	copy.markDirty();
@@ -2099,7 +2126,7 @@ class TestEditorPane extends Disposable implements IEditorPane {
 	}
 
 	async setInput(
-		_input: EditorInput,
+		_input: IResourceEditorInput,
 		signal: AbortSignal,
 	): Promise<void> {
 		this.inputSignal = signal;
@@ -2345,7 +2372,7 @@ function descriptor(
 	};
 }
 
-function input(path: string): EditorInput {
+function input(path: string): IResourceEditorInput {
 	return { resource: URI.file(path) };
 }
 
@@ -2368,7 +2395,6 @@ function deferred<T>(): {
 	});
 	return { promise, resolve: resolvePromise };
 }
-
 
 test('ignored open errors leave the active file intact and report the original error', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -2507,7 +2533,6 @@ test('modal file failures use the same retryable error page', async () => {
 		dom.window.close();
 	}
 });
-
 
 test('a missing file offers creation and retries into the same pinned tab', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

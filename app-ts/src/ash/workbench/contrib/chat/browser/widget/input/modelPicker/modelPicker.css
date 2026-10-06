@@ -1,12 +1,6 @@
 .ash-chat-model-picker {
-	display: flex;
-	position: relative;
-	box-sizing: border-box;
-	width: 320px;
 	max-width: calc(100vw - var(--ash-spacing-size160));
 	max-height: min(420px, calc(100vh - var(--ash-spacing-size240)));
-	flex-direction: column;
-	overflow: visible;
 	font-size: var(--ash-font-size-label1);
 }
 
@@ -38,40 +32,6 @@
 
 .ash-chat-model-picker-empty > .ash-button {
 	margin-top: var(--ash-spacing-size80);
-}
-
-.ash-chat-model-picker-search {
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size120) 0;
-}
-
-.ash-chat-model-picker-search input {
-	box-sizing: border-box;
-	width: 100%;
-	height: var(--ash-spacing-size280);
-	padding: 0;
-	border: 0;
-	outline: none;
-	border-radius: var(--ash-corner-radius-small);
-	color: var(--ash-input-foreground);
-	background: transparent;
-	font: inherit;
-}
-
-.ash-chat-model-picker-search input:focus {
-	outline: none;
-}
-
-.ash-chat-model-picker-search input::placeholder {
-	color: var(--ash-description-foreground);
-}
-
-.ash-chat-model-picker-list {
-	min-height: 0;
-	overflow: hidden;
-}
-
-.ash-context-view-menu:has(.ash-chat-model-picker) {
-	overflow: visible;
 }
 
 .ash-chat-model-picker-auto {

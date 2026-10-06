@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
@@ -40,7 +41,7 @@ import { IContextMenuService } from "../../../../../platform/contextview/browser
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
-import { IEditorService, type EditorInput, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
 import type { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -766,7 +767,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 			return { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "text" as const, text: "after\n" } };
 		},
 	} as unknown as IGitService;
-	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
+	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
 	const editorService = testEditorService(opened);
 	const hoverService: IHoverService = {
 		setupDelayedHover: () => testManagedHover(),
@@ -863,7 +864,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 	const menus = new MenuService(commands, contextKeys);
 	const objectId = '1'.repeat(40);
 	const parentId = '2'.repeat(40);
-	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
+	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
 	services.registerInstance(IEditorService, testEditorService(opened));
 	services.registerInstance(INotificationService, notifications);
 	const requests: Array<{ readonly id: string; readonly path?: string; readonly repository?: string; }> = [];
@@ -1150,7 +1151,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const repositoryStatusChanges = new Emitter<GitStatus>();
 	statusListener = status => repositoryStatusChanges.fire(status);
 	const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged"; readonly repositoryId: string | undefined; }> = [];
-	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
+	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
 	const first: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-1",
@@ -1316,7 +1317,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		viewAllChanges.click();
 		await waitFor(() => opened.length === 4);
 		assert.equal(opened[3].input.contentType, "application/vnd.stanza.editor-multi-diff");
-		const multiDiffInput = opened[3].input as EditorInput & { readonly items: readonly { readonly goToFile?: EditorInput; }[]; };
+		const multiDiffInput = opened[3].input as IResourceEditorInput & { readonly items: readonly { readonly goToFile?: IResourceEditorInput; }[]; };
 		assert.equal(multiDiffInput.items.length, 2);
 		assert.deepEqual(multiDiffInput.items.map((item) => item.goToFile?.resource.toString()), [
 			"file:///src/working.ts",
@@ -1542,7 +1543,7 @@ function testManagedHover(): IManagedHover {
 	};
 }
 
-function testEditorService(opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = []): IEditorService {
+function testEditorService(opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = []): IEditorService {
 	return {
 		...emptyEditorServiceState,
 		openEditor: async (input, options, target) => { opened.push({ input, options, target }); },
@@ -1679,7 +1680,6 @@ test("SCM distinguishes an empty window, a folder without Git, and unavailable a
 		'Git is unavailable for this workspace. Check folder access and retry.',
 	]);
 });
-
 
 suite('SCM badge and decorations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

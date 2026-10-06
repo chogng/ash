@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -8,15 +9,15 @@ import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTarg
 import { BulkEditService } from '../../browser/bulkEditService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IDialogService, IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
-import type { IEditorService, EditorInput } from '../../../../services/editor/common/editorService.js';
+import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 
 export class TestEditorService implements IEditorService {
 	public readonly onDidActiveEditorChange = Event.None;
 	public readonly onDidVisibleEditorsChange = Event.None;
 	public readonly activeEditor = undefined;
 	public readonly visibleEditors = [];
-	public readonly opened: EditorInput[] = [];
-	public async openEditor(input: EditorInput): Promise<void> {
+	public readonly opened: IResourceEditorInput[] = [];
+	public async openEditor(input: IResourceEditorInput): Promise<void> {
 		this.opened.push(input);
 	}
 	public focusActiveEditor(): void { }

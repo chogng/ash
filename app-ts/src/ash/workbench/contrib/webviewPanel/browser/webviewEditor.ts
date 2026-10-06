@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -11,7 +12,6 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { WebviewElement } from '../../../../platform/webview/browser/webviewElement.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { CustomTextEditorModel } from '../../customEditor/common/customTextEditorModel.js';
 
@@ -54,7 +54,7 @@ export class WebviewEditor extends Disposable implements IEditorPane {
 		this._register(toDisposable(() => this.container?.remove()));
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		const reference = await this.models.acquire(input, signal);
 		this.model = this.inputResources.add(this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled));

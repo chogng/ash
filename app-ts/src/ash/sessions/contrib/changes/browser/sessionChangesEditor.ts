@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -5,7 +6,6 @@ import { localize } from '../../../../nls.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { EditorPanes } from '../../../../workbench/browser/editor.js';
 import { EditorPaneVisibility, type EditorPaneCreationOptions, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import type { MultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -19,7 +19,7 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
 	private domNode!: HTMLDivElement;
 	private messageDomNode!: HTMLParagraphElement;
-	private input: EditorInput | undefined;
+	private input: IResourceEditorInput | undefined;
 	private comparisonInput: MultiDiffEditorInput | undefined;
 	private dimension: IDimension = Dimension.Zero;
 	private visible = false;
@@ -70,7 +70,7 @@ export class SessionChangesEditor extends Disposable implements IEditorPane {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public async setInput(input: EditorInput, _signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
 		this.input = input;
 		await this.refresh();
 	}

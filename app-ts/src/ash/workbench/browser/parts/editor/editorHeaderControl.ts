@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { h } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { RunOnceScheduler } from "../../../../base/common/async.js";
@@ -24,7 +25,6 @@ import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, Brea
 import type { EditorGroupId } from "../../../services/editor/common/editorState.js";
 import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
 import { BreadcrumbsModel, type FileElement, type SymbolElement } from "./breadcrumbsModel.js";
-import type { EditorInput } from "./editorInput.js";
 import type { IEditorPane } from "./editorPane.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
@@ -46,7 +46,7 @@ export class EditorHeaderControl extends Disposable {
 	private breadcrumbsEnabled: boolean;
 	private filePath: BreadcrumbsPathMode;
 	private symbolPath: BreadcrumbsPathMode;
-	private activeInput: EditorInput | undefined;
+	private activeInput: IResourceEditorInput | undefined;
 	private activePane: IEditorPane | undefined;
 	private outline: OutlineModel | null = null;
 	private readonly symbolListeners = this._register(new DisposableStore());
@@ -158,7 +158,7 @@ export class EditorHeaderControl extends Disposable {
 			} : undefined);
 	}
 
-	setInput(input: EditorInput | undefined, pane?: IEditorPane): void {
+	setInput(input: IResourceEditorInput | undefined, pane?: IEditorPane): void {
 		const changed = input !== this.activeInput || pane !== this.activePane;
 		this.activeInput = input;
 		this.activePane = pane;

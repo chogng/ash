@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -17,7 +18,7 @@ import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID } from '../../../../..
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
 import { createSettingsEditorInput } from '../../../../services/preferences/common/settingsEditorInput.js';
@@ -39,7 +40,7 @@ class SettingsFixture extends DisposableStore {
 	public rejectWrites = false;
 	public readonly writes: unknown[] = [];
 	public readonly commands: unknown[] = [];
-	public readonly inputs: EditorInput[] = [];
+	public readonly inputs: IResourceEditorInput[] = [];
 	public readonly content: LanguageServerSettingsContent;
 
 	constructor(locale = 'en') {
@@ -74,7 +75,7 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(IContextViewService, this.add(new BrowserContextViewService(this.root)));
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-		this.services.registerInstance(IEditorService, { openEditor: async (input: EditorInput) => { this.inputs.push(input); this.content.setInput(input); } } as IEditorService);
+		this.services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput) => { this.inputs.push(input); this.content.setInput(input); } } as IEditorService);
 		this.content = this.add(this.services.createInstance(LanguageServerSettingsContent, this.root));
 		this.root.append(this.content.domNode);
 		this.content.setInput(createSettingsEditorInput());

@@ -1,7 +1,7 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type { EditorInput } from './editorService.js';
 
 export interface SerializedEditorInput {
 	readonly typeId: string;
@@ -10,9 +10,9 @@ export interface SerializedEditorInput {
 
 export interface EditorInputSerializer {
 	readonly typeId: string;
-	canSerialize(input: EditorInput): boolean;
-	serialize(input: EditorInput, registry: EditorInputSerializerRegistry): unknown;
-	deserialize(value: unknown, registry: EditorInputSerializerRegistry): EditorInput;
+	canSerialize(input: IResourceEditorInput): boolean;
+	serialize(input: IResourceEditorInput, registry: EditorInputSerializerRegistry): unknown;
+	deserialize(value: unknown, registry: EditorInputSerializerRegistry): IResourceEditorInput;
 }
 
 /** Owns the wire-safe forms used by editor working sets. */
@@ -38,7 +38,7 @@ export class EditorInputSerializerRegistry {
 		this.serializers.set(serializer.typeId, serializer);
 	}
 
-	serialize(input: EditorInput): SerializedEditorInput {
+	serialize(input: IResourceEditorInput): SerializedEditorInput {
 		for (const serializer of this.serializers.values()) {
 			if (!serializer.canSerialize(input)) continue;
 			return Object.freeze({ typeId: serializer.typeId, value: serializer.serialize(input, this) });
@@ -46,7 +46,7 @@ export class EditorInputSerializerRegistry {
 		return Object.freeze({ typeId: BaseEditorInputSerializer.typeId, value: serializeBaseEditorInput(input) });
 	}
 
-	deserialize(input: SerializedEditorInput): EditorInput {
+	deserialize(input: SerializedEditorInput): IResourceEditorInput {
 		if (!isSerializedEditorInput(input)) throw new TypeError('Invalid serialized editor input');
 		if (input.typeId === BaseEditorInputSerializer.typeId) return deserializeBaseEditorInput(input.value);
 		const serializer = this.serializers.get(input.typeId);
@@ -59,7 +59,7 @@ export const EditorInputSerializers = new EditorInputSerializerRegistry();
 
 const BaseEditorInputSerializer = Object.freeze({ typeId: 'workbench.editorInput.resource' });
 
-function serializeBaseEditorInput(input: EditorInput): unknown {
+function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 	const icon = input.getIcon?.();
 	let serializedIcon: string | { id: string; color?: string; } | undefined;
 	if (icon instanceof URI) {
@@ -80,7 +80,7 @@ function serializeBaseEditorInput(input: EditorInput): unknown {
 	});
 }
 
-function deserializeBaseEditorInput(value: unknown): EditorInput {
+function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 	const record = requireRecord(value, 'serialized editor input');
 	const resource = requireString(record.resource, 'serialized editor resource');
 	const contentType = optionalString(record.contentType, 'serialized editor content type');

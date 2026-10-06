@@ -32,7 +32,7 @@ import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider 
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { ModelPickerConfiguration } from './modelPicker/modelPickerConfiguration.js';
-import { modelPickerEffortLabel } from './modelPicker/modelPickerModelConfig.js';
+import { getModelConfigSummary } from './modelPicker/modelPickerModelConfig.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 
 type ChatInputToolbarPresentation = "mode" | "model" | "effort" | "mic" | "voice" | "send" | "interrupt";
@@ -429,14 +429,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				},
 			);
 		const selectedModel = this.toolbarState.models.find(entry => sameModel(entry.model, this.toolbarState.selectedModel));
-		const selectedEffortLabel = modelPickerEffortLabel(this.toolbarState.selectedReasoningEffort ?? selectedModel?.defaultReasoningEffort);
+		const configurationLabel = selectedModel ? getModelConfigSummary(selectedModel, this.toolbarState.selectedReasoningEffort) : '';
 		this.modelAction.label = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel?.displayName ?? "Model";
 		this.modelAction.tooltip = this.toolbarState.isAutomaticModel ? localize('chat.modelPicker.auto', 'Auto') : selectedModel ? `Model: ${selectedModel.displayName}` : "Select model";
-		const effortAction = !this.toolbarState.isAutomaticModel && selectedModel?.supportedReasoningEfforts?.length
+		const effortAction = !this.toolbarState.isAutomaticModel && configurationLabel
 			? new ChatInputAction(
 				'ash.chat.input.effort',
-				selectedEffortLabel,
-				localize('chat.modelPicker.effortAriaLabel', 'Thinking Effort: {0}', selectedEffortLabel),
+				configurationLabel,
+				localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', configurationLabel),
 				undefined,
 				true,
 				'effort',
@@ -517,7 +517,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const entry = this.state.models.find(model => sameModel(model.model, this.state.selectedModel))!;
 			return this.instantiationService.createInstance(ModelPickerConfiguration, action, entry, this.state.selectedReasoningEffort, async (effort: ModelReasoningEffort | undefined) => {
 				await this.delegate.selectReasoningEffort(effort);
-				// Updating the effort replaces the toolbar action, so return focus to its new button.
+			}, () => {
+				// Saving either option replaces the toolbar action, so focus its new button.
 				this.inputToolbar.element.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort'] button")?.focus();
 			});
 		}

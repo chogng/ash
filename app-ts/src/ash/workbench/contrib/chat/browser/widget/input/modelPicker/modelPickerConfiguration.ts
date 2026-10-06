@@ -1,21 +1,22 @@
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../../base/browser/ui/aria/aria.js';
-import { ButtonActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionViewItem, ButtonActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { AnchorPosition, ContextView, ContextViewFocusRestore } from '../../../../../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
-import type { IAction } from '../../../../../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../../../../../base/common/actions.js';
 import { MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
-import { modelPickerEffortLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { ILanguageModelsService } from '../../../../common/languageModels.js';
+import { getModelConfigValueLabel, modelPickerEffortLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
 import './modelPicker.css';
 
 let nextConfigurationId = 0;
 
-/** Presents the selected model's thinking effort beside the model selector. */
+/** Presents the selected model's effort and context settings beside the model selector. */
 export class ModelPickerConfiguration extends ButtonActionViewItem {
 	private readonly contextView: ContextView;
 	private readonly menu = this._register(new MutableDisposable<Menu>());
@@ -25,8 +26,10 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 		private readonly entry: ModelCatalogEntry,
 		private readonly selectedEffort: ModelReasoningEffort | undefined,
 		private readonly selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => Promise<void>,
+		private readonly onDidSave: () => void,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
+		@ILanguageModelsService private readonly languageModels: ILanguageModelsService,
 	) {
 		super(action);
 		this.contextView = this._register(new ContextView(contextViewService.container));
@@ -61,7 +64,7 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.ChatModelConfiguration,
 					{ type: AccessibleViewType.Help },
-					() => [localize('chat.modelPicker.effortHelp', "Thinking level menu. Press Enter or Space to open it. Use Up and Down Arrow to choose a level, Enter to apply it, or Escape to return to the button. The level marked Default uses the model's configured effort."), ...modelPickerEffortOptions(this.entry, this.selectedEffort).filter(option => option.description).map(option => `${option.label}: ${option.description}`)].join('\n'),
+					() => [localize('chat.modelPicker.configurationHelp', "Model options menu. Thinking level and context size are separate groups. Press Enter or Space to open it. Use Up and Down Arrow to move between options, Enter to apply one, or Escape to return to the button. Default marks the model's default option."), ...modelPickerEffortOptions(this.entry, this.selectedEffort).filter(option => option.description).map(option => `${option.label}: ${option.description}`)].join('\n'),
 					() => button.focus(),
 					AccessibilityVerbositySettingId.ChatModelConfiguration,
 				);
@@ -84,8 +87,18 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 
 	private show(): void {
 		if (this.contextView.visible) return;
-		const options = modelPickerEffortOptions(this.entry, this.selectedEffort);
-		const actions: IAction[] = options.map(option => {
+		const options = this.entry.supportedReasoningEfforts?.length ? modelPickerEffortOptions(this.entry, this.selectedEffort) : [];
+		const headings = new Set<IAction>();
+		const actions: IAction[] = [];
+		const addHeading = (id: string, label: string): void => {
+			const heading: IAction = { id, label, tooltip: '', enabled: false, run: () => { } };
+			headings.add(heading);
+			actions.push(heading);
+		};
+		if (options.length) {
+			addHeading('ash.chat.input.effort.heading', localize('chat.modelPicker.thinkingEffort', 'Thinking Level'));
+		}
+		actions.push(...options.map(option => {
 			const { effort, label } = option;
 			return {
 				id: `ash.chat.input.effort.${effort ?? 'default'}`,
@@ -97,29 +110,56 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 				run: async () => {
 					try {
 						await this.selectReasoningEffort(option.value);
+						this.onDidSave();
 					} catch {
 						status(localize('chat.modelPicker.effortFailed', 'Could not set thinking effort'));
 					}
 				},
 			};
-		});
+		}));
+		if (this.entry.contextWindowOptions.length) {
+			if (actions.length) {
+				actions.push(new Separator());
+			}
+			addHeading('ash.chat.input.context.heading', localize('chat.modelPicker.contextSize', 'Context Size'));
+			for (const contextWindow of this.entry.contextWindowOptions) {
+				const label = getModelConfigValueLabel(contextWindow);
+				actions.push({
+					id: `ash.chat.input.context.${contextWindow}`,
+					label,
+					tooltip: localize('chat.modelPicker.contextChoice', '{0} context', label),
+					enabled: true,
+					checked: contextWindow === this.entry.contextWindow,
+					badge: contextWindow === this.entry.defaultContextWindow ? modelPickerEffortLabel(undefined) : undefined,
+					run: async () => {
+						try {
+							await this.languageModels.setModelPreferences(this.entry.model, { contextWindow });
+							this.onDidSave();
+						} catch {
+							status(localize('chat.modelPicker.preferencesFailed', 'Could not update model settings'));
+						}
+					},
+				});
+			}
+		}
 		const menu = new Menu(this.contextView.element, {
 			actions,
 			contextViewContainer: this.contextViewService.container,
 			layer: 20,
 			getCheckedActionsRepresentation: () => 'radio',
+			actionViewItemProvider: action => headings.has(action) ? new ModelConfigurationHeading(action) : undefined,
 			onDidSelect: () => this.contextView.hide(),
 		});
 		menu.element.classList.add('ash-chat-model-configuration-menu');
-		menu.element.setAttribute('aria-label', localize('chat.modelPicker.thinkingEffort', 'Thinking Level'));
-		const heading = h(menu.element.ownerDocument, 'div');
-		heading.className = 'ash-chat-model-configuration-heading';
-		heading.setAttribute('role', 'presentation');
-		heading.textContent = localize('chat.modelPicker.thinkingEffort', 'Thinking Level');
-		menu.element.prepend(heading);
+		menu.element.setAttribute('aria-label', localize('chat.modelPicker.configuration', 'Model options'));
 		for (const option of options) {
 			const description = [option.description, option.isDefault ? modelPickerEffortLabel(undefined) : undefined].filter(Boolean).join(' ');
 			if (description) menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`)?.setAttribute('aria-description', description);
+		}
+		for (const contextWindow of this.entry.contextWindowOptions) {
+			const description = localize('chat.modelPicker.contextChoice', '{0} context', getModelConfigValueLabel(contextWindow));
+			const defaultLabel = contextWindow === this.entry.defaultContextWindow ? modelPickerEffortLabel(undefined) : '';
+			menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.context.${contextWindow}'] button`)?.setAttribute('aria-description', [description, defaultLabel].filter(Boolean).join(' '));
 		}
 		this.menu.value = menu;
 		const shown = this.contextView.show({
@@ -143,4 +183,16 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 		this.button.domNode.setAttribute('aria-expanded', 'true');
 		(menu.element.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ?? menu.element.querySelector<HTMLElement>('[role="menuitemradio"]'))?.focus();
 	}
+}
+
+/** Group labels participate in menu layout but never take keyboard focus. */
+class ModelConfigurationHeading extends ActionViewItem {
+	public override render(container: HTMLElement): void {
+		const heading = h(container.ownerDocument, 'div');
+		heading.className = 'ash-chat-model-configuration-heading';
+		heading.textContent = this.action.label;
+		container.append(heading);
+	}
+
+	public override setTabbable(_tabbable: boolean): void { }
 }

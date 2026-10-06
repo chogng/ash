@@ -1,5 +1,5 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { URI } from "../../../../base/common/uri.js";
-import type { EditorInput } from "./editorInput.js";
 import type { IEditorGroup, IEditorGroupsService } from "../../../services/editor/common/editorGroupsService.js";
 import { getActiveDocument } from "../../../../base/browser/dom.js";
 import { extUri } from "../../../../base/common/resources.js";
@@ -11,13 +11,13 @@ export interface IEditorCommandsContext {
 }
 
 export interface IResolvedEditorCommandsContext {
-	readonly groupedEditors: readonly { readonly group: IEditorGroup; readonly editors: readonly EditorInput[]; }[];
+	readonly groupedEditors: readonly { readonly group: IEditorGroup; readonly editors: readonly IResourceEditorInput[]; }[];
 	readonly preserveFocus: boolean;
 }
 
 /** Resolves explicit editor command arguments against the currently open groups. */
 export function resolveCommandsContext(commandArgs: readonly unknown[], editorGroups: IEditorGroupsService): IResolvedEditorCommandsContext {
-	const grouped = new Map<IEditorGroup, EditorInput[]>();
+	const grouped = new Map<IEditorGroup, IResourceEditorInput[]>();
 	let preserveFocus = false;
 	let args = commandArgs;
 	if (args.length === 0) {
@@ -49,7 +49,7 @@ export function resolveCommandsContext(commandArgs: readonly unknown[], editorGr
 	};
 }
 
-function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: EditorInput; preserveFocus: boolean; } | undefined {
+function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: IResourceEditorInput; preserveFocus: boolean; } | undefined {
 	if (argument instanceof URI) {
 		for (const group of editorGroups.groups) {
 			const editor = group.inputs.find(input => extUri.isEqual(input.resource, argument));

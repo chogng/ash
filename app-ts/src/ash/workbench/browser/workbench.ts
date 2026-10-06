@@ -1,3 +1,4 @@
+import { AppServerAvailableContext } from '../common/contextkeys.js';
 import { localize } from '../../nls.js';
 import { Schemas } from '../../base/common/network.js';
 import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
@@ -65,7 +66,7 @@ import { createBrowserExtensionApi } from '../../platform/extensions/browser/ext
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
-import { AppServerAvailableContext, IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';

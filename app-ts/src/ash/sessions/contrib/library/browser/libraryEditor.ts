@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import './library.css';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -13,7 +14,6 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { ImageResource } from '../../../../platform/media/browser/image.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import { ILibraryService, type LibraryState } from './libraryService.js';
 
 interface LibraryItem {
@@ -88,7 +88,7 @@ export class LibraryEditorPane extends Disposable implements IEditorPane {
 		}));
 	}
 
-	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	public async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
 	public clearInput(): void { }
 	public setVisible(visibility: EditorPaneVisibility): void {
 		this.visible = visibility === EditorPaneVisibility.Visible;

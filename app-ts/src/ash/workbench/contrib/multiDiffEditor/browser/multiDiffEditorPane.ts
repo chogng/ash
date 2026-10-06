@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import './media/multiDiffEditorPane.css';
@@ -20,7 +21,6 @@ import { type ITextModelResourceService } from '../../../services/textmodelResol
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import type { IMenuService } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -89,7 +89,7 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPaneWithVi
 		}));
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isMultiDiffEditorInput(input)) throw new TypeError('Multi-diff editor pane requires a multi-diff editor input');
 		const container = this.requireContainer();
 		throwIfCancelled(signal, 'Multi-diff editor input loading was cancelled');

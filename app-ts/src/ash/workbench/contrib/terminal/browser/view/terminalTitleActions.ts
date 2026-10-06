@@ -12,7 +12,7 @@ import { type IContextKeyService } from "../../../../../platform/contextkey/brow
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance, ITerminalProfile } from "../terminal.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
-import { AppServerAvailableContext } from '../../../../../platform/renderer/common/rendererHost.js';
+import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 
 const ACTIVE_TERMINAL_COMMAND_ID = "ash.terminal.focusActive";
 const NEW_TERMINAL_WITH_PROFILE_COMMAND_ID = "ash.terminal.newWithProfile";

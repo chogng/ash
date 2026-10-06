@@ -1,4 +1,4 @@
-import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
+import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';

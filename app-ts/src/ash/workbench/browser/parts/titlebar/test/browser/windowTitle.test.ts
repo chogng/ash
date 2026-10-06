@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { isWindows } from '../../../../../../base/common/platform.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
@@ -10,7 +11,6 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ILabelService, LabelService } from '../../../../../../platform/label/common/labelService.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../platform/workspace/common/workspace.js';
-import type { EditorInput } from '../../../../../services/editor/common/editorService.js';
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
@@ -198,10 +198,10 @@ class TestEditorService extends Disposable implements IEditorGroupsContainer {
 		} as IEditorGroup;
 	}
 	public readonly onDidVisibleEditorsChange = Event.None;
-	public activeEditor: EditorInput | undefined;
-	public get visibleEditors(): readonly EditorInput[] { return this.activeEditor ? [this.activeEditor] : []; }
+	public activeEditor: IResourceEditorInput | undefined;
+	public get visibleEditors(): readonly IResourceEditorInput[] { return this.activeEditor ? [this.activeEditor] : []; }
 	public get hasListeners(): boolean { return this.activeChanged.hasListeners(); }
-	public async openEditor(input: EditorInput): Promise<void> { this.activeEditor = input; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
+	public async openEditor(input: IResourceEditorInput): Promise<void> { this.activeEditor = input; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
 	public close(): void { this.activeEditor = undefined; this.activeChanged.fire({ kind: 'activeEditorChanged', editor: undefined }); }
 	public focusActiveEditor(): void { }
 }

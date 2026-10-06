@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import "./media/editorTitleControl.css";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -8,7 +9,7 @@ import {
 	EditorTabsModeConfiguration,
 	type EditorTabsMode,
 } from "../../../services/editor/common/editorConfiguration.js";
-import type { EditorInput } from "./editorInput.js";
+
 import type { FileElement } from "./breadcrumbsModel.js";
 import { EditorHeaderControl, type EditorHeaderActions } from "./editorHeaderControl.js";
 import type { IBreadcrumbsService } from "./breadcrumbs.js";
@@ -47,7 +48,7 @@ export class EditorTitleControl extends Disposable {
 	private readonly header: EditorHeaderControl;
 	private editors: readonly EditorTabDescriptor[] = [];
 	private selectedIds: ReadonlySet<string> | undefined;
-	private activeInput: EditorInput | undefined;
+	private activeInput: IResourceEditorInput | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -122,7 +123,7 @@ export class EditorTitleControl extends Disposable {
 
 	setEditors(
 		editors: readonly EditorTabDescriptor[],
-		activeInput: EditorInput | undefined,
+		activeInput: IResourceEditorInput | undefined,
 		activePane?: IEditorPane,
 		selectedIds?: ReadonlySet<string>,
 	): void {

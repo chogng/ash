@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { addDisposableListener, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -13,11 +14,10 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ImageResource, inspectImage, type ImageMetadata } from '../../../../platform/media/browser/image.js';
 import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 
 export const IMAGE_PREVIEW_ID = 'ash.imagePreview';
 
-export function matchImagePreview(input: EditorInput): EditorPaneMatch {
+export function matchImagePreview(input: IResourceEditorInput): EditorPaneMatch {
 	const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
 	return /\.(png|jpe?g|webp)$/i.test(input.resource.path) || mediaType === 'image/png' || mediaType === 'image/jpeg' || mediaType === 'image/webp'
 		? EditorPaneMatch.Default
@@ -34,7 +34,7 @@ export class ImagePreview extends Disposable implements IEditorPane {
 	private imageDomNode!: HTMLImageElement;
 	private summaryDomNode!: HTMLElement;
 	private toolbar!: WorkbenchToolBar;
-	private input: EditorInput | undefined;
+	private input: IResourceEditorInput | undefined;
 	private metadata: ImageMetadata | undefined;
 	private loadFailure: string | undefined;
 	private byteLength = 0;
@@ -109,7 +109,7 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		this.updateLabels();
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		await this.load(input, signal, true);
 	}
@@ -142,7 +142,7 @@ export class ImagePreview extends Disposable implements IEditorPane {
 		return localize('media.image.content', 'Image: {0}\nResource: {1}\nSize: {2} × {3} pixels\nFormat: {4}\nFile size: {5} bytes\nZoom: {6}', this.input.label ?? basename(this.input.resource), this.input.resource.toString(), metadata.width, metadata.height, metadata.mediaType, this.byteLength, this.zoomLabel());
 	}
 
-	private async load(input: EditorInput, signal: AbortSignal, resetScale: boolean): Promise<void> {
+	private async load(input: IResourceEditorInput, signal: AbortSignal, resetScale: boolean): Promise<void> {
 		const generation = ++this.generation;
 		const cancellation = new AbortController();
 		this.loading.value = toDisposable(() => cancellation.abort());

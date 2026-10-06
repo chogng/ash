@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../../../services/userDataProfile/common/userDataProfile.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
@@ -23,7 +24,7 @@ import { FileRevisionConflictError } from '../../../../../platform/files/common/
 import { JsonSchemaRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserTextResourceStore } from '../../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
-import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { PreferencesService } from '../../../../../workbench/services/preferences/browser/preferencesService.js';
 import { TextFileService } from '../../../../../workbench/services/textfile/common/textFileService.js';
 import { UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
@@ -141,7 +142,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 });
 
 test('PreferencesService opens User Settings JSON as a pinned JSON editor input', async () => {
-	let opened: { readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target: EditorOpenTarget | undefined; } | undefined;
+	let opened: { readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target: EditorOpenTarget | undefined; } | undefined;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
 		openEditor(input, options, target): Promise<void> {

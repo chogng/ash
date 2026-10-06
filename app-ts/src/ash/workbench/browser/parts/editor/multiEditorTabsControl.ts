@@ -1,6 +1,6 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
-import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
+import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
 import { TAB_CLOSE_ACTION_ID } from '../../../../base/browser/ui/tablist/tabList.js';
 import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
@@ -12,7 +12,6 @@ import { localize } from "../../../../nls.js";
 import { containsExternalEditorDrop } from "./editorDropData.js";
 import { clearConnectedTabClipping, updateConnectedTabClipping } from "./connectedTabClipping.js";
 import { CONNECTED_EDITOR_TABS_CLASS } from "./editor.js";
-import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { IResourceLabelService, type IResourceLabel, type ResourceLabels } from "../../labels.js";
 import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -37,9 +36,9 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	private readonly labels: ResourceLabels;
 	private connectedTab: HTMLElement | undefined;
 	private connected = true;
-	private previewedInput: EditorInput | undefined;
+	private previewedInput: IResourceEditorInput | undefined;
 	private editors: readonly EditorTabDescriptor[] = [];
-	private activeInput: EditorInput | undefined;
+	private activeInput: IResourceEditorInput | undefined;
 	private selectedIds: ReadonlySet<string> | undefined;
 	private readonly tabContext: IScopedContextKeyService;
 	private readonly renderedLabels = new Map<string, { readonly label: IResourceLabel; readonly context: IScopedContextKeyService; signature: string | undefined; }>();
@@ -175,7 +174,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		this.delegate.showContextMenu(editor.input, event, tab);
 	}
 
-	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
+	setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
 		this.editors = editors;
 		this.activeInput = activeInput;
 		this.selectedIds = selectedIds;
@@ -339,7 +338,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	}
 }
 
-function editorInputLabel(input: EditorInput, labelService: ILabelService): { readonly input: EditorInput; readonly name: string; description: string | undefined; } {
+function editorInputLabel(input: IResourceEditorInput, labelService: ILabelService): { readonly input: IResourceEditorInput; readonly name: string; description: string | undefined; } {
 	const explicitLabel = input.label?.trim();
 	const name = explicitLabel || labelService.getUriBasenameLabel(input.resource);
 	const parent = dirname(input.resource);

@@ -1,10 +1,10 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { CancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
-import type { EditorInput } from "../../../../../workbench/browser/parts/editor/editorInput.js";
 import { EditorPaneMatch, EditorPaneVisibility } from "../../../../../workbench/browser/parts/editor/editorPane.js";
 import { PdfEditorPane } from "../../../../../workbench/contrib/pdf/browser/pdfEditorPane.js";
 import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
@@ -123,7 +123,7 @@ test("workspace PDF loader reads only through the binary file contract", async (
 	assert.deepEqual(await loader.load(input("paper.pdf"), new AbortController().signal), new Uint8Array([37, 80, 68, 70]));
 });
 
-function input(name: string): EditorInput {
+function input(name: string): IResourceEditorInput {
 	return { resource: URI.file(`C:\\project\\${name}`), label: name };
 }
 

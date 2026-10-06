@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
@@ -23,7 +24,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IEditorService, type EditorInput, type IEditorService as EditorServiceContract } from '../../../../services/editor/common/editorService.js';
+import { IEditorService, type IEditorService as EditorServiceContract } from '../../../../services/editor/common/editorService.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import type { IEditorPart as EditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
@@ -431,7 +432,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		const copied: string[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
 		const services = new InstantiationService();
-		let activeEditor: EditorInput = { resource: file };
+		let activeEditor: IResourceEditorInput = { resource: file };
 		services.registerInstance(IEditorService, {
 			get activeEditor() { return activeEditor; },
 		} as EditorServiceContract);

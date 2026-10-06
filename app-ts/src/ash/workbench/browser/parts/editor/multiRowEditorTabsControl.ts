@@ -1,6 +1,6 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import type { TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
-import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
@@ -38,7 +38,7 @@ export class MultiRowEditorControl extends EditorTabsControl {
 		return this.currentRows;
 	}
 
-	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
+	setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
 		const descriptors = new Map(editors.map(editor => [editor.input, editor]));
 		const sticky = this.stickyModel.getEditors().map(input => descriptors.get(input)!);
 		const ordinary = this.ordinaryModel.getEditors().map(input => descriptors.get(input)!);

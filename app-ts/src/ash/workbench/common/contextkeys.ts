@@ -1,6 +1,9 @@
 import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { WorkbenchStateValue } from '../../platform/workspace/common/workspace.js';
 
+/** Stable host capability for this window, independent of connection state. */
+export const AppServerAvailableContext = new RawContextKey<boolean>('appServerAvailable', false);
+
 export const IsSessionsWindowContext = new RawContextKey<boolean>('isSessionsWindow', false);
 
 /** Kind of workspace currently hosted by the window. */

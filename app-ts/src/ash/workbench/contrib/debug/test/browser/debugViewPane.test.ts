@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -9,7 +10,7 @@ import { IContextMenuService } from "../../../../../platform/contextview/browser
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from "../../../../../nls.js";
 import { builtinLanguagePackCatalogs } from "../../../../services/localization/common/localizationCatalogs.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { type EditorInput, IEditorService } from "../../../../services/editor/common/editorService.js";
+import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IDebugService, type IDebugSourceContent, type IDebugVariable } from "../../../../services/debug/common/debugService.js";
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from "../common/mockDebug.js";
@@ -18,7 +19,7 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const opened: unknown[] = [];
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened.push(input); }, focusActiveEditor() { } };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => { opened.push(input); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
@@ -39,7 +40,7 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 
 		(view.element.querySelector<HTMLButtonElement>(".ash-debug-frame")!).click();
 		await waitFor(() => opened.length === 2);
-		const openedInput = opened[0] as EditorInput;
+		const openedInput = opened[0] as IResourceEditorInput;
 		assert.equal(openedInput.resource.scheme, "debug-source");
 		assert.deepEqual({ ...openedInput, resource: undefined }, { resource: undefined, label: "generated.ts", contentType: "text/typescript", readOnly: true, initialText: "const generated = true;" });
 
@@ -56,8 +57,8 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 test("Debug view opens an authority-qualified Remote stack source", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	let opened: EditorInput | undefined;
-	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened = input; }, focusActiveEditor() { } };
+	let opened: IResourceEditorInput | undefined;
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => { opened = input; }, focusActiveEditor() { } };
 	const resource = URI.parse("ash-remote://ssh+work-server/srv/project/src/main.ts");
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
@@ -233,7 +234,7 @@ test("Debug source failures preserve variable and Watch inspection", async () =>
 test("Debug inspection retires pending variable and virtual source replies when execution resumes", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
-	const opened: EditorInput[] = [];
+	const opened: IResourceEditorInput[] = [];
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
@@ -319,7 +320,7 @@ test("Debug variable editing respects read-only hints, retains adapter errors, a
 test("Debug welcome creates a launch document and reopens existing configuration without overwriting it", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const globals = installDomGlobals(browser);
-	const opened: EditorInput[] = [];
+	const opened: IResourceEditorInput[] = [];
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");

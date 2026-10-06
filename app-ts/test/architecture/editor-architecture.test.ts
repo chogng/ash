@@ -678,8 +678,11 @@ test("Workbench entries select runtime services and load feature services throug
 	assert.match(workbench, /installWorkbenchServiceContributions/u);
 	for (const runtime of ["web", "desktop"]) {
 		const entry = readFileSync(join(workbenchRoot, `workbench.${runtime}.main.ts`), "utf8");
-		assert.match(entry, /contrib\/tasks\/browser\/taskService/u);
+		assert.match(entry, /import ["']\.\/workbench\.common\.main\.js["']/u);
 	}
+	assert.match(workbenchContributions, /contrib\/tasks\/browser\/tasks\.contribution/u);
+	assert.match(readFileSync(join(workbenchRoot, "contrib/tasks/browser/tasks.contribution.ts"), "utf8"), /import ["']\.\/taskService\.js["']/u);
+	assert.doesNotMatch(workbenchContributions, /contrib\/tasks\/browser\/taskService/u);
 	assert.match(workbenchContributions, /extensionHostServiceRegistration/u);
 	assert.match(workbenchContributions, /codebaseSymbolsServiceRegistration/u);
 	assert.match(debugContribution, /import ["']\.\/debugService\.js["']/u);

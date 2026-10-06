@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert as ariaAlert } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -13,7 +14,6 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISCMService, type ISCMConflictFile, type ISCMConflictProvider, type ISCMConflictResolution } from '../common/scm.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
@@ -97,7 +97,7 @@ export class ScmMergeEditorPane extends Disposable implements IEditorPane {
 		this.mergeView.create(this.domNode);
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isScmMergeEditorInput(input)) throw new TypeError('SCM merge editor requires a conflict input');
 		const conflictProvider = this.scmService.getRepository(input.repositoryId)?.provider.mergeProvider;
 		if (!conflictProvider) throw new Error(`SCM repository '${input.repositoryId}' cannot resolve merge conflicts`);

@@ -1,12 +1,12 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { URI } from '../../../../base/common/uri.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorInputSerializers, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 
 export const SCM_MERGE_EDITOR_ID = 'ash.editor.scmMerge';
 const contentType = 'application/vnd.ash.scm-merge';
 
-export interface ScmMergeEditorInput extends EditorInput {
+export interface ScmMergeEditorInput extends IResourceEditorInput {
 	readonly contentType: typeof contentType;
 	readonly repositoryId: string;
 	readonly path: string;
@@ -25,13 +25,13 @@ export function createScmMergeEditorInput(repositoryId: string, path: string, re
 	};
 }
 
-export function isScmMergeEditorInput(input: EditorInput): input is ScmMergeEditorInput {
+export function isScmMergeEditorInput(input: IResourceEditorInput): input is ScmMergeEditorInput {
 	return input.contentType === contentType && 'repositoryId' in input && typeof input.repositoryId === 'string'
 		&& 'path' in input && typeof input.path === 'string'
 		&& 'resultResource' in input && input.resultResource instanceof URI;
 }
 
-export function matchScmMergeEditor(input: EditorInput): EditorPaneMatch {
+export function matchScmMergeEditor(input: IResourceEditorInput): EditorPaneMatch {
 	return isScmMergeEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 

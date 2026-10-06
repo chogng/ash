@@ -44,8 +44,8 @@ test('Cowork separates model settings from input actions and omits prompt, Agent
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
 		await search.fill('GPT-6.1 Sol');
-		await expect(picker.getByRole('option')).toHaveCount(1);
-		const selectedModelName = await picker.getByRole('option').locator('.ash-quick-pick-row-label').innerText();
+		await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
+		const selectedModelName = await picker.getByRole('menuitemradio').locator('.ash-icon-label-text').innerText();
 		await search.press('Enter');
 		await expect(model).toHaveText(selectedModelName);
 		const effort = settings.locator('[data-action-id="ash.chat.input.effort"] button');

@@ -1,5 +1,5 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { URI } from '../../../../base/common/uri.js';
-import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { EditorInputSerializers, requireRecord, requireSerializedEditorInput, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 
@@ -78,14 +78,14 @@ export interface MultiDiffEditorGitChange {
 
 export interface MultiDiffEditorInputItem {
 	readonly label: string;
-	readonly original: EditorInput;
-	readonly modified: EditorInput;
+	readonly original: IResourceEditorInput;
+	readonly modified: IResourceEditorInput;
 	/** Resource opened by the per-file Open File action. Defaults to the modified side. */
-	readonly goToFile?: EditorInput;
+	readonly goToFile?: IResourceEditorInput;
 	readonly gitChange?: MultiDiffEditorGitChange;
 }
 
-export interface MultiDiffEditorInput extends EditorInput {
+export interface MultiDiffEditorInput extends IResourceEditorInput {
 	readonly contentType: typeof MULTI_DIFF_EDITOR_CONTENT_TYPE;
 	readonly label: string;
 	readonly items: readonly MultiDiffEditorInputItem[];
@@ -129,14 +129,14 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 	});
 }
 
-export function isMultiDiffEditorInput(input: EditorInput): input is MultiDiffEditorInput {
+export function isMultiDiffEditorInput(input: IResourceEditorInput): input is MultiDiffEditorInput {
 	return input.contentType === MULTI_DIFF_EDITOR_CONTENT_TYPE &&
 		'items' in input &&
 		Array.isArray(input.items) &&
 		input.items.every((item) => isMultiDiffEditorInputItem(item));
 }
 
-export function matchMultiDiffEditor(input: EditorInput): EditorPaneMatch {
+export function matchMultiDiffEditor(input: IResourceEditorInput): EditorPaneMatch {
 	return isMultiDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
@@ -185,12 +185,12 @@ function freezeMultiDiffSource(source: MultiDiffEditorSource): MultiDiffEditorSo
 	return Object.freeze({ ...source });
 }
 
-function assertTextResourceInput(value: unknown, owner: string): asserts value is EditorInput {
+function assertTextResourceInput(value: unknown, owner: string): asserts value is IResourceEditorInput {
 	if (!isTextResourceInput(value)) throw new TypeError(`${owner} requires an editor resource`);
 }
 
-function isTextResourceInput(value: unknown): value is EditorInput {
+function isTextResourceInput(value: unknown): value is IResourceEditorInput {
 	return typeof value === 'object' && value !== null &&
 		'resource' in value &&
-		typeof (value as EditorInput).resource?.toString === 'function';
+		typeof (value as IResourceEditorInput).resource?.toString === 'function';
 }

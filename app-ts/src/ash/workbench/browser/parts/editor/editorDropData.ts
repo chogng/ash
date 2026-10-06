@@ -1,9 +1,9 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { containsDragType, DataTransfers } from "../../../../base/browser/dnd.js";
 import { Mimes } from "../../../../base/common/mime.js";
 import { URI } from "../../../../base/common/uri.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import { getPathForFile } from "../../../../platform/dnd/browser/dnd.js";
-import type { EditorInput } from "./editorInput.js";
 
 /** Returns whether a native drag exposes resources the editor can open. */
 export function containsExternalEditorDrop(event: DragEvent): boolean {
@@ -11,10 +11,10 @@ export function containsExternalEditorDrop(event: DragEvent): boolean {
 }
 
 /** Converts native URI and file transfers into frontend-owned editor inputs. */
-export async function extractExternalEditorInputs(dataTransfer: DataTransfer): Promise<readonly EditorInput[]> {
+export async function extractExternalEditorInputs(dataTransfer: DataTransfer): Promise<readonly IResourceEditorInput[]> {
 	const uriList = dataTransfer.getData(Mimes.uriList);
 	const files = [...dataTransfer.files];
-	const inputs: EditorInput[] = [];
+	const inputs: IResourceEditorInput[] = [];
 	const resources = new Set<string>();
 	for (const value of uriList.split(/\r?\n/)) {
 		const candidate = value.trim();

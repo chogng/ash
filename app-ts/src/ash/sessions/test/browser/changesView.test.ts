@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../workbench/common/editor.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -17,7 +18,7 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
-import { IEditorService, type EditorInput, type EditorOpenOptions } from '../../../workbench/services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions } from '../../../workbench/services/editor/common/editorService.js';
 import { isDiffEditorInput } from '../../../workbench/common/editor/diffEditorInput.js';
 import { isMultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
@@ -60,7 +61,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 				readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
 			},
 		});
-		const opened: EditorInput[] = [];
+		const opened: IResourceEditorInput[] = [];
 		const openOptions: (EditorOpenOptions | undefined)[] = [];
 		const editors: IEditorService = { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() { } };
 		services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });

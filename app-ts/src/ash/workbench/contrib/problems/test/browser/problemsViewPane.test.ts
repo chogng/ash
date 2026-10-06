@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -5,7 +6,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
-import { type EditorInput, type EditorOpenOptions, type IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import { type EditorOpenOptions, type IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test("ProblemsViewPane filters diagnostics and opens the selected range", async () => {
@@ -19,7 +20,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 		marker(main, MarkerSeverity.Warning, "unused import", 2),
 		marker(library, MarkerSeverity.Information, "consider simplifying", 4),
 	]);
-	let opened: { readonly input: EditorInput; readonly options?: EditorOpenOptions; } | undefined;
+	let opened: { readonly input: IResourceEditorInput; readonly options?: EditorOpenOptions; } | undefined;
 	let focusCount = 0;
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,

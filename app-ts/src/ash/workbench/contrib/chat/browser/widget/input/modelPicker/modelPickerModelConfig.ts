@@ -1,6 +1,27 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
+export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
+	const labels: string[] = [];
+	if (entry.supportedReasoningEfforts?.length) {
+		labels.push(modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort));
+	}
+	if (entry.contextWindowOptions.length && entry.contextWindow) {
+		labels.push(getModelConfigValueLabel(entry.contextWindow));
+	}
+	return labels.join(' ');
+}
+
+export function getModelConfigValueLabel(tokens: number): string {
+	if (tokens >= 1_000_000) {
+		return `${Number((tokens / 1_000_000).toFixed(2))}M`;
+	}
+	if (tokens >= 1_000) {
+		return `${Number((tokens / 1_000).toFixed(1))}K`;
+	}
+	return String(tokens);
+}
+
 /** Both configuration surfaces write undefined when the configured default is chosen. */
 export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; isDefault: boolean; }[] {
 	const defaultEffort = entry.defaultReasoningEffort;

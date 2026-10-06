@@ -1,13 +1,13 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 
 const GettingStartedResource = URI.parse('ash-welcome:/welcome');
 const GettingStartedContentType = 'application/vnd.ash.welcome';
 
-export function createGettingStartedInput(): EditorInput {
+export function createGettingStartedInput(): IResourceEditorInput {
 	return {
 		resource: GettingStartedResource,
 		contentType: GettingStartedContentType,
@@ -18,6 +18,6 @@ export function createGettingStartedInput(): EditorInput {
 	};
 }
 
-export function isGettingStartedInput(input: EditorInput): boolean {
+export function isGettingStartedInput(input: IResourceEditorInput): boolean {
 	return input.contentType === GettingStartedContentType || extUri.isEqual(input.resource, GettingStartedResource);
 }

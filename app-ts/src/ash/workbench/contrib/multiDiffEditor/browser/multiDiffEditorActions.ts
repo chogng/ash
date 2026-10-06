@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
@@ -5,7 +6,7 @@ import { Action2, MenuId } from '../../../../platform/actions/common/actions.js'
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
-import { IEditorService, type EditorInput } from '../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffEditorPane } from './multiDiffEditorPane.js';
 
@@ -112,8 +113,8 @@ function activeMultiDiffPane(accessor: ServicesAccessor): MultiDiffEditorPane | 
 	return pane instanceof MultiDiffEditorPane ? pane : undefined;
 }
 
-function isEditorInput(value: unknown): value is EditorInput {
+function isEditorInput(value: unknown): value is IResourceEditorInput {
 	return typeof value === 'object' && value !== null &&
 		'resource' in value &&
-		typeof (value as EditorInput).resource?.toString === 'function';
+		typeof (value as IResourceEditorInput).resource?.toString === 'function';
 }

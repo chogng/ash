@@ -4,16 +4,15 @@ import type { IContextKey } from "../../../../platform/contextkey/common/context
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IEditorPane } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
-import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
+import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
 import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 
 export interface EditorContextKeySource extends IEditorStateSource {
-	readonly activeInput: EditorInput | undefined;
+	readonly activeInput: IResourceEditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
 }
 
@@ -153,7 +152,7 @@ function createEditorContextKeyBindings(contextKeyService: IContextKeyService) {
 type EditorContextKeyBindings = ReturnType<typeof createEditorContextKeyBindings>;
 
 interface EditorContextKeyProjection {
-	readonly input: EditorInput | undefined;
+	readonly input: IResourceEditorInput | undefined;
 	readonly paneId: string | undefined;
 	readonly isDirty: boolean;
 	readonly isPreview: boolean;
@@ -204,7 +203,7 @@ function resetEditorContextKeys(contextKeyService: IContextKeyService, keys: Edi
 	});
 }
 
-function resourceContextPath(resource: EditorInput['resource']): string {
+function resourceContextPath(resource: IResourceEditorInput['resource']): string {
 	return resource.scheme === 'file' ? resource.fsPath : resource.path;
 }
 
@@ -229,7 +228,7 @@ function resourceExtension(filename: string): string {
 	return dot > 0 ? filename.slice(dot) : '';
 }
 
-function resourceLanguageId(input: EditorInput, resolver: TextResourceLanguageResolver | undefined): string | undefined {
+function resourceLanguageId(input: IResourceEditorInput, resolver: TextResourceLanguageResolver | undefined): string | undefined {
 	if (input.languageId) return input.languageId;
 	return isTextResourceLanguageInput(input, resolver) ? resolveTextResourceLanguageId(input, resolver) : undefined;
 }

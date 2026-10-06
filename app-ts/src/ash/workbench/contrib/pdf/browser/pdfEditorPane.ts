@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { addDisposableListener, h, svg as createSvgElement } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
@@ -9,7 +10,6 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { clamp } from "../../../../base/common/numbers.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
-import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import type { PdfAnnotationPoint, PdfAnnotationRect, PdfNoteAnnotation } from "../common/pdfAnnotations.js";
 import { PdfAnnotationModel } from "./pdfAnnotationModel.js";
@@ -63,7 +63,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 	private colorInput: HTMLInputElement | undefined;
 	private statusElement: HTMLDivElement | undefined;
 	private renderResult: IPdfRenderResult | undefined;
-	private input: EditorInput | undefined;
+	private input: IResourceEditorInput | undefined;
 	private mode: PdfAnnotationMode = "select";
 	private color = defaultAnnotationColor;
 	private noteDraft = defaultNoteText;
@@ -175,7 +175,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		this.renderSidebar();
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (matchPdfEditor(input) === EditorPaneMatch.None) {
 			throw new RangeError(`PDF editor cannot open ${input.resource}`);
 		}
@@ -249,7 +249,7 @@ export class PdfEditorPane extends Disposable implements IEditorPane {
 		return this.saveOperation;
 	}
 
-	private async persistAnnotations(input: EditorInput): Promise<void> {
+	private async persistAnnotations(input: IResourceEditorInput): Promise<void> {
 		try {
 			const controller = new AbortController();
 			const snapshot = await this.annotationStore.save(input.resource, this.annotationModel.snapshot, this.annotationModel.revision, controller.signal);

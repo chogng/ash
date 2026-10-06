@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { SearchSettingsContent } from '../../search/browser/searchSettingsContent.js';
 import { NetworkSettingsContent } from './networkSettingsContent.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -23,7 +24,6 @@ import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../.
 import { localize } from '../../../../nls.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { GitConfiguration, type GitAutofetch } from '../../git/common/gitConfiguration.js';
 import { IGitService } from '../../git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
@@ -255,7 +255,7 @@ export class SettingsEditor extends Disposable implements IEditorPane {
 		this._register(toDisposable(() => rootDomNode.remove()));
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isSettingsEditorInput(input)) throw new TypeError(`Settings editor cannot open ${input.resource}`);
 		if (signal.aborted) throw signal.reason;
 		this.languageServerSettings.setInput(input);

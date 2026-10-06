@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
@@ -11,7 +12,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
+import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroupView.js';
 import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
@@ -27,7 +28,7 @@ export interface ModalEditorPartOptions {
 }
 
 interface ModalEditorEntry {
-	readonly input: EditorInput;
+	readonly input: IResourceEditorInput;
 	readonly instance: ModalEditorPaneInstance;
 }
 
@@ -36,7 +37,7 @@ let nextModalEditorId = 1;
 /** Owns the single Editor Pane presented above the Workbench. */
 export class ModalEditorPart extends Disposable {
 	public readonly domNode: HTMLElement;
-	public readonly onDidRequestClose: Event<EditorInput>;
+	public readonly onDidRequestClose: Event<IResourceEditorInput>;
 	public readonly onDidChangeVisibility: Event<boolean>;
 
 	private readonly active = this._register(new MutableDisposable<ModalEditorPaneInstance>());
@@ -44,7 +45,7 @@ export class ModalEditorPart extends Disposable {
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly hostDomNode: HTMLDivElement;
 	private readonly pending = this._register(new DisposableMap<number, ModalEditorPaneInstance>());
-	private readonly requestCloseEmitter = this._register(new Emitter<EditorInput>());
+	private readonly requestCloseEmitter = this._register(new Emitter<IResourceEditorInput>());
 	private readonly visibilityEmitter = this._register(new Emitter<boolean>());
 	private readonly titleDomNode: HTMLHeadingElement;
 	private currentEntry: ModalEditorEntry | undefined;
@@ -106,7 +107,7 @@ export class ModalEditorPart extends Disposable {
 		}));
 	}
 
-	public get activeInput(): EditorInput | undefined {
+	public get activeInput(): IResourceEditorInput | undefined {
 		return this.currentEntry?.input;
 	}
 
@@ -118,7 +119,7 @@ export class ModalEditorPart extends Disposable {
 		return this.visible;
 	}
 
-	public async openEditor(input: EditorInput, openOptions: EditorOpenOptions = {}): Promise<IEditorPane> {
+	public async openEditor(input: IResourceEditorInput, openOptions: EditorOpenOptions = {}): Promise<IEditorPane> {
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
 		try {
@@ -151,7 +152,7 @@ export class ModalEditorPart extends Disposable {
 		}
 	}
 
-	private async doOpenEditor(input: EditorInput, openOptions: EditorOpenOptions, sequence: number): Promise<IEditorPane> {
+	private async doOpenEditor(input: IResourceEditorInput, openOptions: EditorOpenOptions, sequence: number): Promise<IEditorPane> {
 		const descriptor = this.options.registry.getEditorPane(input, openOptions);
 		if (!descriptor) {
 			throw new RangeError(`No editor can open ${input.resource}`);
@@ -194,7 +195,7 @@ export class ModalEditorPart extends Disposable {
 		return pane;
 	}
 
-	public closeEditor(input: EditorInput): boolean {
+	public closeEditor(input: IResourceEditorInput): boolean {
 		if (!this.currentEntry || editorInputKey(this.currentEntry.input) !== editorInputKey(input)) return false;
 		this.openSequence += 1;
 		this.cancelPendingOpen();
@@ -255,7 +256,7 @@ export class ModalEditorPart extends Disposable {
 		if (!preserveFocus) this.focusEditorContent();
 	}
 
-	private updateTitle(input: EditorInput): void {
+	private updateTitle(input: IResourceEditorInput): void {
 		const title = editorInputLabel(input);
 		this.titleDomNode.textContent = title;
 		const closeLabel = `Close ${title}`;
@@ -292,7 +293,7 @@ class ModalEditorPaneInstance extends Disposable {
 	}
 }
 
-function editorInputLabel(input: Pick<EditorInput, 'resource' | 'label'>): string {
+function editorInputLabel(input: Pick<IResourceEditorInput, 'resource' | 'label'>): string {
 	if (input.label?.trim()) return input.label;
 	return basename(input.resource) || input.resource.toString();
 }

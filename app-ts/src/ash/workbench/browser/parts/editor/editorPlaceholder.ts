@@ -6,8 +6,8 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { basename } from "../../../../base/common/resources.js";
 import Severity from "../../../../base/common/severity.js";
 import { localize } from "../../../../nls.js";
-import { isEditorOpenError } from "../../../common/editor.js";
-import type { EditorInput } from "./editorInput.js";
+import { isEditorOpenError, type IResourceEditorInput } from "../../../common/editor.js";
+
 import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
 
 let nextErrorPageId = 0;
@@ -22,7 +22,7 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 	private actionsDomNode!: HTMLDivElement;
 	private readonly buttons = this._register(new DisposableStore());
 	private firstButton: Button | undefined;
-	private input: EditorInput | undefined;
+	private input: IResourceEditorInput | undefined;
 
 	constructor(
 		private error: unknown,
@@ -55,7 +55,7 @@ export class ErrorPlaceholderEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	setInput(input: EditorInput, _signal: AbortSignal): Promise<void> {
+	setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
 		this.input = input;
 		this.render();
 		return Promise.resolve();

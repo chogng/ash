@@ -1,9 +1,12 @@
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
-import type { ModelCatalogEntry } from '../../../src/ash/workbench/services/chat/common/modelCatalog.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../src/ash/workbench/services/chat/common/modelCatalog.js';
+import type { ModelRef } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatInputPart as CoworkChatInputPart } from '../../../src/ash/sessions/contrib/cowork/browser/widget/input/chatInputPart.js';
+import '../../../src/ash/sessions/contrib/cowork/browser/widget/media/chat.css';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -16,12 +19,14 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { ChatSpeechToTextService as CoworkSpeechToTextService, IChatSpeechToTextService as ICoworkSpeechToTextService } from '../../../src/ash/sessions/contrib/cowork/browser/speechToText/chatSpeechToTextService.js';
+import { DictationOnboardingService as CoworkDictationOnboardingService, IDictationOnboardingService as ICoworkDictationOnboardingService } from '../../../src/ash/sessions/contrib/cowork/browser/speechToText/dictationOnboarding.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; dispose(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -36,20 +41,34 @@ services.registerInstance(IContextViewService, resources.add(new BrowserContextV
 const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
 services.registerInstance(IAccessibleViewService, accessibleView);
 const modelChanged = resources.add(new Emitter<void>());
+let selectedReasoningEffort: ModelReasoningEffort | undefined;
+const modelOptions = new URLSearchParams(location.search).get('modelOptions');
 let models: readonly ModelCatalogEntry[] = [{
-	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model', contextWindowOptions: [],
+	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
+	contextWindowOptions: [272_000, 1_000_000], contextWindow: 272_000, defaultContextWindow: 272_000,
 	description: 'A model for everyday tasks',
 	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
 	defaultReasoningEffort: 'low',
 	supportsFast: true, fast: false, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' },
 }];
+if (modelOptions === 'effort' || modelOptions === 'none') {
+	models = models.map(entry => ({ ...entry, contextWindowOptions: [] }));
+}
+if (modelOptions === 'context' || modelOptions === 'none') {
+	models = models.map(entry => ({ ...entry, supportedReasoningEfforts: [] }));
+}
+if (new URLSearchParams(location.search).get('modelSet') === 'multiple') {
+	models = [...models, { ...models[0], model: { provider: 'openai', model: 'extended-model' }, displayName: 'Extended model with a longer display name for coding' }];
+}
+let selectedModel: ModelRef = models[0].model;
+let automatic = false;
 services.registerInstance(ILanguageModelsService, {
 	readApprovalReviewModel: async () => ({ type: 'automatic' }),
 	setApprovalReviewModel: async () => { },
 	onDidChangeModels: modelChanged.event,
-	setModelPreferences: async (_model, update) => {
-		models = models.map(entry => ({ ...entry, fast: update.fast ?? entry.fast }));
-		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined });
+	setModelPreferences: async (model, update) => {
+		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? { ...entry, fast: update.fast ?? entry.fast, contextWindow: update.contextWindow ?? entry.contextWindow } : entry);
+		renderModels();
 		modelChanged.fire();
 	},
 	listModels: async () => models,
@@ -72,16 +91,27 @@ services.registerInstance(IConfigurationService, resources.add(new InMemoryConfi
 services.registerInstance(IDictationService, undefined);
 services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
+services.registerSingleton(ICoworkSpeechToTextService, () => services.createInstance(CoworkSpeechToTextService));
+services.registerSingleton(ICoworkDictationOnboardingService, () => services.createInstance(CoworkDictationOnboardingService));
 const notifications = resources.add(new NotificationService());
 const delegate: ChatInputDelegate = {
 	send: async () => { }, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
-	selectModel: async () => { }, selectReasoningEffort: async effort => {
-		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, selectedReasoningEffort: effort, interaction: undefined });
-	}, selectAutomaticModel: async () => { },
+	selectModel: async model => {
+		selectedModel = model;
+		automatic = false;
+		renderModels();
+	}, selectReasoningEffort: async effort => {
+		selectedReasoningEffort = effort;
+		renderModels();
+	}, selectAutomaticModel: async () => {
+		automatic = true;
+		renderModels();
+	},
 	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, openModelSettings: async () => { },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
-const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, []));
+const inputPart = new URLSearchParams(location.search).get('surface') === 'cowork' ? CoworkChatInputPart : ChatInputPart;
+const part = resources.add(services.createInstance<ChatInputPart | CoworkChatInputPart>(inputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, []));
 const state: ChatInputState = {
 	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 	interaction: {
@@ -103,9 +133,13 @@ const state: ChatInputState = {
 		}
 	},
 };
+function renderModels(): void {
+	part.render({ ...state, models, selectedModel, isAutomaticModel: automatic, selectedReasoningEffort, interaction: undefined });
+}
 part.render(state);
 window.ashChatInputIntegration = {
-	showModels: () => part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined }),
+	dispose: () => resources.dispose(),
+	showModels: renderModels,
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
 	showQuestions: () => part.render({
 		...state, interaction: {

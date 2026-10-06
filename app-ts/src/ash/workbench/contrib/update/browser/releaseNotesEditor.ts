@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './releaseNotesEditor.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -6,7 +7,6 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { MarkdownDocumentView } from '../../markdown/browser/markdownDocumentRenderer.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IOnboardingTryoutService } from '../../onboarding/common/onboardingTryout.js';
 import { prepareReleaseNotesMarkdown, releaseNotesTryoutId } from './releaseNotesTryouts.js';
 import packageMetadata from '../../../../../../package.json' with { type: 'json' };
@@ -38,7 +38,7 @@ export class ReleaseNotesEditor extends Disposable implements IEditorPane {
 		}));
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
 		if (input.resource.toString() !== releaseNotesResource) throw new Error('Invalid release notes resource');
 		this.render();

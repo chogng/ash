@@ -24,7 +24,7 @@ import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/e
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IGitService } from '../../git/common/gitService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IGitHubReviewModel, isReviewLine, type GitHubComposeDraft } from './githubReviewModel.js';
 
@@ -199,7 +199,7 @@ export class GitHubEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal);
 		const cancel = () => this.model.cancelLoading();
 		signal.addEventListener('abort', cancel, { once: true });
@@ -259,10 +259,12 @@ export class GitHubEditor extends Disposable implements IEditorPane {
 				const row = this.element(this.list, 'github-list-item'); row.setAttribute('role', 'listitem');
 				const notification = 'id' in item ? item : undefined;
 				const label = notification ? `${notification.unread ? localize('github.editor.unread', 'Unread') + ' · ' : ''}${notification.repository.owner}/${notification.repository.name} · ${notification.title}` : `#${'number' in item ? item.number : ''} ${item.title}`;
-				const button = this.listResources.add(new Button(row, { label, presentation: 'quiet', onClick: () => {
-					if (notification) { model.selectNotification(notification); return; }
-					if ('number' in item) { this.inlineBody.value = ''; this.issueReply.value = ''; void (model.mode === 'pullRequests' ? model.openPullRequest(item.number) : model.openIssue(item.number)); }
-				} }));
+				const button = this.listResources.add(new Button(row, {
+					label, presentation: 'quiet', onClick: () => {
+						if (notification) { model.selectNotification(notification); return; }
+						if ('number' in item) { this.inlineBody.value = ''; this.issueReply.value = ''; void (model.mode === 'pullRequests' ? model.openPullRequest(item.number) : model.openIssue(item.number)); }
+					}
+				}));
 				button.domNode.dataset.githubFocus = notification ? `notification-${notification.id}` : `item-${'number' in item ? item.number : ''}`;
 			}
 			this.listResources.add(addDisposableListener(this.list, 'keydown', event => {
@@ -592,16 +594,18 @@ export class GitHubEditor extends Disposable implements IEditorPane {
 	}
 
 	private action(id: string, label: string, enabled: boolean, run: () => unknown): IAction {
-		return { id: `github.${id}`, label, tooltip: label, enabled, run: async () => {
-			if (!enabled) { return; }
-			try { return await run(); }
-			catch (error) { this.status.textContent = githubErrorMessage(error); this.status.classList.add('error'); }
-		} };
+		return {
+			id: `github.${id}`, label, tooltip: label, enabled, run: async () => {
+				if (!enabled) { return; }
+				try { return await run(); }
+				catch (error) { this.status.textContent = githubErrorMessage(error); this.status.classList.add('error'); }
+			}
+		};
 	}
 	private toolbar(parent: HTMLElement, ariaLabel: string, resources?: DisposableStore): WorkbenchToolBar { const toolbar = new WorkbenchToolBar(parent, this.contextMenu, { ariaLabel }); return resources ? resources.add(toolbar) : this._register(toolbar); }
 	private input(parent: HTMLElement, text: string, focusKey: string): InputBox { const label = this.element(parent, 'github-field', 'label'); label.append(h(parent.ownerDocument, 'span', text)); const input = this._register(new InputBox(label, { presentation: 'field', ariaLabel: text })); input.inputElement.dataset.githubFocus = focusKey; return input; }
 	private textarea(parent: HTMLElement, text: string, focusKey: string): HTMLTextAreaElement { const label = this.element(parent, 'github-field', 'label'); label.append(h(parent.ownerDocument, 'span', text)); const area = h(parent.ownerDocument, 'textarea'); area.setAttribute('aria-label', text); area.dataset.githubFocus = focusKey; area.rows = 3; area.maxLength = 65_536; label.append(area); return area; }
-	private select(parent: HTMLElement, label: string, options: readonly { value: string; label: string }[]): SelectBox { return this._register(new SelectBox(parent, { ariaLabel: label, options, presentation: 'field', contextViewProvider: this.contextView })); }
+	private select(parent: HTMLElement, label: string, options: readonly { value: string; label: string; }[]): SelectBox { return this._register(new SelectBox(parent, { ariaLabel: label, options, presentation: 'field', contextViewProvider: this.contextView })); }
 	private element<K extends 'div' | 'label' = 'div'>(parent: HTMLElement, className: string, tag = 'div' as K) { const element = h(parent.ownerDocument, tag); element.className = className; parent.append(element); return element; }
 	private link(parent: HTMLElement, text: string, url: string): void {
 		// Remote text is rendered as text; URLs go through the shared opener's trust policy.

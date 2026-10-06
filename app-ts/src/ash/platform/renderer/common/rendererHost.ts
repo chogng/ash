@@ -44,9 +44,6 @@ import type { IAutomationService } from '../../automation/common/automationServi
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
-import { RawContextKey } from '../../contextkey/common/contextkey.js';
-
-export const AppServerAvailableContext = new RawContextKey<boolean>('appServerAvailable', false);
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {

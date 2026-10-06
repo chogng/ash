@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/disassemblyView.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert, status } from '../../../../base/browser/ui/aria/aria.js';
@@ -22,7 +23,7 @@ import { IKeybindingService } from '../../../../platform/keybinding/common/keybi
 import { Range } from '../../../../editor/common/core/range.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDebugService, type IDebugSession, type IDisassembledInstruction, type IInstructionBreakpoint } from '../../../services/debug/common/debugService.js';
-import { IEditorService, type EditorInput } from '../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { CONTEXT_DISASSEMBLY_VIEW_FOCUS, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 
 const PAGE_SIZE = 50;
@@ -163,7 +164,7 @@ export class DisassemblyView extends Disposable implements IEditorPane {
 		this._register(this.keybindings.onDidUpdateKeybindings(updateHint));
 	}
 
-	public async setInput(_input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		this.inputSignal = signal;
 		const abort = (): void => { this.generation++; };

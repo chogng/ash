@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
@@ -11,7 +12,6 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IDialogsModel } from '../../../common/dialogs.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
@@ -118,7 +118,7 @@ export class BrowserEditor extends Disposable implements IEditorPane {
 		}));
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
 		if (!(input instanceof BrowserEditorInput)) { throw new TypeError('Expected browser editor input'); }
 		const model = await input.resolve();

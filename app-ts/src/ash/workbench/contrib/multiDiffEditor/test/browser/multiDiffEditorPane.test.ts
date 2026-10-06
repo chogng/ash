@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { MultiDiffEditorPaneOptions } from '../../browser/multiDiffEditorPane.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -25,7 +26,7 @@ import { IEditorPartsService } from '../../../../browser/parts/editor/editorPart
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 import { VIEW_ID } from '../../../files/common/files.js';
-import type { EditorInput, IEditorService } from '../../../../services/editor/common/editorService.js';
+import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
@@ -154,7 +155,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 			discardWorktree: async (paths: readonly string[]) => { gitActions.push(`discard:${paths.join(',')}`); return {} as never; },
 		} as unknown as IGitService,
 		editorService: {
-			openEditor: async (input: EditorInput) => { opened.push(input.resource.toString()); },
+			openEditor: async (input: IResourceEditorInput) => { opened.push(input.resource.toString()); },
 		} as unknown as IEditorService,
 		viewsService: {
 			openView: async () => undefined,

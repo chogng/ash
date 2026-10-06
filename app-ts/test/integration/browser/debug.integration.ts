@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { Event } from '../../../src/ash/base/common/event.js';
@@ -20,7 +21,7 @@ import { create, createModel } from '../../../src/ash/editor/standalone/browser/
 import { type TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { IDebugService, type IDebugVariable, type IDataBreakpointInfoResponse } from '../../../src/ash/workbench/services/debug/common/debugService.js';
-import { IEditorService, type EditorInput, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { DebugViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugViewPane.js';
 import { BreakpointEditorContribution } from '../../../src/ash/workbench/contrib/debug/browser/breakpointEditorContribution.js';
@@ -56,7 +57,7 @@ if (new URLSearchParams(location.search).has('breakpoints')) {
 	debug.toggleBreakpoint(resource, 2);
 	debug.toggleBreakpoint(resource, 3);
 }
-let activeInput: EditorInput | undefined;
+let activeInput: IResourceEditorInput | undefined;
 const openedSources: unknown[] = [];
 const editors: IEditorService = {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, get activeEditor() { return activeInput; }, visibleEditors: [],

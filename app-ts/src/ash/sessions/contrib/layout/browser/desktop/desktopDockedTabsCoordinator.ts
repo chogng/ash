@@ -1,6 +1,6 @@
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { IEditorService, type EditorInput } from '../../../../../workbench/services/editor/common/editorService.js';
-import { EditorInputCapabilities } from '../../../../../workbench/common/editor.js';
+import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
@@ -52,7 +52,7 @@ export class DesktopDockedTabsCoordinator {
 		await this.editors.openEditor(new SessionChangesEditorInput(selection), { pinned: true });
 	}
 
-	public isManaged(input: EditorInput): boolean {
+	public isManaged(input: IResourceEditorInput): boolean {
 		return input.resource.scheme === 'ash-sessions-files' || input.resource.scheme === 'ash-session-changes';
 	}
 }

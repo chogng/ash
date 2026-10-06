@@ -1,5 +1,5 @@
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import type { Event } from '../../../../base/common/event.js';
 
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
@@ -11,7 +11,7 @@ export interface ISessionsEntry {
 	readonly conversation?: 'optional';
 	readonly sidebarContainerId: string;
 	readonly detailsContainerId?: string;
-	readonly editorInput?: EditorInput;
+	readonly editorInput?: IResourceEditorInput;
 	readonly restoreCommand: string;
 	readonly focus: 'conversation' | 'sidebar' | 'editor';
 }

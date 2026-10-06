@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -12,7 +13,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 
 test('MultiDiff Action2 contributions use active-editor context and route to the active pane', async () => {
@@ -82,7 +83,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		const pane = services.createInstance(TrackingMultiDiffEditorPane);
 		registrations.add(pane);
 		services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);
-		const openedInputs: EditorInput[] = [];
+		const openedInputs: IResourceEditorInput[] = [];
 		services.registerInstance(IEditorService, {
 			...emptyEditorServiceState,
 			async openEditor(input) { openedInputs.push(input); },

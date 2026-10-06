@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../common/editor.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { IDecorationsService, type IDecorationData } from '../../services/decorations/common/decorations.js';
 import '../../../editor/test/browser/testEditorDom.js';
@@ -19,7 +20,6 @@ import { TextModel } from "../../../editor/common/model/textModel.js";
 import { LanguageFeaturesService } from "../../../editor/common/services/languageFeaturesService.js";
 import { InMemoryConfigurationService } from "../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { EditorTabsDelegate } from "../../browser/parts/editor/editorTabsControl.js";
-import type { EditorInput } from "../../browser/parts/editor/editorInput.js";
 import { MultiEditorTabsControl } from "../../browser/parts/editor/multiEditorTabsControl.js";
 import { updateConnectedTabClipping } from "../../browser/parts/editor/connectedTabClipping.js";
 import { EditorTitleControl } from "../../browser/parts/editor/editorTitleControl.js";
@@ -132,13 +132,13 @@ test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and 
 test('Pinned editor action preserves its target and keyboard focus across state updates', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		const unpinned: EditorInput[] = [];
+		const unpinned: IResourceEditorInput[] = [];
 		using services = createTestEditorServices();
 		const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 			...inertDelegate,
-			unstickEditor: (input: EditorInput) => { unpinned.push(input); },
+			unstickEditor: (input: IResourceEditorInput) => { unpinned.push(input); },
 		}, new EditorGroupModel());
 		const first = input('first');
 		const second = input('second');
@@ -164,9 +164,9 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 
 test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion point", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after"; }> = [];
-	const previews: EditorInput[] = [];
-	const keptEditors: EditorInput[] = [];
+	const drops: Array<{ target: IResourceEditorInput | undefined; position: "before" | "after"; }> = [];
+	const previews: IResourceEditorInput[] = [];
+	const keptEditors: IResourceEditorInput[] = [];
 	let dragging = false;
 	using services = createTestEditorServices();
 	const control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
@@ -219,7 +219,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 
 test("MultiEditorTabsControl forwards external resource drops to the target tab", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: EditorInput | undefined; position: "before" | "after"; }> = [];
+	const drops: Array<{ target: IResourceEditorInput | undefined; position: "before" | "after"; }> = [];
 	using services = createTestEditorServices();
 	const control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 		activate: () => undefined,
@@ -441,7 +441,7 @@ suite('Editor tab label format', () => {
 			const first = { resource: URI.file('/work/ash/client/src/index.ts') };
 			const second = { resource: URI.file('/work/ash/server/src/index.ts') };
 			const unique = { resource: URI.file('/work/ash/.cursorignore') };
-			const tab = (input: EditorInput) => ({ ...descriptor(input), instanceId: input.resource.path, tabId: `${input.resource.path}-tab`, panelId: `${input.resource.path}-panel` });
+			const tab = (input: IResourceEditorInput) => ({ ...descriptor(input), instanceId: input.resource.path, tabId: `${input.resource.path}-tab`, panelId: `${input.resource.path}-panel` });
 			group.openEditor(first);
 			group.openEditor(unique);
 			using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
@@ -472,7 +472,7 @@ suite('Editor tab label format', () => {
 			const group = new EditorGroupModel();
 			const rootFile = { resource: URI.file('/work/ash/index.ts') };
 			const nestedFile = { resource: URI.file('/work/ash/src/index.ts') };
-			const tab = (input: EditorInput) => ({ ...descriptor(input), instanceId: input.resource.toString(), tabId: `${input.resource.toString()}-tab`, panelId: `${input.resource.toString()}-panel` });
+			const tab = (input: IResourceEditorInput) => ({ ...descriptor(input), instanceId: input.resource.toString(), tabId: `${input.resource.toString()}-tab`, panelId: `${input.resource.toString()}-panel` });
 			group.openEditor(rootFile);
 			group.openEditor(nestedFile);
 			using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, inertDelegate, group);
@@ -538,11 +538,11 @@ suite('Editor tab label format', () => {
 	});
 });
 
-function input(name: string): EditorInput {
+function input(name: string): IResourceEditorInput {
 	return { resource: URI.parse(`untitled:/${name}`), label: name };
 }
 
-function descriptor(input: EditorInput): { readonly instanceId: string; readonly input: EditorInput; readonly panelId: string; readonly tabId: string; } {
+function descriptor(input: IResourceEditorInput): { readonly instanceId: string; readonly input: IResourceEditorInput; readonly panelId: string; readonly tabId: string; } {
 	return { instanceId: `${input.label}-instance`, input, panelId: `${input.label}-panel`, tabId: `${input.label}-tab` };
 }
 
@@ -562,7 +562,6 @@ function externalDataTransfer(): DataTransfer {
 	} as unknown as DataTransfer;
 }
 
-
 test('Editor tabs require the window resource label service before rendering', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -573,7 +572,6 @@ test('Editor tabs require the window resource label service before rendering', (
 		dom.window.close();
 	}
 });
-
 
 suite('Editor resource decorations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

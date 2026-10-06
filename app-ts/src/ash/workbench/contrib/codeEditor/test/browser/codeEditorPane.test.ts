@@ -19,7 +19,7 @@ import { LanguageService } from '../../../../../editor/common/services/languageS
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { Event } from '../../../../../base/common/event.js';
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../services/language/common/languageDiagnosticsService.js";
-import { type TextModel } from "../../../../../editor/common/model/textModel.js";
+import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
 import type { EditorPaneOptions, EditorPanePart, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -418,6 +418,30 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 	pane.dispose();
 	dom.window.close();
 });
+
+for (const close of ['abort', 'clear', 'dispose'] as const) {
+	test(`text pane releases provider content that arrives after ${close}`, async () => {
+		const dom = createTestDom('<!doctype html><body><main></main></body>');
+		using closeWindow = toDisposable(() => dom.window.close());
+		const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles(''));
+		using models = new BrowserTextModelService(resourceStore);
+		using services = paneServices(models);
+		const pending = deferred<TextModel>();
+		using provider = services.get(ITextModelService).registerTextModelContentProvider('review', { provideTextContent: () => pending.promise });
+		let parts = 0;
+		using pane = createPane(services, resourceStore, { createPart: () => { parts++; return createInertEditorPart(); } });
+		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+		const controller = new AbortController();
+		const opening = pane.setInput({ resource: URI.parse('review:/late.txt') }, controller.signal);
+		if (close === 'abort') controller.abort();
+		if (close === 'clear') pane.clearInput();
+		if (close === 'dispose') pane.dispose();
+		using text = new TextModel('late content');
+		pending.resolve(text);
+		await assert.rejects(opening, isCancellationError);
+		assert.deepEqual([parts, text.isDisposed(), pane.getControl()], [0, true, undefined]);
+	});
+}
 
 test("Stanza editor pane saves and reverts its shared model reference", async () => {
 	const dom = createTestDom("<!doctype html><body><main></main></body>");

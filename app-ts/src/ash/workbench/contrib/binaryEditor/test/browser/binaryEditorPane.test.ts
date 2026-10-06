@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -13,7 +14,7 @@ import { EditorInputSerializers } from "../../../../../workbench/services/editor
 import { BinaryFileEditor } from '../../../files/browser/editors/binaryFileEditor.js';
 import { CODE_EDITOR_ID } from '../../../../common/editor/codeEditorId.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
-import { IEditorService, type EditorInput, type EditorOpenOptions } from '../../../../services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions } from '../../../../services/editor/common/editorService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async () => {
@@ -75,7 +76,7 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 test('Binary file editor opens a bounded read-only text preview', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const resource = URI.file('C:\\project\\sample.bin');
-	let opened: EditorInput | undefined;
+	let opened: IResourceEditorInput | undefined;
 	let openOptions: EditorOpenOptions | undefined;
 	const dialogs: IDialogService = {
 		onWillShowDialog: Event.None,

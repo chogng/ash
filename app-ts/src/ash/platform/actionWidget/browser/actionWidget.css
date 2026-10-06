@@ -65,3 +65,24 @@
 .ash-action-widget-status:empty {
 	display: none;
 }
+
+.ash-action-widget [hidden] {
+	display: none;
+}
+
+/* Details remain attached to their popup while only the action region scrolls. */
+.ash-action-widget-details {
+	display: flex;
+	position: relative;
+	flex-direction: column;
+	overflow: visible;
+}
+
+.ash-action-widget-details > .ash-action-widget-items {
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-action-widget-details > .ash-action-widget-filter {
+	flex-shrink: 0;
+}

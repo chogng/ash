@@ -1,24 +1,25 @@
+import type { IResourceEditorInput } from '../common/editor.js';
 import { Emitter, type Event } from '../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
-import type { EditorInput, EditorOpenOptions } from '../services/editor/common/editorService.js';
+import type { EditorOpenOptions } from '../services/editor/common/editorService.js';
 import { EditorPaneMatch, type EditorPaneCreationOptions, type IEditorPane } from './parts/editor/editorPane.js';
 
 /** Resource matchers are pure; Workbench inputs are values rather than input classes. */
 export interface IEditorPaneDescriptor {
 	readonly id: string;
 	readonly name: string;
-	canOpen(input: EditorInput): EditorPaneMatch;
+	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Creates a distinct tab identity when this editor opens beside the source. */
-	createInput?(source: EditorInput): EditorInput;
+	createInput?(source: IResourceEditorInput): IResourceEditorInput;
 	create(options: EditorPaneCreationOptions): IEditorPane;
 }
 
 export interface IEditorPaneRegistry {
 	readonly onDidChange: Event<void>;
 	registerEditorPane(descriptor: IEditorPaneDescriptor): IDisposable;
-	getEditorPane(input: EditorInput, options?: EditorOpenOptions): IEditorPaneDescriptor | undefined;
+	getEditorPane(input: IResourceEditorInput, options?: EditorOpenOptions): IEditorPaneDescriptor | undefined;
 	getEditorPanes(): readonly IEditorPaneDescriptor[];
-	getEditorPanesForInput(input: EditorInput): readonly IEditorPaneDescriptor[];
+	getEditorPanesForInput(input: IResourceEditorInput): readonly IEditorPaneDescriptor[];
 }
 
 /** Owns editor declarations and matching; editor groups own the created panes. */
@@ -47,7 +48,7 @@ export class EditorPaneRegistry implements IEditorPaneRegistry {
 	}
 
 	/** Registration order breaks ties between equally suitable panes. */
-	public getEditorPanesForInput(input: EditorInput): readonly IEditorPaneDescriptor[] {
+	public getEditorPanesForInput(input: IResourceEditorInput): readonly IEditorPaneDescriptor[] {
 		return Array.from(this.descriptors.values())
 			.map((descriptor, index) => {
 				const match = descriptor.canOpen(input);
@@ -59,7 +60,7 @@ export class EditorPaneRegistry implements IEditorPaneRegistry {
 			.map(({ descriptor }) => descriptor);
 	}
 
-	public getEditorPane(input: EditorInput, options: EditorOpenOptions = {}): IEditorPaneDescriptor | undefined {
+	public getEditorPane(input: IResourceEditorInput, options: EditorOpenOptions = {}): IEditorPaneDescriptor | undefined {
 		const preferredEditorId = options.preferredEditorId;
 		if (preferredEditorId !== undefined) {
 			const preferred = this.descriptors.get(preferredEditorId);

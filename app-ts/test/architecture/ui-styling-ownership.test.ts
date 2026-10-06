@@ -85,8 +85,8 @@ test("Workbench owns the horizontal ActionBar hover skin", async () => {
 	const workbenchCss = await readFile(join(sourceRoot, "workbench", "browser", "media", "style.css"), "utf8");
 
 	assert.doesNotMatch(actionBarCss, /:hover/);
-	assert.match(workbenchCss, /\.ash-workbench :where\(\.ash-action-bar:not\(\.vertical\).*\.ash-button:not\(:disabled\):hover\)/);
-	assert.match(workbenchCss, /\.ash-workbench :where\(\.ash-action-bar:not\(\.vertical\).*\.ash-action-label:not\(:disabled\):hover\)/);
+	assert.match(workbenchCss, /\.ash-workbench\s+:where\(\s*\.ash-action-bar:not\(\.vertical\)[^{}]*\.ash-button:not\(:disabled\):hover\s*\)/);
+	assert.match(workbenchCss, /\.ash-workbench\s+:where\(\s*\.ash-action-bar:not\(\.vertical\)[^{}]*\.ash-action-label:not\(:disabled\):hover\s*\)/);
 	assert.match(workbenchCss, /background: var\(--ash-toolbar-hover-background\)/);
 });
 

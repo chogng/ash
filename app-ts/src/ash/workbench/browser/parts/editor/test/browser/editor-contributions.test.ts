@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -10,7 +11,6 @@ import { BrowserWorkingCopyService } from "../../../../../services/workingCopy/b
 import type { IWorkingCopy } from "../../../../../services/workingCopy/common/workingCopyService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../services/statusbar/browser/statusbar.js";
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from "../../../../../services/editor/common/editorConfiguration.js";
-import type { EditorInput } from "../../editorInput.js";
 import type { IEditorPane, EditorPaneStatus } from "../../editorPane.js";
 import { EditorPaneVisibility } from "../../editorPane.js";
 import type { IEditorPart } from "../../editorPart.js";
@@ -163,8 +163,8 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	const editorChanges = new Emitter<void>();
 	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\status.ts"));
 	const pane = new TestStatusPane(workingCopy);
-	const input: EditorInput = { resource: workingCopy.resource, languageId: "typescript" };
-	const state: { activeInput: EditorInput | undefined; activePane: IEditorPane | undefined; } = { activeInput: input, activePane: pane };
+	const input: IResourceEditorInput = { resource: workingCopy.resource, languageId: "typescript" };
+	const state: { activeInput: IResourceEditorInput | undefined; activePane: IEditorPane | undefined; } = { activeInput: input, activePane: pane };
 	const editorPart = {
 		domNode: dom.window.document.body,
 		get activeInput() { return state.activeInput; },

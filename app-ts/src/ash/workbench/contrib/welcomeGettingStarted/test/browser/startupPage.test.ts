@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
@@ -7,7 +8,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
-import type { EditorInput, IEditorService } from '../../../../services/editor/common/editorService.js';
+import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { isGettingStartedInput } from '../../browser/gettingStartedInput.js';
 import { StartupEditorConfigurationKey, StartupPageRunnerContribution } from '../../browser/startupPage.js';
@@ -26,13 +27,13 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	} finally {
 		resetNlsResolver();
 	}
-	const opened: EditorInput[] = [];
+	const opened: IResourceEditorInput[] = [];
 	const editor = {
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
 		get activeEditor() { return opened.at(-1); },
 		get visibleEditors() { return opened; },
-		async openEditor(input: EditorInput) { opened.push(input); },
+		async openEditor(input: IResourceEditorInput) { opened.push(input); },
 		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
@@ -71,13 +72,13 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 test('Welcome waits for restored editors and accepts only implemented startup modes', async () => {
 	using configuration = new InMemoryConfigurationService();
 	await assert.rejects(configuration.updateValue(StartupEditorConfigurationKey, 'readme'), /Unknown startup editor/);
-	const opened: EditorInput[] = [{ resource: URI.file('/restored.txt') }];
+	const opened: IResourceEditorInput[] = [{ resource: URI.file('/restored.txt') }];
 	const editor = {
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
 		get activeEditor() { return opened.at(-1); },
 		get visibleEditors() { return opened; },
-		async openEditor(input: EditorInput) { opened.push(input); },
+		async openEditor(input: IResourceEditorInput) { opened.push(input); },
 		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new WorkspaceContextService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });

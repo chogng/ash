@@ -10,7 +10,7 @@ import { getSingletonServiceDescriptors } from '../../platform/instantiation/com
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
-import { IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
+import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
@@ -84,7 +84,7 @@ import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../../wo
 import { NotificationService } from "../../workbench/services/notification/common/notificationService.js";
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
-import { AppServerAvailableContext, IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason, StorageScope } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";

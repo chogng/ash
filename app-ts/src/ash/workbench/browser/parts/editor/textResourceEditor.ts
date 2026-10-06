@@ -1,10 +1,12 @@
-import { ITextModelService, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
+import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
+import { Schemas } from '../../../../base/common/network.js';
+import { TextResourceEditorInput } from '../../../common/editor/textResourceEditorInput.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, type IReference, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
@@ -12,9 +14,8 @@ import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput } from '../../../common/editor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -143,7 +144,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	readonly viewStateTypeId = "stanza.code.textView";
 	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
 	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
-	private readonly providedModel = this._register(new MutableDisposable<IReference<IResolvedTextEditorModel>>());
+	private readonly providedModel = this._register(new MutableDisposable<TextResourceEditorInput>());
+	private readonly loadingProvidedInput = this._register(new MutableDisposable<TextResourceEditorInput>());
 	private readonly workingCopySlot = this._register(new MutableDisposable<IWorkingCopy>());
 	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
@@ -259,19 +261,26 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		}));
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
 		throwIfCancelled(signal, "Code editor input loading was cancelled");
-		const isProvidedResource = input.resource.scheme !== 'file' && this.textModelService.canHandleResource(input.resource);
-		const providedReference = isProvidedResource ? await this.textModelService.createModelReference(input.resource) : undefined;
-		const modelReference = isProvidedResource ? undefined : await this.modelService.acquire(input, signal);
-		const resolvedModel = providedReference ? providedReference.object.textEditorModel : modelReference!.model;
+		const isProvidedResource = input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);
+		// Requests can be shared by groups. Each pane owns its resolved input so closing
+		// one view releases only that view's reference, including an unfinished load.
+		const providedInput = isProvidedResource ? this.instantiationService.createInstance(TextResourceEditorInput, input.resource, input.label) : undefined;
+		this.loadingProvidedInput.value = providedInput;
+		using cancellationListener = providedInput ? addDisposableListener(signal, 'abort', () => providedInput.dispose(), { once: true }) : undefined;
+		let modelReference: TextModelReference | undefined;
+		let resolvedModel: TextModel;
 		let part: EditorPanePart | undefined;
 		let workingCopy: EditorWorkingCopy | undefined;
 		const beforeSaveHooks: Array<() => void | Promise<void>> = [];
 		try {
+			modelReference = isProvidedResource ? undefined : await this.modelService.acquire(input, signal);
+			const model = providedInput ? (await providedInput.resolve()).textEditorModel : modelReference!.model;
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
-			if (!(resolvedModel instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
+			if (!(model instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
+			resolvedModel = model;
 			part = this.createPart({
 				container,
 				model: resolvedModel,
@@ -357,7 +366,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			part?.dispose();
 			workingCopy?.dispose();
 			if (!workingCopy) modelReference?.dispose();
-			providedReference?.dispose();
+			if (this.loadingProvidedInput.value === providedInput) this.loadingProvidedInput.clear();
+			providedInput?.dispose();
 			throw error;
 		}
 		const shouldRestoreFocus = container.contains(container.ownerDocument.activeElement);
@@ -365,7 +375,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this.part.value = part;
 		this.beforeSaveHooks = beforeSaveHooks;
 		this.workingCopySlot.value = workingCopy;
-		this.providedModel.value = providedReference;
+		this.providedModel.value = this.loadingProvidedInput.clearAndLeak();
 		this.languageId = resolvedModel.getLanguageId();
 		const statusListeners = new DisposableStore();
 		// Declarative language registration can finish after a file has opened.
@@ -395,6 +405,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	clearInput(): void {
+		this.loadingProvidedInput.clear();
 		this.statusListener.clear();
 		this.part.clear();
 		this.beforeSaveHooks = [];
@@ -484,7 +495,7 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	constructor(
 		private readonly reference: TextModelReference,
 		private readonly resourceStore: ITextResourceStore,
-		private readonly input: EditorInput,
+		private readonly input: IResourceEditorInput,
 		workingCopyService: IWorkingCopyService | undefined,
 		private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
 	) {

@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
@@ -10,7 +11,6 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { BinaryEditorModel } from '../../../common/editor/binaryEditorModel.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from "./editorInput.js";
 import { EditorPaneMatch, EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
 
 export const BINARY_EDITOR_ID = "ash.editor.binary";
@@ -52,7 +52,7 @@ export class BaseBinaryResourceEditor extends Disposable implements IEditorPane 
 		this._register(toDisposable(() => container.remove()));
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const summary = this.requireSummary();
 		const content = this.requireContent();
 		throwIfCancelled(signal, "Binary editor loading was cancelled");

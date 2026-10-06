@@ -1,11 +1,12 @@
-import type { EditorInput } from '../../services/editor/common/editorService.js';
+import type { IResourceEditorInput } from '../editor.js';
+
 import type { EditorGroupModel } from './editorGroupModel.js';
 
 /** Reads the current sticky row without caching another copy of group state. */
 export class StickyEditorGroupModel {
 	constructor(private readonly model: EditorGroupModel) { }
 
-	getEditors(): readonly EditorInput[] {
+	getEditors(): readonly IResourceEditorInput[] {
 		return this.model.entries.filter(editor => editor.sticky).map(editor => editor.input);
 	}
 }
@@ -14,7 +15,7 @@ export class StickyEditorGroupModel {
 export class UnstickyEditorGroupModel {
 	constructor(private readonly model: EditorGroupModel) { }
 
-	getEditors(): readonly EditorInput[] {
+	getEditors(): readonly IResourceEditorInput[] {
 		return this.model.entries.filter(editor => !editor.sticky).map(editor => editor.input);
 	}
 }

@@ -7,8 +7,8 @@ import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { assertDefined } from "../../../../base/common/types.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection } from '../../../common/editor.js';
-import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
+import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput } from '../../../common/editor.js';
+
 import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
 import { TextDiffEditorModel } from '../../../common/editor/textDiffEditorModel.js';
@@ -97,7 +97,7 @@ export class TextDiffEditor extends Disposable implements IEditorPaneWithSelecti
 		}));
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isDiffEditorInput(input)) {
 			throw new TypeError("Diff editor pane requires a diff editor input");
 		}

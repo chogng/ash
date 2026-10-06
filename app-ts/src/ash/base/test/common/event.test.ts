@@ -7,6 +7,32 @@ test("Event.None returns the reusable empty disposable", () => {
 	assert.equal(Event.None(() => undefined), noneDisposable);
 });
 
+test('Event.any subscriptions belong to each consumer and release all source listeners', () => {
+	using first = new Emitter<number>();
+	using second = new Emitter<number>();
+	const combined = Event.any(first.event, second.event);
+	assert.deepEqual([first.hasListeners(), second.hasListeners()], [false, false]);
+	using owner = new DisposableStore();
+	const context = { total: 0 };
+	combined(function (this: typeof context, value) { this.total += value; }, context, owner);
+	const received: number[] = [];
+	using other = combined(value => received.push(value));
+	first.fire(1);
+	owner.clear();
+	second.fire(2);
+	assert.deepEqual([context.total, received, first.hasListeners(), second.hasListeners()], [1, [1, 2], true, true]);
+	other.dispose();
+	assert.deepEqual([first.hasListeners(), second.hasListeners()], [false, false]);
+});
+
+test('Event.any cleans up earlier subscriptions when a later source rejects registration', () => {
+	using first = new Emitter<void>();
+	using second = new Emitter<void>();
+	second.dispose();
+	assert.throws(() => Event.any(first.event, second.event)(() => undefined), ReferenceError);
+	assert.equal(first.hasListeners(), false);
+});
+
 test("Emitter binds listener context and registers subscriptions with their owner", () => {
 	using emitter = new Emitter<number>();
 	const context = { total: 1 };

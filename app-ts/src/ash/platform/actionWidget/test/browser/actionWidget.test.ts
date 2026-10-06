@@ -355,3 +355,54 @@ test('a dropdown opens typed actions and disposal cannot close a replacement men
 		dom.window.close();
 	}
 });
+
+
+test('filtered action updates retain model identity and expose metadata without visible descriptions', () => {
+	const dom = new JSDOM('<body><button id="source">Models</button></body>');
+	try {
+		using resources = new DisposableStore();
+		const document = dom.window.document;
+		const service = createServices(document, resources).get(IActionWidgetService);
+		const header = document.createElement('div');
+		header.textContent = 'Auto';
+		const footer = document.createElement('div');
+		footer.textContent = 'Add Models';
+		const selected: number[] = [];
+		const focused: number[] = [];
+		let help = 0;
+		service.show('models', false, [
+			{ id: 'first', kind: ActionListItemKind.Action, item: 1, label: 'First', detail: 'provider model-1', checked: true },
+			{ id: 'second', kind: ActionListItemKind.Action, item: 2, label: 'Second', detail: 'provider model-2', checked: false },
+		], { onSelect: item => { selected.push(item); }, onFocus: item => { focused.push(item); }, onHide: () => { } }, document.querySelector<HTMLElement>('#source')!, {
+			presentation: 'details', header, footer, showFilter: true, focusFilterOnOpen: true, filterAsCombobox: true, accessibilityHelp: () => { help++; },
+		});
+		const root = document.querySelector<HTMLElement>('.ash-action-widget')!;
+		const filter = root.querySelector<HTMLInputElement>('[role=combobox]')!;
+		assert.equal(document.activeElement, filter);
+		assert.equal(root.textContent?.includes('provider'), false);
+		assert.equal(root.querySelector('[aria-label="Second"]')?.getAttribute('aria-description'), 'provider model-2');
+		root.querySelector<HTMLButtonElement>('[aria-label="Second"]')!.focus();
+		service.updateItems([
+			{ id: 'first', kind: ActionListItemKind.Action, item: 3, label: 'First refreshed', checked: true },
+			{ id: 'second', kind: ActionListItemKind.Action, item: 4, label: 'Second refreshed', detail: 'provider model-2', checked: false },
+		]);
+		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Second refreshed');
+		assert.equal(focused.at(-1), 4);
+		service.focusFilter();
+		filter.value = 'model-2';
+		filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.equal(root.querySelectorAll('[role=menuitemradio]').length, 1);
+		filter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		assert.deepEqual(selected, [4]);
+		filter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F1', altKey: true, bubbles: true, cancelable: true }));
+		assert.equal(help, 1);
+		service.updateItems([], { filterVisible: false, itemsVisible: false });
+		assert.equal(filter.closest<HTMLElement>('.ash-action-widget-filter')?.hidden, true);
+		assert.equal(root.querySelector<HTMLElement>('.ash-action-widget-items')?.hidden, true);
+		assert.equal(header.isConnected && footer.isConnected, true);
+		service.hide();
+		assert.equal(header.isConnected || footer.isConnected, false);
+	} finally {
+		dom.window.close();
+	}
+});

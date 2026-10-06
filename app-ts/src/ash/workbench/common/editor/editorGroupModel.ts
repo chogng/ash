@@ -1,16 +1,18 @@
+import type { IResourceEditorInput } from '../editor.js';
 import { extUri } from '../../../base/common/resources.js';
-import type { EditorInput } from '../../services/editor/common/editorService.js';
+import { EditorInput } from './editorInput.js';
+
 import type { EditorGroupId, EditorInstanceId } from '../../services/editor/common/editorState.js';
 
 export interface IEditorGroupModelEntry {
-	readonly input: EditorInput;
+	readonly input: IResourceEditorInput;
 	readonly instanceId: EditorInstanceId;
 	readonly preview: boolean;
 	readonly sticky: boolean;
 }
 
 interface EditorEntry {
-	input: EditorInput;
+	input: IResourceEditorInput;
 	readonly instanceId: EditorInstanceId;
 	preview: boolean;
 	sticky: boolean;
@@ -52,15 +54,15 @@ export class EditorGroupModel {
 		return this.editors;
 	}
 
-	public get activeEditor(): EditorInput | undefined {
+	public get activeEditor(): IResourceEditorInput | undefined {
 		return this.active?.input;
 	}
 
-	public get previewEditor(): EditorInput | undefined {
+	public get previewEditor(): IResourceEditorInput | undefined {
 		return this.editors.find(editor => editor.preview)?.input;
 	}
 
-	public get selectedEditors(): readonly EditorInput[] {
+	public get selectedEditors(): readonly IResourceEditorInput[] {
 		return this.editors.filter(editor => this.selection.has(editor.instanceId)).map(editor => editor.input);
 	}
 
@@ -80,28 +82,36 @@ export class EditorGroupModel {
 		this.locked = locked;
 	}
 
-	public getEditors(): readonly EditorInput[] {
+	public getEditors(): readonly IResourceEditorInput[] {
 		return this.editors.map(editor => editor.input);
 	}
 
-	public indexOf(input: EditorInput): number {
+	public indexOf(input: IResourceEditorInput): number {
 		const key = extUri.getComparisonKey(input.resource);
-		return this.editors.findIndex(editor => editor.input.editorId === input.editorId && extUri.getComparisonKey(editor.input.resource) === key);
+		return this.editors.findIndex(editor => {
+			if (editor.input instanceof EditorInput) {
+				return editor.input.matches(input);
+			}
+			if (input instanceof EditorInput) {
+				return input.matches(editor.input);
+			}
+			return editor.input.editorId === input.editorId && extUri.getComparisonKey(editor.input.resource) === key;
+		});
 	}
 
-	public findEditor(input: EditorInput): IEditorGroupModelEntry | undefined {
+	public findEditor(input: IResourceEditorInput): IEditorGroupModelEntry | undefined {
 		return this.editors[this.indexOf(input)];
 	}
 
-	public isPinned(input: EditorInput): boolean {
+	public isPinned(input: IResourceEditorInput): boolean {
 		return this.findEditor(input)?.preview === false;
 	}
 
-	public isSticky(input: EditorInput): boolean {
+	public isSticky(input: IResourceEditorInput): boolean {
 		return this.findEditor(input)?.sticky === true;
 	}
 
-	public openEditor(input: EditorInput, options: IEditorOpenOptions = {}): IEditorOpenResult {
+	public openEditor(input: IResourceEditorInput, options: IEditorOpenOptions = {}): IEditorOpenResult {
 		const existing = this.editors[this.indexOf(input)];
 		const replaced = existing ?? (options.pinned === false ? this.editors.find(editor => editor.preview) : undefined);
 		const editor: EditorEntry = {
@@ -123,7 +133,7 @@ export class EditorGroupModel {
 		return { editor, replaced };
 	}
 
-	public updateEditor(input: EditorInput, options: IEditorOpenOptions): void {
+	public updateEditor(input: IResourceEditorInput, options: IEditorOpenOptions): void {
 		const editor = this.requireEditor(input);
 		editor.input = input;
 		if (options.pinned === true) {
@@ -134,31 +144,31 @@ export class EditorGroupModel {
 		}
 	}
 
-	public pin(input: EditorInput): void {
+	public pin(input: IResourceEditorInput): void {
 		this.requireEditor(input).preview = false;
 	}
 
-	public stick(input: EditorInput): void {
+	public stick(input: IResourceEditorInput): void {
 		const editor = this.requireEditor(input);
 		editor.sticky = true;
 		editor.preview = false;
 		this.moveEditor(input, this.stickyCount - 1);
 	}
 
-	public unstick(input: EditorInput): void {
+	public unstick(input: IResourceEditorInput): void {
 		const editor = this.requireEditor(input);
 		editor.sticky = false;
 		this.moveEditor(input, this.stickyCount);
 	}
 
-	public moveEditor(input: EditorInput, index: number): void {
+	public moveEditor(input: IResourceEditorInput, index: number): void {
 		const editor = this.requireEditor(input);
 		this.editors.splice(this.editors.indexOf(editor), 1);
 		const target = Math.min(Math.max(editor.sticky ? 0 : this.stickyCount, index), editor.sticky ? this.stickyCount : this.editors.length);
 		this.editors.splice(target, 0, editor);
 	}
 
-	public setActive(input: EditorInput): boolean {
+	public setActive(input: IResourceEditorInput): boolean {
 		const editor = this.requireEditor(input);
 		const changed = this.active !== editor;
 		this.active = editor;
@@ -168,7 +178,7 @@ export class EditorGroupModel {
 		return changed;
 	}
 
-	public setSelection(input: EditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): void {
+	public setSelection(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): void {
 		const editor = this.requireEditor(input);
 		if (modifiers.range) {
 			const anchor = this.editors.findIndex(candidate => candidate.instanceId === this.selectionAnchor);
@@ -191,7 +201,7 @@ export class EditorGroupModel {
 		this.selectionAnchor = editor.instanceId;
 	}
 
-	public closeEditor(input: EditorInput): void {
+	public closeEditor(input: IResourceEditorInput): void {
 		const editor = this.requireEditor(input);
 		this.editors.splice(this.editors.indexOf(editor), 1);
 		this.selection.delete(editor.instanceId);
@@ -207,7 +217,7 @@ export class EditorGroupModel {
 		}
 	}
 
-	private requireEditor(input: EditorInput): EditorEntry {
+	private requireEditor(input: IResourceEditorInput): EditorEntry {
 		const editor = this.editors[this.indexOf(input)];
 		if (!editor) {
 			throw new RangeError(`Editor is not open in this group: ${input.resource}`);

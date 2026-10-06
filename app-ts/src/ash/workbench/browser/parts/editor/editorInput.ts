@@ -1,1 +1,1 @@
-export type { EditorInput, EditorOpenOptions } from "../../../services/editor/common/editorService.js";
+export type { EditorOpenOptions } from "../../../services/editor/common/editorService.js";

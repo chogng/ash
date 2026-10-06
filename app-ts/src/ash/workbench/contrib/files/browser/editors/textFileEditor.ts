@@ -1,10 +1,10 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { isRemoteResource } from '../../../../../platform/remote/common/remote.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TextResourceEditor, type EditorPaneOptions } from '../../../../browser/parts/editor/textResourceEditor.js';
-import { type EditorInput } from '../../../../services/editor/common/editorService.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { type ITextResourceStore } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { TextFileSaveErrorHandler } from './textFileSaveErrorHandler.js';
@@ -26,7 +26,7 @@ export class TextFileEditor extends TextResourceEditor {
 		this.saveErrorHandler = new TextFileSaveErrorHandler(dialogs);
 	}
 
-	override async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (input.resource.scheme !== 'file' && !isRemoteResource(input.resource)) {
 			throw new TypeError('Text file editor requires a file resource');
 		}

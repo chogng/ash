@@ -7,6 +7,23 @@ export interface Event<T> {
 
 export namespace Event {
 	export const None: Event<any> = () => noneDisposable;
+
+	export function any<T>(...events: Event<T>[]): Event<T>;
+	export function any(...events: Event<any>[]): Event<void>;
+	export function any<T>(...events: Event<T>[]): Event<T> {
+		return (listener, thisArgs, disposables) => {
+			const subscriptions = new DisposableStore();
+			try {
+				for (const event of events) {
+					subscriptions.add(event(listener, thisArgs));
+				}
+				return addDisposable(subscriptions, disposables);
+			} catch (error) {
+				subscriptions.dispose();
+				throw error;
+			}
+		};
+	}
 }
 
 export interface EmitterOptions {

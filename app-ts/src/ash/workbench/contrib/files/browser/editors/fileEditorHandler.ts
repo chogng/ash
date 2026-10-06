@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { URI } from '../../../../../base/common/uri.js';
 import {
 	EditorInputSerializers,
@@ -6,18 +7,18 @@ import {
 	requireString,
 	type EditorInputSerializer,
 } from '../../../../services/editor/common/editorInputSerializer.js';
-import { type EditorInput } from '../../../../services/editor/common/editorService.js';
+
 import { FILE_EDITOR_INPUT_ID, FileEditorInput } from './fileEditorInput.js';
 
 /** Persists file-specific editor identity and caller-selected display details. */
 export class FileEditorInputSerializer implements EditorInputSerializer {
 	readonly typeId = FILE_EDITOR_INPUT_ID;
 
-	canSerialize(input: EditorInput): boolean {
+	canSerialize(input: IResourceEditorInput): boolean {
 		return input instanceof FileEditorInput;
 	}
 
-	serialize(input: EditorInput): unknown {
+	serialize(input: IResourceEditorInput): unknown {
 		if (!(input instanceof FileEditorInput)) throw new TypeError('Expected a file editor input');
 		return Object.freeze({
 			resource: input.resource.toString(),

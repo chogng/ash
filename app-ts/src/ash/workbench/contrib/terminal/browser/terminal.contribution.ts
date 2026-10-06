@@ -1,4 +1,4 @@
-import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
+import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import '../../terminalContrib/links/browser/terminal.links.contribution.js';

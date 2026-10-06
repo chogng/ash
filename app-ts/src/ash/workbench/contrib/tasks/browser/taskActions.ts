@@ -1,4 +1,4 @@
-import { AppServerAvailableContext } from '../../../../platform/renderer/common/rendererHost.js';
+import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";

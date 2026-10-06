@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/keyboardShortcutsEditor.css';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
@@ -16,7 +17,6 @@ import { IContextKeyService, type IScopedContextKeyService } from "../../../../p
 import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
-import type { EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
 import { KeyboardShortcutsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
@@ -126,7 +126,7 @@ export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 		this.renderRows(this.model.items);
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isKeyboardShortcutsEditorInput(input)) throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
 		throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
 	}

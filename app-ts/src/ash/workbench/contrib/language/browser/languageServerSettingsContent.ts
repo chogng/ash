@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/languageServerSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -19,7 +20,6 @@ import { ILanguageServerService, type LanguageServerSnapshot } from '../../../..
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID } from '../../../../platform/marketplace/common/marketplaceService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
@@ -147,7 +147,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		this.updateActions();
 	}
 
-	public setInput(input: EditorInput): void {
+	public setInput(input: IResourceEditorInput): void {
 		const languageId = new URLSearchParams(input.resource.query).get('languageId');
 		this.language.value = languageId ?? this.editors.getActiveCodeEditor()?.getModel()?.getLanguageId() ?? '';
 	}

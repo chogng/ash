@@ -83,11 +83,11 @@ class Connection extends Disposable {
 
 /** Playwright and element operations stay outside Main and renderer lifetimes. */
 export class PlaywrightService extends Disposable implements IPlaywrightService {
-	readonly #connections = this._register(new DisposableMap<string, Connection>());
-	readonly #operations = new Map<string, AbortController>();
+	private readonly connections = this._register(new DisposableMap<string, Connection>());
+	private readonly operations = new Map<string, AbortController>();
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) { super(); }
 	public async getObservation(operationId: string, sessionId: string, pageId: string, options: IBrowserViewObservationOptions): Promise<IBrowserViewObservation> {
-		return this.#run(operationId, sessionId, pageId, async ({ page, cdp }, signal) => {
+		return this.run(operationId, sessionId, pageId, async ({ page, cdp }, signal) => {
 			await page.waitForLoadState('load'); signal.throwIfAborted();
 			const accessibilityTree = options.includeAccessibilityTree ? boundedJson(await cdp.send('Accessibility.getFullAXTree')) : undefined;
 			signal.throwIfAborted();
@@ -104,7 +104,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		});
 	}
 	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction): Promise<void> {
-		await this.#run(operationId, sessionId, pageId, async ({ page, cdp }, signal) => {
+		await this.run(operationId, sessionId, pageId, async ({ page, cdp }, signal) => {
 			await page.waitForLoadState('load'); signal.throwIfAborted();
 			switch (action.type) {
 				case 'click': {
@@ -141,23 +141,23 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			signal.throwIfAborted();
 		});
 	}
-	public async cancelOperation(id: string): Promise<void> { this.#operations.get(id)?.abort(new Error('BrowserRequestCancelled')); }
-	public async disposeSession(id: string): Promise<void> { this.#connections.deleteAndDispose(id); }
-	async #run<T>(id: string, sessionId: string, pageId: string, execute: (page: ConnectedPage, signal: AbortSignal) => Promise<T>): Promise<T> {
+	public async cancelOperation(id: string): Promise<void> { this.operations.get(id)?.abort(new Error('BrowserRequestCancelled')); }
+	public async disposeSession(id: string): Promise<void> { this.connections.deleteAndDispose(id); }
+	private async run<T>(id: string, sessionId: string, pageId: string, execute: (page: ConnectedPage, signal: AbortSignal) => Promise<T>): Promise<T> {
 		this.assertNotDisposed();
-		if (this.#operations.has(id)) { throw new Error('Duplicate browser operation'); }
+		if (this.operations.has(id)) { throw new Error('Duplicate browser operation'); }
 		const cancellation = new AbortController();
-		this.#operations.set(id, cancellation);
+		this.operations.set(id, cancellation);
 		try {
-			let connection = this.#connections.get(sessionId);
-			if (!connection) { connection = this.instantiationService.createInstance(Connection, sessionId); this.#connections.set(sessionId, connection); }
+			let connection = this.connections.get(sessionId);
+			if (!connection) { connection = this.instantiationService.createInstance(Connection, sessionId); this.connections.set(sessionId, connection); }
 			const page = await connection.findPage(pageId, cancellation.signal);
 			cancellation.signal.throwIfAborted();
 			return await execute(page, cancellation.signal);
-		} finally { this.#operations.delete(id); }
+		} finally { this.operations.delete(id); }
 	}
 	protected override disposeCore(): void {
-		for (const controller of this.#operations.values()) { controller.abort(new Error('BrowserCapabilityUnavailable')); }
+		for (const controller of this.operations.values()) { controller.abort(new Error('BrowserCapabilityUnavailable')); }
 		super.disposeCore();
 	}
 }

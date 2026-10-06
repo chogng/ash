@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
 import assert from "node:assert/strict";
@@ -14,7 +15,7 @@ import { WorkspaceContextService } from "../../../../../workbench/services/works
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { ListConfiguration } from "../../../../../platform/list/browser/listService.js";
-import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -37,7 +38,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 	let addedRootFile = false;
 	let addedNestedFile = false;
 	let failNextRootRead = false;
-	let openedInput: EditorInput | undefined;
+	let openedInput: IResourceEditorInput | undefined;
 	let openedOptions: EditorOpenOptions | undefined;
 	let openedTarget: EditorOpenTarget | undefined;
 	let editorFocusCount = 0;
@@ -123,7 +124,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 	});
 	const editorService: IEditorService = {
 		...emptyEditorServiceState,
-		openEditor: async (input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget) => {
+		openEditor: async (input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget) => {
 			openedInput = input;
 			openedOptions = options;
 			openedTarget = target;

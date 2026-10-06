@@ -62,20 +62,28 @@ test('question controls resolve the editor background variable for each palette'
 	}
 });
 
-for (const locale of ['en', 'zh-CN']) {
-	test(`model picker describes acceleration and retains keyboard state in ${locale}`, async ({ page }) => {
-		await page.goto(`/chatInput.html?locale=${locale}`);
+for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
+	test(`model picker describes acceleration and retains keyboard state in ${surface} ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
+		expect(errors).toEqual([]);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const trigger = page.locator('[data-action-id="ash.chat.input.model"] button');
 		await trigger.press('ArrowDown');
-		const picker = page.locator('.ash-chat-model-picker');
+		const prefix = surface === 'cowork' ? 'ash-cowork' : 'ash-chat';
+		const picker = page.locator(`.${prefix}-model-picker`);
 		const search = picker.getByRole('combobox');
-		await expect(picker).toContainText('A model for everyday tasks');
+		await expect(picker.getByRole('menuitemradio', { name: 'Test Model', exact: true })).toHaveText('Test Model');
+		await expect(picker).toHaveClass(/ash-action-widget/);
+		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBeLessThan(320);
+		await expect(picker.locator('.ash-quick-pick-row-description')).toHaveCount(0);
+		await expect(picker).not.toContainText('A model for everyday tasks');
 		await search.press('ArrowRight');
-		const card = picker.locator('.ash-chat-model-card');
+		const card = picker.locator(`.${prefix}-model-card`);
 		const fast = card.getByRole('switch', { name: locale === 'zh-CN' ? '快速' : 'Fast', exact: true });
 		const description = locale === 'zh-CN' ? '响应更快，用量增加' : 'Faster responses, increased usage';
-		await expect(card.locator('.ash-chat-model-card-description')).toHaveText(description);
+		await expect(card.locator(`.${prefix}-model-card-description`)).toHaveText(description);
 		await expect(fast).toHaveAttribute('aria-description', description);
 		await expect(fast).toBeFocused();
 		await fast.press('Space');
@@ -84,7 +92,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await fast.press('Space');
 		await expect(fast).not.toBeChecked();
 		await page.setViewportSize({ width: 320, height: 600 });
-		const explanation = card.locator('.ash-chat-model-card-description');
+		const explanation = card.locator(`.${prefix}-model-card-description`);
 		expect(await explanation.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		await fast.press('Escape');
 		await expect(picker).toHaveCount(0);
@@ -113,5 +121,134 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(menu).toHaveCount(0);
 		await expect(trigger).toBeFocused();
 		await expect(trigger).toHaveAttribute('aria-description', highCopy);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`model options select effort and context independently in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		const trigger = page.locator('[data-action-id="ash.chat.input.effort"] button');
+		const menu = page.locator('.ash-chat-model-configuration-menu');
+		await expect(trigger).toHaveText(chinese ? '低 272K' : 'Low 272K');
+		await trigger.press('ArrowDown');
+		await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(chinese ? ['推理强度', '上下文大小'] : ['Thinking Level', 'Context Size']);
+		await expect(menu.getByRole('separator')).toHaveCount(1);
+		const contextDefault = menu.locator('[data-action-id="ash.chat.input.context.272000"] button');
+		const expanded = menu.locator('[data-action-id="ash.chat.input.context.1000000"] button');
+		await expect(contextDefault).toHaveAttribute('aria-checked', 'true');
+		await expect(contextDefault.locator('.ash-menu-badge')).toHaveText(chinese ? '默认' : 'Default');
+		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
+		await page.keyboard.press('ArrowDown');
+		await expect(high).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(trigger).toHaveText(chinese ? '高 272K' : 'High 272K');
+		await expect(trigger).toBeFocused();
+		await trigger.press('ArrowDown');
+		await expect(high).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(contextDefault).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(expanded).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(trigger).toHaveText(chinese ? '高 1M' : 'High 1M');
+		await expect(trigger).toBeFocused();
+		await trigger.press('ArrowDown');
+		await expect(high).toHaveAttribute('aria-checked', 'true');
+		await expect(expanded).toHaveAttribute('aria-checked', 'true');
+		await expect(contextDefault).toHaveAttribute('aria-checked', 'false');
+		await expect(menu.getByRole('menuitemradio')).toHaveCount(4);
+		const geometry = await menu.evaluate(element => ({ overflow: element.scrollWidth - element.clientWidth, left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right }));
+		expect(geometry.overflow).toBe(0);
+		expect(geometry.left).toBeGreaterThanOrEqual(0);
+		expect(geometry.right).toBeLessThanOrEqual(page.viewportSize()!.width);
+		await contextDefault.click();
+		await expect(trigger).toHaveText(chinese ? '高 272K' : 'High 272K');
+		await trigger.press('ArrowDown');
+		await menu.locator('[data-action-id="ash.chat.input.effort.low"] button').click();
+		await expect(trigger).toHaveText(chinese ? '低 272K' : 'Low 272K');
+		await trigger.press('ArrowDown');
+		await page.keyboard.press('Escape');
+		await expect(trigger).toBeFocused();
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	});
+}
+
+for (const modelOptions of ['effort', 'context', 'none']) {
+	test(`model options only show supported ${modelOptions} controls`, async ({ page }) => {
+		await page.goto(`/chatInput.html?modelOptions=${modelOptions}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('[data-action-id="ash.chat.input.effort"] button');
+		if (modelOptions === 'none') {
+			await expect(trigger).toHaveCount(0);
+			return;
+		}
+		await expect(trigger).toHaveText(modelOptions === 'effort' ? 'Low' : '272K');
+		await trigger.press('ArrowDown');
+		const menu = page.locator('.ash-chat-model-configuration-menu');
+		await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(modelOptions === 'effort' ? 'Thinking Level' : 'Context Size');
+		await expect(menu.getByRole('separator')).toHaveCount(0);
+		await expect(menu.getByRole('menuitemradio')).toHaveCount(2);
+		await page.keyboard.press('End');
+		await page.keyboard.press('Enter');
+		await expect(trigger).toHaveText(modelOptions === 'effort' ? 'High' : '1M');
+		await expect(trigger).toBeFocused();
+	});
+}
+
+
+for (const surface of ['chat', 'cowork']) {
+	test(`model picker preserves width, Auto state and popup ownership in ${surface}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?surface=${surface}&modelSet=multiple`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('[data-action-id="ash.chat.input.model"] button');
+		await trigger.press('ArrowDown');
+		const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+		const search = picker.getByRole('combobox');
+		const width = await picker.evaluate(element => element.getBoundingClientRect().width);
+		expect(width).toBeGreaterThan(320);
+		expect(width).toBeLessThanOrEqual(page.viewportSize()!.width * 0.8);
+		await search.fill('test-model');
+		await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
+		await expect(picker.getByRole('menuitemradio')).toHaveText('Test Model');
+		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBe(width);
+		await search.press('ArrowRight');
+		const fast = picker.getByRole('region', { name: 'Test Model', exact: true }).getByRole('switch', { name: 'Fast', exact: true });
+		await fast.press('Space');
+		await expect(fast).toBeChecked();
+		await expect(fast).toBeFocused();
+		await expect(search).toHaveValue('test-model');
+		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBe(width);
+		await fast.press('Alt+ArrowLeft');
+		await expect(search).toBeFocused();
+		await search.fill('extended-model');
+		await search.press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toHaveText('Extended model with a longer display name for coding');
+		await expect(trigger).toBeFocused();
+		await trigger.press('ArrowDown');
+		await expect(picker.getByRole('menuitemradio', { name: 'Extended model with a longer display name for coding', exact: true })).toBeChecked();
+		const auto = picker.getByRole('switch', { name: 'Auto', exact: true });
+		await auto.press('Space');
+		await expect(auto).toBeChecked();
+		await expect(auto).toBeFocused();
+		await expect(search).toBeHidden();
+		await expect(picker.getByRole('menuitemradio')).toHaveCount(0);
+		await expect(picker.getByRole('menuitem', { name: 'Add Models' })).toHaveCount(0);
+		await auto.press('ControlOrMeta+f');
+		await expect(auto).toBeFocused();
+		await auto.press('Space');
+		await expect(auto).not.toBeChecked();
+		await expect(auto).toBeFocused();
+		await expect(search).toBeVisible();
+		await expect(picker.getByRole('menuitemradio')).toHaveCount(2);
+		await page.locator('[data-action-id="ash.chat.input.effort"] button').click();
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await trigger.click();
+		await expect(picker).toBeVisible();
+		await page.evaluate(() => window.ashChatInputIntegration.dispose());
+		await expect(page.locator('.ash-action-widget')).toHaveCount(0);
 	});
 }

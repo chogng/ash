@@ -1,9 +1,8 @@
-import { BINARY_DIFF_EDITOR_ID } from '../../../common/editor.js';
+import { BINARY_DIFF_EDITOR_ID, type IResourceEditorInput } from '../../../common/editor.js';
 import { isBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { BaseBinaryResourceEditor } from "./binaryEditor.js";
-import type { EditorInput } from "./editorInput.js";
 import { EditorPaneMatch } from "./editorPane.js";
 import { SideBySideEditor } from "./sideBySideEditor.js";
 
@@ -17,7 +16,7 @@ export class BinaryResourceDiffEditor extends SideBySideEditor {
 		);
 	}
 
-	override async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isBinaryDiffEditorInput(input)) throw new TypeError("Binary diff editor requires two binary file inputs");
 		await super.setInput(input, signal);
 	}

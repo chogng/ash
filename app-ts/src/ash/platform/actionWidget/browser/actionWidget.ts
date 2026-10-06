@@ -9,7 +9,7 @@ import { IContextViewService } from '../../contextview/browser/contextView.js';
 import { InstantiationType, registerSingleton } from '../../instantiation/common/extensions.js';
 import { IInstantiationService, createDecorator } from '../../instantiation/common/instantiation.js';
 import { Registry } from '../../registry/common/platform.js';
-import { ActionList, type IActionListDelegate, type IActionListItem, type IActionListOptions } from './actionList.js';
+import { ActionList, type IActionListDelegate, type IActionListItem, type IActionListOptions, type IActionListUpdateOptions } from './actionList.js';
 import { TabbedActionListWidget, type ITabbedActionListShowOptions } from './tabbedActionListWidget.js';
 
 export const IActionWidgetService = createDecorator<IActionWidgetService>('actionWidgetService');
@@ -20,12 +20,16 @@ export interface IActionWidgetService {
 	readonly isVisible: boolean;
 	show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions?: IActionListOptions, tabs?: ITabbedActionListShowOptions<T>): void;
 	hide(didCancel?: boolean): void;
+	updateItems<T>(items: readonly IActionListItem<T>[], options?: IActionListUpdateOptions): void;
+	focusFilter(): void;
+	focus(): void;
 }
 
 export class ActionWidgetService extends Disposable implements IActionWidgetService {
 	declare public readonly _serviceBrand: undefined;
 	private readonly current = this._register(new MutableDisposable<DisposableStore>());
 	private cancelOnHide = true;
+	private list: ActionList<unknown> | undefined;
 
 	constructor(
 		@IContextViewService private readonly contextViewService: IContextViewService,
@@ -50,6 +54,8 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		const list = lifetime.add(tabs
 			? this.instantiationService.createInstance(TabbedActionListWidget<T>, user, tabs.createActionList(tabs.initialTab).items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions, tabs)
 			: this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions));
+		this.list = list as ActionList<unknown>;
+		lifetime.add(toDisposable(() => { this.list = undefined; }));
 		const layout = (): void => {
 			list.domNode.style.width = `${list.layout(0)}px`;
 			this.contextViewService.layout();
@@ -61,6 +67,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		lifetime.add(addDisposableListener(document, 'focusin', () => { focused = getActiveElement(document); }));
 		this.current.value = lifetime;
 		this.cancelOnHide = true;
+		delegate.onShow?.(list.domNode);
 		layout();
 		const shown = this.contextViewService.show({
 			anchor,
@@ -83,8 +90,24 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			},
 		});
 		if (shown) {
-			list.focus();
+			if (listOptions.focusFilterOnOpen && listOptions.filterVisible !== false) {
+				list.focusFilter();
+			} else {
+				list.focus();
+			}
 		}
+	}
+
+	public updateItems<T>(items: readonly IActionListItem<T>[], options?: IActionListUpdateOptions): void {
+		(this.list as ActionList<T> | undefined)?.updateItems(items, options);
+	}
+
+	public focusFilter(): void {
+		this.list?.focusFilter();
+	}
+
+	public focus(): void {
+		this.list?.focus();
 	}
 
 	public hide(didCancel = true): void {

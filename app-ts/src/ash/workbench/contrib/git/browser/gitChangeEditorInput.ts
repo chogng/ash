@@ -1,11 +1,11 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { URI } from '../../../../base/common/uri.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { GitChangeFileComparison, GitChangeStatus, GitCommitFileContent, GitRepositoryChange, GitStatus, IGitService } from '../common/gitService.js';
 
 export interface ResolvedGitChangeInputs {
-	readonly original: EditorInput | undefined;
-	readonly modified: EditorInput | undefined;
-	readonly goToFile: EditorInput | undefined;
+	readonly original: IResourceEditorInput | undefined;
+	readonly modified: IResourceEditorInput | undefined;
+	readonly goToFile: IResourceEditorInput | undefined;
 }
 
 /** Resolves one Git change into the ordinary text-resource inputs used by diff panes. */
@@ -35,7 +35,7 @@ function changeOriginalPath(change: GitRepositoryChange, comparison: GitChangeFi
 	return status === 'renamed' || status === 'copied' ? change.originalPath ?? change.path : change.path;
 }
 
-function changeEditorInput(content: GitCommitFileContent, resource: URI, label: string): EditorInput | undefined {
+function changeEditorInput(content: GitCommitFileContent, resource: URI, label: string): IResourceEditorInput | undefined {
 	if (content.kind === 'binary') return undefined;
 	return {
 		resource,

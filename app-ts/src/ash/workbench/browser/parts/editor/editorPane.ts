@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type {
 	IDimension,
@@ -12,7 +13,6 @@ import type {
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import type { EditorInput } from "./editorInput.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -50,7 +50,7 @@ export interface IEditorPane extends IDisposable {
 	readonly workingCopy?: IWorkingCopy;
 
 	create(parent: HTMLElement): void;
-	setInput(input: EditorInput, signal: AbortSignal): Promise<void>;
+	setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	clearInput(): void;
 	layout(dimension: IDimension): void;
 	setVisible(visibility: EditorPaneVisibility): void;
@@ -85,7 +85,7 @@ export function isEditorPaneWithStatus(pane: IEditorPane | undefined): pane is I
 
 export interface EditorPaneCreationOptions {
 	/** The input used to choose a profile-specific pane implementation. */
-	readonly input?: EditorInput;
+	readonly input?: IResourceEditorInput;
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
 	/** Group-scoped action services for pane-owned menus and toolbars. */

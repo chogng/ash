@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
@@ -9,7 +10,7 @@ import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
+import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
@@ -38,7 +39,7 @@ export interface IEditorPartsService extends IEditorPart {
 	createAuxiliaryEditorPart(): Promise<IEditorPart>;
 	moveActiveEditorToNewWindow(): Promise<IEditorPart | undefined>;
 	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean>;
-	replaceEditorResource(source: IEditorGroupView, input: EditorInput, replacement: EditorInput): Promise<void>;
+	replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
 	savePartsState(): EditorPartsState;
 	restorePartsState(state: EditorPartsState): Promise<void>;
 	restoreSavedState(shouldRestore: boolean): Promise<void>;
@@ -83,7 +84,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	get groups(): readonly IEditorGroupView[] { return this.parts.flatMap(part => part.groups); }
 	get activeGroup(): IEditorGroupView { return this._activePart.activeGroup; }
 	toggleActiveGroupLock(): boolean { return this._activePart.toggleActiveGroupLock(); }
-	get activeInput(): EditorInput | undefined { return this._activePart.activeInput; }
+	get activeInput(): IResourceEditorInput | undefined { return this._activePart.activeInput; }
 	get activePane(): IEditorPane | undefined { return this._activePart.activePane; }
 	get isModalEditorVisible(): boolean { return this._activePart.isModalEditorVisible; }
 	get editorsMru(): readonly EditorIdentifier[] {
@@ -174,7 +175,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return true;
 	}
 
-	openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
 		if (typeof target === 'object') {
 			return this.parts.find(part => part.groups.some(group => group.id === target.groupId))!.openEditor(input, options, target);
 		}
@@ -196,7 +197,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		this.parts.find(part => part.groups.some(group => group.id === id))!.setGroupVisible(id, visible);
 	}
 
-	activateEditor(input: EditorInput): IEditorPane {
+	activateEditor(input: IResourceEditorInput): IEditorPane {
 		const part = this.findPartForInput(input) ?? this._activePart;
 		this.setActivePart(part);
 		return part.activateEditor(input);
@@ -217,12 +218,12 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 
-	async closeEditor(input: EditorInput): Promise<boolean> {
+	async closeEditor(input: IResourceEditorInput): Promise<boolean> {
 		const part = this.findPartForInput(input) ?? this._activePart;
 		return part.closeEditor(input);
 	}
 
-	async replaceEditorResource(source: IEditorGroupView, input: EditorInput, replacement: EditorInput): Promise<void> {
+	async replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
 		const key = editorInputKey(input);
 		const groups = this.groups.filter(group => group.inputs.some(candidate => editorInputKey(candidate) === key));
 		if (!groups.includes(source)) throw new RangeError(`Editor is not open in its source group: ${input.resource}`);
@@ -265,12 +266,12 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	splitActiveGroup(direction: GridDirection): Promise<void> { return this._activePart.splitActiveGroup(direction); }
 	splitActiveGroupHorizontal(): Promise<void> { return this._activePart.splitActiveGroupHorizontal(); }
 	splitActiveGroupVertical(): Promise<void> { return this._activePart.splitActiveGroupVertical(); }
-	splitEditors(groupId: EditorGroupId, inputs: readonly EditorInput[], direction: GridDirection): Promise<void> {
+	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
 		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === groupId));
 		if (!part) throw new RangeError(`Editor group is not open: ${groupId}`);
 		return part.splitEditors(groupId, inputs, direction);
 	}
-	getEditorPaneChoices(input?: EditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
+	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> { return this._activePart.reopenActiveEditorWith(preferredEditorId); }
 	reopenClosedEditor(): Promise<boolean> { return this._activePart.reopenClosedEditor(); }
 	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet { return this._activePart.saveWorkingSet(id, excludedGroups); }
@@ -323,7 +324,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		if (publish) this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: part.activeGroup.id }));
 	}
 
-	private findPartForInput(input: EditorInput): IEditorPart | undefined {
+	private findPartForInput(input: IResourceEditorInput): IEditorPart | undefined {
 		const key = editorInputKey(input);
 		return this.parts.find(part => part.groups.some(group => group.inputs.some(candidate => editorInputKey(candidate) === key)));
 	}

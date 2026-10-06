@@ -1,28 +1,28 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceState } from './editorState.js';
-import type { EditorInput } from './editorService.js';
 
 /** Editor operations and canonical state shared by commands and group hosts. */
 export interface IEditorGroup {
 	readonly id: EditorGroupId;
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent>;
-	readonly inputs: readonly EditorInput[];
-	readonly selectedInputs: readonly EditorInput[];
+	readonly inputs: readonly IResourceEditorInput[];
+	readonly selectedInputs: readonly IResourceEditorInput[];
 	readonly editors: readonly EditorInstanceState[];
-	readonly activeInput: EditorInput | undefined;
+	readonly activeInput: IResourceEditorInput | undefined;
 	readonly isLocked: boolean;
 	setLocked(locked: boolean): void;
 	getEditorState(): EditorGroupState;
-	isPreview(input: EditorInput): boolean;
-	isSticky(input: EditorInput): boolean;
+	isPreview(input: IResourceEditorInput): boolean;
+	isSticky(input: IResourceEditorInput): boolean;
 	/** Keeps a preview open. The model calls this pinned; the UI thumbtack is sticky. */
-	pinEditor(input?: EditorInput): void;
+	pinEditor(input?: IResourceEditorInput): void;
 	/** Makes the editor sticky; repeated calls retain the same state. */
-	stickEditor(input?: EditorInput): void;
+	stickEditor(input?: IResourceEditorInput): void;
 	/** Removes sticky placement while keeping the editor open. */
-	unstickEditor(input?: EditorInput): void;
-	closeEditor(input: EditorInput, options?: EditorCloseOptions): Promise<boolean>;
+	unstickEditor(input?: IResourceEditorInput): void;
+	closeEditor(input: IResourceEditorInput, options?: EditorCloseOptions): Promise<boolean>;
 	focus(): void;
 }
 

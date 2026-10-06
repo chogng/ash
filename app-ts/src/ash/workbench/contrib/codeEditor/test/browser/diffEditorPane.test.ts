@@ -19,12 +19,12 @@ import { AccessibilityVerbositySettingId } from '../../../../../platform/accessi
 import { type DiffEditorWidget } from '../../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
-import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
-import { EditorPaneSelectionChangeReason } from '../../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -151,7 +151,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	await commands.executeCommand(TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE);
 	assert.equal(container.get(IConfigurationService).getValue('diffEditor.ignoreTrimWhitespace'), false);
 	await commands.executeCommand(DIFF_SWAP_SIDES);
-	const swapped = opened[1] as EditorInput;
+	const swapped = opened[1] as IResourceEditorInput;
 	assert.ok(isDiffEditorInput(swapped));
 	assert.equal(swapped.original.resource.toString(), input.modified.resource.toString());
 	assert.deepEqual(closed, [input]);
@@ -268,7 +268,7 @@ test('Diff pane releases both references when loading is cancelled after acquisi
 		const acquired: ITextModel[] = [];
 		using pane = container.createInstance(DiffEditorPane, resourceStore, {
 			modelService: {
-				acquire: async (input: EditorInput, signal: AbortSignal) => {
+				acquire: async (input: IResourceEditorInput, signal: AbortSignal) => {
 					const reference = await models.acquire(input, signal);
 					acquired.push(reference.model);
 					if (acquired.length === 2) {

@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,7 +18,6 @@ import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutline } from "../../../../editor/common/model/documentOutline.js";
 import type { IDocumentCollaborationService } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
 import { EditorPaneVisibility, type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
-import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { IDocumentEditorTextModelService } from '../../../services/documentEditor/common/documentTypes.js';
 import type { IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
@@ -92,7 +92,7 @@ export class DocumentEditorPane extends Disposable implements IEditorPane {
 		editor.create(container);
 	}
 
-	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.requireContainer();
 		const editor = this.requireEditor();
 		const generation = ++this.inputGeneration;

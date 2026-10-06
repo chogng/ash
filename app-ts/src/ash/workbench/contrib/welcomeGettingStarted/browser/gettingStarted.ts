@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
@@ -5,7 +6,6 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IGitService } from '../../../contrib/git/common/gitService.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -60,7 +60,7 @@ export class GettingStartedPage extends Disposable implements IEditorPane {
 		}));
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isGettingStartedInput(input)) throw new TypeError('Welcome editor requires a Welcome input');
 		if (signal.aborted) throw signal.reason;
 	}

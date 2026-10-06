@@ -1,7 +1,8 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
-import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
+import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
 import type { IEditorGroup, IEditorGroupsService } from '../common/editorGroupsService.js';
 import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from "../common/editorState.js";
 
@@ -39,11 +40,11 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		return this.editorPart.getEditorState();
 	}
 
-	get activeEditor(): EditorInput | undefined {
+	get activeEditor(): IResourceEditorInput | undefined {
 		return this.editorPart.activeInput;
 	}
 
-	get visibleEditors(): readonly EditorInput[] {
+	get visibleEditors(): readonly IResourceEditorInput[] {
 		const state = this.editorPart.getEditorState();
 		const editors = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []);
 		if (state.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
@@ -66,7 +67,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		return this.groups.length;
 	}
 
-	async openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
+	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
 		await this.editorPart.openEditor(input, options, target);
 		if (options?.preserveFocus !== true) this.editorPart.focus();
 	}
@@ -112,6 +113,6 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	}
 }
 
-function editorInputSignature(input: EditorInput | undefined): string {
+function editorInputSignature(input: IResourceEditorInput | undefined): string {
 	return input ? `${input.resource.toString()}\0${input.contentType ?? ''}\0${input.languageId ?? ''}` : '';
 }

@@ -9,7 +9,7 @@ import { IInstantiationService } from '../../instantiation/common/instantiation.
 
 /** The connection's window scope is selected by product assembly, never by a CDP request. */
 export class BrowserViewGroupMainService extends Disposable implements IBrowserViewGroupService {
-	readonly #groups = this._register(new DisposableMap<string, BrowserViewGroup>());
+	private readonly groups = this._register(new DisposableMap<string, BrowserViewGroup>());
 	constructor(@IBrowserViewMainService private readonly views: IBrowserViewMainService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService) { super(); }
 	public async createGroup(filter: IBrowserViewGroupFilter): Promise<string> {
@@ -19,22 +19,22 @@ export class BrowserViewGroupMainService extends Disposable implements IBrowserV
 			throw new TypeError('Invalid browser group filter');
 		}
 		for (const id of filter.browserIds ?? []) { this.views.validateAgentAccess(id, filter.sandboxSessionId); }
-		const group = this.instantiationService.createInstance(BrowserViewGroup, filter, (id: string) => { this.#groups.deleteAndLeak(id); });
-		this.#groups.set(group.id, group);
+		const group = this.instantiationService.createInstance(BrowserViewGroup, filter, (id: string) => { this.groups.deleteAndLeak(id); });
+		this.groups.set(group.id, group);
 		try { await group.initialize(); return group.id; }
-		catch (error) { this.#groups.deleteAndDispose(group.id); throw error; }
+		catch (error) { this.groups.deleteAndDispose(group.id); throw error; }
 	}
-	public async destroyGroup(id: string): Promise<void> { this.#group(id); this.#groups.deleteAndDispose(id); }
-	public onDynamicDidDestroy(id: string): Event<void> { return this.#group(id).onDidDestroy; }
-	public onDynamicCDPMessage(id: string): Event<CDPEvent | CDPResponse> { return this.#group(id).onCDPMessage; }
+	public async destroyGroup(id: string): Promise<void> { this.group(id); this.groups.deleteAndDispose(id); }
+	public onDynamicDidDestroy(id: string): Event<void> { return this.group(id).onDidDestroy; }
+	public onDynamicCDPMessage(id: string): Event<CDPEvent | CDPResponse> { return this.group(id).onCDPMessage; }
 	public sendCDPMessage(id: string, message: CDPRequest): Promise<void> {
 		if (!isRecord(message) || !Number.isSafeInteger(message.id) || message.id < 0 || typeof message.method !== 'string'
 			|| (message.sessionId !== undefined && typeof message.sessionId !== 'string')) { throw new TypeError('Invalid CDP request'); }
-		return this.#group(id).sendCDPMessage(message);
+		return this.group(id).sendCDPMessage(message);
 	}
-	#group(id: string): BrowserViewGroup {
+	private group(id: string): BrowserViewGroup {
 		this.assertNotDisposed();
-		const group = this.#groups.get(id);
+		const group = this.groups.get(id);
 		if (!group) { throw new Error('BrowserGroupUnavailable'); }
 		return group;
 	}

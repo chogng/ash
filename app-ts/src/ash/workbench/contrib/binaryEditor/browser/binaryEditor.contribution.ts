@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { localize2 } from '../../../../nls.js';
 import "./media/binaryEditorPane.css";
@@ -11,13 +12,12 @@ import { binaryDiffEditorDescriptor } from "../../../browser/parts/editor/binary
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { EditorPanes } from "../../../browser/editor.js";
 import { binaryFileEditorDescriptor } from '../../files/browser/editors/binaryFileEditor.js';
-import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 
 EditorPanes.registerEditorPane(binaryFileEditorDescriptor());
 EditorPanes.registerEditorPane(binaryDiffEditorDescriptor());
 
 interface BinaryComparisonItem extends IQuickPickItem {
-	readonly input: EditorInput;
+	readonly input: IResourceEditorInput;
 }
 
 registerAction2(class CompareBinaryEditorsAction extends Action2 {
@@ -55,6 +55,6 @@ registerAction2(class CompareBinaryEditorsAction extends Action2 {
 	}
 });
 
-function isFileInput(input: EditorInput): boolean {
+function isFileInput(input: IResourceEditorInput): boolean {
 	return input.resource.scheme === "file" || isRemoteResource(input.resource);
 }

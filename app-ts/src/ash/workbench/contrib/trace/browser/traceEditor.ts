@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './traceEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { triggerDownload } from '../../../../base/browser/fileAccess.js';
@@ -7,7 +8,6 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { exportTrace, TraceConnection, type TraceConnectionState, type TraceSpan } from './traceConnection.js';
 
@@ -110,7 +110,7 @@ export class TraceEditor extends Disposable implements IEditorPane {
 		this.render();
 	}
 
-	async setInput(_input: EditorInput, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); }
+	async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); }
 	clearInput(): void { this.connection.disconnect(); this.connection.clear(); this.token.value = ''; }
 	layout(dimension: IDimension): void { this.domNode.style.width = dimension.width + 'px'; this.domNode.style.height = dimension.height + 'px'; }
 	setVisible(visibility: EditorPaneVisibility): void { this.shown = visibility === EditorPaneVisibility.Visible; if (this.shown) { this.scheduleRender(); } }

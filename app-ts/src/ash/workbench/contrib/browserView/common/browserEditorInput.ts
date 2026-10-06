@@ -1,10 +1,12 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IBrowserViewService, BrowserViewStorageScope, normalizeBrowserViewUrl, type IBrowserViewSessionOptions } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
+import { EditorInput } from '../../../common/editor/editorInput.js';
+
 import { type EditorInputSerializer, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 import { BrowserViewModel, IBrowserViewWorkbenchService, type IBrowserViewModel } from './browserView.js';
 export const BROWSER_RESOURCE_SCHEME = 'ash-browser';
@@ -16,7 +18,8 @@ export interface IBrowserEditorInputData {
 	readonly session: IBrowserViewSessionOptions;
 }
 
-export class BrowserEditorInput extends Disposable implements EditorInput {
+export class BrowserEditorInput extends EditorInput {
+	public readonly typeId = 'workbench.editorInput.browser';
 	readonly resource: URI;
 	readonly readOnly = true;
 	readonly showBreadcrumbs = false;
@@ -34,7 +37,7 @@ export class BrowserEditorInput extends Disposable implements EditorInput {
 		this.resource = URI.parse(`${BROWSER_RESOURCE_SCHEME}:/${data.id}`);
 	}
 
-	public get label(): string {
+	public getName(): string {
 		const state = this.model.value?.state;
 		const url = state?.url ?? this.data.url;
 		const title = state?.title ?? this.data.title;
@@ -74,12 +77,12 @@ export class BrowserEditorSerializer implements EditorInputSerializer {
 
 	constructor(@IBrowserViewWorkbenchService private readonly views: IBrowserViewWorkbenchService) { }
 
-	public canSerialize(input: EditorInput): boolean { return input instanceof BrowserEditorInput; }
-	public serialize(input: EditorInput): unknown {
+	public canSerialize(input: IResourceEditorInput): boolean { return input instanceof BrowserEditorInput; }
+	public serialize(input: IResourceEditorInput): unknown {
 		if (!(input instanceof BrowserEditorInput)) { throw new TypeError('Expected browser editor input'); }
 		return input.serialize();
 	}
-	public deserialize(value: unknown): EditorInput {
+	public deserialize(value: unknown): IResourceEditorInput {
 		const data = requireRecord(value, 'browser editor');
 		const id = requireString(data.id, 'browser editor id');
 		if (!/^browser_target_[0-9a-f-]{36}$/.test(id)) { throw new TypeError('Invalid browser editor id'); }
@@ -91,4 +94,3 @@ export class BrowserEditorSerializer implements EditorInputSerializer {
 		return this.views.getOrCreateLazy({ id, url: normalizeBrowserViewUrl(data.url), title: data.title, session: { scope: session.scope } });
 	}
 }
-

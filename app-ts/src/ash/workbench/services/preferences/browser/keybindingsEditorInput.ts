@@ -1,14 +1,14 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { localize } from '../../../../nls.js';
 import { EditorInputSerializers, requireString } from '../../editor/common/editorInputSerializer.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
-import type { EditorInput } from '../../editor/common/editorService.js';
 
 export const KeyboardShortcutsEditorContentType = 'application/vnd.ash.keyboard-shortcuts';
 export const KeyboardShortcutsEditorResource = URI.parse('ash-preferences:/keyboard-shortcuts');
 
 /** Creates the singleton editor input used by the Keyboard Shortcuts tab. */
-export function createKeyboardShortcutsEditorInput(): EditorInput {
+export function createKeyboardShortcutsEditorInput(): IResourceEditorInput {
 	return {
 		resource: KeyboardShortcutsEditorResource,
 		contentType: KeyboardShortcutsEditorContentType,
@@ -17,12 +17,12 @@ export function createKeyboardShortcutsEditorInput(): EditorInput {
 	};
 }
 
-export function isKeyboardShortcutsEditorInput(input: EditorInput): boolean {
+export function isKeyboardShortcutsEditorInput(input: IResourceEditorInput): boolean {
 	return input.contentType === KeyboardShortcutsEditorContentType || input.resource.toString() === KeyboardShortcutsEditorResource.toString();
 }
 
 /** Uses the profile resource identity shared by the text model and shortcut services. */
-export function createKeybindingsJsonEditorInput(resource: URI): EditorInput {
+export function createKeybindingsJsonEditorInput(resource: URI): IResourceEditorInput {
 	return Object.freeze({
 		resource,
 		languageId: 'jsonc',

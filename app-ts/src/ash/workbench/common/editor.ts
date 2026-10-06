@@ -1,3 +1,4 @@
+import type { ThemeIcon } from '../../base/common/themables.js';
 import type { Event } from '../../base/common/event.js';
 import type { Range } from '../../editor/common/core/range.js';
 import type { TextEditorSelectionSource } from '../../platform/editor/common/editor.js';
@@ -5,12 +6,30 @@ import type { IAction } from '../../base/common/actions.js';
 import { toError } from '../../base/common/errors.js';
 import type Severity from '../../base/common/severity.js';
 import { URI } from '../../base/common/uri.js';
-import type { EditorInput } from '../services/editor/common/editorService.js';
+
+/** A resource requested through the Workbench editor service. */
+export interface IResourceEditorInput {
+	/** Distinguishes an independent custom editor tab from a text tab for the same resource. */
+	readonly editorId?: string;
+	toUntyped?(): IResourceEditorInput;
+	readonly capabilities?: EditorInputCapabilities;
+	readonly resource: URI;
+	readonly contentType?: string;
+	readonly languageId?: string;
+	readonly label?: string;
+	/** Also signals a change to the editor's custom icon. */
+	readonly onDidChangeLabel?: Event<void>;
+	getIcon?(): ThemeIcon | URI | undefined;
+	readonly readOnly?: boolean;
+	/** Whether the resource path is meaningful to show as breadcrumbs. */
+	readonly showBreadcrumbs?: boolean;
+	readonly initialText?: string;
+}
 
 /** Comparison inputs keep a tab identity separate from the resources displayed on each side. */
 export interface IResourceDiffEditorInput {
-	readonly original: EditorInput;
-	readonly modified: EditorInput;
+	readonly original: IResourceEditorInput;
+	readonly modified: IResourceEditorInput;
 }
 
 export function isResourceDiffEditorInput(input: unknown): input is IResourceDiffEditorInput {
@@ -34,10 +53,10 @@ export interface IEditorResourceAccessorOptions {
 }
 
 class EditorResourceAccessorImpl {
-	public getOriginalUri(editor: EditorInput | undefined | null, options?: IEditorResourceAccessorOptions & { supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY; }): URI | undefined;
-	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH; }): URI | { primary?: URI; secondary?: URI; } | undefined;
-	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI; } | undefined;
-	public getOriginalUri(editor: EditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI; } | undefined {
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options?: IEditorResourceAccessorOptions & { supportSideBySide?: SideBySideEditor.PRIMARY | SideBySideEditor.SECONDARY | SideBySideEditor.ANY; }): URI | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH; }): URI | { primary?: URI; secondary?: URI; } | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI; } | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI; } | undefined {
 		if (!editor) {
 			return undefined;
 		}

@@ -1,11 +1,11 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import { DISASSEMBLY_VIEW_ID } from './debug.js';
 
 /** One editor identity follows the active debug session rather than a stored address. */
-export class DisassemblyViewInput implements EditorInput {
+export class DisassemblyViewInput implements IResourceEditorInput {
 	public static readonly ID = 'debug.disassemblyView.input';
 	public readonly editorId = DISASSEMBLY_VIEW_ID;
 	public readonly resource = URI.from({ scheme: Schemas.internal, authority: 'debug', path: '/disassembly' });

@@ -3,6 +3,7 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContain
 import { TASKS_VIEW_ID } from "../common/tasks.js";
 import { TasksViewPane } from "./tasksViewPane.js";
 import "./taskActions.js";
+import "./taskService.js";
 import "./media/tasks.css";
 
 /** Contributes the Code task catalog as its own Panel destination. */

@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import "./media/breadcrumbscontrol.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { BreadcrumbsItem, BreadcrumbsWidget } from "../../../../base/browser/ui/breadcrumbs/breadcrumbsWidget.js";
@@ -7,7 +8,6 @@ import { extUri } from "../../../../base/common/resources.js";
 import { localize } from "../../../../nls.js";
 import { BreadcrumbsModel, FileElement, SymbolElement } from "./breadcrumbsModel.js";
 import type { BreadcrumbsPathMode } from "./breadcrumbs.js";
-import type { EditorInput } from "./editorInput.js";
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import type { EditorTitleScrollbarSizing, EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -18,7 +18,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 	private readonly widget: BreadcrumbsWidget;
 	private readonly editorTypeButton: HTMLButtonElement;
 	private selectEditorType: ((anchor: HTMLElement) => void) | undefined;
-	private input: EditorInput | undefined;
+	private input: IResourceEditorInput | undefined;
 	private symbols: readonly SymbolElement[] = [];
 	private filePath: BreadcrumbsPathMode = "on";
 	private symbolPath: BreadcrumbsPathMode = "on";
@@ -77,7 +77,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.widget.setHorizontalScrollbarVisibility(values[visibility]);
 	}
 
-	setInput(input: EditorInput | undefined): void {
+	setInput(input: IResourceEditorInput | undefined): void {
 		this.input = input;
 		this.symbols = [];
 		this.render();

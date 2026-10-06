@@ -11,6 +11,7 @@ import { appendIcon } from "../lxicons/lxicon.js";
 import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
 
 export interface MenuActionViewItemOptions {
+	readonly ariaDescription?: string;
 	readonly onDidSelect?: () => void;
 	readonly submenuLayer?: number;
 	readonly contextViewContainer?: HTMLElement;
@@ -49,6 +50,7 @@ abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
 
 /** Button view item for an action presented inside a menu. */
 class MenuActionViewItem extends MenuButtonActionViewItem {
+	private readonly ariaDescription: string | undefined;
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly keybinding: ResolvedKeybinding | undefined;
 	private readonly actionRunner: IActionRunner | undefined;
@@ -60,6 +62,7 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 		options: MenuActionViewItemOptions = {},
 	) {
 		super(action);
+		this.ariaDescription = options.ariaDescription;
 		this.onDidSelect = options.onDidSelect;
 		this.keybinding = options.keybinding;
 		this.actionRunner = options.actionRunner;
@@ -70,6 +73,9 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
 		prependMenuLeadingSlot(this.button.domNode, this.action.checked);
+		if (this.ariaDescription) {
+			this.button.domNode.setAttribute('aria-description', this.ariaDescription);
+		}
 		if (this.action.checked === undefined) {
 			this.button.domNode.setAttribute("role", "menuitem");
 		} else {
@@ -289,6 +295,7 @@ function createMenuActionViewItem(
 }
 
 export interface MenuOptions {
+	readonly getAriaDescription?: (action: IAction) => string | undefined;
 	readonly actions: readonly IAction[];
 	/** Applies only to submenu actions in this menu, not nested menus they create. */
 	readonly openSubmenusImmediatelyOnHover?: boolean;
@@ -340,6 +347,7 @@ export class Menu extends Disposable {
 
 		for (const action of options.actions) {
 			const itemOptions: MenuActionViewItemOptions = {
+				ariaDescription: options.getAriaDescription?.(action),
 				onDidSelect: options.onDidSelect,
 				openSubmenusImmediatelyOnHover: options.openSubmenusImmediatelyOnHover,
 				submenuLayer: (options.layer ?? 20) + 1,

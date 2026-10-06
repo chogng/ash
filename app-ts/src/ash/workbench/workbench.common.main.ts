@@ -47,8 +47,6 @@ import './contrib/debug/browser/debug.contribution.js';
 import './contrib/tasks/browser/tasks.contribution.js';
 import './contrib/testing/browser/testing.contribution.js';
 import './services/extensionHost/browser/extensionHostServiceRegistration.js';
-import './contrib/tasks/browser/taskService.js';
-import './services/testing/browser/testingServiceRegistration.js';
 import './services/codebaseSymbols/browser/codebaseSymbolsServiceRegistration.js';
 import { ISyntaxApi } from '../platform/syntax/common/syntaxApi.js';
 import { ILanguageFeaturesService } from '../editor/common/services/languageFeatures.js';

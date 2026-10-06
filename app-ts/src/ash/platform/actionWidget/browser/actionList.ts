@@ -24,6 +24,7 @@ export const enum ActionListItemKind {
 }
 
 export interface IActionListItem<T> {
+	readonly id?: string;
 	readonly kind: ActionListItemKind;
 	readonly item?: T;
 	readonly label: string;
@@ -32,21 +33,40 @@ export interface IActionListItem<T> {
 	readonly checked?: boolean;
 	readonly canPreview?: boolean;
 	readonly keybinding?: ResolvedKeybinding;
+	/** Searchable metadata announced with the action; the row renders only its label. */
+	readonly detail?: string;
 }
 
 export interface IActionListOptions {
 	readonly className?: string;
+	readonly presentation?: 'menu' | 'details';
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
+	readonly focusFilterOnOpen?: boolean;
+	readonly filterAsCombobox?: boolean;
+	readonly ariaLabel?: string;
+	readonly header?: HTMLElement;
+	readonly footer?: HTMLElement;
+	readonly accessibilityHelp?: () => void;
+	readonly filterVisible?: boolean;
+	readonly itemsVisible?: boolean;
 	/** Minimum popup width in CSS pixels, including its border. */
 	readonly minWidth?: number;
 	/** Maximum popup width in CSS pixels; longer labels are truncated. */
 	readonly maxWidth?: number;
 }
 
+export interface IActionListUpdateOptions {
+	readonly filterVisible?: boolean;
+	readonly itemsVisible?: boolean;
+}
+
 export interface IActionListDelegate<T> {
 	onHide(didCancel?: boolean): void;
 	onSelect(action: T, preview?: boolean): void | Promise<void>;
+	onShow?(container: HTMLElement): void;
+	onFocus?(action: T, anchor: HTMLElement): void;
+	onHover?(action: T, anchor: HTMLElement): void;
 }
 
 /** A group label is descriptive content, never a disabled action button. */
@@ -73,6 +93,7 @@ export class ActionList<T> extends Disposable {
 	private readonly itemsDomNode: HTMLElement;
 	private readonly statusDomNode: HTMLElement;
 	private readonly filter: InputBox | undefined;
+	private readonly filterHost: HTMLElement | undefined;
 	private readonly preview: Button | undefined;
 	private readonly help = this._register(new MutableDisposable<DisposableStore>());
 	private readonly layoutRequested = this._register(new Emitter<void>());
@@ -94,31 +115,48 @@ export class ActionList<T> extends Disposable {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = options.className ? `ash-action-widget ${options.className}` : 'ash-action-widget';
-		this.domNode.setAttribute('role', 'group');
+		this.domNode.classList.toggle('ash-action-widget-details', options.presentation === 'details');
+		this.domNode.setAttribute('role', options.filterAsCombobox ? 'dialog' : 'group');
 		this.domNode.tabIndex = -1;
-		this.domNode.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
+		this.domNode.setAttribute('aria-label', options.ariaLabel ?? localize('actionWidget.label', 'Actions'));
 		if (ariaHint) {
 			this.domNode.setAttribute('aria-description', ariaHint);
 		}
 		if (options.showFilter) {
-			const filterHost = h(container.ownerDocument, 'div');
+			const filterHost = this.filterHost = h(container.ownerDocument, 'div');
 			filterHost.className = 'ash-action-widget-filter';
+			filterHost.hidden = options.filterVisible === false;
 			this.domNode.append(filterHost);
 			this.filter = this._register(new InputBox(filterHost, {
 				type: 'search',
-				ariaLabel: localize('actionWidget.filter', 'Filter actions'),
+				presentation: 'compact',
+				ariaLabel: options.ariaLabel ?? localize('actionWidget.filter', 'Filter actions'),
 				placeholder: options.filterPlaceholder ?? localize('actionWidget.filter', 'Filter actions'),
+				role: options.filterAsCombobox ? 'combobox' : undefined,
+				ariaAutoComplete: options.filterAsCombobox ? 'list' : undefined,
+				ariaExpanded: options.filterAsCombobox ? true : undefined,
 			}));
+			if (options.filterAsCombobox) {
+				this.domNode.id = `${user}.popup`;
+				this.filter.inputElement.setAttribute('aria-haspopup', 'dialog');
+				this.filter.inputElement.setAttribute('aria-controls', this.domNode.id);
+			}
 			this._register(this.filter.onDidChange(() => this.renderItems()));
 			this._register(this.filter.onKeyDown(event => {
 				if (event.isComposing) {
 					return;
 				}
-				if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter') {
+				if (event.key === 'Enter' && this.focusedEntry) {
+					stopEvent(event);
+					void this.select(this.focusedEntry);
+				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 					stopEvent(event);
 					this.focus();
 				}
 			}));
+		}
+		if (options.header) {
+			this.domNode.append(options.header);
 		}
 		this.itemsDomNode = h(container.ownerDocument, 'div');
 		this.itemsDomNode.className = 'ash-action-widget-items';
@@ -127,6 +165,11 @@ export class ActionList<T> extends Disposable {
 		this.statusDomNode.setAttribute('role', 'status');
 		this.statusDomNode.setAttribute('aria-live', 'polite');
 		this.domNode.append(this.itemsDomNode, this.statusDomNode);
+		this.itemsDomNode.hidden = options.itemsVisible === false;
+		this.statusDomNode.hidden = options.itemsVisible === false;
+		if (options.footer) {
+			this.domNode.append(options.footer);
+		}
 		if (supportsPreview) {
 			const previewHost = h(container.ownerDocument, 'div');
 			previewHost.className = 'ash-action-widget-preview';
@@ -152,7 +195,7 @@ export class ActionList<T> extends Disposable {
 			}
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && this.filter) {
 				stopEvent(event);
-				this.filter.focus();
+				this.focusFilter();
 				return;
 			}
 			if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && this.supportsPreview) {
@@ -164,6 +207,10 @@ export class ActionList<T> extends Disposable {
 			}
 			if (event.altKey && event.key === 'F1') {
 				stopEvent(event);
+				if (this.options.accessibilityHelp) {
+					this.options.accessibilityHelp();
+					return;
+				}
 				const lifetime = new DisposableStore();
 				const provider = lifetime.add(createHelpProvider(getActiveElement(this.domNode.ownerDocument)));
 				const dialog = lifetime.add(new Dialog(container, {
@@ -192,7 +239,7 @@ export class ActionList<T> extends Disposable {
 				header = entry;
 				continue;
 			}
-			const text = `${entry.label} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
+			const text = `${entry.label} ${entry.detail ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
 			if (!terms.every(term => text.includes(term))) {
 				continue;
 			}
@@ -224,6 +271,7 @@ export class ActionList<T> extends Disposable {
 			className: 'ash-action-widget-menu',
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeybinding: action => entries.get(action.id)?.keybinding,
+			getAriaDescription: action => entries.get(action.id)?.detail,
 			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
 		}));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
@@ -234,13 +282,28 @@ export class ActionList<T> extends Disposable {
 		this.menuResources.add(addDisposableListener(menu.element, 'focusin', event => {
 			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
 			this.focusedEntry = row ? entries.get(row.dataset.actionId!) : undefined;
+			if (this.focusedEntry && row) {
+				this.delegate.onFocus?.(this.focusedEntry.item!, row);
+			}
 			this.updatePreview();
 		}));
-		this.focusedEntry = previous && visible.includes(previous) && !previous.disabled
-			? previous
+		this.menuResources.add(addDisposableListener(menu.element, 'mousemove', event => {
+			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
+			const entry = row ? entries.get(row.dataset.actionId!) : undefined;
+			if (entry?.kind === ActionListItemKind.Action && !entry.disabled && row) {
+				this.delegate.onHover?.(entry.item!, row);
+			}
+		}));
+		const retained = previous && visible.find(entry => entry === previous || (entry.id !== undefined && entry.id === previous.id));
+		this.focusedEntry = retained && !retained.disabled
+			? retained
 			: visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked)
 			?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
 		this.updatePreview();
+		if (this.focusedEntry && previous) {
+			const row = menu.element.children[visible.indexOf(this.focusedEntry)] as HTMLElement;
+			this.delegate.onFocus?.(this.focusedEntry.item!, row);
+		}
 		const count = visible.filter(entry => entry.kind === ActionListItemKind.Action).length;
 		this.statusDomNode.textContent = '';
 		if (count === 0) {
@@ -260,16 +323,28 @@ export class ActionList<T> extends Disposable {
 		}
 	}
 
-	public updateItems(items: readonly IActionListItem<T>[]): void {
+	public updateItems(items: readonly IActionListItem<T>[], options: IActionListUpdateOptions = {}): void {
 		this.items = items;
-		this.contentWidth = undefined;
+		if (this.filterHost && options.filterVisible !== undefined) {
+			this.filterHost.hidden = !options.filterVisible;
+		}
+		if (options.itemsVisible !== undefined) {
+			this.itemsDomNode.hidden = !options.itemsVisible;
+			this.statusDomNode.hidden = !options.itemsVisible;
+		}
 		this.renderItems();
+	}
+
+	public focusFilter(): void {
+		if (this.filterHost && !this.filterHost.hidden) {
+			this.filter?.focus();
+		}
 	}
 
 	public layout(minWidth: number): number {
 		// Measure the existing menu at its intrinsic width, including icons, shortcuts and chrome.
 		// Filtering retains the full menu width so typing does not move the popup's edge.
-		if (!this.filter?.value.trim() || this.contentWidth === undefined) {
+		if (this.filterHost?.hidden || !this.filter?.value.trim() || this.contentWidth === undefined) {
 			const previousWidth = this.domNode.style.width;
 			this.domNode.style.width = 'max-content';
 			this.contentWidth = Math.ceil(this.domNode.getBoundingClientRect().width);

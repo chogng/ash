@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -14,7 +15,7 @@ import { ICodeEditorService } from '../../../../../editor/browser/services/codeE
 import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { IQuickInputService, type IQuickPickItem, type IQuickPick } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import type { SCMHistoryItemViewModelTreeElement, ISCMHistoryItem } from '../../../scm/common/history.js';
@@ -197,7 +198,7 @@ test('Graph comparisons keep each editor and file bound to its exact base and pr
 	registerGraphServices(services, git);
 	services.registerInstance(IQuickInputService, inputSelecting(0));
 	services.registerInstance(IEditorService, {
-		openEditor: async (editor: EditorInput) => {
+		openEditor: async (editor: IResourceEditorInput) => {
 			assert.ok(isMultiDiffEditorInput(editor));
 			opened.push({ resource: editor.resource.toString(), label: editor.label, original: editor.items[0].original.initialText, modified: editor.items[0].modified.initialText });
 		}

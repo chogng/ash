@@ -1,8 +1,8 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { localize } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { EditorInputSerializers } from '../../editor/common/editorInputSerializer.js';
-import type { EditorInput } from '../../editor/common/editorService.js';
 
 export const SettingsEditorContentType = 'application/vnd.ash.settings-editor';
 export const SettingsEditorResource = URI.parse('ash-settings-editor:/settings');
@@ -10,7 +10,7 @@ export const SettingsFileSystemScheme = 'ash-settings';
 export const UserSettingsResource = URI.parse(`${SettingsFileSystemScheme}:/user/settings.json`);
 
 /** Creates the singleton input routed to the Workbench Settings editor. */
-export function createSettingsEditorInput(target?: string, parameters: Readonly<Record<string, string>> = {}): EditorInput {
+export function createSettingsEditorInput(target?: string, parameters: Readonly<Record<string, string>> = {}): IResourceEditorInput {
 	const query = Object.entries(target ? { ...parameters, target } : parameters)
 		.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
 	return {
@@ -22,12 +22,12 @@ export function createSettingsEditorInput(target?: string, parameters: Readonly<
 	};
 }
 
-export function isSettingsEditorInput(input: EditorInput): boolean {
+export function isSettingsEditorInput(input: IResourceEditorInput): boolean {
 	return input.contentType === SettingsEditorContentType || input.resource.toString() === SettingsEditorResource.toString();
 }
 
 /** Creates the editable JSONC projection of the current profile's user settings. */
-export function createUserSettingsEditorInput(): EditorInput {
+export function createUserSettingsEditorInput(): IResourceEditorInput {
 	return Object.freeze({
 		resource: UserSettingsResource,
 		languageId: 'jsonc',

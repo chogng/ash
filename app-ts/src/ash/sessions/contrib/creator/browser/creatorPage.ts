@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import './creatorPage.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -9,7 +10,6 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { localize } from '../../../../nls.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import type { EditorInput } from '../../../../workbench/services/editor/common/editorService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { CreatorMode } from '../common/creator.js';
@@ -27,7 +27,7 @@ export class CreatorEditorPane extends Disposable implements IEditorPane {
 		parent.append(this.page.domNode);
 		this.page.initialize();
 	}
-	public async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }
+	public async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
 	public clearInput(): void { }
 	public setVisible(visibility: EditorPaneVisibility): void { this.page.setVisible(visibility === EditorPaneVisibility.Visible); }
 	public layout(dimension: IDimension): void { this.page.layout(dimension); }

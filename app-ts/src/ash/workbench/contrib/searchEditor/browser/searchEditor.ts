@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/searchEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -18,7 +19,7 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
-import { IEditorService, type EditorInput } from '../../../services/editor/common/editorService.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { SearchResultImpl } from '../../search/browser/searchTreeModel/searchResult.js';
 import { SearchEditorID, InSearchEditor } from './constants.js';
 import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from './searchEditorSerialization.js';
@@ -145,7 +146,7 @@ export class SearchEditor extends Disposable implements IEditorPane {
 		}, true));
 	}
 
-	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
+	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		await this.textEditor.setInput({ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false }, signal);
 		this.readQuery();

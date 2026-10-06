@@ -1,3 +1,4 @@
+import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -8,7 +9,7 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
-import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from '../../common/editorService.js';
+import type { EditorOpenOptions, EditorOpenTarget } from '../../common/editorService.js';
 import type { IEditorPane } from '../../../../browser/parts/editor/editorPane.js';
 import { type IEditorPartsService as EditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 
@@ -78,10 +79,10 @@ test('code editor services require their host and keep registrations within its 
 test('code editor resource opening reaches the Workbench group with its selection and focus preferences', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
-	const requests: Array<{ input: EditorInput; options: EditorOpenOptions; target: EditorOpenTarget; }> = [];
+	const requests: Array<{ input: IResourceEditorInput; options: EditorOpenOptions; target: EditorOpenTarget; }> = [];
 	let control: unknown;
 	services.registerInstance(IEditorPartsService, {
-		openEditor: async (input: EditorInput, options: EditorOpenOptions, target: EditorOpenTarget) => {
+		openEditor: async (input: IResourceEditorInput, options: EditorOpenOptions, target: EditorOpenTarget) => {
 			requests.push({ input, options, target });
 			return { getControl: () => control } as IEditorPane;
 		},
