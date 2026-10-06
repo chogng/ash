@@ -12,6 +12,7 @@ import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { SessionsList } from "./sessionsList.js";
 import { TeamsPanel, type TeamRoleOption } from './teamsPanel.js';
 import type { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
+import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../common/layoutConstants.js';
 
 /** Session navigation Part for the dedicated Sessions Workbench. */
 export type SidebarView = 'chats' | 'teams' | 'views';
@@ -27,6 +28,10 @@ export class SidebarPart extends WorkbenchSidebarPart {
 
 	override get minimumWidth(): number { return 240; }
 	override get maximumWidth(): number { return 520; }
+	override get preferredWidth(): number {
+		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
+		return Math.max(SESSION_SIDEBAR_DEFAULT_WIDTH, width);
+	}
 
 	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, teamsService: ITeamsManagementService, quickInput: IQuickInputService, listRoles: () => Promise<readonly TeamRoleOption[]>,
 		@IViewDescriptorService descriptors: IViewDescriptorService,

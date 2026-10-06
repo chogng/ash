@@ -43,10 +43,6 @@ export class PaneComposite extends ViewPaneContainer {
 		}
 	}
 
-	getOptimalWidth(): number | undefined {
-		return undefined;
-	}
-
 	getTitle(): string {
 		const paneTitle = this.mergedPane?.paneTitle;
 		return paneTitle && paneTitle !== this.title ? `${this.title}: ${paneTitle}` : this.title;

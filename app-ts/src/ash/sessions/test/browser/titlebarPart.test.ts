@@ -18,7 +18,7 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { WorkbenchPart } from '../../../workbench/browser/part.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
-import { SessionsWorkbenchLayout } from '../../browser/workbench.js';
+import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { TitlebarPart } from '../../browser/parts/titlebar/titlebarPart.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
@@ -127,12 +127,12 @@ test('Sessions titlebar initializes localized actions and closes the application
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/workbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/workbench.js').SessionsWorkbenchLayout {
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => {} }));
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
-	const layout = services.createInstance(SessionsWorkbenchLayout, container, options);
+	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
 		layout.createWorkbenchLayout(parts);
 	} catch (error) {

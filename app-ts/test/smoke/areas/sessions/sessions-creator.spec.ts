@@ -55,6 +55,62 @@ test('Sessions Creator opens seven workspaces and retains each canvas independen
 	await expect(design).toHaveCSS('min-height', '36px');
 });
 
+test('Sessions Creator resets side panel widths and retains them across page changes and reopening', async ({ application, target, workbench }) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const leftSash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').first();
+	const rightSash = page.locator('[data-part="auxiliarybar"]').locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').last();
+	const panelWidths = () => page.locator('.ash-workbench-part-frame').evaluateAll(frames => frames.filter(frame => frame.querySelector(':scope > [data-part="sidebar"], :scope > [data-part="auxiliarybar"]')).map(frame => Math.round(frame.getBoundingClientRect().width)));
+	await expect.poll(panelWidths).toEqual([240, 240]);
+	for (const width of [1226, 1400, 1100]) {
+		let contentWidth = width;
+		if ('windows' in application) {
+			const window = await application.browserWindow(page);
+			try {
+				contentWidth = await window.evaluate((window, width) => {
+					window.setSize(width, 800);
+					return window.getContentSize()[0];
+				}, width);
+			} finally { await window.dispose(); }
+		} else {
+			await page.setViewportSize({ width, height: 800 });
+		}
+		await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(contentWidth);
+		await expect.poll(panelWidths).toEqual([240, 240]);
+	}
+	await leftSash.focus();
+	await leftSash.press('ArrowRight');
+	await expect.poll(panelWidths).not.toEqual([240, 240]);
+	await leftSash.dblclick();
+	await rightSash.focus();
+	await rightSash.press('ArrowLeft');
+	await rightSash.dblclick();
+	await expect.poll(panelWidths).toEqual([240, 240]);
+	const canvas = page.locator('.ash-creator').getByRole('region', { name: 'Design canvas' });
+	await canvas.press('t');
+	const text = page.locator('[data-part="auxiliarybar"]').getByRole('textbox', { name: 'Text content', exact: true });
+	await text.fill('A long dashboard headline whose complete layer name needs more room');
+	await text.press('Tab');
+	await leftSash.dblclick();
+	await expect.poll(async () => (await panelWidths())[0]).toBeGreaterThan(240);
+	await canvas.press('ControlOrMeta+z');
+	await canvas.press('ControlOrMeta+z');
+	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
+	await leftSash.dblclick();
+	await expect.poll(panelWidths).toEqual([240, 240]);
+	await page.locator('.ash-creator').getByRole('button', { name: 'Creator home', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await expect.poll(panelWidths).toEqual([240, 240]);
+	await leftSash.focus();
+	await leftSash.press('ArrowRight');
+	const resized = await panelWidths();
+	page = await workbench.reopenAgentsWindow(application, page);
+	await expect(page.locator('.ash-creator').getByRole('heading', { name: 'Design', exact: true })).toBeVisible();
+	await expect.poll(panelWidths).toEqual(resized);
+});
+
 test('Sessions Creator Slides presents reordered pages and Brand undoes an entire variant batch', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();

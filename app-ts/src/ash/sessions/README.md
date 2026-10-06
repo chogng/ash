@@ -21,9 +21,10 @@ requirements are described in [Creator Sites](CREATOR_SITES.md).
 | Electron renderer close | `workbench/services/lifecycle/electron-browser/lifecycleService.ts` | checks shutdown vetoes and joins save work before either Electron window closes |
 | Code profile | `code/common/codeSessionsProfile.ts` | defines the Code window identity and page route used by both browser and Electron entries |
 | Product composition | `browser/workbench.ts` | uses shared window identity and lifecycle services; owns the fixed titlebar/activitybar/sidebar/sessions/editor/auxiliarybar/panel Part set |
+| Workbench construction | `browser/workbenchFactory.ts` and `browser/desktopWorkbench.ts` | prepares window resources and creates the desktop Workbench; the abstract Workbench owns shared services and Parts |
 | Code Files and Changes | `contrib/files/browser/`, `contrib/changes/browser/`, and `common/views.ts` | register only in the Sessions view catalog; Files reuses Explorer, Changes reads the selected conversation's Turn ledger, and both open the shared Workbench Editor Part |
 | Session file access | `services/workspace/browser/workspaceContextService.ts` and `contrib/providers/appServer/browser/sessionFileService.ts` | Explorer follows the selected Session directory; resource identities retain previously opened directories, while the transport adapter selects the Session directory protocol |
-| Layout | `browser/workbench.ts`, `browser/dockedAuxiliaryBarController.ts`, and `contrib/layout/browser/` | Workbench owns topology, geometry and persisted Part sizes/visibility. Code docks Details below the shared editor tabs and hosts its bottom Panel. The base controller restores session editors and panel views; the desktop controller owns the four Editor/Details states and managed Files/Changes tabs |
+| Layout | `browser/desktopWorkbench.ts`, `browser/layoutPolicy.ts`, `browser/dockedAuxiliaryBarController.ts`, and `contrib/layout/browser/` | DesktopWorkbenchLayout owns topology, geometry and persisted Part sizes/visibility; the layout policy supplies initial sizes and frame metrics. Code docks Details below the shared editor tabs and hosts its bottom Panel. The base controller restores session editors and panel views; the desktop controller owns the four Editor/Details states and managed Files/Changes tabs |
 | Appearance | `common/configuration.ts` and `contrib/modernUI/browser/` | own the independent Sessions layout, Activity Bar position, and size preferences |
 | Accounts and settings | `contrib/accounts/browser/` and `contrib/preferences/browser/` | the account icon opens a Sessions-owned menu with Settings and Return to Workbench; Settings opens a Sessions-owned page that reuses the Workbench setting widgets |
 | Window Sessions state | `services/sessions/browser/sessionsService.ts` | owns one active/visible selection model and Back/Forward history for the window |
@@ -82,7 +83,10 @@ joins pending attachment resolution before flushing storage.
 
 ## Execution path
 
-1. The Code browser or Electron entry creates one Sessions `Workbench`.
+1. The Code browser or Electron entry calls `createSessionsWorkbench` to prepare
+   window resources and create one `DesktopWorkbench`. `Workbench` is its
+   abstract shared host; the phone presentation specified in `LAYOUT.md` remains
+   unimplemented.
 2. `browser/workbench.ts` creates one App Server Session provider, one
    `ISessionsManagementService`, one window `ISessionsService`, and one
    `ChatService`, then registers their frontend contracts in a window-local
@@ -120,7 +124,7 @@ joins pending attachment resolution before flushing storage.
    change, so an immediate reload does not wait for the periodic flush.
    A hidden Sessions Part retains its saved split widths until it is visible and the
    surrounding Parts have completed their layout.
-4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
+4. `DesktopWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    activitybar, sidebar, sessions, editor, and auxiliary Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar visibility follows `sessions.activityBar.location`.
    The Activity Bar runs Chat, Collaboration, Library, Code, and Design commands; Collaboration opens the Teams sidebar; Library opens in LibraryPart and browses the shared asset catalog with image import, search, favorites, collections, grid/list views and previews. Its retained page owns browsing state and releases preview URLs while hidden. Library can attach an exact image version to the current Chat draft or place it in Design; the window composition owns navigation between these surfaces.
@@ -242,7 +246,8 @@ displays the stored root and does not grant access.
   selection; `platform/globalKeybindings/test/electron-main/` verifies
   active-window routing, conflict reporting, and release.
 
-Changes to topology belong in `browser/layoutPolicy.ts`; changes to window selection
+Changes to desktop topology belong in `browser/desktopWorkbench.ts`; default sizes
+and frame metrics belong in `browser/layoutPolicy.ts`. Changes to window selection
 belong in `services/sessions/browser/sessionsService.ts`; changes to provider
 adaptation and Session catalog operations belong in `services/sessions/`. Adding a second layout or
 Session model inside a Part would be architectural drift.

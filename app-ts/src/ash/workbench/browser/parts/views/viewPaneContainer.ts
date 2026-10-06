@@ -114,6 +114,10 @@ export class ViewPaneContainer extends Disposable {
 			.filter((pane): pane is ViewPane => pane !== undefined);
 	}
 
+	getOptimalWidth(): number {
+		return this.panes.reduce((width, pane) => Math.max(width, pane.getOptimalWidth()), 0) + 16;
+	}
+
 	getView(id: string): ViewPane | undefined {
 		return this.model.isVisible(id) ? this._panes.get(id)?.pane : undefined;
 	}

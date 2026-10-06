@@ -51,6 +51,30 @@ test('External Git init and ref changes update status and history without a manu
 	await expect(branch).toHaveCount(0);
 });
 
+test('Deep tool worktrees keep Repositories hidden until a workspace child repository appears', async ({ testWorkspace, workbench }) => {
+	const cwd = testWorkspace.directory;
+	const page = workbench.page;
+	await run('git', ['init', '-b', 'main'], { cwd });
+	await run('git', ['add', '.'], { cwd });
+	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Workspace baseline'], { cwd });
+	await writeFile(join(cwd, '.git/info/exclude'), '/.delta/\n');
+	await run('git', ['worktree', 'add', '-b', 'review', '.delta/worktrees/review/ash'], { cwd });
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
+	const repositories = page.locator('[data-view-id="workbench.scm.repositories"]');
+	await expect(repositories).toBeHidden();
+
+	const nested = join(cwd, 'nested');
+	await mkdir(nested);
+	await run('git', ['init', '-b', 'nested'], { cwd: nested });
+	const list = repositories.getByRole('listbox', { name: 'Source control repositories', exact: true });
+	await expect(list.getByRole('option')).toHaveCount(2);
+	await expect(list.getByRole('option', { name: /^nested, nested,/u })).toBeVisible();
+	await rm(join(nested, '.git'), { recursive: true });
+	await expect(repositories).toBeHidden();
+	await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('main');
+});
+
 test('External nested repository creation and deletion update Repositories, Changes, Graph and status', async ({ testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
 	const page = workbench.page;

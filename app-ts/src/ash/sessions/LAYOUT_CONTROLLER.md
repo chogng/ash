@@ -12,7 +12,7 @@ changes settle, and serializes restoration once the incoming workspace is ready.
 Chat, Code and Collaboration commands keep this same selection and input.
 Library and Creator open in the retained `LibraryPart` and `CreatorPart`; the desktop controller
 coordinates the surrounding Parts without changing Code editor inputs. Window geometry and Part visibility are
-persisted by `SessionsWorkbenchLayout`. Draft materialization transfers state to
+persisted by `DesktopWorkbenchLayout`. Draft materialization transfers state to
 the created Session identity. The selected Library or Creator page is
 restored from workspace storage at `sessions.layout.primaryPage`. The old
 `sessions.layout.primaryEditor` value is migrated once and removed; old page

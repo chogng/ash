@@ -17,7 +17,8 @@ import { registerLocalTranscriptionService } from '../../workbench/services/loca
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
-import { Workbench } from "../browser/workbench.js";
+import type { Workbench } from '../browser/workbench.js';
+import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
 import { isMacintosh } from '../../base/common/platform.js';
 import { IMenuService } from '../../platform/actions/common/actions.js';
 import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
@@ -120,7 +121,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	});
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
-	workbench = sessions.add(await Workbench.create({
+	workbench = sessions.add(await createSessionsWorkbench({
 		createTextDocumentHost: documentClient ? services => {
 			const editing = services.get(IChatEditingService);
 			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));

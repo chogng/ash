@@ -70,6 +70,16 @@ export class DesignLayersView extends ViewPane {
 		}));
 	}
 	public focus(): void { this.tree.domFocus(); }
+	public override getOptimalWidth(): number {
+		const left = this.contentElement.getBoundingClientRect().left;
+		const range = this.contentElement.ownerDocument.createRange();
+		let width = 0;
+		for (const label of this.contentElement.querySelectorAll('.ash-design-layer-label')) {
+			range.selectNodeContents(label);
+			width = Math.max(width, label.getBoundingClientRect().left - left + range.getBoundingClientRect().width);
+		}
+		return Math.ceil(width);
+	}
 }
 
 /** AuxiliaryBarPart hosts the editor-owned property component without copying its model. */

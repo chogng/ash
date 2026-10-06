@@ -17,7 +17,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { toDisposable } = await import("../../../../../../base/common/lifecycle.js");
-const { ContextKeyService } = await import("../../../../../../platform/contextkey/browser/contextKeyService.js");
+const { ContextKeyService, IContextKeyService } = await import("../../../../../../platform/contextkey/browser/contextKeyService.js");
 const { ViewContainerLocation } = await import("../../../../../../workbench/common/views.js");
 const { ViewPaneContainer } = await import("../../../../../../workbench/browser/parts/views/viewPaneContainer.js");
 const { InstantiationService } = await import("../../../../../../platform/instantiation/common/instantiationService.js");
@@ -65,6 +65,39 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 suiteTeardown(() => {
 	browserEnvironment.window.close();
 	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "navigator"]) Reflect.deleteProperty(globalThis, name);
+});
+
+test('ViewPaneContainer derives preferred width from visible view content', async () => {
+	const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+	const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
+	const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
+	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
+	class SizedView extends ViewPane {
+		constructor(container: HTMLElement, options: import('../../../../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) { super(container, options); }
+		override getOptimalWidth(): number { return this.id === 'wide' ? 360 : 180; }
+	}
+	const registry = new WorkbenchViewRegistry();
+	const descriptor = { id: 'widths', title: 'Widths', location: ViewContainerLocation.Sidebar };
+	using registration = registry.registerViewContainer(descriptor);
+	using views = registry.registerViews(descriptor.id, [
+		{ id: 'wide', title: 'Wide', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(SizedView) },
+		{ id: 'narrow', title: 'Narrow', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(SizedView) },
+	]);
+	using services = new InstantiationService();
+	using storage = createStorage('widths');
+	services.registerInstance(IStorageService, storage);
+	using contextKeys = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contextKeys);
+	using descriptors = services.createInstance(ViewDescriptorService, { registry });
+	const model = descriptors.getViewContainerModel(descriptor.id)!;
+	using container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+		viewContainer: descriptor, model, contextKeyService: contextKeys, instantiationService: services,
+	});
+	assert.equal(container.getOptimalWidth(), 376);
+	model.setVisible('wide', false);
+	assert.equal(container.getOptimalWidth(), 196);
+	model.setVisible('wide', true);
+	assert.equal(container.getOptimalWidth(), 376);
 });
 
 test("ViewPaneContainer opens a collapsed view and focuses only when requested", async () => {

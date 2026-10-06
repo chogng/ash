@@ -3,12 +3,17 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { AuxiliarybarPart } from '../../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
 import { IViewDescriptorService } from '../../../../workbench/common/views.js';
+import { SESSION_AUXILIARYBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.js';
 
 /** Hosts Code details and Design properties; editor tabs own their navigation. */
 export class AuxiliaryBarPart extends AuxiliarybarPart {
 
 	override get minimumWidth(): number { return 180; }
 	override get maximumWidth(): number { return 460; }
+	override get preferredWidth(): number {
+		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
+		return Math.max(SESSION_AUXILIARYBAR_DEFAULT_WIDTH, width);
+	}
 
 	constructor(
 		container: HTMLElement,

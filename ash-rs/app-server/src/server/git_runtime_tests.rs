@@ -515,6 +515,53 @@ fn await_directory_change(change: impl Fn() -> std::io::Result<()>) {
 }
 
 #[test]
+fn discovery_skips_deep_worktrees_but_accepts_them_when_opened_directly() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    let worktree_path = ".delta/worktrees/review/ash";
+    repository.git(&["worktree", "add", "-b", "review", worktree_path]);
+    repository.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "topic",
+        "tools/worktrees/topic/ash",
+    ]);
+
+    let runtime = GitRuntime::new(
+        inspection_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    assert_eq!(
+        runtime
+            .repositories()
+            .repositories
+            .iter()
+            .map(|descriptor| descriptor.path.as_str())
+            .collect::<Vec<_>>(),
+        vec![""]
+    );
+
+    let worktree = GitRuntime::new(
+        inspection_authorization(&repository.root().join(worktree_path)),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    assert_eq!(worktree.repositories().repositories.len(), 1);
+    assert_eq!(
+        runtime.common_dir_for(None).unwrap(),
+        worktree.common_dir_for(None).unwrap()
+    );
+    assert!(matches!(
+        worktree.status().unwrap().head,
+        ash_app_server_protocol::protocol::git::GitHeadDto::Branch { name, .. } if name == "review"
+    ));
+}
+
+#[test]
 fn runtime_discovers_nested_repositories_and_routes_operations_by_repository_id() {
     let repository = TestRepository::init();
     repository.write(".gitignore", "nested/\n");

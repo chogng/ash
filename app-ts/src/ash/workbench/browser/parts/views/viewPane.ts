@@ -32,6 +32,11 @@ export abstract class ViewPane extends Pane implements IView {
 		return undefined;
 	}
 
+	/** Views with intrinsic content widths report them independently of the current allocation. */
+	getOptimalWidth(): number {
+		return 0;
+	}
+
 	isVisible(): boolean {
 		return this.visible;
 	}

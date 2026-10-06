@@ -1880,6 +1880,8 @@ fn discover_repository_roots(authorization: &Authorization) -> Vec<PathBuf> {
     let dir_root = authorization.dir().canonical_path();
     let mut roots = vec![dir_root.to_path_buf()];
     let mut builder = WalkBuilder::new(dir_root);
+    // Automatic discovery covers immediate workspace children, matching VS Code's default.
+    // Deeper tool-managed working trees are discovered when opened as a workspace root.
     builder
         .hidden(false)
         .follow_links(false)
@@ -1887,7 +1889,7 @@ fn discover_repository_roots(authorization: &Authorization) -> Vec<PathBuf> {
         .git_global(false)
         .git_exclude(false)
         .parents(false)
-        .max_depth(Some(16))
+        .max_depth(Some(1))
         .filter_entry(|entry| {
             let name = entry.file_name().to_string_lossy();
             entry.depth() == 0

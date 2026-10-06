@@ -348,10 +348,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.applyingComposition = true;
 		try {
 			this.layout.updateParts(() => {
+				// Keep a primary view present while Grid transfers its cached width.
+				this.layout.setPartAvailable(page, true);
+				this.layout.setPartAvailable(page === 'library' ? 'creator' : 'library', false);
 				this.layout.setPartAvailable('editor', false);
 				this.layout.setPartAvailable('sessions', false);
-				this.layout.setPartAvailable('library', page === 'library');
-				this.layout.setPartAvailable('creator', page === 'creator');
 				this.layout.setPartAvailable('sidebar', canvas);
 				this.layout.setPartAvailable('auxiliarybar', canvas);
 				this.layout.setPartAvailable('panel', false);
@@ -389,6 +390,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 				this.closedProfile = this.profile;
 			}
 			this.layout.updateParts(() => {
+				this.layout.setPartAvailable('sessions', true);
 				this.layout.setPartAvailable('library', false);
 				this.layout.setPartAvailable('creator', false);
 				this.layout.setPartAvailable('sidebar', true);
@@ -396,7 +398,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 				this.layout.setPartAvailable('editor', true);
 				this.layout.setPartAvailable('auxiliarybar', true);
 				this.layout.setPartAvailable('panel', true);
-				this.layout.setPartAvailable('sessions', true);
 				if (action !== 'code') { this.layout.showPart('sidebar'); }
 				if (action === 'code') {
 					if (!keepComposition) { this.applyProfile(this.closedProfile); }

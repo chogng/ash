@@ -25,7 +25,8 @@ import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js
 import { workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
-import { Workbench } from "./workbench.js";
+import type { Workbench } from './workbench.js';
+import { createSessionsWorkbench } from './workbenchFactory.js';
 import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
@@ -65,7 +66,7 @@ async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: ID
 		if (!container) throw new Error("Sessions renderer requires an #app container");
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
-		const workbench = sessions.add(await Workbench.create({
+		const workbench = sessions.add(await createSessionsWorkbench({
 			createTextDocumentHost: documentClient ? services => {
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
