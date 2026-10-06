@@ -1,7 +1,11 @@
 use crate::JsonSchema;
 use crate::TS;
-use crate::protocol::common::{CommandId, SessionId, ThreadId, TurnId};
-use serde::{Deserialize, Serialize};
+use crate::protocol::common::CommandId;
+use crate::protocol::common::SessionId;
+use crate::protocol::common::ThreadId;
+use crate::protocol::common::TurnId;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Stable identity of one Turn/repository change set.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS)]
@@ -30,6 +34,7 @@ pub enum TurnChangeMessageStateDto {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum TurnChangeCommitStateDto {
+    PartiallyCommitted,
     Idle,
     Queued,
     Committing,
@@ -126,6 +131,7 @@ pub struct TurnChangeSetSummary {
     pub capture_state: TurnChangeCaptureStateDto,
     pub message_state: TurnChangeMessageStateDto,
     pub commit_state: TurnChangeCommitStateDto,
+    pub committed_paths: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub terminal_state: Option<TurnChangeTerminalStateDto>,
@@ -227,14 +233,12 @@ pub struct TurnChangesUpdateDraftParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TurnChangesCommitParams {
     pub command_id: CommandId,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
-    pub change_set_ids: Vec<ChangeSetId>,
-    #[ts(type = "number")]
-    pub expected_revision: u64,
+    pub commit_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -260,4 +264,52 @@ pub struct TurnChangesChanged {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub change_sets: Vec<TurnChangeSetSummary>,
+}
+
+/// Paths identify immutable file changes within one saved Turn, including both rename sides.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnChangeSelectionDto {
+    pub change_set_id: ChangeSetId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnChangesPrepareCommitParams {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub selections: Vec<TurnChangeSelectionDto>,
+    pub message: String,
+}
+
+/// Exact final diff against the frozen target; submitting this ID cannot rebuild the selection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnChangesPrepareCommitResult {
+    pub commit_id: String,
+    pub target_branch: String,
+    pub message: String,
+    pub files: Vec<TurnChangeFileDto>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnChangesReadCommitFileParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub commit_id: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnChangesReadCommitParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub commit_id: String,
 }

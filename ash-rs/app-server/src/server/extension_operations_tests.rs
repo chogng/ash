@@ -1,6 +1,6 @@
 use super::extension_catalog_error;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
-use ash_extensions::ExtensionCatalogError;
+use extension_catalog::ExtensionCatalogError;
 
 #[test]
 fn stale_extension_generations_have_a_distinct_rpc_error() {

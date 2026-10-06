@@ -46,7 +46,8 @@ fn declare_editor_extension(root: &Path, entrypoint: &str) {
     value["contributions"]["editorExtensions"] = serde_json::json!([{
         "id": "review-runtime",
         "entrypoint": entrypoint,
-        "runtimeApiVersion": 1,
+        "runtime": "hostRpc",
+                    "runtimeApiVersion": 1,
         "activationEvents": [
             {"type": "onCommand", "id": "acme.review.run"}
         ],

@@ -49,3 +49,15 @@ impl From<io::Error> for ExtensionHostError {
         Self::Transport(error)
     }
 }
+
+impl From<extension_protocol::ProtocolError> for ExtensionHostError {
+    fn from(error: extension_protocol::ProtocolError) -> Self {
+        match error {
+            extension_protocol::ProtocolError::InvalidProtocol(message) => {
+                Self::InvalidProtocol(message)
+            }
+            extension_protocol::ProtocolError::QuotaExceeded(quota) => Self::QuotaExceeded(quota),
+            extension_protocol::ProtocolError::Transport(error) => Self::Transport(error),
+        }
+    }
+}

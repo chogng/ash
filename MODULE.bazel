@@ -2,6 +2,7 @@ module(name = "ash")
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.96")
+bazel_dep(name = "rules_cc", version = "0.2.20")
 bazel_dep(name = "rules_platform", version = "0.1.0")
 bazel_dep(name = "rules_python", version = "1.9.2")
 bazel_dep(name = "apple_support", version = "2.1.0")
@@ -204,6 +205,19 @@ inject_repo(crate, "aws-lc")
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# Headers are the exact crate source selected by Cargo.lock; strip to include/ so
+# V8's own nested Bazel workspace does not take ownership of this public header target.
+http_archive(
+    name = "ash_v8_headers",
+    urls = ["https://static.crates.io/crates/v8/v8-150.4.0.crate"],
+    sha256 = "42a978ff11f15b24e5c05a7123cf2b68f41e763546699781a924ef4e2cf43a49",
+    strip_prefix = "v8-150.4.0/v8/include",
+    type = "tar.gz",
+    build_file = "//third_party/v8:headers.BUILD.bazel",
+)
+
 
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 

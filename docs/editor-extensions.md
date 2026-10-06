@@ -1,22 +1,31 @@
 # 编辑器扩展系统
 
-> 本文说明 Ash 编辑器扩展的三条边界：声明式资源目录、窗口内的浏览器 Worker，以及
-> App Server 管理的可执行扩展进程。静态目录实现见
-> [`ash-rs/extensions/README.md`](../ash-rs/extensions/README.md)，声明式 Workbench 投影见
-> [`app-ts/src/ash/workbench/services/extensions/README.md`](../app-ts/src/ash/workbench/services/extensions/README.md)，
-> 可执行进程与 RPC 实现见
-> [`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)。统一 Marketplace
-> artifact/capability 入口由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 维护；legacy
-> Plugin 本地来源 authority 由 [`plugins.md`](plugins.md) 维护。
+> 本文是 Ash 编辑器扩展的职责、运行方式与权限边界的权威说明。
+> 产品方向已确定为：扩展用 TS 编写，编译后的 JS 在 Rust 管理的独立 V8 宿主内运行，通过 TS SDK 调用编辑器服务或 Rust 后端。
+> 第三方扩展包来源选用 Open VSX；市场接入与扩展运行兼容性分别建设和验证。
+> 静态包与资源实现见 [`ash-rs/extension-catalog/README.md`](../ash-rs/extension-catalog/README.md)，
+> Workbench 接入见 [`app-ts/src/ash/workbench/services/extensions/README.md`](../app-ts/src/ash/workbench/services/extensions/README.md)。
+> 进程监管与权限门禁继续复用
+> [`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)；作者接口见
+> [`TS SDK`](../app-ts/extension-sdk/README.md)，JS 执行见 [`Rust V8 宿主`](../ash-rs/js-extension-host/README.md)。
+> Marketplace 安装由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 维护，
+> Plugin 来源授权由 [`plugins.md`](plugins.md) 维护。
 
 ## 快速理解
 
-声明式扩展读取主机限定目录中的 `package.json`、language/TextMate/snippet/theme/debugger 资源，
-不执行包内代码。随产品打包或开发者显式指定的浏览器扩展在窗口自己的 Worker 中运行，
-Markdown 预览使用这条路径。App Server 管理的可执行扩展必须先
-绑定一个 immutable package/executable 与独立 enable/grant authority，再由每扩展独立进程通过 Ash
-Host RPC v1 注册窄 provider。来源可以是 legacy Plugin authority，也可以是 Marketplace Manager；
-这些路径服务同一个 Workbench，但 manifest、身份、信任、刷新和失败语义由各自的宿主负责。
+扩展用 TS 编写，编译为 JS 后在独立的 Rust V8 扩展宿主中执行，不启动 Node。扩展通过 Ash TS SDK 注册命令、语言服务
+和界面贡献；编辑器文档、未保存文本、撤销和界面由 TS 服务管理。需要 Git、账号凭据、网络授权、
+数据库或系统工具等后端能力时，宿主代为请求 Rust。扩展作者不链接 Rust crate，也不编写 stdio 协议。
+采用这个分工是为了明确职责和权限。第三方扩展包从 Open VSX 获取；现成扩展能否直接运行，取决于
+它使用的贡献、API、运行入口和权限是否被 Ash 支持，不能由市场来源决定。
+
+当前代码同时存在声明式目录、可信浏览器 Worker 和 Rust 可执行扩展 Host。声明式目录只读取
+`package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。此前新增的 `ash-extensions` Rust
+作者 SDK 不再作为产品扩展入口继续建设。TS SDK v1 与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
+授权磁盘读取、通知、Quick Pick 和停用释放；本地包安装、启用、授权和 macOS JS 系统隔离已接入。完整 API、其他系统的 JS 隔离和旧作者 SDK 源码退场尚未完成。
+Open VSX 已接入现有 Rust 包管理。VSIX 安装先加载受支持的声明式贡献；macOS 用户另外启用并授权后，可执行使用受支持 VS Code API 的 CommonJS JavaScript 包。
+现有 Host RPC v1 的细节在下文作为当前实现记录保留，不能当作新方向的实现要求。
+
 这里的声明式 `Extension` 是领域 consumer，不是独立 Marketplace 或 package family；当前远端
 Theme/Language package 通过 typed adapter 进入它；Theme 的 portable manifest 由 host 规范化为声明式
 manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不会被自动解释为编辑器扩展。
@@ -27,20 +36,22 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 | 打开 Markdown 预览 | 内置浏览器扩展注册命令、菜单和文本预览，源码与预览共享未保存内容 | 不把 Markdown 渲染器放进工作台编辑器实现 |
 | 主机配置静态用户扩展目录 | 扫描该目录的直接子包，非法包产生诊断 | Workspace 或 Renderer 不能提交任意扩展根 |
 | Marketplace Theme / Language | Manager 验证同一 package 后，将声明式 assets 投影进共享 Extension catalog | 不建立 `extension-marketplace`，不执行静态资源 |
+| Open VSX 编辑器扩展 | 搜索、验证并安装精确版本；声明式贡献直接加载，受支持的 JS 在分别启用和授权后执行 | 安装不授权脚本，不把下载校验和当成 Ash TUF 签名 |
 | Legacy Plugin 声明 `declarativeExtensions[]` | 仅 effective exact package 的静态目录进入 catalog | 本地兼容来源不成为远端 Marketplace 旁路 |
 | 用户静态包与内置包使用同一扩展 ID | 内置包优先，用户包被报告为重复项 | 可变用户文件不能静默替换产品资源 |
-| Plugin 声明可执行 Editor Extension | 校验 exact entrypoint、process permission、Host API v1、activation event 和 capability ceiling | 安装或 manifest 校验本身不会启动进程 |
+| Plugin 声明 Editor Extension | 显式声明 `runtime: javascript` 或 `hostRpc`；校验入口、API 版本和能力；只有独立 RPC 程序需要 exact process permission | 安装或 manifest 校验本身不会启动进程 |
 | Marketplace package 带可选 `ash/editor-extensions.json` | 产品 adapter 绑定同 package 的 exact executable；独立 admission 与 Manager lease 都通过后才进入 Host | sidecar 不成为通用 Marketplace 必需 manifest；安装不自动 grant |
 | 已授权可执行扩展启动 | Runtime core 为它创建独立进程，完成版本握手和整批 registration validation | 不把它加载进 App Server 进程，不继承主机环境 |
 | 可执行扩展崩溃 | 清除旧 incarnation 注册，按有界预算重新握手和激活；超限进入 crash loop | 不无限重启，不把旧请求重绑定到新进程 |
 | 调用超时或取消后没有 terminal response | 结果标为 unknown outcome，终止旧 incarnation 后恢复 | 不声称副作用没有发生 |
-| 需要 VS Code Extension API 或 Marketplace compatibility | 当前不支持 | Host RPC v1 不是 Node Extension Host，也不是 VS Code API 子集 |
-| 生产环境没有可实施 hard limits 的 launcher | executable Host capability 必须为 false，失败关闭 | 不允许退化到无 sandbox 的第三方执行 |
+| 需要 VS Code Extension API | 已支持命令、通知、单选 Quick Pick、只读文档和 Hover 的基础子集 | 包可安装不代表全部 API 可用；不提供 Node 运行环境 |
+| 本地 SDK JS 包 | 工作区相对路径安装；分别启用、授权后，macOS 产品宿主执行 | 不自动授权，也不放宽独立可执行扩展的限制 |
+| 生产平台不支持所需隔离 | 运行失败并报告 isolation unavailable | 不允许无 sandbox 的第三方执行 |
 
 当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Marketplace executable source 都会
 先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
-Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现；由于生产
-launcher 尚未实现，默认产品仍以 capability=false 失败关闭，不能描述为可启用第三方代码的生产路径。
+Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现。macOS 产品已注入
+JS 专用 launcher，启用且授权的本地 SDK 包和兼容的 Open VSX 包可以运行；独立可执行扩展仍要求整个进程的系统硬限制，目前产品 launcher 拒绝启动它们。
 后续章节说明这些流程、所有权、信任与失败边界、完成度及演进。
 
 Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/resources/extensions.ts` 将内置包及显式配置的
@@ -61,13 +72,209 @@ Worker 无法访问 Workbench DOM，但仍是同源代码，不宣称具备生�
 承载预览，`CustomTextEditorModel` 引用源码的共享文本模型。源码和独立预览标签可以同时打开，
 未保存文本、保存状态和关闭确认仍由同一文档状态决定。此入口没有扩大第三方扩展的生产执行许可。
 
-## 1. 两条 App Server 装载与激活路径
+## 0. 确定的产品方向
+
+### 0.1 TS SDK 与 Rust V8 扩展宿主
+
+```mermaid
+flowchart TD
+    package["扩展包中的 TS 源码 / 编译后的 JS"] --> runtime["Rust 管理的独立 V8 扩展宿主"]
+    runtime --> sdk["Ash TS SDK"]
+    sdk --> host["宿主校验扩展身份、授权和调用范围"]
+    host --> editor["TS 编辑器服务：文档、撤销、命令、界面"]
+    host --> request["受限的后端请求"]
+    request --> backend["Rust：业务接口、授权检查、凭据、存储、系统工具"]
+    backend --> reply["业务结果和事件"]
+    reply --> runtime
+```
+
+Rust 拥有包安装、授权记录、扩展宿主进程和 V8 执行调度；扩展入口、回调、Provider 和特有流程
+仍是 JS。编辑器对象、未保存文本、撤销和 UI 状态继续由 TS 管理，业务 App Server 不链接 V8。
+Code Mode 和扩展宿主复用引擎初始化实现与锁定版本，分别管理执行状态和权限，不共享扩展或工具身份。
+
+SDK 是作者的公共入口；协议是宿主内部的调用约定，不要求作者自己发送请求。接口覆盖必须包含
+实际调用、错误、取消和释放，不能只有同名声明。原扩展直接依赖 Node 模块时，需要改用受限 SDK；
+协议不会自动把任意 JS 变成 Rust，也不会完整模拟 Node。后台重活可以通过 SDK 交给共享 Rust 服务，
+是否降低内存或加快启动需由真实扩展测量，不能由实现语言推定。
+
+| 能力 | 目标 owner | 扩展使用方式 |
+| --- | --- | --- |
+| 扩展入口、激活、回调、注册释放 | TS SDK 与独立 Rust V8 扩展宿主 | 编写 TS，运行编译后的 JS |
+| 扩展自己的流程、数据整理、业务特有 Provider | TS 扩展包 | 组合公开 API，保留在扩展内部 |
+| 文档模型、未保存文本、撤销、选区、编辑器和界面组件 | TS Editor / Workbench 服务 | 宿主校验后，通过 SDK 请求或贡献 Provider |
+| Git、数据库、凭据、受授权的远端请求与系统工具 | Rust 领域服务 | SDK 请求明确的业务操作，返回领域结果 |
+| 安装、包完整性、启用和授权记录 | Rust 包管理与授权服务 | 安装和授权是独立动作，宿主只取得当前有效授权 |
+| 扩展请求身份和范围 | 可信宿主与 Rust 授权服务 | 宿主绑定身份，Rust 每次执行前复核授权 |
+
+SDK 提供语义明确的 API，不公开任意 App Server 方法、原始 IPC、后端连接或通用系统执行入口。
+Rust V8 宿主通过共享扩展协议请求 App Server；编辑器与 UI 操作由 App Server 回到发起调用的 TS 客户端。
+Workbench 消费前端领域类型，后台文件读取不会转发到 Renderer。
+
+SDK v1 的实际入口是 `@ash/extension`。作者导出 `activate(context)`，在激活阶段注册命令并把
+Disposable 放入 `context.subscriptions`；每个命令收到独立的调用上下文。`workspace.openTextDocument`
+读取 TS 的当前文档与版本，`workspace.readTextFile` 由 Rust 文件服务读取工作区相对路径，限制为
+256 KiB UTF-8。文件读取必须同时满足 Plugin 的 `directory: read` 声明与当前目录的 `ReadFiles` 授权；
+工作区切换不会把在途请求转到另一个文件服务。撤销目录授权后读请求失败。
+
+包中用 `runtime: javascript` 明确选择产品打包的 `ash-js-extension-host`，入口为 `.js` 或 `.mjs` ESM。
+相对模块只能来自包快照，`@ash/extension` 由宿主提供；不支持 Node、CommonJS 或动态导入。
+激活阶段只完成本地初始化和命令注册，模块顶层初始化必须完成后再激活。注册的 dispose 立即撤销回调，
+对外注册快照在停用或重启时整体更新。`deactivate` 即使失败仍释放 subscriptions；异步停用不能等待外部服务。
+SDK 的 `ExtensionError.code` 保留 Rust 服务的错误分类。
+
+`languages.registerHoverProvider` 已接入现有 TS 语言服务。manifest 需声明 `languageProvider`；回调取得
+当前编辑器的不可变文本、版本和从 0 开始的 UTF-16 坐标，可返回文本、代码块和可选范围。
+未保存内容来自当前编辑器，不重新读盘；SDK 校验语言选择器、坐标和范围，TS 编辑器负责展示与无障碍交互。
+Provider 与命令共用调用身份、受限服务、取消和释放规则；其他语言 Provider 的作者接口尚未开放。
+
+宿主将纯 JS 执行和 Promise 续执行纳入截止时间；取消会退役整个扩展运行实例，在途调用不会重放到新进程。
+macOS 产品宿主先读取包快照并初始化 V8，再通过 Seatbelt 禁止直接文件访问、网络和创建子进程，随后才处理握手和执行扩展。
+每个运行实例有 64 MiB V8 堆预算与独立的 64 MiB 堆外 ArrayBuffer 预算；极小 TypedArray 的内联存储计入 JS 堆。
+堆超额会终止执行，V8 可取得最多 4 MiB 的结束执行余量；堆外缓冲区累计超额立即结束扩展进程。它们不是整个进程的系统内存上限。
+共享、可调整大小的缓冲区和 WebAssembly 不开放，因为其分配绕过该 ArrayBuffer 接口。独立可执行扩展的原有系统硬限制不变。
+其他系统目前拒绝产品 JS 执行；Open VSX 下载包不会自动选用此入口。
+
+作者可运行 `pnpm --dir app-ts/extension-sdk build:example`，得到 `.build/extension-sdk/` 下的 JS 与 Plugin manifest。
+真实子进程测试覆盖 SDK→前端文档调用、SDK→Rust 磁盘读取、错误、取消、新运行实例和停用释放；
+当前不是完整 VS Code API，也尚未向公共 npm registry 发布 SDK。
+
+### 0.2 GitHub 的具体分工
+
+GitHub 扩展仍用 TS 编写和运行。它负责“什么时候查询 PR、如何组织列表、用户点击后做什么”；
+Ash 的 TS 服务负责实际显示列表、编辑评论、打开文件和 Diff；Rust 负责账号授权、持有凭据、发送
+GitHub 请求，以及 Git 和持久化。扩展取得所需业务结果，不取得用户令牌。
+
+| GitHub 场景 | TS 扩展与工作台 | Rust 后端 |
+| --- | --- | --- |
+| 登录 | 扩展请求登录，工作台展示账号选择和授权交互 | 管理认证状态、凭据保存、账号权限与撤销 |
+| 展示 PR 和检查结果 | 扩展发起查询并整理结果，工作台渲染 | 发送 GitHub 请求，处理分页、限流和业务错误 |
+| 提交评论、Review 或合并 | 扩展组织流程，工作台呈现输入和确认 | 校验扩展操作授权、账号及仓库范围，执行写入并返回明确结果 |
+| 打开文件或 Diff | 使用工作台编辑器和当前文档模型 | 提供所需 Git 对象或远端内容 |
+| 保存数据 | 保存扩展范围内的持久数据请求；窗口显示状态仍由 TS 管理 | 校验存储范围并持久化，隔离不同扩展的数据 |
+
+仓库已经有 [`IGitHubService`](../app-ts/src/ash/platform/github/common/githubService.ts) 和
+[`AppServerGitHubService`](../app-ts/src/ash/platform/github/browser/appServerGitHubService.ts)，
+后者通过生成协议调用 [`App Server GitHub operations`](../ash-rs/app-server/src/server/github_operations.rs)
+和 [`ash-rs/github`](../ash-rs/github/README.md)。这条产品服务路径可以作为 SDK 接入的后端能力来源；
+当前产品账号授权不等于第三方扩展授权，不能把现有服务或完整连接直接交给扩展。
+GitHub 的独立 TS 扩展入口、TS SDK 的 GitHub API 和逐扩展权限接入尚未完成。
+
+代码在 `extensions/` 或 `src/` 不决定它是否交给 Rust。扩展特有流程在扩展包，通用编辑器和界面
+服务在 TS `src/ash`，共享后端业务在 `ash-rs`。迁移依据是能力和状态由谁管理，不是上游目录名。
+
+### 0.3 权限必须在运行环境和服务端执行
+
+- Electron 主进程与受信任 preload 只用于产品自身的宿主工作。扩展不能取得 `require`、Node
+  文件和进程模块、Electron API、主进程对象或通用 IPC。
+- 承载扩展或其界面的窗口关闭 `nodeIntegration`、`nodeIntegrationInWorkers`、
+  `nodeIntegrationInSubFrames`，开启 `contextIsolation` 和 `sandbox`。扩展运行环境与产品界面隔离，
+  不能取得 DOM、产品存储、登录会话或后端连接。Worker 本身不提供完整的权限隔离。
+- 宿主根据已加载包和当前授权绑定扩展身份；请求内自报的 `extensionId` 不能决定权限。请求还绑定
+  工作区、窗口和激活代次，宿主只允许公开且获授权的命令和操作。
+- Rust 对每次操作复核扩展有效授权、目录或仓库范围、账号、网络目标和写入权限。撤销、更新、
+  停用或工作区切换后，旧身份不能继续调用；长任务持有相应授权并处理取消。
+- 凭据留在后端。扩展使用受限业务操作，不获得令牌、完整环境变量或其他扩展的存储权限。
+- 网络和浏览器存储的限制也在运行环境中执行。只从 SDK 删除 `fetch` 或存储方法不能阻止扩展自己调用
+  浏览器 API；必须限制扩展来源、会话、网络策略和消息入口。
+- Rust 可以管理已授权 Git、LSP 等外部工具的受限执行；这种工具执行权限不授予 JS 扩展本身。
+
+即使扩展绕过 SDK、自己构造消息，宿主和 Rust 仍须拒绝未授权操作。Electron 官方的
+[上下文隔离说明](https://www.electronjs.org/docs/latest/tutorial/context-isolation#security-considerations)
+明确指出，开启隔离并不使通用 IPC 自动安全；基础窗口设置不能代替 API 权限检查。
+
+### 0.4 当前状态与验收要求
+
+| 项目 | 当前状态 |
+| --- | --- |
+| 内置或显式可信包的浏览器 Worker 执行、Markdown 预览 | 已有实现；当前同源 Worker 不代表第三方权限隔离已完成 |
+| Rust GitHub 领域能力与 TS 产品服务调用 | 已有实现；尚未开放为逐扩展授权的 SDK API |
+| 产品窗口禁用 Node、开启上下文隔离和沙箱 | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC |
+| TS SDK v1 与独立 Rust V8 宿主 | 已实现并通过独立进程测试；支持命令、悬停 Provider、文档快照、授权文件读取、通知、Quick Pick 和释放 |
+| 第三方 SDK v1 生产执行与系统隔离 | macOS JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其他平台尚未开放 |
+| 完整 TS API | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方 SDK 权限边界 |
+| Open VSX 搜索、下载、安装、更新和卸载 | 已接入 Rust Manager 与 Marketplace 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
+| Rust 作者 SDK 与后端可执行扩展入口 | 已停止作为产品扩展方向；源码仍在，此前服务反向调用补充未完成验证 |
+
+后续实现必须通过真实扩展入口验证：正常授权操作成功；伪造扩展身份、越界文件或仓库、未授权命令、
+直接 Node/IPC/后端连接访问失败；撤销授权后在途和后续调用停止；关闭窗口释放注册与任务；文档编辑
+读取未保存文本并保留版本冲突和撤销语义。扩大 SDK API 或平台范围时必须继续验证这条权限和生命周期链。
+
+### 0.5 第三方扩展来源采用 Open VSX
+
+Ash 接入 Open VSX 获取已有扩展包，不要求所有作者重新发布到 Ash 自建市场。Open VSX 是由
+Eclipse 管理的开放扩展 registry，可供兼容编辑器使用；每个扩展仍按自己的许可证使用。
+见 [Open VSX 官方说明](https://www.eclipse.org/legal/open-vsx-registry-faq/)。Cursor 已采用
+Open VSX，并通过自己的代理提供搜索、下载与扩展检查，见
+[Cursor 扩展文档](https://prod.cursor.com/help/customization/extensions)。
+
+| 部分 | Ash 的目标做法 |
+| --- | --- |
+| 搜索、版本查询、下载来源 | Rust 的 Open VSX 来源 adapter 获取目录与 VSIX 包 |
+| 包安装、更新、卸载 | 由现有 Rust 包管理 owner 管理；来源接入不新建第二套安装生命周期 |
+| 包格式和声明式资源 | 解析 VSIX 中的 `package.json` 与资源，交给现有扩展目录和各 TS 贡献 owner |
+| 扩展入口与回调 | 隔离的 JS 宿主执行受支持的入口，TS 提供已实现的扩展 API |
+| 文件、Git、凭据、网络和工具操作 | 通过明确的 SDK 接口请求受权限控制的 Rust 领域能力；编辑器模型仍由 TS 管理 |
+
+Open VSX adapter 必须保留 registry、publisher、扩展 ID、版本、平台和包摘要。不同 registry 中
+相同的 `publisher.name` 不证明作者或内容相同；切换来源不能沿用原来源的授权。来源目录提供的
+摘要、发布者信息与 Ash 市场的签名验证分别记录，不能把 Open VSX 包标记为已通过 Ash 的 TUF 验证。
+VSIX 使用其自身的包格式，不要求上游包额外携带 Ash Plugin manifest 或旧 executable Host sidecar。
+
+市场页面分别说明“包可获取”和“在 Ash 中可运行”。安装前检查已知的入口、平台、API 与贡献要求；
+实际兼容性以扩展入口、调用、取消及释放的验证结果为准，不能只检查 `browser` 字段或 API 名称。
+
+| 扩展形态 | 支持条件 |
+| --- | --- |
+| 声明式主题、语法、snippet 等 | 包验证通过，全部必要贡献由 Ash 对应领域支持 |
+| 使用 `browser` 入口的 JS 扩展 | 所用扩展 API 与运行环境能力均受支持，并符合逐扩展权限要求 |
+| 直接依赖 Node 文件、进程或 Electron 能力的扩展 | 原包不能直接运行；作者须改用受限 SDK，并完成适配验证 |
+
+VS Code 的 [Web 扩展说明](https://code.visualstudio.com/api/extension-guides/web-extensions)
+也区分浏览器入口与 Node 能力。Ash 保持第 0.3 节的权限边界，不为提高兼容数量向扩展开放 Node
+或通用 IPC。兼容目标是经验证的扩展集合，不承诺 Open VSX 全库可运行。
+
+当前 `OpenVsxClient` 已实现来源 adapter 和 VSIX 安装链，复用 `PluginsManager` 的安装、更新、
+持久化恢复及卸载。产品配置中的 `openVsx` 定义唯一来源名、HTTPS API 和允许的下载 origin；
+每次请求与 CDN 跳转均检查这些地址。搜索不下载所有包，打开选中包详情时取得并验证该版本的
+VSIX，随后安装复用同一份已验证内容。校验和与包内 publisher/name/version 必须一致，解压遵守
+现有路径、文件数和大小限制。来源记录、精确版本、平台与校验和随安装保存。
+
+Marketplace 的“编辑器扩展（Open VSX）”筛选及安装确认说明：安装加载受支持的主题、语法、
+代码片段等声明式资源；脚本执行需要在命令面板“管理市场扩展执行”中分别启用和授权。
+macOS Rust V8 宿主执行受支持的 CommonJS 包，可信 Worker 不执行下载包。完整兼容 API 尚未完成。`universal` 正式版本是当前支持的包目标；平台专用包和预发布包未接入。
+
+### 0.6 已支持的 VS Code JavaScript 接口
+
+先从 Open VSX 安装包，再在命令面板打开“管理市场扩展执行”，分别选择“启用”和“授权执行”。
+授权绑定已安装包的精确版本、摘要、能力 ID 和宿主权限版本，保存于 Profile；更新包或扩大宿主权限后需要新授权。
+停用或撤销先使旧调用失去权限、取消在途操作并结束旧进程，再返回成功。运行中的安装包持有 Manager 租约，卸载前先停用。
+这些状态由 `core-plugins::EditorExtensionPolicy` 管理，与本地 Plugin 的授权来源分开。
+
+| 接口 | 当前支持范围 |
+| --- | --- |
+| 包入口 | `browser` 优先，否则 `main`；单文件 CommonJS bundle，入口可省略 `.js`；`require` 只提供 `vscode` |
+| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；启用且授权后立即激活 |
+| 命令 | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg` |
+| 界面 | 三种消息通知（无按钮或选项）；字符串或 label 项的单选 `window.showQuickPick` 与 `placeHolder` |
+| 文档 | `workspace.openTextDocument(Uri)` 读取调用窗口的只读快照；`uri`、`version`、`languageId`、`getText(range)` |
+| 语言 | 字符串语言 ID 的 `languages.registerHoverProvider`，UTF-16 Position、Hover 内容和 Range |
+| 基础类型 | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Disposable` 的上述用法，不提供完整类型成员 |
+
+接口未实现时明确报错；不提供 Node 模块、相对 CommonJS 模块加载、文件或网络直连、任意后端 RPC、完整 ExtensionContext、
+文档变化事件和 `activationEvents` 延迟启动。服务调用只在命令或 Hover 回调内有效，不能在激活阶段或回调结束后访问窗口。
+V8 将调用身份随 Promise 续执行保留；并行命令不共享身份，过期续执行不能借用后来的调用。
+命令忽略通知的 Thenable 时，宿主仍等待该通知结束再关闭调用。
+
+未经修改的 Open VSX `mark-wiemer.helloworld-2022` 0.2.3 已通过真实 Electron 下载、安装、命令通知、
+同 Profile 重启、撤销与卸载验证。这证明该原包兼容，不代表整个市场的扩展都兼容。
+
+## 1. 当前 App Server 装载与激活实现
 
 ### 1.1 声明式静态扩展
 
 ```mermaid
 flowchart TD
-    package["产品根 / Marketplace exact asset / legacy Plugin exact package / 用户根"] --> scan["ash-extensions 扫描并冻结包快照"]
+    package["产品根 / Marketplace exact asset / legacy Plugin exact package / 用户根"] --> scan["ash-extension-catalog 扫描并冻结包快照"]
     scan -->|非法包| diagnostic["目录诊断；不注册该包"]
     scan --> catalog["不可变目录代次与 package digest"]
     catalog --> protocol["App Server DTO 与有代次约束的资源读取"]
@@ -80,7 +287,7 @@ flowchart TD
 
 产品构建把仓库根目录 `extensions/` 复制到包内 `ash-resources/extensions/`。App Server 同时把当前
 Plugin activation snapshot 中的 `declarativeExtensions[]` 与 Manager 的 Theme/Language capabilities
-解析为 exact immutable package directories。`ash-extensions` 按 built-in → dynamic authority sources
+解析为 exact immutable package directories。`ash-extension-catalog` 按 built-in → dynamic authority sources
 → profile user 顺序扫描，每个扩展 ID 的第一个有效包获胜。每次 `Refresh` 或任一动态 source
 generation 改变都会重新扫描；只有 descriptor、完整 package digest 或 diagnostics 改变才推进目录
 代次，并把包内 regular-file bytes 冻结为当前内存快照。内容相同的刷新保留代次，避免启动时多个
@@ -95,7 +302,7 @@ Workbench 启动会保留初次 `AppServerExtensionService.start()` 的 Promise�
 才恢复 working-copy backup 并推进 `AfterRestored`。App Server 连接状态从任一非 `ready` 状态回到
 `ready` 时，组合根调用 `reload()`；该请求复用 single-runner 合并规则。
 
-### 1.2 来源授权的可执行 Host v1
+### 1.2 现有来源授权的可执行 Host v1（退出产品扩展方向）
 
 ```mermaid
 flowchart TD
@@ -116,24 +323,29 @@ Legacy Plugin v1 的 `editorExtensions[]` 仍可作为本地兼容来源。Marke
 `ash/editor-extensions.json` consumer sidecar 把声明绑定到同 digest 内的 exact `executable`
 capability；没有独立 `MarketplaceEditorExtensionAdmission` grant 时 deployment 不会被接纳或启动。
 Admission authority 必须为 policy commit 推进 generation，并在可变时发布变更；Host 据此撤销旧
-fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定当前 Environment 的显式 source 与目录 Grant，随后把绝对 executable 交给能够实施 sandbox 与 hard limits 的平台 launcher。默认安全策略缺少
-该 launcher 时失败关闭，不能自动改用可信开发 launcher。
+fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定当前 Environment 的显式 source 与目录 Grant。独立可执行扩展交给能够实施系统沙箱与进程资源上限的 launcher；JS 扩展交给产品打包的 V8 宿主，在 macOS 实施系统沙箱和第 0.1 节的 JS 内存预算。缺少所选运行方式要求的 launcher 时拒绝启动，不能自动改用可信开发 launcher。
 
 一个 `ExtensionHostSupervisor` 只监管一个扩展程序。它先取得 live activation lease，再 spawn、执行
 Initialize/Activate，最后一次发布整批 registrations。每次 provider invocation 重新取得 lease，并绑定
 request ID、process incarnation 和 activation generation。崩溃后的新进程会重新握手和激活；旧
 registration、pending request 和 lease 不会迁移。
 
-Manifest activation events 当前是经过验证并传给 runtime 的 facts；`ash-editor-extension-host` 不自行
-监听 Workbench 事件或决定何时 lazy start。activation-event matching 必须由 App Server composition
-明确实现并测试，不能因为协议携带该字段就宣称按事件激活已经可用。
+Open VSX JS 扩展由 App Server 在 Rust 中匹配激活事件。启用且授权后先进入 `dormant`，
+不创建进程，也不产生 incarnation 或 provider registrations。命令清单先供命令面板展示；第一次
+调用等待启动，再使用实际注册和进程代际执行。TypeScript 编辑器传递当前模型的语言，以及窗口
+恢复后的 `onStartupFinished`。Rust 支持 `onCommand`、`onLanguage`、`onStartupFinished` 与
+立即启动的 `*`，并从标准 commands、languages 贡献生成隐式事件。健康轮询和失败重试不会启动
+等待中的扩展，匹配事件也不能绕过精确包授权。切换目录后激活代际仍单调递增，迟到的旧事件
+不能使用新目录中的扩展。其他激活事件类型尚未实现，本地 SDK 与独立
+可执行扩展仍沿用现有启动方式。`ash-editor-extension-host` 只监管进程，不监听编辑器事件。
 
-## 2. 所有权
+## 2. 当前实现所有权
 
 | 能力 | 权威所有者 | 不负责 |
 | --- | --- | --- |
 | 内置静态资源源码与上游 provenance | 根目录 `extensions/` | 运行时扫描、Extension API |
-| 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `ash-extensions` | Editor 贡献语义、任意代码执行 |
+| 此前的 Rust 作者接口、回调分发与激活作用域（待退场） | `ash-extensions` | 不再承担目标产品 SDK；目标分工见第 0 节 |
+| 静态包扫描、路径/文件类型校验、快照、摘要与目录代次 | `ash-extension-catalog` | Editor 贡献语义、任意代码执行 |
 | 静态可信根选择和顺序 | App Server 产品组合根 | 由 Renderer 提交任意主机路径 |
 | Plugin 静态目录选择 | `ash-core-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行 |
 | Marketplace Theme/Language 静态目录选择 | `PluginsManager` + App Server provider | 解析 Workbench 贡献、主题选择或 LSP lifecycle |
@@ -195,14 +407,15 @@ Theme document 当前必须是自包含资源：`include` 会被拒绝，`uiThem
 `foreground`、`background` 和受支持的 `fontStyle`。未知 Workbench color token ID 可以保留在
 catalog 中，但投影为产品主题时会被忽略。
 
-## 4. 可执行 Host v1 的窄契约
+## 4. 现有可执行 Host v1 的窄契约
 
 ### 4.1 清单与激活上限
 
 每个 legacy Plugin `editorExtensions[]` item 或 Marketplace Ash sidecar item 必须有唯一
-manifest-local ID、唯一 exact executable binding、数值 `runtimeApiVersion: 1`、非空且有界的
-activation events 和 capabilities。Legacy entrypoint 必须有对应 `process` permission；Marketplace
-entrypoint 必须引用同一 Manager package 中声明为 `runtime: direct` 的 executable capability。
+manifest-local ID、唯一入口绑定、数值 `runtimeApiVersion: 1`、非空且有界的 activation events 和 capabilities。
+Legacy `runtime: hostRpc` 入口必须有对应 `process` permission；`runtime: javascript` 入口由产品 V8 宿主加载，
+SDK v1 允许 command 和 languageProvider ceiling，目前语言作者 API 仅支持 hover。Marketplace sidecar 的入口仍须绑定同一 Manager package 的
+`runtime: direct` executable capability，尚未开放第三方 JS 下载包执行。
 regular-file 校验不证明当前 OS、CPU、ABI 或代码签名可运行；launcher 仍需在目标平台失败关闭。
 
 v1 activation event 为 `startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、
@@ -278,7 +491,7 @@ identity，但声明式消费不等于 executable grant；所有来源都只能�
 
 ### 5.2 可执行进程
 
-可执行扩展必须同时满足三层 gate：来源的 exact package/digest + enable/grant lease、当前 Environment 的有效 source/目录 Grant，以及平台 launcher 对 sandbox/hard limits 的实际实施。Marketplace 来源额外同时持有 Manager
+可执行扩展必须同时满足三层 gate：来源的 exact package/digest + enable/grant lease、当前 Environment 的有效 source/目录 Grant，以及 launcher 对所选运行方式的隔离和资源预算的实际实施。Marketplace 来源额外同时持有 Manager
 capability lease 与产品 admission lease；admission generation/notification 负责使 grant/revoke 触发
 fleet replacement。任一 gate 失效都拒绝新 activation
 和 invocation；App Server 还须取消 connection-owned invocation，并在 disable/update/uninstall 或
@@ -286,12 +499,12 @@ Environment 或有效目录集合切换时停止旧进程。
 
 默认 process/protocol limits 为 1 MiB frame、512 KiB payload、256 registrations、32 个普通和 8 个
 control in-flight requests、256 KiB stderr、4096 个 / 512 KiB queued/retained Output events、10 秒
-startup、30 秒 request、2 秒 cancel grace、5 秒 shutdown。默认 hard limits 请求 512 MiB memory、
-300 秒 CPU 和单进程。restart policy 在 60 秒窗口内
+startup、30 秒 request、2 秒 cancel grace、5 秒 shutdown。独立可执行扩展默认请求 512 MiB 进程内存、
+300 秒 CPU 和单进程上限。macOS JS 扩展分别限制 V8 堆和 ArrayBuffer 为 64 MiB，执行有超时；这不是整个进程的内存上限。restart policy 在 60 秒窗口内
 最多允许 5 次，以 100 ms 起步、最高 5 秒指数退避。确切实现和修改义务见 Host crate README。
 
 `TrustedDevelopmentLauncher` 只允许显式可信本地开发。生产第三方执行必须注入能实施所请求隔离的
-launcher；当前没有这样的 product launcher 时，App Server 对外能力必须为 false，而不是放宽 policy。
+launcher。macOS JS 使用 `ProductJavaScriptLauncher`；其他平台或独立可执行扩展缺少符合要求的 launcher 时，App Server 对外能力必须为 false。
 
 ## 6. 失败、刷新和恢复语义
 
@@ -327,72 +540,85 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 
 | 子系统 | 状态 | 实现证据或缺口 |
 | --- | --- | --- |
-| 静态 package discovery、snapshot、digest、资源读取 | 已实现 | `ash-extensions` + App Server extension operations |
+| 静态 package discovery、snapshot、digest、资源读取 | 已实现 | `ash-extension-catalog` + App Server extension operations |
 | Plugin 声明式 Extension 分发与 live activation | 已实现 | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh |
 | 声明式语言、grammar、snippet、theme、debugger 投影 | 已实现 | `AppServerExtensionService` 与领域 registry tests |
 | Plugin executable declaration 与 exact process permission | 已实现 | `ash-plugin` manifest/package tests |
 | Plugin executable authority | 已实现 | `ash-core-plugins` authority tests |
 | Marketplace executable consumer adapter 与独立 admission | 已实现 | exact sidecar/executable binding、双 lease 与 deferred uninstall tests |
 | Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `ash-editor-extension-host` standalone tests |
+| TS 作者 SDK 与 Rust V8 执行 | 已实现（v1） | 独立进程测试覆盖 ESM、命令、前端文档、Rust 读取、服务错误、取消、超时与停用 |
+| Rust 作者 SDK 与共用 wire contract | 已停止该产品方向 | 基础命令、Hover、Output 曾通过独立进程测试；反向调用补充已暂停，未完成验证，源码尚未退场 |
 | 扩展命名 Output event stream | 已实现 | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
 | App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
 | Workbench Commands/Language/Tasks/Testing bridge | 已实现（窄契约） | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile |
 | Workbench DataChannel/LinkPresentation bridge | 已实现 | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证 |
 | Workbench executable Debug bridge | 尚未完成 | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam |
-| 生产第三方 platform launcher | 尚未完成 | 无 launcher 时 capability=false；可信开发 launcher 不计生产支持 |
-| Activation-event-driven lazy start | 尚未完成 | Manifest/协议携带 facts；尚无完整事件匹配调度证据 |
-| VS Code Node Extension API / Marketplace compatibility | 非目标 | Host RPC v1 是独立 Ash 协议 |
+| 生产第三方 launcher | 部分具备 | macOS JS 已实现系统隔离和独立内存预算；其他平台和独立可执行扩展缺少所需 launcher 时 capability=false |
+| Open VSX 按事件启动 | 已实现（限定事件） | Rust 调度命令、语言、窗口恢复事件及 `*`；等待状态无进程，首次调用绑定实际注册 |
+| Open VSX 来源、VSIX 安装和声明式贡献 | 已实现 | 复用 Manager；精确版本、校验和、来源和安全解压；接入共享声明式目录 |
+| Open VSX 基础 JS 扩展运行 | 已实现 | macOS 显式启用与授权，标准 CommonJS 入口与 `require('vscode')`；原包命令和重启、撤销已验证 |
+| 完整 VS Code 扩展 API | 尚未完成 | 只支持下述 API 子集；Node、完整 ExtensionContext 和扩展文档事件尚未提供 |
+| 扩展直接使用 Node / Electron 能力 | 不开放 | 目标 JS 宿主维持第 0.3 节的权限限制 |
 
 当前不支持 generic Node/WASM loader、命名 Output 之外的扩展主动 event stream、publisher signature/revocation feed、
 per-platform artifact selector、跨重启 invocation 恢复或多个扩展共享一个 Host process。完整 test tree、
 任意 Webview/UI contribution、任意 App Server method registration 和扩展直接 filesystem/network access
 也不属于 v1 provider bridge。
 
-## 8. 计划演进
+## 8. 后续实现按确定方向推进
 
-### 近期
+目标分工由第 0 节维护。实现时完成以下内容：
 
-- 为 executable Debug Adapter 建立专用异步 DAP session seam；补齐 definition、references、rename、
-  code action 等尚无严格 codec 的 Language Provider operation；
-- 让 activation events 真正驱动按需启动，避免当前 App Server fleet 的 eager activation；
-- 在安装/更新授权 UI 中展示 Editor Extension capabilities、文档内容披露与 task command 提议权限；
-- 在至少一个产品平台实现并验收 production `ExtensionHostLauncher`，覆盖 sandbox、memory/CPU/process
-  limits、空环境和 process-tree termination；在此之前保持 capability=false。
+- 在 TS SDK v1 与独立 Rust V8 宿主上继续补 API；复用现有进程监管与共享协议，Rust 作者 SDK 退场时同步处理调用方、Cargo/Bazel、CI、示例和测试。
+- 保留静态目录、包完整性与安装授权能力；Rust 领域业务复用现有 GitHub、Git、存储和工具服务，
+  不为每个扩展重新实现业务。
+- 保持 Open VSX 来源 adapter、VSIX 格式和 Rust 安装生命周期；进一步完成 API 与运行环境支持
+  检查，用真实扩展验证可运行范围。
+- 完成宿主身份绑定、逐扩展授权和 Rust 操作检查；收紧 preload、通用命令调用、浏览器来源、
+  网络、存储和凭据入口，不能让扩展借用产品的完整权限。
+- 在同一扩展调用链中补命令、文档与事件、语言 Provider、配置、扩展存储、账号、界面和任务 API；
+  只有注册、实际调用、取消和释放都经过真实 owner 并通过测试，才计为可用。
 
-### 潜在方向
-
-只有真实生态需求与独立 threat model 成立后，才分别评审 extension-originated diagnostics/event、
-WASM component、remote Host、更多 provider kind 或 activation-event lazy scheduling。任何新 wire 行为都
-必须版本化，先有 App Server/domain owner 和背压/权限语义，不能借 v1 unknown field 静默扩展。
-
-Node/VS Code compatibility 若未来立项，仍是独立产品项目：需要 Node runtime、版本化 VS Code API、
-兼容矩阵、Marketplace/package migration 和独立安全模型，不能宣称为 Host RPC v1 的增量开关。
+Open VSX 安装与基础 JS 执行已接入，不表示全部扩展 API、平台或上述迁移已完成。扩展兼容建设遵守既定权限
+边界，不能因 API 名称相似或市场中存在某个包就声称它可以运行。
 
 ## 9. 长期不变量
 
-- Renderer 永不直接读取主机扩展路径，也不直接访问扩展进程 stdio。
+- 扩展用 TS/JS 运行并调用 TS SDK；Rust 提供后端业务和权限检查，不成为作者 SDK 或编辑器模型 owner。
+- 扩展运行环境不能直接访问 Node、Electron、产品 DOM、通用 IPC、凭据或完整后端连接。
 - 静态扩展资源读取绑定精确目录代次；刷新不能使旧描述读取到新 bytes。
 - 内置静态产品包不能被可变 profile 包以同 ID 静默覆盖。
-- 安装、启用或 manifest validation 都不等于 execution authority；每次 activation/invocation 复核 live
-  source admission/artifact lease + 目录 Grant gate。
-- 生产第三方扩展必须逐进程隔离并实施 hard limits；缺失实施者时失败关闭。
-- 请求、响应和 registration 同时绑定 extension、incarnation 与 activation generation；恢复不重用旧
-  identity 或 lease。
-- Workbench 消费领域类型；transport DTO 不进入 frontend common service contract。
-- 各 contribution 由语言、TextMate、Debug、Tasks、Testing 等领域 registry 拥有；extension service 只
-  负责编排和生命周期。
-- 声明式 catalog 与 executable authority 保持概念分离；共享产品 UI 不能合并二者的 manifest
-  或运行时语义。
+- 安装、启用或 manifest validation 都不等于操作授权。身份由宿主绑定，每次操作检查当前权限和范围。
+- 取消不代表副作用撤销；超时或断线后的写入结果必须保留明确结果或结果不确定语义。
+- 请求、响应和 registration 绑定扩展、窗口或工作区、激活代次与当前运行实例；恢复不重用旧身份或授权。
+- Workbench 消费领域类型，transport DTO 留在 adapter；各 contribution 由自己的领域 registry 拥有。
+- 扩展包中的流程、TS 通用编辑器能力和 Rust 后端业务各有唯一 owner，不按源码目录机械迁移。
+- 包完整性、声明式资源可读和代码可执行分别检查；共享产品 UI 不合并这些授权。
 
 ## 10. 实现证据与验证
 
-静态链与 Host runtime 的实现细节、private symbols 和 modification checklist 分别见三份关联 README。
-跨层修改至少运行：
+下列命令覆盖声明式目录、现有进程监管及新 SDK；它们不代替第三方系统隔离验收。
+迁移时按实际受影响包选择对应检查，TS/JS 扩展还必须验证真实 Web/Electron 入口与第 0 节权限行为。
 
 ```text
-cargo test --manifest-path Cargo.toml -p ash-extensions
-cargo test --manifest-path Cargo.toml -p ash-plugin
-cargo test --manifest-path Cargo.toml -p ash-core-plugins
+pnpm --dir app-ts/extension-sdk typecheck
+pnpm --dir app-ts/extension-sdk build:example
+just check ash-js-extension-host
+just test ash-js-extension-host
+just rust-warnings ash-js-extension-host
+just test ash-code-mode-runtime
+just test ash-extension-catalog
+just test ash-plugin
+just test ash-core-plugins
+just test ash-core-plugins live_open_vsx -- --ignored
+just test ash-app-server marketplace
+just test ash-app-server product_services
+just generate-protocol
+pnpm --dir app-ts typecheck:renderer
+just test ash-editor-extension-protocol
+just test ash-editor-extension-host
+just test ash-extensions
 powershell -NoProfile -ExecutionPolicy Bypass -File ash-rs/editor-extension-host/check-standalone.ps1
 pnpm --dir app-ts test:extensions
 pnpm --dir app-ts typecheck:extensions
@@ -400,4 +626,15 @@ pnpm --dir app-ts test:unit
 pnpm --dir app-ts test:build-tools
 ```
 
-`test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport/domain projection 与 Workbench provider seams。App Server runtime 当前由 sibling Rust tests 和 Host standalone suite 封住；根 workspace 仍需在缺失的本地 crate 恢复后补跑完整 `ash-app-server` package test。
+`test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport 与 Workbench Provider 接口。
+Open VSX 的确定性 Rust 测试覆盖校验和、包身份、解压路径、下载来源、安装更新和卸载；
+App Server 测试覆盖共享目录接入、精确包授权持久化、revision 冲突、入口路径限制及运行时持有安装包的租约。
+
+真实市场验证显式启用网络，不纳入默认离线测试：
+
+```sh
+ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm --dir app-ts run test:smoke:desktop test/smoke/areas/chat/marketplace.spec.ts --grep 'Open VSX installs|Open VSX JavaScript'
+```
+
+该 Electron 测试下载 Dracula，检查安装后主题可选、使用同一 profile 重新打开进程后安装仍在、
+卸载后贡献移除；JavaScript 场景检查原包命令、独立授权、重启恢复和撤销。浏览器集成测试覆盖英文和中文的市场筛选、安装确认、启用、授权、撤销、停用与卸载。

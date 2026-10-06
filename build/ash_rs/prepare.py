@@ -318,6 +318,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-exec-server",
             "ash-app-server-daemon",
             "ash-code-mode-host",
+            "ash-js-extension-host",
             "ash-voice-host",
             "ash-collaboration-server",
         ]
@@ -452,6 +453,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             binaries["ash-exec-server"],
             binaries["ash-app-server-daemon"],
             binaries["ash-code-mode-host"],
+            binaries["ash-js-extension-host"],
             ripgrep,
             tgrep,
             node,

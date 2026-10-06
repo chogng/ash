@@ -46,4 +46,4 @@ alias(
     }),
 )
 
-exports_files(["runtime-lock.json"])
+exports_files(["runtime-lock.json", "headers.BUILD.bazel"])

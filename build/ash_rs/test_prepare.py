@@ -265,6 +265,7 @@ class PrepareTests(unittest.TestCase):
                 "ash-exec-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
+                "ash-js-extension-host",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-windows-sandbox",

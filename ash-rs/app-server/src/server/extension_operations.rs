@@ -15,12 +15,12 @@ use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionSourceKindDto;
 use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
-use ash_extensions::ExtensionCatalogError;
-use ash_extensions::ExtensionCatalogReload;
-use ash_extensions::ExtensionDescriptor;
-use ash_extensions::ExtensionDiagnostic;
-use ash_extensions::ExtensionDiagnosticCode;
-use ash_extensions::ExtensionSourceKind;
+use extension_catalog::ExtensionCatalogError;
+use extension_catalog::ExtensionCatalogReload;
+use extension_catalog::ExtensionDescriptor;
+use extension_catalog::ExtensionDiagnostic;
+use extension_catalog::ExtensionDiagnosticCode;
+use extension_catalog::ExtensionSourceKind;
 use serde_json::Value;
 use std::time::Duration;
 

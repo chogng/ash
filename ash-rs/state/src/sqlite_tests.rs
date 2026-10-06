@@ -24,10 +24,12 @@ use git_turn_changes::TurnChangeSet;
 use git_turn_changes::TurnChangeSetDraft;
 use git_turn_changes::TurnChangeStore;
 use git_turn_changes::TurnChangeStoreError;
+use git_turn_changes::TurnCommitStore;
 use std::collections::BTreeMap;
 use std::fs;
 use std::time::Instant;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 fn database_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -48,6 +50,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
         turn_id: TurnId::new("turn-1").unwrap(),
         repository_id: "repository-1".into(),
         worktree_root: std::path::PathBuf::from("/dir/repository-1"),
+        git_common_dir: std::path::PathBuf::from("/dir/repository-1/.git"),
         target_branch: Some("main".into()),
         base_object_id: Some("head".into()),
         before_tree: "before".into(),
@@ -650,7 +653,8 @@ fn sqlite_session_list_migrates_existing_thread_catalog() {
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
         .execute_batch(
-            "DROP TABLE session_catalog;
+            "DROP TABLE turn_commits;
+             DROP TABLE session_catalog;
              UPDATE ash_schema_migrations SET version = 8 WHERE component = 'event-store';",
         )
         .unwrap();
@@ -799,7 +803,8 @@ fn benchmark_session_list_against_thread_catalog_assembly() {
         let connection = rusqlite::Connection::open(&path).unwrap();
         connection
             .execute_batch(
-                "DROP TABLE session_catalog;
+                "DROP TABLE turn_commits;
+             DROP TABLE session_catalog;
                  UPDATE ash_schema_migrations SET version = 8 WHERE component = 'event-store';",
             )
             .unwrap();
@@ -881,9 +886,46 @@ fn sqlite_delete_session_removes_all_thread_history_and_change_sets_atomically()
     append_created_thread(&store, &deleted_session, &second, 2);
     append_created_thread(&store, &kept_session, &kept, 3);
     let change_store = SqliteTurnChangeStore::open(&path).unwrap();
+    let capture = open_change_set(first.clone());
+    change_store.insert(&capture).unwrap();
+    let commit = git_turn_changes::TurnCommitRecord {
+        commit_id: "deletion-preview".into(),
+        session_id: deleted_session.clone(),
+        thread_id: first.clone(),
+        repository_id: capture.repository_id.clone(),
+        target_branch: "main".into(),
+        sources: Vec::new(),
+        message: "preview retained with source records".into(),
+        warnings: Vec::new(),
+        publication: git_turn_changes::TurnPublication::MigratedDelta {
+            before_tree: "before".into(),
+            after_tree: "after".into(),
+        },
+        state: git_turn_changes::TurnCommitState::Preview,
+        revision: 1,
+    };
     change_store
-        .insert(&open_change_set(first.clone()))
+        .save_preview(&commit, "deletion-preview", "preview", "{}")
         .unwrap();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let mut pending = commit.clone();
+    pending.state = git_turn_changes::TurnCommitState::Publishing;
+    connection
+        .execute(
+            "UPDATE turn_commits SET record_json = ?1 WHERE commit_id = ?2",
+            rusqlite::params![serde_json::to_string(&pending).unwrap(), pending.commit_id],
+        )
+        .unwrap();
+    assert!(store.delete_session(&deleted_session).is_err());
+    assert!(!store.load(&first).unwrap().is_empty());
+    assert!(change_store.load(&capture.change_set_id).is_ok());
+    connection
+        .execute(
+            "UPDATE turn_commits SET record_json = ?1 WHERE commit_id = ?2",
+            rusqlite::params![serde_json::to_string(&commit).unwrap(), commit.commit_id],
+        )
+        .unwrap();
+    drop(connection);
 
     assert_eq!(
         store.delete_session(&deleted_session).unwrap(),
@@ -900,6 +942,7 @@ fn sqlite_delete_session_removes_all_thread_history_and_change_sets_atomically()
         vec![catalog(&kept_session, &kept, 1)]
     );
     assert!(change_store.list_for_thread(&first).unwrap().is_empty());
+    assert!(change_store.list_commits(&first).unwrap().is_empty());
     drop(change_store);
     drop(store);
     fs::remove_file(path).unwrap();
@@ -1005,6 +1048,7 @@ fn sqlite_thread_catalog_migrates_old_rows_and_marks_invalid_rows_for_rebuild() 
              DROP TABLE thread_catalog;
              ALTER TABLE old_catalog RENAME TO thread_catalog;
              UPDATE thread_catalog SET record_json = 'invalid' WHERE thread_id = 'thread-invalid';
+             DROP TABLE turn_commits;
              UPDATE ash_schema_migrations SET version = 7 WHERE component = 'event-store';
              COMMIT;",
         )

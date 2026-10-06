@@ -50,6 +50,15 @@ impl PluginProvider for MarketplaceRemoteClient {
         &self,
         request: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, MarketplaceClientError> {
+        // This signed catalog's package format has no VSIX/editorExtension capability.
+        // An explicit Open VSX filter must not make an unrelated registry network request.
+        if request.capability_kind == Some(crate::CapabilityKind::EditorExtension)
+            || request.package_type.as_deref() == Some("editorExtension")
+        {
+            return Ok(SearchPackagesResult {
+                packages: Vec::new(),
+            });
+        }
         let limit = request
             .limit
             .unwrap_or(DEFAULT_SEARCH_LIMIT)

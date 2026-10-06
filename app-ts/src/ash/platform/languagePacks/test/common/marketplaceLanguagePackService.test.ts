@@ -77,6 +77,8 @@ function createMarketplace(catalogs: readonly LanguagePackCatalog[]): IMarketpla
 		update: () => Promise.reject(new Error("unused")),
 		uninstall: () => Promise.reject(new Error("unused")),
 		listInstalled: async () => installed,
+		listEditorExtensions: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
+		setEditorExtensionPolicy: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
 		acquireCapability: async () => ({
 			lease: { id: "lease.localization.fr", capability: { id: "capability.localization.fr" }, installationId: "installation.localization.fr" },
 			spec: { kind: "localization" as const, contractVersion: "ash-localization-1", catalog: { id: "catalog.json" } },

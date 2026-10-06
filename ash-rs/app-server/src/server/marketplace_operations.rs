@@ -13,6 +13,7 @@ use ash_app_server_protocol::protocol::marketplace::MarketplaceUninstallParams;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceUpdateParams;
 use ash_core_plugins::AcquireCapabilityRequest;
 use ash_core_plugins::CapabilityRef;
+use ash_core_plugins::PluginPackageService;
 use ash_core_plugins::DownloadPackageRequest;
 use ash_core_plugins::GetPackageRequest;
 use ash_core_plugins::InstallPackageRequest;
@@ -27,8 +28,8 @@ use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::UninstallMode;
 use ash_core_plugins::UninstallPackageRequest;
 use ash_core_plugins::UpdatePackageRequest;
-use ash_extensions::ExtensionCatalogReload;
 use ash_skills_extension::SkillCatalogReload;
+use extension_catalog::ExtensionCatalogReload;
 use serde_json::Value;
 
 use super::AppServer;
@@ -39,6 +40,138 @@ use super::marketplace_projection;
 use super::result;
 
 impl AppServer {
+    pub(super) fn marketplace_editor_extensions(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        result(&self.editor_extension_policy_snapshot()?)
+    }
+
+    pub(super) fn marketplace_set_editor_extension_policy(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::marketplace::MarketplaceEditorExtensionPolicyActionDto as Action;
+        use ash_app_server_protocol::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
+        use ash_core_plugins::EditorExtensionPolicyAction as PolicyAction;
+        use ash_core_plugins::EditorExtensionPolicyError;
+        let params: MarketplaceEditorExtensionPolicyParams = decode(params)?;
+        let policy = self
+            .editor_extension_policy
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let installed = manager
+            .list_installed(ListInstalledRequest {})
+            .map_err(marketplace_error)?
+            .into_iter()
+            .find(|package| {
+                package.installation_id == params.installation_id
+                    && package.package.digest == params.package_digest
+            })
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let source = manager
+            .local_capability_sources(ash_core_plugins::CapabilityKind::EditorExtension)
+            .map_err(marketplace_error)?
+            .into_iter()
+            .find(|source| *source.package() == installed.package)
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        if matches!(params.action, Action::Enable | Action::Grant)
+            && (!cfg!(target_os = "macos")
+                || !crate::marketplace_editor_extensions::javascript_entrypoint(&source)
+                    .is_ok_and(|entry| entry.is_some()))
+        {
+            return Err(marketplace_error(MarketplaceClientError::business(
+                MarketplaceErrorCode::PackageIncompatible,
+                "This extension has no admitted JavaScript entry on this platform",
+                false,
+            )));
+        }
+        let action = match params.action {
+            Action::Enable => PolicyAction::Enable,
+            Action::Disable => PolicyAction::Disable,
+            Action::Grant => PolicyAction::Grant,
+            Action::Revoke => PolicyAction::Revoke,
+        };
+        policy
+            .set(
+                source.package(),
+                source.capability(),
+                action,
+                params.expected_revision,
+            )
+            .map_err(|error| match error {
+                EditorExtensionPolicyError::RevisionConflict => {
+                    RpcError::new(-32041, AppServerErrorName::PluginRevisionConflict)
+                }
+                EditorExtensionPolicyError::InvalidBinding => {
+                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                }
+                EditorExtensionPolicyError::Storage => {
+                    RpcError::new(-32042, AppServerErrorName::PluginOperationFailed)
+                }
+            })?;
+        if let Some(runtime) = &self.extension_hosts {
+            runtime
+                .reconcile(super::extension_host_runtime::ExtensionHostReconcileMode::Refresh)
+                .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        }
+        result(&self.editor_extension_policy_snapshot()?)
+    }
+
+    fn editor_extension_policy_snapshot(
+        &self,
+    ) -> Result<
+        ash_app_server_protocol::protocol::marketplace::MarketplaceEditorExtensionsResult,
+        RpcError,
+    > {
+        use ash_app_server_protocol::protocol::marketplace::MarketplaceEditorExtensionPolicyDto;
+        use ash_app_server_protocol::protocol::marketplace::MarketplaceEditorExtensionsResult;
+        let policy = self
+            .editor_extension_policy
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let installed = manager
+            .list_installed(ListInstalledRequest {})
+            .map_err(marketplace_error)?;
+        let sources = manager
+            .local_capability_sources(ash_core_plugins::CapabilityKind::EditorExtension)
+            .map_err(marketplace_error)?;
+        let mut extensions = Vec::new();
+        for source in sources {
+            let Some(package) = installed
+                .iter()
+                .find(|package| package.package == *source.package())
+            else {
+                continue;
+            };
+            let state = policy.snapshot(source.package(), source.capability());
+            let entrypoint = if cfg!(target_os = "macos") {
+                crate::marketplace_editor_extensions::javascript_entrypoint(&source)
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            };
+            extensions.push(MarketplaceEditorExtensionPolicyDto {
+                installation_id: package.installation_id.clone(),
+                package: marketplace_projection::package_ref(source.package().clone()),
+                entrypoint,
+                enabled: state.enabled,
+                granted: state.granted,
+            });
+        }
+        Ok(MarketplaceEditorExtensionsResult {
+            revision: policy.generation(),
+            extensions,
+        })
+    }
+
     pub(super) fn marketplace_search(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceSearchParams = decode(params)?;
         let found = self

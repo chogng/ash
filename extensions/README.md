@@ -3,22 +3,29 @@
 > This README owns the repository package-set and distribution contract. The cross-layer runtime,
 > trust, refresh, and evolution contract is maintained in
 > [`docs/editor-extensions.md`](../docs/editor-extensions.md); the Rust catalog implementation is
-> documented in [`ash-rs/extensions/README.md`](../ash-rs/extensions/README.md).
+> documented in [`ash-rs/extension-catalog/README.md`](../ash-rs/extension-catalog/README.md).
 
-This directory contains static extension packages shipped with Ash during development. Packaging
+This directory contains extension package sources and declarative resources shipped with Ash. Packaging
 places the same directory under `ash-resources/extensions/`.
 
 Except for this README and `BUILD.bazel`, each direct child must be a package directory with a
 `package.json`. TextMate packages may put raw JSON or PLIST grammars below the package and reference
 them from `contributes.grammars[].path`.
-Built-in packages are declarative resources only; this directory is not an extension JavaScript
-runtime or a workspace plugin directory.
+The declarative loader reads resources without executing package code. Packages with a `browser`
+entry, including `markdown-language-features`, are separately bundled and executed by the TS
+browser extension host. This directory holds packages, not the SDK or runtime implementation.
+
+Authors use the [`TS SDK`](../app-ts/extension-sdk/README.md); compiled JavaScript runs in a separate
+[`Rust V8 host`](../ash-rs/js-extension-host/README.md) without Node. Editor and UI services remain
+in TS; GitHub requests, Git, credentials, storage, and authorized system operations use Rust
+backend APIs. The existing trusted Worker path does not yet establish third-party permission
+isolation. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向).
 
 ## Source and distribution boundary
 
 This directory is a runtime input, not a download endpoint. Built-in packages committed here are
 copied into `ash-resources/extensions/` during development and production packaging. Ash reads
-that trusted package directory through `ash-extensions`; App is only a future consumer extension
+that trusted package directory through `ash-extension-catalog`; App is only a future consumer extension
 point. A running application does not authenticate to a Git repository to load built-in extensions.
 
 Marketplace language packages are maintained in the separate `ash-marketplace` repository. That
@@ -83,7 +90,7 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | `themes` | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection | Extension/theme/TextMate services |
 | `debuggers` | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API | Extension registry / Debug service |
 | `configurationDefaults`, `semanticTokenScopes` | 尚未接入；bundled manifest 中的字段不会被投影 | 后续领域 adapter |
-| extension JavaScript | ❌ 不执行 | 声明式资源目录 |
+| extension JavaScript | 声明式扫描不执行；可信 `browser` 包由独立 Worker 路径执行 | TS 扩展宿主 |
 | Marketplace LSP executable | 由已验证 catalog 映射并运行 | App Server / LSP manager |
 
 User packages are read from the host-selected profile extension root, but the current Editor

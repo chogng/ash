@@ -27,6 +27,7 @@ _BINARIES = {
     "ash-app-server": ("ash-app-server", "--server-bin"),
     "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),
     "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
+    "ash-js-extension-host": ("ash-js-extension-host", "--js-extension-host-bin"),
     "ash-remote": ("ash-remote-connections", "--remote-bin"),
     "ash-remote-server": ("ash-remote-server", "--remote-server-bin"),
     "ash-exec-server": ("ash-exec-server", "--exec-server-bin"),

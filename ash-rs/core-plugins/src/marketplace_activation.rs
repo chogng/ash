@@ -164,7 +164,8 @@ pub(crate) fn acquire_spec(
                 entrypoint: resource_ref(&capability.descriptor.reference.id),
             }))
         }
-        CapabilityKind::Asset => Err(unsupported()),
+        // Editor packages are consumed by the catalog; installation never grants script execution.
+        CapabilityKind::EditorExtension | CapabilityKind::Asset => Err(unsupported()),
     }
 }
 

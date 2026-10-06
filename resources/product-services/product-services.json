@@ -2,6 +2,11 @@
   "schemaVersion": 2,
   "reportIssueUrl": "https://github.com/chogng/ash/issues",
   "githubAccount": { "clientId": "Iv23lieaFUjG1LamZy3K", "brokerBaseUrl": "https://ash-github-auth.lanxiang0901.workers.dev/" },
+  "openVsx": {
+    "name": "open-vsx",
+    "apiUrl": "https://open-vsx.org/api/",
+    "downloadOrigins": ["https://openvsx.eclipsecontent.org/"]
+  },
   "marketplaces": [
     {
       "name": "ash",

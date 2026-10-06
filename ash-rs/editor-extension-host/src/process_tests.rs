@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use super::PendingEntry;
 use super::reserve_pending;
-use super::stdio::read_bounded_line;
 use crate::ExtensionHostRequest;
 use crate::ExtensionHostResponse;
 use crate::HostRequestKind;
@@ -13,6 +12,53 @@ use crate::HostResponseKind;
 use crate::HostSuccess;
 use crate::PendingHostRequest;
 use crate::RequestContext;
+use extension_protocol::read_frame as read_bounded_line;
+
+#[test]
+fn product_js_policy_cannot_authorize_an_independent_executable_or_another_host() {
+    use crate::ExtensionHostLauncher;
+    let root = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let executable = root.join("ash-js-extension-host");
+    let launcher = crate::ProductJavaScriptLauncher::new(executable.clone());
+    let limits = crate::ExtensionHostLimits {
+        isolation: crate::ProcessIsolationPolicy::RequireJavaScriptEnforcement(
+            crate::JavaScriptMemoryLimits::default(),
+        ),
+        ..Default::default()
+    };
+    let independent = super::ExtensionLaunchCommand::new(
+        &executable,
+        std::iter::empty::<String>(),
+        &root,
+        BTreeMap::new(),
+    )
+    .unwrap();
+    assert!(matches!(
+        launcher.spawn(&independent, &limits),
+        Err(crate::ExtensionHostError::IsolationUnavailable)
+    ));
+    let other_host = super::ExtensionLaunchCommand::javascript(
+        root.join("other-host"),
+        std::iter::empty::<String>(),
+        &root,
+    )
+    .unwrap();
+    assert!(matches!(
+        launcher.spawn(&other_host, &limits),
+        Err(crate::ExtensionHostError::IsolationUnavailable)
+    ));
+    let javascript =
+        super::ExtensionLaunchCommand::javascript(executable, std::iter::empty::<String>(), root)
+            .unwrap();
+    assert!(matches!(
+        launcher.spawn(&javascript, &crate::ExtensionHostLimits::default()),
+        Err(crate::ExtensionHostError::IsolationUnavailable)
+    ));
+}
 
 #[test]
 fn bounded_reader_never_accepts_an_oversized_line() {
@@ -47,6 +93,7 @@ fn duplicate_request_id_never_replaces_the_original_waiter() {
     reserve_pending(
         &mut pending,
         PendingEntry {
+            client_ids: std::collections::BTreeSet::new(),
             request: request.clone(),
             sender: original_sender,
             control: false,
@@ -60,6 +107,7 @@ fn duplicate_request_id_never_replaces_the_original_waiter() {
         reserve_pending(
             &mut pending,
             PendingEntry {
+                client_ids: std::collections::BTreeSet::new(),
                 request: request.clone(),
                 sender: duplicate_sender,
                 control: false,
@@ -73,10 +121,10 @@ fn duplicate_request_id_never_replaces_the_original_waiter() {
         .remove(&1)
         .unwrap()
         .sender
-        .send(Ok(ExtensionHostResponse {
+        .send(Ok(super::PendingMessage::Response(ExtensionHostResponse {
             context: request.context,
             response: HostResponseKind::Success(HostSuccess::Pong),
-        }))
+        })))
         .unwrap();
     assert!(
         original
@@ -97,6 +145,7 @@ fn control_request_capacity_is_reserved_when_normal_requests_are_full() {
     reserve_pending(
         &mut pending,
         PendingEntry {
+            client_ids: std::collections::BTreeSet::new(),
             request: normal,
             sender: normal_sender,
             control: false,
@@ -117,6 +166,7 @@ fn control_request_capacity_is_reserved_when_normal_requests_are_full() {
         reserve_pending(
             &mut pending,
             PendingEntry {
+                client_ids: std::collections::BTreeSet::new(),
                 request: cancel,
                 sender: cancel_sender,
                 control: true,

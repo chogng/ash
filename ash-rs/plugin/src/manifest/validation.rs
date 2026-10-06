@@ -181,12 +181,14 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
                 extension.entrypoint
             ));
         }
-        if !manifest.permissions.iter().any(|permission| {
-            matches!(
-                permission,
-                Permission::Process { executable } if executable == &extension.entrypoint
-            )
-        }) {
+        if extension.runtime == super::EditorExtensionRuntime::HostRpc
+            && !manifest.permissions.iter().any(|permission| {
+                matches!(
+                    permission,
+                    Permission::Process { executable } if executable == &extension.entrypoint
+                )
+            })
+        {
             return invalid(format!(
                 "Editor Extension '{}' entrypoint '{}' requires an exact process permission",
                 extension.id, extension.entrypoint
@@ -198,6 +200,26 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
 }
 
 fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<(), PluginError> {
+    if extension.runtime == super::EditorExtensionRuntime::JavaScript {
+        if !matches!(
+            std::path::Path::new(extension.entrypoint.as_str())
+                .extension()
+                .and_then(|extension| extension.to_str()),
+            Some("js" | "mjs")
+        ) {
+            return invalid("JavaScript Editor Extension entrypoint must be .js or .mjs");
+        }
+        if extension.capabilities.iter().any(|capability| {
+            !matches!(
+                capability,
+                super::EditorExtensionCapability::Command
+                    | super::EditorExtensionCapability::LanguageProvider
+            )
+        }) {
+            return invalid("JavaScript SDK v1 supports only command and language provider registrations");
+        }
+    }
+
     if extension.activation_events.is_empty() {
         return invalid(format!(
             "Editor Extension '{}' must declare at least one activation event",

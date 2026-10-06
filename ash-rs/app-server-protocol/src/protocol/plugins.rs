@@ -10,10 +10,50 @@ pub struct PluginPackageDto {
     pub id: String,
     pub version: String,
     pub digest: String,
+    pub display_name: String,
+    pub permissions: Vec<PluginPermissionDto>,
+    pub has_editor_extensions: bool,
     pub enabled: bool,
     pub granted: bool,
     pub effective: bool,
     pub revoked: bool,
+}
+
+/// Declared maximum permissions of the exact installed package, shown before granting it.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PluginPermissionDto {
+    Directory { access: PluginDirectoryAccessDto },
+    Process { executable: String },
+    Network { hosts: Vec<String> },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginDirectoryAccessDto {
+    Read,
+    Write,
+}
+
+/// Copies a package inside a currently authorized directory into the profile package store.
+/// Installation alone neither enables the package nor grants its requested permissions.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInstallLocalParams {
+    pub command_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub path: String,
+    pub dir_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInstallLocalResult {
+    pub id: String,
+    pub version: String,
+    pub digest: String,
+    pub command: PluginCommandResultDto,
 }
 
 /// Current durable Plugin authority projection.

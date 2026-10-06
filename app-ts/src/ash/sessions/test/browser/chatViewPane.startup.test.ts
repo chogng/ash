@@ -199,6 +199,9 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		readTurnChangeFile: () => pending,
 		generateTurnChangeMessage: () => pending,
 		updateTurnChangeDraft: () => pending,
+		prepareTurnCommit: () => pending,
+		readTurnCommit: () => pending,
+		readTurnCommitFile: () => pending,
 		commitTurnChange: () => pending,
 		discardThreadChanges: () => pending,
 	};

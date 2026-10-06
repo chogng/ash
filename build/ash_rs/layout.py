@@ -52,6 +52,7 @@ def build_package_directory(
     exec_server_binary: Path,
     app_server_daemon_binary: Path,
     code_mode_host_binary: Path,
+    js_extension_host_binary: Path,
     ripgrep: RipgrepResolution,
     tgrep: ExecutableResolution,
     node: Optional[NodeResolution],
@@ -67,9 +68,8 @@ def build_package_directory(
     remote_runtime_bundle: Optional[Path] = None,
     remote_runtime_release: Optional[Dict[str, str]] = None,
 ) -> None:
-    if (
-        spec.is_windows != (windows_sandbox_binary is not None)
-        or spec.is_windows != (windows_sandbox_service_binary is not None)
+    if spec.is_windows != (windows_sandbox_binary is not None) or spec.is_windows != (
+        windows_sandbox_service_binary is not None
     ):
         raise RuntimeError(
             "Windows packages require both sandbox executables; other targets must omit them"
@@ -102,6 +102,7 @@ def build_package_directory(
             "execServer": str(exec_server_binary),
             "appServerDaemon": str(app_server_daemon_binary),
             "codeModeHost": str(code_mode_host_binary),
+            "jsExtensionHost": str(js_extension_host_binary),
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
             "livekit": livekit["executable"],
@@ -618,6 +619,7 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     artifacts = {
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
+        "jsExtensionHost": package / "bin" / spec.js_extension_host_name,
         "voiceHost": package / "bin" / ("ash-voice-host" + spec.executable_suffix),
         "collaborationServer": package
         / "bin"
@@ -632,7 +634,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     }
     if spec.is_windows:
         artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
-        artifacts["windowsSandboxService"] = package / "bin/ash-windows-sandbox-service.exe"
+        artifacts["windowsSandboxService"] = (
+            package / "bin/ash-windows-sandbox-service.exe"
+        )
     if "cli" in components:
         artifacts["cli"] = package / "bin" / spec.cli_name
     if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
@@ -683,6 +687,7 @@ def record_system_signing(
             "appServerDaemon",
             "cli",
             "codeModeHost",
+            "jsExtensionHost",
             "voiceHost",
             "collaborationServer",
             "livekit",

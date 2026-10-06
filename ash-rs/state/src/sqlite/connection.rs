@@ -2,12 +2,16 @@ use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadStoreError;
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::TransactionBehavior;
+use rusqlite::params;
 use std::path::Path;
 
-use crate::{SqliteDurability, open_sqlite_database};
+use crate::SqliteDurability;
+use crate::open_sqlite_database;
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 10;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 11;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -142,6 +146,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         | Some(7)
         | Some(8)
         | Some(9)
+        | Some(10)
         | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
@@ -305,6 +310,9 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     }
     if locked_version.is_none_or(|version| version < 10) {
         super::handoff::create_schema(&transaction)?;
+    }
+    if locked_version.is_none_or(|version| version < 11) {
+        super::git_turn_commits::create_schema(&transaction)?;
     }
     transaction.commit().map_err(sql_error)?;
     Ok(connection)

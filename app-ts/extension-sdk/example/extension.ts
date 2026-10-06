@@ -1,0 +1,16 @@
+import { commands, languages, type ExtensionContext } from '@ash/extension';
+
+export function activate(context: ExtensionContext): void {
+	context.subscriptions.push(commands.registerCommand('ash.example.inspect', 'Inspect document and disk content', async (call, uri, path) => {
+		if (typeof uri !== 'string' || typeof path !== 'string') { throw new TypeError('Expected a document URI and workspace-relative path'); }
+		const document = await call.workspace.openTextDocument(uri);
+		const disk = await call.workspace.readTextFile(path);
+		await call.window.showInformationMessage(`Editor: ${document.getText().length} characters; disk: ${disk.length} characters`);
+		return { version: document.version, editor: document.getText(), disk };
+	}));
+	context.subscriptions.push(languages.registerHoverProvider('ash.example.hover', ['plaintext'], {
+		provideHover(_call, document, position) {
+			return { contents: [`Version ${document.version}: ${document.getText().length} UTF-16 units at ${position.line}:${position.character}`] };
+		},
+	}));
+}

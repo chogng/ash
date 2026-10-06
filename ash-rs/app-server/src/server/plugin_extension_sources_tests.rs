@@ -4,8 +4,8 @@ use ash_core_plugins::PluginAuthorityCommand;
 use ash_core_plugins::PluginAuthorityCommandId;
 use ash_core_plugins::PluginAuthorityCommandRequest;
 use ash_core_plugins::PluginPackageStore;
-use ash_extensions::DynamicExtensionSourceProvider;
 use ash_plugin::LocalPluginPackage;
+use extension_catalog::DynamicExtensionSourceProvider;
 use std::fs;
 
 #[test]

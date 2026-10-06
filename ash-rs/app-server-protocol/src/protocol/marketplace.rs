@@ -41,6 +41,7 @@ pub enum MarketplaceCapabilityKindDto {
     Language,
     Localization,
     Executable,
+    EditorExtension,
     Asset,
 }
 
@@ -183,6 +184,39 @@ pub struct MarketplaceListInstalledResult {
     #[ts(type = "number")]
     pub generation: u64,
     pub packages: Vec<MarketplaceInstalledPackageDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum MarketplaceEditorExtensionPolicyActionDto { Enable, Disable, Grant, Revoke }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceEditorExtensionPolicyParams {
+    pub installation_id: String,
+    pub package_digest: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub action: MarketplaceEditorExtensionPolicyActionDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceEditorExtensionPolicyDto {
+    pub installation_id: String,
+    pub package: MarketplacePackageRefDto,
+    /// Entry selection does not promise API compatibility. Missing entries remain resources-only.
+    pub entrypoint: Option<String>,
+    pub enabled: bool,
+    pub granted: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceEditorExtensionsResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub extensions: Vec<MarketplaceEditorExtensionPolicyDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

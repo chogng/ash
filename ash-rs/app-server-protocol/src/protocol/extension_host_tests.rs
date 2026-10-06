@@ -141,3 +141,20 @@ fn invoke_read_uses_disjoint_tagged_terminal_states() {
         json!({"state": "cancelled", "reason": "authorityRevoked"})
     );
 }
+
+#[test]
+fn activation_intent_is_fenced_and_closed_without_granting_process_identity() {
+    for event in [
+        json!({"type":"command","command":"lazy.run"}),
+        json!({"type":"language","languageId":"rust"}),
+        json!({"type":"startupFinished"}),
+    ] {
+        let fixture = json!({"extensionId":"lazy","activationGeneration":7,"event":event});
+        let params: super::ExtensionHostActivateParams =
+            serde_json::from_value(fixture.clone()).unwrap();
+        assert_eq!(serde_json::to_value(params).unwrap(), fixture);
+        let mut invalid = fixture;
+        invalid["event"]["incarnation"] = json!(1);
+        assert!(serde_json::from_value::<super::ExtensionHostActivateParams>(invalid).is_err());
+    }
+}

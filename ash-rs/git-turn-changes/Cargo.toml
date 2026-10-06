@@ -19,6 +19,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 ash-file-watcher = { workspace = true }
 ash-git = { workspace = true }
+git-transaction = { workspace = true }
 ash-protocol = { workspace = true }
 
 [dev-dependencies]

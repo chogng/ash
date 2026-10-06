@@ -126,7 +126,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			const editing = services.get(IChatEditingService);
 			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
 		} : undefined,
-		contributionIds: ['workbench.contrib.sessionsLayout', 'workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations', 'workbench.contrib.externalUriOpener', 'workbench.contrib.browserView', 'workbench.contrib.browserView.restore'],
+		contributionIds: ['workbench.contrib.sessionsLayout', 'sessions.contrib.multiDiffSource', 'workbench.contrib.nativeWindow', OpenAgentsWindowSystemWideKeybindingContribution.ID, 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations', 'workbench.contrib.externalUriOpener', 'workbench.contrib.browserView', 'workbench.contrib.browserView.restore'],
 		browserViewService: api.browserView,
 		createLogService: () => logger.createLogger('agents'),
 		createStorageService: async options => {

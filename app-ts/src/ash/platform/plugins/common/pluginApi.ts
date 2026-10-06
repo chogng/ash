@@ -1,7 +1,8 @@
-import type { PluginCommandResultDto, PluginListResult, PluginPackageCommandParams } from "../../app-server/common/generated/index.js";
+import type { PluginCommandResultDto, PluginInstallLocalParams, PluginInstallLocalResult, PluginListResult, PluginPackageCommandParams } from "../../app-server/common/generated/index.js";
 
 export interface IPluginApi {
 	list(): Promise<PluginListResult>;
+	installLocal(params: PluginInstallLocalParams): Promise<PluginInstallLocalResult>;
 	enable(params: PluginPackageCommandParams): Promise<PluginCommandResultDto>;
 	disable(params: PluginPackageCommandParams): Promise<PluginCommandResultDto>;
 	grant(params: PluginPackageCommandParams): Promise<PluginCommandResultDto>;

@@ -89,6 +89,7 @@ fn open_change_set() -> TurnChangeSet {
         turn_id: TurnId::new("turn-1").unwrap(),
         repository_id: "repository-1".into(),
         worktree_root: PathBuf::from("/dir/repository-1"),
+        git_common_dir: std::path::PathBuf::from("/dir/repository-1/.git"),
         target_branch: Some("main".into()),
         base_object_id: Some("head".into()),
         before_tree: "before".into(),
@@ -176,9 +177,9 @@ fn evidence_digest_tracks_effects_but_not_commit_message_state() {
 }
 
 #[test]
-fn unresolved_dependency_prevents_commit_queueing() {
-    let mut change_set = open_change_set();
-    change_set
+fn selection_keeps_dependency_evidence_without_forcing_whole_turn_commits() {
+    let mut record = open_change_set();
+    record
         .seal(
             "after".into(),
             TerminalTurnState::Interrupted,
@@ -186,68 +187,50 @@ fn unresolved_dependency_prevents_commit_queueing() {
             BTreeSet::from([ChangeSetId::new("dependency").unwrap()]),
         )
         .unwrap();
-    change_set
-        .update_draft("fix(core): retain interrupted work".into())
-        .unwrap();
-
-    assert_eq!(
-        change_set.queue_commit(),
-        Err(TurnChangeError::UnresolvedDependencies)
-    );
-    assert_eq!(change_set.commit_state, CommitState::Idle);
-}
-
-#[test]
-fn initial_dir_dependency_prevents_commit_queueing() {
-    let mut change_set = open_change_set();
-    change_set
-        .baseline_dependency_paths
-        .insert(PathBuf::from("src/config.rs"));
-    change_set
-        .record_tool_scope([PathBuf::from("src/config.rs")], [], false)
-        .unwrap();
-    change_set
-        .seal(
-            "after".into(),
-            TerminalTurnState::Completed,
-            vec![file()],
-            BTreeSet::new(),
+    record
+        .external_dependency_paths
+        .insert("src/config.rs".into());
+    let selection = crate::TurnCommitSelection {
+        change_set_id: record.change_set_id.clone(),
+        expected_revision: record.revision,
+        paths: vec![file().path],
+    };
+    assert!(
+        crate::validate_selection(
+            &[record.clone()],
+            &record.session_id,
+            &record.thread_id,
+            &[selection]
         )
-        .unwrap();
-    change_set
-        .update_draft("fix(core): use dir config".into())
-        .unwrap();
-
-    assert_eq!(
-        change_set.queue_commit(),
-        Err(TurnChangeError::UnresolvedExternalDependencies)
+        .is_ok()
     );
+    assert_eq!(record.commit_state, CommitState::Idle);
     assert_eq!(
-        change_set.external_dependency_paths,
-        BTreeSet::from([PathBuf::from("src/config.rs")])
+        record.dependencies,
+        BTreeSet::from([ChangeSetId::new("dependency").unwrap()])
     );
-    change_set
-        .satisfy_external_dependencies([PathBuf::from("src/config.rs")])
-        .unwrap();
-    change_set.queue_commit().unwrap();
-    assert_eq!(change_set.commit_state, CommitState::Queued);
 }
 
 #[test]
-fn open_or_incomplete_change_set_cannot_be_committed() {
-    let mut change_set = open_change_set();
-    change_set
-        .update_draft("feat(core): add change capture".into())
-        .unwrap();
-    assert_eq!(
-        change_set.queue_commit(),
-        Err(TurnChangeError::InvalidTransition)
-    );
-    change_set.mark_incomplete("late dir write".into()).unwrap();
-    assert_eq!(
-        change_set.queue_commit(),
-        Err(TurnChangeError::InvalidTransition)
-    );
+fn open_or_incomplete_change_set_cannot_be_selected_for_commit() {
+    let mut record = open_change_set();
+    for state in [crate::CaptureState::Open, crate::CaptureState::Incomplete] {
+        record.capture_state = state;
+        let selection = crate::TurnCommitSelection {
+            change_set_id: record.change_set_id.clone(),
+            expected_revision: record.revision,
+            paths: vec![file().path],
+        };
+        assert!(
+            crate::validate_selection(
+                &[record.clone()],
+                &record.session_id,
+                &record.thread_id,
+                &[selection]
+            )
+            .is_err()
+        );
+    }
 }
 
 #[test]
@@ -308,9 +291,9 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
     assert_eq!(open[0].files[0].kind, ChangeFileKind::Renamed);
     let sealed = ledger
         .seal_turn(crate::TurnChangeSealRequest {
-            session_id,
-            thread_id,
-            turn_id,
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
             terminal_state: TerminalTurnState::Completed,
         })
         .unwrap();
@@ -328,6 +311,10 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
     assert_eq!(sealed[0].files[0].deletions, 0);
     assert_eq!(sealed[0].files[0].before_mode.as_deref(), Some("100644"));
     assert_eq!(sealed[0].files[0].after_mode.as_deref(), Some("100644"));
+    assert_eq!(
+        ledger.refresh_turn(session_id, thread_id, turn_id).unwrap(),
+        sealed
+    );
 }
 
 #[test]
@@ -441,4 +428,113 @@ fn checkpoint_leases_exclude_writes_only_in_their_own_thread() {
         .unwrap();
     worker.join().unwrap();
     assert!(tracker.try_checkpoint(&second).unwrap().is_some());
+}
+
+#[test]
+fn selection_rejects_stale_repeated_unknown_and_wrong_owner_changes() {
+    let mut record = open_change_set();
+    record
+        .seal(
+            "after".into(),
+            TerminalTurnState::Completed,
+            vec![file()],
+            BTreeSet::new(),
+        )
+        .unwrap();
+    let valid = crate::TurnCommitSelection {
+        change_set_id: record.change_set_id.clone(),
+        expected_revision: record.revision,
+        paths: vec![file().path],
+    };
+    for selection in [
+        crate::TurnCommitSelection {
+            expected_revision: valid.expected_revision - 1,
+            ..valid.clone()
+        },
+        crate::TurnCommitSelection {
+            paths: Vec::new(),
+            ..valid.clone()
+        },
+        crate::TurnCommitSelection {
+            paths: vec![file().path, file().path],
+            ..valid.clone()
+        },
+        crate::TurnCommitSelection {
+            paths: vec!["unknown.rs".into()],
+            ..valid.clone()
+        },
+    ] {
+        assert!(
+            crate::validate_selection(
+                &[record.clone()],
+                &record.session_id,
+                &record.thread_id,
+                &[selection]
+            )
+            .is_err()
+        );
+    }
+    assert!(
+        crate::validate_selection(
+            &[record.clone()],
+            &record.session_id,
+            &record.thread_id,
+            &[valid.clone(), valid.clone()]
+        )
+        .is_err()
+    );
+    assert!(
+        crate::validate_selection(
+            &[record.clone()],
+            &SessionId::new("other").unwrap(),
+            &record.thread_id,
+            &[valid.clone()]
+        )
+        .is_err()
+    );
+    assert!(
+        crate::validate_selection(
+            &[record.clone()],
+            &record.session_id,
+            &ThreadId::new("other").unwrap(),
+            &[valid]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn relocated_object_store_does_not_change_sealed_evidence() {
+    use crate::TurnChangeStore;
+    let store = MemoryStore::default();
+    let mut record = open_change_set();
+    record
+        .seal(
+            "after".into(),
+            TerminalTurnState::Completed,
+            vec![file()],
+            BTreeSet::new(),
+        )
+        .unwrap();
+    let evidence = record.evidence_digest().unwrap();
+    store.insert(&record).unwrap();
+    crate::relocate_capture_objects(
+        &store,
+        &record.thread_id,
+        &record.repository_id,
+        std::path::Path::new("/other/.git"),
+    )
+    .unwrap();
+    let relocated = store.load(&record.change_set_id).unwrap();
+    assert_eq!(relocated.evidence_digest().unwrap(), evidence);
+    assert_eq!(relocated.revision, record.revision + 1);
+    assert_eq!(relocated.git_common_dir, PathBuf::from("/other/.git"));
+    crate::relocate_capture_objects(
+        &store,
+        &record.thread_id,
+        &record.repository_id,
+        &relocated.git_common_dir,
+    )
+    .unwrap();
+    assert_eq!(store.load(&record.change_set_id).unwrap(), relocated);
 }

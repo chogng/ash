@@ -4,7 +4,7 @@
 > preparation, and registration lifecycle. The cross-layer product behavior and trust model are
 > canonical in [`docs/editor-extensions.md`](../../../../../../docs/editor-extensions.md); Rust
 > filesystem catalog details are in
-> [`ash-rs/extensions/README.md`](../../../../../../ash-rs/extensions/README.md).
+> [`ash-rs/extension-catalog/README.md`](../../../../../../ash-rs/extension-catalog/README.md).
 
 This service is the Workbench composition boundary for static extension packages. Rust owns
 server-backed discovery and immutable resource authority; `build/resources/extensions.ts` prepares
@@ -13,11 +13,24 @@ owns Workbench catalog types and decides which supported declarative contributio
 It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
 filesystem access.
 
+The product direction is TS/JS extensions running in an isolated JS host, with a TS SDK delegating
+editor and UI operations to their TS services and backend operations to Rust. This declarative
+loader remains responsible for resources; it does not become the JS runtime. The Rust author SDK
+and executable Editor Extension Host are no longer the target extension entry points. Source
+retirement, the complete TS SDK, and per-extension authorization are not complete; see the
+[direction and current status](../../../../../../docs/editor-extensions.md#0-确定的产品方向).
+
+Open VSX packages enter this same declarative loader after Rust verifies and installs their VSIX.
+The Marketplace source remains part of the extension identity. This loader consumes supported
+manifest contributions and resources; it does not execute the downloaded `main` or `browser` entries.
+The server excludes debugger commands and executable entries from this source's catalog manifest.
+Both static contribution loaders refresh on Marketplace changes, including removal and updates.
+
 ## Ownership
 
 | Area | Owner | Current contract |
 | --- | --- | --- |
-| Trusted roots, immutable package snapshot, digest and generation | `ash-extensions::ExtensionCatalog` | Built-in first, profile second; direct child packages only |
+| Trusted roots, immutable package snapshot, digest and generation | `ash-extension-catalog::ExtensionCatalog` | Built-in first, profile second; direct child packages only |
 | Renderer transport and exact-shape normalization | `platform/extensions/*` | `IExtensionApi.list` and generation-bound `readResource` |
 | Workbench catalog/domain types | `common/extensionService.ts` | Does not expose generated DTO or manifest JSON |
 | Supported manifest parsing | `parseExtensionManifest` | Identity plus languages, grammars, snippets, color/icon themes, and debuggers |
@@ -58,6 +71,9 @@ Theme documents accept the four supported `uiTheme` values, hexadecimal colors, 
 JSON `include` files, `tokenColors` arrays or package-relative TextMate theme files, and semantic token styles. Token
 settings use `foreground`, `background`, and supported `fontStyle` values. Unknown
 Workbench color token IDs remain catalog data but are ignored when compiling product color themes.
+At the extension resource boundary, publisher metadata is ignored and TextMate's `normal` and
+`regular` font styles clear emphasis. Color and style validation still applies, and user-authored
+theme documents retain their complete-value schema.
 
 Product icon themes use the manifest entry `{ "id": "my-icons", "label": "My icons", "path": "./icons/theme.json" }`.
 The referenced JSONC file maps icon IDs to package-relative SVG resources:
@@ -163,5 +179,5 @@ tests separately enumerate all bundled manifests and their referenced files.
 This declarative service has no Editor Extension installer, enablement database, signature
 authority, manifest NLS, or arbitrary extension runtime. Ash's executable Host RPC v1 is a
 separate Plugin-authorized service under `workbench/services/extensionHost`; it is not an evolution
-of this loader and is not a VS Code/Node Extension Host. The two current boundaries and remaining
-product-integration limits are documented in `docs/editor-extensions.md`.
+of this loader and is not a VS Code/Node Extension Host. The executable path remains in the source pending retirement. Its existing contract and the
+TS/JS product direction are distinguished in `docs/editor-extensions.md`.

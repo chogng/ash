@@ -1,14 +1,18 @@
-use super::git_turn_changes_commit::settle_dependencies;
 use super::git_turn_changes_commit::spawn_commit_job;
 use super::git_turn_changes_message::spawn_message_job;
 use super::thread_dirs::ThreadDirs;
 use super::update_broker::UpdateBroker;
-use ash_app_server_protocol::protocol::turn_changes::{
-    ChangeSetId as ChangeSetIdDto, ThreadDirBinding, ThreadWorktreeRepositoryBindingDto,
-    TurnChangeCaptureStateDto, TurnChangeCommitStateDto, TurnChangeFileStatisticsDto,
-    TurnChangeMessageStateDto, TurnChangeSetSummary, TurnChangeTerminalStateDto,
-    TurnChangesChanged, TurnChangesMutationResult,
-};
+use ash_app_server_protocol::protocol::turn_changes::ChangeSetId as ChangeSetIdDto;
+use ash_app_server_protocol::protocol::turn_changes::ThreadDirBinding;
+use ash_app_server_protocol::protocol::turn_changes::ThreadWorktreeRepositoryBindingDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeCaptureStateDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeCommitStateDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeFileStatisticsDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeMessageStateDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeSetSummary;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeTerminalStateDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
 use ash_config::ConfigStore;
 use ash_core::ThreadController;
 use ash_protocol::CommandId;
@@ -16,17 +20,24 @@ use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
-use ash_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
+use ash_state::SqliteTurnChangeStore;
+use ash_state::TurnChangeCommandOutcome;
 use core_api::ModelService;
-use git_turn_changes::{
-    CaptureState, CommitState, GitTurnChangeWatcher, MessageState, TerminalTurnState,
-    TurnChangeLedger, TurnChangeSet, TurnChangeStore, WriteLifecycleTracker,
-};
+use git_turn_changes::CaptureState;
+use git_turn_changes::CommitState;
+use git_turn_changes::GitTurnChangeWatcher;
+use git_turn_changes::MessageState;
+use git_turn_changes::TerminalTurnState;
+use git_turn_changes::TurnChangeLedger;
+use git_turn_changes::TurnChangeSet;
+use git_turn_changes::TurnChangeStore;
+use git_turn_changes::WriteLifecycleTracker;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
-use worktree::{ManagedDirBinding, ManagedDirKind};
+use worktree::ManagedDirBinding;
+use worktree::ManagedDirKind;
 
 /// App Server adapter from Turn execution events to the Git ChangeSet domain.
 pub(super) struct GitTurnChangesRuntime {
@@ -87,6 +98,7 @@ impl GitTurnChangesRuntime {
                 .install_message_checkpoint_source(thread_id.clone(), runtime.clone())
                 .map_err(|error| error.to_string())?;
             if binding.kind() == worktree::ManagedDirKind::Git {
+                runtime.refresh_capture_object_locations(thread_id, binding)?;
                 runtime.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])?;
             }
         }
@@ -158,12 +170,6 @@ impl GitTurnChangesRuntime {
                 .store
                 .list_for_thread(&thread_id)
                 .map_err(|error| error.to_string())?;
-            for committed in records
-                .iter()
-                .filter(|record| matches!(record.commit_state, CommitState::Committed { .. }))
-            {
-                settle_dependencies(&self.store, committed)?;
-            }
             for record in records {
                 if matches!(
                     record.message_state,
@@ -180,18 +186,25 @@ impl GitTurnChangesRuntime {
                         record.change_set_id.clone(),
                     );
                 }
+            }
+            for commit in
+                git_turn_changes::TurnCommitStore::list_commits(self.store.as_ref(), &thread_id)
+                    .map_err(|error| error.to_string())?
+            {
                 if matches!(
-                    record.commit_state,
-                    CommitState::Queued | CommitState::Committing
+                    commit.state,
+                    git_turn_changes::TurnCommitState::Queued
+                        | git_turn_changes::TurnCommitState::Publishing
+                        | git_turn_changes::TurnCommitState::Committed { .. }
                 ) {
                     let binding = self
-                        .binding(&record.thread_id)
-                        .ok_or_else(|| format!("Thread {} has no dir binding", record.thread_id))?;
+                        .binding(&thread_id)
+                        .ok_or("Thread has no directory binding")?;
                     spawn_commit_job(
                         Arc::clone(&self.store),
                         Arc::clone(&self.updates),
                         binding,
-                        record.change_set_id,
+                        commit.commit_id,
                     );
                 }
             }
@@ -308,101 +321,6 @@ impl GitTurnChangesRuntime {
         Ok(response)
     }
 
-    pub(super) fn queue_commit(
-        self: &Arc<Self>,
-        mut record: TurnChangeSet,
-        expected_revision: u64,
-        command_id: &CommandId,
-        fingerprint: &str,
-    ) -> Result<TurnChangesMutationResult, String> {
-        require_revision(&record, expected_revision)?;
-        if record.target_branch.is_none() {
-            return Err("detached Thread targets cannot be committed".into());
-        }
-        let binding = self
-            .binding(&record.thread_id)
-            .ok_or_else(|| format!("Thread {} has no dir binding", record.thread_id))?;
-        self.resolve_external_dependencies(&binding, &mut record)?;
-        record.queue_commit().map_err(|error| error.to_string())?;
-        let response = mutation_result(&[record.clone()]);
-        if let Some(replayed) = self.apply_command(command_id, fingerprint, &record, &response)? {
-            return Ok(replayed);
-        }
-        self.publish(&[record.clone()]);
-        spawn_commit_job(
-            Arc::clone(&self.store),
-            Arc::clone(&self.updates),
-            binding,
-            record.change_set_id,
-        );
-        Ok(response)
-    }
-
-    fn resolve_external_dependencies(
-        &self,
-        binding: &ManagedDirBinding,
-        record: &mut TurnChangeSet,
-    ) -> Result<(), String> {
-        if record.external_dependency_paths.is_empty() {
-            return Ok(());
-        }
-        let repository_binding = binding
-            .repositories()
-            .iter()
-            .find(|repository| repository.repository_id() == record.repository_id)
-            .ok_or_else(|| format!("Thread binding omitted repository {}", record.repository_id))?;
-        if binding.kind() != worktree::ManagedDirKind::Git {
-            return Ok(());
-        }
-        let resolved = self.dirs.runtime.block_on(async {
-            let git = ash_git::GitClient::system();
-            let repository = git
-                .open_repository(repository_binding.source_repository_root())
-                .await
-                .map_err(|error| error.to_string())?;
-            let Some(branch_name) = record.target_branch.as_deref() else {
-                return Ok(Vec::new());
-            };
-            let Some(branch) = git
-                .local_branches(&repository)
-                .await
-                .map_err(|error| error.to_string())?
-                .into_iter()
-                .find(|branch| branch.name() == branch_name)
-            else {
-                return Ok(Vec::new());
-            };
-            let current = git
-                .resolve_tree(&repository, branch.object_id())
-                .await
-                .map_err(|error| error.to_string())?;
-            let baseline = ash_git::GitTreeId::new(record.before_tree.clone())
-                .map_err(|error| error.to_string())?;
-            let differences = git
-                .diff_trees(&repository, &current, &baseline)
-                .await
-                .map_err(|error| error.to_string())?;
-            Ok::<_, String>(
-                record
-                    .external_dependency_paths
-                    .iter()
-                    .filter(|dependency| {
-                        differences.iter().all(|change| {
-                            !paths_overlap(dependency, change.path())
-                                && change
-                                    .previous_path()
-                                    .is_none_or(|path| !paths_overlap(dependency, path))
-                        })
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            )
-        })?;
-        record
-            .satisfy_external_dependencies(resolved)
-            .map_err(|error| error.to_string())
-    }
-
     fn apply_command(
         &self,
         command_id: &CommandId,
@@ -448,10 +366,6 @@ impl GitTurnChangesRuntime {
     }
 }
 
-fn paths_overlap(left: &Path, right: &Path) -> bool {
-    left == right || left.starts_with(right) || right.starts_with(left)
-}
-
 fn require_revision(record: &TurnChangeSet, expected_revision: u64) -> Result<(), String> {
     if record.revision == expected_revision {
         Ok(())
@@ -482,6 +396,12 @@ pub(super) fn publish_records(updates: &UpdateBroker, records: &[TurnChangeSet])
 
 pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
     let (commit_state, conflict_paths, failure_message, commit_id) = match &record.commit_state {
+        CommitState::PartiallyCommitted { .. } => (
+            TurnChangeCommitStateDto::PartiallyCommitted,
+            Vec::new(),
+            None,
+            None,
+        ),
         CommitState::Idle => (TurnChangeCommitStateDto::Idle, Vec::new(), None, None),
         CommitState::Queued => (TurnChangeCommitStateDto::Queued, Vec::new(), None, None),
         CommitState::Committing => (TurnChangeCommitStateDto::Committing, Vec::new(), None, None),
@@ -491,13 +411,13 @@ pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
             None,
             Some(object_id.clone()),
         ),
-        CommitState::Conflict { paths } => (
+        CommitState::Conflict { paths, message } => (
             TurnChangeCommitStateDto::Conflict,
             paths
                 .iter()
                 .map(|path| path.to_string_lossy().into_owned())
                 .collect(),
-            None,
+            Some(message.clone()),
             None,
         ),
         CommitState::Failed { message } => (
@@ -533,6 +453,11 @@ pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
             MessageState::Failed => TurnChangeMessageStateDto::Failed,
         },
         commit_state,
+        committed_paths: record
+            .committed_paths
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect(),
         terminal_state: record.terminal_state.map(|state| match state {
             TerminalTurnState::Completed => TurnChangeTerminalStateDto::Completed,
             TerminalTurnState::Failed => TurnChangeTerminalStateDto::Failed,
@@ -553,5 +478,32 @@ pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
         failure_message,
         commit_id,
         revision: record.revision,
+    }
+}
+
+impl GitTurnChangesRuntime {
+    pub(super) fn require_session_publications_settled(
+        &self,
+        session_id: &ash_protocol::SessionId,
+    ) -> Result<(), String> {
+        use git_turn_changes::TurnCommitStore;
+        for thread_id in self
+            .dirs
+            .bindings
+            .read()
+            .map_err(|_| "Thread binding lock poisoned")?
+            .keys()
+        {
+            let commits = self
+                .store
+                .list_commits(thread_id)
+                .map_err(|error| error.to_string())?;
+            let owned = commits
+                .into_iter()
+                .filter(|commit| &commit.session_id == session_id)
+                .collect::<Vec<_>>();
+            git_turn_changes::require_settled_publications(&owned)?;
+        }
+        Ok(())
     }
 }

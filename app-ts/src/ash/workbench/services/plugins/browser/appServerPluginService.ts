@@ -2,7 +2,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IPluginApi } from "../../../../platform/plugins/common/pluginApi.js";
-import type { IPluginService, PluginCatalogView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
+import type { IPluginService, PluginCatalogView, PluginInstallation, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 
 export class AppServerPluginService extends Disposable implements IPluginService {
 	private readonly _onDidChange = this._register(new Emitter<number>());
@@ -18,6 +18,11 @@ export class AppServerPluginService extends Disposable implements IPluginService
 
 	async list(): Promise<PluginCatalogView> {
 		return this.api.list();
+	}
+
+	async installLocal(path: string, expectedRevision: number): Promise<PluginInstallation> {
+		const result = await this.api.installLocal({ commandId: `desktop-plugin-install-${crypto.randomUUID()}`, expectedRevision, path, dirId: null });
+		return { id: result.id, version: result.version, digest: result.digest };
 	}
 
 	async enable(plugin: PluginPackageView, revision: number): Promise<void> {

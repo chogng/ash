@@ -8,6 +8,7 @@ import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
+import './browser/turnMultiDiffSource.contribution.js';
 import './contrib/editor/browser/emptyFileEditor.contribution.js';
 import './contrib/creator/browser/creatorEditor.contribution.js';
 import './contrib/creator/browser/creator.contribution.js';

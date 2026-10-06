@@ -27,6 +27,7 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalProductServicesConfig {
     pub(crate) marketplaces: BTreeMap<MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
+    pub(crate) open_vsx: Option<(MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
     pub(crate) github_account: Option<GitHubAccountConfig>,
     pub(crate) report_issue_url: Option<String>,
@@ -87,6 +88,24 @@ impl LocalProductServicesConfig {
                 return Err(product_config_error(()));
             }
         }
+        let open_vsx = document
+            .open_vsx
+            .map(|source| {
+                if marketplaces.contains_key(&source.name) {
+                    return Err(product_config_error(()));
+                }
+                let config = ash_core_plugins::OpenVsxConfig::new(
+                    Url::parse(&source.api_url).map_err(product_config_error)?,
+                    source
+                        .download_origins
+                        .into_iter()
+                        .map(|url| Url::parse(&url).map_err(product_config_error))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+                .map_err(product_config_error)?;
+                Ok((source.name, config))
+            })
+            .transpose()?;
         let connector_oauth = document
             .connector_oauth
             .into_iter()
@@ -123,6 +142,7 @@ impl LocalProductServicesConfig {
             image_generation: document.image_generation,
             git_attribution: document.git_attribution,
             marketplaces,
+            open_vsx,
             connector_oauth,
             github_account,
             report_issue_url: document.report_issue_url,
@@ -182,6 +202,8 @@ struct ProductServicesDocument {
     #[serde(default)]
     marketplaces: Vec<ProductMarketplaceDocument>,
     #[serde(default)]
+    open_vsx: Option<ProductOpenVsxDocument>,
+    #[serde(default)]
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
     #[serde(default)]
     github_account: Option<GitHubAccountDocument>,
@@ -235,6 +257,14 @@ impl TryFrom<GitHubAccountDocument> for GitHubAccountConfig {
             broker_base_url,
         })
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProductOpenVsxDocument {
+    name: MarketplaceName,
+    api_url: String,
+    download_origins: Vec<String>,
 }
 
 #[derive(Deserialize)]

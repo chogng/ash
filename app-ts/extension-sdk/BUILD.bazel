@@ -1,0 +1,6 @@
+exports_files(["index.js"], visibility = ["//ash-rs/js-extension-host:__pkg__"])
+
+exports_files(
+    ["example/.ash-plugin/plugin.json"],
+    visibility = ["//ash-rs/plugin:__pkg__", "//ash-rs/app-server:__pkg__"],
+)

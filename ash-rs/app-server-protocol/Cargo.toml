@@ -11,8 +11,8 @@ name = "ash_app_server_protocol"
 path = "src/lib.rs"
 
 [features]
-json-schema = ["dep:schemars", "slash-commands/json-schema"]
-export = ["json-schema", "dep:sha2", "dep:ts-rs", "slash-commands/export"]
+json-schema = ["dep:schemars", "slash-commands/json-schema", "extension-protocol/json-schema"]
+export = ["json-schema", "dep:sha2", "dep:ts-rs", "slash-commands/export", "extension-protocol/export"]
 
 [[bin]]
 name = "generate_protocol"
@@ -20,6 +20,7 @@ path = "src/bin/generate_protocol.rs"
 required-features = ["export"]
 
 [dependencies]
+extension-protocol = { workspace = true }
 slash-commands = { package = "ash-slash-commands", path = "../slash-commands" }
 noop-macros = { package = "ash-app-server-protocol-noop-macros", path = "../app-server-protocol-noop-macros" }
 call = { package = "ash-call", path = "../call" }
@@ -53,6 +54,7 @@ ash-utils-path-uri = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+extension-protocol = { workspace = true, features = ["export"] }
 slash-commands = { package = "ash-slash-commands", path = "../slash-commands", features = ["export"] }
 cargo-bin = { workspace = true }
 sha2 = { workspace = true }

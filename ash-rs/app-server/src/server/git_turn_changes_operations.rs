@@ -1,18 +1,40 @@
-use super::git_turn_changes_runtime::{GitTurnChangesRuntime, summary};
-use super::{AppServer, RpcError, decode, result};
+use super::AppServer;
+use super::RpcError;
+use super::decode;
+use super::git_turn_changes_runtime::GitTurnChangesRuntime;
+use super::git_turn_changes_runtime::summary;
+use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
-use ash_app_server_protocol::protocol::turn_changes::{
-    ChangeSetId as ChangeSetIdDto, TurnChangeFileDto, TurnChangeFileKindDto,
-    TurnChangesCommitParams, TurnChangesDiscardThreadParams, TurnChangesListParams,
-    TurnChangesListResult, TurnChangesMutationParams, TurnChangesMutationResult,
-    TurnChangesReadFileParams, TurnChangesReadFileResult, TurnChangesReadParams,
-    TurnChangesReadResult, TurnChangesUpdateDraftParams,
-};
+use ash_app_server_protocol::protocol::turn_changes::ChangeSetId as ChangeSetIdDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeFileDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeFileKindDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesCommitParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesDiscardThreadParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesListParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesListResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesPrepareCommitParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesPrepareCommitResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadCommitFileParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadCommitParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadFileParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadFileResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesUpdateDraftParams;
 use ash_core::TurnStatus;
 use ash_state::TurnChangeCommandOutcome;
-use git_turn_changes::{ChangeFileKind, ChangeSetId, CommitState, TurnChangeSet, TurnChangeStore};
+use git_turn_changes::ChangeFileKind;
+use git_turn_changes::ChangeSetId;
+use git_turn_changes::CommitState;
+use git_turn_changes::TurnChangeSet;
+use git_turn_changes::TurnChangeStore;
+use git_turn_changes::TurnCommitStore;
+use git_turn_changes::TurnPublication;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -125,31 +147,246 @@ impl AppServer {
         result(&record)
     }
 
+    pub(super) fn turn_changes_prepare_commit(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: TurnChangesPrepareCommitParams = decode(params)?;
+        let runtime = self.git_turn_changes_runtime()?;
+        let fingerprint = mutation_fingerprint("turnChanges/prepareCommit", &params)?;
+        if let Some(response) = replayed_response(&runtime, &params.command_id, &fingerprint)? {
+            return Ok(response);
+        }
+        let records = runtime
+            .list(&params.session_id, &params.thread_id)
+            .map_err(operation_error)?;
+        let selections = params
+            .selections
+            .iter()
+            .map(|selection| {
+                Ok(git_turn_changes::TurnCommitSelection {
+                    change_set_id: ChangeSetId::new(selection.change_set_id.0.clone())
+                        .map_err(|error| operation_error(error.to_string()))?,
+                    expected_revision: selection.expected_revision,
+                    paths: selection
+                        .paths
+                        .iter()
+                        .map(std::path::PathBuf::from)
+                        .collect(),
+                })
+            })
+            .collect::<Result<Vec<_>, RpcError>>()?;
+        let ordered = git_turn_changes::validate_selection(
+            &records,
+            &params.session_id,
+            &params.thread_id,
+            &selections,
+        )
+        .map_err(mutation_error)?;
+        let repository_id = &ordered[0].0.repository_id;
+        let binding = runtime
+            .binding(&params.thread_id)
+            .ok_or_else(|| operation_error("Thread has no directory binding".into()))?;
+        let target = binding
+            .repositories()
+            .iter()
+            .find(|repository| repository.repository_id() == repository_id)
+            .ok_or_else(|| operation_error("Thread binding omitted repository".into()))?;
+        let response = runtime.dirs.runtime.block_on(async {
+            let git = ash_git::GitClient::system();
+            let repository = git
+                .open_repository(target.source_repository_root())
+                .await
+                .map_err(|error| operation_error(error.to_string()))?;
+            let operation = ash_git::repository_operation_lock(&repository);
+            let _operation = operation
+                .lock()
+                .map_err(|_| operation_error("repository operation lock poisoned".into()))?;
+            if let Some(response) = replayed_response(&runtime, &params.command_id, &fingerprint)? {
+                return Ok(response);
+            }
+            let commit = git_turn_changes::prepare_selection(
+                &git,
+                &repository,
+                git_turn_changes::commit_transaction_id(params.command_id.as_str()),
+                &params.session_id,
+                &params.thread_id,
+                &records,
+                &selections,
+                params.message.clone(),
+            )
+            .await
+            .map_err(mutation_error)?;
+            let TurnPublication::Prepared { commit: prepared } = &commit.publication else {
+                unreachable!("new selection is prepared");
+            };
+            let files = git
+                .diff_trees(&repository, prepared.target_tree(), prepared.final_tree())
+                .await
+                .map_err(|error| operation_error(error.to_string()))?;
+            let preview = TurnChangesPrepareCommitResult {
+                commit_id: commit.commit_id.clone(),
+                target_branch: commit.target_branch.clone(),
+                message: commit.message.clone(),
+                files: files
+                    .into_iter()
+                    .map(git_turn_changes::change_file)
+                    .map(|file| file_dto(&file))
+                    .collect(),
+                warnings: commit.warnings.clone(),
+            };
+            let response = result(&preview)?;
+            runtime
+                .store
+                .save_preview(
+                    &commit,
+                    params.command_id.as_str(),
+                    &fingerprint,
+                    &response.to_string(),
+                )
+                .map_err(|error| mutation_error(error.to_string()))?;
+            Ok::<_, RpcError>(response)
+        })?;
+        Ok(response)
+    }
+
+    pub(super) fn turn_changes_read_commit(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: TurnChangesReadCommitParams = decode(params)?;
+        let runtime = self.git_turn_changes_runtime()?;
+        let commit = runtime
+            .store
+            .load_commit(&params.commit_id)
+            .map_err(|error| operation_error(error.to_string()))?;
+        if commit.session_id != params.session_id || commit.thread_id != params.thread_id {
+            return Err(operation_error("commit ownership mismatch".into()));
+        }
+        let capture = runtime
+            .store
+            .load(&commit.sources[0].change_set_id)
+            .map_err(|error| operation_error(error.to_string()))?;
+        let TurnPublication::Prepared { commit: prepared } = &commit.publication else {
+            return Err(operation_error("commit has no preview".into()));
+        };
+        runtime.dirs.runtime.block_on(async {
+            let git = ash_git::GitClient::system();
+            let files = git
+                .diff_trees_at_git_dir(
+                    &capture.git_common_dir,
+                    prepared.target_tree(),
+                    prepared.final_tree(),
+                )
+                .await
+                .map_err(|error| operation_error(error.to_string()))?;
+            result(&TurnChangesPrepareCommitResult {
+                commit_id: commit.commit_id.clone(),
+                target_branch: commit.target_branch.clone(),
+                message: commit.message.clone(),
+                files: files
+                    .into_iter()
+                    .map(git_turn_changes::change_file)
+                    .map(|file| file_dto(&file))
+                    .collect(),
+                warnings: commit.warnings.clone(),
+            })
+        })
+    }
+
+    pub(super) fn turn_changes_read_commit_file(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: TurnChangesReadCommitFileParams = decode(params)?;
+        let runtime = self.git_turn_changes_runtime()?;
+        let commit = runtime
+            .store
+            .load_commit(&params.commit_id)
+            .map_err(|error| operation_error(error.to_string()))?;
+        if commit.session_id != params.session_id || commit.thread_id != params.thread_id {
+            return Err(operation_error("commit ownership mismatch".into()));
+        }
+        let capture = runtime
+            .store
+            .load(&commit.sources[0].change_set_id)
+            .map_err(|error| operation_error(error.to_string()))?;
+        let TurnPublication::Prepared { commit: prepared } = &commit.publication else {
+            return Err(operation_error("commit has no preview".into()));
+        };
+        runtime.dirs.runtime.block_on(async {
+            let git = ash_git::GitClient::system();
+            let files = git
+                .diff_trees_at_git_dir(
+                    &capture.git_common_dir,
+                    prepared.target_tree(),
+                    prepared.final_tree(),
+                )
+                .await
+                .map_err(|error| operation_error(error.to_string()))?;
+            let file = files
+                .iter()
+                .find(|file| file.path() == Path::new(&params.path))
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            let (before, before_truncated, before_binary) =
+                read_repository_blob(&git, &capture.git_common_dir, file.before_object_id())
+                    .await?;
+            let (after, after_truncated, after_binary) =
+                read_repository_blob(&git, &capture.git_common_dir, file.after_object_id()).await?;
+            let binary = file.binary() || before_binary || after_binary;
+            result(&TurnChangesReadFileResult {
+                path: params.path,
+                binary,
+                truncated: before_truncated || after_truncated,
+                before: (!binary).then_some(before).flatten(),
+                after: (!binary).then_some(after).flatten(),
+            })
+        })
+    }
+
     pub(super) fn turn_changes_commit(&self, params: &Value) -> Result<Value, RpcError> {
         let params: TurnChangesCommitParams = decode(params)?;
-        if params.change_set_ids.len() != 1 {
-            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-        }
         let runtime = self.git_turn_changes_runtime()?;
         let fingerprint = mutation_fingerprint("turnChanges/commit", &params)?;
         if let Some(response) = replayed_response(&runtime, &params.command_id, &fingerprint)? {
             return Ok(response);
         }
-        let record = owned_record(
-            &runtime,
-            &params.session_id,
-            &params.thread_id,
-            &params.change_set_ids[0],
-        )?;
-        let record = runtime
-            .queue_commit(
-                record,
-                params.expected_revision,
-                &params.command_id,
+        let commit = runtime
+            .store
+            .load_commit(&params.commit_id)
+            .map_err(|error| operation_error(error.to_string()))?;
+        if commit.session_id != params.session_id || commit.thread_id != params.thread_id {
+            return Err(operation_error("commit ownership mismatch".into()));
+        }
+        let binding = runtime
+            .binding(&params.thread_id)
+            .ok_or_else(|| operation_error("Thread has no directory binding".into()))?;
+        let mut records = commit
+            .sources
+            .iter()
+            .map(|source| {
+                runtime
+                    .store
+                    .load(&source.change_set_id)
+                    .map_err(|error| operation_error(error.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for record in &mut records {
+            record.commit_state = CommitState::Queued;
+            record.revision += 1;
+        }
+        let response = result(&TurnChangesMutationResult {
+            change_sets: records.iter().map(summary).collect(),
+        })?;
+        let updated = runtime
+            .store
+            .queue_publication(
+                &params.commit_id,
+                params.command_id.as_str(),
                 &fingerprint,
+                &response.to_string(),
             )
-            .map_err(mutation_error)?;
-        result(&record)
+            .map_err(|error| mutation_error(error.to_string()))?;
+        runtime.publish(&updated);
+        super::git_turn_changes_commit::spawn_commit_job(
+            Arc::clone(&runtime.store),
+            Arc::clone(&runtime.updates),
+            binding,
+            params.commit_id,
+        );
+        replayed_response(&runtime, &params.command_id, &fingerprint)?
+            .ok_or_else(|| operation_error("queued command omitted receipt".into()))
     }
 
     pub(super) fn turn_changes_discard_thread(&self, params: &Value) -> Result<Value, RpcError> {
@@ -336,8 +573,7 @@ fn read_blob_side(
     let (bytes, truncated) = runtime
         .block_on(async {
             let git = ash_git::GitClient::system();
-            let repository = git.open_repository(&record.worktree_root).await?;
-            git.read_blob(&repository, object_id, MAX_FILE_SIDE_BYTES)
+            git.read_blob_at_git_dir(&record.git_common_dir, object_id, MAX_FILE_SIDE_BYTES)
                 .await
         })
         .map_err(|error| operation_error(error.to_string()))?;
@@ -358,6 +594,30 @@ fn revision_error() -> RpcError {
     RpcError::new(-32081, AppServerErrorName::TurnChangesRevisionConflict)
 }
 
-fn operation_error(_: String) -> RpcError {
-    RpcError::new(-32082, AppServerErrorName::TurnChangesOperationFailed)
+fn operation_error(detail: String) -> RpcError {
+    RpcError::with_details(
+        -32082,
+        AppServerErrorName::TurnChangesOperationFailed,
+        detail,
+    )
+}
+
+async fn read_repository_blob(
+    git: &ash_git::GitClient,
+    git_directory: &std::path::Path,
+    object_id: Option<&str>,
+) -> Result<(Option<String>, bool, bool), RpcError> {
+    let Some(object_id) = object_id else {
+        return Ok((None, false, false));
+    };
+    let (bytes, truncated) = git
+        .read_blob_at_git_dir(git_directory, object_id, MAX_FILE_SIDE_BYTES)
+        .await
+        .map_err(|error| operation_error(error.to_string()))?;
+    let binary = bytes.contains(&0) || std::str::from_utf8(&bytes).is_err();
+    Ok((
+        (!binary).then(|| String::from_utf8(bytes).expect("UTF-8 checked")),
+        truncated,
+        binary,
+    ))
 }

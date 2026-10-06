@@ -1,6 +1,6 @@
 {
 	"ash.marketplace": {
-		"accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。",
+		"accessibilityHelp": "使用 /marketplace [关键词] 搜索，或使用 /plugins 管理已安装的软件包。可按软件包、能力、语言名称、别名或文件扩展名搜索。能力筛选包含插件捆绑的能力。安装 Open VSX 编辑器扩展时加载受支持的声明式贡献，脚本执行需要另外启用和授权。语言服务器 ID 筛选要求该语言具有可执行程序，并排除仅提供语法资源的软件包。目录不可用时，已安装列表仍显示本地软件包。安装、更新和卸载作用于整个软件包。用 Tab 和 Shift+Tab 切换控件，用方向键选择软件包，按 Escape 关闭帮助。 在命令面板中使用“从工作区安装扩展”和“管理本地扩展”；安装 SDK 扩展包后，需要分别启用和授权。 在 macOS 上，可通过命令面板的“管理市场扩展执行”单独启用并授权市场扩展脚本。",
 		"searchMarketplace": "搜索 Marketplace",
 		"searchLanguageExtensions": "搜索语言扩展",
 		"searchPackages": "搜索插件、技能、MCP…",
@@ -31,10 +31,42 @@
 		"officialMcp": "已列入官方 MCP Registry · {name}@{version}",
 		"official": "Marketplace 官方软件包",
 		"thirdParty": "第三方软件包",
-		"operationFailed": "Marketplace 操作失败。"
+		"operationFailed": "Marketplace 操作失败。",
+		"filterEditorExtensions": "编辑器扩展（Open VSX）",
+		"declarativeOnly": "安装时加载受支持的主题、语法和代码片段，不执行脚本。使用“管理市场扩展执行”单独启用和授权 JavaScript。",
+		"installLocalExtension": "从工作区安装扩展",
+		"localExtensionPath": "输入扩展包相对于当前所选工作区目录的路径。",
+		"localExtensionInstallNotice": "扩展包必须包含 .ash-plugin/plugin.json。安装会将包复制到用户配置中；启用和授权分别管理。",
+		"localExtensionInstalled": "已安装 {0} {1}。通过“管理本地扩展”启用扩展并查看其请求的权限。",
+		"manageLocalExtensions": "管理本地扩展",
+		"noLocalExtensions": "尚未安装本地编辑器扩展。通过“从工作区安装扩展”添加扩展。",
+		"chooseLocalExtension": "选择要管理的扩展",
+		"localExtensionState": "已启用：{0}。已授权：{1}。已撤销：{2}。",
+		"disableLocalExtension": "禁用",
+		"enableLocalExtension": "启用",
+		"revokeLocalExtension": "撤销权限",
+		"grantLocalExtension": "授予权限",
+		"localExtensionPermissions": "请求的权限：{0}",
+		"noPermissions": "无",
+		"localExtensionDocumentNotice": "扩展回调可以取得正在使用的文档，包括未保存的文本。读取工作区文件仍需要目录授权。JS 扩展目前可在 macOS 运行，禁止直接访问文件、联网或创建子进程。",
+		"localExtensionDigest": "扩展包摘要：{0}",
+		"yes": "是",
+		"no": "否",
+		"permissionRead": "读取工作区文件",
+		"permissionWrite": "写入工作区文件",
+		"permissionProcess": "运行 {0}",
+		"permissionNetwork": "访问网络主机：{0}",
+		"manageMarketplaceExtensions": "管理市场扩展执行",
+		"noMarketplaceExtensions": "尚未安装市场编辑器扩展。请先从 Open VSX 市场安装。",
+		"noExecutableEntry": "此扩展包或平台尚不支持脚本执行。",
+		"marketplaceExtensionState": "已启用：{0}。已授权执行：{1}。",
+		"grantMarketplaceExecution": "授权执行",
+		"revokeMarketplaceExecution": "撤销执行授权",
+		"marketplaceExecutionNotice": "授权命令、悬停服务和编辑器文档访问，包括未保存的文本。此 JS 宿主支持部分 VS Code API，不提供 Node 模块、直接文件访问、网络访问或子进程。未支持的 API 会明确报错。卸载前请先停用。新版本需要重新授权。"
 	},
 	"ash.workbench": {
 		"command.OpenMarketplace": "打开市场",
-		"command.OpenPlugins": "管理已安装的包"
+		"command.OpenPlugins": "管理已安装的包",
+		"missingCommandAfterActivation": "扩展启动后未注册命令“{0}”。"
 	}
 }

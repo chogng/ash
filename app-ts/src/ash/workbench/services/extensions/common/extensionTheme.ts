@@ -8,6 +8,8 @@ import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 import { loadColorThemeDocument } from '../../themes/common/colorThemeData.js';
 import { parseJsonc } from './jsonc.js';
 import type { ExtensionThemeContribution } from './extensionManifest.js';
+import { colorThemeSchema } from '../../themes/common/colorThemeSchema.js';
+import { isRecord } from '../../../../base/common/types.js';
 
 export interface ExtensionThemeTokenColorSettings {
 	readonly foreground?: string;
@@ -78,7 +80,7 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 
 /** Parses the declarative subset of a VS Code color-theme document. */
 export function parseExtensionTheme(value: unknown, id: string, extensionId: string, label: string, uiTheme: string | undefined, owner: string): ExtensionThemeDefinition {
-	const document = parseColorThemeDocument(value);
+	const document = extensionThemeDocument(value);
 	const tokenColors = document.tokenColors === undefined ? Object.freeze([]) : parseTokenColors(document.tokenColors, `${owner}.tokenColors`);
 	const colors = document.colors === undefined ? Object.freeze({}) : parseColors(document.colors, `${owner}.colors`);
 	const documentName = document.name === undefined ? undefined : boundedText(document.name, `${owner}.name`, 256);
@@ -105,9 +107,26 @@ export async function loadExtensionTheme(
 	const document = await loadColorThemeDocument(contribution.path, async resource => {
 		const bytes = await read(resource);
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-		return /\.tmTheme$/iu.test(resource) ? text : parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`);
+		return /\.tmTheme$/iu.test(resource) ? text : extensionThemeDocument(parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`));
 	});
 	return parseExtensionTheme(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
+}
+
+/** VS Code consumes known theme fields and ignores publisher metadata. Normalize that external
+ * format before applying Ash's complete-value validator; user theme documents remain strict. */
+function extensionThemeDocument(value: unknown): ColorThemeDocument {
+	if (!isRecord(value)) { throw new TypeError('Invalid color theme: expected an object'); }
+	const document = Object.fromEntries(Object.entries(value).filter(([key]) => Object.hasOwn(colorThemeSchema.properties!, key)));
+	if (Array.isArray(document.tokenColors)) {
+		document.tokenColors = document.tokenColors.map(rule => {
+			if (!isRecord(rule) || !isRecord(rule.settings)) { return rule; }
+			// TextMate treats these explicit regular-weight styles as clearing inherited emphasis.
+			const fontStyle = rule.settings.fontStyle;
+			return fontStyle === 'normal' || fontStyle === 'regular'
+				? { ...rule, settings: { ...rule.settings, fontStyle: '' } } : rule;
+		});
+	}
+	return parseColorThemeDocument(document);
 }
 
 /** Produces the stable Workbench theme identity owned by one manifest contribution. */

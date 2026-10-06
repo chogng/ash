@@ -49,21 +49,21 @@ pub enum GitError {
 }
 
 impl GitError {
-    pub(crate) fn io(operation: &'static str, source: io::Error) -> Self {
+    pub fn io(operation: &'static str, source: io::Error) -> Self {
         Self::Io {
             operation,
             source: Arc::new(source),
         }
     }
 
-    pub(crate) fn runtime(operation: &'static str, detail: impl Into<String>) -> Self {
+    pub fn runtime(operation: &'static str, detail: impl Into<String>) -> Self {
         Self::Runtime {
             operation,
             detail: detail.into(),
         }
     }
 
-    pub(crate) fn invalid_output(command: impl Into<String>, detail: impl Into<String>) -> Self {
+    pub fn invalid_output(command: impl Into<String>, detail: impl Into<String>) -> Self {
         Self::InvalidOutput {
             command: command.into(),
             detail: detail.into(),
@@ -128,5 +128,12 @@ impl std::error::Error for GitError {
             Self::Io { source, .. } => Some(source.as_ref()),
             _ => None,
         }
+    }
+}
+
+pub(crate) fn invalid_command(reason: &'static str) -> GitError {
+    GitError::InvalidConfiguration {
+        field: "Git command",
+        requirement: reason,
     }
 }

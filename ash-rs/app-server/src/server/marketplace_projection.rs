@@ -144,7 +144,7 @@ fn package_summary(value: PackageSummary) -> MarketplacePackageSummaryDto {
     }
 }
 
-fn package_ref(value: PackageRef) -> MarketplacePackageRefDto {
+pub(super) fn package_ref(value: PackageRef) -> MarketplacePackageRefDto {
     MarketplacePackageRefDto {
         id: value.id,
         version: value.version,
@@ -169,6 +169,7 @@ fn capability_kind(value: CapabilityKind) -> MarketplaceCapabilityKindDto {
         CapabilityKind::Language => MarketplaceCapabilityKindDto::Language,
         CapabilityKind::Localization => MarketplaceCapabilityKindDto::Localization,
         CapabilityKind::Executable => MarketplaceCapabilityKindDto::Executable,
+        CapabilityKind::EditorExtension => MarketplaceCapabilityKindDto::EditorExtension,
         CapabilityKind::Asset => MarketplaceCapabilityKindDto::Asset,
     }
 }
@@ -182,6 +183,7 @@ pub(super) fn domain_capability_kind(value: MarketplaceCapabilityKindDto) -> Cap
         MarketplaceCapabilityKindDto::Language => CapabilityKind::Language,
         MarketplaceCapabilityKindDto::Localization => CapabilityKind::Localization,
         MarketplaceCapabilityKindDto::Executable => CapabilityKind::Executable,
+        MarketplaceCapabilityKindDto::EditorExtension => CapabilityKind::EditorExtension,
         MarketplaceCapabilityKindDto::Asset => CapabilityKind::Asset,
     }
 }

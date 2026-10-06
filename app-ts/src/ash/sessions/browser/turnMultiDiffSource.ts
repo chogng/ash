@@ -1,6 +1,6 @@
 import { URI } from '../../base/common/uri.js';
 import { localize } from '../../nls.js';
-import type { IChatService, TurnChangeFile, TurnChangeSetSummary } from '../../workbench/services/chat/common/chatService.js';
+import type { IChatService, TurnChangeFile, TurnChangeSetSummary, TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { IActiveSessionThread } from '../services/sessions/common/session.js';
 
@@ -97,4 +97,25 @@ function turnScopeLabel(scope: TurnMultiDiffScope): string {
 
 function basename(path: string): string {
 	return path.replaceAll('\\', '/').split('/').at(-1) ?? path;
+}
+
+/** Reviews the exact tree prepared by the backend, including binary and mode-only changes. */
+export async function createTurnCommitPreviewInput(chat: IChatService, sessionId: string, threadId: string, preview: TurnCommitPreview): Promise<MultiDiffEditorInput> {
+	const items = await Promise.all(preview.files.map(async file => {
+		const contents = await chat.readTurnCommitFile(sessionId, threadId, preview.commitId, file.path);
+		if (contents.truncated) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
+		const binary = contents.binary ? localize('sessions.changes.binaryPreview', 'Binary file. Contents are not shown.') : undefined;
+		const path = file.path.split('/').map(encodeURIComponent).join('/');
+		const resource = URI.parse(`ash-turn-commit:/${encodeURIComponent(preview.commitId)}/${path}`);
+		const original = { resource: resource.with({ query: 'target' }), initialText: binary ?? contents.before ?? '', readOnly: true };
+		const modified = { resource: resource.with({ query: 'commit' }), initialText: binary ?? contents.after ?? '', readOnly: true };
+		let label = file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
+		if (contents.binary) { label = localize('sessions.changes.binaryLabel', '{0} (binary)', label); }
+		if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) { label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode); }
+		return { label, original, modified, goToFile: modified };
+	}));
+	const resource = URI.parse(`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`);
+	const title = localize('sessions.changes.commitPreview', '{0} files to commit to {1}: {2}', preview.files.length, preview.targetBranch, preview.message);
+	const label = preview.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', title, preview.warnings.join('; ')) : title;
+	return createMultiDiffEditorInput(resource, items, label, { kind: 'external', providerId: 'sessions.turnCommit', label, branchName: preview.targetBranch });
 }

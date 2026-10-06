@@ -1,7 +1,10 @@
 # `ash-editor-extension-host`
 
-> 本 README 是 Ash 原生可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复
-> 实现权威文档。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
+> 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
+> 作者使用 [`TS SDK`](../../app-ts/extension-sdk/README.md)，JS 由独立的
+> [`Rust V8 宿主`](../js-extension-host/README.md)执行；本 crate 继续承担共用的进程监管。
+> 此前的 [`Rust 作者 SDK`](../extensions/README.md) 不再作为产品作者入口继续建设。
+> 共享 wire 定义属于 `ash-editor-extension-protocol`。跨 Marketplace/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
 > [`ash-rs/core-plugins/README.md`](../core-plugins/README.md) 维护。
 
@@ -10,6 +13,10 @@
 完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。它不发现或
 安装 package，不选择 activation event，不实现 Workbench provider，也不兼容 VS Code Node Extension
 API。
+
+Rust 后端继续提供授权、GitHub、Git、存储等业务能力。JS 入口和回调在独立 V8 进程执行，
+作者无需实现传输协议。新宿主的进程测试已覆盖 SDK 反向编辑器调用、Rust 文件读取、取消、超时和释放；
+这些测试不能代替生产平台隔离验收。
 
 ## 1. Crate 边界
 
@@ -30,8 +37,8 @@ entrypoint 加载。
 
 | 文件 | 关键公共契约 | 约束 |
 | --- | --- | --- |
-| `protocol.rs` | `ExtensionHostRequest`、`ExtensionHostResponse`、`RegistrationDescriptor` | Host RPC v1 的唯一 wire shape；严格校验 request/response correlation |
-| `protocol/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation` | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
+| `../editor-extension-protocol/src/lib.rs` | `ExtensionHostRequest`、`ExtensionHostResponse`、`RegistrationDescriptor` | Host 与 SDK 共用的 Host RPC v1 wire shape；严格校验 request/response correlation |
+| `../editor-extension-protocol/src/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation` | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
 | `authority.rs` | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec` | 授权是 live gate，不是 activation 时的一次布尔判断 |
 | `limits.rs` | `ExtensionHostLimits`、`ProcessIsolationPolicy` | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致 |
 | `process.rs` | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 必须在 entrypoint 执行前完成隔离，并清空继承环境 |
@@ -51,8 +58,8 @@ entrypoint 加载。
 | `ExtensionHostSupervisor::launch_and_activate` | 取得 activation lease，spawn，递增 incarnation，完成 handshake + activate 后一次发布 registrations | 平台 sandbox、activation-event matching | authority、handshake、capability ceiling、restart tests |
 | `ExtensionHostSupervisor::context` | 分配非零且不复用的 request ID，并绑定 incarnation 与 activation generation | 跨进程持久 ID | exhaustion/correlation tests |
 | `reserve_pending` | 在写 stdin 前预留 waiter，分别约束普通请求和 control request，并拒绝 request ID 重用 | provider-level scheduling | concurrent cancel、quota、duplicate-ID tests |
-| `spawn_stdout_reader` | 有界读取一行，区分 correlated response 与 Output event；前者匹配 pending request，后者严格校验并进入有界队列 | Workbench channel registry 或无限缓冲 | malformed/oversized/correlation/Output quota tests |
-| `read_bounded_line` | 在分配增长前执行 frame byte ceiling，并要求 newline-terminated frame | JSON semantic validation | exact-boundary tests |
+| `spawn_stdout_reader` | 有界读取 frame，区分 correlated response、client request 与 Output event；前者匹配 pending request，后者严格校验并进入有界队列 | Workbench channel registry 或无限缓冲 | malformed/oversized/correlation/Output quota tests |
+| `extension_protocol::read_frame` | 在分配增长前校验 frame byte ceiling，并要求换行终止 | JSON semantic validation | exact-boundary tests |
 | `ExtensionInvocationHandle::wait` | 轮询 terminal response，观察 caller/deadline cancellation，执行 grace 后 unknown-outcome recovery | 把超时当成确认失败 | cancel/deadline/indeterminate/restart tests |
 | `ExtensionHostSupervisor::recover_locked` | 清除旧注册和 leases、终止旧进程、消费 restart budget、重新握手和激活 | 无限重启或跨授权恢复 | crash-window/backoff/authority-revoked tests |
 | `validate_registrations` | 检查注册数量、ID 唯一性、字段限制和 manifest capability ceiling | 实现 provider 业务语义 | protocol capability/duplicate/size tests |
@@ -140,9 +147,11 @@ composition 主动取消；进程中自报的 package identity 不是授权依�
 
 默认 `ProcessIsolationPolicy::RequirePlatformEnforcement` 要求产品提供的 launcher 在 entrypoint 运行前
 同时安装 sandbox、memory/CPU/process hard limit、独立 stdio、空继承环境和可整体终止的 process tree。
-任何一项无法保证都必须返回 `IsolationUnavailable`。当前 crate 唯一具体 launcher
-`TrustedDevelopmentLauncher` 只接受显式 `TrustedDevelopment` policy，并仅用于可信本地开发；它不是
-生产第三方扩展的安全边界。
+任何一项无法保证都必须返回 `IsolationUnavailable`。产品 JS 命令单独使用
+`RequireJavaScriptEnforcement`：macOS 的 `ProductJavaScriptLauncher` 只接受产品自带的 V8 宿主，
+子进程在执行扩展前安装系统隔离、V8 堆与堆外缓冲区预算，执行仍有截止时间。JS 预算不代表整个进程的系统内存上限。
+独立可执行扩展不能选用此策略。`TrustedDevelopmentLauncher` 只接受显式 `TrustedDevelopment` policy，
+仅用于可信本地开发。所有 stdio 进程的整组清理由共享 sandboxing ProcessHandle 管理。
 
 崩溃后旧 incarnation 的 registrations 立即清除，pending request 和 lease 不得迁移到新进程。恢复会
 重新执行 Initialize/Activate，再发布一整批新注册。空闲进程退出由 `reconcile()` 检出，因此 App Server
@@ -167,8 +176,8 @@ App Server 或其他 composition root 必须：
 
 1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
    `ExtensionActivationSpec`，并把 directory capability 加入同一 live gate；
-2. 只把经过 exact process permission 和 regular-file validation 的绝对 executable 交给 launcher；
-3. 注入能够实施 `RequirePlatformEnforcement` 的平台 launcher，若不存在则将生产能力标记为不可用；
+2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，并交给产品打包的 V8 executable；
+3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；缺少符合所选策略的 launcher 时将生产能力标记为不可用；
 4. 定期调用 `reconcile()`，把 snapshot 变化原子投影到 provider owners；
 5. 使用异步 invocation session 或后台 waiter 暴露调用，使 cancel request 不被一个阻塞 RPC 串行化；
 6. connection 断开、authority 撤销和 shutdown 时取消 owned invocations 并调用 `shutdown()`；
@@ -182,8 +191,11 @@ Host runtime 复制进产品 host。
 仓库 workspace 可加载时运行：
 
 ```text
-cargo test --manifest-path Cargo.toml -p ash-editor-extension-host
-cargo clippy --manifest-path Cargo.toml -p ash-editor-extension-host --all-targets --no-deps -- -D warnings
+just check ash-editor-extension-host
+just test ash-editor-extension-protocol
+just test ash-editor-extension-host
+just test ash-extensions
+just rust-warnings ash-editor-extension-host
 ```
 
 当前仓库还提供不加载根 workspace 其他 crate 的离线入口：
@@ -206,7 +218,7 @@ crash recovery 已实现。
 
 当前限制：
 
-- crate 没有生产平台 launcher；只有显式不安全的可信开发 launcher；
+- macOS JS 产品 launcher 已接入；其他系统 JS 执行和独立可执行扩展的生产平台 launcher 尚未开放；
 - activation-event matching 和 lazy activation 属于上层 composition，监管器只接收 activation facts；
 - 空闲崩溃检测依赖上层 health loop；
 - v1 的 extension-originated event 目前只覆盖命名 Output channel；其他事件必须先明确领域 owner 与背压语义；

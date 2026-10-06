@@ -227,6 +227,7 @@ fn migration_indexes_legacy_identity_without_rewriting_history() {
         CREATE TABLE legacy_thread_catalog (thread_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, requires_startup_recovery INTEGER NOT NULL, record_json TEXT NOT NULL);
         INSERT INTO legacy_thread_catalog SELECT thread_id, session_id, requires_startup_recovery, record_json FROM thread_catalog;
         DROP TABLE thread_catalog; ALTER TABLE legacy_thread_catalog RENAME TO thread_catalog;
+        DROP TABLE turn_commits;
         UPDATE ash_schema_migrations SET version = 5 WHERE component = 'event-store';").unwrap();
     let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
     let threads = ThreadController::with_store(store.clone());
@@ -244,7 +245,7 @@ fn migration_indexes_legacy_identity_without_rewriting_history() {
         recovered.agent_id
     );
     assert_eq!(
-        store.list_catalog().unwrap()[0].binding.agent_id,
+        threads.list_thread_catalog().unwrap()[0].binding.agent_id,
         recovered.agent_id
     );
     let after: String = connection

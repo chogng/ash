@@ -376,7 +376,7 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions { readon
 
 export type TurnChangeCaptureState = "open" | "sealed" | "incomplete" | "discarded";
 export type TurnChangeMessageState = "unconfigured" | "queued" | "generating" | "ready" | "failed";
-export type TurnChangeCommitState = "idle" | "queued" | "committing" | "committed" | "conflict" | "failed";
+export type TurnChangeCommitState = "idle" | "queued" | "committing" | "committed" | "partiallyCommitted" | "conflict" | "failed";
 
 export interface TurnChangeSetSummary {
 	readonly changeSetId: string;
@@ -389,11 +389,13 @@ export interface TurnChangeSetSummary {
 	readonly captureState: TurnChangeCaptureState;
 	readonly messageState: TurnChangeMessageState;
 	readonly commitState: TurnChangeCommitState;
+	readonly committedPaths: readonly string[];
 	readonly terminalState?: "completed" | "failed" | "interrupted";
 	readonly dependencies: readonly string[];
 	readonly externalDependencyPaths: readonly string[];
 	readonly warnings: readonly string[];
 	readonly conflictPaths: readonly string[];
+	readonly failureMessage?: string;
 	readonly commitId?: string;
 	readonly revision: number;
 }
@@ -402,6 +404,8 @@ export interface TurnChangeFile {
 	readonly path: string;
 	readonly previousPath?: string;
 	readonly kind: "added" | "modified" | "deleted" | "renamed" | "typeChanged";
+	readonly beforeMode?: string;
+	readonly afterMode?: string;
 	readonly binary: boolean;
 	readonly additions: number;
 	readonly deletions: number;
@@ -420,6 +424,20 @@ export interface TurnChangeFileContents {
 	readonly truncated: boolean;
 	readonly before?: string;
 	readonly after?: string;
+}
+
+export interface TurnCommitSelection {
+	readonly changeSetId: string;
+	readonly expectedRevision: number;
+	readonly paths: readonly string[];
+}
+
+export interface TurnCommitPreview {
+	readonly commitId: string;
+	readonly targetBranch: string;
+	readonly message: string;
+	readonly files: readonly TurnChangeFile[];
+	readonly warnings: readonly string[];
 }
 
 export interface TurnChangesUpdate {
@@ -459,7 +477,10 @@ export interface IChatService {
 	readTurnChangeFile(sessionId: SessionId, threadId: ThreadId, changeSetId: string, path: string): Promise<TurnChangeFileContents>;
 	generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
 	updateTurnChangeDraft(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number, message: string): Promise<readonly TurnChangeSetSummary[]>;
-	commitTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
+	prepareTurnCommit(sessionId: SessionId, threadId: ThreadId, selections: readonly TurnCommitSelection[], message: string): Promise<TurnCommitPreview>;
+	readTurnCommit(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<TurnCommitPreview>;
+	readTurnCommitFile(sessionId: SessionId, threadId: ThreadId, commitId: string, path: string): Promise<TurnChangeFileContents>;
+	commitTurnChange(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<readonly TurnChangeSetSummary[]>;
 	discardThreadChanges(sessionId: SessionId, threadId: ThreadId, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
 }
 

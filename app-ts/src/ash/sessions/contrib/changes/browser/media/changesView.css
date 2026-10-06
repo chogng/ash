@@ -31,3 +31,8 @@
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
+
+.ash-sessions-change-state {
+	flex-shrink: 0;
+	color: var(--ash-description-foreground);
+}

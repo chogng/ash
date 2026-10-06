@@ -1,3 +1,5 @@
+use crate::client::validate_argument;
+use crate::error::invalid_command as invalid;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -133,3 +135,26 @@ fn normalize_native_path(path: PathBuf) -> PathBuf {
 #[cfg(test)]
 #[path = "repository_tests.rs"]
 mod tests;
+
+impl GitClient {
+    pub async fn initialize_repository(
+        &self,
+        path: &std::path::Path,
+        branch: &str,
+    ) -> GitResult<()> {
+        validate_argument(branch)?;
+        // Initializing inside an existing checkout would create an unintended nested repository.
+        if self
+            .run_query_unchecked(path, ["rev-parse", "--git-dir"])
+            .await?
+            .status
+            .success()
+        {
+            return Err(invalid("directory already belongs to a repository"));
+        }
+        self.run_mutation(path, ["init", "--initial-branch", branch])
+            .await?
+            .require_success()?;
+        Ok(())
+    }
+}

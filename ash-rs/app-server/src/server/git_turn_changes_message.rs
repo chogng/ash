@@ -250,12 +250,8 @@ fn commit_message_prompt(
         .map_err(|error| error.to_string())?;
     let diff = runtime.block_on(async {
         let git = ash_git::GitClient::system();
-        let repository = git
-            .open_repository(&record.worktree_root)
-            .await
-            .map_err(|error| error.to_string())?;
-        git.diff_tree_text(
-            &repository,
+        git.diff_tree_text_at_git_dir(
+            &record.git_common_dir,
             &ash_git::GitTreeId::new(record.before_tree.clone())
                 .map_err(|error| error.to_string())?,
             &ash_git::GitTreeId::new(after_tree.clone()).map_err(|error| error.to_string())?,

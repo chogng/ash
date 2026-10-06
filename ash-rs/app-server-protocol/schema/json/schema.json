@@ -6241,6 +6241,54 @@
         {
           "properties": {
             "method": {
+              "const": "turnChanges/prepareCommit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesPrepareCommitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/readCommit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesReadCommitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/readCommitFile",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesReadCommitFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "turnChanges/commit",
               "type": "string"
             },
@@ -7025,6 +7073,22 @@
         {
           "properties": {
             "method": {
+              "const": "plugin/installLocal",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginInstallLocalParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "marketplace/search",
               "type": "string"
             },
@@ -7126,6 +7190,38 @@
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "marketplace/editorExtensions",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "marketplace/setEditorExtensionPolicy",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MarketplaceEditorExtensionPolicyParams"
             }
           },
           "required": [
@@ -7974,6 +8070,22 @@
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "extensionHost/activate",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionHostActivateParams"
             }
           },
           "required": [
@@ -12421,6 +12533,54 @@
         {
           "properties": {
             "method": {
+              "const": "turnChanges/prepareCommit",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesPrepareCommitResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/readCommit",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesPrepareCommitResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/readCommitFile",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "turnChanges/commit",
               "type": "string"
             },
@@ -13205,6 +13365,22 @@
         {
           "properties": {
             "method": {
+              "const": "plugin/installLocal",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/PluginInstallLocalResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "marketplace/search",
               "type": "string"
             },
@@ -13306,6 +13482,38 @@
             },
             "result": {
               "$ref": "#/$defs/MarketplaceListInstalledResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "marketplace/editorExtensions",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MarketplaceEditorExtensionsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "marketplace/setEditorExtensionPolicy",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/MarketplaceEditorExtensionsResult"
             }
           },
           "required": [
@@ -14150,6 +14358,22 @@
           "properties": {
             "method": {
               "const": "extensionHost/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionHostSnapshotDto"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "extensionHost/activate",
               "type": "string"
             },
             "result": {
@@ -22160,6 +22384,338 @@
       ],
       "type": "string"
     },
+    "ExtensionClientOperation": {
+      "description": "Editor operations available to executable extensions. Documents, undo and UI remain client-owned.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "arguments": {
+              "items": true,
+              "type": "array"
+            },
+            "command": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "executeCommand",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "command",
+            "arguments"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "readDocument",
+              "type": "string"
+            },
+            "uri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "uri"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Workspace-relative disk read. The App Server filesystem owner handles this, never the renderer.",
+          "properties": {
+            "operation": {
+              "const": "readWorkspaceFile",
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "listDocuments",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "documents": {
+              "items": {
+                "$ref": "#/$defs/ExtensionDocumentEdit"
+              },
+              "type": "array"
+            },
+            "operation": {
+              "const": "applyEdit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "documents"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "readConfiguration",
+              "type": "string"
+            },
+            "resource": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "section": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "section"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "const": "updateConfiguration",
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/ExtensionConfigurationTarget"
+            },
+            "value": true
+          },
+          "required": [
+            "operation",
+            "section",
+            "value",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "operation": {
+              "const": "showMessage",
+              "type": "string"
+            },
+            "severity": {
+              "$ref": "#/$defs/ExtensionMessageSeverity"
+            }
+          },
+          "required": [
+            "operation",
+            "message",
+            "severity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "operation": {
+              "const": "showQuickPick",
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "items",
+            "placeholder"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExtensionClientResult": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "const": "command",
+              "type": "string"
+            },
+            "value": true
+          },
+          "required": [
+            "result",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/ExtensionDocumentSnapshot"
+            },
+            "result": {
+              "const": "document",
+              "type": "string"
+            }
+          },
+          "required": [
+            "result",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "const": "file",
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "result",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "documents": {
+              "items": {
+                "$ref": "#/$defs/ExtensionDocumentSnapshot"
+              },
+              "type": "array"
+            },
+            "result": {
+              "const": "documents",
+              "type": "string"
+            }
+          },
+          "required": [
+            "result",
+            "documents"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "applied": {
+              "type": "boolean"
+            },
+            "result": {
+              "const": "applied",
+              "type": "string"
+            }
+          },
+          "required": [
+            "result",
+            "applied"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "const": "configuration",
+              "type": "string"
+            },
+            "value": true
+          },
+          "required": [
+            "result",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "index": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "result": {
+              "const": "selection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "const": "done",
+              "type": "string"
+            }
+          },
+          "required": [
+            "result"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExtensionConfigurationTarget": {
+      "enum": [
+        "user",
+        "workspace"
+      ],
+      "type": "string"
+    },
     "ExtensionDiagnosticCodeDto": {
       "enum": [
         "sourceUnavailable",
@@ -22193,6 +22749,58 @@
         "source",
         "code",
         "message"
+      ],
+      "type": "object"
+    },
+    "ExtensionDocumentEdit": {
+      "additionalProperties": false,
+      "description": "The version is mandatory: an extension cannot overwrite edits made since its snapshot.",
+      "properties": {
+        "edits": {
+          "items": {
+            "$ref": "#/$defs/ExtensionTextEdit"
+          },
+          "type": "array"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uri",
+        "version",
+        "edits"
+      ],
+      "type": "object"
+    },
+    "ExtensionDocumentSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "languageId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uri",
+        "version",
+        "languageId",
+        "text"
       ],
       "type": "object"
     },
@@ -22239,6 +22847,112 @@
       ],
       "type": "object"
     },
+    "ExtensionHostActivateParams": {
+      "additionalProperties": false,
+      "description": "Activates one exact admitted package generation when its declaration matches the event.",
+      "properties": {
+        "activationGeneration": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "event": {
+          "$ref": "#/$defs/ExtensionHostActivationEventDto"
+        },
+        "extensionId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "extensionId",
+        "activationGeneration",
+        "event"
+      ],
+      "type": "object"
+    },
+    "ExtensionHostActivationDto": {
+      "additionalProperties": false,
+      "description": "Immutable manifest facts for an authorized extension waiting for its first matching event.",
+      "properties": {
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/ExtensionHostCommandContributionDto"
+          },
+          "maxItems": 2048,
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "type": "array"
+        }
+      },
+      "required": [
+        "events",
+        "commands"
+      ],
+      "type": "object"
+    },
+    "ExtensionHostActivationEventDto": {
+      "description": "Editor intent delivered to Rust; it never grants execution authority.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": {
+              "const": "command",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "command"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "languageId": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": {
+              "const": "language",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "languageId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "startupFinished",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ExtensionHostCancellationReasonDto": {
       "description": "Observable reason why an invocation reached the cancelled terminal state.",
       "enum": [
@@ -22264,10 +22978,41 @@
       ],
       "type": "object"
     },
+    "ExtensionHostCommandContributionDto": {
+      "additionalProperties": false,
+      "description": "Declared command metadata available before a process exists, not a provider registration.",
+      "properties": {
+        "command": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "title"
+      ],
+      "type": "object"
+    },
     "ExtensionHostExtensionDto": {
       "additionalProperties": false,
       "description": "One exact package contribution and its current process lifecycle.",
       "properties": {
+        "activation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtensionHostActivationDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "activationGeneration": {
           "format": "uint64",
           "minimum": 1,
@@ -22615,6 +23360,7 @@
     "ExtensionHostLifecycleDto": {
       "description": "Observable state of one per-extension process supervised by App Server.",
       "enum": [
+        "dormant",
         "stopped",
         "starting",
         "handshaking",
@@ -23270,6 +24016,14 @@
       ],
       "type": "object"
     },
+    "ExtensionMessageSeverity": {
+      "enum": [
+        "information",
+        "warning",
+        "error"
+      ],
+      "type": "string"
+    },
     "ExtensionResourceOpenParams": {
       "properties": {
         "extensionId": {
@@ -23310,6 +24064,47 @@
         "user"
       ],
       "type": "string"
+    },
+    "ExtensionTextEdit": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/ExtensionTextPosition"
+        },
+        "start": {
+          "$ref": "#/$defs/ExtensionTextPosition"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "text"
+      ],
+      "type": "object"
+    },
+    "ExtensionTextPosition": {
+      "additionalProperties": false,
+      "description": "Zero-based UTF-16 edit coordinates.",
+      "properties": {
+        "character": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "character"
+      ],
+      "type": "object"
     },
     "Feature": {
       "enum": [
@@ -27817,6 +28612,22 @@
         {
           "properties": {
             "method": {
+              "const": "extensionClient/request",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ExtensionClientOperation"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "textDocument/list",
               "type": "string"
             },
@@ -27962,6 +28773,22 @@
     },
     "HostResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "extensionClient/request",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ExtensionClientResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -32355,6 +33182,7 @@
         "language",
         "localization",
         "executable",
+        "editorExtension",
         "asset"
       ],
       "type": "string"
@@ -32448,6 +33276,90 @@
       },
       "required": [
         "packageId"
+      ],
+      "type": "object"
+    },
+    "MarketplaceEditorExtensionPolicyActionDto": {
+      "enum": [
+        "enable",
+        "disable",
+        "grant",
+        "revoke"
+      ],
+      "type": "string"
+    },
+    "MarketplaceEditorExtensionPolicyDto": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "entrypoint": {
+          "description": "Entry selection does not promise API compatibility. Missing entries remain resources-only.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "installationId": {
+          "type": "string"
+        },
+        "package": {
+          "$ref": "#/$defs/MarketplacePackageRefDto"
+        }
+      },
+      "required": [
+        "installationId",
+        "package",
+        "enabled",
+        "granted"
+      ],
+      "type": "object"
+    },
+    "MarketplaceEditorExtensionPolicyParams": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/MarketplaceEditorExtensionPolicyActionDto"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "installationId": {
+          "type": "string"
+        },
+        "packageDigest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "installationId",
+        "packageDigest",
+        "expectedRevision",
+        "action"
+      ],
+      "type": "object"
+    },
+    "MarketplaceEditorExtensionsResult": {
+      "properties": {
+        "extensions": {
+          "items": {
+            "$ref": "#/$defs/MarketplaceEditorExtensionPolicyDto"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "extensions"
       ],
       "type": "object"
     },
@@ -36358,6 +37270,64 @@
       ],
       "type": "object"
     },
+    "PluginDirectoryAccessDto": {
+      "enum": [
+        "read",
+        "write"
+      ],
+      "type": "string"
+    },
+    "PluginInstallLocalParams": {
+      "description": "Copies a package inside a currently authorized directory into the profile package store.\nInstallation alone neither enables the package nor grants its requested permissions.",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "path"
+      ],
+      "type": "object"
+    },
+    "PluginInstallLocalResult": {
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/PluginCommandResultDto"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest",
+        "command"
+      ],
+      "type": "object"
+    },
     "PluginListResult": {
       "description": "Current durable Plugin authority projection.",
       "properties": {
@@ -36421,6 +37391,9 @@
         "digest": {
           "type": "string"
         },
+        "displayName": {
+          "type": "string"
+        },
         "effective": {
           "type": "boolean"
         },
@@ -36430,8 +37403,17 @@
         "granted": {
           "type": "boolean"
         },
+        "hasEditorExtensions": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PluginPermissionDto"
+          },
+          "type": "array"
         },
         "revoked": {
           "type": "boolean"
@@ -36444,12 +37426,71 @@
         "id",
         "version",
         "digest",
+        "displayName",
+        "permissions",
+        "hasEditorExtensions",
         "enabled",
         "granted",
         "effective",
         "revoked"
       ],
       "type": "object"
+    },
+    "PluginPermissionDto": {
+      "description": "Declared maximum permissions of the exact installed package, shown before granting it.",
+      "oneOf": [
+        {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/PluginDirectoryAccessDto"
+            },
+            "type": {
+              "const": "directory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "access"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "executable": {
+              "type": "string"
+            },
+            "type": {
+              "const": "process",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "executable"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "hosts": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "network",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "hosts"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "PluginRequestDto": {
       "description": "Declarative request for one exact Plugin package.",
@@ -47561,6 +48602,7 @@
     },
     "TurnChangeCommitStateDto": {
       "enum": [
+        "partiallyCommitted",
         "idle",
         "queued",
         "committing",
@@ -47664,6 +48706,32 @@
       ],
       "type": "string"
     },
+    "TurnChangeSelectionDto": {
+      "additionalProperties": false,
+      "description": "Paths identify immutable file changes within one saved Turn, including both rename sides.",
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "changeSetId",
+        "expectedRevision",
+        "paths"
+      ],
+      "type": "object"
+    },
     "TurnChangeSetSummary": {
       "description": "Small record used by Session Inspector lists and notifications.",
       "properties": {
@@ -47681,6 +48749,12 @@
         },
         "commitState": {
           "$ref": "#/$defs/TurnChangeCommitStateDto"
+        },
+        "committedPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "conflictPaths": {
           "items": {
@@ -47762,6 +48836,7 @@
         "captureState",
         "messageState",
         "commitState",
+        "committedPaths",
         "dependencies",
         "externalDependencyPaths",
         "warnings",
@@ -47801,20 +48876,13 @@
       "type": "object"
     },
     "TurnChangesCommitParams": {
+      "additionalProperties": false,
       "properties": {
-        "changeSetIds": {
-          "items": {
-            "$ref": "#/$defs/ChangeSetId"
-          },
-          "type": "array"
-        },
         "commandId": {
           "$ref": "#/$defs/CommandId"
         },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
+        "commitId": {
+          "type": "string"
         },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
@@ -47827,8 +48895,7 @@
         "commandId",
         "sessionId",
         "threadId",
-        "changeSetIds",
-        "expectedRevision"
+        "commitId"
       ],
       "type": "object"
     },
@@ -47940,6 +49007,115 @@
       },
       "required": [
         "changeSets"
+      ],
+      "type": "object"
+    },
+    "TurnChangesPrepareCommitParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "message": {
+          "type": "string"
+        },
+        "selections": {
+          "items": {
+            "$ref": "#/$defs/TurnChangeSelectionDto"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "selections",
+        "message"
+      ],
+      "type": "object"
+    },
+    "TurnChangesPrepareCommitResult": {
+      "description": "Exact final diff against the frozen target; submitting this ID cannot rebuild the selection.",
+      "properties": {
+        "commitId": {
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/TurnChangeFileDto"
+          },
+          "type": "array"
+        },
+        "message": {
+          "type": "string"
+        },
+        "targetBranch": {
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "commitId",
+        "targetBranch",
+        "message",
+        "files",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "TurnChangesReadCommitFileParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commitId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "commitId",
+        "path"
+      ],
+      "type": "object"
+    },
+    "TurnChangesReadCommitParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commitId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "commitId"
       ],
       "type": "object"
     },

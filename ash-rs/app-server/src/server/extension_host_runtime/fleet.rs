@@ -106,39 +106,82 @@ impl RuntimeInner {
             activation_generation: generation.get(),
             incarnation: None,
             lifecycle: projection::ExtensionHostLifecycle::Failed,
+            activation: None,
             failure: None,
             stderr: String::new(),
             output_events: Vec::new(),
             registrations: Vec::new(),
         };
+        if let Some(message) = &deployment.activation_failure {
+            return RuntimeEntry {
+                version,
+                workspace_read: deployment.workspace_read,
+                supervisor: None,
+                fallback,
+                failure: Some(projection::ExtensionHostRuntimeFailure {
+                    code: projection::ExtensionHostFailureKind::ActivationFailed,
+                    message: message.clone(),
+                    incarnation: None,
+                }),
+                pending_activation: None,
+            };
+        }
         let prepared = prepare_extension(authorization, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
+            let mut limits = self.limits.clone();
+            if prepared.command.is_javascript()
+                && matches!(
+                    limits.isolation,
+                    ash_editor_extension_host::ProcessIsolationPolicy::RequirePlatformEnforcement(
+                        _
+                    )
+                )
+            {
+                // JS uses the product engine's storage budgets; arbitrary executables
+                // retain the whole-process platform limits and cannot select this policy.
+                limits.isolation =
+                    ash_editor_extension_host::ProcessIsolationPolicy::RequireJavaScriptEnforcement(
+                        ash_editor_extension_host::JavaScriptMemoryLimits::default(),
+                    );
+            }
             ExtensionHostSupervisor::new(
                 Arc::clone(&self.launcher),
                 prepared.command,
                 prepared.activation,
-                self.limits.clone(),
+                limits,
                 self.restart_policy,
             )
         });
         match supervisor {
             Ok(supervisor) => {
-                let failure = supervisor
-                    .start()
-                    .err()
-                    .map(|error| runtime_failure(&error, nonzero_incarnation(&supervisor)));
+                let pending_activation = deployment
+                    .activation
+                    .clone()
+                    .filter(|plan| !plan.events.iter().any(|event| event == "*"));
+                let failure = if pending_activation.is_some() {
+                    None
+                } else {
+                    supervisor
+                        .start()
+                        .err()
+                        .map(|error| runtime_failure(&error, nonzero_incarnation(&supervisor)))
+                };
                 RuntimeEntry {
                     version,
+                    workspace_read: deployment.workspace_read,
                     supervisor: Some(supervisor),
                     fallback,
                     failure,
+                    pending_activation,
                 }
             }
             Err(error) => RuntimeEntry {
                 version,
+                workspace_read: deployment.workspace_read,
                 supervisor: None,
                 fallback,
                 failure: Some(runtime_failure(&error, None)),
+                pending_activation: None,
             },
         }
     }
@@ -152,6 +195,7 @@ impl RuntimeInner {
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
             .entries
             .iter()
+            .filter(|(_, entry)| entry.pending_activation.is_none())
             .filter_map(|(id, entry)| {
                 entry
                     .supervisor
@@ -198,6 +242,7 @@ impl RuntimeInner {
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
             .entries
             .iter()
+            .filter(|(_, entry)| entry.pending_activation.is_none())
             .filter_map(|(id, entry)| {
                 (entry.failure.is_some())
                     .then(|| {
@@ -307,6 +352,12 @@ impl RuntimeInner {
 
 impl RuntimeEntry {
     fn projection(&self) -> ExtensionHostExtensionSnapshot {
+        if let Some(plan) = &self.pending_activation {
+            let mut snapshot = self.fallback.clone();
+            snapshot.lifecycle = projection::ExtensionHostLifecycle::Dormant;
+            snapshot.activation = Some(plan.clone());
+            return snapshot;
+        }
         match &self.supervisor {
             Some(supervisor) => {
                 extension_projection(&self.version, supervisor.snapshot(), self.failure.clone())

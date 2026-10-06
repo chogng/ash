@@ -1,4 +1,20 @@
 #[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionClientOperation;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionClientResult;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionConfigurationTarget;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDocumentEdit;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDocumentSnapshot;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionMessageSeverity;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionTextEdit;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionTextPosition;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountCreditBalanceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountDto;
@@ -736,6 +752,14 @@ use crate::protocol::extension_host::ExtensionHostReconcileModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostReconcileParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostActivateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostActivationEventDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostActivationDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostCommandContributionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostRegistrationKindDto;
@@ -1101,10 +1125,19 @@ use crate::protocol::github::GitHubLabelsResult;
 use crate::protocol::github::GitHubRepositoryResult;
 
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::issue_reporter::{
-    IssueReporterCancelParams, IssueReporterCancelResult, IssueReporterContext, IssueReporterIssue,
-    IssueReporterSearchParams, IssueReporterSearchResult, IssueReporterSubmitParams,
-};
+use crate::protocol::issue_reporter::IssueReporterCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::IssueReporterCancelResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::IssueReporterContext;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::IssueReporterIssue;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::IssueReporterSearchParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::IssueReporterSearchResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::issue_reporter::IssueReporterSubmitParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issues::IssueListResult;
 #[cfg(any(test, feature = "export"))]
@@ -1345,6 +1378,14 @@ use crate::protocol::marketplace::MarketplaceLanguageActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceListInstalledResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyActionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::marketplace::MarketplaceEditorExtensionsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceLocalizationActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::marketplace::MarketplaceMcpActivationSpecDto;
@@ -1458,11 +1499,19 @@ use crate::protocol::plugins::PluginCommandDispositionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::plugins::PluginCommandResultDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::plugins::PluginDirectoryAccessDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::plugins::PluginInstallLocalParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::plugins::PluginInstallLocalResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::plugins::PluginListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::plugins::PluginPackageCommandParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::plugins::PluginPackageDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::plugins::PluginPermissionDto;
 use crate::protocol::plugins::PluginsChanged;
 use crate::protocol::projects::ProjectChanged;
 #[cfg(any(test, feature = "export"))]
@@ -1822,6 +1871,8 @@ use crate::protocol::turn_changes::TurnChangeFileStatisticsDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangeMessageStateDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangeSelectionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangeSetSummary;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangeTerminalStateDto;
@@ -1838,6 +1889,14 @@ use crate::protocol::turn_changes::TurnChangesListResult;
 use crate::protocol::turn_changes::TurnChangesMutationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangesMutationResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesPrepareCommitParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesPrepareCommitResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesReadCommitFileParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesReadCommitParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangesReadFileParams;
 #[cfg(any(test, feature = "export"))]
@@ -3099,6 +3158,21 @@ client_methods! {
         response: TurnChangesMutationResult,
         serialization: SessionExclusive,
     },
+    TurnChangesPrepareCommit => "turnChanges/prepareCommit" {
+        params: TurnChangesPrepareCommitParams,
+        response: TurnChangesPrepareCommitResult,
+        serialization: SessionExclusive,
+    },
+    TurnChangesReadCommit => "turnChanges/readCommit" {
+        params: TurnChangesReadCommitParams,
+        response: TurnChangesPrepareCommitResult,
+        serialization: SessionSharedRead,
+    },
+    TurnChangesReadCommitFile => "turnChanges/readCommitFile" {
+        params: TurnChangesReadCommitFileParams,
+        response: TurnChangesReadFileResult,
+        serialization: SessionSharedRead,
+    },
     TurnChangesCommit => "turnChanges/commit" {
         params: TurnChangesCommitParams,
         response: TurnChangesMutationResult,
@@ -3336,6 +3410,11 @@ client_methods! {
         response: PluginListResult,
         serialization: GlobalSharedRead,
     },
+    PluginInstallLocal => "plugin/installLocal" {
+        params: PluginInstallLocalParams,
+        response: PluginInstallLocalResult,
+        serialization: GlobalExclusive,
+    },
     MarketplaceSearch => "marketplace/search" {
         params: MarketplaceSearchParams,
         response: MarketplaceSearchResult,
@@ -3371,6 +3450,16 @@ client_methods! {
         params: EmptyParams,
         response: MarketplaceListInstalledResult,
         serialization: GlobalSharedRead,
+    },
+    MarketplaceEditorExtensions => "marketplace/editorExtensions" {
+        params: EmptyParams,
+        response: MarketplaceEditorExtensionsResult,
+        serialization: GlobalSharedRead,
+    },
+    MarketplaceSetEditorExtensionPolicy => "marketplace/setEditorExtensionPolicy" {
+        params: MarketplaceEditorExtensionPolicyParams,
+        response: MarketplaceEditorExtensionsResult,
+        serialization: GlobalExclusive,
     },
     MarketplaceAcquireCapability => "marketplace/acquireCapability" {
         params: MarketplaceAcquireCapabilityParams,
@@ -3636,6 +3725,11 @@ client_methods! {
         params: EmptyParams,
         response: ExtensionHostSnapshotDto,
         serialization: GlobalSharedRead,
+    },
+    ExtensionHostActivate => "extensionHost/activate" {
+        params: ExtensionHostActivateParams,
+        response: ExtensionHostSnapshotDto,
+        serialization: None,
     },
     ExtensionHostReconcile => "extensionHost/reconcile" {
         params: ExtensionHostReconcileParams,
@@ -4519,6 +4613,7 @@ macro_rules! host_methods {
 }
 
 host_methods! {
+    ExtensionClientRequest => "extensionClient/request" { params: ExtensionClientOperation, response: ExtensionClientResult, },
     TextDocumentList => "textDocument/list" { params: TextDocumentListParams, response: TextDocumentListResult, },
     TextDocumentRead => "textDocument/read" { params: TextDocumentReadParams, response: TextDocumentReadResult, },
     TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
@@ -4765,6 +4860,7 @@ macro_rules! typescript_bindings {
 }
 
 typescript_bindings! {
+    serde_json::Value,
     ash_protocol::CollaborationMode,
     ash_protocol::AgentConfiguration,
     ash_protocol::AgentRoleSelection,
@@ -4931,6 +5027,10 @@ typescript_bindings! {
     MarketplaceInstallationStateDto,
     MarketplaceInstalledPackageDto,
     MarketplaceListInstalledResult,
+    MarketplaceEditorExtensionPolicyActionDto,
+    MarketplaceEditorExtensionPolicyParams,
+    MarketplaceEditorExtensionPolicyDto,
+    MarketplaceEditorExtensionsResult,
     MarketplaceChanged,
     MarketplaceUninstallModeDto,
     MarketplaceUninstallParams,
@@ -4951,6 +5051,10 @@ typescript_bindings! {
     MarketplaceOpenResourceParams,
     MarketplaceResourceContentDto,
     PluginPackageDto,
+    PluginPermissionDto,
+    PluginDirectoryAccessDto,
+    PluginInstallLocalParams,
+    PluginInstallLocalResult,
     PluginListResult,
     PluginPackageCommandParams,
     PluginCommandDispositionDto,
@@ -4979,6 +5083,14 @@ typescript_bindings! {
     BrowserTextInputTargetDto,
     ClientCapabilities,
     TextDocumentsCapability,
+    ExtensionClientOperation,
+    ExtensionClientResult,
+    ExtensionConfigurationTarget,
+    ExtensionDocumentEdit,
+    ExtensionDocumentSnapshot,
+    ExtensionMessageSeverity,
+    ExtensionTextEdit,
+    ExtensionTextPosition,
     TextDocumentListParams,
     TextDocumentListResult,
     TextDocumentContentDto,
@@ -5214,6 +5326,10 @@ typescript_bindings! {
     ExtensionResourceOpenResult,
     ExtensionHostReconcileModeDto,
     ExtensionHostReconcileParams,
+    ExtensionHostActivateParams,
+    ExtensionHostActivationEventDto,
+    ExtensionHostActivationDto,
+    ExtensionHostCommandContributionDto,
     ExtensionHostSnapshotDto,
     ExtensionHostExtensionDto,
     ExtensionHostLifecycleDto,
@@ -5480,6 +5596,11 @@ typescript_bindings! {
     TurnChangesMutationParams,
     TurnChangesUpdateDraftParams,
     TurnChangesCommitParams,
+    TurnChangeSelectionDto,
+    TurnChangesPrepareCommitParams,
+    TurnChangesPrepareCommitResult,
+    TurnChangesReadCommitFileParams,
+    TurnChangesReadCommitParams,
     TurnChangesDiscardThreadParams,
     TurnChangesMutationResult,
     TurnChangesChanged,

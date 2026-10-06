@@ -28,6 +28,7 @@ use serde_json::Value;
 use super::update_broker::UpdateBroker;
 
 mod authority;
+mod client;
 mod fleet;
 mod projection;
 mod sessions;
@@ -58,6 +59,7 @@ struct RuntimeInner {
     limits: ExtensionHostLimits,
     restart_policy: RestartPolicy,
     updates: Arc<UpdateBroker>,
+    client_host: Arc<crate::client_host::ClientHost>,
     state: Mutex<FleetState>,
     reconcile_gate: Mutex<()>,
     sessions: Mutex<InvocationSessionStore>,
@@ -77,9 +79,11 @@ struct FleetState {
 
 struct RuntimeEntry {
     version: String,
+    workspace_read: source::WorkspaceReadAccess,
     supervisor: Option<ExtensionHostSupervisor>,
     fallback: ExtensionHostExtensionSnapshot,
     failure: Option<ExtensionHostRuntimeFailure>,
+    pending_activation: Option<source::ActivationPlan>,
 }
 
 pub(super) enum ExtensionHostReconcileMode {
@@ -128,6 +132,7 @@ impl ExtensionHostRuntime {
         limits: ExtensionHostLimits,
         restart_policy: RestartPolicy,
         updates: Arc<UpdateBroker>,
+        client_host: Arc<crate::client_host::ClientHost>,
     ) -> Result<Self, ExtensionHostError> {
         limits.validate()?;
         restart_policy.validate()?;
@@ -149,6 +154,7 @@ impl ExtensionHostRuntime {
             limits,
             restart_policy,
             updates,
+            client_host,
             state: Mutex::new(FleetState {
                 generation: 1,
                 authority_generation: 0,
@@ -221,7 +227,8 @@ impl ExtensionHostRuntime {
                 return;
             };
             state.authorization = None;
-            state.authority_generation = 0;
+            // Package fences remain monotonic across directory changes: a delayed editor
+            // event must never acquire the same generation in a different directory.
             state.source_revision = source::EditorExtensionSourceRevision::default();
             self.inner
                 .refresh_generation_locked(&mut state)
@@ -249,6 +256,68 @@ impl ExtensionHostRuntime {
         }
     }
 
+    pub(super) fn activate_by_event(
+        &self,
+        extension_id: &str,
+        generation: u64,
+        event: source::ActivationEvent,
+    ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
+        let _gate = self
+            .inner
+            .reconcile_gate
+            .lock()
+            .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+        self.inner.reconcile_authority_locked(false)?;
+        let supervisor = {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+            let entry = state
+                .entries
+                .get_mut(extension_id)
+                .ok_or(ExtensionHostRuntimeError::Stale)?;
+            if entry.fallback.activation_generation != generation {
+                return Err(ExtensionHostRuntimeError::Stale);
+            }
+            let Some(plan) = &entry.pending_activation else {
+                return Ok(ExtensionHostFleetSnapshot {
+                    generation: state.generation,
+                    extensions: state.published.clone(),
+                });
+            };
+            if !plan.matches(&event) {
+                return Err(ExtensionHostRuntimeError::Stale);
+            }
+            let supervisor = entry
+                .supervisor
+                .clone()
+                .ok_or_else(|| entry_host_error(entry))?;
+            entry.pending_activation = None;
+            supervisor
+        };
+        let failure = supervisor
+            .start()
+            .err()
+            .map(|error| projection::runtime_failure(&error, nonzero_incarnation(&supervisor)));
+        let published = {
+            let mut state = self
+                .inner
+                .state
+                .lock()
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+            state
+                .entries
+                .get_mut(extension_id)
+                .ok_or(ExtensionHostRuntimeError::Stale)?
+                .failure = failure;
+            self.inner.refresh_generation_locked(&mut state)?
+        };
+        self.inner.publish(published);
+        Ok(self.inner.snapshot())
+    }
+
     pub(super) fn snapshot(&self) -> ExtensionHostFleetSnapshot {
         self.inner.snapshot()
     }
@@ -257,8 +326,9 @@ impl ExtensionHostRuntime {
         &self,
         owner: u64,
         request: ExtensionHostInvocationRequest,
+        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
     ) -> Result<String, ExtensionHostRuntimeError> {
-        self.inner.start_invocation(owner, request)
+        self.inner.start_invocation(owner, request, files)
     }
 
     pub(super) fn read_invocation(
@@ -301,12 +371,13 @@ impl RuntimeInner {
         self: &Arc<Self>,
         owner: u64,
         request: ExtensionHostInvocationRequest,
+        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
     ) -> Result<String, ExtensionHostRuntimeError> {
         let _gate = self
             .reconcile_gate
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-        let supervisor = {
+        let (supervisor, workspace_read) = {
             let state = self
                 .state
                 .lock()
@@ -334,7 +405,7 @@ impl RuntimeInner {
             if !registration_allows_operation(&registration.kind, &request.operation) {
                 return Err(ExtensionHostRuntimeError::Stale);
             }
-            supervisor
+            (supervisor, entry.workspace_read)
         };
         let deadline = NonZeroU64::new(request.deadline_unix_millis)
             .ok_or(ExtensionHostRuntimeError::Stale)?;
@@ -373,10 +444,26 @@ impl RuntimeInner {
             .install(&id, Arc::clone(&handle))?;
         let weak = Arc::downgrade(self);
         let invocation_id = id.clone();
+        let client_host = Arc::clone(&self.client_host);
         if std::thread::Builder::new()
             .name("ash-extension-invocation".into())
             .spawn(move || {
-                let result = handle.wait();
+                let result = handle.wait_with_client(|operation, token, remaining| {
+                    if let extension_protocol::ExtensionClientOperation::ReadWorkspaceFile { path } = &operation {
+                        return client::read_workspace_file(workspace_read, &files, path, token);
+                    }
+                    client_host.request_with_timeout(owner,
+                        ash_app_server_protocol::protocol::registry::HostMethod::ExtensionClientRequest,
+                        &operation, token, remaining).map_err(|error| {
+                            use crate::client_host::ClientHostError;
+                            let code = match error {
+                                ClientHostError::Cancelled(_) | ClientHostError::CapabilityUnavailable => ash_editor_extension_host::HostErrorCode::Cancelled,
+                                ClientHostError::TimedOut => ash_editor_extension_host::HostErrorCode::DeadlineExceeded,
+                                ClientHostError::Failed(_) => ash_editor_extension_host::HostErrorCode::Internal,
+                            };
+                            ash_editor_extension_host::HostFailure { code, message: "editor service request failed".into() }
+                        })
+                });
                 if let Some(runtime) = weak.upgrade() {
                     runtime.complete_invocation(&invocation_id, result);
                 }

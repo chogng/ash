@@ -80,6 +80,11 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Prebuilt isolated Code Mode Host executable. If omitted, Cargo builds it.",
     )
     parser.add_argument(
+        "--js-extension-host-bin",
+        type=Path,
+        help="Prebuilt Rust/V8 JavaScript extension host. If omitted, Cargo builds it.",
+    )
+    parser.add_argument(
         "--rg-bin",
         type=Path,
         help="Local ripgrep executable override instead of the locked download.",
@@ -173,6 +178,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
+        "ash-js-extension-host": args.js_extension_host_bin,
         "ash-remote": args.remote_bin,
         "ash-remote-server": args.remote_server_bin,
         "ash-exec-server": args.exec_server_bin,
@@ -236,6 +242,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         binaries["ash-exec-server"],
         binaries["ash-app-server-daemon"],
         binaries["ash-code-mode-host"],
+        binaries["ash-js-extension-host"],
         ripgrep,
         tgrep,
         node,

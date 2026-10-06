@@ -612,11 +612,12 @@ dependencies = [
  "ash-diagnostics",
  "ash-diff",
  "ash-editor-extension-host",
+ "ash-editor-extension-protocol",
  "ash-exec-server",
  "ash-exec-server-protocol",
  "ash-execpolicy",
  "ash-extension-api",
- "ash-extensions",
+ "ash-extension-catalog",
  "ash-features",
  "ash-feedback",
  "ash-file-access",
@@ -784,6 +785,7 @@ dependencies = [
  "ash-call",
  "ash-collaboration",
  "ash-diagnostics",
+ "ash-editor-extension-protocol",
  "ash-environment",
  "ash-extension-items",
  "ash-features",
@@ -1128,7 +1130,7 @@ version = "0.1.0"
 dependencies = [
  "ash-code-mode-protocol",
  "ash-protocol",
- "deno_core_icudata",
+ "ash-v8-runtime",
  "serde_json",
  "v8",
 ]
@@ -1312,6 +1314,7 @@ name = "ash-core-plugins"
 version = "0.1.0"
 dependencies = [
  "ash-file-identity",
+ "ash-http-client",
  "ash-plugin",
  "ash-tools",
  "ash-utils-path",
@@ -1385,9 +1388,22 @@ dependencies = [
 name = "ash-editor-extension-host"
 version = "0.1.0"
 dependencies = [
+ "ash-async-utils",
+ "ash-editor-extension-protocol",
+ "ash-sandboxing",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-editor-extension-protocol"
+version = "0.1.0"
+dependencies = [
+ "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+ "ts-rs",
 ]
 
 [[package]]
@@ -1497,6 +1513,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-extension-catalog"
+version = "0.1.0"
+dependencies = [
+ "ash-file-identity",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "ash-extension-items"
 version = "0.1.0"
 dependencies = [
@@ -1509,10 +1535,11 @@ dependencies = [
 name = "ash-extensions"
 version = "0.1.0"
 dependencies = [
- "ash-file-identity",
+ "ash-editor-extension-host",
+ "ash-editor-extension-protocol",
+ "serde",
  "serde_json",
- "sha2 0.10.9",
- "tempfile",
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -1646,7 +1673,6 @@ dependencies = [
  "futures",
  "pretty_assertions",
  "serde",
- "serde_json",
  "tempfile",
  "tokio",
 ]
@@ -1657,6 +1683,18 @@ version = "0.1.0"
 dependencies = [
  "ash-extension-api",
  "ash-protocol",
+]
+
+[[package]]
+name = "ash-git-transaction"
+version = "0.1.0"
+dependencies = [
+ "ash-git",
+ "dunce",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -1934,6 +1972,21 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tempfile",
+]
+
+[[package]]
+name = "ash-js-extension-host"
+version = "0.1.0"
+dependencies = [
+ "ash-editor-extension-host",
+ "ash-editor-extension-protocol",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-v8-runtime",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "v8",
 ]
 
 [[package]]
@@ -2781,6 +2834,8 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-file-access",
+ "ash-git",
+ "ash-git-transaction",
  "ash-github",
  "ash-guardian-environment",
  "ash-history",
@@ -2800,6 +2855,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -3315,6 +3371,16 @@ name = "ash-v8-poc"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+ "v8",
+]
+
+[[package]]
+name = "ash-v8-runtime"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "deno_core_icudata",
+ "serde_json",
  "v8",
 ]
 
@@ -6695,6 +6761,7 @@ version = "0.1.0"
 dependencies = [
  "ash-file-watcher",
  "ash-git",
+ "ash-git-transaction",
  "ash-protocol",
  "log",
  "pretty_assertions",
@@ -14178,6 +14245,7 @@ version = "12.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
 dependencies = [
+ "serde_json",
  "thiserror 2.0.19",
  "ts-rs-macros",
 ]

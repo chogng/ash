@@ -27,6 +27,13 @@ pub struct ExtensionLaunchCommand {
     arguments: Vec<OsString>,
     working_directory: PathBuf,
     environment: BTreeMap<OsString, OsString>,
+    runtime: LaunchRuntime,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LaunchRuntime {
+    Executable,
+    JavaScript,
 }
 
 impl ExtensionLaunchCommand {
@@ -41,6 +48,7 @@ impl ExtensionLaunchCommand {
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
             environment,
+            runtime: LaunchRuntime::Executable,
         };
         if !command.executable.is_absolute() || !command.working_directory.is_absolute() {
             return Err(ExtensionHostError::InvalidProtocol(
@@ -48,6 +56,21 @@ impl ExtensionLaunchCommand {
             ));
         }
         Ok(command)
+    }
+
+    /// Marks a product-owned JS host command, never an executable supplied by a package.
+    pub fn javascript(
+        executable: impl Into<PathBuf>,
+        arguments: impl IntoIterator<Item = impl Into<OsString>>,
+        working_directory: impl Into<PathBuf>,
+    ) -> Result<Self, ExtensionHostError> {
+        let mut command = Self::new(executable, arguments, working_directory, BTreeMap::new())?;
+        command.runtime = LaunchRuntime::JavaScript;
+        Ok(command)
+    }
+
+    pub fn is_javascript(&self) -> bool {
+        self.runtime == LaunchRuntime::JavaScript
     }
 
     pub fn executable(&self) -> &Path {
@@ -115,6 +138,11 @@ pub trait ExtensionHostLauncher: Send + Sync {
 /// `dispatch` must register the response waiter before writing. Implementations must authorization a
 /// cancellation request to be dispatched while an earlier invocation is still pending.
 pub trait ExtensionHostProcess: Send + Sync {
+    /// Completes a client request previously received through an invocation waiter.
+    fn respond_client(
+        &self,
+        response: extension_protocol::ExtensionClientResponse,
+    ) -> Result<(), ExtensionHostError>;
     fn dispatch(
         &self,
         request: ExtensionHostRequest,
@@ -140,7 +168,13 @@ pub(crate) enum PendingFailure {
 /// Waiter for one response already dispatched to a process incarnation.
 pub struct PendingHostRequest {
     request_id: u64,
-    receiver: mpsc::Receiver<Result<ExtensionHostResponse, PendingFailure>>,
+    receiver: mpsc::Receiver<Result<PendingMessage, PendingFailure>>,
+}
+
+#[derive(Debug)]
+pub(crate) enum PendingMessage {
+    Response(ExtensionHostResponse),
+    ClientRequest(extension_protocol::ExtensionClientRequest),
 }
 
 impl PendingHostRequest {
@@ -152,6 +186,19 @@ impl PendingHostRequest {
         &self,
         timeout: Duration,
     ) -> Result<Option<ExtensionHostResponse>, ExtensionHostError> {
+        match self.recv_next_timeout(timeout)? {
+            Some(PendingMessage::Response(response)) => Ok(Some(response)),
+            Some(PendingMessage::ClientRequest(_)) => Err(ExtensionHostError::InvalidProtocol(
+                "client request requires an invocation handler".into(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub(crate) fn recv_next_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<Option<PendingMessage>, ExtensionHostError> {
         match self.receiver.recv_timeout(timeout) {
             Ok(Ok(response)) => Ok(Some(response)),
             Ok(Err(PendingFailure::Exited)) => Err(ExtensionHostError::HostExited),
@@ -168,9 +215,9 @@ impl PendingHostRequest {
         request_id: u64,
     ) -> (
         Self,
-        mpsc::Sender<Result<ExtensionHostResponse, PendingFailure>>,
+        mpsc::SyncSender<Result<PendingMessage, PendingFailure>>,
     ) {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(64);
         (
             Self {
                 request_id,
@@ -183,7 +230,8 @@ impl PendingHostRequest {
 
 struct PendingEntry {
     request: ExtensionHostRequest,
-    sender: mpsc::Sender<Result<ExtensionHostResponse, PendingFailure>>,
+    sender: mpsc::SyncSender<Result<PendingMessage, PendingFailure>>,
+    client_ids: std::collections::BTreeSet<u64>,
     control: bool,
 }
 
@@ -193,6 +241,48 @@ struct PendingEntry {
 /// use a platform launcher that implements [`ExtensionHostLauncher`] and enforces hard limits.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TrustedDevelopmentLauncher;
+
+/// Launches only the product's exact JS executable. The child applies OS confinement
+/// after loading its immutable package and V8, before serving Initialize or running code.
+pub struct ProductJavaScriptLauncher {
+    executable: PathBuf,
+}
+
+impl ProductJavaScriptLauncher {
+    pub fn new(executable: PathBuf) -> Self {
+        Self { executable }
+    }
+}
+
+impl ExtensionHostLauncher for ProductJavaScriptLauncher {
+    fn spawn(
+        &self,
+        command: &ExtensionLaunchCommand,
+        limits: &ExtensionHostLimits,
+    ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
+        limits.validate()?;
+        let ProcessIsolationPolicy::RequireJavaScriptEnforcement(memory) = limits.isolation else {
+            return Err(ExtensionHostError::IsolationUnavailable);
+        };
+        if !cfg!(target_os = "macos")
+            || !command.is_javascript()
+            || command.executable() != self.executable
+        {
+            return Err(ExtensionHostError::IsolationUnavailable);
+        }
+        let mut command = command.clone();
+        command.arguments.extend([
+            "--isolation".into(),
+            "javascript".into(),
+            "--heap-bytes".into(),
+            memory.heap_bytes.to_string().into(),
+            "--array-buffer-bytes".into(),
+            memory.array_buffer_bytes.to_string().into(),
+        ]);
+        command.validate_limits(limits)?;
+        StdioExtensionHostProcess::spawn(&command, limits).map(|process| Arc::new(process) as _)
+    }
+}
 
 impl ExtensionHostLauncher for TrustedDevelopmentLauncher {
     fn spawn(

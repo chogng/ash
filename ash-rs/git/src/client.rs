@@ -971,3 +971,16 @@ fn quote_for_log(argument: &str) -> String {
 #[cfg(test)]
 #[path = "client_tests.rs"]
 mod tests;
+
+pub(crate) fn validate_argument(value: &str) -> GitResult<()> {
+    if value.is_empty()
+        || value.len() > 4096
+        || value.starts_with('-')
+        || value.chars().any(char::is_control)
+    {
+        return Err(crate::error::invalid_command(
+            "invalid reference, name or location",
+        ));
+    }
+    Ok(())
+}

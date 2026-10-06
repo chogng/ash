@@ -38,6 +38,7 @@ pub enum CapabilityKind {
     Language,
     Localization,
     Executable,
+    EditorExtension,
     Asset,
 }
 

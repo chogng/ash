@@ -24,6 +24,18 @@ import { ILanguageFeaturesService } from '../../../../../editor/common/services/
 import { IOutputService } from '../../../output/common/output.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../commands/common/commandService.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../notification/common/notificationService.js';
+import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
+import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lifecycle.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -398,7 +410,21 @@ test('extension API resets output for a new process and ignores stale output eve
 	assert.equal(output.getChannel('extension.acme.demo.review')?.getText(), 'new');
 });
 
+class FixtureLifecycleService extends AbstractLifecycleService {}
+
 class FakeExtensionHostApi implements IExtensionHostApi {
+	public clientHandler: Parameters<IExtensionHostApi['registerClientHandler']>[0] | undefined;
+	public registerClientHandler(handler: Parameters<IExtensionHostApi['registerClientHandler']>[0]): { dispose(): void } {
+		this.clientHandler = handler;
+		return { dispose: () => { this.clientHandler = undefined; } };
+	}
+	readonly activations: Parameters<IExtensionHostApi['activateByEvent']>[0][] = [];
+	activationResult: Promise<ExtensionHostFleetSnapshot> | undefined;
+	async activateByEvent(request: Parameters<IExtensionHostApi['activateByEvent']>[0]): Promise<ExtensionHostFleetSnapshot> {
+		this.activations.push(request);
+		assert.ok(this.activationResult, 'Unexpected activation request');
+		return this.activationResult;
+	}
 	invocationResult: Promise<JsonValue> | undefined;
 	readonly invocationSignals: AbortSignal[] = [];
 	available = true;
@@ -502,8 +528,134 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
 	services.registerInstance(IExtensionHostApi, api);
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerSingleton(ILifecycleService, () => services.createInstance(FixtureLifecycleService, undefined));
 	services.registerInstance(ITaskService, tasks as unknown as ITaskService);
 	services.registerInstance(ITestingService, tests as unknown as ITestingService);
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(INotificationService, () => services.createInstance(NotificationService));
+	// These scenarios exercise registrations and provider calls, never edits or Quick Input UI.
+	services.registerInstance(IBulkEditService, {
+		_serviceBrand: undefined,
+		hasPreviewHandler: () => assert.fail('Unexpected bulk edit request'),
+		setPreviewHandler: () => assert.fail('Unexpected bulk edit request'),
+		apply: () => assert.fail('Unexpected bulk edit request'),
+	});
+	services.registerInstance(IQuickInputService, {
+		createQuickPick: () => assert.fail('Unexpected Quick Input request'),
+		input: () => assert.fail('Unexpected Quick Input request'),
+	});
 
 	return services;
 }
+
+function dormantSnapshot(events: readonly string[] = ['onCommand:acme.lazy']): ExtensionHostFleetSnapshot {
+	const ready = snapshot(1, 'acme.lazy');
+	return Object.freeze({ ...ready, extensions: Object.freeze([Object.freeze({
+		...ready.extensions[0]!, incarnation: undefined, lifecycle: 'dormant' as const,
+		activation: Object.freeze({ events: Object.freeze([...events]), commands: Object.freeze([{ command: 'acme.lazy', title: 'Lazy command' }]) }),
+		registrations: Object.freeze([]),
+	})]) });
+}
+
+test('declared command starts on first use and invokes the actual registered incarnation', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot());
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	assert.equal(service.state, 'ready');
+	assert.equal(service.currentSnapshot.extensions[0]!.state, 'dormant');
+	assert.equal(service.currentSnapshot.extensions[0]!.incarnation, undefined);
+	assert.equal(commands.hasCommand('acme.lazy'), true);
+	assert.equal(api.activations.length, 0);
+	assert.equal(api.invocations.length, 0);
+	// Publishing ready replaces the command batch while the original first-use handler waits.
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	const result = services.invokeFunction(accessor => commands.getCommand('acme.lazy')!(accessor, 'first'));
+	api.current = snapshot(2, 'acme.lazy', [], '', [], 11);
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
+	activation.resolve(api.current);
+	assert.deepEqual(await result, { executed: true });
+	assert.deepEqual(api.activations, [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'command', command: 'acme.lazy' } }]);
+	assert.equal(api.invocations.length, 1);
+	assert.equal(api.invocations[0]!.incarnation, 3);
+	assert.deepEqual(JSON.parse(JSON.stringify(api.invocations[0]!.payload)), { arguments: ['first'] });
+});
+
+test('disconnect during first-use activation prevents command execution', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot());
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const result = services.invokeFunction(accessor => commands.getCommand('acme.lazy')!(accessor));
+	api.emitConnection('stopped');
+	activation.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	await assert.rejects(Promise.resolve(result));
+	assert.equal(api.invocations.length, 0);
+	assert.equal(commands.hasCommand('acme.lazy'), false);
+});
+
+test('already open language models activate matching extensions once while startup awaits restoration', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onLanguage:typescript']));
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const models = services.get(IModelService);
+	using language = services.get(ILanguageService).registerLanguage({ id: 'typescript' });
+	using model = models.createModel('unsaved', services.get(ILanguageService).createById('typescript'), URI.file('/project/main.ts'));
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	await service.reload();
+	assert.equal(api.activations.length, 1);
+	assert.deepEqual(api.activations[0]!.event, { type: 'language', languageId: 'typescript' });
+	activation.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
+});
+
+test('new model and language change use current editor language for activation', async () => {
+	for (const trigger of ['create', 'change']) {
+		const api = new FakeExtensionHostApi(dormantSnapshot(['onLanguage:typescript']));
+		api.activationResult = Promise.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+		using languages = new LanguageFeaturesService();
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+		const models = services.get(IModelService);
+		const languageService = services.get(ILanguageService);
+		using language = languageService.registerLanguage({ id: 'typescript' });
+		using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+		await service.start();
+		assert.equal(api.activations.length, 0);
+		using model = models.createModel('text', languageService.createById(trigger === 'create' ? 'typescript' : 'plaintext'), URI.file('/project/main.ts'));
+		if (trigger === 'change') { model.setLanguage(languageService.createById('typescript')); }
+		await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
+		assert.equal(api.activations.length, 1);
+	}
+});
+
+test('startupFinished waits for window restoration and ignores replies after stop', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onStartupFinished']));
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	assert.equal(api.activations.length, 0);
+	services.get(ILifecycleService).phase = LifecyclePhase.Restored;
+	await waitFor(() => api.activations.length === 1);
+	assert.deepEqual(api.activations[0]!.event, { type: 'startupFinished' });
+	await service.stop();
+	activation.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	await activation.promise;
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(service.state, 'stopped');
+	assert.equal(service.currentSnapshot.extensions.length, 0);
+});

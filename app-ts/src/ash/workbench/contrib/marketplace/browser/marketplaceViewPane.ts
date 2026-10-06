@@ -66,7 +66,7 @@ export class MarketplaceContent extends Disposable {
 		this.query.type = 'search';
 		this.field('Search packages', this.query);
 		this.capability = h(document, 'select');
-		for (const [value, label] of [['', 'All capabilities'], ['skill', 'Skills'], ['mcp', 'MCP servers'], ['connector', 'Connectors'], ['executable', 'Executables'], ['language', 'Languages'], ['theme', 'Themes'], ['localization', 'Language packs'], ['asset', 'Assets']]) {
+		for (const [value, label] of [['', 'All capabilities'], ['skill', 'Skills'], ['mcp', 'MCP servers'], ['connector', 'Connectors'], ['executable', 'Executables'], ['language', 'Languages'], ['theme', 'Themes'], ['localization', 'Language packs'], ['editorExtension', localize({ bundle: 'ash.marketplace', key: 'filterEditorExtensions' }, 'Editor extensions (Open VSX)')], ['asset', 'Assets']]) {
 			this.capability.append(this.option(label, value));
 		}
 		this.field('Capability', this.capability);
@@ -195,7 +195,10 @@ export class MarketplaceContent extends Disposable {
 	}
 
 	private describeCapabilities(details: MarketplacePackageDetails): string {
-		return details.capabilities.map(capability => `${capability.kind}: ${capability.id}${capability.permissions.length ? `\n  Permissions: ${capability.permissions.join(', ')}` : ''}`).join('\n');
+		const execution = details.packageType === 'editorExtension'
+			? localize({ bundle: 'ash.marketplace', key: 'declarativeOnly' }, 'Installation loads supported themes, syntax and snippets without running scripts. Use Manage Marketplace extension execution to enable and authorize JavaScript separately.') + '\n'
+			: '';
+		return execution + details.capabilities.map(capability => `${capability.kind}: ${capability.id}${capability.permissions.length ? `\n  Permissions: ${capability.permissions.join(', ')}` : ''}`).join('\n');
 	}
 
 	private async changePackage(operation: 'install' | 'update' | 'uninstall'): Promise<void> {
@@ -238,7 +241,7 @@ export class MarketplaceContent extends Disposable {
 	}
 
 	private helpContent(): string {
-		return localize({ bundle: 'ash.marketplace', key: 'accessibilityHelp' }, 'Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.');
+		return localize({ bundle: 'ash.marketplace', key: 'accessibilityHelp' }, 'Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. Open VSX editor extensions load supported declarative contributions. Use Manage Marketplace extension execution in the command palette to enable and authorize JavaScript separately on macOS. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help. Use the command palette to Install extension from workspace and Manage local extensions. Installing a local SDK package does not enable it or grant permissions.');
 	}
 
 	private async showHelp(): Promise<void> {

@@ -10,6 +10,9 @@ export function createDisconnectedTurnChangesApi(unavailable: UnavailableOperati
 		readFile: () => unavailable("turnChanges.readFile"),
 		generateMessage: () => unavailable("turnChanges.generateMessage"),
 		updateDraft: () => unavailable("turnChanges.updateDraft"),
+		prepareCommit: () => unavailable("turnChanges.prepareCommit"),
+		readCommit: () => unavailable("turnChanges.readCommit"),
+		readCommitFile: () => unavailable("turnChanges.readCommitFile"),
 		commit: () => unavailable("turnChanges.commit"),
 		discardThread: () => unavailable("turnChanges.discardThread"),
 	};
@@ -22,6 +25,9 @@ export function createAppServerTurnChangesApi(connection: AppServerProtocolClien
 		readFile: (params) => appServerRequest(connection, "turnChanges/readFile", params),
 		generateMessage: (params) => appServerRequest(connection, "turnChanges/generateMessage", params),
 		updateDraft: (params) => appServerRequest(connection, "turnChanges/updateDraft", params),
+		prepareCommit: (params) => appServerRequest(connection, "turnChanges/prepareCommit", params),
+		readCommit: (params) => appServerRequest(connection, "turnChanges/readCommit", params),
+		readCommitFile: (params) => appServerRequest(connection, "turnChanges/readCommitFile", params),
 		commit: (params) => appServerRequest(connection, "turnChanges/commit", params),
 		discardThread: (params) => appServerRequest(connection, "turnChanges/discardThread", params),
 	};

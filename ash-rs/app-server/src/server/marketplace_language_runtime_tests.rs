@@ -22,16 +22,16 @@ use ash_core_plugins::PluginProvider;
 use ash_core_plugins::PluginsManager;
 use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::SearchPackagesResult;
-use ash_extensions::DynamicExtensionSourceProvider;
-use ash_extensions::ExtensionCatalog;
-use ash_extensions::ExtensionCatalogReload;
-use ash_extensions::ExtensionRootKind;
-use ash_extensions::ExtensionSourceKind;
 use ash_lsp_server_provider::LspServerLaunch;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::ManagedNodeRuntime;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use extension_catalog::DynamicExtensionSourceProvider;
+use extension_catalog::ExtensionCatalog;
+use extension_catalog::ExtensionCatalogReload;
+use extension_catalog::ExtensionRootKind;
+use extension_catalog::ExtensionSourceKind;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -56,6 +56,64 @@ const THEME_MANIFEST: &[u8] = br#"{
   }]
 }"#;
 const THEME_DOCUMENT: &[u8] = br#"{"type":"dark","colors":{},"tokenColors":[]}"#;
+const VSIX_MANIFEST: &[u8] = br#"{
+  "name":"sample", "publisher":"publisher", "version":"1.0.0",
+  "main":"./main.js", "browser":"./main.js",
+  "contributes":{"languages":[{"id":"sample","extensions":[".sample"]}],
+    "themes":[{"id":"sample","label":"Sample","uiTheme":"vs-dark","path":"./themes/sample.json"}],
+    "debuggers":[{"type":"sample","label":"Unsafe adapter","debugAdapter":{"program":"node","arguments":["main.js"]}}]}
+}"#;
+
+#[test]
+fn vsix_declarations_enter_the_catalog_and_disappear_after_uninstall() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        Arc::new(PluginsManager::open(root.path(), providers(Arc::new(LanguageRegistry))).unwrap());
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "publisher.sample@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(Arc::new(
+        MarketplaceExtensionSourceProvider::new(manager.clone()),
+    ));
+    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    assert!(
+        snapshot.diagnostics.is_empty(),
+        "{:?}",
+        snapshot.diagnostics
+    );
+    assert_eq!(snapshot.extensions.len(), 1);
+    assert_eq!(snapshot.extensions[0].id, "test.publisher.sample");
+    let manifest: serde_json::Value =
+        serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
+    assert_eq!(manifest["contributes"]["languages"][0]["id"], "sample");
+    assert_eq!(manifest["contributes"]["themes"][0]["label"], "Sample");
+    assert!(manifest.get("main").is_none());
+    assert!(manifest.get("browser").is_none());
+    assert!(manifest["contributes"].get("debuggers").is_none());
+    assert!(
+        manager
+            .acquire_capability(AcquireCapabilityRequest {
+                capability: installed.capabilities[0].reference.clone(),
+            })
+            .is_err(),
+        "storing a script does not admit an executable extension"
+    );
+    manager
+        .uninstall(ash_core_plugins::UninstallPackageRequest {
+            installation_id: installed.installation_id,
+            mode: ash_core_plugins::UninstallMode::IfUnused,
+        })
+        .unwrap();
+    assert!(
+        catalog
+            .list(ExtensionCatalogReload::Refresh)
+            .extensions
+            .is_empty()
+    );
+}
 
 #[test]
 fn marketplace_manager_commit_watcher_broadcasts_the_authoritative_change() {
@@ -330,8 +388,56 @@ impl PluginProvider for LanguageRegistry {
         match request.package_id.as_str() {
             "example.demo-language" => Ok(Box::new(LanguagePayload::new())),
             "example.demo-theme" => Ok(Box::new(ThemePayload::new())),
+            "publisher.sample" => Ok(Box::new(VsixPayload)),
             _ => Err(MarketplaceClientError::storage()),
         }
+    }
+}
+
+struct VsixPayload;
+
+const VSIX_FILES: &[(&str, &[u8])] = &[
+    ("extension/main.js", b"throw new Error('must not run');"),
+    ("extension/package.json", VSIX_MANIFEST),
+    ("extension/themes/sample.json", THEME_DOCUMENT),
+];
+
+impl PluginPackagePayload for VsixPayload {
+    fn package(&self) -> &PackageRef {
+        static PACKAGE: std::sync::OnceLock<PackageRef> = std::sync::OnceLock::new();
+        PACKAGE.get_or_init(|| PackageRef {
+            id: "publisher.sample".into(),
+            version: "1.0.0".into(),
+            digest: package_digest(VSIX_FILES),
+        })
+    }
+    fn capabilities(&self) -> &[PluginPackageCapability] {
+        static CAPABILITIES: std::sync::OnceLock<Vec<PluginPackageCapability>> =
+            std::sync::OnceLock::new();
+        CAPABILITIES.get_or_init(|| {
+            vec![PluginPackageCapability {
+                kind: CapabilityKind::EditorExtension,
+                id: "publisher.sample".into(),
+                path: "extension".into(),
+                runtime: None,
+                language_ids: Vec::new(),
+            }]
+        })
+    }
+    fn expected_file_count(&self) -> u64 {
+        VSIX_FILES.len() as u64
+    }
+    fn expected_size_bytes(&self) -> u64 {
+        VSIX_FILES.iter().map(|(_, bytes)| bytes.len() as u64).sum()
+    }
+    fn copy_to(&self, destination: &Path) -> Result<(), MarketplaceClientError> {
+        fs::create_dir_all(destination.join("extension/themes"))
+            .map_err(|_| MarketplaceClientError::storage())?;
+        for (path, bytes) in VSIX_FILES {
+            fs::write(destination.join(path), bytes)
+                .map_err(|_| MarketplaceClientError::storage())?;
+        }
+        Ok(())
     }
 }
 

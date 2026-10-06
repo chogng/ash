@@ -31,14 +31,56 @@ pub(crate) struct EditorExtensionSourceSnapshot {
     pub(crate) deployments: Vec<EditorExtensionDeployment>,
 }
 
+/// Package permission ceiling, independent of the workspace user's filesystem grant.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum WorkspaceReadAccess {
+    Denied,
+    Read,
+}
+
 #[derive(Clone)]
 pub(crate) struct EditorExtensionDeployment {
     pub(crate) id: String,
     pub(crate) version: String,
     pub(crate) package_digest: String,
     pub(crate) command: ExtensionLaunchCommand,
+    pub(crate) workspace_read: WorkspaceReadAccess,
     pub(crate) params: ActivateParams,
     pub(crate) authority: Arc<dyn ActivationAuthority>,
+    pub(crate) activation: Option<ActivationPlan>,
+    pub(crate) activation_failure: Option<String>,
+}
+
+/// Manifest facts are distinct from process-owned registrations. Waiting never holds a process lease.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ActivationPlan {
+    pub(crate) events: Vec<String>,
+    pub(crate) commands: Vec<(String, String)>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::server) enum ActivationEvent {
+    Command(String),
+    Language(String),
+    StartupFinished,
+}
+
+impl ActivationPlan {
+    pub(super) fn matches(&self, event: &ActivationEvent) -> bool {
+        match event {
+            ActivationEvent::Command(command) => self
+                .events
+                .iter()
+                .any(|event| event == &format!("onCommand:{command}")),
+            ActivationEvent::Language(language) => self
+                .events
+                .iter()
+                .any(|event| event == "onLanguage" || event == &format!("onLanguage:{language}")),
+            ActivationEvent::StartupFinished => {
+                self.events.iter().any(|event| event == "onStartupFinished")
+            }
+        }
+    }
 }
 
 pub(super) fn plugin_deployments(
@@ -53,21 +95,73 @@ pub(super) fn plugin_deployments(
             .ok_or(ExtensionHostRuntimeError::Internal)?;
         for contribution in &package.manifest().contributions.editor_extensions {
             let id = stable_extension_id(package.manifest().id.as_str(), contribution.id.as_str());
-            let executable = package
+            let entry = package
                 .resolve_file(&contribution.entrypoint)
                 .map_err(|_| ExtensionHostRuntimeError::Host(ExtensionHostError::SpawnFailed))?;
-            let command = ExtensionLaunchCommand::new(
-                executable,
-                std::iter::empty::<String>(),
-                package.package_root(),
-                BTreeMap::new(),
-            )
+            let (executable, arguments) = match contribution.runtime {
+                ash_plugin::EditorExtensionRuntime::HostRpc => (entry, Vec::new()),
+                ash_plugin::EditorExtensionRuntime::JavaScript => {
+                    let current = std::env::current_exe().map_err(|_| {
+                        ExtensionHostRuntimeError::Host(ExtensionHostError::SpawnFailed)
+                    })?;
+                    let directory = current
+                        .parent()
+                        .ok_or(ExtensionHostRuntimeError::Internal)?;
+                    let executable = directory.join(format!(
+                        "ash-js-extension-host{}",
+                        std::env::consts::EXE_SUFFIX
+                    ));
+                    let root = package
+                        .package_root()
+                        .to_str()
+                        .ok_or(ExtensionHostRuntimeError::Internal)?
+                        .to_string();
+                    (
+                        executable,
+                        vec![
+                            "--extension-id".into(),
+                            id.clone(),
+                            "--package".into(),
+                            root,
+                            "--entry".into(),
+                            contribution.entrypoint.as_str().into(),
+                        ],
+                    )
+                }
+            };
+            let command = match contribution.runtime {
+                ash_plugin::EditorExtensionRuntime::HostRpc => ExtensionLaunchCommand::new(
+                    executable,
+                    arguments,
+                    package.package_root(),
+                    BTreeMap::new(),
+                ),
+                ash_plugin::EditorExtensionRuntime::JavaScript => {
+                    ExtensionLaunchCommand::javascript(
+                        executable,
+                        arguments,
+                        package.package_root(),
+                    )
+                }
+            }
             .map_err(ExtensionHostRuntimeError::Host)?;
             deployments.push(EditorExtensionDeployment {
                 id: id.clone(),
                 version: package.manifest().version.to_string(),
                 package_digest: package.package_digest().as_str().to_string(),
                 command,
+                workspace_read: if package.manifest().permissions.iter().any(|permission| {
+                    matches!(
+                        permission,
+                        ash_plugin::Permission::Directory {
+                            access: ash_plugin::DirectoryAccess::Read
+                        }
+                    )
+                }) {
+                    WorkspaceReadAccess::Read
+                } else {
+                    WorkspaceReadAccess::Denied
+                },
                 params: ActivateParams {
                     extension_id: id,
                     package: PackageBinding {
@@ -92,6 +186,8 @@ pub(super) fn plugin_deployments(
                         .map(extension_capability)
                         .collect(),
                 },
+                activation: None,
+                activation_failure: None,
                 authority: Arc::new(PluginPackageAuthority {
                     fence: fence.clone(),
                 }),
@@ -217,3 +313,7 @@ struct PluginPackageLease {
 }
 
 impl ActivationLease for PluginPackageLease {}
+
+#[cfg(test)]
+#[path = "source_tests.rs"]
+mod tests;

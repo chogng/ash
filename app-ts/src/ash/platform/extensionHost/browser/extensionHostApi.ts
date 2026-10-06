@@ -3,6 +3,9 @@ import { invokeExtensionHost, normalizeExtensionHostChanged, normalizeExtensionH
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import { APP_SERVER_SERVER_REQUESTS } from '../../app-server/common/generated/index.js';
+import type { JsonValue as ProtocolJsonValue } from '../../app-server/common/generated/index.js';
+import type { ExtensionClientHandler } from '../common/extensionHostApi.js';
 import { inertSubscription } from "../../renderer/browser/disconnectedHost.js";
 import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -20,6 +23,9 @@ export type BrowserExtensionHostRequest =
 
 /** A package snapshot is executed in a window-owned Worker, never in the Workbench realm. */
 export class BrowserExtensionHostApi extends Disposable implements IExtensionHostApi {
+    public registerClientHandler(handler: ExtensionClientHandler): ReturnType<IExtensionHostApi['registerClientHandler']> {
+        return this.remote.registerClientHandler(handler);
+    }
 	private readonly workers = this._register(new DisposableMap<string, BrowserExtensionWorker>());
 	private readonly changes = this._register(new Emitter<number>());
 	private generation = 0;
@@ -27,6 +33,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 	private refreshing: Promise<ExtensionHostFleetSnapshot> | undefined;
 	private remoteSnapshot: ExtensionHostFleetSnapshot = { generation: 1, extensions: [] };
 	private remoteRevision = 0;
+	private remoteConnectionRevision = 0;
 
 	constructor(private readonly extensions: IExtensionApi, private readonly remote: IExtensionHostApi,
 		@ICommandService private readonly commandService: ICommandService) {
@@ -34,6 +41,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 		const changes = remote.onDidChange(() => { void this.refreshRemote().catch(error => console.error('Extension Host refresh failed', error)); });
 		this._register(toDisposable(() => changes.dispose()));
 		const connection = remote.onConnectionState(state => {
+			this.remoteConnectionRevision++;
 			if (state === 'ready') void this.refreshRemote().catch(error => console.error('Extension Host refresh failed', error));
 			else { this.remoteRevision++; this.remoteSnapshot = { generation: 1, extensions: [] }; this.changes.fire(++this.snapshotGeneration); }
 		});
@@ -55,6 +63,11 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 		const snapshot = mode ? await this.remote.reconcile(mode) : await this.remote.list();
 		this.assertNotDisposed();
 		if (revision !== this.remoteRevision) return;
+		this.acceptRemoteSnapshot(snapshot);
+	}
+
+	private acceptRemoteSnapshot(snapshot: ExtensionHostFleetSnapshot): void {
+		if (snapshot.generation < this.remoteSnapshot.generation) { return; }
 		const localIds = new Set(this.snapshot.extensions.map(runtime => runtime.id));
 		if (snapshot.extensions.some(runtime => localIds.has(runtime.id))) throw new Error('An extension cannot be active in two hosts');
 		this.remoteSnapshot = snapshot;
@@ -68,6 +81,19 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 			void this.refreshing.finally(() => { this.refreshing = undefined; }).catch(() => undefined);
 		}
 		return this.refreshing;
+	}
+
+	public async activateByEvent(request: Parameters<IExtensionHostApi['activateByEvent']>[0]): Promise<ExtensionHostFleetSnapshot> {
+		this.assertNotDisposed();
+		const connectionRevision = this.remoteConnectionRevision;
+		const activated = await this.remote.activateByEvent(request);
+		this.assertNotDisposed();
+		if (connectionRevision !== this.remoteConnectionRevision) { throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation')); }
+		// The activation reply is a complete fleet. Retire in-flight older reads so first use
+		// cannot return dormant metadata while a notification refresh is still pending.
+		this.remoteRevision++;
+		this.acceptRemoteSnapshot(activated);
+		return this.list();
 	}
 
 	public async invoke(request: Parameters<IExtensionHostApi['invoke']>[0], signal: AbortSignal): Promise<JsonValue> {
@@ -205,9 +231,11 @@ function runtimeIdentity(extension: ExtensionDescriptor, generation: number): Om
 
 export function createDisconnectedExtensionHostApi(unavailable: UnavailableOperation): IExtensionHostApi {
 	return {
+        registerClientHandler: () => inertSubscription(),
 		isAvailable: () => Promise.resolve(false),
 		list: () => unavailable("extensionHost.list"),
 		reconcile: () => unavailable("extensionHost.reconcile"),
+		activateByEvent: () => unavailable("extensionHost.activate"),
 		invoke: () => unavailable("extensionHost.invoke"),
 		getConnectionState: () => Promise.resolve("stopped"),
 		onDidChange: inertSubscription,
@@ -222,9 +250,27 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		cancel: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId }),
 	};
 	return {
+        registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async (operation, context) => {
+            if (operation.operation === 'readWorkspaceFile') {
+                throw new Error('Workspace file requests must be handled by App Server');
+            }
+            const request = operation.operation === 'executeCommand'
+                ? { ...operation, arguments: operation.arguments.map(normalizeExtensionHostPayload) }
+                : operation.operation === 'updateConfiguration'
+                    ? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
+                    : operation;
+            const result = await handler(request, context.signal);
+            // Domain payloads are immutable; the transport owns a separate mutable wire value.
+            switch (result.result) {
+                case 'command':
+                case 'configuration': return { ...result, value: protocolJsonValue(result.value) };
+                default: return result;
+            }
+        }),
 		isAvailable: () => Promise.resolve(connection.capabilities?.extensionHost === true),
 		list: async () => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/list", {})),
 		reconcile: async mode => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/reconcile", { mode })),
+		activateByEvent: async request => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/activate", request)),
 		invoke: (request, signal) => invokeExtensionHost(transport, request, signal),
 		getConnectionState: () => Promise.resolve(connection.state),
 		onDidChange: listener => connection.onNotification(event => {
@@ -232,4 +278,10 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		}),
 		onConnectionState: listener => connection.onStateChange(listener),
 	};
+}
+
+function protocolJsonValue(value: JsonValue): ProtocolJsonValue {
+    if (value === null || typeof value !== 'object') { return value; }
+    if (Array.isArray(value)) { return value.map(protocolJsonValue); }
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, protocolJsonValue(entry)]));
 }

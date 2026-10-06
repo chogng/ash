@@ -265,7 +265,7 @@ pub struct AssetContribution {
 
 /// One static Editor Extension package activated through Plugin authority.
 ///
-/// The directory must contain a declarative `package.json`. The `ash-extensions` crate owns
+/// The directory must contain a declarative `package.json`. The `ash-extension-catalog` crate owns
 /// parsing that package and freezing its resources; this declaration does not grant code
 /// execution or reinterpret executable `editorExtensions[]` contributions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

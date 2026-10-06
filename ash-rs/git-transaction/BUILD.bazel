@@ -1,0 +1,12 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "git-transaction",
+    crate_name = "git_transaction",
+    data = ["//ash-rs/git:src/test_support.rs"],
+    test_env = {"RUST_MIN_STACK": "8388608"},
+    test_env_inherit = ["PATH"] + select({
+        "@platforms//os:windows": ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "SystemRoot"],
+        "//conditions:default": [],
+    }),
+)

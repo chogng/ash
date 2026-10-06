@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::LocalCapabilitySource;
 use ash_core_plugins::PluginsManager;
-use ash_extensions::DynamicExtensionPackageSource;
-use ash_extensions::DynamicExtensionSourceProvider;
-use ash_extensions::DynamicExtensionSourceSnapshot;
+use extension_catalog::DynamicExtensionPackageSource;
+use extension_catalog::DynamicExtensionSourceProvider;
+use extension_catalog::DynamicExtensionSourceSnapshot;
 use serde::Deserialize;
 
 const MAXIMUM_PORTABLE_THEME_MANIFEST_BYTES: u64 = 64 * 1024;
@@ -54,6 +54,16 @@ impl DynamicExtensionSourceProvider for MarketplaceExtensionSourceProvider {
             .map_err(|error| error.to_string())?
         {
             let manifest = normalized_theme_manifest(&source)?;
+            sources.push((source, Some(manifest)));
+        }
+        for source in self
+            .manager
+            .local_capability_sources(CapabilityKind::EditorExtension)
+            .map_err(|error| error.to_string())?
+        {
+            // VSIX supplies package.json directly. Its scripts remain inert; only the catalog's
+            // supported declarative contributions are consumed by the editor owners.
+            let manifest = normalized_language_manifest(&source)?;
             sources.push((source, Some(manifest)));
         }
         sources.sort_by(|left, right| {
@@ -121,6 +131,29 @@ fn normalized_language_manifest(source: &LocalCapabilitySource) -> Result<String
     manifest.insert("name".into(), plugin.plugin_name().into());
     manifest.insert("publisher".into(), plugin.marketplace().as_str().into());
     manifest.insert("version".into(), source.package().version.clone().into());
+    if source.kind() == CapabilityKind::EditorExtension {
+        // Open VSX admission currently covers resources only. In particular, Ash's declarative
+        // debugger command must not become a route from an ungranted VSIX to process execution.
+        for entry in ["main", "browser", "activationEvents"] {
+            manifest.remove(entry);
+        }
+        if let Some(contributes) = manifest
+            .get_mut("contributes")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            contributes.retain(|kind, _| {
+                matches!(
+                    kind.as_str(),
+                    "languages"
+                        | "grammars"
+                        | "snippets"
+                        | "themes"
+                        | "iconThemes"
+                        | "productIconThemes"
+                )
+            });
+        }
+    }
     serde_json::to_string(&manifest).map_err(|error| error.to_string())
 }
 

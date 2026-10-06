@@ -432,6 +432,11 @@ impl AppServer {
         mutation: SessionMutation,
     ) -> Result<SessionId, RpcError> {
         let session_id = mutation.session_id.clone();
+        if let Some(runtime) = &self.git_turn_changes {
+            runtime
+                .require_session_publications_settled(&session_id)
+                .map_err(|error| core_error(core_api::CoreError::Execution(error)))?;
+        }
         self.agent_runtime()
             .archive_session(
                 &session_id,

@@ -6,17 +6,16 @@ license-file.workspace = true
 publish.workspace = true
 
 [lib]
-doctest = false
-name = "ash_extensions"
-path = "src/lib.rs"
+name = "extensions"
 
 [dependencies]
+extension-protocol = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
-ash-file-identity = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+host = { package = "ash-editor-extension-host", path = "../editor-extension-host" }
 
 [lints]
 workspace = true

@@ -4,6 +4,59 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+/// Editor intent delivered to Rust; it never grants execution authority.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type",
+    deny_unknown_fields
+)]
+pub enum ExtensionHostActivationEventDto {
+    Command {
+        #[schemars(length(min = 1, max = 256))]
+        command: String,
+    },
+    Language {
+        #[schemars(length(min = 1, max = 128))]
+        language_id: String,
+    },
+    // A struct variant preserves the closed wire shape; Serde unit variants ignore extra fields.
+    StartupFinished {},
+}
+
+/// Activates one exact admitted package generation when its declaration matches the event.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostActivateParams {
+    #[schemars(length(min = 1, max = 256))]
+    pub extension_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub activation_generation: u64,
+    pub event: ExtensionHostActivationEventDto,
+}
+
+/// Declared command metadata available before a process exists, not a provider registration.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostCommandContributionDto {
+    #[schemars(length(min = 1, max = 256))]
+    pub command: String,
+    #[schemars(length(min = 1, max = 512))]
+    pub title: String,
+}
+
+/// Immutable manifest facts for an authorized extension waiting for its first matching event.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostActivationDto {
+    #[schemars(length(max = 128))]
+    pub events: Vec<String>,
+    #[schemars(length(max = 2048))]
+    pub commands: Vec<ExtensionHostCommandContributionDto>,
+}
+
 /// Requests a complete reconciliation of the executable Editor Extension fleet.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -48,6 +101,9 @@ pub struct ExtensionHostExtensionDto {
     #[ts(type = "number | null")]
     pub incarnation: Option<u64>,
     pub lifecycle: ExtensionHostLifecycleDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub activation: Option<ExtensionHostActivationDto>,
     pub failure: Option<ExtensionHostFailureDto>,
     #[schemars(length(max = 262_144))]
     pub stderr: String,
@@ -146,6 +202,7 @@ pub enum ExtensionHostOutputOperationDto {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionHostLifecycleDto {
+    Dormant,
     Stopped,
     Starting,
     Handshaking,

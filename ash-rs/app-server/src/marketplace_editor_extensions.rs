@@ -21,6 +21,7 @@ use ash_editor_extension_host::ExtensionLaunchCommand;
 use ash_editor_extension_host::PackageBinding;
 use serde::Deserialize;
 
+use crate::server::extension_host_runtime::source::ActivationPlan;
 use crate::server::extension_host_runtime::source::EditorExtensionDeployment;
 
 const PRODUCT_MANIFEST_PATH: &str = "ash/editor-extensions.json";
@@ -124,6 +125,89 @@ pub(crate) fn deployments(
             result.push(deployment);
         }
     }
+    for source in manager
+        .local_capability_sources(CapabilityKind::EditorExtension)
+        .map_err(|error| error.to_string())?
+    {
+        let Ok(Some(entrypoint)) = javascript_entrypoint(&source) else {
+            continue;
+        };
+        // Invalid declarations belong to this package's failure state, never the whole fleet.
+        let (activation, activation_failure, activation_events) =
+            match javascript_activation_plan(&source) {
+                Ok(plan) => {
+                    let events = plan.events.clone();
+                    (Some(plan), None, events)
+                }
+                Err(message) => (None, Some(message), Vec::new()),
+            };
+        let extension_id = format!("marketplace:{}:vscode", source.package().id);
+        let capabilities = vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::LanguageProvider,
+        ];
+        let binding = MarketplaceEditorExtensionBinding {
+            package: source.package().clone(),
+            capability: source.capability().clone(),
+            extension_id: extension_id.clone(),
+            requested_capabilities: capabilities.clone(),
+        };
+        let current = std::env::current_exe().map_err(|error| error.to_string())?;
+        let executable = current
+            .parent()
+            .ok_or("missing product executable directory")?
+            .join(format!(
+                "ash-js-extension-host{}",
+                std::env::consts::EXE_SUFFIX
+            ));
+        let root = source
+            .host_path()
+            .to_str()
+            .ok_or("invalid extension source path")?
+            .to_string();
+        let command = ExtensionLaunchCommand::javascript(
+            executable,
+            vec![
+                "--extension-id".into(),
+                extension_id.clone(),
+                "--package".into(),
+                root,
+                "--entry".into(),
+                entrypoint.clone(),
+                "--api".into(),
+                "vscode".into(),
+            ],
+            source.host_path(),
+        )
+        .map_err(|error| error.to_string())?;
+        result.push(EditorExtensionDeployment {
+            activation,
+            activation_failure,
+            id: extension_id.clone(),
+            version: source.package().version.clone(),
+            package_digest: source.package().digest.clone(),
+            command,
+            workspace_read:
+                crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
+            params: ActivateParams {
+                extension_id,
+                package: PackageBinding {
+                    package_id: format!("{}@{}", source.package().id, source.package().version),
+                    package_digest: source.package().digest.clone(),
+                    entrypoint,
+                },
+                runtime_api_version: 1,
+                activation_events,
+                capabilities,
+            },
+            authority: Arc::new(MarketplaceExecutableAuthority {
+                manager: Arc::clone(manager),
+                admission: Arc::clone(admission),
+                binding,
+                source,
+            }),
+        });
+    }
     result.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(result)
 }
@@ -163,11 +247,16 @@ fn deployment(
         manager: Arc::clone(manager),
         admission: Arc::clone(admission),
         binding,
+        source: source.clone(),
     });
     Ok(EditorExtensionDeployment {
+        activation: None,
+        activation_failure: None,
         id: extension_id.clone(),
         version: source.package().version.clone(),
         package_digest: source.package().digest.clone(),
+        // Executable admission currently carries no directory-read ceiling.
+        workspace_read: crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
         command: ExtensionLaunchCommand::new(
             source.host_path(),
             std::iter::empty::<String>(),
@@ -299,6 +388,7 @@ struct MarketplaceExecutableAuthority {
     manager: Arc<PluginsManager>,
     admission: Arc<dyn MarketplaceEditorExtensionAdmission>,
     binding: MarketplaceEditorExtensionBinding,
+    source: LocalCapabilitySource,
 }
 
 impl ActivationAuthority for MarketplaceExecutableAuthority {
@@ -312,7 +402,7 @@ impl ActivationAuthority for MarketplaceExecutableAuthority {
                         package.state == InstallationState::Installed
                             && package.package == self.binding.package
                             && package.capabilities.iter().any(|capability| {
-                                capability.kind == CapabilityKind::Executable
+                                capability.kind == self.source.kind()
                                     && capability.reference == self.binding.capability
                             })
                     })
@@ -321,6 +411,14 @@ impl ActivationAuthority for MarketplaceExecutableAuthority {
 
     fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
         let admission = self.admission.acquire(&self.binding)?;
+        if self.source.kind() == CapabilityKind::EditorExtension {
+            let lease = self.manager.acquire_local_source(&self.source).ok()?;
+            return Some(Box::new(MarketplaceExecutableLease {
+                manager: Arc::clone(&self.manager),
+                manager_lease_id: lease.id,
+                _admission: admission,
+            }));
+        }
         let acquired = self
             .manager
             .acquire_capability(AcquireCapabilityRequest {
@@ -338,6 +436,154 @@ impl ActivationAuthority for MarketplaceExecutableAuthority {
             manager_lease_id: acquired.lease.id,
             _admission: admission,
         }))
+    }
+}
+
+/// Reads declarations separately from the process registrations published after activation.
+fn javascript_activation_plan(source: &LocalCapabilitySource) -> Result<ActivationPlan, String> {
+    let bytes = std::fs::read(source.host_path().join("package.json"))
+        .map_err(|error| error.to_string())?;
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+    activation_plan(&manifest)
+}
+
+fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, String> {
+    let mut events: BTreeSet<String> = match manifest.get("activationEvents") {
+        None => BTreeSet::new(),
+        Some(value) => serde_json::from_value::<Vec<String>>(value.clone())
+            .map_err(|_| "invalid activation events")?
+            .into_iter()
+            .collect(),
+    };
+    let mut commands = Vec::new();
+    if let Some(entries) = manifest.pointer("/contributes/commands") {
+        for entry in entries.as_array().ok_or("invalid command contributions")? {
+            let command = entry
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= 256)
+                .ok_or("invalid command contribution")?;
+            let title = entry
+                .get("title")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= 512)
+                .ok_or("invalid command title")?;
+            events.insert(format!("onCommand:{command}"));
+            commands.push((command.to_owned(), title.to_owned()));
+        }
+    }
+    if let Some(entries) = manifest.pointer("/contributes/languages") {
+        for entry in entries.as_array().ok_or("invalid language contributions")? {
+            let id = entry
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= 128)
+                .ok_or("invalid language contribution")?;
+            events.insert(format!("onLanguage:{id}"));
+        }
+    }
+    if events.len() > MAXIMUM_ACTIVATION_EVENTS
+        || events
+            .iter()
+            .any(|event| event.is_empty() || event.len() > MAXIMUM_ACTIVATION_EVENT_BYTES)
+        || commands.len() > 2048
+        || commands
+            .iter()
+            .map(|(id, _)| id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != commands.len()
+    {
+        return Err("activation declaration quota or identity is invalid".into());
+    }
+    Ok(ActivationPlan {
+        events: events.into_iter().collect(),
+        commands,
+    })
+}
+
+pub(crate) fn javascript_entrypoint(
+    source: &LocalCapabilitySource,
+) -> Result<Option<String>, String> {
+    let path = source.host_path().join("package.json");
+    let metadata = std::fs::symlink_metadata(&path).map_err(|_| "missing extension manifest")?;
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("invalid extension manifest".into());
+    }
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(path).map_err(|_| "missing extension manifest")?)
+            .map_err(|_| "invalid extension manifest")?;
+    let entry = if manifest.get("browser").is_some() {
+        manifest.get("browser")
+    } else {
+        manifest.get("main")
+    };
+    let Some(entry) = entry else {
+        return Ok(None);
+    };
+    let entry = entry
+        .as_str()
+        .ok_or("invalid extension entry")?
+        .strip_prefix("./")
+        .unwrap_or(entry.as_str().ok_or("invalid extension entry")?);
+    let path = std::path::Path::new(entry);
+    if entry.is_empty()
+        || path.is_absolute()
+        || !path
+            .components()
+            .all(|part| matches!(part, std::path::Component::Normal(_)))
+    {
+        return Err("invalid extension entry".into());
+    }
+    let entry = if path.extension().is_none() {
+        format!("{entry}.js")
+    } else {
+        entry.into()
+    };
+    if !matches!(
+        std::path::Path::new(&entry)
+            .extension()
+            .and_then(|ext| ext.to_str()),
+        Some("js" | "mjs")
+    ) {
+        return Err("unsupported extension entry".into());
+    }
+    let metadata = std::fs::symlink_metadata(source.host_path().join(&entry))
+        .map_err(|_| "missing extension entry")?;
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("invalid extension entry".into());
+    }
+    Ok(Some(entry))
+}
+
+pub(crate) struct ProfileEditorExtensionAdmission(
+    pub(crate) Arc<ash_core_plugins::EditorExtensionPolicy>,
+);
+struct ProfileAdmissionLease {
+    _policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
+}
+impl MarketplaceEditorExtensionAdmissionLease for ProfileAdmissionLease {}
+impl MarketplaceEditorExtensionAdmission for ProfileEditorExtensionAdmission {
+    fn generation(&self) -> u64 {
+        self.0.generation()
+    }
+    fn subscribe(&self) -> Option<std::sync::mpsc::Receiver<u64>> {
+        Some(self.0.subscribe())
+    }
+    fn authorizes(&self, binding: &MarketplaceEditorExtensionBinding) -> bool {
+        let state = self.0.snapshot(binding.package(), binding.capability());
+        state.enabled && state.granted
+    }
+    fn acquire(
+        &self,
+        binding: &MarketplaceEditorExtensionBinding,
+    ) -> Option<Box<dyn MarketplaceEditorExtensionAdmissionLease>> {
+        self.authorizes(binding).then(|| {
+            Box::new(ProfileAdmissionLease {
+                _policy: Arc::clone(&self.0),
+            }) as Box<dyn MarketplaceEditorExtensionAdmissionLease>
+        })
     }
 }
 

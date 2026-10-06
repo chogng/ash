@@ -1094,9 +1094,9 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
     let write_command = if cfg!(windows) {
-        "echo sealed turn contents>turn.txt"
+        "echo sealed turn contents>turn.txt & echo remaining contents>remaining.txt"
     } else {
-        "printf 'sealed turn contents\\n' > turn.txt"
+        "printf 'sealed turn contents\\n' > turn.txt; printf 'remaining contents\\n' > remaining.txt"
     };
     let started = local_call(
         &server,
@@ -1152,7 +1152,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     };
     assert_eq!(
         change_set["statistics"]["files"],
-        1,
+        2,
         "unexpected ChangeSet: {change_set}; thread: {:#?}",
         server.threads().read_thread(&thread_id_typed).unwrap()
     );
@@ -1175,6 +1175,28 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         .as_u64()
         .unwrap();
     request_id += 1;
+    let preview = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"turnChanges/prepareCommit",
+            "params":{"commandId":"preview-shell-turn","sessionId":session_id,"threadId":thread_id,
+                "selections":[{"changeSetId":change_set_id,"expectedRevision":drafted_revision,"paths":["turn.txt"]}],
+                "message":"test(turn-changes): commit sealed shell turn"}}),
+    );
+    assert!(preview.get("error").is_none(), "{preview}");
+    let commit_id = preview["result"]["commitId"].as_str().unwrap();
+    request_id += 1;
+    let contents = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"turnChanges/readCommitFile",
+            "params":{"sessionId":session_id,"threadId":thread_id,"commitId":commit_id,"path":"turn.txt"}}),
+    );
+    assert_eq!(
+        contents["result"]["after"].as_str().unwrap().trim(),
+        "sealed turn contents"
+    );
+    request_id += 1;
     let queued = local_call(
         &server,
         &mut connection,
@@ -1182,12 +1204,12 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
             "jsonrpc":"2.0","id":request_id,"method":"turnChanges/commit",
             "params":{
                 "commandId":"commit-shell-turn","sessionId":session_id,"threadId":thread_id,
-                "changeSetIds":[change_set_id],"expectedRevision":drafted_revision
+                "commitId":commit_id
             }
         }),
     );
     assert_eq!(queued["result"]["changeSets"][0]["commitState"], "queued");
-    loop {
+    let committed = loop {
         request_id += 1;
         let listed = local_call(
             &server,
@@ -1198,8 +1220,8 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
             }),
         );
         let state = &listed["result"]["changeSets"][0]["commitState"];
-        if state == "committed" {
-            break;
+        if state == "partiallyCommitted" {
+            break listed["result"]["changeSets"][0].clone();
         }
         assert!(
             state == "queued" || state == "committing",
@@ -1207,7 +1229,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         );
         assert!(request_id < 406, "commit did not finish: {listed}");
         std::thread::sleep(Duration::from_millis(10));
-    }
+    };
 
     assert_ne!(
         run_local_git(dir.path(), &["rev-parse", "HEAD"]),
@@ -1223,6 +1245,99 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     assert_eq!(
         run_local_git(dir.path(), &["show", "-s", "--format=%s", "HEAD"]),
         "test(turn-changes): commit sealed shell turn"
+    );
+    // Review records outlive the linked checkout. Reads use retained objects, including after GC.
+    let worktrees =
+        worktree::WorktreeManager::new(worktree::WorktreeSettings::defaults(profile.path()));
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let directories = runtime.block_on(worktrees.list(dir.path())).unwrap();
+    let checkout = directories
+        .iter()
+        .find(|directory| directory.owner_thread_id() == Some(thread_id))
+        .unwrap();
+    let checkout = checkout.checkout_root().to_str().unwrap();
+    assert!(!dir.path().join("remaining.txt").exists());
+    assert!(
+        std::path::Path::new(checkout)
+            .join("remaining.txt")
+            .exists()
+    );
+    request_id += 1;
+    let discarded = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":request_id, "method":"turnChanges/discardThread",
+            "params":{"commandId":"discard-remaining","sessionId":session_id,"threadId":thread_id,"expectedRevision":committed["revision"],"confirmed":true}
+        }),
+    );
+    assert!(discarded.get("error").is_none(), "{discarded}");
+    assert_eq!(
+        discarded["result"]["changeSets"][0]["captureState"],
+        "discarded"
+    );
+    assert_eq!(
+        discarded["result"]["changeSets"][0]["committedPaths"],
+        serde_json::json!(["turn.txt"])
+    );
+    assert!(
+        !std::path::Path::new(checkout)
+            .join("remaining.txt")
+            .exists()
+    );
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(checkout).join("turn.txt"))
+            .unwrap()
+            .trim(),
+        "sealed turn contents"
+    );
+    run_local_git(dir.path(), &["worktree", "unlock", checkout]);
+    run_local_git(dir.path(), &["worktree", "remove", "--force", checkout]);
+    run_local_git(dir.path(), &["gc", "--prune=now"]);
+    for method in ["turnChanges/readFile", "turnChanges/readCommitFile"] {
+        request_id += 1;
+        let read = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":request_id, "method":method,
+                "params": if method == "turnChanges/readFile" {
+                    serde_json::json!({"sessionId":session_id,"threadId":thread_id,"changeSetId":change_set_id,"path":"turn.txt"})
+                } else { serde_json::json!({"sessionId":session_id,"threadId":thread_id,"commitId":commit_id,"path":"turn.txt"}) }
+            }),
+        );
+        assert!(read.get("error").is_none(), "{read}");
+        assert_eq!(
+            read["result"]["after"].as_str().unwrap().trim(),
+            "sealed turn contents"
+        );
+    }
+    request_id += 1;
+    let history = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":request_id, "method":"turnChanges/readFile",
+            "params":{"sessionId":session_id,"threadId":thread_id,"changeSetId":change_set_id,"path":"remaining.txt"}
+        }),
+    );
+    assert_eq!(
+        history["result"]["after"].as_str().unwrap().trim(),
+        "remaining contents"
+    );
+    request_id += 1;
+    let replay = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":request_id, "method":"turnChanges/commit",
+            "params":{"commandId":"commit-shell-turn","sessionId":session_id,"threadId":thread_id,"commitId":commit_id}
+        }),
+    );
+    assert_eq!(replay["result"], queued["result"]);
+    assert_eq!(
+        run_local_git(dir.path(), &["rev-list", "--count", "HEAD"]),
+        "2"
     );
 }
 
@@ -2024,8 +2139,8 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
         ),
         (ash_plugin::MarketplaceName::new("vendor").unwrap(), vendor),
     ]);
-    let first = runtime.plugins_manager(first_config.clone()).unwrap();
-    let reused = runtime.plugins_manager(first_config).unwrap();
+    let first = runtime.plugins_manager(first_config.clone(), None).unwrap();
+    let reused = runtime.plugins_manager(first_config, None).unwrap();
     assert!(Arc::ptr_eq(&first, &reused));
     assert!(!profile.path().join("vendor-cache").exists());
 
@@ -2040,7 +2155,7 @@ fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
         ash_plugin::MarketplaceName::new("ash").unwrap(),
         second_config,
     )]);
-    let error = match runtime.plugins_manager(second_config) {
+    let error = match runtime.plugins_manager(second_config, None) {
         Ok(_) => panic!("a second Marketplace authority must be rejected"),
         Err(error) => error,
     };

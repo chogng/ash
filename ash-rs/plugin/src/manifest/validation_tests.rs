@@ -35,6 +35,7 @@ fn valid_manifest() -> Value {
                 {
                     "id": "review-runtime",
                     "entrypoint": "bin/review-server",
+                    "runtime": "hostRpc",
                     "runtimeApiVersion": 1,
                     "activationEvents": [
                         { "type": "startup" },
@@ -196,7 +197,8 @@ fn editor_extension_identity_and_entrypoint_are_unique() {
         {
             "id": "review-runtime",
             "entrypoint": "bin/second-host",
-            "runtimeApiVersion": 1,
+            "runtime": "hostRpc",
+                    "runtimeApiVersion": 1,
             "activationEvents": [{"type": "startup"}],
             "capabilities": ["command"]
         }
@@ -214,7 +216,8 @@ fn editor_extension_identity_and_entrypoint_are_unique() {
         {
             "id": "second-runtime",
             "entrypoint": "bin/review-server",
-            "runtimeApiVersion": 1,
+            "runtime": "hostRpc",
+                    "runtimeApiVersion": 1,
             "activationEvents": [{"type": "startup"}],
             "capabilities": ["command"]
         }
@@ -421,4 +424,41 @@ fn schema_and_version_are_explicit() {
     let mut non_semver = valid_manifest();
     non_semver["version"] = json!("latest");
     assert!(parse(&non_semver).is_err());
+}
+
+#[test]
+fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
+    let mut value = valid_manifest();
+    value["contributions"]["editorExtensions"] = json!([{
+        "id": "review-runtime", "runtime": "javascript", "entrypoint": "extension/main.js",
+        "runtimeApiVersion": 1, "activationEvents": [{"type": "startup"}], "capabilities": ["command"]
+    }]);
+    value["permissions"] = json!([{"type": "directory", "access": "read"}]);
+    let manifest = parse(&value).unwrap();
+    assert_eq!(
+        manifest.contributions.editor_extensions[0].runtime,
+        super::super::EditorExtensionRuntime::JavaScript
+    );
+    let mut unsupported = value.clone();
+    unsupported["contributions"]["editorExtensions"][0]["capabilities"] =
+        json!(["languageProvider"]);
+    unsupported["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{"type": "onLanguage", "id": "typescript"}]);
+    assert!(parse(&unsupported).is_ok());
+    unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!(["taskProvider"]);
+    assert!(parse(&unsupported).is_err());
+    value["contributions"]["editorExtensions"][0]["entrypoint"] = json!("bin/program");
+    assert!(parse(&value).is_err());
+}
+
+#[test]
+fn sdk_example_manifest_declares_the_supported_javascript_contract() {
+    let manifest = PluginManifest::from_json(include_bytes!(
+        "../../../../app-ts/extension-sdk/example/.ash-plugin/plugin.json"
+    ))
+    .unwrap();
+    assert_eq!(
+        manifest.contributions.editor_extensions[0].runtime,
+        super::super::EditorExtensionRuntime::JavaScript
+    );
 }

@@ -1,3 +1,4 @@
+import { localize } from '../../../nls.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
@@ -14,6 +15,19 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import { parseContextKeyExpression } from '../../../platform/contextkey/common/contextKeyExpressionParser.js';
 import { Icon } from '../../../base/common/icon.js';
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IConfigurationService, ConfigurationTarget } from '../../../platform/configuration/common/configuration.js';
+import { IModelService } from '../../../editor/common/services/model.js';
+import { ITextModelService } from '../../../editor/common/services/resolverService.js';
+import { IBulkEditService, ResourceTextEdit } from '../../../editor/browser/services/bulkEditService.js';
+import { INotificationService, NotificationSeverity } from '../../../platform/notification/common/notification.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { URI } from '../../../base/common/uri.js';
+import { Range } from '../../../editor/common/core/range.js';
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
+import { CancellationError } from '../../../base/common/errors.js';
+import type { ITextModel } from '../../../editor/common/model.js';
+import type { ExtensionClientOperation, ExtensionClientResult, ExtensionDocumentSnapshot } from '../../../platform/extensionHost/common/extensionHostApi.js';
 
 export interface ExtensionApiIssue {
 	readonly extensionId: string;
@@ -52,6 +66,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly taskRegistration: TaskProviderRegistration;
 	private readonly testRegistration: TestProfileProviderRegistration;
 	private activeContributions: ContributionSet | undefined;
+	private activationController = new AbortController();
 	private readonly extensionOutputs = this._register(new DisposableMap<string, IOutputChannel>());
 	private readonly outputCursors = new Map<string, ExtensionOutputCursor>();
 	private readonly namedOutputChannels = this._register(new DisposableMap<string, IOutputChannel>());
@@ -68,14 +83,24 @@ export class MainThreadExtensionApi extends Disposable {
 		@ITestingService testing: ITestingService,
 		@IOutputService private readonly outputService: IOutputService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@ICommandService private readonly commandService: ICommandService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IModelService private readonly models: IModelService,
+		@ITextModelService private readonly textModels: ITextModelService,
+		@IBulkEditService private readonly bulkEdits: IBulkEditService,
+		@INotificationService private readonly notifications: INotificationService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super();
+		const clientHandler = this.api.registerClientHandler((operation, signal) => this.handleClientOperation(operation, signal));
+		this._register(toDisposable(() => clientHandler.dispose()));
 		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
 		this.testRegistration = this._register(testing.registerTestProfileProviders([]));
 		this._register(toDisposable(() => {
+			this.activationController.abort('Extension API was disposed');
 			this.activeContributions?.controller.abort('Extension API was disposed');
 			this.activeContributions = undefined;
 			this.outputCursors.clear();
@@ -85,6 +110,72 @@ export class MainThreadExtensionApi extends Disposable {
 
 	public get hasContributions(): boolean {
 		return this.activeContributions !== undefined;
+	}
+
+	private async handleClientOperation(operation: ExtensionClientOperation, signal: AbortSignal): Promise<ExtensionClientResult> {
+		this.assertNotDisposed();
+		throwIfCancelled(signal);
+		switch (operation.operation) {
+			case 'executeCommand': {
+				const value = await this.commandService.executeCommand(operation.command, ...operation.arguments);
+				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
+			}
+			case 'listDocuments':
+				return { result: 'documents', documents: this.models.getModels().map(extensionDocumentSnapshot) };
+			case 'readDocument': {
+				const reference = await this.textModels.createModelReference(URI.parse(operation.uri));
+				try {
+					throwIfCancelled(signal);
+					return { result: 'document', document: extensionDocumentSnapshot(reference.object.textEditorModel) };
+				} finally {
+					reference.dispose();
+				}
+			}
+			case 'applyEdit': {
+				const edits = operation.documents.flatMap(document => document.edits.map(edit => {
+					if (!Number.isSafeInteger(document.version) || document.version < 1 ||
+						[edit.start.line, edit.start.character, edit.end.line, edit.end.character].some(value => !Number.isSafeInteger(value) || value < 0) ||
+						edit.start.line > edit.end.line || edit.start.line === edit.end.line && edit.start.character > edit.end.character) {
+						throw new TypeError('Extension edit requires a version and an ordered UTF-16 range');
+					}
+					return new ResourceTextEdit(URI.parse(document.uri), {
+						range: new Range(edit.start.line + 1, edit.start.character + 1, edit.end.line + 1, edit.end.character + 1),
+						text: edit.text,
+					}, document.version);
+				}));
+				const result = await this.bulkEdits.apply(edits, { token: signal });
+				return { result: 'applied', applied: result.isApplied };
+			}
+			case 'readConfiguration': {
+				const value = this.configuration.getValue(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
+				return { result: 'configuration', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
+			}
+			case 'updateConfiguration':
+				await this.configuration.updateValue(operation.section, operation.value, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
+				return { result: 'done' };
+			case 'showMessage':
+				this.notifications.notify({ message: operation.message, severity: operation.severity === 'information' ? NotificationSeverity.Info : operation.severity === 'warning' ? NotificationSeverity.Warning : NotificationSeverity.Error });
+				return { result: 'done' };
+			case 'showQuickPick':
+				return this.showQuickPick(operation.items, operation.placeholder, signal);
+		}
+	}
+
+	private showQuickPick(items: readonly string[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
+		const pick = this.quickInput.createQuickPick<{ label: string; index: number }>();
+		const listeners = new DisposableStore();
+		return new Promise<ExtensionClientResult>((resolve, reject) => {
+			const finish = (index: number | null): void => resolve({ result: 'selection', index });
+			const cancel = (): void => { reject(new CancellationError()); pick.hide(); };
+			listeners.add(pick.onDidAccept(item => { finish(item.index); pick.hide(); }));
+			listeners.add(pick.onDidHide(() => finish(null)));
+			signal.addEventListener('abort', cancel, { once: true });
+			listeners.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
+			pick.items = items.map((label, index) => ({ label, index }));
+			pick.ariaLabel = placeholder;
+			pick.placeholder = placeholder;
+			pick.show();
+		}).finally(() => { listeners.dispose(); pick.dispose(); });
 	}
 
 	public update(snapshot: ExtensionHostFleetSnapshot): readonly ExtensionApiIssue[] {
@@ -103,6 +194,8 @@ export class MainThreadExtensionApi extends Disposable {
 
 	public clear(): void {
 		this.assertNotDisposed();
+		this.activationController.abort();
+		this.activationController = new AbortController();
 		this.revokeContributions();
 		this.customEditors.clear();
 		for (const key of this.namedOutputChannels.keys()) {
@@ -126,6 +219,22 @@ export class MainThreadExtensionApi extends Disposable {
 			taskProviders.set(runtime.id, providers);
 		}
 		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle === 'dormant') {
+				const signal = this.activationController.signal;
+				for (const command of runtime.activation!.commands) {
+					commands.push({ id: command.command, metadata: { description: command.title }, handler: async (_accessor, ...args) => {
+						signal.throwIfAborted();
+						const activated = await this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event: { type: 'command', command: command.command } });
+						signal.throwIfAborted();
+						const current = activated.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration && candidate.lifecycle === 'ready');
+						const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
+						if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
+						// Activating replaces process registrations. This command retains the connection
+						// lifetime signal and uses the new process fence, rather than the retired batch.
+						return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: args }), signal);
+					} });
+				}
+			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
 				if (registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
@@ -387,4 +496,8 @@ function combineSignals(first: AbortSignal, second: AbortSignal): { readonly sig
 			second.removeEventListener("abort", abortSecond);
 		},
 	};
+}
+
+function extensionDocumentSnapshot(model: ITextModel): ExtensionDocumentSnapshot {
+    return { uri: model.uri.toString(), version: model.getVersionId(), languageId: model.getLanguageId(), text: model.getValue() };
 }

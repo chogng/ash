@@ -183,7 +183,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 			modified: { resource: URI.parse('git-change:/second/modified'), initialText: 'after', languageId: 'javascript', label: 'Working Tree' },
 		},
 	], 'Review changes', {
-		kind: 'external', providerId: 'sessions.turn', label: 'Current Turn', repositoryId: 'repo', branchName: 'main',
+		kind: 'external', providerId: 'sessions.turn', label: 'Current Turn', repositoryId: 'repo', branchName: 'feature/turn-preview',
 	}), new AbortController().signal);
 	assert.deepEqual(seenOptions, [false, true]);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
@@ -200,16 +200,15 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.deepEqual(services.get(ICodeEditorService).listCodeEditors().map(editor => editor.getOption(EditorOption.scrollBeyondLastLine)), [false, false, false, false]);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-file-actions > .ash-toolbar').length, 2);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar').length, 1);
-	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar .ash-dropdown-with-primary-action-view-item').length, 2);
+	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-toolbar .ash-dropdown-with-primary-action-view-item').length, 1);
 	assert.equal(parent.querySelectorAll('button button').length, 0);
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Files"]').click();
 	assert.equal(focusedViews.at(-1), VIEW_ID);
 	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-source-toolbar .ash-dropdown-with-primary-dropdown button').click();
-	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-repository-toolbar .ash-dropdown-with-primary-dropdown button').click();
+	assert.equal(parent.querySelector('.stanza-multi-diff-editor-repository-toolbar .ash-dropdown-with-primary-dropdown'), null);
 	requiredElement<HTMLButtonElement>(dom.window.document, '.stanza-multi-diff-editor-repository-toolbar .ash-toolbar-more-actions button').click();
 	assert.deepEqual(contextMenus, [
 		['Current Turn', 'Current Turn and Earlier', 'Previous Turn', 'Stage', 'Unstage', 'Uncommitted'],
-		['Commit', 'Commit and Push', 'Push'],
 		['Collapse All', 'Expand All'],
 	]);
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Commit"]').click();

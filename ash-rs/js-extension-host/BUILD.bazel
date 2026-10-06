@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ash_rust_binary")
+
+ash_rust_binary(
+    name = "ash-js-extension-host",
+    crate_name = "ash_js_extension_host",
+    crate_root = "src/main.rs",
+    data = ["//app-ts/extension-sdk:index.js", "src/fixed_buffers.js", "src/vscode.js"],
+    deps = [],
+)

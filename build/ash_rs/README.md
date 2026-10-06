@@ -54,7 +54,7 @@ The release entry point is `build/ash_rs/build.py`. It reads the checked-in App 
 `ash-app-server` or profile-scoped `ash-app-server-daemon` for the selected target.
 When `ASH_UPDATE_PUBLIC_KEY` or `--update-public-key` is supplied, the builder binds that trusted key into the App Server component of the immutable package metadata. The release backend uses it to verify independently published stable updates while running; development packages without a key do not check automatically.
 It collects all missing first-party executables into one locked Cargo build, including
-the Code Mode Host, Remote programs, and Windows sandbox when required. Prebuilt inputs
+the Code Mode Host, Rust/V8 JavaScript extension host, Remote programs, and Windows sandbox when required. Prebuilt inputs
 are validated before the build and are not rebuilt. Executable paths come from Cargo's
 JSON artifact messages; a successful build without a requested artifact is rejected.
 `ripgrep.py`
@@ -76,7 +76,7 @@ existing output directory. Repository-owned declarative Editor Extensions come f
 unlinked-tree restriction. Their canonical upstream license copy is
 `third_party/vscode/LICENSE.txt` (mirrored from the sibling VS Code source checkout) and is copied
 once to `ash-resources/licenses/vscode/LICENSE.txt`. Runtime discovery and contribution semantics remain owned by
-[`ash-extensions`](../../ash-rs/extensions/README.md) and
+[`ash-extension-catalog`](../../ash-rs/extension-catalog/README.md) and
 [`docs/editor-extensions.md`](../../docs/editor-extensions.md), not by the package builder.
 Product service inputs come from `resources/product-services/`; the shared assembler copies the regular
 tree and validates the schema-v2 source list, unique names, the official pin, and every source's

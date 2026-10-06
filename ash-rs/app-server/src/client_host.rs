@@ -344,6 +344,20 @@ impl ClientHost {
         params: &P,
         cancellation: &CancellationToken,
     ) -> Result<R, ClientHostError> {
+        self.request_with_timeout(owner, method, params, cancellation, REQUEST_TIMEOUT)
+    }
+
+    pub(crate) fn request_with_timeout<P: Serialize, R: DeserializeOwned>(
+        &self,
+        owner: u64,
+        method: HostMethod,
+        params: &P,
+        cancellation: &CancellationToken,
+        timeout: Duration,
+    ) -> Result<R, ClientHostError> {
+        if timeout.is_zero() {
+            return Err(ClientHostError::TimedOut);
+        }
         cancellation
             .check()
             .map_err(|signal| ClientHostError::Cancelled(signal.reason().to_string()))?;
@@ -388,9 +402,9 @@ impl ClientHost {
                 .map_err(|error| ClientHostError::Failed(error.to_string()))?,
         );
 
-        let deadline = Instant::now() + REQUEST_TIMEOUT;
+        let deadline = Instant::now() + timeout.min(REQUEST_TIMEOUT);
         let value = loop {
-            match receiver.recv_timeout(CANCELLATION_POLL) {
+            match receiver.recv_timeout(CANCELLATION_POLL.min(deadline.saturating_duration_since(Instant::now()))) {
                 Ok(result) => break result?,
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     break Err(ClientHostError::CapabilityUnavailable)?;

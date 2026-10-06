@@ -113,6 +113,7 @@ struct TestProcess {
 }
 
 impl ExtensionHostProcess for TestProcess {
+    fn respond_client(&self, _: extension_protocol::ExtensionClientResponse) -> Result<(), ExtensionHostError> { panic!("fixture does not issue client calls") }
     fn dispatch(
         &self,
         request: ExtensionHostRequest,
@@ -151,10 +152,10 @@ impl ExtensionHostProcess for TestProcess {
         };
         if let Some(response) = response {
             sender
-                .send(Ok(ExtensionHostResponse {
+                .send(Ok(crate::process::PendingMessage::Response(ExtensionHostResponse {
                     context: request.context,
                     response: HostResponseKind::Success(response),
-                }))
+                })))
                 .unwrap();
         } else {
             std::mem::forget(sender);

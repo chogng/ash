@@ -126,9 +126,17 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
+			let marketplaceRevision: { readonly instanceId: string; readonly generation: number } | undefined;
 			const subscription = options.eventApi.subscribe(event => {
-				if (event.method !== "plugin/changed" || event.params.activationGeneration === activationGeneration) return;
-				activationGeneration = event.params.activationGeneration;
+				if (event.method === 'plugin/changed') {
+					if (event.params.activationGeneration === activationGeneration) return;
+					activationGeneration = event.params.activationGeneration;
+				} else if (event.method === 'marketplace/changed') {
+					if (marketplaceRevision?.instanceId === event.params.instanceId && event.params.generation <= marketplaceRevision.generation) return;
+					marketplaceRevision = event.params;
+				} else {
+					return;
+				}
 				void this.reload().catch(error => console.error("Declarative extension refresh failed", error));
 			});
 			this._register(toDisposable(() => subscription.dispose()));

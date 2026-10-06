@@ -3,13 +3,20 @@ use ash_protocol::ThreadOrigin;
 use core_api::CoreError;
 use core_api::ThreadWorktreeBinder;
 use core_api::ThreadWorktreeBindingRequest;
-use git_turn_changes::{CommitState, TurnChangeSet, TurnChangeStore};
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use worktree::{
-    ManagedDirBinding, ManagedDirKind, ManagedDirOwner, ManagedDirProvisionRequest,
-    ManagedDirSource, ManagedDirTarget, ManagedRepositoryBinding,
-};
+use git_turn_changes::CommitState;
+use git_turn_changes::TurnChangeSet;
+use git_turn_changes::TurnChangeStore;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::path::Path;
+use std::path::PathBuf;
+use worktree::ManagedDirBinding;
+use worktree::ManagedDirKind;
+use worktree::ManagedDirOwner;
+use worktree::ManagedDirProvisionRequest;
+use worktree::ManagedDirSource;
+use worktree::ManagedDirTarget;
+use worktree::ManagedRepositoryBinding;
 
 impl GitTurnChangesRuntime {
     /// Cleans a binding after its Session history has been deleted by an explicit user action.
@@ -124,7 +131,7 @@ impl GitTurnChangesRuntime {
                         .map_err(|error| error.to_string())?;
                 for record in records.iter().filter(|record| {
                     record.repository_id == repository_binding.repository_id()
-                        && matches!(record.commit_state, CommitState::Committed { .. })
+                        && !record.committed_paths.is_empty()
                 }) {
                     let before = ash_git::GitTreeId::new(record.before_tree.clone())
                         .map_err(|error| error.to_string())?;
@@ -133,10 +140,27 @@ impl GitTurnChangesRuntime {
                             "committed ChangeSet omitted its after tree".to_string()
                         })?)
                         .map_err(|error| error.to_string())?;
-                    desired = git
-                        .compose_tree_delta(&repository, &before, &desired, &after)
+                    let selected = git
+                        .select_tree_changes(
+                            &repository,
+                            &before,
+                            &after,
+                            &record.committed_paths.iter().cloned().collect::<Vec<_>>(),
+                        )
                         .await
                         .map_err(|error| error.to_string())?;
+                    desired = match git
+                        .replay_tree_delta(&repository, &before, &desired, &selected)
+                        .await
+                        .map_err(|error| error.to_string())?
+                    {
+                        ash_git::GitTreeReplayResult::Clean(tree) => tree,
+                        ash_git::GitTreeReplayResult::Conflict { paths } => {
+                            return Err(format!(
+                                "committed changes cannot reconstruct Thread: {paths:?}"
+                            ));
+                        }
+                    };
                 }
                 git.replace_managed_worktree_tree(&repository, &desired)
                     .await
@@ -548,6 +572,30 @@ impl GitTurnChangesRuntime {
 }
 
 impl GitTurnChangesRuntime {
+    pub(super) fn refresh_capture_object_locations(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+        binding: &ManagedDirBinding,
+    ) -> Result<(), String> {
+        self.dirs.runtime.block_on(async {
+            let git = ash_git::GitClient::system();
+            for repository in binding.repositories() {
+                let opened = git
+                    .open_repository(repository.source_repository_root())
+                    .await
+                    .map_err(|error| error.to_string())?;
+                git_turn_changes::relocate_capture_objects(
+                    self.store.as_ref(),
+                    thread_id,
+                    repository.repository_id(),
+                    opened.common_dir(),
+                )
+                .map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        })
+    }
+
     fn bind_thread_services(
         &self,
         thread_id: &ash_protocol::ThreadId,
@@ -563,6 +611,8 @@ impl GitTurnChangesRuntime {
             .bind_services(thread_id, binding)
             .map_err(CoreError::Journal)?;
         if binding.kind() == ManagedDirKind::Git {
+            self.refresh_capture_object_locations(thread_id, binding)
+                .map_err(CoreError::Journal)?;
             self.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])
                 .map_err(CoreError::Journal)?;
         }

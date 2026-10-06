@@ -47,6 +47,7 @@ def create_runtime_package(root: Path, target: str) -> Path:
         executable("ash-exec-server"),
         executable("ash-app-server-daemon"),
         executable("ash-code-mode-host"),
+        executable("ash-js-extension-host"),
         ExecutableResolution(rg, "test", "local-override", _digest(rg)),
         ExecutableResolution(tgrep, "test", "local-override", _digest(tgrep)),
         NodeResolution(

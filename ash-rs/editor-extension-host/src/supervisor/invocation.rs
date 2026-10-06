@@ -116,6 +116,7 @@ impl ExtensionHostSupervisor {
             }
         };
         Ok(ExtensionInvocationHandle {
+            client_cancellation: ash_async_utils::CancellationSource::new(),
             supervisor: self.clone(),
             process,
             incarnation,
@@ -144,6 +145,7 @@ pub struct ExtensionInvocationTarget {
 
 /// In-flight invocation that can be cancelled from another thread while `wait` is blocked.
 pub struct ExtensionInvocationHandle {
+    client_cancellation: ash_async_utils::CancellationSource,
     supervisor: ExtensionHostSupervisor,
     process: Arc<dyn ExtensionHostProcess>,
     incarnation: u64,
@@ -160,6 +162,7 @@ impl ExtensionInvocationHandle {
     }
 
     pub fn cancel(&self, reason: CancelReason) -> Result<(), ExtensionHostError> {
+        self.client_cancellation.cancel();
         if self.cancelled.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
@@ -174,6 +177,12 @@ impl ExtensionInvocationHandle {
     }
 
     pub fn wait(&self) -> Result<InvokeResult, ExtensionHostError> {
+        self.wait_with_client(|_, _, _| Err(crate::HostFailure { code: crate::HostErrorCode::OperationNotSupported, message: "this caller does not provide editor services".into() }))
+    }
+
+    /// Services child calls on the initiating owner's thread, within the parent deadline.
+    /// The handler must observe both cancellation and the supplied remaining duration.
+    pub fn wait_with_client(&self, mut handler: impl FnMut(extension_protocol::ExtensionClientOperation, &ash_async_utils::CancellationToken, Duration) -> Result<extension_protocol::ExtensionClientResult, crate::HostFailure>) -> Result<InvokeResult, ExtensionHostError> {
         let pending = self
             .pending
             .lock()
@@ -193,8 +202,14 @@ impl ExtensionInvocationHandle {
                 break pending.recv_timeout(self.supervisor.inner.limits.cancellation_grace);
             }
             let poll = WAIT_POLL_INTERVAL.min(self.wait_timeout.saturating_sub(elapsed));
-            match pending.recv_timeout(poll) {
-                Ok(Some(response)) => break Ok(Some(response)),
+            match pending.recv_next_timeout(poll) {
+                Ok(Some(crate::process::PendingMessage::Response(response))) => break Ok(Some(response)),
+                Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
+                    let outcome = handler(request.operation, &self.client_cancellation.token(), self.wait_timeout.saturating_sub(started.elapsed()));
+                    if let Err(error) = self.process.respond_client(extension_protocol::ExtensionClientResponse { context: request.context, call_id: request.call_id, outcome }) {
+                        break Err(error);
+                    }
+                }
                 Ok(None) => {}
                 Err(error) => break Err(error),
             }
@@ -219,6 +234,7 @@ impl ExtensionInvocationHandle {
         if requires_recovery {
             let _ = self.process.terminate();
         }
+        self.client_cancellation.cancel();
         self.release_lease();
         self.completed.store(true, Ordering::Release);
         if requires_recovery {

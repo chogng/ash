@@ -12,6 +12,11 @@
 
 ## 快速理解
 
+Editor Extension 的目标为 TS/JS 扩展、TS SDK 和受限 Rust 业务接口。PluginsManager 继续拥有包安装、
+完整性和授权记录；扩展入口由 JS 运行环境执行。现有 executable sidecar + Host 仍在源码中，
+不再作为目标产品扩展入口。新 JS 运行方式、逐扩展授权与源码退场尚未完成，见
+[`编辑器扩展系统`](../../docs/editor-extensions.md#0-确定的产品方向)。
+
 Marketplace 是 Plugin 来源，不是产品主领域。`ash-core-plugins` 聚合内置、远端和本地来源，
 远端签名 registry 只是其中一个 adapter；它们不是 client/server 进程对，也不通过 JSONL 相连。
 
@@ -147,8 +152,8 @@ PluginsManager；领域页面不另建安装记录、更新策略或下载链路
 | `skill` | `ash-skills-extension` / Skill catalog | verified exact Skill root | 选择、完整 `SKILL.md` 加载与执行 |
 | `mcp` | MCP composition | HTTPS 或 package-relative stdio transport；调用持有 capability lease | OAuth、审批、Tool policy |
 | `connector` | Connector authority | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入 | 登录、SecretStore、连接状态 |
-| Theme package 的 `asset` | `ash-extensions` → Workbench Theme | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用 |
-| Language package 的 `asset` + `executable` | `ash-extensions` + `LspServerProviders` | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
+| Theme package 的 `asset` | `ash-extension-catalog` → Workbench Theme | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用 |
+| Language package 的 `asset` + `executable` | `ash-extension-catalog` + `LspServerProviders` | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
 | `localization` | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window | 文案提取、产品 bundle 设计与 UI 重建 |
 | `executable` + 可选 `ash/editor-extensions.json` | Editor Extension source/admission → Host | Ash consumer sidecar 绑定 exact executable；admission generation/lease 与 PluginsManager lease 同时成立 | enable/grant、目录执行 capability、进程隔离 |
 
@@ -165,7 +170,8 @@ bytes 复制进 PluginsManager store。
 `package.json` 静态 editor assets 的声明式 consumer contract。Theme 与 Language family 先由各自
 portable adapter 规范化，再进入该 contract。只有出现真实的跨 Theme/Language 静态贡献发布需求时，
 才应新增有明确 schema 的 `editorAssets` capability；不能把通用 `asset` 自动当成 Extension。可执行
-Editor Extension 则始终走 sidecar + admission + Host 路径，不能与声明式 catalog 合并。
+Editor Extension 的现有代码走 sidecar + admission + Host 路径；它将退出目标编辑器扩展入口。
+TS/JS 宿主必须独立校验运行和操作授权，不能从声明式 catalog 可读或旧 executable grant 推导新权限。
 
 官方 MCP Registry 是上游发现源，不是 Ash 的安装信任根。Marketplace publisher 将选中的
 Registry record 转换成固定版本 package，经审核后写入 signed catalog；Ash 只安装经过 TUF 与
@@ -217,16 +223,30 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
     "targetsBaseUrl": "https://chogng.github.io/ash-marketplace/targets/",
     "trustedRoot": "marketplace-root.json",
     "catalogRefreshIntervalSeconds": 300
-  }]
+  }],
+  "openVsx": {
+    "name": "open-vsx",
+    "apiUrl": "https://open-vsx.org/api/",
+    "downloadOrigins": ["https://openvsx.eclipsecontent.org/"]
+  }
 }
 ```
 
 App Server 启动时：
 
 1. `LocalProductServicesConfig` 读取 HTTPS endpoints 和 product-pinned trusted root；
-2. 为每个名称调用 `MarketplaceRemoteClient::new`，延迟访问网络，并注册到 `PluginProviders`；
+2. 为每个签名来源创建 `MarketplaceRemoteClient`，为 `openVsx` 创建 `OpenVsxClient`，延迟访问网络，并注册到 `PluginProviders`；
 3. `PluginsManager::open(<profile>/marketplace-manager, providers)` 打开唯一的本地安装状态；
-4. App Server 注入 `Arc<dyn PluginPackageService>`；首次 Marketplace 请求才刷新 TUF/catalog。
+4. App Server 注入 `Arc<dyn PluginPackageService>`；首次 Marketplace 请求才访问对应来源。
+
+`openVsx` 是可选的独立来源，名称不能与 `marketplaces` 重复。它使用 Open VSX 的 HTTPS API 和
+VSIX 校验和，不使用 Ash TUF 根。配置中的 API origin 和 `downloadOrigins` 是每次请求及 CDN
+跳转的允许地址。包 ID 为 `publisher.name@open-vsx`，精确版本、平台及校验和写入安装内容；
+Manager 仍核对解压后的内容摘要、文件数与大小。来源校验不授予脚本执行权限。
+
+当前只接入 `universal` 正式版 VSIX。`editorExtension` capability 把安装目录交给现有扩展目录，
+让 TS owner 消费受支持的语言、语法、snippet 和主题等声明。它不能被 acquire 为 executable，
+不会启动包中的 `main`、`browser` 或旧 Rust Host。详情页和安装确认均显示此限制。
 
 `catalogRefreshIntervalSeconds` 是产品选择的进程内已验签 catalog snapshot 复用时间，允许范围为
 60–86400 秒，默认 300 秒。它只控制何时再次尝试远端刷新，不改变 TUF expiry、rollback、revocation

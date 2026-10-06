@@ -70,7 +70,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.SessionsChanges,
 				{ type },
-				() => type === AccessibleViewType.View ? view.getAccessibleContent() : localize('sessions.changes.help', 'Changes\nUse the arrow keys to select a changed file. Press Enter to compare its before and after contents. Review all changes opens a combined comparison. Press Alt+F2 to read the changed files. Changes belong to the selected conversation.'),
+				() => type === AccessibleViewType.View ? view.getAccessibleContent() : localize('sessions.changes.help', 'Changes\nUse the arrow keys to navigate changed files. Hold Shift to select several files, or use Command on macOS and Control on other platforms to add files to the selection. Press Enter to compare a file. Preview selected changes asks for a commit message and opens the final comparison. Commit this preview submits exactly the reviewed contents and message. Committed files remain readable; remaining files can be selected later. Press Alt+F2 to read the files, their Turn and selection state. Changes belong to the selected conversation.'),
 				() => view.focus(),
 				AccessibilityVerbositySettingId.SessionsChanges,
 			);

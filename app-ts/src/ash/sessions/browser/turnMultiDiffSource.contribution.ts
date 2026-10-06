@@ -1,15 +1,17 @@
 import type { IAction } from '../../base/common/actions.js';
 import { Disposable } from '../../base/common/lifecycle.js';
 import { Lxicon } from '../../base/common/lxicons.js';
+import { localize } from '../../nls.js';
+import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import type { URI } from '../../base/common/uri.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../workbench/common/contributions.js';
 import type { MultiDiffEditorInput } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, type IMultiDiffSourceResolver, type IResolvedMultiDiffSource } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
-import { type IChatService, IChatService as ChatServiceId, type TurnChangeSetSummary } from '../../workbench/services/chat/common/chatService.js';
+import { type IChatService, IChatService as ChatServiceId, type TurnCommitSelection } from '../../workbench/services/chat/common/chatService.js';
 import { IEditorService, type IEditorService as IEditorServiceContract } from '../../workbench/services/editor/common/editorService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { createTurnMultiDiffEditorInput, type TurnMultiDiffScope } from './turnMultiDiffSource.js';
+import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput, type TurnMultiDiffScope } from './turnMultiDiffSource.js';
 
 class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 
@@ -17,6 +19,7 @@ class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@ChatServiceId private readonly chat: IChatService,
 		@IEditorService private readonly editors: IEditorServiceContract,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {}
 
 	sourceActions(): readonly IAction[] {
@@ -29,10 +32,15 @@ class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 	}
 
 	canHandleUri(uri: URI): boolean {
-		return uri.scheme === 'ash-multi-diff' && uri.path.startsWith('/turn/');
+		return uri.scheme === 'ash-multi-diff' && (uri.path.startsWith('/turn/') || uri.path.startsWith('/turn-commit/'));
 	}
 
 	async resolveDiffSource(uri: URI): Promise<IResolvedMultiDiffSource> {
+		const preview = commitSourceIdentity(uri);
+		if (preview) {
+			const input = await createTurnCommitPreviewInput(this.chat, preview.sessionId, preview.threadId, await this.chat.readTurnCommit(preview.sessionId, preview.threadId, preview.commitId));
+			return { resource: input.resource, resources: input.items, label: input.label, source: input.source };
+		}
 		const identity = turnSourceIdentity(uri);
 		if (!identity) throw new Error('The multi-diff source does not belong to Sessions.');
 		const session = this.sessions.sessions.find(candidate => candidate.sessionId === identity.sessionId);
@@ -42,15 +50,16 @@ class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 	}
 
 	primaryRepositoryAction(input: MultiDiffEditorInput): IAction | undefined {
-		if (!this.sessions.active || input.source?.kind !== 'external' || input.source.providerId !== 'sessions.turn') return undefined;
-		return {
-			id: 'multiDiff.commit.auto',
-			label: 'Commit',
-			tooltip: 'Generate a commit message and commit the selected Turn changes',
-			icon: Lxicon.gitCommit,
-			enabled: true,
-			run: () => this.autoCommit(input),
-		};
+		if (input.source?.kind !== 'external') { return undefined; }
+		const preview = commitSourceIdentity(input.resource);
+		if (preview && input.source.providerId === 'sessions.turnCommit') {
+			return { id: 'multiDiff.commit.selection', label: localize('sessions.changes.commitPrepared', 'Commit this preview'), tooltip: localize('sessions.changes.commitPreparedHint', 'Commit exactly the reviewed files and message'), icon: Lxicon.gitCommit, enabled: true, run: async () => {
+				await this.chat.commitTurnChange(preview.sessionId, preview.threadId, preview.commitId);
+				return localize('sessions.changes.commitQueued', 'The reviewed commit is queued.');
+			} };
+		}
+		if (input.source.providerId !== 'sessions.turn') { return undefined; }
+		return { id: 'multiDiff.commit.preview', label: localize('sessions.changes.previewCommit', 'Preview commit…'), tooltip: localize('sessions.changes.previewCommitHint', 'Choose a message and review the remaining Turn changes before committing'), icon: Lxicon.gitCommit, enabled: true, run: () => this.previewCommit(input) };
 	}
 
 	private action(id: string, label: string, tooltip: string, enabled: boolean, run: () => Promise<void>): IAction {
@@ -64,56 +73,26 @@ class SessionsMultiDiffSourceResolver implements IMultiDiffSourceResolver {
 		await this.editors.openEditor(input, { pinned: true });
 	}
 
-	private async autoCommit(input: MultiDiffEditorInput): Promise<string> {
+	private async previewCommit(input: MultiDiffEditorInput): Promise<void> {
 		const identity = turnSourceIdentity(input.resource);
-		const active = this.sessions.active;
-		const sessionId = identity?.sessionId ?? active?.session.sessionId;
-		const threadId = identity?.threadId ?? active?.threadId;
-		if (!sessionId || !threadId) throw new Error('No active Turn is available to commit.');
-		const listed = await this.chat.listTurnChanges(sessionId, threadId);
-		const requestedIds = identity ? new Set(identity.changeSetIds) : undefined;
-		const selected = listed.filter(changeSet =>
-			(requestedIds?.has(changeSet.changeSetId) ?? changeSet.repositoryId === input.source?.repositoryId) &&
-			changeSet.captureState !== 'discarded' && changeSet.commitState !== 'committed');
-		if (selected.length === 0) throw new Error('No sealed Turn changes are available to commit.');
-		for (const changeSet of selected) await this.commitChangeSet(changeSet);
-		return selected.length === 1 ? 'Committed the selected Turn.' : `Committed ${selected.length} Turns.`;
-	}
-
-	private async commitChangeSet(initial: TurnChangeSetSummary): Promise<void> {
-		if (initial.captureState !== 'sealed') throw new Error('The selected Turn is still running and cannot be committed.');
-		let summary = initial;
-		let details = await this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
-		if (!details.draftMessage?.trim()) {
-			if (summary.messageState === 'unconfigured') throw new Error('Configure and authorize a commit-message model before using automatic commit.');
-			const updates = await this.chat.generateTurnChangeMessage(summary.sessionId, summary.threadId, summary.changeSetId, summary.revision);
-			summary = updates.find(candidate => candidate.changeSetId === summary.changeSetId) ?? summary;
-			summary = await this.waitForGeneratedMessage(summary);
-			details = await this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
-			const message = details.draftMessage?.trim() || details.generatedMessage?.trim();
-			if (!message) throw new Error('The commit-message model did not produce a message.');
-			if (!details.draftMessage?.trim()) {
-				const draftUpdates = await this.chat.updateTurnChangeDraft(summary.sessionId, summary.threadId, summary.changeSetId, summary.revision, message);
-				summary = draftUpdates.find(candidate => candidate.changeSetId === summary.changeSetId) ?? summary;
-			}
+		if (!identity) { throw new Error(localize('sessions.changes.invalidSelection', 'This review has no Turn selection.')); }
+		const listed = await this.chat.listTurnChanges(identity.sessionId, identity.threadId);
+		const selected = listed.filter(record => identity.changeSetIds.includes(record.changeSetId) && record.captureState === 'sealed' && record.commitState !== 'committed');
+		const selections: TurnCommitSelection[] = [];
+		let draft = '';
+		for (const record of selected) {
+			const details = await this.chat.readTurnChange(identity.sessionId, identity.threadId, record.changeSetId);
+			const paths = details.files.filter(file => !details.summary.committedPaths.includes(file.path)).map(file => file.path);
+			if (paths.length) { selections.push({ changeSetId: record.changeSetId, expectedRevision: details.summary.revision, paths }); }
+			if (selected.length === 1) { draft = details.draftMessage ?? ''; }
 		}
-		await this.chat.commitTurnChange(summary.sessionId, summary.threadId, summary.changeSetId, summary.revision);
+		if (!selections.length) { throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.')); }
+		const message = await this.quickInput.input({ title: localize('sessions.changes.commitMessage', 'Commit message'), value: draft, validateInput: async value => value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.') });
+		if (message === undefined) { return; }
+		const preview = await this.chat.prepareTurnCommit(identity.sessionId, identity.threadId, selections, message);
+		await this.editors.openEditor(await createTurnCommitPreviewInput(this.chat, identity.sessionId, identity.threadId, preview), { pinned: true });
 	}
 
-	private waitForGeneratedMessage(summary: TurnChangeSetSummary): Promise<TurnChangeSetSummary> {
-		if (summary.messageState === 'ready') return Promise.resolve(summary);
-		if (summary.messageState === 'failed' || summary.messageState === 'unconfigured') return Promise.reject(new Error('Commit-message generation failed.'));
-		return new Promise((resolve, reject) => {
-			const listener = this.chat.onDidUpdateTurnChanges(update => {
-				if (update.sessionId !== summary.sessionId || update.threadId !== summary.threadId) return;
-				const next = update.changeSets.find(candidate => candidate.changeSetId === summary.changeSetId);
-				if (!next || next.messageState === 'queued' || next.messageState === 'generating') return;
-				listener.dispose();
-				if (next.messageState === 'ready') resolve(next);
-				else reject(new Error('Commit-message generation failed.'));
-			});
-		});
-	}
 }
 
 class SessionsMultiDiffSourceContribution extends Disposable {
@@ -141,6 +120,16 @@ function turnSourceIdentity(uri: URI): {
 	const changes = query.get('changes');
 	if (!sessionId || !threadId || !changes) throw new Error('Invalid Turn source identity.');
 	return { scope, sessionId, threadId, changeSetIds: changes.split(',') };
+}
+
+function commitSourceIdentity(uri: URI): { readonly sessionId: string; readonly threadId: string; readonly commitId: string } | undefined {
+	if (uri.scheme !== 'ash-multi-diff' || !uri.path.startsWith('/turn-commit/')) { return undefined; }
+	const query = new URLSearchParams(uri.toEncodedComponents().query);
+	const sessionId = query.get('session');
+	const threadId = query.get('thread');
+	const commitId = decodeURIComponent(uri.path.slice('/turn-commit/'.length));
+	if (!sessionId || !threadId || !commitId) { throw new Error(localize('sessions.changes.invalidSelection', 'This review has no Turn selection.')); }
+	return { sessionId, threadId, commitId };
 }
 
 // The resolver needs IEditorService, which the Workbench registers after BlockStartup.

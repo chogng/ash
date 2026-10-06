@@ -151,6 +151,48 @@ struct LeaseRecord {
 }
 
 impl PluginsManager {
+    /// Pins an exact verified source for a trusted product consumer. This grants package
+    /// retention only; executable admission is checked by that consumer's separate authority.
+    pub fn acquire_local_source(
+        &self,
+        source: &LocalCapabilitySource,
+    ) -> Result<CapabilityLease, MarketplaceClientError> {
+        let mut runtime = self.lock_runtime()?;
+        let (installation, capability) = find_capability(&runtime.durable, &source.capability)?;
+        if installation.state != InstallationState::Installed
+            || installation.package != source.package
+            || capability.descriptor.kind != source.kind
+        {
+            return Err(installation_in_use());
+        }
+        let installation_id = installation.installation_id.clone();
+        Ok(self.insert_lease(&mut runtime, source.capability.clone(), installation_id))
+    }
+
+    fn insert_lease(
+        &self,
+        runtime: &mut RuntimeState,
+        capability: CapabilityRef,
+        installation_id: String,
+    ) -> CapabilityLease {
+        let sequence = self
+            .lease_sequence
+            .fetch_add(1, Ordering::Relaxed)
+            .to_string();
+        let lease = CapabilityLease {
+            id: opaque_id("lease", &[&self.session_nonce, &sequence, &capability.id]),
+            capability,
+            installation_id,
+        };
+        runtime.leases.insert(
+            lease.id.clone(),
+            LeaseRecord {
+                lease: lease.clone(),
+            },
+        );
+        lease
+    }
+
     /// Opens one profile-owned installation store over its explicitly registered sources.
     pub fn open(
         state_root: impl Into<PathBuf>,
@@ -471,24 +513,7 @@ impl PluginPackageService for PluginsManager {
             return Err(installation_in_use());
         }
         let spec = activation::acquire_spec(&self.store, &installation, &capability)?;
-        let sequence = self
-            .lease_sequence
-            .fetch_add(1, Ordering::Relaxed)
-            .to_string();
-        let lease = CapabilityLease {
-            id: opaque_id(
-                "lease",
-                &[&self.session_nonce, &sequence, &request.capability.id],
-            ),
-            capability: request.capability,
-            installation_id: installation.installation_id,
-        };
-        runtime.leases.insert(
-            lease.id.clone(),
-            LeaseRecord {
-                lease: lease.clone(),
-            },
-        );
+        let lease = self.insert_lease(&mut runtime, request.capability, installation.installation_id);
         Ok(AcquiredCapability { lease, spec })
     }
 
@@ -605,6 +630,7 @@ fn capability_kind_tag(kind: CapabilityKind) -> &'static str {
         CapabilityKind::Language => "language",
         CapabilityKind::Localization => "localization",
         CapabilityKind::Executable => "executable",
+        CapabilityKind::EditorExtension => "editorExtension",
         CapabilityKind::Asset => "asset",
     }
 }

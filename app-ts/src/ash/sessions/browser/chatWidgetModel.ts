@@ -230,11 +230,6 @@ export class ChatWidgetModel extends Disposable {
 		await this.loadChangeDetails(changeSet.changeSetId, this.changesGeneration);
 	}
 
-	async commitChange(changeSet: TurnChangeSetSummary): Promise<void> {
-		const owner = this.requireChangeOwner();
-		this.acceptChangeSets(await this.chatService.commitTurnChange(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision));
-	}
-
 	async discardChanges(): Promise<void> {
 		const owner = this.requireChangeOwner();
 		const expectedRevision = Math.max(0, ...this._changeSets.map((changeSet) => changeSet.revision));

@@ -1,7 +1,7 @@
 use ash_core_plugins::PluginActivationAuthority;
-use ash_extensions::DynamicExtensionPackageSource;
-use ash_extensions::DynamicExtensionSourceProvider;
-use ash_extensions::DynamicExtensionSourceSnapshot;
+use extension_catalog::DynamicExtensionPackageSource;
+use extension_catalog::DynamicExtensionSourceProvider;
+use extension_catalog::DynamicExtensionSourceSnapshot;
 
 /// Projects exact effective Plugin declarative Extension packages into the static catalog.
 pub(super) struct PluginExtensionSourceProvider {

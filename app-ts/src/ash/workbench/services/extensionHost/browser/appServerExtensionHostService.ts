@@ -1,9 +1,11 @@
+import { IModelService } from '../../../../editor/common/services/model.js';
+import { ILifecycleService, LifecyclePhase } from '../../lifecycle/common/lifecycle.js';
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CommandRegistry } from "../../../../platform/commands/common/commands.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from "../../../../platform/extensionHost/common/extensionHostApi.js";
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type ExtensionHostActivationEvent } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../output/common/output.js";
 import { MainThreadExtensionApi, type ExtensionApiIssue } from "../../../api/browser/mainThreadExtensionApi.js";
@@ -27,6 +29,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	private pendingAction: RefreshAction | undefined;
 	private refreshRunner: Promise<void> | undefined;
 	private started = false;
+	private readonly pendingActivations = new Map<string, Promise<void>>();
 
 	readonly onDidChangeState: Event<ExtensionHostState> = this.stateEmitter.event;
 	readonly onDidChange: Event<ExtensionHostSnapshot> = this.changeEmitter.event;
@@ -38,11 +41,16 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IOutputService output: IOutputService,
+		@IModelService private readonly models: IModelService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
 	) {
 		super();
 		const timeout = normalizeTimeout(invocationTimeoutMillis);
 		this.fleetOutput = this._register(output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" }));
 		this.extensionApi = this._register(instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput));
+		this._register(models.onModelAdded(() => this.activateEditorEvents()));
+		this._register(models.onModelLanguageChanged(() => this.activateEditorEvents()));
+		void lifecycle.when(LifecyclePhase.Restored).then(() => this.activateEditorEvents());
 		const changed = api.onDidChange(generation => this.acceptChanged(generation));
 		const connection = api.onConnectionState(state => { void this.acceptConnectionState(state).catch(error => this.failRefresh(error)); });
 		this._register(toDisposable(() => changed.dispose()));
@@ -52,6 +60,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			this.connectionRevision += 1;
 			this.authorityRevision += 1;
 			this.pendingAction = undefined;
+			this.pendingActivations.clear();
 			this.extensionApi.clear();
 		}));
 	}
@@ -89,6 +98,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		if (!this.started) return Promise.resolve();
 		this.started = false;
 		this.authorityRevision += 1;
+		this.pendingActivations.clear();
 		this.pendingAction = undefined;
 		this.desiredGeneration = 0;
 		runWithBufferedEvents(() => {
@@ -131,6 +141,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		}
 		this.connectionReady = false;
 		this.authorityRevision += 1;
+		this.pendingActivations.clear();
 		this.pendingAction = undefined;
 		runWithBufferedEvents(() => {
 			this.extensionApi.clear();
@@ -182,12 +193,37 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 				this.publishSnapshotFailures(snapshot, issues);
 				this.setState(projectState(snapshot, issues.length > 0));
 			});
+			this.activateEditorEvents(snapshot);
 		} catch (error) {
 			runWithBufferedEvents(() => {
 				this.failureEmitter.fire({ extensionId: undefined, code: "registrationProjectionFailed", incarnation: undefined, message: errorMessage(error) });
 				this.setState(this.extensionApi.hasContributions ? "degraded" : "failed");
 			});
 		}
+	}
+
+	private activateEditorEvents(snapshot?: ExtensionHostFleetSnapshot): void {
+		if (this.isDisposed || !this.started || !this.connectionReady) { return; }
+		if (!snapshot) { void this.requestRefresh('list').catch(reportExtensionHostError); return; }
+		const languages = new Set(this.models.getModels().map(model => model.getLanguageId()));
+		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle !== 'dormant') { continue; }
+			const language = [...languages].find(id => runtime.activation!.events.includes('onLanguage') || runtime.activation!.events.includes(`onLanguage:${id}`));
+			if (language) { this.activateRuntime(runtime, { type: 'language', languageId: language }); }
+			else if (this.lifecycle.phase >= LifecyclePhase.Restored && runtime.activation!.events.includes('onStartupFinished')) { this.activateRuntime(runtime, { type: 'startupFinished' }); }
+		}
+	}
+
+	private activateRuntime(runtime: ExtensionHostRuntime, event: ExtensionHostActivationEvent): void {
+		const key = `${runtime.id}:${runtime.activationGeneration}`;
+		if (this.pendingActivations.has(key)) { return; }
+		const revision = this.authorityRevision;
+		const pending = this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event }).then(snapshot => {
+			if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) { this.acceptSnapshot(snapshot); }
+		}).catch(error => {
+			if (!this.isDisposed && this.started && revision === this.authorityRevision) { this.failureEmitter.fire({ extensionId: runtime.id, code: 'activationFailed', incarnation: undefined, message: errorMessage(error) }); }
+		}).finally(() => { if (this.pendingActivations.get(key) === pending) { this.pendingActivations.delete(key); } });
+		this.pendingActivations.set(key, pending);
 	}
 
 	private publishSnapshotFailures(snapshot: ExtensionHostFleetSnapshot, issues: readonly ExtensionApiIssue[]): void {
@@ -246,7 +282,7 @@ function fleetStateSeverity(state: ExtensionHostState): OutputEntrySeverity {
 
 function projectState(snapshot: ExtensionHostFleetSnapshot, bridgeIssues: boolean): ExtensionHostState {
 	if (snapshot.extensions.length === 0) return bridgeIssues ? "degraded" : "ready";
-	const ready = snapshot.extensions.filter(extension => extension.lifecycle === "ready").length;
+	const ready = snapshot.extensions.filter(extension => (extension.lifecycle === "ready" || extension.lifecycle === "dormant")).length;
 	if (ready === snapshot.extensions.length) return bridgeIssues ? "degraded" : "ready";
 	if (ready > 0) return "degraded";
 	if (snapshot.extensions.every(extension => extension.lifecycle === "stopped")) return "stopped";

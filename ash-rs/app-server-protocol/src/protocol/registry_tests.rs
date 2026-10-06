@@ -4,6 +4,32 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn marketplace_execution_policy_roundtrips_and_serializes_global_mutations() {
+    use crate::protocol::marketplace::MarketplaceEditorExtensionPolicyParams;
+    let read = super::client_method_definition("marketplace/editorExtensions").unwrap();
+    assert_eq!(
+        read.serialization_scope(&serde_json::json!({})).unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::SharedRead
+        })
+    );
+    let write = super::client_method_definition("marketplace/setEditorExtensionPolicy").unwrap();
+    for action in ["enable", "disable", "grant", "revoke"] {
+        let value = serde_json::json!({"installationId":"installed", "packageDigest":"sha256:exact", "expectedRevision":7, "action":action});
+        let request: MarketplaceEditorExtensionPolicyParams =
+            serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), value);
+        assert_eq!(
+            write.serialization_scope(&value).unwrap(),
+            Some(ClientRequestSerializationScope::Global {
+                access: SerializationAccess::Exclusive
+            })
+        );
+    }
+    assert!(serde_json::from_value::<MarketplaceEditorExtensionPolicyParams>(serde_json::json!({"installationId":"installed", "packageDigest":"digest", "expectedRevision":1, "action":"automatic"})).is_err());
+}
+
+#[test]
 fn context_inspection_uses_environment_or_session_read_serialization() {
     let method = super::client_method_definition("context/read").unwrap();
     assert_eq!(

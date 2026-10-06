@@ -15,9 +15,17 @@ export class ExtensionColorThemeService extends Disposable {
 	constructor(private readonly api: IExtensionApi, events: IServerEventApi) {
 		super();
 		let activationGeneration: number | undefined;
+		let marketplaceRevision: { readonly instanceId: string; readonly generation: number } | undefined;
 		const subscription = events.subscribe(event => {
-			if (event.method !== 'plugin/changed' || event.params.activationGeneration === activationGeneration) return;
-			activationGeneration = event.params.activationGeneration;
+			if (event.method === 'plugin/changed') {
+				if (event.params.activationGeneration === activationGeneration) return;
+				activationGeneration = event.params.activationGeneration;
+			} else if (event.method === 'marketplace/changed') {
+				if (marketplaceRevision?.instanceId === event.params.instanceId && event.params.generation <= marketplaceRevision.generation) return;
+				marketplaceRevision = event.params;
+			} else {
+				return;
+			}
 			void this.reload().catch(error => console.error('Extension color theme refresh failed', error));
 		});
 		this._register(toDisposable(() => subscription.dispose()));

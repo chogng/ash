@@ -14,7 +14,7 @@
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
-> Editor Extension 双轨系统边界：[`editor-extensions.md`](editor-extensions.md)
+> Editor Extension 的 TS/JS 运行方向与当前实现：[`editor-extensions.md`](editor-extensions.md)
 > 可执行 Host runtime 实现：[`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)
 
 ## 快速理解
@@ -22,6 +22,16 @@
 Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定义并校验这个 bundle；
 `ash-core-plugins` 聚合内置 Ash catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
 Marketplace 只是 Plugin 来源，Skill、MCP、Connector 等运行方不解释 Marketplace。
+
+Editor Extension 已确定采用 TS/JS 扩展和 TS SDK：界面与文档调用 TS 服务，后端业务通过受限接口
+请求 Rust。包管理仍由本系统负责，扩展运行不要求作者编写 Rust。下文的 `editorExtensions[]` 与
+可执行 Host 是仍在源码中的既有契约，退出目标产品扩展方向；它们不作为第三方 JS 运行的授权依据。
+职责与安全要求见 [`确定的产品方向`](editor-extensions.md#0-确定的产品方向)。
+
+第三方 Editor Extension 来源已接入 Open VSX。来源 adapter 与 VSIX 安装复用 Rust 包管理生命周期，
+保留独立的来源身份和验证结果；安装后只消费受支持的声明式贡献，包中的脚本不会运行。现有 Ash registry 的签名契约不会自动
+适用于 Open VSX 包。运行兼容性由 TS 扩展 API 和隔离的 JS 宿主决定，具体要求见
+[`第三方扩展来源采用 Open VSX`](editor-extensions.md#05-第三方扩展来源采用-open-vsx)。
 
 | 用户动作 | 系统发生什么 | 不会自动发生什么 |
 | --- | --- | --- |
@@ -57,7 +67,7 @@ Plugin 不是：
 - secret container；
 - 允许扩展绕过 approval、sandbox、credential 和 network policy 的信任标记。
 
-边界固定为：
+当前已实现的包分发与领域接入如下；Editor Extension 支持显式 JS 入口及独立 RPC 程序：
 
 ```mermaid
 flowchart TD
@@ -73,7 +83,7 @@ flowchart TD
     C -->|"connected"| B["Ready MCP binding"]
     R -->|"standalone activation"| T["Tool Registry / Core"]
     E --> H["ash-editor-extension-host supervisor"]
-    D --> X["ash-extensions immutable snapshot"]
+    D --> X["ash-extension-catalog immutable snapshot"]
     B --> R
 ```
 
@@ -84,12 +94,13 @@ Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时语�
 
 静态 Editor Extension 保持另一套内容边界：它读取自己的 `package.json` 和声明式
 language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declarativeExtensions[]` 指向包内
-静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `ash-extensions`。
+静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `ash-extension-catalog`。
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
-Legacy Plugin v1 提供显式 `editorExtensions[]` bridge。每项指向包内一个可直接启动、自己实现 Ash Host
-RPC v1 的程序；它不是由通用 Node/WASM runtime 加载的脚本。compatibility authority 只验证并授权声明，
+Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 指向用 TS SDK 编写并编译为 ESM 的 JS，
+由产品的 Rust V8 宿主执行；`runtime: hostRpc` 指向自己实现共享协议的独立程序。两者不启动 Node。
+compatibility authority 只验证并授权声明，
 `ash-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
 
@@ -268,6 +279,7 @@ slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device p
       {
         "id": "review-runtime",
         "entrypoint": "bin/review-extension-host",
+        "runtime": "hostRpc",
         "runtimeApiVersion": 1,
         "activationEvents": [
           { "type": "onCommand", "id": "acme.review.run" },
@@ -302,8 +314,9 @@ Manifest 必须 strict-parse：
 - permission 使用 tagged enum，不使用 `network: true`、`directory: "all"` 一类含糊开关。
 
 `editorExtensions[]` 是 strict typed control-plane declaration：ID 与 entrypoint 各自唯一；entrypoint
-必须是包内 regular file，并有完全相同路径的 `process` permission；`runtimeApiVersion` 仅接受数值
-`1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
+必须是包内 regular file。`runtime` 必须显式声明为 `javascript` 或 `hostRpc`，不根据文件名猜测。
+`hostRpc` 要求完全相同路径的 `process` permission；JS 入口必须是 `.js` 或 `.mjs`，SDK v1 只允许
+`command` 与 `languageProvider` ceiling，语言作者 API 当前只开放 hover；读取工作区还需要 `directory: read` 与当前目录读授权。`runtimeApiVersion` 仅接受数值 `1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
 `startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、`onTaskType` 和
 `onTestProfile`。除 `startup` 外，trigger 不得请求 ceiling 中未声明的 capability。
 

@@ -5,3 +5,10 @@
 1. `WorktreeManager::list/resolve` 读取同仓库 worktree 清单；`provision` 为 Thread 建立独占受管目录。Git 默认使用 detached linked worktree；显式 `NewBranch` 目标同时创建指定本地分支和 linked worktree。非 Git 使用一次性隔离目录副本，不能请求新分支。
 2. `ManagedDirBinding` 固定 Thread、来源 `DirId`、Git 仓库身份、精确目标和绑定摘要；非 Git 绑定不伪装成 repository。
 3. 本 crate 只负责受管目录的物化、恢复和清理；Turn 归属、工作契约、验证、提交与产品状态由上层领域拥有。
+
+## 与 Turn 文件变化的边界
+
+每个执行 Thread 绑定独立工作目录，提供编辑隔离；单独的提交锁不能代替该隔离。
+本 crate 物化、恢复和删除目录，`git-turn-changes` 保存修改归属、不可变文件变化和精确提交进度，
+App Server 装配清理资格。部分提交仍有剩余文件，不等于整个 Thread 可以清理；历史读取使用保留的
+Git 对象库，独立于 checkout 生命周期。能力划分见 [方案](../../docs/git-capabilities.md)。

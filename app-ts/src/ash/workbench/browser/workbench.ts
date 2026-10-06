@@ -783,7 +783,6 @@ export class Workbench extends Disposable {
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
 		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
-		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
 		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
 		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
@@ -851,6 +850,8 @@ export class Workbench extends Disposable {
 			layoutService,
 		}));
 		services.registerInstance(IQuickInputService, quickInputService);
+		// Extension callbacks can open Quick Pick; install their bridge after its UI service exists.
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));

@@ -57,12 +57,23 @@ pub enum MessageState {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum CommitState {
+    PartiallyCommitted {
+        object_ids: Vec<String>,
+    },
     Idle,
     Queued,
     Committing,
-    Committed { object_id: String },
-    Conflict { paths: Vec<PathBuf> },
-    Failed { message: String },
+    Committed {
+        object_id: String,
+    },
+    Conflict {
+        paths: Vec<PathBuf>,
+        #[serde(default)]
+        message: String,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -106,6 +117,7 @@ pub struct TurnChangeSetDraft {
     pub turn_id: TurnId,
     pub repository_id: String,
     pub worktree_root: PathBuf,
+    pub git_common_dir: PathBuf,
     pub target_branch: Option<String>,
     pub base_object_id: Option<String>,
     pub before_tree: String,
@@ -123,13 +135,20 @@ pub struct TurnChangeSet {
     pub turn_id: TurnId,
     pub repository_id: String,
     pub worktree_root: PathBuf,
+    /// Checkout lifetime is independent of retained capture objects. Empty only while upgrading
+    /// records written before the object-store location was persisted.
+    #[serde(default)]
+    pub git_common_dir: PathBuf,
     pub target_branch: Option<String>,
     pub base_object_id: Option<String>,
     pub before_tree: String,
     pub after_tree: Option<String>,
     pub capture_state: CaptureState,
     pub message_state: MessageState,
+    #[serde(skip)]
     pub commit_state: CommitState,
+    #[serde(skip)]
+    pub committed_paths: BTreeSet<PathBuf>,
     pub terminal_state: Option<TerminalTurnState>,
     pub files: Vec<ChangeFile>,
     pub dependencies: BTreeSet<ChangeSetId>,
@@ -156,6 +175,7 @@ impl TurnChangeSet {
     pub fn open(draft: TurnChangeSetDraft) -> Result<Self, TurnChangeError> {
         if draft.repository_id.is_empty()
             || draft.worktree_root.as_os_str().is_empty()
+            || draft.git_common_dir.as_os_str().is_empty()
             || draft.before_tree.is_empty()
         {
             return Err(TurnChangeError::InvalidSnapshot);
@@ -167,6 +187,7 @@ impl TurnChangeSet {
             turn_id: draft.turn_id,
             repository_id: draft.repository_id,
             worktree_root: draft.worktree_root,
+            git_common_dir: draft.git_common_dir,
             target_branch: draft.target_branch,
             base_object_id: draft.base_object_id,
             before_tree: draft.before_tree,
@@ -174,6 +195,7 @@ impl TurnChangeSet {
             capture_state: CaptureState::Open,
             message_state: draft.message_state,
             commit_state: CommitState::Idle,
+            committed_paths: BTreeSet::new(),
             terminal_state: None,
             files: Vec::new(),
             dependencies: BTreeSet::new(),
@@ -378,49 +400,6 @@ impl TurnChangeSet {
         self.bump_revision()
     }
 
-    pub fn queue_commit(&mut self) -> Result<(), TurnChangeError> {
-        self.require_committable()?;
-        self.commit_state = CommitState::Queued;
-        self.bump_revision()
-    }
-
-    pub fn begin_commit(&mut self) -> Result<(), TurnChangeError> {
-        if self.commit_state != CommitState::Queued {
-            return Err(TurnChangeError::InvalidTransition);
-        }
-        self.commit_state = CommitState::Committing;
-        self.bump_revision()
-    }
-
-    pub fn finish_commit(&mut self, object_id: String) -> Result<(), TurnChangeError> {
-        if self.commit_state != CommitState::Committing || object_id.is_empty() {
-            return Err(TurnChangeError::InvalidTransition);
-        }
-        self.commit_state = CommitState::Committed { object_id };
-        self.bump_revision()
-    }
-
-    pub fn fail_commit(
-        &mut self,
-        conflict_paths: Vec<PathBuf>,
-        message: String,
-    ) -> Result<(), TurnChangeError> {
-        if !matches!(
-            self.commit_state,
-            CommitState::Queued | CommitState::Committing
-        ) {
-            return Err(TurnChangeError::InvalidTransition);
-        }
-        self.commit_state = if conflict_paths.is_empty() {
-            CommitState::Failed { message }
-        } else {
-            CommitState::Conflict {
-                paths: conflict_paths,
-            }
-        };
-        self.bump_revision()
-    }
-
     pub fn discard(&mut self) -> Result<(), TurnChangeError> {
         if matches!(
             self.commit_state,
@@ -471,27 +450,6 @@ impl TurnChangeSet {
         self.require_capture(CaptureState::Sealed)
     }
 
-    fn require_committable(&self) -> Result<(), TurnChangeError> {
-        self.require_sealed()?;
-        if self.files.is_empty() {
-            return Err(TurnChangeError::NoChanges);
-        }
-        if !self.dependencies.is_empty() {
-            return Err(TurnChangeError::UnresolvedDependencies);
-        }
-        if !self.external_dependency_paths.is_empty() {
-            return Err(TurnChangeError::UnresolvedExternalDependencies);
-        }
-        self.draft_message()?;
-        if !matches!(
-            self.commit_state,
-            CommitState::Idle | CommitState::Conflict { .. } | CommitState::Failed { .. }
-        ) {
-            return Err(TurnChangeError::InvalidTransition);
-        }
-        Ok(())
-    }
-
     fn bump_revision(&mut self) -> Result<(), TurnChangeError> {
         self.revision = self
             .revision
@@ -539,4 +497,10 @@ pub enum TurnChangeError {
     RevisionOverflow,
     #[error("change-set evidence could not be encoded: {0}")]
     EvidenceEncoding(String),
+}
+
+impl Default for CommitState {
+    fn default() -> Self {
+        Self::Idle
+    }
 }

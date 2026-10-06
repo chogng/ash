@@ -150,3 +150,240 @@ fn host_failures_are_sanitized_before_projection() {
     assert!(!failure.message.contains("/secret/path"));
     assert_eq!(failure.incarnation, Some(3));
 }
+
+struct CountingLauncher(std::sync::atomic::AtomicUsize);
+impl ash_editor_extension_host::ExtensionHostLauncher for CountingLauncher {
+    fn spawn(
+        &self,
+        _: &ash_editor_extension_host::ExtensionLaunchCommand,
+        _: &ash_editor_extension_host::ExtensionHostLimits,
+    ) -> Result<
+        std::sync::Arc<dyn ash_editor_extension_host::ExtensionHostProcess>,
+        ExtensionHostError,
+    > {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(ExtensionHostError::SpawnFailed)
+    }
+}
+
+#[test]
+fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant_entries() {
+    use ash_editor_extension_host::{
+        ExtensionHostLimits, ExtensionHostSupervisor, ExtensionLaunchCommand, RestartPolicy,
+    };
+    use ash_file_access::{Dir, Grant, GrantSource, Permission, Permissions};
+    use std::sync::{Arc, atomic::Ordering};
+    let directory = tempfile::tempdir().unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    let authorization = grant.authorize(Permission::DiscoverPlugins).unwrap();
+    let launcher = Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0)));
+    let runtime = super::ExtensionHostRuntime::start(
+        None,
+        None,
+        None,
+        launcher.clone(),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+        Arc::new(super::super::update_broker::UpdateBroker::default()),
+        Arc::new(crate::client_host::ClientHost::default()),
+    )
+    .unwrap();
+    runtime.bind_dir(authorization).unwrap();
+    let command = ExtensionLaunchCommand::javascript(
+        std::env::current_exe().unwrap(),
+        Vec::<String>::new(),
+        directory.path(),
+    )
+    .unwrap();
+    let params = ash_editor_extension_host::ActivateParams {
+        extension_id: "lazy".into(),
+        package: ash_editor_extension_host::PackageBinding {
+            package_id: "lazy@1".into(),
+            package_digest: format!("sha256:{}", "a".repeat(64)),
+            entrypoint: "main.js".into(),
+        },
+        runtime_api_version: 1,
+        activation_events: vec!["onCommand:lazy.run".into()],
+        capabilities: vec![ash_editor_extension_host::ExtensionCapability::Command],
+    };
+    let supervisor = ExtensionHostSupervisor::new(
+        launcher.clone(),
+        command,
+        ash_editor_extension_host::ExtensionActivationSpec::new(
+            params,
+            std::num::NonZeroU64::new(7).unwrap(),
+            Arc::new(AllowedActivation),
+        ),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+    )
+    .unwrap();
+    {
+        let mut state = runtime.inner.state.lock().unwrap();
+        state.entries.insert(
+            "lazy".into(),
+            super::RuntimeEntry {
+                version: "1".into(),
+                workspace_read: super::source::WorkspaceReadAccess::Denied,
+                supervisor: Some(supervisor),
+                failure: None,
+                pending_activation: Some(super::source::ActivationPlan {
+                    events: vec!["onCommand:lazy.run".into()],
+                    commands: vec![("lazy.run".into(), "Run".into())],
+                }),
+                fallback: super::projection::ExtensionHostExtensionSnapshot {
+                    id: "lazy".into(),
+                    version: "1".into(),
+                    package_digest: format!("sha256:{}", "a".repeat(64)),
+                    runtime_api_version: 1,
+                    activation_generation: 7,
+                    incarnation: None,
+                    lifecycle: super::projection::ExtensionHostLifecycle::Failed,
+                    activation: None,
+                    failure: None,
+                    stderr: String::new(),
+                    output_events: Vec::new(),
+                    registrations: Vec::new(),
+                },
+            },
+        );
+    }
+    for mode in [
+        super::ExtensionHostReconcileMode::Refresh,
+        super::ExtensionHostReconcileMode::RestartFailed,
+    ] {
+        let snapshot = runtime.reconcile(mode).unwrap();
+        assert_eq!(
+            snapshot.extensions[0].lifecycle,
+            super::projection::ExtensionHostLifecycle::Dormant
+        );
+        assert_eq!(snapshot.extensions[0].incarnation, None);
+        assert!(snapshot.extensions[0].registrations.is_empty());
+    }
+    assert_eq!(launcher.0.load(Ordering::SeqCst), 0);
+    for (generation, event) in [
+        (
+            6,
+            super::source::ActivationEvent::Command("lazy.run".into()),
+        ),
+        (7, super::source::ActivationEvent::Language("rust".into())),
+    ] {
+        assert!(matches!(
+            runtime.activate_by_event("lazy", generation, event),
+            Err(ExtensionHostRuntimeError::Stale)
+        ));
+    }
+    assert_eq!(launcher.0.load(Ordering::SeqCst), 0);
+    let activated = std::thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            runtime
+                .activate_by_event(
+                    "lazy",
+                    7,
+                    super::source::ActivationEvent::Command("lazy.run".into()),
+                )
+                .unwrap()
+        });
+        let second = runtime
+            .activate_by_event(
+                "lazy",
+                7,
+                super::source::ActivationEvent::Command("lazy.run".into()),
+            )
+            .unwrap();
+        assert_eq!(first.join().unwrap(), second);
+        second
+    });
+    assert_eq!(
+        launcher.0.load(Ordering::SeqCst),
+        RestartPolicy::default().maximum_restarts + 1
+    );
+    assert_eq!(
+        activated.extensions[0].failure.as_ref().unwrap().code,
+        ExtensionHostFailureKind::CrashLoop
+    );
+    // A failed first attempt is observable; duplicate first-use requests do not replay startup.
+    runtime
+        .activate_by_event(
+            "lazy",
+            7,
+            super::source::ActivationEvent::Command("lazy.run".into()),
+        )
+        .unwrap();
+    assert_eq!(
+        launcher.0.load(Ordering::SeqCst),
+        RestartPolicy::default().maximum_restarts + 1
+    );
+    grant.revoke();
+    assert!(
+        runtime
+            .activate_by_event(
+                "lazy",
+                7,
+                super::source::ActivationEvent::Command("lazy.run".into())
+            )
+            .is_err()
+    );
+}
+
+struct AllowedActivation;
+struct AllowedLease;
+impl ash_editor_extension_host::ActivationLease for AllowedLease {}
+impl ash_editor_extension_host::ActivationAuthority for AllowedActivation {
+    fn authorizes(&self) -> bool {
+        true
+    }
+    fn acquire(&self) -> Option<Box<dyn ash_editor_extension_host::ActivationLease>> {
+        Some(Box::new(AllowedLease))
+    }
+}
+
+#[test]
+fn directory_changes_do_not_reuse_extension_activation_generations() {
+    use ash_editor_extension_host::{ExtensionHostLimits, RestartPolicy};
+    use ash_file_access::{Dir, Grant, GrantSource, Permission, Permissions};
+    use std::sync::Arc;
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let runtime = super::ExtensionHostRuntime::start(
+        None,
+        None,
+        None,
+        Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0))),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+        Arc::new(super::super::update_broker::UpdateBroker::default()),
+        Arc::new(crate::client_host::ClientHost::default()),
+    )
+    .unwrap();
+    let bind = |path| {
+        let grant = Grant::for_environment(
+            Dir::open_local(path).unwrap(),
+            GrantSource::ExplicitUser,
+            Permissions::new([Permission::DiscoverPlugins]),
+        );
+        runtime
+            .bind_dir(grant.authorize(Permission::DiscoverPlugins).unwrap())
+            .unwrap();
+        grant
+    };
+    let first_grant = bind(first.path());
+    let first_generation = runtime.inner.state.lock().unwrap().authority_generation;
+    runtime.unbind_dir();
+    let second_grant = bind(second.path());
+    assert!(runtime.inner.state.lock().unwrap().authority_generation > first_generation);
+    assert!(matches!(
+        runtime.activate_by_event(
+            "lazy",
+            first_generation,
+            super::source::ActivationEvent::Command("lazy.run".into())
+        ),
+        Err(ExtensionHostRuntimeError::Stale)
+    ));
+    first_grant.revoke();
+    second_grant.revoke();
+}

@@ -606,6 +606,28 @@ test('invalid response rejects its pending request and unknown host methods rece
 	client.dispose();
 });
 
+test('extension client callbacks round-trip immutable JSON and release their request handler', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const registration = connected.api.extensionHost.registerClientHandler(async operation => {
+		assert.equal(operation.operation, 'executeCommand');
+		if (operation.operation !== 'executeCommand') throw new Error('Unexpected extension operation');
+		assert.equal(JSON.stringify(operation.arguments), '[{"paths":["src/main.ts"]}]');
+		assert.equal(Object.isFrozen(operation.arguments[0]), true);
+		return { result: 'command', value: Object.freeze({ paths: Object.freeze(['src/main.ts']) }) };
+	});
+	try {
+		const params = { operation: 'executeCommand', command: 'test.paths', arguments: [{ paths: ['src/main.ts'] }] };
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-1', method: 'extensionClient/request', params }) });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-1', result: { result: 'command', value: { paths: ['src/main.ts'] } } });
+		registration.dispose();
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-2', method: 'extensionClient/request', params }) });
+		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32601, message: 'Method not found' });
+	} finally { registration.dispose(); }
+});
+
 test('Call service is assembled from the negotiated contract and ignores stale or foreign updates', async () => {
 	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, calls: { version: 1 } } } }));
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
@@ -630,4 +652,22 @@ test('Call service is assembled from the negotiated contract and ignores stale o
 		await leaving;
 		assert.equal(calls.state?.connection, 'ended');
 	} finally { connected.dispose(); }
+});
+
+
+test('extension disk requests are rejected before reaching a renderer service', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	let calls = 0;
+	const registration = connected.api.extensionHost.registerClientHandler(async () => {
+		calls += 1;
+		return { result: 'done' };
+	});
+	try {
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-disk', method: 'extensionClient/request', params: { operation: 'readWorkspaceFile', path: 'data.txt' } }) });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(calls, 0);
+		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Workspace file requests must be handled by App Server' });
+	} finally { registration.dispose(); }
 });

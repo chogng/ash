@@ -1,8 +1,13 @@
+use crate::GitClient;
+use crate::GitError;
+use crate::GitHead;
+use crate::GitRepository;
+use crate::GitResult;
 use crate::path::path_from_git_bytes;
-use crate::{GitClient, GitError, GitHead, GitRepository, GitResult};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Bounded UTF-8 patch text between two immutable trees.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,7 +27,8 @@ impl GitTreeTextDiff {
 }
 
 /// Validated Git tree object identity.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct GitTreeId(String);
 
 impl GitTreeId {
@@ -316,10 +322,24 @@ impl GitClient {
         before: &GitTreeId,
         after: &GitTreeId,
     ) -> GitResult<Vec<GitTreeChange>> {
+        self.diff_trees_at_git_dir(repository.common_dir(), before, after)
+            .await
+    }
+
+    /// Reads retained trees independently of the linked checkout's lifetime.
+    pub async fn diff_trees_at_git_dir(
+        &self,
+        git_directory: &Path,
+        before: &GitTreeId,
+        after: &GitTreeId,
+    ) -> GitResult<Vec<GitTreeChange>> {
+        let git_directory = std::fs::canonicalize(git_directory)
+            .map_err(|error| GitError::io("resolve object store", error))?;
         let raw = self
             .run_query(
-                repository.worktree_root(),
+                &git_directory,
                 [
+                    "--git-dir=.",
                     "diff-tree",
                     "--raw",
                     "-z",
@@ -333,8 +353,9 @@ impl GitClient {
             .await?;
         let statistics = self
             .run_query(
-                repository.worktree_root(),
+                &git_directory,
                 [
+                    "--git-dir=.",
                     "diff-tree",
                     "--numstat",
                     "-z",
@@ -357,6 +378,19 @@ impl GitClient {
         object_id: &str,
         max_bytes: usize,
     ) -> GitResult<(Vec<u8>, bool)> {
+        self.read_blob_at_git_dir(repository.common_dir(), object_id, max_bytes)
+            .await
+    }
+
+    /// Reads a retained blob through the shared object store after a Thread checkout is removed.
+    pub async fn read_blob_at_git_dir(
+        &self,
+        git_directory: &Path,
+        object_id: &str,
+        max_bytes: usize,
+    ) -> GitResult<(Vec<u8>, bool)> {
+        let git_directory = std::fs::canonicalize(git_directory)
+            .map_err(|error| GitError::io("resolve object store", error))?;
         validate_object_id(object_id, "blob object ID")?;
         if max_bytes == 0 {
             return Err(GitError::InvalidConfiguration {
@@ -365,7 +399,10 @@ impl GitClient {
             });
         }
         let output = self
-            .run_query(repository.worktree_root(), ["cat-file", "blob", object_id])
+            .run_query(
+                &git_directory,
+                ["--git-dir=.", "cat-file", "blob", object_id],
+            )
             .await?;
         let truncated = output.stdout.len() > max_bytes;
         let mut bytes = output.stdout;
@@ -381,16 +418,31 @@ impl GitClient {
         after: &GitTreeId,
         max_bytes: usize,
     ) -> GitResult<GitTreeTextDiff> {
+        self.diff_tree_text_at_git_dir(repository.common_dir(), before, after, max_bytes)
+            .await
+    }
+
+    /// Reads a retained immutable patch independently of the checkout lifetime.
+    pub async fn diff_tree_text_at_git_dir(
+        &self,
+        git_directory: &Path,
+        before: &GitTreeId,
+        after: &GitTreeId,
+        max_bytes: usize,
+    ) -> GitResult<GitTreeTextDiff> {
         if max_bytes == 0 {
             return Err(GitError::InvalidConfiguration {
                 field: "tree diff byte limit",
                 requirement: "must be non-zero",
             });
         }
+        let directory = std::fs::canonicalize(git_directory)
+            .map_err(|error| GitError::io("resolve retained Git object directory", error))?;
         let output = self
             .run_query(
-                repository.worktree_root(),
+                &directory,
                 [
+                    "--git-dir=.",
                     "diff-tree",
                     "--patch",
                     "--no-ext-diff",
@@ -587,8 +639,8 @@ fn parse_tree_id(output: Vec<u8>, command: &str) -> GitResult<GitTreeId> {
     GitTreeId::new(value.trim().to_string())
 }
 
-fn validate_object_id(value: &str, field: &'static str) -> GitResult<()> {
-    if !(40..=64).contains(&value.len()) || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+pub(crate) fn validate_object_id(value: &str, field: &'static str) -> GitResult<()> {
+    if !matches!(value.len(), 40 | 64) || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(GitError::InvalidConfiguration {
             field,
             requirement: "must be a hexadecimal Git object ID",
@@ -606,3 +658,24 @@ pub(crate) fn validate_checkout_path(path: &Path) -> GitResult<PathBuf> {
     }
     Ok(path.to_path_buf())
 }
+
+impl TryFrom<String> for GitTreeId {
+    type Error = GitError;
+    fn try_from(value: String) -> GitResult<Self> {
+        Self::new(value)
+    }
+}
+
+impl From<GitTreeId> for String {
+    fn from(tree: GitTreeId) -> Self {
+        tree.0
+    }
+}
+
+mod transfer;
+mod tree;
+
+pub use transfer::GitPackBase;
+pub use tree::GitTreeReplayResult;
+
+pub(crate) use tree::parse_tree;

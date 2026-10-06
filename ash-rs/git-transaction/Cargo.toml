@@ -1,0 +1,28 @@
+[package]
+name = "ash-git-transaction"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "git_transaction"
+path = "src/lib.rs"
+
+[dependencies]
+ash-git = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+dunce = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[package.metadata.cargo-shear]
+# Shared test fixture uses dunce through #[path].
+ignored = ["dunce"]
+
+[lints]
+workspace = true

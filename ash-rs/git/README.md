@@ -2,7 +2,7 @@
 
 > 本 README 是 Ash 本地 Git 实现的 crate-level canonical contract。它说明当前代码、关键
 > private symbol、失败语义与安全修改路径。Desktop/App Server Git 产品语义见
-> [`docs/git.md`](../../docs/git.md)；模型 Tool 和 approval 边界仍由 [`docs/tools.md`](../../docs/tools.md) 与
+> [`docs/git.md`](../../docs/git.md)；模型 Tool 和 approval 边界仍由 [`docs/tools.md`](../../docs/tools/tools.md) 与
 > [`docs/sandboxing.md`](../../docs/sandboxing.md) 维护。
 
 `ash-git` 是 Ash 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
@@ -10,7 +10,7 @@
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
 stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory、linked worktree mutation、
 仓库初始化、分支改名、远端分支删除、merge/rebase/cherry-pick 及继续或中止、stash、tag、remote 管理、amend/undo、部分 index 编辑、
-不可变 tree/blob 操作、任务快照的有界对象包导出/导入和基于 tree 的事务提交。任务包保留准确的
+不可变 tree/blob 操作、任务快照的有界对象包导出/导入和选定 tree delta 的重放。提交事务由 [`ash-git-transaction`](../git-transaction/README.md) 拥有。任务包保留准确的
 HEAD 与工作树对象，导入验证摘要之外的 Git 完整性和对象类型，且不修改接收目录或 index；子模块
 和嵌入仓库不能由单个对象库表示，直接拒绝。持续监听和状态缓存由 App Server 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
@@ -31,7 +31,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | 结构化 patch | 用 enum 区分 check/apply 与 forward/reverse；区分 `AppliedWithConflicts` 和未应用的 `Rejected`，不与 spawn/timeout/输出损坏混为一谈 |
 | 路径边界 | `git apply` 不启用 `--unsafe-paths`；diff header path 做排序、去重和 quoted-path 解析 |
 
-因此，新增 Git 能力时应扩展本 crate，而不是在 App Server、Desktop adapter 或 Tool 中直接新增
+因此，新增 Git 命令与解析时应扩展本 crate，而不是在 App Server、Desktop adapter 或 Tool 中直接新增
 `Command::new("git")`。
 
 ## 当前所有权
@@ -39,20 +39,15 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | 文件 | 当前职责 | 关键 symbol |
 | --- | --- | --- |
 | `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config，以及流式 query process 生命周期 | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`GitQueryStream`、`read_bounded` |
-| `src/repository.rs` | 从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
+| `src/repository.rs` | 仓库初始化、从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
 | `src/discovery.rs` | 合并进行中的仓库探测、限制并发，并随最后一个调用方取消工作 | private `Coordinator` |
-| `src/status.rs` | porcelain-v2 snapshot、HEAD/change/submodule model 与忽略规则查询 | `GitRepositorySnapshot`、`GitHead`、`GitClient::check_ignore`、private `parse_status` |
-| `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
-| `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
-| `src/worktree.rs` | 解析 primary/linked/locked/prunable worktree inventory，不决定产品工作区替换 | `GitWorktree`、`GitWorktreeAvailability`、`GitClient::worktrees` |
-| `src/objects.rs` | 捕获、固定、读取、比较与安装不可变 tree/blob；忽略 Git ignored 的未跟踪文件 | `GitTreeId`、`GitPrivateRef`、`GitClient::capture_worktree_tree` |
-| `src/tree_commit.rs` | 把封存的 tree delta 重放到目标分支，保留 checkout 的 staged/unstaged/untracked 语义，并通过 journal + ref CAS 恢复中断事务 | `GitTreeCommitRequest`、`GitTreeCommitRecovery`、`GitClient::commit_tree_delta` |
-| `src/operations.rs` | 封闭 Git 操作、标签/储藏清单、Git 持久化整合状态和提交撤销 CAS | `GitCommand`、`GitCommandOutcome`、`GitCatalog`、`GitIntegration` |
-| `src/index_edit.rs` | 基于真实比较的块/行暂存，持有 Git index 锁后原子替换 index，保留工作文件 | `GitIndexDiff`、`GitIndexEdit`、`GitIndexSelection` |
-| `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
-| `src/graph.rs` | local/remote/tag refs 与当前 HEAD 的单次分页 commit traversal | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
-| `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
-| `src/patch.rs` | patch request/result、stdin apply、path extraction 和 diagnostics 分类 | `GitPatchRequest`、`GitPatchResult`、private `parse_apply_diagnostics` |
+| `src/working_copy.rs` 与 `src/working_copy/` | status、忽略规则、工作文件内容、文本 Diff、index 编辑、patch、普通 stage/unstage/discard/commit，以及 checkout 层保持 | `GitRepositorySnapshot`、`GitIndexEdit`、`GitCommitRequest` |
+| `src/history.rs` 与 `src/history/` | 提交详情、最近历史、分页图与历史内容 | `GitGraphCursor`、`GitCommitDetails`、`GitCommitSummary` |
+| `src/references.rs` 与 `src/references/` | 分支、标签、stash、检出、整合状态、封闭操作入口与 ref CAS | `GitCommand`、`GitIntegration`、`GitBranch` |
+| `src/remote.rs` | remote 清单与配置身份、fetch/pull/push、分支推送 | `GitRemote`、`GitRemoteIdentity` |
+| `src/objects.rs` 与 `src/objects/` | tree/blob 捕获与保留、精确文件 delta、三方重放、commit 对象、对象包完整性 | `GitTreeId`、`GitTreeReplayResult`、`GitPrivateRef`、`GitPackBase` |
+| `src/worktree.rs` | Git worktree 清单、创建、锁定、修复和删除原语 | `GitWorktree`、`GitWorktreeAvailability` |
+| `src/operation_lock.rs` | 按 common directory 协调目标发布与交互 Git 写入 | `repository_operation_lock` |
 | `src/fsmonitor.rs` | effective config 与 built-in daemon capability 探测 | private `detect_fsmonitor_override` |
 | `src/path.rs` | porcelain path bytes 到 platform `PathBuf` | private `path_from_git_bytes` |
 | `src/error.rs` | transport、timeout、limit、Git exit 和 parse failure 的稳定区分 | `GitError` |
@@ -309,23 +304,11 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 
 ## 测试与修改
 
-实现测试全部位于独立 sibling 文件：
-
-- `client_tests.rs`：system Git runner 与 limits；
-- `repository_tests.rs`：nested start、non-repository、linked worktree；
-- `status_tests.rs`：index/worktree/untracked、rename 与 unmerged/unborn parser；
-- `content_tests.rs`：HEAD/index 内容与 missing path；
-- `text_diff_tests.rs`：modified/deleted/untracked 汇总、replacement 统计及 binary/size skip；
-- `info_tests.rs`：branch、remote fetch/push URL、history limit；
-- `graph_tests.rs`：分页、local/remote/tag refs、当前 detached HEAD、unborn，以及 stash/内部引用/其他工作树 HEAD 的排除；
-- `operations_tests.rs`：初始化、分支与远端管理、储藏、标签、整合冲突与继续/中止、amend 与撤销提交；
-- `index_edit_tests.rs`：按行/块编辑 index、过期比较拒绝、新增与删除文件的部分暂存；
-- `worktree_tests.rs`：raw NUL fixture、detached/异常 record、primary/linked inventory、locked reason 与 prunable checkout；
-- `mutation_tests.rs`：validation、stage/unstage/discard/commit、local branch switch 及失败时
-  保留当前分支和工作树，以及本地 bare remote 驱动的 fetch/fast-forward pull/push；
-- `patch_tests.rs`：quoted paths、check/apply、unapplied rejection、three-way conflict 与
-  Windows `core.autocrlf=true`；
-- `fsmonitor_tests.rs`：NUL config value 与 boolean spelling。
+测试随能力放在所属模块的独立测试文件；共享真实仓库 fixture 位于 `test_support.rs`。
+工作区覆盖 status、部分 index 编辑、普通提交与 patch；引用覆盖分支、stash、整合及条件更新；
+历史覆盖分页起点与内容；远端使用本地 bare 仓库验证同步；对象测试覆盖选择、重命名、删除、
+二进制、mode 和同文件文本合并。事务恢复、目标移动与 checkout 层保持测试已归
+[`ash-git-transaction`](../git-transaction/README.md)，不再由 Git 原语 crate 持有。
 
 测试仓库固定 `core.autocrlf=false` 与 LF，避免继承开发机全局配置；需要验证平台换行语义的测试
 必须显式覆盖 repository-local config。本地 remote 测试不访问网络或用户凭据。
@@ -367,3 +350,14 @@ bazel test //ash-rs/git:git-unit-tests
 
 只有出现多个独立底层 Git owner 且有稳定共享 primitive 时，才重新评估 `ash-git-utils`；当前不应
 新增该 crate。
+
+## 选定文件的不可变提交
+
+`select_tree_changes` 从 before/after 取完整文件变化；重命名包含两侧路径，mode、删除和二进制
+按 tree entry 处理。它使用独立临时 index，不读取后续工作目录正文，不修改真实 index。
+`replay_tree_delta` 使用 Git 三方合并，允许同文件的互不重叠文本变化；实际重叠返回冲突路径。
+文件选择与重放均拒绝把未选文件整份拷入目标。
+
+这两个接口只处理对象。Session/Thread/Turn 归属、选择版本、提交记录与进度由
+[`git-turn-changes`](../git-turn-changes/README.md) 持有；条件发布与恢复由提交事务持有。
+详细能力边界见 [Git 能力划分方案](../../docs/git-capabilities.md)。

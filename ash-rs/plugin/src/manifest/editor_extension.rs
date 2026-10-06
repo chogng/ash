@@ -8,17 +8,26 @@ use super::ManifestLocalId;
 
 /// Editor Extension launch target declared by one immutable Plugin package.
 ///
-/// The package-owned program implements Ash Host RPC directly. This declaration does not prove
-/// that the regular file is executable on the current platform. A product supervisor checks
-/// launchability, starts it out of process, enforces the runtime API, and projects registrations.
+/// JavaScript entries run in the product-owned V8 host; Host RPC programs implement the
+/// process protocol themselves. The product supervisor enforces authority and process isolation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EditorExtensionContribution {
     pub id: ManifestLocalId,
     pub entrypoint: PluginPath,
+    pub runtime: EditorExtensionRuntime,
     pub runtime_api_version: EditorExtensionRuntimeApiVersion,
     pub activation_events: Vec<EditorExtensionActivationEvent>,
     pub capabilities: Vec<EditorExtensionCapability>,
+}
+
+/// Explicit execution format. A JavaScript module never receives an executable/process grant.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorExtensionRuntime {
+    #[serde(rename = "javascript")]
+    JavaScript,
+    HostRpc,
 }
 
 /// Version of the out-of-process Editor Extension runtime API requested by an entry point.

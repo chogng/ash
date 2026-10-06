@@ -7,7 +7,7 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 import { parseLinkPresentation, type LinkPresentationKind } from '../../dataChannel/common/dataChannel.js';
 
 export type ExtensionHostReconcileMode = "refresh" | "restartFailed";
-export type ExtensionHostRuntimeLifecycle = "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
+export type ExtensionHostRuntimeLifecycle = "dormant" | "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
 export type ExtensionHostFailureCode = "authorityDenied" | "staleSnapshot" | "isolationUnavailable" | "launchFailed" | "handshakeFailed" | "activationFailed" | "registrationNotFound" | "operationNotSupported" | "cancelled" | "deadlineExceeded" | "quotaExceeded" | "hostExited" | "hostRestarted" | "outcomeIndeterminate" | "crashLoop" | "invalidProtocol" | "internal";
 export type ExtensionHostLanguageProviderOperation = "completion" | "definition" | "hover" | "references" | "rename" | "formatting" | "codeAction" | "codeLens" | "documentSymbols" | "foldingRanges" | "documentLinks" | "documentColors" | "semanticTokens" | "inlayHints" | "linkedEditing" | "parameterHints";
 export type ExtensionHostCancellationReason = "caller" | "deadline" | "authorityRevoked" | "shutdown";
@@ -95,6 +95,18 @@ export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHos
 
 export type ExtensionHostRegistration = ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
+export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string } | { readonly type: 'language'; readonly languageId: string } | { readonly type: 'startupFinished' };
+export interface ExtensionHostActivationRequest {
+	readonly extensionId: string;
+	readonly activationGeneration: number;
+	readonly event: ExtensionHostActivationEvent;
+}
+/** Manifest facts available while waiting; these are not process registrations. */
+export interface ExtensionHostActivation {
+	readonly events: readonly string[];
+	readonly commands: readonly { readonly command: string; readonly title: string }[];
+}
+
 export interface ExtensionHostRuntime {
 	readonly id: string;
 	readonly version: string;
@@ -103,6 +115,7 @@ export interface ExtensionHostRuntime {
 	readonly activationGeneration: number;
 	readonly incarnation: number | undefined;
 	readonly lifecycle: ExtensionHostRuntimeLifecycle;
+	readonly activation?: ExtensionHostActivation;
 	readonly failure: ExtensionHostRuntimeFailure | undefined;
 	readonly stderr: string;
 	readonly outputEvents: readonly ExtensionHostOutputEvent[];
@@ -126,14 +139,52 @@ export interface ExtensionHostInvocationRequest {
 
 /** Renderer-facing Extension Host authority and invocation capability. */
 export interface IExtensionHostApi {
+    registerClientHandler(handler: ExtensionClientHandler): DisposableHandle;
 	isAvailable(): Promise<boolean>;
 	list(): Promise<ExtensionHostFleetSnapshot>;
 	reconcile(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot>;
+	/** Asks Rust to match editor intent against one exact authorized package generation. */
+	activateByEvent(request: ExtensionHostActivationRequest): Promise<ExtensionHostFleetSnapshot>;
 	invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue>;
 	getConnectionState(): Promise<AppServerConnectionState>;
 	onDidChange(listener: (generation: number) => void): DisposableHandle;
 	onConnectionState(listener: (state: AppServerConnectionState) => void): DisposableHandle;
 }
+
+export interface ExtensionDocumentSnapshot {
+	readonly uri: string;
+	readonly version: number;
+	readonly languageId: string;
+	readonly text: string;
+}
+
+export interface ExtensionDocumentEdit {
+	readonly uri: string;
+	readonly version: number;
+	readonly edits: { start: { line: number; character: number }; end: { line: number; character: number }; text: string }[];
+}
+
+/** Window services available during a connection-owned extension invocation. */
+export type ExtensionClientOperation =
+	| { operation: 'executeCommand'; command: string; arguments: JsonValue[] }
+	| { operation: 'readDocument'; uri: string }
+	| { operation: 'listDocuments' }
+	| { operation: 'applyEdit'; documents: ExtensionDocumentEdit[] }
+	| { operation: 'readConfiguration'; section: string; resource: string | null }
+	| { operation: 'updateConfiguration'; section: string; value: JsonValue; target: 'user' | 'workspace' }
+	| { operation: 'showMessage'; message: string; severity: 'information' | 'warning' | 'error' }
+	| { operation: 'showQuickPick'; items: string[]; placeholder: string };
+
+export type ExtensionClientResult =
+	| { result: 'command'; value: JsonValue }
+	| { result: 'document'; document: ExtensionDocumentSnapshot }
+	| { result: 'documents'; documents: ExtensionDocumentSnapshot[] }
+	| { result: 'applied'; applied: boolean }
+	| { result: 'configuration'; value: JsonValue }
+	| { result: 'selection'; index: number | null }
+	| { result: 'done' };
+
+export type ExtensionClientHandler = (operation: ExtensionClientOperation, signal: AbortSignal) => Promise<ExtensionClientResult>;
 
 export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>("extensionHostApi");
 
@@ -157,7 +208,7 @@ export class ExtensionHostInvocationError extends Error {
 }
 
 const FAILURE_CODES = ["authorityDenied", "staleSnapshot", "isolationUnavailable", "launchFailed", "handshakeFailed", "activationFailed", "registrationNotFound", "operationNotSupported", "cancelled", "deadlineExceeded", "quotaExceeded", "hostExited", "hostRestarted", "outcomeIndeterminate", "crashLoop", "invalidProtocol", "internal"] as const;
-const LIFECYCLES = ["stopped", "starting", "handshaking", "ready", "recovering", "crashLoop", "failed"] as const;
+const LIFECYCLES = ["dormant", "stopped", "starting", "handshaking", "ready", "recovering", "crashLoop", "failed"] as const;
 const LANGUAGE_OPERATIONS = ["completion", "definition", "hover", "references", "rename", "formatting", "codeAction", "codeLens", "documentSymbols", "foldingRanges", "documentLinks", "documentColors", "semanticTokens", "inlayHints", "linkedEditing", "parameterHints"] as const;
 const CANCELLATION_REASONS = ["caller", "deadline", "authorityRevoked", "shutdown"] as const;
 const OUTPUT_SEVERITIES = ["trace", "debug", "information", "warning", "error", "log"] as const;
@@ -232,7 +283,7 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 }
 
 function normalizeRuntime(value: unknown): ExtensionHostRuntime {
-	const runtime = exactRecord(value, "Extension Host runtime", ["activationGeneration", "failure", "id", "incarnation", "lifecycle", "outputEvents", "packageDigest", "registrations", "runtimeApiVersion", "stderr", "version"]);
+	const runtime = exactRecord(value, "Extension Host runtime", ["activationGeneration", "failure", "id", "incarnation", "lifecycle", "outputEvents", "packageDigest", "registrations", "runtimeApiVersion", "stderr", "version"], ["activation"]);
 	const registrations = boundedArray(runtime.registrations, "Extension Host registrations", 2048).map(normalizeRegistration);
 	const outputEvents = boundedArray(runtime.outputEvents, "Extension Host Output events", 4096).map(normalizeOutputEvent);
 	if (utf8Length(JSON.stringify(outputEvents)) > MAX_OUTPUT_EVENT_BYTES) throw new RangeError("Extension Host Output event history is too large");
@@ -240,6 +291,19 @@ function normalizeRuntime(value: unknown): ExtensionHostRuntime {
 	assertStrictlyIncreasing(outputEvents.map(event => event.sequence), "Extension Host Output event sequences");
 	const lifecycle = stringEnum(runtime.lifecycle, "Extension Host lifecycle", LIFECYCLES);
 	const incarnation = optionalPositiveSafeInteger(runtime.incarnation, "Extension Host incarnation");
+	let activation: ExtensionHostActivation | undefined;
+	if (runtime.activation !== undefined) {
+		const facts = exactRecord(runtime.activation, 'Extension activation', ['events', 'commands']);
+		const events = boundedArray(facts.events, 'Activation events', 128).map(value => boundedText(value, 'Activation event', 256));
+		const commands = boundedArray(facts.commands, 'Declared commands', 2048).map(value => {
+			const command = exactRecord(value, 'Declared command', ['command', 'title']);
+			return Object.freeze({ command: boundedText(command.command, 'Declared command ID', 256), title: boundedText(command.title, 'Declared command title', 512) });
+		});
+		assertUnique(commands.map(command => command.command), 'Declared command IDs');
+		activation = Object.freeze({ events: Object.freeze(events), commands: Object.freeze(commands) });
+	}
+	if (lifecycle === 'dormant' && (!activation || incarnation !== undefined || registrations.length || outputEvents.length || runtime.stderr !== '' || runtime.failure !== null)) { throw new TypeError('Dormant extension requires manifest facts and no process registration'); }
+	if (lifecycle !== 'dormant' && activation) { throw new TypeError('Activation facts require a dormant extension'); }
 	if (lifecycle === "ready" && incarnation === undefined) throw new TypeError("Ready Extension Host runtime must have an incarnation");
 	return Object.freeze({
 		id: boundedText(runtime.id, "Extension Host extension ID", 256),
@@ -249,6 +313,7 @@ function normalizeRuntime(value: unknown): ExtensionHostRuntime {
 		activationGeneration: positiveSafeInteger(runtime.activationGeneration, "Extension Host activation generation"),
 		incarnation,
 		lifecycle,
+		...(activation ? { activation } : {}),
 		failure: runtime.failure === null ? undefined : normalizeFailure(runtime.failure),
 		stderr: boundedOptionalText(runtime.stderr, "Extension Host stderr", 262_144),
 		outputEvents: Object.freeze(outputEvents),

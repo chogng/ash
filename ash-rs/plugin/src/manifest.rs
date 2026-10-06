@@ -16,3 +16,5 @@ pub use model::{
 
 pub const PLUGIN_MANIFEST_PATH: &str = ".ash-plugin/plugin.json";
 pub(crate) const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+
+pub use editor_extension::EditorExtensionRuntime;

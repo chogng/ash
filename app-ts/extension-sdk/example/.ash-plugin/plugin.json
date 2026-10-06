@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "ash/sdk-example",
+  "version": "0.1.0",
+  "displayName": "Ash SDK example",
+  "description": "Read editor and disk content and provide a plaintext hover through the SDK.",
+  "license": "Apache-2.0",
+  "compatibility": { "ash": ">=0.1.0" },
+  "contributions": {
+    "editorExtensions": [{
+      "id": "inspect",
+      "runtime": "javascript",
+      "entrypoint": "example/extension.js",
+      "runtimeApiVersion": 1,
+      "activationEvents": [{ "type": "onCommand", "id": "ash.example.inspect" }, { "type": "onLanguage", "id": "plaintext" }],
+      "capabilities": ["command", "languageProvider"]
+    }]
+  },
+  "permissions": [{ "type": "directory", "access": "read" }]
+}

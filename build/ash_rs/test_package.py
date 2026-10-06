@@ -89,6 +89,7 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
+                "ash-js-extension-host",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-remote",
@@ -326,6 +327,9 @@ class PackageTests(unittest.TestCase):
                 executable_file(root / "exec-server-source", b"exec-server"),
                 daemon_binary,
                 code_mode_host_binary,
+                executable_file(
+                    root / "js-extension-host-source", b"ash-js-extension-host"
+                ),
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
@@ -529,6 +533,9 @@ class PackageTests(unittest.TestCase):
                 executable_file(root / "exec-server-source", b"exec-server"),
                 executable_file(root / "daemon-source", b"ash-app-server-daemon"),
                 executable_file(root / "code-mode-host-source", b"ash-code-mode-host"),
+                executable_file(
+                    root / "js-extension-host-source", b"ash-js-extension-host"
+                ),
                 resolve_ripgrep(
                     spec,
                     PRODUCTION_LOCK,
@@ -566,6 +573,15 @@ class PackageTests(unittest.TestCase):
                 },
                 metadata["remoteRuntimeCatalog"],
             )
+            self.assertEqual(
+                b"ash-js-extension-host",
+                (output / "bin" / spec.js_extension_host_name).read_bytes(),
+            )
+            self.assertEqual(
+                file_sha256(output / "bin" / spec.js_extension_host_name),
+                metadata["components"]["jsExtensionHost"]["binarySha256"],
+            )
+            self.assertIn("jsExtensionHost", system_signing_artifacts(output, spec))
             self.assertNotIn("node", metadata["components"])
             self.assertFalse((output / "ash-resources" / "node").exists())
             self.assertFalse((output / "ash-resources" / "licenses" / "node").exists())
@@ -694,6 +710,9 @@ class PackageTests(unittest.TestCase):
                 executable_file(root / "exec-server-source", b"exec-server"),
                 daemon_binary,
                 code_mode_host_binary,
+                executable_file(
+                    root / "js-extension-host-source", b"ash-js-extension-host"
+                ),
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
@@ -760,6 +779,9 @@ class PackageTests(unittest.TestCase):
                 executable_file(root / "exec-server-source", b"exec-server"),
                 daemon_binary,
                 code_mode_host_binary,
+                executable_file(
+                    root / "js-extension-host-source", b"ash-js-extension-host"
+                ),
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,

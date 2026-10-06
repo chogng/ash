@@ -11,7 +11,9 @@ name = "ash_editor_extension_host"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-sandboxing.workspace = true
+extension-protocol = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 

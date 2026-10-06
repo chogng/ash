@@ -12,11 +12,30 @@ pub struct HardResourceLimits {
     pub maximum_processes: NonZeroU32,
 }
 
+/// Independent V8 budgets. These bound JavaScript storage, not the process address space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct JavaScriptMemoryLimits {
+    pub heap_bytes: std::num::NonZeroUsize,
+    pub array_buffer_bytes: std::num::NonZeroUsize,
+}
+
+impl Default for JavaScriptMemoryLimits {
+    fn default() -> Self {
+        Self {
+            heap_bytes: std::num::NonZeroUsize::new(64 * 1024 * 1024).unwrap(),
+            array_buffer_bytes: std::num::NonZeroUsize::new(64 * 1024 * 1024).unwrap(),
+        }
+    }
+}
+
 /// Required isolation level for an extension runtime process.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessIsolationPolicy {
     /// Fail closed unless the launcher enforces the requested sandbox and hard resource limits.
     RequirePlatformEnforcement(HardResourceLimits),
+    /// Product-owned V8 process: no direct filesystem, network or child processes;
+    /// separate heap/backing-store budgets and per-request execution deadlines.
+    RequireJavaScriptEnforcement(JavaScriptMemoryLimits),
     /// Explicit opt-in for trusted local development. Never use for installed third-party code.
     TrustedDevelopment,
 }
@@ -44,6 +63,15 @@ pub struct ExtensionHostLimits {
 }
 
 impl ExtensionHostLimits {
+    /// Wire validation is shared with SDK clients; execution limits remain host-owned.
+    pub fn protocol_limits(&self) -> extension_protocol::ProtocolLimits {
+        extension_protocol::ProtocolLimits {
+            maximum_frame_bytes: self.maximum_frame_bytes,
+            maximum_payload_bytes: self.maximum_payload_bytes,
+            maximum_registrations: self.maximum_registrations,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), ExtensionHostError> {
         if self.maximum_frame_bytes == 0 {
             return Err(ExtensionHostError::InvalidLimits(
@@ -103,10 +131,11 @@ impl ExtensionHostLimits {
 
 impl Default for ExtensionHostLimits {
     fn default() -> Self {
+        let protocol = extension_protocol::ProtocolLimits::default();
         Self {
-            maximum_frame_bytes: 1024 * 1024,
-            maximum_payload_bytes: 512 * 1024,
-            maximum_registrations: 256,
+            maximum_frame_bytes: protocol.maximum_frame_bytes,
+            maximum_payload_bytes: protocol.maximum_payload_bytes,
+            maximum_registrations: protocol.maximum_registrations,
             maximum_in_flight_requests: 32,
             maximum_in_flight_control_requests: 8,
             maximum_stderr_bytes: 256 * 1024,

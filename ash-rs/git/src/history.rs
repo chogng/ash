@@ -430,3 +430,12 @@ fn missing_object(stderr: &[u8]) -> bool {
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;
+
+mod graph;
+
+pub use graph::GitGraph;
+pub use graph::GitGraphCursor;
+pub use graph::GitReference;
+pub use graph::GitReferenceKind;
+pub use summary::GitCommitSummary;
+mod summary;

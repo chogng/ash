@@ -147,6 +147,7 @@ import type { EnvDirsSetParams } from './types/EnvDirsSetParams.js';
 import type { EnvDirsSetResult } from './types/EnvDirsSetResult.js';
 import type { ExecPolicyRuleRemoveParams } from './types/ExecPolicyRuleRemoveParams.js';
 import type { ExecPolicyRuleUpsertParams } from './types/ExecPolicyRuleUpsertParams.js';
+import type { ExtensionHostActivateParams } from './types/ExtensionHostActivateParams.js';
 import type { ExtensionHostInvokeCancelParams } from './types/ExtensionHostInvokeCancelParams.js';
 import type { ExtensionHostInvokeCancelResult } from './types/ExtensionHostInvokeCancelResult.js';
 import type { ExtensionHostInvokeReadParams } from './types/ExtensionHostInvokeReadParams.js';
@@ -349,6 +350,8 @@ import type { MarketplaceAcquireCapabilityParams } from './types/MarketplaceAcqu
 import type { MarketplaceAcquiredCapabilityDto } from './types/MarketplaceAcquiredCapabilityDto.js';
 import type { MarketplaceArtifactHandleDto } from './types/MarketplaceArtifactHandleDto.js';
 import type { MarketplaceDownloadParams } from './types/MarketplaceDownloadParams.js';
+import type { MarketplaceEditorExtensionPolicyParams } from './types/MarketplaceEditorExtensionPolicyParams.js';
+import type { MarketplaceEditorExtensionsResult } from './types/MarketplaceEditorExtensionsResult.js';
 import type { MarketplaceGetParams } from './types/MarketplaceGetParams.js';
 import type { MarketplaceInstallParams } from './types/MarketplaceInstallParams.js';
 import type { MarketplaceInstalledPackageDto } from './types/MarketplaceInstalledPackageDto.js';
@@ -404,6 +407,8 @@ import type { NetworkDiagnosticsRunResult } from './types/NetworkDiagnosticsRunR
 import type { NetworkHttpConfigureParams } from './types/NetworkHttpConfigureParams.js';
 import type { NetworkReadResult } from './types/NetworkReadResult.js';
 import type { PluginCommandResultDto } from './types/PluginCommandResultDto.js';
+import type { PluginInstallLocalParams } from './types/PluginInstallLocalParams.js';
+import type { PluginInstallLocalResult } from './types/PluginInstallLocalResult.js';
 import type { PluginListResult } from './types/PluginListResult.js';
 import type { PluginPackageCommandParams } from './types/PluginPackageCommandParams.js';
 import type { PluginRequestRemoveParams } from './types/PluginRequestRemoveParams.js';
@@ -537,6 +542,10 @@ import type { TurnChangesListParams } from './types/TurnChangesListParams.js';
 import type { TurnChangesListResult } from './types/TurnChangesListResult.js';
 import type { TurnChangesMutationParams } from './types/TurnChangesMutationParams.js';
 import type { TurnChangesMutationResult } from './types/TurnChangesMutationResult.js';
+import type { TurnChangesPrepareCommitParams } from './types/TurnChangesPrepareCommitParams.js';
+import type { TurnChangesPrepareCommitResult } from './types/TurnChangesPrepareCommitResult.js';
+import type { TurnChangesReadCommitFileParams } from './types/TurnChangesReadCommitFileParams.js';
+import type { TurnChangesReadCommitParams } from './types/TurnChangesReadCommitParams.js';
 import type { TurnChangesReadFileParams } from './types/TurnChangesReadFileParams.js';
 import type { TurnChangesReadFileResult } from './types/TurnChangesReadFileResult.js';
 import type { TurnChangesReadParams } from './types/TurnChangesReadParams.js';
@@ -631,6 +640,9 @@ export interface AppServerRequestMap {
   "turnChanges/readFile": { params: TurnChangesReadFileParams; response: TurnChangesReadFileResult };
   "turnChanges/generateMessage": { params: TurnChangesMutationParams; response: TurnChangesMutationResult };
   "turnChanges/updateDraft": { params: TurnChangesUpdateDraftParams; response: TurnChangesMutationResult };
+  "turnChanges/prepareCommit": { params: TurnChangesPrepareCommitParams; response: TurnChangesPrepareCommitResult };
+  "turnChanges/readCommit": { params: TurnChangesReadCommitParams; response: TurnChangesPrepareCommitResult };
+  "turnChanges/readCommitFile": { params: TurnChangesReadCommitFileParams; response: TurnChangesReadFileResult };
   "turnChanges/commit": { params: TurnChangesCommitParams; response: TurnChangesMutationResult };
   "turnChanges/discardThread": { params: TurnChangesDiscardThreadParams; response: TurnChangesMutationResult };
   "project/list": { params: ProjectListParams; response: ProjectListResult };
@@ -680,6 +692,7 @@ export interface AppServerRequestMap {
   "connector/disconnect": { params: ConnectorDisconnectParams; response: ConnectorDisconnectResultDto };
   "connector/credential/cleanup": { params: ConnectorCredentialCleanupParams; response: ConnectorCredentialCleanupDto };
   "plugin/list": { params: Record<string, never>; response: PluginListResult };
+  "plugin/installLocal": { params: PluginInstallLocalParams; response: PluginInstallLocalResult };
   "marketplace/search": { params: MarketplaceSearchParams; response: MarketplaceSearchResult };
   "marketplace/get": { params: MarketplaceGetParams; response: MarketplacePackageDetailsDto };
   "marketplace/download": { params: MarketplaceDownloadParams; response: MarketplaceArtifactHandleDto };
@@ -687,6 +700,8 @@ export interface AppServerRequestMap {
   "marketplace/update": { params: MarketplaceUpdateParams; response: MarketplaceInstalledPackageDto };
   "marketplace/uninstall": { params: MarketplaceUninstallParams; response: null };
   "marketplace/listInstalled": { params: Record<string, never>; response: MarketplaceListInstalledResult };
+  "marketplace/editorExtensions": { params: Record<string, never>; response: MarketplaceEditorExtensionsResult };
+  "marketplace/setEditorExtensionPolicy": { params: MarketplaceEditorExtensionPolicyParams; response: MarketplaceEditorExtensionsResult };
   "marketplace/acquireCapability": { params: MarketplaceAcquireCapabilityParams; response: MarketplaceAcquiredCapabilityDto };
   "marketplace/releaseCapability": { params: MarketplaceReleaseCapabilityParams; response: null };
   "marketplace/openResource": { params: MarketplaceOpenResourceParams; response: MarketplaceResourceContentDto };
@@ -740,6 +755,7 @@ export interface AppServerRequestMap {
   "extensions/list": { params: ExtensionListParams; response: ExtensionListResult };
   "extensions/resource/open": { params: ExtensionResourceOpenParams; response: ExtensionResourceOpenResult };
   "extensionHost/list": { params: Record<string, never>; response: ExtensionHostSnapshotDto };
+  "extensionHost/activate": { params: ExtensionHostActivateParams; response: ExtensionHostSnapshotDto };
   "extensionHost/reconcile": { params: ExtensionHostReconcileParams; response: ExtensionHostSnapshotDto };
   "extensionHost/invoke/start": { params: ExtensionHostInvokeStartParams; response: ExtensionHostInvokeStartResult };
   "extensionHost/invoke/read": { params: ExtensionHostInvokeReadParams; response: ExtensionHostInvokeReadResult };
@@ -1029,6 +1045,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "turnChanges/readFile": { method: "turnChanges/readFile" },
   "turnChanges/generateMessage": { method: "turnChanges/generateMessage" },
   "turnChanges/updateDraft": { method: "turnChanges/updateDraft" },
+  "turnChanges/prepareCommit": { method: "turnChanges/prepareCommit" },
+  "turnChanges/readCommit": { method: "turnChanges/readCommit" },
+  "turnChanges/readCommitFile": { method: "turnChanges/readCommitFile" },
   "turnChanges/commit": { method: "turnChanges/commit" },
   "turnChanges/discardThread": { method: "turnChanges/discardThread" },
   "project/list": { method: "project/list" },
@@ -1078,6 +1097,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "connector/disconnect": { method: "connector/disconnect" },
   "connector/credential/cleanup": { method: "connector/credential/cleanup" },
   "plugin/list": { method: "plugin/list" },
+  "plugin/installLocal": { method: "plugin/installLocal" },
   "marketplace/search": { method: "marketplace/search" },
   "marketplace/get": { method: "marketplace/get" },
   "marketplace/download": { method: "marketplace/download" },
@@ -1085,6 +1105,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "marketplace/update": { method: "marketplace/update" },
   "marketplace/uninstall": { method: "marketplace/uninstall" },
   "marketplace/listInstalled": { method: "marketplace/listInstalled" },
+  "marketplace/editorExtensions": { method: "marketplace/editorExtensions" },
+  "marketplace/setEditorExtensionPolicy": { method: "marketplace/setEditorExtensionPolicy" },
   "marketplace/acquireCapability": { method: "marketplace/acquireCapability" },
   "marketplace/releaseCapability": { method: "marketplace/releaseCapability" },
   "marketplace/openResource": { method: "marketplace/openResource" },
@@ -1138,6 +1160,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "extensions/list": { method: "extensions/list" },
   "extensions/resource/open": { method: "extensions/resource/open" },
   "extensionHost/list": { method: "extensionHost/list" },
+  "extensionHost/activate": { method: "extensionHost/activate" },
   "extensionHost/reconcile": { method: "extensionHost/reconcile" },
   "extensionHost/invoke/start": { method: "extensionHost/invoke/start" },
   "extensionHost/invoke/read": { method: "extensionHost/invoke/read" },

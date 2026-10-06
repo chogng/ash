@@ -2,6 +2,7 @@ use tempfile::TempDir;
 use url::Url;
 
 use super::MarketplaceRemoteClient;
+use crate::PluginProvider;
 use crate::RemoteMarketplaceConfig;
 
 #[test]
@@ -15,7 +16,17 @@ fn opening_the_remote_client_never_requires_network_access() {
     )
     .unwrap();
 
-    MarketplaceRemoteClient::new(config);
+    let client = MarketplaceRemoteClient::new(config);
+    let result = client
+        .search(crate::SearchPackagesRequest {
+            capability_kind: Some(crate::CapabilityKind::EditorExtension),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(
+        result.packages.is_empty(),
+        "VSIX discovery belongs to its own provider, not the signed catalog"
+    );
 }
 
 #[test]

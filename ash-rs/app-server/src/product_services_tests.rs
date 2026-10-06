@@ -330,3 +330,45 @@ fn product_services_binds_image_endpoint_and_git_policy_to_the_product_authority
     fs::write(&path, document.to_string()).unwrap();
     assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
 }
+
+#[test]
+fn open_vsx_is_an_independent_source_with_explicit_download_origins() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product-services.json");
+    let source = serde_json::json!({"schemaVersion":2,"openVsx":{
+        "name":"open-vsx", "apiUrl":"https://open-vsx.org/api/",
+        "downloadOrigins":["https://openvsx.eclipsecontent.org/"]
+    }});
+    fs::write(&path, source.to_string()).unwrap();
+    let config = LocalProductServicesConfig::load(&path, root.path()).unwrap();
+    assert!(config.marketplaces().is_empty());
+    assert_eq!(config.open_vsx.as_ref().unwrap().0.as_str(), "open-vsx");
+    for endpoint in [
+        "http://open-vsx.org/api/",
+        "https://user@open-vsx.org/api/",
+        "https://open-vsx.org/api",
+    ] {
+        let mut invalid = source.clone();
+        invalid["openVsx"]["apiUrl"] = endpoint.into();
+        fs::write(&path, invalid.to_string()).unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    }
+}
+
+#[test]
+fn open_vsx_cannot_replace_a_pinned_marketplace_identity() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("root.json"), b"{}").unwrap();
+    let path = root.path().join("product-services.json");
+    fs::write(
+        &path,
+        serde_json::json!({"schemaVersion":2,
+            "marketplaces":[{"name":"shared", "metadataBaseUrl":"https://signed.example/metadata/",
+                "targetsBaseUrl":"https://signed.example/targets/", "trustedRoot":"root.json"}],
+            "openVsx":{"name":"shared", "apiUrl":"https://open-vsx.org/api/", "downloadOrigins":[]}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+}

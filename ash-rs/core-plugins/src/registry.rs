@@ -3,8 +3,8 @@
 //! The adapter verifies the current HTTPS/TUF distribution and hands opaque package bytes to the
 //! local store without exposing remote cache paths or extraction directories.
 
-mod archive;
-mod catalog;
+pub(crate) mod archive;
+pub(crate) mod catalog;
 mod catalog_provenance;
 mod client;
 mod error;

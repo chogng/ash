@@ -80,10 +80,10 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private createRepositoryToolbar(container: HTMLElement): void {
 		const isMain = isMainBranch(sourceBranch(this.options.input.source));
 		const contributedPrimary = this.sourceResolvers.primaryRepositoryAction(this.options.input);
-		const primary = isMain
-			? contributedPrimary
-				? this.wrapExternalAction(contributedPrimary, 'Committing…')
-				: new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.canModifyGit(), () => this.showCommitEditor(false))
+		const primary = contributedPrimary
+			? this.wrapExternalAction(contributedPrimary, 'Committing…')
+			: isMain
+				? new ToolbarAction('multiDiff.commit.manual', 'Commit', 'Enter a commit message', Lxicon.gitCommit, this.canModifyGit(), () => this.showCommitEditor(false))
 			: new ToolbarAction('multiDiff.pullRequest.create', 'Create Pull Request', 'Pull request provider is not connected', Lxicon.git, false, () => {});
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', 'Repository Actions', 'Repository Actions', Lxicon.chevronDown, true, () => {});
 		const actions = isMain ? this.commitActions() : this.pullRequestActions();
@@ -98,7 +98,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		];
 		const toolbar = this._register(new WorkbenchToolBar(container, this.options.contextMenuProvider, {
 			ariaLabel: 'Multi-diff repository actions',
-			actionViewItemProvider: action => action.id === primary.id
+			actionViewItemProvider: action => action.id === primary.id && !contributedPrimary
 				? new DropdownWithPrimaryActionViewItem(primary, dropdown, actions, this.options.contextMenuProvider)
 				: undefined,
 		}));

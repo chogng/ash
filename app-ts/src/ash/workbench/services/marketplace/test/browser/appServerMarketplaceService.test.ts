@@ -13,14 +13,18 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
 	const summary = { id: "example/docs", version: "1.0.0", packageType: "mcp", displayName: "Docs", description: "Documentation search." };
 	const packageReference = { id: summary.id, version: summary.version, digest: `sha256:${"a".repeat(64)}` };
 	const details = { package: packageReference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: "MIT", source: "thirdParty" as const, upstream: null, capabilities: [] };
+	const extension = { ...summary, id: "publisher.sample@open-vsx", packageType: "editorExtension" };
+	const detailRequests: string[] = [];
 	const installed = { installationId: "installed-1", package: packageReference, state: "installed" as const, capabilities: [] };
 	const api = {
+		editorExtensions: async () => ({ revision: 1, extensions: [] }),
+		setEditorExtensionPolicy: async () => { throw new Error("unused"); },
 		search: async (params: Parameters<IMarketplaceApi["search"]>[0]) => {
 			requests.push(params);
 			searches += 1;
-			return { packages: [summary] };
+			return { packages: [summary, extension] };
 		},
-		get: async () => details,
+		get: async (params: Parameters<IMarketplaceApi["get"]>[0]) => { detailRequests.push(params.packageId); return details; },
 		download: async () => ({ id: "artifact-1", package: packageReference }),
 		install: async () => installed,
 		update: async () => installed,
@@ -49,6 +53,10 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
 	assert.equal(service.cachedBrowse("", { limit: 100 }), first);
 	assert.equal(searches, 1);
 	assert.equal(installedReads, 1);
+	assert.equal(first.packages[1]!.details, undefined);
+	assert.deepEqual(detailRequests, [summary.id], "browsing does not download VSIX packages for every result");
+	await service.get(extension.id, extension.version);
+	assert.deepEqual(detailRequests, [summary.id, extension.id], "opening the selected extension resolves its payload");
 
 	await service.install(summary.id, summary.version);
 	assert.equal(installedChanges, 0);

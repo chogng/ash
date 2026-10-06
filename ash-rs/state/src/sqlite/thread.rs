@@ -1,4 +1,7 @@
-use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
+use super::connection::from_sql_integer;
+use super::connection::open;
+use super::connection::sql_error;
+use super::connection::to_sql_integer;
 use ash_history::StoredEvent;
 use ash_history::supports_stored_event_schema_version;
 use ash_protocol::ContentDigest;
@@ -12,8 +15,13 @@ use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
 use ash_thread_store::session_from_catalog;
 use ash_thread_store::validate_append_batch;
-use rusqlite::{Connection, OptionalExtension, ToSql, TransactionBehavior, params};
-use std::path::{Path, PathBuf};
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::ToSql;
+use rusqlite::TransactionBehavior;
+use rusqlite::params;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// SQLite implementation of the authoritative typed Thread event store.
@@ -447,6 +455,9 @@ impl ThreadStore for SqliteThreadStore {
                 .collect::<Result<Vec<_>, _>>()?
         };
         for thread_id in &thread_ids {
+            let commits = super::git_turn_commits::list_commits(&transaction, thread_id)
+                .map_err(storage_error)?;
+            git_turn_changes::require_settled_publications(&commits).map_err(storage_error)?;
             transaction
                 .execute(
                     "DELETE FROM thread_history_prefixes WHERE thread_id = ?1",
@@ -456,6 +467,12 @@ impl ThreadStore for SqliteThreadStore {
             transaction
                 .execute(
                     "DELETE FROM agent_threads WHERE thread_id = ?1",
+                    [thread_id.as_str()],
+                )
+                .map_err(storage_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM turn_commits WHERE thread_id = ?1",
                     [thread_id.as_str()],
                 )
                 .map_err(storage_error)?;

@@ -332,6 +332,26 @@ impl PluginActivationAuthority {
         PluginAuthoritySubscription { receiver }
     }
 
+    /// Reads metadata from an exact installed object, including disabled and ungranted packages.
+    /// The authority lock keeps uninstall from removing that object during validation.
+    pub fn installed_manifest(
+        &self,
+        package: &InstalledPluginRef,
+    ) -> Result<crate::PluginManifest, PluginError> {
+        let state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| authority_unavailable("Plugin authority lock is unavailable"))?;
+        if state.installed.get(&InstalledKey::from_package(package)) != Some(package) {
+            return Err(authority_error(
+                PluginErrorKind::SourceUnavailable,
+                "Plugin package is not installed",
+            ));
+        }
+        Ok(self.inner.store.read(package)?.manifest().clone())
+    }
+
     /// Validates, copies, and records one local-development package without enabling it.
     pub fn install_local(
         &self,

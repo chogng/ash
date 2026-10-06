@@ -6,11 +6,11 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IAppServerApi } from '../../../platform/app-server/common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
-import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
@@ -92,8 +92,8 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 
 test('Sessions contributes Turn changes and commit actions to the shared multi-diff editor', async () => {
 	const summaries: TurnChangeSetSummary[] = [
-		{ changeSetId: 'one', sessionId: 'session', threadId: 'thread', turnId: 'turn-one', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
-		{ changeSetId: 'two', sessionId: 'session', threadId: 'thread', turnId: 'turn-two', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 2 },
+		{ changeSetId: 'one', sessionId: 'session', threadId: 'thread', turnId: 'turn-one', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
+		{ changeSetId: 'two', sessionId: 'session', threadId: 'thread', turnId: 'turn-two', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 2 },
 	];
 	const commits: string[] = [];
 	const opened: MultiDiffEditorInput[] = [];
@@ -107,12 +107,19 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		readTurnChangeFile: async (_sessionId: string, _threadId: string, changeSetId: string) => changeSetId === 'one'
 			? { path: 'src/file.ts', binary: false, truncated: false, before: 'before', after: 'middle' }
 			: { path: 'src/file.ts', binary: false, truncated: false, before: 'middle', after: 'after' },
+		prepareTurnCommit: async (_session: string, _thread: string, selections: unknown, message: string) => {
+			assert.deepEqual(selections, [{ changeSetId: 'one', expectedRevision: 1, paths: ['src/file.ts'] }, { changeSetId: 'two', expectedRevision: 2, paths: ['src/file.ts'] }]);
+			assert.equal(message, 'feat: reviewed selection');
+			return { commitId: 'prepared', targetBranch: 'main', message, files: [{ path: 'src/file.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }], warnings: [] };
+		},
+		readTurnCommitFile: async () => ({ path: 'src/file.ts', binary: false, truncated: false, before: 'target', after: 'selected' }),
 		commitTurnChange: async (_sessionId: string, _threadId: string, changeSetId: string) => {
 			commits.push(changeSetId);
 			return summaries;
 		},
 	} as unknown as IChatService;
 	using services = new InstantiationService();
+	services.registerInstance(IQuickInputService, { input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); } });
 	services.registerInstance(IChatService, chat);
 	const session = { sessionId: 'session' };
 	services.registerInstance(ISessionsManagementService, {
@@ -148,7 +155,11 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	assert.equal(resolved?.source?.kind, 'external');
 	assert.equal(resolvers.primaryRepositoryAction({ ...restored, source: { kind: 'git', repositoryId: 'repo', scope: 'uncommitted', branchName: 'main' } }), undefined);
 	await resolvers.primaryRepositoryAction(restored)?.run();
-	assert.deepEqual(commits, ['one', 'two']);
+	assert.deepEqual(commits, []);
+	assert.equal(opened[1]?.items[0]?.original.initialText, 'target');
+	assert.equal(opened[1]?.items[0]?.modified.initialText, 'selected');
+	await resolvers.primaryRepositoryAction(opened[1]!)?.run();
+	assert.deepEqual(commits, ['prepared']);
 	const direct = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'currentTurn');
 	assert.equal(direct.items[0]?.original.initialText, 'middle');
 });

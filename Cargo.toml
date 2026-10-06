@@ -64,6 +64,8 @@ members = [
     "ash-rs/code-mode-host",
     "ash-rs/code-mode-protocol",
     "ash-rs/code-mode-runtime",
+    "ash-rs/v8-runtime",
+    "ash-rs/js-extension-host",
     "ash-rs/v8-poc",
     "ash-rs/chatgpt",
     "ash-rs/glm",
@@ -89,8 +91,10 @@ members = [
     "ash-rs/diff",
     "ash-rs/debug-adapter",
     "ash-rs/testing",
-    "ash-rs/extensions",
+    "ash-rs/extension-catalog",
     "ash-rs/editor-extension-host",
+    "ash-rs/editor-extension-protocol",
+    "ash-rs/extensions",
     "ash-rs/environment",
     "ash-rs/ext/extension-api",
     "ash-rs/ext/connectors",
@@ -164,6 +168,7 @@ members = [
     "ash-rs/thread-store",
     "ash-rs/thread-transcript",
     "ash-rs/git-turn-changes",
+    "ash-rs/git-transaction",
     "ash-rs/tools",
     "ash-rs/uds",
     "code/tui",
@@ -491,6 +496,7 @@ ash-code-mode = { path = "ash-rs/code-mode" }
 ash-code-mode-host = { path = "ash-rs/code-mode-host" }
 ash-code-mode-protocol = { path = "ash-rs/code-mode-protocol" }
 ash-code-mode-runtime = { path = "ash-rs/code-mode-runtime" }
+v8-runtime = { package = "ash-v8-runtime", path = "ash-rs/v8-runtime" }
 ash-v8-poc = { path = "ash-rs/v8-poc" }
 ash-chatgpt = { path = "ash-rs/chatgpt" }
 backend-client = { package = "ash-backend-client", path = "ash-rs/backend-client" }
@@ -519,8 +525,9 @@ ash-web-search-extension = { path = "ash-rs/ext/web-search" }
 ash-exec = { path = "ash-rs/exec" }
 ash-execpolicy = { path = "ash-rs/execpolicy" }
 ash-tool-executor = { path = "ash-rs/tool-executor" }
-ash-extensions = { path = "ash-rs/extensions" }
+extension-catalog = { package = "ash-extension-catalog", path = "ash-rs/extension-catalog" }
 ash-editor-extension-host = { path = "ash-rs/editor-extension-host" }
+extension-protocol = { package = "ash-editor-extension-protocol", path = "ash-rs/editor-extension-protocol" }
 ash-icons = { path = "app-rs/icons" }
 ash-file-identity = { path = "ash-rs/file-identity" }
 ash-file-search = { path = "ash-rs/file-search" }
@@ -533,6 +540,7 @@ ash-file-watcher = { path = "ash-rs/file-watcher" }
 ash-files = { path = "app-rs/files" }
 github = { package = "ash-github", path = "ash-rs/github" }
 ash-git = { path = "ash-rs/git" }
+git-transaction = { package = "ash-git-transaction", path = "ash-rs/git-transaction" }
 ash-history = { path = "ash-rs/history" }
 ash-home = { path = "ash-rs/ash-home" }
 message-history = { package = "ash-message-history", path = "ash-rs/message-history" }

@@ -9,6 +9,8 @@ export interface IMarketplaceApi {
 	update(params: MarketplaceUpdateParams): Promise<MarketplaceInstalledPackageDto>;
 	uninstall(params: MarketplaceUninstallParams): Promise<void>;
 	listInstalled(): Promise<MarketplaceListInstalledResult>;
+	editorExtensions(): Promise<import('../../app-server/common/generated/index.js').MarketplaceEditorExtensionsResult>;
+	setEditorExtensionPolicy(params: import('../../app-server/common/generated/index.js').MarketplaceEditorExtensionPolicyParams): Promise<import('../../app-server/common/generated/index.js').MarketplaceEditorExtensionsResult>;
 	acquireCapability(params: MarketplaceAcquireCapabilityParams): Promise<MarketplaceAcquiredCapabilityDto>;
 	releaseCapability(params: MarketplaceReleaseCapabilityParams): Promise<void>;
 	openResource(params: MarketplaceOpenResourceParams): Promise<MarketplaceResourceContentDto>;

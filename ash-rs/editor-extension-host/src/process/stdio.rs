@@ -1,16 +1,9 @@
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
-use std::io::BufRead;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
-use std::process::Child;
-use std::process::ChildStderr;
-use std::process::ChildStdin;
-use std::process::ChildStdout;
-use std::process::Command;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
@@ -23,12 +16,14 @@ use super::ExtensionLaunchCommand;
 use super::PendingEntry;
 use super::PendingFailure;
 use super::PendingHostRequest;
+use super::PendingMessage;
 use super::reserve_pending;
 use crate::ExtensionHostError;
 use crate::ExtensionHostLimits;
 use crate::ExtensionHostOutputEvent;
 use crate::ExtensionHostRequest;
-use crate::protocol::ExtensionHostStdoutFrame;
+use extension_protocol::ExtensionHostStdoutFrame;
+use extension_protocol::read_frame as read_bounded_line;
 
 #[derive(Default)]
 struct OutputEventQueue {
@@ -37,8 +32,8 @@ struct OutputEventQueue {
 }
 
 pub(super) struct StdioExtensionHostProcess {
-    child: Mutex<Option<Child>>,
-    writer: Mutex<Option<BufWriter<ChildStdin>>>,
+    child: Mutex<Option<ash_sandboxing::ProcessHandle>>,
+    writer: Mutex<Option<BufWriter<Box<dyn Write + Send>>>>,
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
     exited: Arc<AtomicBool>,
     stderr: Arc<Mutex<Vec<u8>>>,
@@ -53,21 +48,28 @@ impl StdioExtensionHostProcess {
         launch: &ExtensionLaunchCommand,
         limits: &ExtensionHostLimits,
     ) -> Result<Self, ExtensionHostError> {
-        let mut command = Command::new(launch.executable());
-        command
-            .args(launch.arguments())
-            .current_dir(launch.working_directory())
-            .env_clear()
-            .envs(launch.environment())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
+        let command = ash_sandboxing::SandboxCommand::new(
+            launch.executable(),
+            launch.arguments().iter().cloned(),
+            launch.working_directory(),
+        );
+        let environment = launch
+            .environment()
+            .iter()
+            .map(|(key, value)| {
+                let key = key.to_str().ok_or(ExtensionHostError::SpawnFailed)?;
+                let value = value.to_str().ok_or(ExtensionHostError::SpawnFailed)?;
+                Ok((key.to_owned(), value.to_owned()))
+            })
+            .collect::<Result<Vec<_>, ExtensionHostError>>()?;
+        // Confinement is applied inside the product child before extension code. This
+        // shared process handle owns the group and also cleans it up on partial startup.
+        let mut child = ash_sandboxing::PreparedCommand::unrestricted(&command)
+            .spawn(&environment)
             .map_err(|_| ExtensionHostError::SpawnFailed)?;
-        let stdin = child.stdin.take().ok_or(ExtensionHostError::SpawnFailed)?;
-        let stdout = child.stdout.take().ok_or(ExtensionHostError::SpawnFailed)?;
-        let stderr_pipe = child.stderr.take().ok_or(ExtensionHostError::SpawnFailed)?;
+        let stdin = child.take_stdin().ok_or(ExtensionHostError::SpawnFailed)?;
+        let stdout = child.take_stdout().ok_or(ExtensionHostError::SpawnFailed)?;
+        let stderr_pipe = child.take_stderr().ok_or(ExtensionHostError::SpawnFailed)?;
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
         let exited = Arc::new(AtomicBool::new(false));
         let stderr = Arc::new(Mutex::new(Vec::new()));
@@ -103,11 +105,23 @@ impl StdioExtensionHostProcess {
 }
 
 impl ExtensionHostProcess for StdioExtensionHostProcess {
+    fn respond_client(
+        &self,
+        response: extension_protocol::ExtensionClientResponse,
+    ) -> Result<(), ExtensionHostError> {
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?;
+        let writer = writer.as_mut().ok_or(ExtensionHostError::HostExited)?;
+        extension_protocol::write_frame(writer, &response, self.limits.maximum_frame_bytes)?;
+        Ok(())
+    }
     fn dispatch(
         &self,
         request: ExtensionHostRequest,
     ) -> Result<PendingHostRequest, ExtensionHostError> {
-        request.validate(&self.limits)?;
+        request.validate(&self.limits.protocol_limits())?;
         if self.has_exited() {
             return Err(ExtensionHostError::HostExited);
         }
@@ -128,6 +142,7 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
             reserve_pending(
                 &mut pending,
                 PendingEntry {
+                    client_ids: std::collections::BTreeSet::new(),
                     request,
                     sender,
                     control,
@@ -184,14 +199,7 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?;
         if let Some(mut child) = child.take() {
-            if child
-                .try_wait()
-                .map_err(|_| ExtensionHostError::HostExited)?
-                .is_none()
-            {
-                child.kill().map_err(|_| ExtensionHostError::HostExited)?;
-            }
-            child.wait().map_err(|_| ExtensionHostError::HostExited)?;
+            child.close().map_err(|_| ExtensionHostError::HostExited)?;
         }
         self.fail_pending(PendingFailure::Exited);
         join_thread(&self.stdout_thread);
@@ -224,7 +232,7 @@ impl Drop for StdioExtensionHostProcess {
 }
 
 fn spawn_stdout_reader(
-    stdout: ChildStdout,
+    stdout: Box<dyn Read + Send>,
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
     exited: Arc<AtomicBool>,
     output_events: Arc<Mutex<OutputEventQueue>>,
@@ -253,11 +261,43 @@ fn spawn_stdout_reader(
                         break;
                     }
                 };
+                if let ExtensionHostStdoutFrame::ClientRequest(request) = frame {
+                    let forwarded = (|| {
+                        request
+                            .validate(&limits.protocol_limits())
+                            .map_err(|error| error.to_string())?;
+                        let mut requests = pending
+                            .lock()
+                            .map_err(|_| "pending requests lock poisoned".to_owned())?;
+                        let entry = requests
+                            .get_mut(&request.context.request_id)
+                            .ok_or_else(|| "client call has no pending invocation".to_owned())?;
+                        if entry.request.context != request.context
+                            || !matches!(entry.request.request, crate::HostRequestKind::Invoke(_))
+                        {
+                            return Err("client call belongs to a different invocation".to_owned());
+                        }
+                        if entry.client_ids.len() >= limits.maximum_in_flight_requests
+                            || !entry.client_ids.insert(request.call_id)
+                        {
+                            return Err("client call quota exceeded or ID reused".to_owned());
+                        }
+                        entry
+                            .sender
+                            .try_send(Ok(PendingMessage::ClientRequest(request)))
+                            .map_err(|_| "client call queue exceeded".to_owned())
+                    })();
+                    if let Err(error) = forwarded {
+                        fail_all_pending(&pending, PendingFailure::Protocol(error));
+                        break;
+                    }
+                    continue;
+                }
                 let ExtensionHostStdoutFrame::Response(response) = frame else {
                     let ExtensionHostStdoutFrame::Output(event) = frame else {
                         unreachable!();
                     };
-                    if let Err(error) = event.validate(&limits) {
+                    if let Err(error) = event.validate(&limits.protocol_limits()) {
                         fail_all_pending(&pending, PendingFailure::Protocol(error.to_string()));
                         break;
                     }
@@ -290,8 +330,8 @@ fn spawn_stdout_reader(
                     break;
                 };
                 let response = response
-                    .validate_for(&entry.request, &limits)
-                    .map(|()| response)
+                    .validate_for(&entry.request, &limits.protocol_limits())
+                    .map(|()| PendingMessage::Response(response))
                     .map_err(|error| PendingFailure::Protocol(error.to_string()));
                 let invalid = response.is_err();
                 let _ = entry.sender.send(response);
@@ -309,7 +349,7 @@ fn spawn_stdout_reader(
 }
 
 fn spawn_stderr_reader(
-    mut stderr: ChildStderr,
+    mut stderr: Box<dyn Read + Send>,
     captured: Arc<Mutex<Vec<u8>>>,
     maximum_bytes: usize,
 ) -> JoinHandle<()> {
@@ -329,40 +369,6 @@ fn spawn_stderr_reader(
             }
         })
         .expect("extension host stderr reader thread must start")
-}
-
-pub(super) fn read_bounded_line<R: BufRead>(
-    reader: &mut R,
-    maximum_bytes: usize,
-) -> Result<Option<Vec<u8>>, String> {
-    let mut output = Vec::new();
-    loop {
-        let available = reader.fill_buf().map_err(|error| error.to_string())?;
-        if available.is_empty() {
-            return if output.is_empty() {
-                Ok(None)
-            } else {
-                Err("protocol frame ended without a newline".into())
-            };
-        }
-        let newline = available.iter().position(|byte| *byte == b'\n');
-        let take = newline.map_or(available.len(), |position| position + 1);
-        if output.len().saturating_add(take) > maximum_bytes.saturating_add(1) {
-            return Err("protocol frame exceeds its byte limit".into());
-        }
-        output.extend_from_slice(&available[..take]);
-        reader.consume(take);
-        if newline.is_some() {
-            output.pop();
-            if output.last() == Some(&b'\r') {
-                output.pop();
-            }
-            if output.len() > maximum_bytes {
-                return Err("protocol frame exceeds its byte limit".into());
-            }
-            return Ok(Some(output));
-        }
-    }
 }
 
 fn fail_all_pending(pending: &Mutex<BTreeMap<u64, PendingEntry>>, failure: PendingFailure) {

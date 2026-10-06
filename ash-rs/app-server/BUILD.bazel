@@ -3,7 +3,7 @@ load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
 ash_rust_crate(
     name = "app-server",
     crate_name = "ash_app_server",
-    data = glob(["templates/**"]) + ["//ash-rs/utils/audio:tests/fixtures/tone.wav"],
+    data = glob(["templates/**"]) + ["//ash-rs/utils/audio:tests/fixtures/tone.wav", "//app-ts/extension-sdk:example/.ash-plugin/plugin.json"],
     extra_aliases = {
         "//ash-rs/collaboration-mode-templates": "collaboration_mode_templates",
         "//ash-rs/screen-capture": "screen_capture",

@@ -7,7 +7,7 @@ import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessi
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
-import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
+import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
 
 export interface ChatServiceOptions {
@@ -203,8 +203,22 @@ export class ChatService extends Disposable implements IChatService {
 		return result.changeSets.map(toTurnChangeSummary);
 	}
 
-	async commitTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
-		const result = await this.options.turnChangesApi.commit({ commandId: commandId("turn-changes-commit"), sessionId, threadId, changeSetIds: [changeSetId], expectedRevision });
+	async prepareTurnCommit(sessionId: SessionId, threadId: ThreadId, selections: readonly TurnCommitSelection[], message: string): Promise<TurnCommitPreview> {
+		const result = await this.options.turnChangesApi.prepareCommit({ commandId: commandId("turn-changes-prepare"), sessionId, threadId, selections: selections.map(selection => ({ ...selection, paths: [...selection.paths] })), message });
+		return { ...result, files: result.files.map(file => ({ ...file })), warnings: [...result.warnings] };
+	}
+
+	async readTurnCommit(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<TurnCommitPreview> {
+		const result = await this.options.turnChangesApi.readCommit({ sessionId, threadId, commitId });
+		return { ...result, files: result.files.map(file => ({ ...file })), warnings: [...result.warnings] };
+	}
+
+	async readTurnCommitFile(sessionId: SessionId, threadId: ThreadId, commitId: string, path: string) {
+		return { ...await this.options.turnChangesApi.readCommitFile({ sessionId, threadId, commitId, path }) };
+	}
+
+	async commitTurnChange(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<readonly TurnChangeSetSummary[]> {
+		const result = await this.options.turnChangesApi.commit({ commandId: commandId("turn-changes-commit"), sessionId, threadId, commitId });
 		return result.changeSets.map(toTurnChangeSummary);
 	}
 
@@ -356,6 +370,7 @@ function toTurnChangeSummary(summary: TurnChangeSetSummaryDto): TurnChangeSetSum
 		externalDependencyPaths: [...summary.externalDependencyPaths],
 		warnings: [...summary.warnings],
 		conflictPaths: [...summary.conflictPaths],
+		committedPaths: [...summary.committedPaths],
 	};
 }
 
@@ -366,6 +381,8 @@ function toTurnChangeDetails(details: TurnChangesReadResultDto): TurnChangeDetai
 			path: file.path,
 			previousPath: file.previousPath,
 			kind: file.kind,
+			beforeMode: file.beforeMode,
+			afterMode: file.afterMode,
 			binary: file.binary,
 			additions: file.additions,
 			deletions: file.deletions,

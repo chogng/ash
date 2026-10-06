@@ -40,7 +40,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	pane.setVisible(EditorPaneVisibility.Hidden);
 	await pending.complete([{
 		changeSetId: 'change-a', sessionId: 'a', threadId: 'a-thread', turnId: 'turn-a', repositoryId: 'repository-a',
-		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', revision: 1,
+		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
 		statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
 	}]);
 	await Promise.resolve();

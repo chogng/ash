@@ -11,7 +11,7 @@ name = "ash_code_mode_runtime"
 path = "src/lib.rs"
 
 [dependencies]
-deno_core_icudata = { workspace = true }
+v8-runtime.workspace = true
 serde_json = { workspace = true }
 v8 = { workspace = true, features = ["v8_enable_sandbox"] }
 ash-code-mode-protocol = { workspace = true }

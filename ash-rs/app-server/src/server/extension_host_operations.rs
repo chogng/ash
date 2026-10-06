@@ -55,6 +55,50 @@ impl AppServer {
         result(&fleet_dto(runtime.snapshot()))
     }
 
+    pub(super) fn extension_host_activate(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use super::extension_host_runtime::source::ActivationEvent;
+        use ash_app_server_protocol::protocol::extension_host::ExtensionHostActivateParams;
+        use ash_app_server_protocol::protocol::extension_host::ExtensionHostActivationEventDto;
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+        }
+        let params: ExtensionHostActivateParams = decode(params)?;
+        let valid_text = |value: &str, maximum: usize| {
+            !value.is_empty() && value.len() <= maximum && !value.chars().any(char::is_control)
+        };
+        let valid_event = match &params.event {
+            ExtensionHostActivationEventDto::Command { command } => valid_text(command, 256),
+            ExtensionHostActivationEventDto::Language { language_id } => {
+                valid_text(language_id, 128)
+            }
+            ExtensionHostActivationEventDto::StartupFinished {} => true,
+        };
+        if !valid_text(&params.extension_id, 256)
+            || params.activation_generation == 0
+            || !valid_event
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let event = match params.event {
+            ExtensionHostActivationEventDto::Command { command } => {
+                ActivationEvent::Command(command)
+            }
+            ExtensionHostActivationEventDto::Language { language_id } => {
+                ActivationEvent::Language(language_id)
+            }
+            ExtensionHostActivationEventDto::StartupFinished {} => ActivationEvent::StartupFinished,
+        };
+        result(&fleet_dto(
+            self.extension_host_runtime()?
+                .activate_by_event(&params.extension_id, params.activation_generation, event)
+                .map_err(runtime_rpc_error)?,
+        ))
+    }
+
     pub(super) fn extension_host_reconcile(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ExtensionHostReconcileParams = decode(params)?;
         let mode = match params.mode {
@@ -89,6 +133,14 @@ impl AppServer {
                     payload: params.payload,
                     deadline_unix_millis: params.deadline_unix_millis,
                 },
+                // Capture the initiating workspace service once. A later workspace selection
+                // must never change the authority of an in-flight extension command.
+                self.file_system_service_for(None).map_err(|_| {
+                    ash_editor_extension_host::HostFailure {
+                        code: ash_editor_extension_host::HostErrorCode::OperationNotSupported,
+                        message: "workspace filesystem is unavailable".into(),
+                    }
+                }),
             )
             .map_err(runtime_rpc_error)?;
         result(&ExtensionHostInvokeStartResult { invocation_id })
@@ -166,6 +218,7 @@ fn fleet_dto(snapshot: ExtensionHostFleetSnapshot) -> ExtensionHostSnapshotDto {
                 activation_generation: extension.activation_generation,
                 incarnation: extension.incarnation,
                 lifecycle: match extension.lifecycle {
+                    ExtensionHostLifecycle::Dormant => ExtensionHostLifecycleDto::Dormant,
                     ExtensionHostLifecycle::Stopped => ExtensionHostLifecycleDto::Stopped,
                     ExtensionHostLifecycle::Starting => ExtensionHostLifecycleDto::Starting,
                     ExtensionHostLifecycle::Ready => ExtensionHostLifecycleDto::Ready,
@@ -173,6 +226,9 @@ fn fleet_dto(snapshot: ExtensionHostFleetSnapshot) -> ExtensionHostSnapshotDto {
                     ExtensionHostLifecycle::CrashLoop => ExtensionHostLifecycleDto::CrashLoop,
                     ExtensionHostLifecycle::Failed => ExtensionHostLifecycleDto::Failed,
                 },
+                activation: extension.activation.map(|plan| ash_app_server_protocol::protocol::extension_host::ExtensionHostActivationDto {
+                    events: plan.events, commands: plan.commands.into_iter().map(|(command, title)| ash_app_server_protocol::protocol::extension_host::ExtensionHostCommandContributionDto { command, title }).collect()
+                }),
                 failure: extension.failure.map(failure_dto),
                 stderr: extension.stderr,
                 output_events: extension

@@ -3,6 +3,7 @@
 > 本文拥有 Git 跨进程 ownership、用户可见语义和演进状态。`ash-git` 的命令、解析、
 > timeout 与失败细节以 [`ash-rs/git/README.md`](../ash-rs/git/README.md) 为准；
 > worktree 切换目标与 Codex 兼容归属以 [`ash-rs/worktree/README.md`](../ash-rs/worktree/README.md) 为准；
+> 能力划分与 Session 文件选择提交见 [`git-capabilities.md`](git-capabilities.md)；
 > external wire shape 以 [`ash-app-server-api.md`](ash-app-server-api.md) 为准。
 
 ## 快速理解
@@ -216,20 +217,25 @@ Git 操作的接入位置：
 | 协议调用与连接 | [`Git API adapter`](../app-ts/src/ash/platform/git/browser/gitApi.ts)、[`protocol client`](../app-ts/src/ash/platform/app-server/browser/appServerProtocolClient.ts) |
 | Electron 连接启动和透明转发 | [`daemon launcher`](../app-ts/src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../app-ts/src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../app-ts/src/ash/platform/app-server/electron-browser/appServerMessagePortTransport.ts) |
 | 协议定义和生成边界 | [`Git protocol`](../ash-rs/app-server-protocol/src/protocol/git.rs)、[`request map`](../app-ts/src/ash/platform/app-server/common/generated/AppServerRequestMap.ts)、[`decoder`](../app-ts/src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts) |
-| Git 执行与部分 index 编辑 | [`operations.rs`](../ash-rs/git/src/operations.rs)、[`index_edit.rs`](../ash-rs/git/src/index_edit.rs) |
+| Git 执行与部分 index 编辑 | [`references.rs`](../ash-rs/git/src/references.rs)、[`index_edit.rs`](../ash-rs/git/src/working_copy/index_edit.rs) |
 | Rust 调度与通知 | [`git_operations.rs`](../ash-rs/app-server/src/server/git_operations.rs)、[`git_runtime.rs`](../ash-rs/app-server/src/server/git_runtime.rs) |
 
 这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon；没有新增 Host 或需要退出的旧 Host 注册。生成协议与 decoder 已覆盖这些方法，前端命令只依赖 `IGitService`。命令通过 `getRepository` 先取得目标 ID，后续查询、输入、确认和执行始终使用该 ID。
 
 取消选择器或确认框会释放 UI 资源且不发送修改请求；修改请求发出后沿用后端的有限 Git 操作，不把关闭输入框当作取消执行。连接关闭仍由 protocol client 拒绝该连接的未完成请求，并取消正在处理的服务端请求；监听订阅由前端 service 释放，重新连接时重新发现仓库。脏 worktree 的删除由 Rust 拒绝；打开目录继续走工作区切换服务，编辑器未保存内容继续由 working copy 处理。会话持有的 worktree 仍由会话生命周期管理。
 
-Thread 提交不走普通 `git/commit`。`git-turn-changes` 把每个 Turn 封存为不可变 before/after tree，
-`ash-git::commit_tree_delta` 将这一个 delta 三方重放到目标分支最新 HEAD。目标 checkout 原有 index、
-未暂存和未跟踪内容先分别捕获并计算重放结果；ref 更新使用 expected HEAD CAS，checkout 安装前再比较
-tree 指纹。事务 journal 位于 Git common directory，进程重启后可以继续安装或确认已回滚状态。
+Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可变 before/after tree，
+用户从同一 Session / Thread 选择一轮或多轮的部分文件。Git 对象能力按捕获顺序重放选中 delta，
+随后 `ash-git-transaction` 准备固定目标 HEAD 与最终 commit 的预览。确认只发布这份准备结果，
+目标在预览期间移动时必须重新预览。
 
-该路径不读取正在运行的 Thread 目录，也不执行 commit hooks。目标分支推进且重放干净时允许提交；
-同一路径冲突、分支删除、checkout 变为 detached、index/文件变化都会返回明确冲突，不静默带入其他 Turn。
+每个 Thread 使用独立受管目录；提交读取保留对象，不读取或改写正在执行的 Thread 内容。
+目标 checkout 原有 staged / unstaged / untracked 内容分别保留，目标 ref 使用条件更新，
+安装 checkout 前再次比较 tree。Git 成功后原子保存精确文件选择的回执，随后确认并清理事务日志；
+重启恢复原事务身份，避免已发布却未记账造成重复提交。部分提交的 Turn 保留全部历史并可提交剩余文件。
+
+捕获完整性和实际文本冲突决定可提交性；工具读范围作为审阅提示，不强制整轮提交。跨 Session / Thread
+组合和行/块级 Turn 选择不属于本次能力。普通 SCM 的行/块暂存仍由工作区能力提供。
 
 ## 当前状态
 
@@ -295,7 +301,7 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 - `GitRuntime` 已支持目录集合中的 multi-repository registry。Workbench 通过 `ISCMService`
   注册仓库、由 `ISCMViewService` 选择当前仓库；Git provider 提供 Changes 资源组、输入框、状态栏命令、
   历史记录和冲突操作。SCM 视图从 provider 读取这些数据，不直接读取 Git 状态；
-- operation 由 runtime mutex 串行化；连接取消会中止已接入取消信号的 Git 请求，但尚无用户可见的 queue、progress 或取消按钮；
+- 交互 Git 写入和 Turn 目标发布按仓库 common directory 共用操作锁；连接取消会中止已接入取消信号的 Git 请求，但尚无用户可见的 queue、progress 或取消按钮；
 - App Server 已支持分支改名、远端分支删除和 tag 管理；不提供强制删除或凭据提示；
 - 部分暂存要求每侧文本不超过 2 MiB，且 diff 满足后端计算上限；冲突、重命名、子模块、二进制和非 UTF-8 内容不能部分暂存；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；

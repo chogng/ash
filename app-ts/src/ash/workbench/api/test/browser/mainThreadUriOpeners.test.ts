@@ -34,6 +34,7 @@ function snapshot(incarnation = 1): ExtensionHostFleetSnapshot {
 }
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
+	public registerClientHandler(): { dispose(): void } { throw new Error('Client calls are outside this fixture'); }
 	private readonly changed = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	public current = snapshot();
@@ -44,6 +45,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
 	public list(): Promise<ExtensionHostFleetSnapshot> { return Promise.resolve(this.current); }
 	public reconcile(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }
+	public activateByEvent(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Activation is outside this fixture'); }
 	public getConnectionState(): Promise<AppServerConnectionState> { return Promise.resolve('ready'); }
 	public onDidChange(listener: (generation: number) => void) { return this.changed.event(listener); }
 	public onConnectionState(listener: (state: AppServerConnectionState) => void) { return this.connection.event(listener); }

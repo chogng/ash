@@ -558,7 +558,7 @@ fn valid_locale(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
 }
 
-fn copy_tree(source: &Path, destination: &Path) -> Result<(), MarketplaceClientError> {
+pub(crate) fn copy_tree(source: &Path, destination: &Path) -> Result<(), MarketplaceClientError> {
     let mut children = fs::read_dir(source)
         .map_err(|_| MarketplaceClientError::storage())?
         .collect::<Result<Vec<_>, _>>()

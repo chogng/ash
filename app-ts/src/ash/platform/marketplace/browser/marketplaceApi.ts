@@ -4,7 +4,7 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { IMarketplaceApi } from "../common/marketplaceApi.js";
 
 export function createDisconnectedMarketplaceApi(unavailable: UnavailableOperation): IMarketplaceApi {
-	return { search: () => unavailable("marketplace.search"), get: () => unavailable("marketplace.get"), download: () => unavailable("marketplace.download"), install: () => unavailable("marketplace.install"), update: () => unavailable("marketplace.update"), uninstall: () => unavailable("marketplace.uninstall"), listInstalled: () => unavailable("marketplace.listInstalled"), acquireCapability: () => unavailable("marketplace.acquireCapability"), releaseCapability: () => unavailable("marketplace.releaseCapability"), openResource: () => unavailable("marketplace.openResource") };
+	return { search: () => unavailable("marketplace.search"), get: () => unavailable("marketplace.get"), download: () => unavailable("marketplace.download"), install: () => unavailable("marketplace.install"), update: () => unavailable("marketplace.update"), uninstall: () => unavailable("marketplace.uninstall"), listInstalled: () => unavailable("marketplace.listInstalled"), editorExtensions: () => unavailable("marketplace.editorExtensions"), setEditorExtensionPolicy: () => unavailable("marketplace.setEditorExtensionPolicy"), acquireCapability: () => unavailable("marketplace.acquireCapability"), releaseCapability: () => unavailable("marketplace.releaseCapability"), openResource: () => unavailable("marketplace.openResource") };
 }
 
 export function createAppServerMarketplaceApi(connection: AppServerProtocolClient): IMarketplaceApi {
@@ -21,6 +21,8 @@ export function createAppServerMarketplaceApi(connection: AppServerProtocolClien
 		update: params => appServerRequest(connection, "marketplace/update", params),
 		uninstall: params => voidResult(appServerRequest(connection, "marketplace/uninstall", params)),
 		listInstalled: () => appServerRequest(connection, "marketplace/listInstalled", {}),
+		editorExtensions: () => appServerRequest(connection, "marketplace/editorExtensions", {}),
+		setEditorExtensionPolicy: params => appServerRequest(connection, "marketplace/setEditorExtensionPolicy", params),
 		acquireCapability: params => appServerRequest(connection, "marketplace/acquireCapability", params),
 		releaseCapability: params => voidResult(appServerRequest(connection, "marketplace/releaseCapability", params)),
 		openResource: params => appServerRequest(connection, "marketplace/openResource", params),

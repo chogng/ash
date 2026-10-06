@@ -289,3 +289,33 @@ fn providers(provider: Arc<dyn PluginProvider>) -> ash_core_plugins::PluginProvi
     )])
     .unwrap()
 }
+
+#[cfg(target_os = "macos")]
+#[path = "marketplace_editor_extensions_web_tests.rs"]
+mod web;
+
+#[test]
+fn standard_manifest_derives_implicit_commands_and_languages_and_preserves_startup_events() {
+    let plan = super::activation_plan(&serde_json::json!({
+        "activationEvents": ["onStartupFinished", "onLanguage", "*"],
+        "contributes": { "commands": [{"command":"demo.run","title":"Run"}], "languages": [{"id":"rust"}] }
+    })).unwrap();
+    assert_eq!(
+        plan.events,
+        [
+            "*",
+            "onCommand:demo.run",
+            "onLanguage",
+            "onLanguage:rust",
+            "onStartupFinished"
+        ]
+    );
+    assert_eq!(plan.commands, [("demo.run".into(), "Run".into())]);
+    for manifest in [
+        serde_json::json!({"contributes":{"commands":[{"command":"demo.run","title":"Run"},{"command":"demo.run","title":"Again"}]}}),
+        serde_json::json!({"activationEvents":[1]}),
+        serde_json::json!({"contributes":{"commands":[{"command":"demo.run","title":{}}]}}),
+    ] {
+        assert!(super::activation_plan(&manifest).is_err());
+    }
+}

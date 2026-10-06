@@ -1,6 +1,10 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 test.beforeEach(async ({ workbench }) => {
 	// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
@@ -40,9 +44,185 @@ test('Marketplace view tab uses the extensions icon', async ({ workbench }) => {
 	await search.focus();
 	await search.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/Install, update, and uninstall affect the whole package/u);
+    await expect(help.getByRole('textbox')).toHaveValue(/Install, update, and uninstall affect the whole package/u);
+    await expect(help.getByRole('textbox')).toHaveValue(/Install extension from workspace and Manage local extensions/u);
+    await expect(help.getByRole('textbox')).toHaveValue(/Manage Marketplace extension execution/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
+});
+
+test('Local SDK extension installs, runs only after grant, survives restart and retires on revoke', async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
+	test.skip(process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Product JS confinement currently supports macOS Electron with App Server');
+	test.setTimeout(90_000);
+	const root = join(testWorkspace.directory, 'sdk-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
+		schemaVersion: 1, id: 'acme/sdk-smoke', version: '1.0.0', displayName: 'SDK smoke',
+		compatibility: { ash: '>=0.1.0' },
+		contributions: { editorExtensions: [{ id: 'inspect', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
+			activationEvents: [{ type: 'onCommand', id: 'acme.sdkSmoke.inspect' }], capabilities: ['command'] }] },
+		permissions: [{ type: 'directory', access: 'read' }],
+	}));
+	await writeFile(join(root, 'extension.js'), `
+import { commands } from '@ash/extension';
+export function activate(context) {
+	context.subscriptions.push(commands.registerCommand('acme.sdkSmoke.inspect', 'Inspect SDK smoke', async call => {
+		const text = await call.workspace.readTextFile('main.ts');
+		await call.window.showInformationMessage('SDK disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(','));
+		return text;
+	}));
+}`);
+	let page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await installation.getByRole('textbox').fill('sdk-extension');
+	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
+	expect(installed.message).toContain('Installed acme/sdk-smoke 1.0.0');
+
+	const absent = async (): Promise<void> => {
+		await workbench.quickaccess.open('>acme.sdkSmoke.inspect');
+		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('acme.sdkSmoke.inspect', { exact: true }) })).toHaveCount(0);
+		await workbench.quickaccess.close();
+	};
+	const manage = async (button: string): Promise<void> => {
+		const review = await workbench.dialogs.confirm(application, 'SDK smoke', button, async () => {
+			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+			await page.getByRole('option').filter({ has: page.getByText('SDK smoke', { exact: true }) }).click();
+		});
+		expect(review.detail).toContain('Read workspace files');
+		expect(review.detail).toContain('Package digest: sha256:');
+	};
+	await absent();
+	await manage('Enable');
+	await absent();
+	await manage('Grant permissions');
+	await workbench.quickaccess.runCommand('acme.sdkSmoke.inspect');
+	await expect(page.locator('.ash-notification', { hasText: 'SDK disk: const value = 1;; globals: undefined,undefined,undefined' })).toBeVisible();
+
+	({ workbench, application } = await reloadWorkbench());
+	page = workbench.page;
+	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.sdkSmoke.inspect');
+	await expect(page.locator('.ash-notification', { hasText: 'SDK disk: const value = 1;; globals: undefined,undefined,undefined' })).toBeVisible();
+	await manage('Revoke permissions');
+	await absent();
+	await manage('Disable');
+	await manage('Uninstall');
+	const empty = await workbench.dialogs.expectMessage(application, 'Information', () => workbench.quickaccess.runCommand('ash.extensions.manageLocal'));
+	expect(empty.message).toContain('No local editor extensions are installed.');
+});
+
+test('Open VSX JavaScript extension starts on first command, survives restart and retires on revoke', async ({ target, application, workbench, reloadWorkbench }) => {
+	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX execution check requires macOS Electron with App Server');
+	test.setTimeout(120_000);
+	let page = workbench.page;
+	const packageId = 'mark-wiemer.helloworld-2022@open-vsx';
+	if (!('evaluate' in application)) { throw new Error('This scenario requires Electron'); }
+	const profile = await application.evaluate(({ app }) => app.getPath('userData'));
+	const processes = async (): Promise<number> => {
+		const { stdout } = await promisify(execFile)('ps', ['-axo', 'command=']);
+		return stdout.split('\n').filter(line => line.includes('/ash-js-extension-host ') && line.includes(`--extension-id marketplace:${packageId}:vscode`) && line.includes(profile)).length;
+	};
+	await workbench.quickaccess.runCommand('ash.plugins.open');
+	let marketplace = page.locator('.ash-marketplace');
+	await marketplace.getByLabel('Capability', { exact: true }).selectOption('editorExtension');
+	await marketplace.getByLabel('Package list', { exact: true }).selectOption('browse');
+	await marketplace.getByLabel('Search packages', { exact: true }).fill('mark-wiemer.helloworld-2022');
+	await marketplace.getByLabel('Search packages', { exact: true }).press('Enter');
+	await expect(marketplace.getByLabel('Packages', { exact: true }).locator(`option[value="${packageId}"]`)).toBeAttached({ timeout: 30_000 });
+	await marketplace.getByLabel('Packages', { exact: true }).selectOption(packageId);
+	await expect(marketplace.getByLabel('Package details', { exact: true })).toContainText('0.2.3');
+	await workbench.dialogs.confirm(application, 'Install package', 'Install', () => marketplace.getByRole('button', { name: 'Install package', exact: true }).click());
+	await marketplace.getByRole('button', { name: 'Show installed versions', exact: true }).click();
+	await expect(marketplace.getByLabel('Packages', { exact: true })).toContainText(packageId);
+	const installationId = await marketplace.getByLabel('Packages', { exact: true }).inputValue();
+	const absent = async (): Promise<void> => {
+		await workbench.quickaccess.open('>helloworld.helloWorld');
+		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('helloworld.helloWorld', { exact: true }) })).toHaveCount(0);
+		await workbench.quickaccess.close();
+	};
+	const manage = async (button: string): Promise<void> => {
+		const review = await workbench.dialogs.confirm(application, packageId, button, async () => {
+			await workbench.quickaccess.runCommand('ash.extensions.manageMarketplace');
+			await page.getByRole('option').filter({ has: page.getByText(packageId, { exact: true }) }).click();
+		});
+		expect(review.detail).toContain('Package digest: sha256:');
+		expect(review.detail).toContain('Node modules, direct file access, networking and child processes are unavailable.');
+	};
+	await absent();
+	await manage('Enable');
+	await absent();
+	await manage('Authorize execution');
+	await workbench.quickaccess.open('>helloworld.helloWorld');
+	await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('helloworld.helloWorld', { exact: true }) })).toHaveCount(1);
+	await workbench.quickaccess.close();
+	// A visible manifest command is not proof of a running extension process.
+	await expect.poll(processes).toBe(0);
+	await workbench.quickaccess.runCommand('helloworld.helloWorld');
+	await expect(page.locator('.ash-notification', { hasText: 'Hello VS Code 2023 (the future!!)' })).toBeVisible();
+	await expect.poll(processes).toBe(1);
+	({ workbench, application } = await reloadWorkbench());
+	page = workbench.page;
+	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
+	await expect.poll(processes).toBe(0);
+	await workbench.quickaccess.runCommand('helloworld.helloWorld');
+	await expect(page.locator('.ash-notification', { hasText: 'Hello VS Code 2023 (the future!!)' })).toBeVisible();
+	await expect.poll(processes).toBe(1);
+	await manage('Revoke execution authorization');
+	await expect.poll(processes).toBe(0);
+	await absent();
+	await manage('Disable');
+	await workbench.quickaccess.runCommand('ash.plugins.open');
+	marketplace = page.locator('.ash-marketplace');
+	await marketplace.getByLabel('Packages', { exact: true }).selectOption(installationId);
+	await workbench.dialogs.confirm(application, 'Uninstall package', 'Uninstall', () => marketplace.getByRole('button', { name: 'Uninstall package', exact: true }).click());
+	await expect(marketplace.getByLabel('Packages', { exact: true }).locator('option')).toHaveCount(0);
+});
+
+test('Open VSX installs a real theme, restores it and removes its contributions', async ({ target, application, workbench, reloadWorkbench }) => {
+	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX check requires Electron with App Server');
+	test.setTimeout(90_000);
+	let page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.plugins.open');
+	let marketplace = page.locator('.ash-marketplace');
+	await marketplace.getByLabel('Capability', { exact: true }).selectOption('editorExtension');
+	await marketplace.getByLabel('Package list', { exact: true }).selectOption('browse');
+	await marketplace.getByLabel('Search packages', { exact: true }).fill('dracula-theme.theme-dracula');
+	await marketplace.getByLabel('Search packages', { exact: true }).press('Enter');
+	await expect(marketplace.getByRole('status')).not.toHaveText('Loading packages…', { timeout: 30_000 });
+	const packageId = 'dracula-theme.theme-dracula@open-vsx';
+	await expect(marketplace.getByLabel('Packages', { exact: true }).locator(`option[value="${packageId}"]`)).toBeAttached();
+	await marketplace.getByLabel('Packages', { exact: true }).selectOption(packageId);
+	await expect(marketplace.getByRole('button', { name: 'Install package', exact: true })).toBeEnabled();
+	const confirmation = await workbench.dialogs.confirm(application, 'Install package', 'Install', () => marketplace.getByRole('button', { name: 'Install package', exact: true }).click());
+	expect(confirmation.detail).toContain('without running scripts');
+	await marketplace.getByRole('button', { name: 'Show installed versions', exact: true }).click();
+	await expect(marketplace.getByLabel('Packages', { exact: true })).toContainText(packageId);
+	const installationId = await marketplace.getByLabel('Packages', { exact: true }).inputValue();
+
+	await workbench.settingsEditor.openUserSettingsUI();
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="appearance"]').click();
+	await page.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
+	await expect(page.getByRole('option', { name: 'Dracula Theme', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.locator('.ash-modal-editor-close').click();
+
+	// Reopen the Electron process with the same profile; installation does not request a restart dialog.
+	({ workbench, application } = await reloadWorkbench());
+	page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.plugins.open');
+	marketplace = page.locator('.ash-marketplace');
+	await expect(marketplace.getByLabel('Packages', { exact: true }).locator(`option[value="${installationId}"]`)).toContainText(packageId);
+	await marketplace.getByLabel('Packages', { exact: true }).selectOption(installationId);
+	await workbench.dialogs.confirm(application, 'Uninstall package', 'Uninstall', () => marketplace.getByRole('button', { name: 'Uninstall package', exact: true }).click());
+	await expect(marketplace.getByLabel('Packages', { exact: true }).locator('option')).toHaveCount(0);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="appearance"]').click();
+	await page.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
+	await expect(page.getByRole('option', { name: 'Dracula Theme', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
 });
 
 test('Marketplace slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {

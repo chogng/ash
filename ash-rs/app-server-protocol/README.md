@@ -171,3 +171,53 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 非法 base64、超大输入和未知 signal 返回 InvalidParams。decoder、method map 和 schema 从 Rust 定义生成。
 现有分页输出与连接租约没有提供解析后 ACK、进程列表、显式 detach 或跨窗口恢复；
 这些操作不能按名称存在或有限缓存推断为已实现。服务进程退出后无法 attach 已退出的 PTY。
+
+## Turn 文件选择提交
+
+`turnChanges/prepareCommit` 按 Session / Thread 接受版本绑定的文件选择和消息，返回固定
+`commitId` 与最终目标 Diff；`readCommit` 和 `readCommitFile` 读取同一准备对象。
+`turnChanges/commit` 只接受这个 commit ID，不重新组合选择或读取当前 draft。
+准备与确认是 Session 独占写，预览读取是共享读。相同 command ID 与参数返回原始持久响应，
+改参数返回冲突；目标移动要求重新预览。
+
+Turn summary 新增部分提交状态与 `committedPaths`；状态从精确回执计算，封存证据不被提交改写。
+存储单向迁移旧整轮提交，保持原事务身份与冻结消息，详见
+[Turn 账本](../../docs/chat-session-inspector.md)。
+
+## 本地 SDK 扩展包安装
+
+`plugin/installLocal` 接受当前已授权目录内的相对包路径；拒绝绝对路径、上级目录段和越界链接。
+读取、验证、复制全过程持有该目录的 `ReadFiles` 授权。请求使用 `commandId` 与 `expectedRevision`，
+返回包的精确身份、digest 和可重放的命令结果。安装不会启用或授予包权限；分别调用 enable 与 grant。
+`plugin/list` 返回该已安装对象的显示名称、权限声明及是否包含编辑器扩展，管理界面据此展示授权内容。
+授权撤销、停用和卸载沿用既有 activation generation 和通知；其他客户端的变更会使旧 revision 冲突。
+
+## 市场编辑器扩展执行
+
+`marketplace/editorExtensions` 查询已安装扩展的精确包身份、可执行入口、enabled、granted 和全局 policy revision。
+`marketplace/setEditorExtensionPolicy` 提交 installationId、精确 packageDigest、expectedRevision 与
+`enable`、`disable`、`grant`、`revoke` 中的一种动作。安装不启用或授权；两个状态分别修改。
+
+只允许产品 host 连接。启用和授权要求当前平台支持隔离且包有合法 JS 入口；停用和撤销允许清除旧状态。
+授权绑定包摘要与宿主权限版本，更新不能继承不同包的授权。旧 revision 返回 PluginRevisionConflict；
+客户端重新查询，不自动覆盖。提交可能已落盘但回复丢失时，先查询，不自动重放修改。
+停用和撤销返回成功前，扩展运行时完成旧调用取消与进程退役。API 兼容性由实际扩展激活验证，入口存在不保证全部代码受支持。
+
+
+## 编辑器扩展按事件启动
+
+`extensionHost/activate` 只允许产品 host 连接，接受 `{ extensionId, activationGeneration, event }`。
+`event` 是 `{ type: "command", command }`、`{ type: "language", languageId }` 或
+`{ type: "startupFinished" }`；它表达使用意图，不授予权限。Rust 重新检查包代际、已安装状态、
+启用与授权状态，再匹配包声明；不匹配或代际过期时拒绝启动。
+
+Open VSX JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或 provider registrations。
+可选 `activation: { events, commands: [{ command, title }] }` 只携带已验证的清单声明。
+命令面板据此展示命令，首次执行等待启动，随后用实际注册 ID 和新 incarnation 发起原有的
+`extensionHost/invoke/start`。已激活快照不携带 activation 声明。启动失败返回扩展的失败状态，
+不会重放命令；过期或断开连接后的回复不能恢复前端贡献。
+
+支持 `onCommand:<id>`、`onLanguage`、`onLanguage:<id>`、`onStartupFinished` 与立即启动的 `*`。
+标准 commands、languages 贡献生成隐式事件。语言来自 TypeScript 编辑器的当前模型，启动完成
+事件来自窗口恢复阶段；调度、进程启动和授权检查属于 Rust。其他事件类型、完整 VS Code API
+与 Node 模块尚未实现。本地 SDK 和独立可执行扩展维持现有启动方式。

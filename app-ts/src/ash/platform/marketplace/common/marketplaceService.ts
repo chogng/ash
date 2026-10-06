@@ -1,7 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-export type MarketplaceCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "asset";
+export type MarketplaceCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "editorExtension" | "asset";
 
 export interface MarketplaceSearchOptions {
 	readonly packageType?: string;
@@ -73,6 +73,19 @@ export interface MarketplaceInstalledPackage {
 	readonly capabilities: readonly MarketplaceCapabilityDescriptor[];
 }
 
+export type MarketplaceEditorExtensionPolicyAction = 'enable' | 'disable' | 'grant' | 'revoke';
+export interface MarketplaceEditorExtensionPolicy {
+	readonly installationId: string;
+	readonly package: MarketplacePackageRef;
+	readonly entrypoint: string | null;
+	readonly enabled: boolean;
+	readonly granted: boolean;
+}
+export interface MarketplaceEditorExtensions {
+	readonly revision: number;
+	readonly extensions: readonly MarketplaceEditorExtensionPolicy[];
+}
+
 export interface MarketplaceBrowsePackage {
 	readonly summary: MarketplacePackageSummary;
 	readonly details: MarketplacePackageDetails | undefined;
@@ -113,6 +126,8 @@ export interface IMarketplaceService {
 	update(installationId: string, version?: string): Promise<MarketplaceInstalledPackage>;
 	uninstall(installationId: string, mode?: "ifUnused" | "whenUnused"): Promise<void>;
 	listInstalled(): Promise<readonly MarketplaceInstalledPackage[]>;
+	listEditorExtensions(): Promise<MarketplaceEditorExtensions>;
+	setEditorExtensionPolicy(extension: MarketplaceEditorExtensionPolicy, action: MarketplaceEditorExtensionPolicyAction, expectedRevision: number): Promise<MarketplaceEditorExtensions>;
 	acquireCapability(capabilityId: string): Promise<MarketplaceAcquiredCapability>;
 	releaseCapability(leaseId: string): Promise<void>;
 	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string }>;

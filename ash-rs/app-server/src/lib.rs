@@ -29,11 +29,11 @@ mod tool_search_embedding;
 mod tool_search_models;
 mod trace;
 
-pub use ash_extensions::ExtensionRoot;
-pub use ash_extensions::ExtensionRootKind;
 pub use ash_slash_commands::SlashCommandCatalog;
 pub use ash_slash_commands::SlashCommandCatalogError;
 pub use dynamic_tools::DynamicToolCompositionError;
+pub use extension_catalog::ExtensionRoot;
+pub use extension_catalog::ExtensionRootKind;
 pub use guardian_v2::ProviderReviewModel;
 pub use guardian_v2::ReviewModelResolutionError;
 pub use guardian_v2::ReviewModelResolver;

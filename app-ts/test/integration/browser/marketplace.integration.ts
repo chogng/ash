@@ -31,8 +31,20 @@ import '../../../src/ash/workbench/contrib/marketplace/browser/marketplace.contr
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { IPluginService } from '../../../src/ash/platform/plugins/common/pluginService.js';
+import type { IPluginApi } from '../../../src/ash/platform/plugins/common/pluginApi.js';
+import type { PluginPackageDto, PluginPackageCommandParams } from '../../../src/ash/platform/app-server/common/generated/index.js';
+import { AppServerPluginService } from '../../../src/ash/workbench/services/plugins/browser/appServerPluginService.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
 import { SkillsSettingsContent } from '../../../src/ash/workbench/contrib/skills/browser/skillsSettingsContent.js';
 import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import chineseMessages from '../../../localization/zh-CN/marketplace.json' with { type: 'json' };
+
+if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
+	setNlsMessages('zh-CN', chineseMessages);
+}
 
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
@@ -51,19 +63,45 @@ const capabilities = [
 	{ kind: 'skill' as const, id: 'review', contractVersion: '1', permissions: [], authenticationProvider: null },
 ];
 const packageDetails = { package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
+const extensionSummary = { ...summary, id: 'publisher.sample@open-vsx', packageType: 'editorExtension', displayName: 'Sample editor extension' };
+const extensionReference = { ...reference, id: extensionSummary.id };
+const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
+const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
+let editorPolicyRevision = 1;
+let editorEntrypoint: string | null = 'dist/extension.js';
+const editorPolicies = new Map<string, { enabled: boolean; granted: boolean }>();
+function editorPolicySnapshot() {
+	return { revision: editorPolicyRevision, extensions: installed.filter(entry => entry.capabilities.some(capability => capability.kind === 'editorExtension')).map(entry => ({
+		installationId: entry.installationId, package: entry.package, entrypoint: editorEntrypoint,
+		...(editorPolicies.get(entry.installationId) ?? { enabled: false, granted: false }),
+	})) };
+}
 const api: IMarketplaceApi = {
+	editorExtensions: async () => editorPolicySnapshot(),
+	setEditorExtensionPolicy: async params => {
+		requests.push(['editorPolicy', params]);
+		const entry = installed.find(entry => entry.installationId === params.installationId && entry.package.digest === params.packageDigest);
+		if (!entry || params.expectedRevision !== editorPolicyRevision) throw new Error('Policy revision conflict');
+		const state = editorPolicies.get(entry.installationId) ?? { enabled: false, granted: false };
+		if (params.action === 'enable' || params.action === 'disable') state.enabled = params.action === 'enable';
+		if (params.action === 'grant' || params.action === 'revoke') state.granted = params.action === 'grant';
+		editorPolicies.set(entry.installationId, state);
+		editorPolicyRevision++;
+		return editorPolicySnapshot();
+	},
 	search: async params => {
 		requests.push(['search', params]);
 		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
 		if (offline) { throw new Error('Catalog unavailable'); }
-		return { packages: [summary] };
+		return { packages: [params.capabilityKind === 'editorExtension' ? extensionSummary : summary] };
 	},
-	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } return { ...packageDetails, package: { ...reference, version: params.version ?? '2.0.0' } }; },
+	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
 	listInstalled: async () => ({ instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {
 		requests.push(['install', params]);
-		const entry = { installationId: 'version-one', package: { ...reference, version: params.version! }, state: 'installed' as const, capabilities: capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions], reference: { id: `cap:${capability.id}` } })) };
+		const details = params.packageId === extensionSummary.id ? extensionDetails : packageDetails;
+		const entry = { installationId: 'version-one', package: { ...details.package, version: params.version! }, state: 'installed' as const, capabilities: details.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions], reference: { id: `cap:${capability.id}` } })) };
 		installed.push(entry); generation++; changed.fire(); return entry;
 	},
 	update: async params => {
@@ -95,6 +133,38 @@ services.registerInstance(ILanguageServerService, {
 	removeConfiguration: async () => {},
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
+services.registerInstance(IQuickInputService, disposables.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: services.get(IContextKeyService) })));
+let pluginRevision = 0;
+let localPackages: PluginPackageDto[] = [];
+let commandCompletion: Promise<unknown> | undefined;
+const mutatePlugin = async (action: string, params: PluginPackageCommandParams) => {
+	requests.push([action, params]);
+	if (params.expectedRevision !== pluginRevision) { throw new Error('Plugin revision conflict'); }
+	localPackages = action === 'pluginUninstall' ? [] : localPackages.map(plugin => ({
+		...plugin,
+		enabled: action === 'pluginEnable' ? true : action === 'pluginDisable' ? false : plugin.enabled,
+		granted: action === 'pluginGrant' ? true : action === 'pluginRevoke' ? false : plugin.granted,
+	}));
+	pluginRevision++;
+	return { revision: pluginRevision, activationGeneration: pluginRevision, disposition: 'updated' as const };
+};
+const pluginApi: IPluginApi = {
+	list: async () => ({ revision: pluginRevision, activationGeneration: pluginRevision, packages: structuredClone(localPackages) }),
+	installLocal: async params => {
+		requests.push(['pluginInstall', params]);
+		if (params.expectedRevision !== pluginRevision) { throw new Error('Plugin revision conflict'); }
+		const plugin: PluginPackageDto = { id: 'acme/sdk', version: '1.0.0', digest: 'sha256:' + 'b'.repeat(64), displayName: 'SDK fixture', permissions: [{ type: 'directory', access: 'read' }], hasEditorExtensions: true, enabled: false, granted: false, effective: false, revoked: false };
+		localPackages = [plugin];
+		pluginRevision++;
+		return { id: plugin.id, version: plugin.version, digest: plugin.digest, command: { revision: pluginRevision, activationGeneration: 0, disposition: 'updated' } };
+	},
+	enable: params => mutatePlugin('pluginEnable', params),
+	disable: params => mutatePlugin('pluginDisable', params),
+	grant: params => mutatePlugin('pluginGrant', params),
+	revokeGrant: params => mutatePlugin('pluginRevoke', params),
+	uninstall: params => mutatePlugin('pluginUninstall', params),
+};
+services.registerInstance(IPluginService, disposables.add(new AppServerPluginService(pluginApi, { subscribe: () => ({ dispose() {} }) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
 services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService);
@@ -116,6 +186,11 @@ marketplace.setVisible(true); skills.setVisible(true); lsp.setVisible(true);
 
 window.ashMarketplaceIntegration = {
 	requests,
+	startCommand: id => { commandCompletion = commands.executeCommand(id).catch((error: unknown) => requests.push(['commandError', String(error)])); },
+	waitCommand: async () => { await commandCompletion; },
+	changePluginRevision: () => { pluginRevision++; },
+	removeEditorEntrypoint: () => { editorEntrypoint = null; },
+	localPackages: () => structuredClone(localPackages),
 	open: options => marketplace.open(options),
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
@@ -129,6 +204,6 @@ window.ashMarketplaceIntegration = {
 };
 declare global {
 	interface Window {
-		ashMarketplaceIntegration: { requests: unknown[]; open(options: MarketplaceOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void };
+		ashMarketplaceIntegration: { requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: MarketplaceOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void };
 	}
 }

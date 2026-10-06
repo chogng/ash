@@ -1,4 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
+import type { MarketplaceEditorExtensionPolicy, MarketplaceEditorExtensionPolicyAction, MarketplaceEditorExtensions } from '../../../../platform/marketplace/common/marketplaceService.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IMarketplaceApi } from "../../../../platform/marketplace/common/marketplaceApi.js";
@@ -15,6 +16,14 @@ export class AppServerMarketplaceService extends Disposable implements IMarketpl
 	private readonly _onDidChangeInstalled = this._register(new Emitter<void>());
 
 	readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
+
+	listEditorExtensions(): Promise<MarketplaceEditorExtensions> {
+		return this.api.editorExtensions();
+	}
+
+	setEditorExtensionPolicy(extension: MarketplaceEditorExtensionPolicy, action: MarketplaceEditorExtensionPolicyAction, expectedRevision: number): Promise<MarketplaceEditorExtensions> {
+		return this.api.setEditorExtensionPolicy({ installationId: extension.installationId, packageDigest: extension.package.digest, expectedRevision, action });
+	}
 
 	constructor(private readonly api: IMarketplaceApi, events: IServerEventApi) {
 		super();
@@ -102,7 +111,8 @@ export class AppServerMarketplaceService extends Disposable implements IMarketpl
 		]).then(async ([packages, installed]) => {
 			const browsePackages = await Promise.all(packages.map(async summary => ({
 				summary,
-				details: await this.packageDetails(summary.id, summary.version).catch(() => undefined),
+				// VSIX details resolve a verified package. Browsing must not download every result.
+				details: summary.packageType === "editorExtension" ? undefined : await this.packageDetails(summary.id, summary.version).catch(() => undefined),
 			})));
 			const snapshot = Object.freeze({ query, options, packages: Object.freeze(browsePackages), installed: Object.freeze([...installed]) });
 			if (generation === this.browseGeneration) this.browseSnapshots.set(key, snapshot);

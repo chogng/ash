@@ -1,13 +1,30 @@
-use crate::{
-    CaptureState, ChangeFile, ChangeFileKind, ChangeSetId, CommitState, MessageState,
-    TerminalTurnState, TurnChangeSet, TurnChangeSetDraft, TurnChangeStore, TurnChangeStoreError,
-};
-use ash_git::{GitClient, GitPrivateRef, GitTreeChange, GitTreeChangeKind, GitTreeId};
-use ash_protocol::{SessionId, ThreadId, TurnId};
-use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::CaptureState;
+use crate::ChangeFile;
+use crate::ChangeFileKind;
+use crate::ChangeSetId;
+use crate::CommitState;
+use crate::MessageState;
+use crate::TerminalTurnState;
+use crate::TurnChangeSet;
+use crate::TurnChangeSetDraft;
+use crate::TurnChangeStore;
+use crate::TurnChangeStoreError;
+use ash_git::GitClient;
+use ash_git::GitPrivateRef;
+use ash_git::GitTreeChange;
+use ash_git::GitTreeChangeKind;
+use ash_git::GitTreeId;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_protocol::TurnId;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::mpsc;
 use std::thread::JoinHandle;
 
 /// One repository inside the managed worktree assigned to a Thread.
@@ -474,6 +491,7 @@ impl LedgerWorker {
                 turn_id: request.turn_id.clone(),
                 repository_id: target.repository_id,
                 worktree_root: target.worktree_root,
+                git_common_dir: repository.common_dir().to_path_buf(),
                 target_branch: target.target_branch,
                 base_object_id: target.base_object_id,
                 before_tree,
@@ -586,10 +604,16 @@ impl LedgerWorker {
     ) -> Result<Vec<TurnChangeSet>, TurnChangeLedgerError> {
         let mut refreshed = Vec::new();
         for mut record in self.store.list_for_thread(thread_id)? {
-            if &record.turn_id != turn_id || record.capture_state != CaptureState::Open {
+            if &record.turn_id != turn_id {
                 continue;
             }
             validate_owner(&record, session_id, thread_id, turn_id)?;
+            // A list query can observe Open before the worker processes Seal. Its refresh is an
+            // observation of the latest capture, and must preserve a now-terminal Turn unchanged.
+            if record.capture_state != CaptureState::Open {
+                refreshed.push(record);
+                continue;
+            }
             let after_tree = self.capture_snapshot(&record.worktree_root).await?;
             let files = self.changes_between(&record, &after_tree).await?;
             let expected_revision = record.revision;
@@ -601,7 +625,7 @@ impl LedgerWorker {
         }
         if refreshed.is_empty() {
             return Err(TurnChangeLedgerError::InvalidRequest(
-                "Turn has no open ChangeSet".into(),
+                "Turn has no ChangeSet".into(),
             ));
         }
         Ok(refreshed)
@@ -786,7 +810,7 @@ fn paths_overlap(left: &std::path::Path, right: &std::path::Path) -> bool {
     left == right || left.starts_with(right) || right.starts_with(left)
 }
 
-fn change_file(change: GitTreeChange) -> ChangeFile {
+pub fn change_file(change: GitTreeChange) -> ChangeFile {
     ChangeFile {
         path: change.path().to_path_buf(),
         previous_path: change.previous_path().map(PathBuf::from),
@@ -878,4 +902,27 @@ pub enum TurnChangeLedgerError {
     Store(#[from] TurnChangeStoreError),
     #[error(transparent)]
     Git(#[from] ash_git::GitError),
+}
+
+/// Binding restoration upgrades legacy object locations and follows source repository relocation.
+/// This changes storage location metadata, never sealed tree/blob evidence or its digest.
+pub fn relocate_capture_objects(
+    store: &dyn TurnChangeStore,
+    thread_id: &ThreadId,
+    repository_id: &str,
+    git_common_dir: &std::path::Path,
+) -> Result<(), TurnChangeStoreError> {
+    for mut record in store.list_for_thread(thread_id)? {
+        if record.repository_id != repository_id || record.git_common_dir == git_common_dir {
+            continue;
+        }
+        let expected = record.revision;
+        record.git_common_dir = git_common_dir.to_path_buf();
+        record.revision = record
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| TurnChangeStoreError::Storage("Turn revision overflow".into()))?;
+        store.compare_and_swap(expected, &record)?;
+    }
+    Ok(())
 }

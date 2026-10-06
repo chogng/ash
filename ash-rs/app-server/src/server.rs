@@ -29,8 +29,6 @@ use ash_core::ToolService;
 use ash_core::TurnActionPolicy;
 use ash_core::TurnExecutor;
 use ash_extension_api::ExtensionRegistry;
-use ash_extensions::ExtensionCatalog;
-use ash_extensions::ExtensionRoot;
 use ash_file_system::FileSystem;
 use ash_model_provider::ProviderCredentialService;
 use ash_protocol::InteractionCancelReason;
@@ -45,6 +43,8 @@ use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::ModelService;
 use core_api::ThreadUpdateSink;
+use extension_catalog::ExtensionCatalog;
+use extension_catalog::ExtensionRoot;
 pub(crate) use network_operations::http_transport_mode;
 use serde::Deserialize;
 use serde_json::Value;
@@ -244,11 +244,13 @@ pub struct AppServer {
     plugins_manager: Option<Arc<ash_core_plugins::PluginsManager>>,
     marketplace_editor_extension_admission:
         Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
+    editor_extension_policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
     marketplace_language_runtime: Option<marketplace_language_runtime::MarketplaceLanguageRuntime>,
     plugin_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
     marketplace_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
-    plugin_extension_sources: Option<Arc<dyn ash_extensions::DynamicExtensionSourceProvider>>,
-    marketplace_extension_sources: Option<Arc<dyn ash_extensions::DynamicExtensionSourceProvider>>,
+    plugin_extension_sources: Option<Arc<dyn extension_catalog::DynamicExtensionSourceProvider>>,
+    marketplace_extension_sources:
+        Option<Arc<dyn extension_catalog::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
@@ -589,6 +591,7 @@ impl AppServer {
             plugin_package_service: None,
             plugins_manager: None,
             marketplace_editor_extension_admission: None,
+            editor_extension_policy: None,
             marketplace_language_runtime: None,
             plugin_skill_sources: None,
             marketplace_skill_sources: None,
@@ -900,7 +903,7 @@ impl AppServer {
             marketplace_skill_sources::MarketplaceSkillSourceProvider::new(Arc::clone(&manager)),
         );
         self.marketplace_skill_sources = Some(source);
-        let extension_source: Arc<dyn ash_extensions::DynamicExtensionSourceProvider> = Arc::new(
+        let extension_source: Arc<dyn extension_catalog::DynamicExtensionSourceProvider> = Arc::new(
             marketplace_extension_sources::MarketplaceExtensionSourceProvider::new(Arc::clone(
                 &manager,
             )),
@@ -1203,7 +1206,7 @@ impl AppServer {
         );
         self.plugin_skill_sources = Some(skill_sources);
         self.rebind_dynamic_skill_sources();
-        let extension_sources: Arc<dyn ash_extensions::DynamicExtensionSourceProvider> =
+        let extension_sources: Arc<dyn extension_catalog::DynamicExtensionSourceProvider> =
             Arc::new(plugin_extension_sources::PluginExtensionSourceProvider::new(plugins.clone()));
         self.plugin_extension_sources = Some(extension_sources);
         self.rebind_dynamic_extension_sources();
@@ -1250,7 +1253,7 @@ impl AppServer {
 
     fn combined_dynamic_extension_sources(
         &self,
-    ) -> Option<Arc<dyn ash_extensions::DynamicExtensionSourceProvider>> {
+    ) -> Option<Arc<dyn extension_catalog::DynamicExtensionSourceProvider>> {
         let providers = [
             self.plugin_extension_sources.clone(),
             self.marketplace_extension_sources.clone(),
@@ -1260,7 +1263,7 @@ impl AppServer {
         .collect::<Vec<_>>();
         (!providers.is_empty()).then(|| {
             Arc::new(marketplace_extension_sources::CombinedExtensionSourceProvider::new(providers))
-                as Arc<dyn ash_extensions::DynamicExtensionSourceProvider>
+                as Arc<dyn extension_catalog::DynamicExtensionSourceProvider>
         })
     }
 
@@ -1291,6 +1294,7 @@ impl AppServer {
             limits,
             restart_policy,
             Arc::clone(&self.updates),
+            Arc::clone(&self.client_host),
         )
         .map_err(|error| error.to_string())?;
         if let Some(authorization) = self.extension_dir_authorization() {
@@ -1305,12 +1309,25 @@ impl AppServer {
     /// Installs product-local enable and grant authority for Marketplace Editor Extensions.
     ///
     /// This policy does not install packages and does not launch processes. It is consulted only
-    /// when an explicitly configured Extension Host runtime consumes signed product sidecars.
+    /// when an explicitly configured Extension Host runtime consumes Marketplace deployments.
     pub fn with_marketplace_editor_extension_admission(
         mut self,
         admission: Arc<dyn crate::MarketplaceEditorExtensionAdmission>,
     ) -> Self {
         self.marketplace_editor_extension_admission = Some(admission);
+        self
+    }
+
+    pub fn with_editor_extension_policy(
+        mut self,
+        policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
+    ) -> Self {
+        self.marketplace_editor_extension_admission = Some(Arc::new(
+            crate::marketplace_editor_extensions::ProfileEditorExtensionAdmission(Arc::clone(
+                &policy,
+            )),
+        ));
+        self.editor_extension_policy = Some(policy);
         self
     }
 
@@ -2495,6 +2512,15 @@ impl AppServer {
             Some(ClientMethod::TurnChangesUpdateDraft) => {
                 self.turn_changes_update_draft(&request.params)
             }
+            Some(ClientMethod::TurnChangesPrepareCommit) => {
+                self.turn_changes_prepare_commit(&request.params)
+            }
+            Some(ClientMethod::TurnChangesReadCommit) => {
+                self.turn_changes_read_commit(&request.params)
+            }
+            Some(ClientMethod::TurnChangesReadCommitFile) => {
+                self.turn_changes_read_commit_file(&request.params)
+            }
             Some(ClientMethod::TurnChangesCommit) => self.turn_changes_commit(&request.params),
             Some(ClientMethod::TurnChangesDiscardThread) => {
                 self.turn_changes_discard_thread(&request.params)
@@ -2650,6 +2676,7 @@ impl AppServer {
                 self.connector_credential_cleanup_retry(&request.params)
             }
             Some(ClientMethod::PluginList) => self.plugin_list(),
+            Some(ClientMethod::PluginInstallLocal) => self.plugin_install_local(&request.params),
             Some(ClientMethod::MarketplaceSearch) => self.marketplace_search(&request.params),
             Some(ClientMethod::MarketplaceGet) => self.marketplace_get(&request.params),
             Some(ClientMethod::MarketplaceDownload) => self.marketplace_download(&request.params),
@@ -2658,6 +2685,16 @@ impl AppServer {
             Some(ClientMethod::MarketplaceUninstall) => self.marketplace_uninstall(&request.params),
             Some(ClientMethod::MarketplaceListInstalled) => {
                 self.marketplace_list_installed(&request.params)
+            }
+            Some(ClientMethod::MarketplaceEditorExtensions | ClientMethod::MarketplaceSetEditorExtensionPolicy) => {
+                if !connection.allows_product_host_capabilities() {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                if client_method(&request.method) == Some(ClientMethod::MarketplaceEditorExtensions) {
+                    self.marketplace_editor_extensions(&request.params)
+                } else {
+                    self.marketplace_set_editor_extension_policy(&request.params)
+                }
             }
             Some(ClientMethod::MarketplaceAcquireCapability) => {
                 self.marketplace_acquire_capability(connection, &request.params)
@@ -2751,6 +2788,7 @@ impl AppServer {
             Some(ClientMethod::ExtensionResourceOpen) => {
                 self.extension_resource_open(connection, &request.params)
             }
+            Some(ClientMethod::ExtensionHostActivate) => self.extension_host_activate(connection, &request.params),
             Some(ClientMethod::ExtensionHostList) => self.extension_host_list(),
             Some(ClientMethod::ExtensionHostReconcile) => {
                 self.extension_host_reconcile(&request.params)

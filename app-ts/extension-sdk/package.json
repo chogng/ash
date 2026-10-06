@@ -1,0 +1,8 @@
+{
+  "name": "@ash/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./index.d.ts", "default": "./index.js" } },
+  "scripts": { "typecheck": "pnpm --dir .. exec tsc -p extension-sdk/tsconfig.json", "build:example": "node example/build.mjs" }
+}

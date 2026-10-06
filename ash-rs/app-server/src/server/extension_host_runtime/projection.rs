@@ -20,6 +20,7 @@ pub(in crate::server) struct ExtensionHostExtensionSnapshot {
     pub(in crate::server) activation_generation: u64,
     pub(in crate::server) incarnation: Option<u64>,
     pub(in crate::server) lifecycle: ExtensionHostLifecycle,
+    pub(in crate::server) activation: Option<super::source::ActivationPlan>,
     pub(in crate::server) failure: Option<ExtensionHostRuntimeFailure>,
     pub(in crate::server) stderr: String,
     pub(in crate::server) output_events: Vec<SequencedExtensionHostOutputEvent>,
@@ -28,6 +29,7 @@ pub(in crate::server) struct ExtensionHostExtensionSnapshot {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::server) enum ExtensionHostLifecycle {
+    Dormant,
     Stopped,
     Starting,
     Ready,
@@ -84,6 +86,7 @@ pub(super) fn extension_projection(
         activation_generation: snapshot.activation_generation,
         incarnation: (snapshot.incarnation != 0).then_some(snapshot.incarnation),
         lifecycle,
+        activation: None,
         failure,
         stderr: snapshot.stderr,
         output_events: snapshot.output_events,
@@ -178,6 +181,10 @@ fn host_rejection(code: HostErrorCode) -> (ExtensionHostFailureKind, &'static st
         HostErrorCode::OperationNotSupported => (
             ExtensionHostFailureKind::OperationNotSupported,
             "extension operation is unsupported",
+        ),
+        HostErrorCode::PermissionDenied => (
+            ExtensionHostFailureKind::AuthorityDenied,
+            "extension operation permission denied",
         ),
         HostErrorCode::Cancelled => (
             ExtensionHostFailureKind::Cancelled,

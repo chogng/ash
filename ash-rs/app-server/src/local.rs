@@ -29,7 +29,6 @@ use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginActivationSnapshot;
-use ash_extensions::ExtensionRoot;
 use ash_file_access::Dir;
 use ash_file_access::Permission as DirPermission;
 use ash_glm::GlmOAuth;
@@ -79,6 +78,7 @@ use core_api::CoreError;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
+use extension_catalog::ExtensionRoot;
 use github::GitHubOAuth;
 use model_provider_info::ModelProviderConfig;
 use model_provider_info::ProviderAccessMode;
@@ -798,6 +798,7 @@ struct ProfileMarketplaceAuthority {
     config: BTreeMap<ash_plugin::MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
     manager: Arc<ash_core_plugins::PluginsManager>,
     _watcher: Option<crate::server::marketplace_runtime::MarketplaceChangeWatcher>,
+    open_vsx: Option<(ash_plugin::MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -964,20 +965,21 @@ impl LocalProfileRuntime {
     fn plugins_manager(
         &self,
         config: BTreeMap<ash_plugin::MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
+        open_vsx: Option<(ash_plugin::MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
     ) -> Result<Arc<ash_core_plugins::PluginsManager>, OpenAppServerError> {
         let mut marketplace = self
             .marketplace
             .lock()
             .map_err(|_| OpenAppServerError("profile Marketplace lock poisoned".into()))?;
         if let Some(authority) = marketplace.as_ref() {
-            if authority.config == config {
+            if authority.config == config && authority.open_vsx == open_vsx {
                 return Ok(Arc::clone(&authority.manager));
             }
             return Err(OpenAppServerError(
                 "one profile runtime cannot use multiple Marketplace authorities".into(),
             ));
         }
-        let providers = marketplace_providers(&config)?;
+        let providers = marketplace_providers(&config, open_vsx.as_ref())?;
         let manager = Arc::new(
             ash_core_plugins::PluginsManager::open(
                 self.profile_root.join("marketplace-manager"),
@@ -991,6 +993,7 @@ impl LocalProfileRuntime {
         );
         *marketplace = Some(ProfileMarketplaceAuthority {
             config,
+            open_vsx,
             manager: Arc::clone(&manager),
             _watcher: watcher,
         });
@@ -1067,12 +1070,22 @@ pub fn open_app_server_with_codebase_providers(
             .cloned()
     {
         if let Some(runtime) = &options.profile_runtime {
-            let manager = runtime.plugins_manager(sources)?;
+            let manager = runtime.plugins_manager(
+                sources,
+                product_services
+                    .as_ref()
+                    .and_then(|services| services.open_vsx.clone()),
+            )?;
             let client: Arc<dyn ash_core_plugins::PluginPackageService> = manager.clone();
             options.plugin_package_service = Some(client);
             options.plugins_manager = Some(manager);
         } else {
-            options = options.with_plugin_providers(marketplace_providers(&sources)?)?;
+            options = options.with_plugin_providers(marketplace_providers(
+                &sources,
+                product_services
+                    .as_ref()
+                    .and_then(|services| services.open_vsx.as_ref()),
+            )?)?;
         }
     }
     let plugin_package_service = options.plugin_package_service.take();
@@ -1756,12 +1769,16 @@ pub fn open_app_server_with_codebase_providers(
             .with_marketplace_language_runtime(runtime)
             .map_err(OpenAppServerError)?;
     }
+    let has_editor_policy = plugins_manager.is_some();
     if let Some(manager) = plugins_manager {
         server = if profile_runtime.is_some() {
             server.with_profile_plugins_manager(manager)
         } else {
             server.with_plugins_manager(manager)
         };
+        let policy = ash_core_plugins::EditorExtensionPolicy::open(options.profile_root.join("editor-extension-policy.json"))
+            .map_err(|error| OpenAppServerError(format!("editor extension policy unavailable: {error:?}")))?;
+        server = server.with_editor_extension_policy(Arc::new(policy));
     } else if let Some(client) = plugin_package_service {
         server = server.with_plugin_package_service(client);
     }
@@ -1805,6 +1822,7 @@ pub fn open_app_server_with_codebase_providers(
         }
         if let Some(authority) = &connectors.plugin_authority {
             server = server.with_plugin_authority(authority.clone());
+
         }
         if let Some(oauth) = &connectors.oauth {
             server = server.with_connector_oauth_service(Arc::clone(oauth));
@@ -1812,6 +1830,25 @@ pub fn open_app_server_with_codebase_providers(
         if let Some(oauth) = &connectors.device_oauth {
             server = server.with_connector_device_oauth_service(Arc::clone(oauth));
         }
+    }
+    if has_editor_policy || connector_runtime.as_ref().is_some_and(|runtime| runtime.plugin_authority.is_some()) {
+        let executable = std::env::current_exe()
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        let directory = executable.parent().ok_or_else(|| {
+            OpenAppServerError("missing product executable directory".into())
+        })?;
+        server = server
+            .with_extension_host_runtime(
+                Arc::new(ash_editor_extension_host::ProductJavaScriptLauncher::new(
+                    directory.join(format!(
+                        "ash-js-extension-host{}",
+                        std::env::consts::EXE_SUFFIX
+                    )),
+                )),
+                ash_editor_extension_host::ExtensionHostLimits::default(),
+                ash_editor_extension_host::RestartPolicy::default(),
+            )
+            .map_err(OpenAppServerError)?;
     }
     server = server
         .with_execution_environments(options.execution_environments)
@@ -2928,16 +2965,23 @@ fn open_error(error: impl fmt::Display) -> OpenAppServerError {
 
 fn marketplace_providers(
     sources: &BTreeMap<ash_plugin::MarketplaceName, ash_core_plugins::RemoteMarketplaceConfig>,
+    open_vsx: Option<&(ash_plugin::MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
 ) -> Result<ash_core_plugins::PluginProviders, OpenAppServerError> {
-    let providers = sources.iter().map(|(name, config)| {
-        let provider = ash_core_plugins::MarketplaceRemoteClient::new(config.clone());
-        (
-            name.clone(),
-            Arc::new(provider) as Arc<dyn ash_core_plugins::PluginProvider>,
-        )
-    });
-    ash_core_plugins::PluginProviders::new(providers)
-        .map_err(|error| OpenAppServerError(error.to_string()))
+    let mut providers = sources
+        .iter()
+        .map(|(name, config)| {
+            let provider = ash_core_plugins::MarketplaceRemoteClient::new(config.clone());
+            (
+                name.clone(),
+                Arc::new(provider) as Arc<dyn ash_core_plugins::PluginProvider>,
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Some((name, config)) = open_vsx {
+        let provider = ash_core_plugins::OpenVsxClient::new(config.clone()).map_err(open_error)?;
+        providers.push((name.clone(), Arc::new(provider)));
+    }
+    ash_core_plugins::PluginProviders::new(providers).map_err(open_error)
 }
 
 #[cfg(test)]

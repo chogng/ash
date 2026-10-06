@@ -197,10 +197,10 @@ pub(crate) fn opaque_id(prefix: &str, values: &[&str]) -> String {
     )
 }
 
-struct TreeInspection {
-    digest: String,
-    file_count: u64,
-    total_bytes: u64,
+pub(crate) struct TreeInspection {
+    pub(crate) digest: String,
+    pub(crate) file_count: u64,
+    pub(crate) total_bytes: u64,
 }
 
 fn artifact_handle(package: PackageRef) -> ArtifactHandle {
@@ -222,7 +222,7 @@ fn validate_statistics(
     Ok(())
 }
 
-fn inspect_tree(root: &Path) -> Result<TreeInspection, MarketplaceClientError> {
+pub(crate) fn inspect_tree(root: &Path) -> Result<TreeInspection, MarketplaceClientError> {
     let metadata = fs::symlink_metadata(root).map_err(|_| MarketplaceClientError::storage())?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
         return Err(MarketplaceClientError::storage());

@@ -88,3 +88,21 @@ function invocation(): ExtensionHostInvocationRequest {
 		deadlineUnixMillis: 1_000,
 	};
 }
+
+
+test('dormant manifests contain declarations without process registrations or authority', () => {
+	const extension = { id: 'acme.lazy', version: '1', packageDigest: DIGEST, runtimeApiVersion: 1,
+		activationGeneration: 4, incarnation: null, lifecycle: 'dormant', failure: null, stderr: '', outputEvents: [], registrations: [],
+		activation: { events: ['onCommand:acme.run'], commands: [{ command: 'acme.run', title: 'Run' }] } };
+	const normalize = (override: object) => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ ...extension, ...override }] });
+	const runtime = normalize({}).extensions[0]!;
+	assert.equal(runtime.incarnation, undefined);
+	assert.deepEqual(runtime.registrations, []);
+	assert.ok(Object.isFrozen(runtime.activation!.commands));
+	for (const invalid of [
+		{ incarnation: 1 }, { stderr: 'not running' }, { activation: undefined }, { lifecycle: 'ready', incarnation: 1 },
+		{ registrations: [{ kind: 'command', registrationId: 'cmd', command: 'acme.run', title: 'Run' }] },
+		{ activation: { ...extension.activation, unknown: true } },
+		{ activation: { events: [], commands: [...extension.activation.commands, ...extension.activation.commands] } },
+	]) { assert.throws(() => normalize(invalid)); }
+});

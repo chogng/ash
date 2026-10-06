@@ -30,6 +30,21 @@ test("rejects selectable extension themes without a supported UI scheme", () => 
 	assert.throws(() => createExtensionWorkbenchColorTheme(definition), /uiTheme/);
 });
 
+test('loads extension publisher metadata and regular-weight syntax rules through package-relative includes', async () => {
+	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
+	const files: Record<string, unknown> = {
+		'themes/theme.json': { include: './base.json', author: 'Publisher', maintainers: ['Publisher'], semanticClass: 'dark', dracula: {}, colors: { 'editor.background': '#282a36' } },
+		'themes/base.json': { tokenColors: [
+			{ scope: 'comment', settings: { foreground: '#6272a4', fontStyle: 'normal' } },
+			{ scope: 'variable', settings: { fontStyle: 'regular' } },
+		] },
+	};
+	const definition = await loadExtensionTheme(async path => new TextEncoder().encode(JSON.stringify(files[path])),
+		'open-vsx.dracula-theme.theme-dracula', { id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' }, 0);
+	assert.equal(createExtensionWorkbenchColorTheme(definition).getColorCss(editorBackground), '#282a36');
+	assert.deepEqual(definition.tokenColors.map(rule => rule.settings.fontStyle), ['', '']);
+});
+
 test("rejects invalid token colors and font styles before a theme becomes active", () => {
 	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { foreground: "green" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
 	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { fontStyle: "italic blink" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
@@ -38,13 +53,14 @@ test("rejects invalid token colors and font styles before a theme becomes active
 test('dedicated renderer loads extension themes and retains the last valid registration after a failed reload', async () => {
 	const manifestJson = JSON.stringify({ name: 'example', publisher: 'ash', version: '1.0.0', contributes: { themes: [{ id: 'Example', label: 'Example', uiTheme: 'vs-dark', path: './themes/example.json' }] } });
 	let generation = 1;
+	let installed = true;
 	let themeDocument = JSON.stringify({ colors: { 'editor.background': '#123456' } });
 	const api: IExtensionApi = {
-		list: async () => ({ generation, diagnostics: [], extensions: [{
+		list: async () => ({ generation, diagnostics: [], extensions: installed ? [{
 			id: 'ash.example', name: 'example', publisher: 'ash', version: '1.0.0', displayName: 'Example', sourceKind: 'user',
 			manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
 			packageSha256: `sha256:${'a'.repeat(64)}`,
-		}] }),
+		}] : [] }),
 		readResource: async ({ generation: requestedGeneration, path }) => {
 			assert.equal(requestedGeneration, generation);
 			assert.equal(path, 'themes/example.json');
@@ -70,6 +86,14 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 		listener?.({ method: 'plugin/changed', params: { revision: generation, activationGeneration: generation } });
 		await changed;
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#654321');
+		generation++;
+		installed = false;
+		const removed = new Promise<void>(resolve => {
+			const subscription = WorkbenchThemesRegistry.onDidChange(() => { subscription.dispose(); resolve(); });
+		});
+		listener?.({ method: 'marketplace/changed', params: { instanceId: 'manager', generation } });
+		await removed;
+		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
 	}
 	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
 	assert.equal(listener, undefined);

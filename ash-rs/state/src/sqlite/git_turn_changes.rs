@@ -1,8 +1,19 @@
-use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
+use super::connection::from_sql_integer;
+use super::connection::open;
+use super::connection::sql_error;
+use super::connection::to_sql_integer;
 use ash_protocol::ThreadId;
-use git_turn_changes::{ChangeSetId, TurnChangeSet, TurnChangeStore, TurnChangeStoreError};
-use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior, params};
-use std::path::{Path, PathBuf};
+use git_turn_changes::ChangeSetId;
+use git_turn_changes::TurnChangeSet;
+use git_turn_changes::TurnChangeStore;
+use git_turn_changes::TurnChangeStoreError;
+use rusqlite::Connection;
+use rusqlite::ErrorCode;
+use rusqlite::OptionalExtension;
+use rusqlite::TransactionBehavior;
+use rusqlite::params;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -150,7 +161,9 @@ impl SqliteTurnChangeStore {
         Ok(TurnChangeCommandOutcome::Applied)
     }
 
-    fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, TurnChangeStoreError> {
+    pub(super) fn connection(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Connection>, TurnChangeStoreError> {
         self.connection
             .lock()
             .map_err(|_| TurnChangeStoreError::Storage("Turn changes SQLite lock poisoned".into()))
@@ -195,7 +208,10 @@ impl TurnChangeStore for SqliteTurnChangeStore {
             .optional()
             .map_err(storage_error)?
             .ok_or_else(|| TurnChangeStoreError::NotFound(change_set_id.to_string()))?;
-        deserialize_checked(change_set_id, row.0, &row.1)
+        let mut record = deserialize_checked(change_set_id, row.0, &row.1)?;
+        let commits = super::git_turn_commits::list_commits(&connection, &record.thread_id)?;
+        git_turn_changes::derive_commit_progress(&mut record, &commits);
+        Ok(record)
     }
 
     fn list_for_thread(
@@ -218,12 +234,14 @@ impl TurnChangeStore for SqliteTurnChangeStore {
                 ))
             })
             .map_err(storage_error)?;
+        let commits = super::git_turn_commits::list_commits(&connection, thread_id)?;
         let mut change_sets = Vec::new();
         for row in rows {
             let (change_set_id, revision, record) = row.map_err(storage_error)?;
             let change_set_id = ChangeSetId::new(change_set_id)
                 .map_err(|error| TurnChangeStoreError::Storage(error.to_string()))?;
-            let change_set = deserialize_checked(&change_set_id, revision, &record)?;
+            let mut change_set = deserialize_checked(&change_set_id, revision, &record)?;
+            git_turn_changes::derive_commit_progress(&mut change_set, &commits);
             if &change_set.thread_id != thread_id {
                 return Err(TurnChangeStoreError::Storage(
                     "Turn change-set row thread disagrees with its record".into(),
