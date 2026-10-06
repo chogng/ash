@@ -1,3 +1,4 @@
+import { createBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { localize2 } from '../../../../nls.js';
 import "./media/binaryEditorPane.css";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
@@ -6,7 +7,7 @@ import { Action2, registerAction2 } from "../../../../platform/actions/common/ac
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
-import { binaryDiffEditorDescriptor, createBinaryDiffEditorInput } from "../../../browser/parts/editor/binaryDiffEditor.js";
+import { binaryDiffEditorDescriptor } from "../../../browser/parts/editor/binaryDiffEditor.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { EditorPanes } from "../../../browser/editor.js";
 import { binaryFileEditorDescriptor } from '../../files/browser/editors/binaryFileEditor.js';

@@ -1,3 +1,4 @@
+import { createBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -7,7 +8,7 @@ import { FileKind, IFileService, type IFileWriteRequest } from "../../../../../p
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPaneMatch } from "../../../../../workbench/browser/parts/editor/editorPane.js";
 import { BaseBinaryResourceEditor, binaryEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryEditor.js";
-import { BinaryResourceDiffEditor, binaryDiffEditorDescriptor, createBinaryDiffEditorInput } from "../../../../../workbench/browser/parts/editor/binaryDiffEditor.js";
+import { BinaryResourceDiffEditor, binaryDiffEditorDescriptor } from "../../../../../workbench/browser/parts/editor/binaryDiffEditor.js";
 import { EditorInputSerializers } from "../../../../../workbench/services/editor/common/editorInputSerializer.js";
 import { BinaryFileEditor } from '../../../files/browser/editors/binaryFileEditor.js';
 import { CODE_EDITOR_ID } from '../../../../common/editor/codeEditorId.js';

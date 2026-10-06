@@ -1,4 +1,4 @@
-import { addDisposableListener, getActiveElement, isHTMLElement } from '../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, isHTMLElement } from '../../../base/browser/dom.js';
 import { ContextViewFocusRestore, ContextViewHideReason, type ContextViewAnchor } from '../../../base/browser/ui/contextview/contextview.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
@@ -50,12 +50,18 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		const list = lifetime.add(tabs
 			? this.instantiationService.createInstance(TabbedActionListWidget<T>, user, tabs.createActionList(tabs.initialTab).items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions, tabs)
 			: this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions));
-		lifetime.add(list.onDidRequestLayout(() => this.contextViewService.layout()));
+		const layout = (): void => {
+			list.domNode.style.width = `${list.layout(0)}px`;
+			this.contextViewService.layout();
+		};
+		lifetime.add(list.onDidRequestLayout(layout));
+		lifetime.add(addDisposableListener(getWindow(document), 'resize', layout));
 		const source = getActiveElement(document);
 		let focused = source;
 		lifetime.add(addDisposableListener(document, 'focusin', () => { focused = getActiveElement(document); }));
 		this.current.value = lifetime;
 		this.cancelOnHide = true;
+		layout();
 		const shown = this.contextViewService.show({
 			anchor,
 			content: list.domNode,

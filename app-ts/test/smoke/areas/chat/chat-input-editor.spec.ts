@@ -163,6 +163,15 @@ test('Chat mode choices use the shared action widget and floating elevation acro
 		await picker.press('ArrowDown');
 		const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');
 		await expect(widget).toBeVisible();
+		const geometry = await widget.evaluate(element => ({
+			width: element.getBoundingClientRect().width,
+			overflow: element.scrollWidth - element.clientWidth,
+			truncated: [...element.querySelectorAll('.ash-button-label')].some(label => label.scrollWidth > label.clientWidth),
+		}));
+		expect(geometry.width).toBeGreaterThanOrEqual(100);
+		expect(geometry.width).toBeLessThan(240);
+		expect(geometry.overflow).toBe(0);
+		expect(geometry.truncated).toBe(false);
 		const shell = widget.locator('..');
 		await expect(shell).toHaveCSS('box-shadow', 'none');
 		await expect(shell).toHaveCSS('border-width', '0px');

@@ -52,7 +52,7 @@ suite('Workbench localization', () => {
 			localize('sessions.layout.openChanges', ''),
 		], ['切换 Code 底部面板', '隐藏编辑器', '显示编辑器', '打开更改标签']);
 		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读更改前后的内容/u);
-		assert.match(localize('sessions.activity.help', ''), /在代码页面切换会话时，会恢复各会话自己的编辑器标签/u);
+		assert.match(localize('sessions.activity.help', ''), /每个会话恢复自己的编辑器标签/u);
 	});
 
 	test('registered Git commands retain the startup language until restart', async () => {
@@ -213,7 +213,7 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 			localization.translate('ash', 'sessions.mode.code', 'Code'),
 		], ['会话窗口操作', '会话菜单', '显示侧边栏', '隐藏侧边栏', '聊天', '代码']);
-		assert.match(localization.translate('ash', 'sessions.activity.help', ''), /两页分别保留选中的会话、导航记录、未发送的文字和附件/u);
+		assert.match(localization.translate('ash', 'sessions.activity.help', ''), /聊天和代码共用选中的会话、导航记录、未发送的文字和附件，切换时只改变布局/u);
 		assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 		assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 		assert.deepEqual([

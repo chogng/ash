@@ -607,7 +607,7 @@ test("Binary content shows an editor error with a working alternative", async ({
 	await expect(content.locator('.ash-binary-editor-content')).toHaveCount(0);
 });
 
-test("Compare open files as binary shows both byte views", async ({ target, workbench }) => {
+test("Compare open files as binary shows both byte views", async ({ target, workbench, application, reloadWorkbench }) => {
 	test.skip(
 		target.appServerMode !== "required",
 		"This scenario requires the Code App Server product",
@@ -632,6 +632,30 @@ test("Compare open files as binary shows both byte views", async ({ target, work
 	await expect(sides.last().locator(".ash-binary-editor-content")).toContainText("00000000");
 	const boxes = await sides.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
 	expect(boxes[1].left).toBeGreaterThanOrEqual(boxes[0].right);
+	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	const readClipboard = (): Promise<string> => target.kind === 'electron'
+		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+		: workbench.page.evaluate(() => navigator.clipboard.readText());
+	const previousClipboard = await readClipboard();
+	try {
+		for (const restored of [false, true]) {
+			if (restored) {
+				({ application, workbench } = await reloadWorkbench());
+				await expect(workbench.editors.groupAt(0).content.locator('.ash-binary-editor-content')).toHaveCount(2);
+			}
+			const tab = workbench.editors.groupAt(0).tabs.and(workbench.page.getByRole('tab', { selected: true }));
+			await tab.focus();
+			await tab.press('Shift+F10');
+			await workbench.page.getByRole('menu').last().getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
+			expect(await readClipboard()).toBe('main.rs');
+		}
+	} finally {
+		if (target.kind === 'electron') {
+			await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+		} else {
+			await workbench.page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
+		}
+	}
 });
 
 test("Reopen Editor With switches the active file to Binary Editor", async ({ target, workbench }) => {

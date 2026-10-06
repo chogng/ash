@@ -5,9 +5,9 @@ export const rendererOutput: Rolldown.OutputOptions = {
 	strictExecutionOrder: true,
 	codeSplitting: {
 		groups: [{
-			name: 'localization-catalogs',
-			// Keep the shared language data independent of growing Workbench implementation chunks.
-			test: id => id.replaceAll('\\', '/').endsWith('/localization/common/localizationCatalogs.ts'),
+			name: id => `localization-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationCatalog.'.length, -3)}`,
+			// Languages grow independently; keep each catalog separate from Workbench code and other languages.
+			test: id => /\/localization\/common\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
 		}, {
 			name: 'app-server-protocol',
 			// The generated validator is shared by both renderers and nearly fills one output chunk.

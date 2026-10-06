@@ -54,6 +54,64 @@ export const ChatInputConfiguration = Object.freeze({
 	}),
 });
 
+/** Code-block preferences override the file editor's typography within Chat replies. */
+export const ChatEditorConfiguration = Object.freeze({
+	fontFamily: configurationRegistry.registerConfiguration<string>({
+		key: 'chat.editor.fontFamily', defaultValue: '', scope: ConfigurationScope.APPLICATION,
+		schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$' },
+		parse(value: unknown): string {
+			if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
+			throw new TypeError(localize('chat.editor.fontFamily.invalid', 'Code block font must be a single-line string no longer than 256 characters.'));
+		},
+		setting: {
+			valueType: 'text',
+			get title() { return localize('chat.editor.fontFamily.title', 'Font family'); },
+			get description() { return localize('chat.editor.fontFamily.description', 'Set the font for code blocks in replies. Leave empty to use the editor font.'); },
+			get placeholder() { return localize('chat.editor.fontFamily.default', 'Use editor font'); },
+		},
+	}),
+	fontSize: configurationRegistry.registerConfiguration<number>({
+		key: 'chat.editor.fontSize', defaultValue: 0, scope: ConfigurationScope.APPLICATION,
+		schema: { anyOf: [{ const: 0 }, { type: 'integer', minimum: 8, maximum: 40 }] },
+		parse(value: unknown): number {
+			if (typeof value === 'number' && Number.isInteger(value) && (value === 0 || value >= 8 && value <= 40)) return value;
+			throw new RangeError(localize('chat.editor.fontSize.invalid', 'Code block font size must be 0 or an integer between 8 and 40.'));
+		},
+		setting: {
+			valueType: 'number', minimum: 0, maximum: 40,
+			get title() { return localize('chat.editor.fontSize.title', 'Font size'); },
+			get description() { return localize('chat.editor.fontSize.description', 'Set the code block text size in pixels. Use 0 to follow the editor font size.'); },
+		},
+	}),
+	lineHeight: configurationRegistry.registerConfiguration<number>({
+		key: 'chat.editor.lineHeight', defaultValue: 0, scope: ConfigurationScope.APPLICATION,
+		schema: { anyOf: [{ const: 0 }, { type: 'integer', minimum: 8, maximum: 80 }] },
+		parse(value: unknown): number {
+			if (typeof value === 'number' && Number.isInteger(value) && (value === 0 || value >= 8 && value <= 80)) return value;
+			throw new RangeError(localize('chat.editor.lineHeight.invalid', 'Code block line height must be 0 or an integer between 8 and 80.'));
+		},
+		setting: {
+			valueType: 'number', minimum: 0, maximum: 80,
+			get title() { return localize('chat.editor.lineHeight.title', 'Line height'); },
+			get description() { return localize('chat.editor.lineHeight.description', 'Set the code block line height in pixels. Use 0 to follow the editor line height setting. When the editor uses automatic line height, it is calculated from the code block font size.'); },
+		},
+	}),
+	wordWrap: configurationRegistry.registerConfiguration<'on' | 'off'>({
+		key: 'chat.editor.wordWrap', defaultValue: 'off', scope: ConfigurationScope.APPLICATION,
+		schema: { type: 'string', enum: ['on', 'off'] },
+		parse(value: unknown): 'on' | 'off' {
+			if (value === 'on' || value === 'off') return value;
+			throw new TypeError(localize('chat.editor.wordWrap.invalid', 'Code block word wrap must be on or off.'));
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('chat.editor.wordWrap.title', 'Word wrap'); },
+			get description() { return localize('chat.editor.wordWrap.description', 'Wrap long code lines to fit the reply width. When off, scroll horizontally to read long lines.'); },
+			get options() { return [{ value: 'off', label: localize('chat.editor.wordWrap.off', 'Off') }, { value: 'on', label: localize('chat.editor.wordWrap.on', 'On') }] as const; },
+		},
+	}),
+});
+
 export const autoAcceptDelaySetting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<number>({
 	key: 'chat.editing.autoAcceptDelay',
 	defaultValue: 0,

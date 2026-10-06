@@ -1,4 +1,4 @@
-import { addDisposableListener, getActiveElement, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
@@ -38,6 +38,10 @@ export interface IActionListOptions {
 	readonly className?: string;
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
+	/** Minimum popup width in CSS pixels, including its border. */
+	readonly minWidth?: number;
+	/** Maximum popup width in CSS pixels; longer labels are truncated. */
+	readonly maxWidth?: number;
 }
 
 export interface IActionListDelegate<T> {
@@ -76,6 +80,7 @@ export class ActionList<T> extends Disposable {
 	private focusedEntry: IActionListItem<T> | undefined;
 	private visibleItems: readonly IActionListItem<T>[] = [];
 	private busy = false;
+	private contentWidth: number | undefined;
 
 	constructor(
 		private readonly user: string,
@@ -84,7 +89,7 @@ export class ActionList<T> extends Disposable {
 		container: HTMLElement,
 		ariaHint: string | undefined,
 		private readonly supportsPreview: boolean,
-		options: IActionListOptions,
+		private readonly options: IActionListOptions,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
@@ -257,7 +262,22 @@ export class ActionList<T> extends Disposable {
 
 	public updateItems(items: readonly IActionListItem<T>[]): void {
 		this.items = items;
+		this.contentWidth = undefined;
 		this.renderItems();
+	}
+
+	public layout(minWidth: number): number {
+		// Measure the existing menu at its intrinsic width, including icons, shortcuts and chrome.
+		// Filtering retains the full menu width so typing does not move the popup's edge.
+		if (!this.filter?.value.trim() || this.contentWidth === undefined) {
+			const previousWidth = this.domNode.style.width;
+			this.domNode.style.width = 'max-content';
+			this.contentWidth = Math.ceil(this.domNode.getBoundingClientRect().width);
+			this.domNode.style.width = previousWidth;
+		}
+		const minimum = Math.max(100, minWidth, this.options.minWidth ?? 0);
+		const maximum = Math.min(getWindow(this.domNode).innerWidth * 0.8, Math.max(minimum, this.options.maxWidth ?? Infinity));
+		return Math.min(maximum, Math.max(minimum, this.contentWidth));
 	}
 
 	private async select(entry: IActionListItem<T>, preview = false): Promise<void> {

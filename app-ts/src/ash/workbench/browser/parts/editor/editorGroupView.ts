@@ -25,7 +25,7 @@ import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import { EditorPaneVisibility, isEditorPaneWithStatus, type IEditorPane } from "./editorPane.js";
-import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection } from '../../../common/editor.js';
+import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -53,7 +53,6 @@ import type { IBreadcrumbsService } from './breadcrumbs.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import type { Range } from '../../../../editor/common/core/range.js';
-import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, type EditorAssociations } from './editorConfiguration.js';
 
 /** Construction inputs for one independently navigable EditorGroup. */
@@ -451,7 +450,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const association = options.preferredEditorId === undefined && this.configurationService
 				? associatedEditorId(
 					EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY })!.path,
-					this.configurationService.getValue<EditorAssociations>(isDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
+					this.configurationService.getValue<EditorAssociations>(isResourceDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
 				)
 				: undefined;
 			const selected = this.registry.getEditorPane(matchInput, { ...options, preferredEditorId: options.preferredEditorId ?? input.editorId ?? association });

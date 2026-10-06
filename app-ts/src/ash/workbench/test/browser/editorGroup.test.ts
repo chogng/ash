@@ -1,3 +1,6 @@
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { createBinaryDiffEditorInput } from '../../common/editor/diffEditorInput.js';
+import { DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration } from '../../browser/parts/editor/editorConfiguration.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -148,8 +151,34 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 	}
 });
 
+test('binary comparisons select the diff association using the modified file path', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+	try {
+		const { EditorGroupView } = await import('../../browser/parts/editor/editorGroupView.js');
+		const { EditorPaneMatch } = await import('../../browser/parts/editor/editorPane.js');
+		const { EditorPaneRegistry } = await import('../../browser/editor.js');
+		using configuration = new InMemoryConfigurationService();
+		await configuration.updateValue(EditorAssociationsConfiguration, { '*.bin': 'regular.editor' });
+		await configuration.updateValue(DiffEditorAssociationsConfiguration, { '*.bin': 'comparison.editor' });
+		const registry = new EditorPaneRegistry();
+		using regular = registry.registerEditorPane({ id: 'regular.editor', name: 'Regular', canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane('regular.editor') });
+		using comparison = registry.registerEditorPane({ id: 'comparison.editor', name: 'Comparison', canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane('comparison.editor') });
+		using services = createTestEditorServices(configuration, undefined, dom.window.document);
+		using group = services.createInstance(EditorGroupView, dom.window.document.body, { registry, configurationService: configuration });
+		const input = createBinaryDiffEditorInput({ resource: URI.file('/project/before.dat') }, { resource: URI.file('/project/after.bin') });
+		await group.openEditor(input, { pinned: true, ignoreError: true });
+		assert.deepEqual(group.editors.map(editor => ({ paneId: editor.paneId, input: editor.input })), [{ paneId: 'comparison.editor', input }]);
+	} finally {
+		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+		else Reflect.deleteProperty(globalThis, 'window');
+		dom.window.close();
+	}
+});
+
 class TestEditorPane implements IEditorPane {
-	readonly id = "test.editor";
+	constructor(readonly id: string = "test.editor") { }
 
 	create(_parent: HTMLElement): void { }
 	async setInput(_input: EditorInput, _signal: AbortSignal): Promise<void> { }

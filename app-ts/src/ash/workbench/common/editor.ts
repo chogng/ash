@@ -4,9 +4,21 @@ import type { TextEditorSelectionSource } from '../../platform/editor/common/edi
 import type { IAction } from '../../base/common/actions.js';
 import { toError } from '../../base/common/errors.js';
 import type Severity from '../../base/common/severity.js';
-import type { URI } from '../../base/common/uri.js';
+import { URI } from '../../base/common/uri.js';
 import type { EditorInput } from '../services/editor/common/editorService.js';
-import { isDiffEditorInput } from './editor/diffEditorInput.js';
+
+/** Comparison inputs keep a tab identity separate from the resources displayed on each side. */
+export interface IResourceDiffEditorInput {
+	readonly original: EditorInput;
+	readonly modified: EditorInput;
+}
+
+export function isResourceDiffEditorInput(input: unknown): input is IResourceDiffEditorInput {
+	const candidate = input as Partial<IResourceDiffEditorInput> | undefined;
+	return URI.isUri(candidate?.original?.resource) && URI.isUri(candidate?.modified?.resource);
+}
+
+export const BINARY_DIFF_EDITOR_ID = 'ash.editor.binaryDiff';
 
 export enum SideBySideEditor {
 	PRIMARY = 1,
@@ -29,7 +41,7 @@ class EditorResourceAccessorImpl {
 		if (!editor) {
 			return undefined;
 		}
-		if (isDiffEditorInput(editor)) {
+		if (isResourceDiffEditorInput(editor)) {
 			if (options.supportSideBySide === undefined) {
 				return undefined;
 			}

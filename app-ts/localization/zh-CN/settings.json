@@ -239,7 +239,9 @@
     "categories.editor-files.label": "文件与保存",
     "categories.editor-files.description": "设置文件保存、编码和资源管理器的文件嵌套。",
     "categories.chat-input.label": "消息输入",
-    "categories.chat-input.description": "设置输入消息时使用的字体和间距。"
+    "categories.chat-input.description": "设置输入消息时使用的字体和间距。",
+    "categories.chat-code-blocks.label": "代码块",
+    "categories.chat-code-blocks.description": "设置回复中代码块的字体、间距和自动换行。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",
@@ -271,7 +273,9 @@
     "settings.editor.selection.label": "标签与编辑器",
     "settings.editor.selection.description": "选择标签样式和文档打开方式。",
     "settings.chatInput.label": "消息输入",
-    "settings.chatInput.description": "设置消息输入框的字体、字号和行间距。"
+    "settings.chatInput.description": "设置消息输入框的字体、字号和行间距。",
+    "settings.chatCodeBlocks.label": "代码块",
+    "settings.chatCodeBlocks.description": "设置回复中整段代码的显示方式。"
   },
   "ash.workbench": {
     "command.ChangeKeyboardLayoutAction": "首选项：更改键盘布局",

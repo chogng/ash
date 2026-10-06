@@ -8,7 +8,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
 import { MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
-import { createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
+import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -453,8 +453,12 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		await commands.executeCommand(COPY_PATH_COMMAND_ID);
 		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
 		assert.deepEqual(copied.slice(2), [file.fsPath, 'src/main.ts']);
+		activeEditor = createBinaryDiffEditorInput({ resource: URI.file('/project/before.bin') }, { resource: file });
+		await commands.executeCommand(COPY_PATH_COMMAND_ID);
+		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
+		assert.deepEqual(copied.slice(4), [file.fsPath, 'src/main.ts']);
 		await assert.rejects(commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('/outside/other.ts')), /outside the current workspace/);
-		assert.equal(copied.length, 4);
+		assert.equal(copied.length, 6);
 	} finally {
 		if (previousDocument) {
 			Object.defineProperty(globalThis, 'document', previousDocument);

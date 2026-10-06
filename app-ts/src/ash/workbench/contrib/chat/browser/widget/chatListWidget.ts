@@ -7,6 +7,10 @@ import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatMarkdownDecorationsRenderer } from './chatContentParts/chatMarkdownDecorationsRenderer.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
+import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
+import { ChatEditorConfiguration } from '../chat.shared.contribution.js';
 
 interface ChatListWidgetOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
@@ -41,7 +45,7 @@ export class ChatListWidget extends Disposable {
 	private visible = false;
 	private shouldFollow = true;
 
-	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
 		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
@@ -59,6 +63,27 @@ export class ChatListWidget extends Disposable {
 		this.transcript.setAttribute("role", "log");
 		this.transcript.setAttribute("aria-label", "Chat transcript");
 		this.transcript.setAttribute("aria-live", "polite");
+		this.updateCodeBlockOptions();
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			const keys = [...Object.values(ChatEditorConfiguration), CodeEditorConfiguration.fontFamily, CodeEditorConfiguration.fontSize, CodeEditorConfiguration.lineHeight];
+			if (!keys.some(key => event.affectsConfiguration(key))) return;
+			if (this.visible) this.captureFollowState();
+			const anchor = this.visible && !this.shouldFollow ? this.readingAnchor() : undefined;
+			this.updateCodeBlockOptions();
+			if (this.visible) this.layout(anchor);
+		}));
+	}
+
+	private updateCodeBlockOptions(): void {
+		const family = this.configurationService.getValue<string>(ChatEditorConfiguration.fontFamily) || this.configurationService.getValue<string>(CodeEditorConfiguration.fontFamily) || EDITOR_FONT_DEFAULTS.fontFamily;
+		const size = this.configurationService.getValue<number>(ChatEditorConfiguration.fontSize) || this.configurationService.getValue<number>(CodeEditorConfiguration.fontSize);
+		const height = this.configurationService.getValue<number>(ChatEditorConfiguration.lineHeight) || this.configurationService.getValue<number>(CodeEditorConfiguration.lineHeight);
+		const font = BareFontInfo._create(family, 'normal', size, 'normal', 'normal', height, 0, 1, true);
+		// Inherited CSS values update existing Markdown nodes without replacing selections or link handlers.
+		this.transcript.style.setProperty('--ash-chat-code-font-family', font.getMassagedFontFamily());
+		this.transcript.style.setProperty('--ash-chat-code-font-size', `${font.fontSize}px`);
+		this.transcript.style.setProperty('--ash-chat-code-line-height', `${font.lineHeight}px`);
+		this.element.classList.toggle('code-word-wrap', this.configurationService.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on');
 	}
 
 	render(items: readonly IChatListItem[]): void {

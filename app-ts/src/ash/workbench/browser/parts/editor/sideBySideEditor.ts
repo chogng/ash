@@ -4,11 +4,7 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorPaneVisibility, type IEditorPane } from "./editorPane.js";
-
-export interface SideBySideEditorInput extends EditorInput {
-	readonly original: EditorInput;
-	readonly modified: EditorInput;
-}
+import { isResourceDiffEditorInput } from '../../../common/editor.js';
 
 /** Hosts two resource panes with independent lifetimes and a shared editor tab. */
 export class SideBySideEditor extends Disposable implements IEditorPane {
@@ -43,7 +39,7 @@ export class SideBySideEditor extends Disposable implements IEditorPane {
 	}
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
-		if (!isSideBySideInput(input)) throw new TypeError("Side-by-side editor requires two inputs");
+		if (!isResourceDiffEditorInput(input)) throw new TypeError("Side-by-side editor requires two inputs");
 		if (!this.container) throw new ReferenceError("Side-by-side editor has not been created");
 		throwIfCancelled(signal, "Side-by-side editor loading was cancelled");
 		const results = await Promise.allSettled([
@@ -87,13 +83,4 @@ export class SideBySideEditor extends Disposable implements IEditorPane {
 
 	protected getSecondaryEditorPane(): IEditorPane { return this.secondaryPane; }
 	protected getPrimaryEditorPane(): IEditorPane { return this.primaryPane; }
-}
-
-function isSideBySideInput(input: EditorInput): input is SideBySideEditorInput {
-	return "original" in input && "modified" in input &&
-		isEditorInput(input.original) && isEditorInput(input.modified);
-}
-
-function isEditorInput(value: unknown): value is EditorInput {
-	return typeof value === "object" && value !== null && "resource" in value;
 }

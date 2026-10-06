@@ -1,6 +1,29 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`mode menu fits its contents and retains keyboard selection in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('[data-action-id="ash.chat.input.mode"] button');
+		await trigger.press('ArrowDown');
+		const menu = page.locator('.ash-chat-input-mode-menu');
+		await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
+		const geometry = await menu.evaluate(element => ({
+			width: element.getBoundingClientRect().width,
+			overflow: element.scrollWidth - element.clientWidth,
+		}));
+		expect(geometry.width).toBeGreaterThanOrEqual(100);
+		expect(geometry.width).toBeLessThan(240);
+		expect(geometry.overflow).toBe(0);
+		await expect(menu.getByRole('menuitemradio').first()).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(menu.getByRole('menuitemradio').nth(1)).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(menu).toHaveCount(0);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
 	test(`approval targets and keyboard decisions use ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));

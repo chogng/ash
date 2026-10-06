@@ -1,7 +1,6 @@
 .ash-action-widget {
 	box-sizing: border-box;
-	min-width: 240px;
-	max-width: min(520px, calc(100vw - 16px));
+	min-width: 0;
 	max-height: inherit;
 	overflow: auto;
 	color: var(--ash-foreground);
@@ -25,6 +24,11 @@
 
 .ash-action-widget-items {
 	min-width: 0;
+}
+
+.ash-action-widget-menu.ash-menu {
+	min-width: 0;
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .ash-action-widget-menu.ash-menu .ash-button {

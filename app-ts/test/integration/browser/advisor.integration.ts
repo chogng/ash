@@ -53,3 +53,39 @@ policyStop.addEventListener('click', () => widget.render(chatTranscriptListItems
 	error: { code: 'policyCircuitBreaker', message: 'Automatic review rejected three consecutive actions.', retryable: false },
 }], 'policy-stop')));
 document.body.append(policyStop);
+
+const configuration = services.get((await import('../../../src/ash/platform/configuration/common/configuration.js')).IConfigurationService);
+const codeBlockActions: readonly [string, () => Promise<void>][] = [
+	['Show code reply', async () => {
+		widget.element.style.width = '320px';
+		widget.render([{ id: 'code-reply', type: 'agentMessage', text: `Regular text with \`inline code\`.\n\n\`\`\`ts\nconst value = "${'long value '.repeat(30)}";\n\`\`\``, transient: false }]);
+	}],
+	['Fill code history', async () => {
+		widget.element.style.width = '320px';
+		widget.render(Array.from({ length: 40 }, (_, index) => ({ id: `code-${index}`, type: 'agentMessage' as const, text: `Reply ${index}\n\n\`\`\`ts\nconst value = ${index};\n\`\`\``, transient: false })));
+	}],
+	['Update editor typography', async () => {
+		await configuration.updateValue('editor.fontFamily', 'Courier New');
+		await configuration.updateValue('editor.fontSize', 16);
+		await configuration.updateValue('editor.lineHeight', 26);
+	}],
+	['Customize code blocks', async () => {
+		await configuration.updateValue('chat.editor.fontFamily', 'Arial');
+		await configuration.updateValue('chat.editor.fontSize', 20);
+		await configuration.updateValue('chat.editor.lineHeight', 30);
+	}],
+	['Turn code wrap on', async () => { await configuration.updateValue('chat.editor.wordWrap', 'on'); }],
+	['Restore code defaults', async () => {
+		for (const key of ['chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) await configuration.updateValue(key, undefined);
+	}],
+	['Use automatic editor line height', async () => {
+		await configuration.updateValue('editor.fontSize', 18);
+		await configuration.updateValue('editor.lineHeight', 0);
+	}],
+];
+for (const [label, action] of codeBlockActions) {
+	const button = document.createElement('button');
+	button.textContent = label;
+	button.addEventListener('click', () => { void action(); });
+	document.body.append(button);
+}

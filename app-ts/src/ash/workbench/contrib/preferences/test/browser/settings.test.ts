@@ -301,6 +301,16 @@ test('font preferences show translated labels and the actual platform defaults',
 		]);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
+		const blocks = createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
+		assert.equal(blocks.groups[0]?.title, '代码块');
+		assert.deepEqual(blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])), [
+			['chat.editor.fontFamily', '字体', ''],
+			['chat.editor.fontSize', '字号', 0],
+			['chat.editor.lineHeight', '行高', 0],
+			['chat.editor.wordWrap', '自动换行', 'off'],
+		]);
+		const blocksFamily = defaults.get('chat.editor.fontFamily');
+		assert.equal(blocksFamily.valueType === 'text' && blocksFamily.placeholder, '跟随编辑器');
 	} finally {
 		resetNlsResolver();
 	}
@@ -327,6 +337,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'editor-opening',
 		'editor-files',
 		'chat-input',
+		'chat-code-blocks',
 		'agents',
 		'teams',
 		'agent-defaults',
@@ -1225,8 +1236,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 2);
+	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 3);
 	assert.ok(root.querySelector('[data-settings-item-id="chat.input.fontFamily"]'));
+	assert.ok(root.querySelector('[data-settings-item-id="chat.editor.fontFamily"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
 	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));

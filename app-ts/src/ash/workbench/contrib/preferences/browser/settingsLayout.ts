@@ -339,6 +339,19 @@ export const SettingsNavigation = [
 				}],
 			},
 			{
+				id: 'chat-code-blocks',
+				label: 'Code blocks',
+				description: 'Set the font, spacing, and word wrap for code blocks in replies.',
+				keywords: ['chat code', 'font', 'typography', 'word wrap'],
+				presentation: 'general',
+				groups: [{
+					id: 'chat-code-blocks',
+					get label() { return localize('settings.chatCodeBlocks.label', 'Code blocks'); },
+					get description() { return localize('settings.chatCodeBlocks.description', 'Choose how code blocks in replies are displayed.'); },
+					settings: ['chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap'],
+				}],
+			},
+			{
 				id: 'agents',
 				label: 'Agents',
 				description: 'Configure agents and the Advisor used for second opinions.',

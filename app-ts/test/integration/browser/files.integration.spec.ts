@@ -23,3 +23,23 @@ test('browser files persist through reload and reject competing saves from two w
 		expect(await page.evaluate(() => window.ashFilesIntegration.copyAndRename())).toEqual([result.content, result.content]);
 	} finally { await other.close(); }
 });
+
+
+test('binary comparison reloads both byte previews and resolves their file paths', async ({ page }) => {
+	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	for (const restored of [false, true]) {
+		if (restored) {
+			await page.reload();
+			await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+		}
+		expect(await page.evaluate(restored => window.ashFilesIntegration.showBinaryComparison(restored), restored)).toEqual({ primary: '/binary/after.bin', secondary: '/binary/before.bin' });
+		const sides = page.locator('#binary-comparison .ash-side-by-side-editor > section');
+		await expect(sides).toHaveCount(2);
+		await expect(sides.first().locator('.ash-binary-editor-content')).toContainText('48 69');
+		await expect(sides.last().locator('.ash-binary-editor-content')).toContainText('48 69 00 ff');
+		await expect(sides.last().getByRole('region')).toBeFocused();
+		const boxes = await sides.evaluateAll(elements => elements.map(element => ({ left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right })));
+		expect(boxes[1]!.left).toBeGreaterThanOrEqual(boxes[0]!.right);
+	}
+});

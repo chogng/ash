@@ -38,6 +38,23 @@
 	font: inherit;
 	white-space: pre-wrap;
 }
+.ash-chat-list-widget .ash-markdown pre {
+	font-family: var(--ash-chat-code-font-family);
+	font-size: var(--ash-chat-code-font-size);
+	line-height: var(--ash-chat-code-line-height);
+	white-space: pre;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+.ash-chat-list-widget .ash-markdown pre code {
+	font: inherit;
+	white-space: inherit;
+	overflow-wrap: inherit;
+}
+.ash-chat-list-widget.code-word-wrap .ash-markdown pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
 .ash-chat-item-reasoning,
 .ash-chat-item-plan,
 .ash-chat-item-toolCall,
