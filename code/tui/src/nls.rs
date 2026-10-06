@@ -1029,6 +1029,48 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Mode multitâche désactivé. Le niveau de raisonnement reste inchangé.",
     ),
     translation(
+        "No additional reasoning",
+        "追加の推論なし",
+        "不增加额外推理",
+        "Aucun raisonnement supplémentaire",
+    ),
+    translation(
+        "Minimal reasoning for simple tasks",
+        "単純なタスク向けの最小限の推論",
+        "适用于简单任务的最少推理",
+        "Raisonnement minimal pour les tâches simples",
+    ),
+    translation(
+        "Fast responses with lighter reasoning",
+        "軽い推論で素早く応答",
+        "较轻的推理，更快的响应",
+        "Réponses rapides avec un raisonnement léger",
+    ),
+    translation(
+        "Balances speed and reasoning depth for everyday tasks",
+        "日常のタスクで速度と推論の深さを両立",
+        "日常任务中平衡速度与推理深度",
+        "Équilibre vitesse et profondeur pour les tâches courantes",
+    ),
+    translation(
+        "Greater reasoning depth for complex problems",
+        "複雑な問題向けの深い推論",
+        "为复杂问题提供更深入的推理",
+        "Raisonnement approfondi pour les problèmes complexes",
+    ),
+    translation(
+        "Extra high reasoning depth for complex problems",
+        "複雑な問題向けの非常に深い推論",
+        "为复杂问题提供超高推理深度",
+        "Raisonnement très approfondi pour les problèmes complexes",
+    ),
+    translation(
+        "Maximum reasoning depth for the hardest problems",
+        "最も難しい問題向けの最大の推論",
+        "为最困难的问题提供最高推理深度",
+        "Raisonnement maximal pour les problèmes les plus difficiles",
+    ),
+    translation(
         "No reasoning. Best for straightforward tasks.",
         "推論なし。単純なタスク向け。",
         "不使用推理，适合直接明确的任务。",

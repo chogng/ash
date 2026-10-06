@@ -630,12 +630,14 @@ fn meta_connection_declares_muse_responses_auth_and_reasoning() {
     assert!(
         model
             .supported_reasoning_efforts
-            .contains(&ReasoningEffort::Minimal)
+            .iter()
+            .any(|option| option.effort == ReasoningEffort::Minimal)
     );
     assert!(
         !model
             .supported_reasoning_efforts
-            .contains(&ReasoningEffort::None)
+            .iter()
+            .any(|option| option.effort == ReasoningEffort::None)
     );
 }
 
@@ -646,7 +648,11 @@ fn static_model_catalog_has_unique_valid_rows() {
         assert!(identities.insert((&spec.provider_id, &spec.model_id)));
         assert_eq!(find_static_model(&spec.model_ref()), Some(spec));
         if let Some(effort) = spec.model_reasoning_effort {
-            assert!(spec.supported_reasoning_efforts.contains(&effort));
+            assert!(
+                spec.supported_reasoning_efforts
+                    .iter()
+                    .any(|option| option.effort == effort)
+            );
         }
     }
 }
@@ -747,7 +753,12 @@ fn static_catalog_exposes_only_model_specific_reasoning_levels() {
             .find(|entry| entry.provider_id == provider && entry.model_id == model)
             .unwrap_or_else(|| panic!("missing catalog model {provider}/{model}"));
         assert_eq!(
-            entry.supported_reasoning_efforts, expected,
+            entry
+                .supported_reasoning_efforts
+                .iter()
+                .map(|option| option.effort)
+                .collect::<Vec<_>>(),
+            expected,
             "{provider}/{model}"
         );
         if !expected.is_empty() {
@@ -1067,7 +1078,7 @@ fn fast_models_are_persisted_per_connection_and_validated_against_model_support(
 }
 
 #[test]
-fn fast_modes_use_the_selected_connection_and_upstream_model_contract() {
+fn fast_preferences_preserve_connection_aliases_and_use_declared_model_support() {
     use ash_protocol::CapabilitySupport;
     use ash_protocol::ModelConnectionId;
     for (connection, model, expected_upstream) in [
@@ -1076,11 +1087,7 @@ fn fast_modes_use_the_selected_connection_and_upstream_model_contract() {
         ("anthropic", "claude-sonnet-4-6", "claude-sonnet-4-6"),
         ("google", "gemini-3.8-flash", "gemini-3.8-flash"),
         ("xai", "grok-4.7", "grok-4.7"),
-        (
-            "kimi-subscription",
-            "kimi-k2.7-code",
-            "kimi-for-coding-highspeed",
-        ),
+        ("kimi-subscription", "kimi-k2.7-code", "kimi-for-coding"),
     ] {
         let mut config =
             ModelProviderConfig::for_connection(ModelConnectionId::new(connection).unwrap());

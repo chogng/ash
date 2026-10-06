@@ -1,0 +1,437 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelCatalog",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/StaticModelSpec"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "models"
+  ],
+  "$defs": {
+    "ModelAcceleration": {
+      "description": "The model catalog owns how the product's acceleration preference changes a call.\nA speed parameter and a different model ID must never be recorded as service tiers.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "serviceTier": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "serviceTier"
+            }
+          },
+          "required": [
+            "type",
+            "serviceTier"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "speed": {
+              "$ref": "#/$defs/ModelSpeed"
+            },
+            "type": {
+              "type": "string",
+              "const": "speed"
+            }
+          },
+          "required": [
+            "type",
+            "speed",
+            "name",
+            "description"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "model": {
+              "$ref": "#/$defs/ModelId"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "model"
+            }
+          },
+          "required": [
+            "type",
+            "model",
+            "name",
+            "description"
+          ]
+        }
+      ]
+    },
+    "ModelCapabilitiesDeclaration": {
+      "type": "object",
+      "properties": {
+        "fastMode": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "imageDetailOriginal": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "parallelToolCalls": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reasoning": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "tools": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelId": {
+      "type": "string"
+    },
+    "ModelInputModality": {
+      "type": "string",
+      "enum": [
+        "text",
+        "image",
+        "audio"
+      ]
+    },
+    "ModelInstructions": {
+      "description": "Complete base instructions owned by one model entry, independently editable and versioned.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "body"
+      ]
+    },
+    "ModelReasoningEffortOption": {
+      "description": "A selectable effort and its catalog explanation. Missing copy is unknown metadata;\nthe effort remains a request value and never implies a fixed token budget.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effort": {
+          "$ref": "#/$defs/ReasoningEffort"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "effort"
+      ]
+    },
+    "ModelReasoningSummary": {
+      "type": "string",
+      "enum": [
+        "none",
+        "auto",
+        "concise",
+        "detailed"
+      ]
+    },
+    "ModelServiceTier": {
+      "description": "A provider service tier ID is a request value; its label and explanation are display metadata.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "ModelSettingsDeclaration": {
+      "type": "object",
+      "properties": {
+        "acceleration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelAcceleration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaultReasoningSummary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelReasoningSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaultServiceTier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "defaultVerbosity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelVerbosity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputModalities": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ModelInputModality"
+          }
+        },
+        "reasoningSummary": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "serviceTiers": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ModelServiceTier"
+          }
+        },
+        "toolOutputLimit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelToolOutputLimit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verbosity": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelSpeed": {
+      "description": "Inference speed is independent of provider scheduling and billing service tiers.",
+      "type": "string",
+      "enum": [
+        "fast"
+      ]
+    },
+    "ModelToolOutputLimit": {
+      "description": "Limits model-visible tool text; original durable tool results remain intact.\nToken limits use the shared output utility's UTF-8 byte approximation, not token measurement.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "mode": {
+              "type": "string",
+              "const": "bytes"
+            }
+          },
+          "required": [
+            "mode",
+            "limit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "mode": {
+              "type": "string",
+              "const": "tokens"
+            }
+          },
+          "required": [
+            "mode",
+            "limit"
+          ]
+        }
+      ]
+    },
+    "ModelVerbosity": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "ReasoningEffort": {
+      "type": "string",
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "extraHigh",
+        "max"
+      ]
+    },
+    "StaticModelSpec": {
+      "description": "One row in Ash's bundled JSON model catalog, independent of account access.",
+      "type": "object",
+      "properties": {
+        "auto_compact_token_limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "capabilities": {
+          "$ref": "#/$defs/ModelCapabilitiesDeclaration"
+        },
+        "context_window": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "context_window_options": {
+          "description": "Normalized budgets: the first is the default. Omitted JSON presets use declared capacity.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "instructions": {
+          "$ref": "#/$defs/ModelInstructions"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "model_reasoning_effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "settings": {
+          "$ref": "#/$defs/ModelSettingsDeclaration"
+        },
+        "supported_reasoning_efforts": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelReasoningEffortOption"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "model_id",
+        "display_name",
+        "instructions"
+      ]
+    }
+  }
+}

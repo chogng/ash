@@ -3,6 +3,8 @@ import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelPreferencesUpdate } from '../../../../../platform/sessions/common/sessionApi.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
+import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
+import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ModelCard } from '../../browser/widget/input/modelPicker/modelPickerCard.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
@@ -98,3 +100,20 @@ test('Model card uses backend choices even below 1M and with an unrelated ceilin
 	await completed;
 	assert.deepEqual(calls, [{ contextWindow: 500_000 }, { contextWindow: 256_000 }]);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Model card exposes catalog acceleration copy and its accessible description in ${locale}`, () => {
+		const catalog = builtinLanguagePackCatalogs.find(item => item.locale === locale)!;
+		setNlsMessages(locale, catalog.bundles);
+		try {
+			using card = new ModelCard(environment.window.document);
+			card.update({ entry: { ...entry, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' } }, setPreferences: async () => {} });
+			const input = card.domNode.querySelector<HTMLInputElement>('input')!;
+			const description = locale === 'zh-CN' ? '响应更快，用量增加' : 'Faster responses, increased usage';
+			assert.equal(input.getAttribute('aria-label'), locale === 'zh-CN' ? '快速' : 'Fast');
+			assert.equal(input.getAttribute('aria-description'), description);
+			assert.equal(card.domNode.querySelector('.ash-chat-model-card-description')!.textContent, description);
+			assert.equal(input.checked, false);
+		} finally { resetNlsResolver(); }
+	});
+}

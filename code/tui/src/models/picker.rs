@@ -424,7 +424,7 @@ pub(crate) fn model_choices(
         let supported_efforts = entry
             .supported_reasoning_efforts
             .iter()
-            .copied()
+            .map(|option| option.effort)
             .filter(|effort| *effort != ReasoningEffort::None)
             .collect::<Vec<_>>();
         let effort = (config.model.as_ref() == Some(&model))

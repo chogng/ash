@@ -230,6 +230,7 @@ impl ContextAssembler {
             verbosity: None,
             reasoning_summary: None,
             service_tier: None,
+            speed: None,
             instructions: resolved_instructions(plan),
             input,
             tools: plan.tools().to_vec(),

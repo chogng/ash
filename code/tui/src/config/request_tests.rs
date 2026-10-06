@@ -236,6 +236,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
         .collect();
     let catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
+            description: None,
             discovered: None,
             model: model.clone(),
             display_name: "Reviewer".into(),

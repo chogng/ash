@@ -7,9 +7,11 @@ use ash_protocol::{ModelAccess, ReasoningEffort};
 fn codex_model_list_becomes_subscription_metadata_without_hidden_entries() {
     let models: Vec<CodexModel> = serde_json::from_value(serde_json::json!([
         {
-            "id":"gpt-visible", "displayName":"GPT Visible", "hidden":false,
+            "id":"gpt-visible", "displayName":"GPT Visible", "description":"Model overview", "hidden":false,
             "defaultReasoningEffort":"medium",
-            "supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"medium"}]
+            "supportedReasoningEfforts":[{"reasoningEffort":"low","description":"Quick tasks"},{"reasoningEffort":"medium","description":"Everyday tasks"}],
+            "serviceTiers":[{"id":"priority","name":"Fast","description":"Increased usage"}],
+            "defaultServiceTier":"priority"
         },
         {"id":"gpt-hidden", "displayName":"GPT Hidden", "hidden":true,
          "defaultReasoningEffort":"low", "supportedReasoningEfforts":[]}
@@ -25,6 +27,25 @@ fn codex_model_list_becomes_subscription_metadata_without_hidden_entries() {
     assert_eq!(models.len(), 1);
     assert_eq!(models[0].id.as_str(), "gpt-visible");
     assert_eq!(models[0].metadata.access, Some(ModelAccess::Subscription));
+    assert_eq!(
+        models[0].metadata.description.as_deref(),
+        Some("Model overview")
+    );
+    let efforts = models[0]
+        .metadata
+        .supported_reasoning_efforts
+        .as_ref()
+        .unwrap();
+    assert_eq!(efforts[0].description.as_deref(), Some("Quick tasks"));
+    assert_eq!(efforts[1].description.as_deref(), Some("Everyday tasks"));
+    assert_eq!(
+        models[0].metadata.settings.service_tiers.as_ref().unwrap()[0].name,
+        "Fast"
+    );
+    assert_eq!(
+        models[0].metadata.settings.default_service_tier.as_deref(),
+        Some("priority")
+    );
     assert_eq!(
         models[0].metadata.display_name.as_deref(),
         Some("GPT Visible")
@@ -67,15 +88,19 @@ fn codex_ultra_is_not_imported_as_model_reasoning_or_a_default() {
     )
     .unwrap();
     assert_eq!(
-        imported[0].metadata.supported_reasoning_efforts.as_deref(),
-        Some(
-            [
-                ReasoningEffort::Low,
-                ReasoningEffort::High,
-                ReasoningEffort::Max
-            ]
-            .as_slice()
-        )
+        imported[0]
+            .metadata
+            .supported_reasoning_efforts
+            .as_ref()
+            .map(|options| options
+                .iter()
+                .map(|option| option.effort)
+                .collect::<Vec<_>>()),
+        Some(vec![
+            ReasoningEffort::Low,
+            ReasoningEffort::High,
+            ReasoningEffort::Max
+        ])
     );
     assert_eq!(imported[0].metadata.model_reasoning_effort, None);
 }

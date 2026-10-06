@@ -49,11 +49,22 @@ pub(crate) fn apply_settings(
             "model does not accept reasoning summary parameters".into(),
         ));
     }
-    if let (Some(tiers), Some(tier)) = (&settings.service_tiers, request.service_tier)
-        && !tiers.contains(&tier)
+    if let (Some(tiers), Some(tier)) = (&settings.service_tiers, &request.service_tier)
+        && !tiers.iter().any(|entry| &entry.id == tier)
     {
         return Err(ModelProviderError::InvalidRequest(
             "service tier is not declared for this model".into(),
+        ));
+    }
+    if request.speed.is_some()
+        && (protocol != ApiProtocol::AnthropicMessages
+            || !matches!(
+                settings.acceleration,
+                Some(ash_protocol::ModelAcceleration::Speed { .. })
+            ))
+    {
+        return Err(ModelProviderError::InvalidRequest(
+            "inference speed is not declared for this model and endpoint".into(),
         ));
     }
     let limit = settings.tool_output_limit.map(|limit| match limit {

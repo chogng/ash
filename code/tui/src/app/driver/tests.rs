@@ -200,7 +200,10 @@ fn effort_command_opens_the_supported_selector_without_loading() {
         provider: entry.model.provider.to_string(),
         model: entry.model.model.to_string(),
     });
-    config.model_reasoning_effort = entry.supported_reasoning_efforts.last().copied();
+    config.model_reasoning_effort = entry
+        .supported_reasoning_efforts
+        .last()
+        .map(|option| option.effort);
     driver.model_picker.update_config(config);
     driver.app_mut().insert_text("/effort");
     let command = driver.app_mut().handle_key(crate::keymap::KeyEvent::new(

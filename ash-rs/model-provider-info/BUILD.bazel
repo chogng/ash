@@ -3,5 +3,5 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "model-provider-info",
     crate_name = "model_provider_info",
-    data = ["models.json"],
+    data = ["models.json", "models.schema.json"],
 )

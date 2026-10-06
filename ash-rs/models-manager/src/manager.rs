@@ -432,7 +432,7 @@ impl ModelsManager {
         if let CatalogDiscoveryOutcome::Modified(catalog) = &outcome {
             let mut models = BTreeSet::new();
             for model in &catalog.models {
-                if let Err(message) = model.metadata.settings.validate() {
+                if let Err(message) = model.metadata.validate() {
                     let error = ModelsManagerError::Source {
                         scope: scope.clone(),
                         error: crate::CatalogSourceError::new(

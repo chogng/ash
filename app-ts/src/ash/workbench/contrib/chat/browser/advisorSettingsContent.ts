@@ -223,7 +223,7 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 			run: () => this.saveAdvisor({
 				model: entry.model, enabled: true,
 				maxCalls: this.savedAdvisor?.maxCalls ?? 3, maxOutputTokens: this.savedAdvisor?.maxOutputTokens ?? 2048,
-				reasoningEffort: this.savedAdvisor?.reasoningEffort && entry.supportedReasoningEfforts?.includes(this.savedAdvisor.reasoningEffort) ? this.savedAdvisor.reasoningEffort : undefined,
+				reasoningEffort: this.savedAdvisor?.reasoningEffort && entry.supportedReasoningEfforts?.some(option => option.effort === this.savedAdvisor?.reasoningEffort) ? this.savedAdvisor.reasoningEffort : undefined,
 			}),
 		}));
 		const actions = [disable, ...(modelActions.length ? [new Separator(), ...modelActions] : [])];

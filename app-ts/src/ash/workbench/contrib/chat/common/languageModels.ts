@@ -164,17 +164,23 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 }
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
+	const declaration = entry.settings.acceleration;
+	const acceleration = declaration?.type === 'serviceTier'
+		? entry.settings.serviceTiers?.find(tier => tier.id === declaration.serviceTier)
+		: declaration;
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.displayName,
+		description: entry.description,
 		defaultContextWindow: entry.defaultContextWindow,
 		maximumContextWindow: entry.maximumContextWindow,
-		supportsFast: entry.capabilities.fastMode === 'supported',
+		supportsFast: entry.capabilities.fastMode === 'supported' && acceleration != null,
+		...(acceleration ? { acceleration: Object.freeze({ name: acceleration.name, description: acceleration.description }) } : {}),
 		fast: entry.fastEnabled,
 		contextWindowOptions: Object.freeze([...entry.contextWindowOptions]),
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.contextWindow,
-		supportedReasoningEfforts: Object.freeze([...entry.supportedReasoningEfforts]),
+		supportedReasoningEfforts: Object.freeze(entry.supportedReasoningEfforts.map(option => Object.freeze({ ...option }))),
 		...(entry.modelReasoningEffort != null ? { modelReasoningEffort: entry.modelReasoningEffort } : {}),
 	});
 }
@@ -184,6 +190,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 		const candidate = right[index];
 		return candidate !== undefined
 			&& entry.displayName === candidate.displayName
+			&& entry.description === candidate.description
 			&& entry.discovered === candidate.discovered
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
 			&& entry.contextWindow === candidate.contextWindow
@@ -191,8 +198,11 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.maximumContextWindow === candidate.maximumContextWindow
 			&& entry.supportsFast === candidate.supportsFast
 			&& entry.fast === candidate.fast
+			&& entry.acceleration?.name === candidate.acceleration?.name
+			&& entry.acceleration?.description === candidate.acceleration?.description
 			&& entry.contextWindowOptions.join('\0') === candidate.contextWindowOptions.join('\0')
 			&& entry.modelReasoningEffort === candidate.modelReasoningEffort
-			&& entry.supportedReasoningEfforts?.join('\0') === candidate.supportedReasoningEfforts?.join('\0');
+			&& entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length
+			&& (entry.supportedReasoningEfforts?.every((option, index) => option.effort === candidate.supportedReasoningEfforts?.[index]?.effort && option.description === candidate.supportedReasoningEfforts?.[index]?.description) ?? true);
 	});
 }

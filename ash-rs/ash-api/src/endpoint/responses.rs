@@ -253,25 +253,15 @@ pub(super) fn build_request(
         ("stream".into(), Value::Bool(false)),
         ("store".into(), Value::Bool(false)),
     ]);
-    match request.service_tier {
-        Some(ash_protocol::ModelServiceTier::Priority) => {
-            body.insert("service_tier".into(), Value::String("priority".into()));
-        }
-        Some(ash_protocol::ModelServiceTier::Fast) => {
-            let tier = if endpoint == ApiEndpoint::ChatGptResponses {
-                "priority"
-            } else {
-                "fast"
-            };
-            body.insert("service_tier".into(), Value::String(tier.into()));
-        }
-        Some(ash_protocol::ModelServiceTier::Standard)
-            if endpoint != ApiEndpoint::ChatGptResponses =>
-        {
-            // An explicit default overrides a project's Fast setting when the user switches it off.
-            body.insert("service_tier".into(), Value::String("default".into()));
-        }
-        Some(ash_protocol::ModelServiceTier::Standard) | None => {}
+    if let Some(tier) = &request.service_tier
+        && !(endpoint == ApiEndpoint::ChatGptResponses && tier == "default")
+    {
+        body.insert("service_tier".into(), Value::String(tier.clone()));
+    }
+    if request.speed.is_some() {
+        return Err(ApiError::InvalidRequest(
+            "Responses does not accept an inference speed parameter".into(),
+        ));
     }
     if let Some(instructions) = &request.instructions {
         body.insert("instructions".into(), Value::String(instructions.clone()));

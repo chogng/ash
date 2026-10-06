@@ -2,18 +2,33 @@ import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
 /** Both configuration surfaces write undefined when the configured default is chosen. */
-export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; checked: boolean; isDefault: boolean }[] {
+export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; isDefault: boolean }[] {
 	const defaultEffort = entry.modelReasoningEffort;
-	const efforts: readonly (ModelReasoningEffort | undefined)[] = defaultEffort === undefined
-		? [undefined, ...(entry.supportedReasoningEfforts ?? [])]
+	const efforts = defaultEffort === undefined
+		? [{ effort: undefined, description: undefined }, ...(entry.supportedReasoningEfforts ?? [])]
 		: entry.supportedReasoningEfforts ?? [];
-	return efforts.map(effort => ({
+	return efforts.map(({ effort, description }) => ({
 		effort,
 		value: effort === defaultEffort ? undefined : effort,
 		label: modelPickerEffortLabel(effort),
+		description: modelPickerEffortDescription(description),
 		checked: effort === (selectedEffort ?? defaultEffort),
 		isDefault: defaultEffort !== undefined && effort === defaultEffort,
 	}));
+}
+
+/** Translate Ash's catalog copy; provider-authored descriptions retain their original text. */
+export function modelPickerEffortDescription(description: string | null | undefined): string | undefined {
+	switch (description) {
+		case 'No additional reasoning': return localize('chat.modelPicker.reasoningNone', 'No additional reasoning');
+		case 'Minimal reasoning for simple tasks': return localize('chat.modelPicker.reasoningMinimal', 'Minimal reasoning for simple tasks');
+		case 'Fast responses with lighter reasoning': return localize('chat.modelPicker.reasoningLow', 'Fast responses with lighter reasoning');
+		case 'Balances speed and reasoning depth for everyday tasks': return localize('chat.modelPicker.reasoningMedium', 'Balances speed and reasoning depth for everyday tasks');
+		case 'Greater reasoning depth for complex problems': return localize('chat.modelPicker.reasoningHigh', 'Greater reasoning depth for complex problems');
+		case 'Extra high reasoning depth for complex problems': return localize('chat.modelPicker.reasoningExtraHigh', 'Extra high reasoning depth for complex problems');
+		case 'Maximum reasoning depth for the hardest problems': return localize('chat.modelPicker.reasoningMax', 'Maximum reasoning depth for the hardest problems');
+		default: return description ?? undefined;
+	}
 }
 
 export function modelPickerEffortLabel(effort: ModelReasoningEffort | undefined): string {

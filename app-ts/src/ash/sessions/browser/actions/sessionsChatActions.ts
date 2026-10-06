@@ -76,10 +76,10 @@ registerAction2(class SelectApprovalReviewModel extends Action2 {
 		const modelId = choice.id === 'custom-model-id' ? (await input.input({ title: localize('sessions.chat.permission.reviewCustomPrompt', 'Model ID supported by this connection'), value: selection.type === 'explicit' ? selection.model.model : '' }))?.trim() : choice.id;
 		if (!modelId) { return; }
 		const entry = catalog.find(entry => entry.model.model === modelId);
-		const efforts: readonly ModelReasoningEffort[] = entry?.supportedReasoningEfforts ?? ['none', 'minimal', 'low', 'medium', 'high', 'extraHigh', 'max'];
+		const efforts = entry?.supportedReasoningEfforts ?? [];
 		const effort = await selectReviewItem(input, localize('sessions.chat.permission.reviewEffort', 'Review thinking effort'), [
 			{ label: localize('sessions.chat.permission.reviewEffortDefault', 'Automatic (review default)'), id: 'automatic' },
-			...efforts.map(effort => ({ label: effort, id: effort })),
+			...efforts.map(option => ({ label: option.effort, id: option.effort, description: option.description ?? undefined })),
 		], selection.type === 'explicit' ? selection.reasoningEffort : 'automatic');
 		if (!effort) { return; }
 		await models.setApprovalReviewModel({

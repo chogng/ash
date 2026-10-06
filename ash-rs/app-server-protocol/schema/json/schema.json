@@ -35612,6 +35612,75 @@
       ],
       "type": "object"
     },
+    "ModelAcceleration": {
+      "description": "The model catalog owns how the product's acceleration preference changes a call.\nA speed parameter and a different model ID must never be recorded as service tiers.",
+      "oneOf": [
+        {
+          "properties": {
+            "serviceTier": {
+              "type": "string"
+            },
+            "type": {
+              "const": "serviceTier",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "serviceTier"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "speed": {
+              "$ref": "#/$defs/ModelSpeed"
+            },
+            "type": {
+              "const": "speed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "speed",
+            "name",
+            "description"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "model": {
+              "$ref": "#/$defs/ModelId"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "model",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "model",
+            "name",
+            "description"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ModelAccess": {
       "description": "How a user gains access to a model.\n\n[`ModelRef::provider`] identifies the model vendor. Product composition may use this access\nmode to choose an execution backend, but it is not proof of authentication, entitlement, or\nremote availability.",
       "enum": [
@@ -35763,6 +35832,12 @@
             }
           ]
         },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "discovered": {
           "description": "True only when this ID belongs to the last successful endpoint observation.",
           "type": [
@@ -35802,6 +35877,7 @@
         "settings": {
           "$ref": "#/$defs/ModelSettings",
           "default": {
+            "acceleration": null,
             "defaultReasoningSummary": null,
             "defaultServiceTier": null,
             "defaultVerbosity": null,
@@ -35814,7 +35890,7 @@
         },
         "supportedReasoningEfforts": {
           "items": {
-            "$ref": "#/$defs/ReasoningEffort"
+            "$ref": "#/$defs/ModelReasoningEffortOption"
           },
           "type": "array"
         }
@@ -36344,6 +36420,25 @@
       ],
       "type": "object"
     },
+    "ModelReasoningEffortOption": {
+      "additionalProperties": false,
+      "description": "A selectable effort and its catalog explanation. Missing copy is unknown metadata;\nthe effort remains a request value and never implies a fixed token budget.",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effort": {
+          "$ref": "#/$defs/ReasoningEffort"
+        }
+      },
+      "required": [
+        "effort"
+      ],
+      "type": "object"
+    },
     "ModelReasoningSummary": {
       "enum": [
         "none",
@@ -36591,18 +36686,41 @@
       "type": "object"
     },
     "ModelServiceTier": {
-      "description": "Provider service classes used by model invocations.",
-      "enum": [
-        "standard",
-        "fast",
-        "priority"
+      "additionalProperties": false,
+      "description": "A provider service tier ID is a request value; its label and explanation are display metadata.",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
       ],
-      "type": "string"
+      "type": "object"
     },
     "ModelSettings": {
       "additionalProperties": false,
       "description": "Request settings frozen with the same model snapshot as its capacity.\nMissing lists/defaults and Unknown capabilities are absence of evidence, not restrictions.\nEndpoint support and user choices are checked separately by the invocation owner.",
       "properties": {
+        "acceleration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelAcceleration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "defaultReasoningSummary": {
           "anyOf": [
             {
@@ -36615,15 +36733,11 @@
           "default": null
         },
         "defaultServiceTier": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ModelServiceTier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "defaultVerbosity": {
           "anyOf": [
@@ -36677,6 +36791,13 @@
         }
       },
       "type": "object"
+    },
+    "ModelSpeed": {
+      "description": "Inference speed is independent of provider scheduling and billing service tiers.",
+      "enum": [
+        "fast"
+      ],
+      "type": "string"
     },
     "ModelToolOutputLimit": {
       "description": "Limits model-visible tool text; original durable tool results remain intact.\nToken limits use the shared output utility's UTF-8 byte approximation, not token measurement.",

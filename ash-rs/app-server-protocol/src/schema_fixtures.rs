@@ -453,7 +453,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
         "fastEnabled: boolean,",
         "maximumContextWindow: number | null,",
         "capabilities: ModelCapabilities,",
-        "supportedReasoningEfforts: Array<ReasoningEffort>,",
+        "description: string | null,",
+        "supportedReasoningEfforts: Array<ModelReasoningEffortOption>,",
     ] {
         assert!(typescript.contains(field), "missing catalog field: {field}");
     }

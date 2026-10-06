@@ -139,6 +139,13 @@
   outline-offset: var(--ash-spacing-size20);
 }
 
+.ash-chat-model-card-description {
+  margin: 0 0 var(--ash-spacing-size80);
+  color: var(--ash-description-foreground);
+  font-size: var(--ash-font-size-label2);
+  overflow-wrap: anywhere;
+}
+
 .ash-chat-model-card-error {
   color: var(--ash-error-foreground);
 }

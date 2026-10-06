@@ -11,7 +11,7 @@ use std::io;
 use std::io::Write;
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 /// Ash-owned catalog files, one per provider and multiple account scopes per file.
 pub(crate) struct DiskCatalogCache {
@@ -128,7 +128,7 @@ impl DiskCatalogCache {
                         && catalog
                             .models
                             .iter()
-                            .all(|model| model.metadata.settings.validate().is_ok())
+                            .all(|model| model.metadata.validate().is_ok())
                 })
                 .collect(),
             ..document

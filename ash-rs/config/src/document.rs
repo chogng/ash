@@ -556,7 +556,10 @@ fn approval_review_effort(
     };
     let spec = model_provider_info::find_static_model(model);
     if let (Some(effort), Some(spec)) = (selected_effort, spec)
-        && !spec.supported_reasoning_efforts.contains(&effort)
+        && !spec
+            .supported_reasoning_efforts
+            .iter()
+            .any(|option| option.effort == effort)
     {
         return Err(ConfigError(format!(
             "approval review model '{}' does not support reasoning effort '{effort:?}'",
@@ -570,7 +573,8 @@ fn approval_review_effort(
             spec.and_then(|spec| {
                 if spec
                     .supported_reasoning_efforts
-                    .contains(&ReasoningEffort::Low)
+                    .iter()
+                    .any(|option| option.effort == ReasoningEffort::Low)
                 {
                     Some(ReasoningEffort::Low)
                 } else {

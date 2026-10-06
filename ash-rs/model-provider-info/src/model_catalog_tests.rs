@@ -12,6 +12,16 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("provider_id", json!("")),
         ("model_id", json!("")),
         ("display_name", json!(" ")),
+        ("description", json!(" ")),
+        ("supported_reasoning_efforts", json!(["low", "medium"])),
+        (
+            "supported_reasoning_efforts",
+            json!([{"effort":"low","description":" "}]),
+        ),
+        (
+            "supported_reasoning_efforts",
+            json!([{"effort":"low"},{"effort":"low","description":"Other copy"}]),
+        ),
         ("context_window", json!(0)),
         ("context_window_options", json!([272000, 0])),
         ("context_window_options", json!([272000, 1_050_001])),
@@ -46,6 +56,22 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
     typo["instruction"] = json!("wrong field");
     assert!(parse_catalog(&json!({"models":[typo]}).to_string()).is_err());
     assert!(parse_catalog("{").is_err());
+}
+
+#[test]
+fn editable_catalog_schema_matches_its_generated_file_and_wire_defaults() {
+    let generated = serde_json::to_value(model_catalog_schema()).unwrap();
+    let committed: serde_json::Value =
+        serde_json::from_str(include_str!("../models.schema.json")).unwrap();
+    assert_eq!(generated, committed);
+    let fields = &generated["$defs"]["StaticModelSpec"]["properties"];
+    for name in ["context_window", "capabilities", "settings"] {
+        assert!(fields[name].get("default").is_none(), "{name}");
+    }
+    assert_eq!(
+        generated["$defs"]["ModelCapabilitiesDeclaration"]["properties"]["tools"]["type"],
+        json!(["boolean", "null"])
+    );
 }
 
 #[test]
@@ -143,8 +169,14 @@ fn invalid_request_defaults_fail_before_catalog_publication() {
         json!({"defaultReasoningSummary":"auto"}),
         json!({"reasoningSummary":false,"defaultReasoningSummary":"auto"}),
         json!({"reasoningSummary":null,"defaultReasoningSummary":"auto"}),
-        json!({"serviceTiers":["standard"],"defaultServiceTier":"fast"}),
-        json!({"serviceTiers":["standard","standard"]}),
+        json!({"serviceTiers":[{"id":"default","name":"Standard","description":"Standard processing"}],"defaultServiceTier":"priority"}),
+        json!({"serviceTiers":[{"id":"default","name":"Standard","description":"One"},{"id":"default","name":"Other name","description":"Two"}]}),
+        json!({"serviceTiers":[{"id":"","name":"Fast","description":"Fast processing"}]}),
+        json!({"serviceTiers":[{"id":"priority","name":"","description":"Fast processing"}]}),
+        json!({"serviceTiers":[{"id":"priority","name":"Fast","description":""}]}),
+        json!({"acceleration":{"type":"serviceTier","serviceTier":"priority"}}),
+        json!({"acceleration":{"type":"speed","speed":"fast","name":"Fast","description":""}}),
+        json!({"acceleration":{"type":"model","model":"","name":"Fast","description":"Faster model"}}),
         json!({"toolOutputLimit":{"mode":"tokens","limit":0}}),
         json!({"toolOutputLimit":{"mode":"words","limit":100}}),
         json!({"defautVerbosity":"low"}),
@@ -243,7 +275,8 @@ fn catalog_settings_use_booleans_without_changing_the_runtime_contract() {
         "defaultVerbosity":"high",
         "reasoningSummary":true,
         "defaultReasoningSummary":"detailed",
-        "serviceTiers":["standard","fast","priority"],
+        "serviceTiers":[{"id":"default","name":"Standard","description":"Standard processing"},{"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
+        "acceleration":{"type":"serviceTier","serviceTier":"priority"},
         "defaultServiceTier":"priority",
         "toolOutputLimit":{"mode":"bytes","limit":4096}
     });

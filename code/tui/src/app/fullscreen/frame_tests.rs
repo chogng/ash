@@ -2599,6 +2599,7 @@ fn configured_model_summary() -> ModelSummary {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(
                     ash_protocol::ProviderId::new("anthropic").unwrap(),
@@ -2616,7 +2617,10 @@ fn configured_model_summary() -> ModelSummary {
                 available_context_window: Some(180_000),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
-                supported_reasoning_efforts: vec![ReasoningEffort::Medium, ReasoningEffort::High],
+                supported_reasoning_efforts: vec![
+                    ReasoningEffort::Medium.into(),
+                    ReasoningEffort::High.into(),
+                ],
                 model_reasoning_effort: Some(ReasoningEffort::High),
                 default_personality: None,
             },
@@ -2727,6 +2731,7 @@ fn custom_model_choices(
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(
                     ash_protocol::ProviderId::new("custom-gateway").unwrap(),
@@ -3141,10 +3146,10 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     );
     let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "GPT Effort");
     info.supported_reasoning_efforts = vec![
-        ReasoningEffort::None,
-        ReasoningEffort::Low,
-        ReasoningEffort::Medium,
-        ReasoningEffort::High,
+        ReasoningEffort::None.into(),
+        ReasoningEffort::Low.into(),
+        ReasoningEffort::Medium.into(),
+        ReasoningEffort::High.into(),
     ];
     info.model_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
@@ -3161,9 +3166,9 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
                         "GPT Other",
                     );
                     other.supported_reasoning_efforts = vec![
-                        ReasoningEffort::Low,
-                        ReasoningEffort::Medium,
-                        ReasoningEffort::High,
+                        ReasoningEffort::Low.into(),
+                        ReasoningEffort::Medium.into(),
+                        ReasoningEffort::High.into(),
                     ];
                     other.model_reasoning_effort = Some(ReasoningEffort::Low);
                     other

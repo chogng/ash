@@ -19,7 +19,13 @@ use ash_protocol::ReasoningEffort;
 pub(super) fn selected_efforts<'a>(
     config: &ash_app_server_protocol::protocol::config::ConfigReadResult,
     catalog: &'a ModelListResult,
-) -> Result<(&'a [ReasoningEffort], Option<ReasoningEffort>), ModelCommandError> {
+) -> Result<
+    (
+        &'a [ash_protocol::ModelReasoningEffortOption],
+        Option<ReasoningEffort>,
+    ),
+    ModelCommandError,
+> {
     let model = config.model.as_ref().ok_or_else(|| {
         ModelCommandError("Select a model with /model before changing thinking effort".into())
     })?;
@@ -52,10 +58,11 @@ pub(super) fn choices(
         selected_efforts(config, catalog).map_err(|error| error.to_string())?;
     Ok(crate::thread::composer::options::choices(
         "Thinking effort",
-        supported.iter().copied().map(|effort| {
+        supported.iter().map(|option| {
+            let effort = option.effort;
             (
                 effort.as_str().into(),
-                String::new(),
+                option.description.clone().unwrap_or_default(),
                 crate::thread::composer::options::ComposerOption::Effort(effort),
                 current == Some(effort),
             )
@@ -81,7 +88,7 @@ pub(super) fn update<T: JsonRpcTransport>(
     let config = client.read_config()?;
     let (supported, current) = selected_efforts(&config, catalog)?;
     let effort = match change {
-        Change::Set(effort) if supported.contains(&effort) => effort,
+        Change::Set(effort) if supported.iter().any(|option| option.effort == effort) => effort,
         Change::Set(_) => {
             return Err(ModelCommandError(
                 "Use /effort to choose a supported thinking effort".into(),
@@ -92,7 +99,7 @@ pub(super) fn update<T: JsonRpcTransport>(
                 Some(effort) => {
                     let index = supported
                         .iter()
-                        .position(|value| *value == effort)
+                        .position(|option| option.effort == effort)
                         .ok_or_else(|| {
                             ModelCommandError(
                                 "Use /effort to choose a supported thinking effort".into(),
@@ -121,7 +128,7 @@ pub(super) fn update<T: JsonRpcTransport>(
                 }
                 None => 0,
             };
-            supported[next]
+            supported[next].effort
         }
     };
     client.update_config(ConfigUpdateParams {

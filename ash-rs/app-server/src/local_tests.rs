@@ -2473,7 +2473,7 @@ fn remove_config_files(path: &Path) {
 
 fn model_ref(model: &str) -> ModelRef {
     ModelRef::new(
-        ProviderId::new("test").unwrap(),
+        ProviderId::new("glm").unwrap(),
         ModelId::new(model).unwrap(),
     )
 }
@@ -2676,7 +2676,7 @@ fn missing_context_blocks_execution_until_the_exact_model_is_configured() {
         catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
         resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
     };
-    assert!(service.list().is_ok());
+    service.list().unwrap();
     let frozen = service
         .snapshot(ModelSelection::ConfiguredDefault)
         .unwrap()
@@ -2788,7 +2788,7 @@ fn missing_context_blocks_execution_until_the_exact_model_is_configured() {
     );
     assert!(!gate.state.lock().unwrap().entered);
 
-    let mut connection = ModelProviderConfig::new(ProviderId::new("test").unwrap());
+    let mut connection = ModelProviderConfig::new(ProviderId::new("glm").unwrap());
     connection.base_url = Some("https://example.test/v1".into());
     connection.max_output_tokens = Some(2_048);
     connection.model_context.insert(
@@ -2897,11 +2897,11 @@ fn configure_test_provider(config: &ConfigStore, revision: ConfigRevision) -> Co
             expected_revision: revision,
             command: UserConfigCommand::ConfigureConnection {
                 connection: ash_protocol::ModelConnectionId::new(
-                    ProviderId::new("test").unwrap().as_str(),
+                    ProviderId::new("glm").unwrap().as_str(),
                 )
                 .unwrap(),
                 config: {
-                    let mut provider = ModelProviderConfig::new(ProviderId::new("test").unwrap());
+                    let mut provider = ModelProviderConfig::new(ProviderId::new("glm").unwrap());
                     provider.base_url = Some("https://example.test/v1".into());
                     provider
                 },
@@ -3224,7 +3224,7 @@ fn local_model_resolution_applies_dir_model_at_the_next_safe_point() {
         &path,
         r#"
 [agent.model]
-provider = "test"
+provider = "glm"
 model = "dir-model"
 "#,
     )
@@ -3280,7 +3280,7 @@ fn local_model_resolution_rechecks_directory_config_permissions() {
     let path = root.path().join("config.toml");
     std::fs::write(
         &path,
-        "[agent.model]\nprovider = 'test'\nmodel = 'dir-model'\n",
+        "[agent.model]\nprovider = 'glm'\nmodel = 'dir-model'\n",
     )
     .unwrap();
     let dir_id = Dir::open_local(root.path()).unwrap().id();
@@ -3804,11 +3804,13 @@ fn invoke_text(model: &dyn ModelService, prompt: &str) -> String {
 }
 
 fn test_provider_registry() -> ProviderConfigRegistry {
-    let mut registry = ProviderConfigRegistry::builtin();
+    // ConfigStore accepts registered vendor identities. GLM has no same-named built-in
+    // connection, so capturing config preserves this isolated synthetic catalog.
+    let mut registry = ProviderConfigRegistry::new();
     registry
         .register(
             ProviderDefinition::new(
-                ProviderId::new("test").unwrap(),
+                ProviderId::new("glm").unwrap(),
                 "Test",
                 ProviderAdapter::OpenAiCompatible,
                 ApiProfile::OpenAiChatCompletions,
@@ -3831,7 +3833,14 @@ fn test_provider_registry() -> ProviderConfigRegistry {
             ),
         )
         .unwrap();
-    registry
+    let mut product_registry = ProviderConfigRegistry::builtin();
+    product_registry
+        .merge(
+            registry,
+            model_provider_info::RegistryMergePolicy::ReplaceExisting,
+        )
+        .unwrap();
+    product_registry
 }
 
 #[test]
@@ -4575,6 +4584,26 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
     let catalog = service.list().unwrap();
     let entry = catalog.iter().find(|entry| entry.model == model).unwrap();
     assert!(entry.fast_enabled);
+    assert_eq!(
+        entry.settings.default_service_tier.as_deref(),
+        Some("default")
+    );
+    assert_eq!(
+        entry.settings.acceleration,
+        Some(ash_protocol::ModelAcceleration::ServiceTier {
+            service_tier: "priority".into()
+        })
+    );
+    let tiers = entry.settings.service_tiers.as_ref().unwrap();
+    assert_eq!(
+        tiers
+            .iter()
+            .map(|tier| tier.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["default", "priority"]
+    );
+    assert_eq!(tiers[1].name, "Fast");
+    assert!(!tiers[1].description.is_empty());
     assert_eq!(entry.context_window, Some(1_000_000));
     assert_eq!(entry.default_context_window, Some(272_000));
     assert_eq!(entry.context_window_options, vec![272_000, 1_000_000]);
@@ -4619,11 +4648,20 @@ fn model_settings_snapshot_passes_effective_catalog_metadata_to_the_provider() {
     info.context_window = ash_protocol::ContextWindow::Known(128000);
     info.settings.verbosity = ash_protocol::CapabilitySupport::Supported;
     info.settings.default_verbosity = Some(ash_protocol::ModelVerbosity::Low);
-    let mut registry = ProviderConfigRegistry::builtin();
+    info.settings.service_tiers = Some(vec![ash_protocol::ModelServiceTier {
+        id: "priority".into(),
+        name: "Fast".into(),
+        description: "Priority processing".into(),
+    }]);
+    info.settings.default_service_tier = Some("priority".into());
+    info.settings.acceleration = Some(ash_protocol::ModelAcceleration::ServiceTier {
+        service_tier: "priority".into(),
+    });
+    let mut registry = ProviderConfigRegistry::new();
     registry
         .register(
             ProviderDefinition::new(
-                ProviderId::new("test").unwrap(),
+                ProviderId::new("glm").unwrap(),
                 "Test",
                 ProviderAdapter::OpenAiCompatible,
                 ApiProfile::OpenAiResponses,

@@ -141,6 +141,7 @@ pub(crate) fn count_input_tokens(
 ) -> Result<InputTokenCount, ApiError> {
     let mut count_request = request.clone();
     count_request.service_tier = None;
+    count_request.speed = None;
     let response = crate::requests::post_json_to_path(
         client,
         target,
@@ -231,18 +232,11 @@ fn build_request_with_prelude(
             json!(request.max_output_tokens.unwrap_or(4096)),
         ),
     ]);
-    match request.service_tier {
-        Some(ash_protocol::ModelServiceTier::Fast) => {
-            body.insert("speed".into(), Value::String("fast".into()));
-            body.insert("service_tier".into(), Value::String("standard_only".into()));
-        }
-        Some(ash_protocol::ModelServiceTier::Priority) => {
-            body.insert("service_tier".into(), Value::String("auto".into()));
-        }
-        Some(ash_protocol::ModelServiceTier::Standard) => {
-            body.insert("service_tier".into(), Value::String("standard_only".into()));
-        }
-        None => {}
+    if let Some(tier) = &request.service_tier {
+        body.insert("service_tier".into(), Value::String(tier.clone()));
+    }
+    if request.speed == Some(ash_protocol::ModelSpeed::Fast) {
+        body.insert("speed".into(), Value::String("fast".into()));
     }
     let mut system: Vec<Value> = prelude
         .iter()
@@ -564,7 +558,7 @@ pub(super) fn headers(
     headers: &mut Vec<ash_http_client::HttpHeader>,
 ) -> Result<(), ApiError> {
     crate::headers::insert(headers, "anthropic-version", "2023-06-01")?;
-    if request.service_tier == Some(ash_protocol::ModelServiceTier::Fast) {
+    if request.speed == Some(ash_protocol::ModelSpeed::Fast) {
         const FAST_BETA: &str = "fast-mode-2026-02-01";
         if let Some(header) = headers
             .iter_mut()

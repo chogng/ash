@@ -15,9 +15,10 @@ export function buildModelPickerItems(models: readonly ModelCatalogEntry[], sele
 		const details = [entry.model.provider, entry.model.model];
 		if (isSelected) details.push(localize('chat.modelPicker.current', 'Current'));
 		if (entry.contextWindow) details.push(localize('chat.modelPicker.context', '{0} context tokens', entry.contextWindow.toLocaleString()));
-		if (entry.supportedReasoningEfforts?.length) details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.map(modelPickerEffortLabel).join(', ')));
+		if (entry.supportedReasoningEfforts?.length) details.push(localize('chat.modelPicker.efforts', 'Thinking: {0}', entry.supportedReasoningEfforts.map(option => modelPickerEffortLabel(option.effort)).join(', ')));
 		return {
 			label: entry.displayName,
+			description: entry.description ?? undefined,
 			detail: details.join(' · '),
 			picked: isSelected,
 			entry,

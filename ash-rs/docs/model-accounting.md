@@ -173,11 +173,13 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 | 机制 | 当前模型 | 请求表达 | 结算依据 |
 | --- | --- | --- | --- |
-| OpenAI 同一模型的服务等级 | GPT-5.6 | 请求 `fast` 或 `priority` | 响应 `service_tier`；`priority` 用 Fast 价，`default` 用 Standard 价 |
+| OpenAI 同一模型的服务等级 | GPT-5.6 | 请求 `priority` | 响应 `service_tier`；`priority` 用 Fast 价，`default` 用 Standard 价 |
 | Google 同一模型的服务等级 | Gemini 3.6 Flash | 请求 `priority` | 响应 `x-gemini-service-tier`；被降到 `standard` 时用 Standard 价 |
 | xAI 同一模型的服务等级 | Grok 4.5 | 请求 `priority` | 响应 `service_tier`；只有 `priority` 使用 2 倍价格 |
 | 独立高速模型 ID | Kimi K2.7 Code HighSpeed | 请求 `kimi-k2.7-code-highspeed` | 响应实际模型；不能给普通模型追加 Fast 标签 |
 | 当前模型不支持加速 | Claude Sonnet 4、DeepSeek V4 Pro、GLM-5.1 | 不允许构造不存在的服务等级 | 只匹配这些模型已验证的公开规则 |
+
+模型目录的 `settings.serviceTiers` 现在保存供应商等级 ID、展示名称和说明，`settings.acceleration` 分别声明服务等级、速度参数或高速型号。OpenAI 的展示名称 `Fast` 对应请求 ID `priority`；Anthropic 的 `speed=fast` 是独立速度参数；Kimi 高速型号由冻结的模型声明选择，再由连接转换上游 ID。名称和“用量增加”等说明只用于界面，不参与 rate selector 或价格倍率。可解析格式见 [模型目录说明](../model-provider-info/README.md#统一静态模型清单)。
 
 产品层可以把这些能力统一展示为“加速”，但调用事实和价目表必须保留供应商原始含义。`requested_service_tier`、`applied_service_tier`、`service_tier_evidence` 和 `resolved_model` 是独立字段，不能只留下一个通用 `Fast` 枚举。证据来源至少区分响应字段、响应头和供应商明确承诺按已接受请求值计费；没有足够证据时不能把请求值当成计费事实。
 

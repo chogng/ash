@@ -41,7 +41,7 @@
 | `ApprovalReviewModelDefault` | automatic review default | active model 或 provider-declared model |
 | `ProviderConfigError` | static/normalization error | 不包含 transport/auth failure |
 
-`model_provider_config_schema()` 与 `provider_definition_schema()` 从 Rust types 生成 JSON Schema；
+`model_provider_config_schema()`、`provider_definition_schema()` 与 `model_catalog_schema()` 从 Rust types 生成 JSON Schema；
 schema 没有第二份手写来源。
 
 `ProviderConfigRegistry::with_configs` 只接受内置接入、已注册供应商或具有完整声明的自定义接入。未知供应商返回 `UnknownProvider`；插件定义必须先注册，不能仅靠配置中的 ID 声明。配置存储在保存、导入和严格读取时校验连接，规则见 [模型接入配置](../../docs/config.md#模型接入配置)。
@@ -145,7 +145,7 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 
 ## 统一静态模型清单
 
-六家官方接口对照、通用字段结构和当前缺口见 [通用模型声明规范](docs/model-template.md)。该文档是设计建议；当前可解析字段仍以本节和 Rust 契约为准。
+六家官方接口对照、通用字段结构和当前缺口见 [通用模型声明规范](docs/model-template.md)。该文档区分当前可解析字段、Codex 字段对应关系和未实现的通用参数设计；当前格式由 Rust 契约和生成的 Schema 定义。
 
 产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和完整的 `instructions.body`，每个模型的正文与 revision 可以独立修改。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
 
@@ -154,13 +154,18 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
   "provider_id": "provider-id",
   "model_id": "model-id",
   "display_name": "Display Name",
+  "description": "A short description of the model",
   "context_window": 1000000,
   "context_window_options": [200000, 1000000],
   "capabilities": {
     "tools": true,
     "reasoning": true
   },
-  "supported_reasoning_efforts": ["low", "medium", "high"],
+  "supported_reasoning_efforts": [
+    { "effort": "low", "description": "Fast responses with lighter reasoning" },
+    { "effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks" },
+    { "effort": "high", "description": "Greater reasoning depth for complex problems" }
+  ],
   "model_reasoning_effort": "medium",
   "instructions": {
     "revision": "model-base-v2",
@@ -169,11 +174,45 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 }
 ```
 
-条目放在顶层 `models` 数组中。只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+条目放在顶层 `models` 数组中。顶层 `$schema` 引用 `./models.schema.json`，编辑器可以检查字段名、类型和枚举并提供补全。Schema 从实际 JSON 解析声明生成，运行时仍负责重复 ID、默认值引用和上下文预算等跨字段校验。修改解析契约后运行：
 
-`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务档位及默认值、工具输出限额。`verbosity` 和 `reasoningSummary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/settings.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
+```sh
+just generate-model-catalog-schema
+just generate-model-catalog-schema --check
+```
 
-已与本地 Codex 清单准确匹配的 8 个 OpenAI 型号补入已声明的模态、verbosity、摘要和工具输出预算，并补齐并行工具与原图能力。服务档位使用 Ash 现有的 standard/fast/priority 契约，由接入 adapter 编码；声明不证明账号权益。其他型号保留未知值，不根据名字补造能力。Codex 的展示、升级提示、搜索工具类型及尚无调用方的字段未进入这份数据。
+`description` 是可选的模型简介；每个推理选项包含请求值 `effort` 和可选的 `description`。缺少说明表示未知，不生成型号能力或固定 token 预算；已填写说明不能空白，同一档位不能重复。App Server revision 14／capability version 17 使用这个对象格式，旧客户端会在初始化时拒绝不兼容的版本，服务端与客户端需一起更新。目录、App Server、桌面和 TUI 保留这些信息，模型选择器显示简介，推理菜单向读屏提供档位说明，TUI 推理面板显示档位说明。已与 Codex 准确匹配的型号保留原始简介和说明，其他型号使用 Ash 的通用档位说明；同名档位不保证跨供应商有相同推理投入。
+
+只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+
+`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务等级选项及默认值、加速机制、工具输出限额。`verbosity` 和 `reasoningSummary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/settings.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
+
+已与本地 Codex 清单准确匹配的 8 个 OpenAI 型号补入已声明的模态、verbosity、摘要和工具输出预算，并补齐并行工具与原图能力。服务等级的 `id` 保存供应商请求值，`name` 和 `description` 保存展示名称及说明；`Fast` 是名称，OpenAI 的等级 ID 是 `priority`，不再同时声明 `fast` 和 `priority` 两个选项。声明不证明账号权益。没有证据的字段继续保持未知。Codex 的模型简介和推理档位说明已进入这份数据；升级提示、展示排序、搜索工具类型及尚无调用方的字段不写入模型规格。
+
+服务等级和加速声明使用以下可解析格式：
+
+```json
+{
+  "serviceTiers": [
+    { "id": "default", "name": "Standard", "description": "Standard processing" },
+    { "id": "priority", "name": "Fast", "description": "Faster responses, increased usage" }
+  ],
+  "defaultServiceTier": "default",
+  "acceleration": { "type": "serviceTier", "serviceTier": "priority" }
+}
+```
+
+以上对象放在条目的 `settings` 中。ID 唯一，ID、名称与说明不能空白；`defaultServiceTier` 和服务等级加速选项都必须引用已声明的 ID。默认值是 Ash 的请求默认值，不代表供应商的默认配置。速度倍数未经实测时，说明不承诺固定倍数；说明也不参与价格计算。
+
+| 加速机制 | `settings.acceleration` | 真实请求 |
+| --- | --- | --- |
+| 服务等级 | `{"type":"serviceTier","serviceTier":"priority"}` | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID |
+| 速度参数 | `{"type":"speed","speed":"fast","name":"Fast","description":"Faster responses, increased usage"}` | 独立的 `speed=fast` 和所属接口的 beta Header；不伪造一个 Fast 服务等级 |
+| 高速型号 | `{"type":"model","model":"kimi-k2.7-code-highspeed","name":"Fast","description":"Uses a separate high-speed model, increased usage"}` | 从冻结的模型声明选择高速型号，再应用所选连接的上游 ID 别名 |
+
+用户的加速开关仍以连接上的 `fastModels` 保存。显式请求等级或速度优先于同类参数的加速偏好；关闭开关使用声明的请求默认等级。服务等级 ID 原样传到请求字段，只有 ChatGPT 订阅的显式 `default` 按接口约定省略。预先计数不发送等级、速度或加速 beta Header。订阅连接仍单独限制是否可加速，不能从公开 API 能力推断。
+
+前端模型设置卡读取加速选项的名称和说明，保留键盘开关、焦点和保存行为，并把说明提供给读屏。内置文案通过现有 NLS 提供英文和中文；供应商自定义文案保留原文。实际型号、实际服务等级与证据进入调用/计价记录，详情见 [模型计价](../docs/model-accounting.md#加速调用如何进入计价)。
 
 内置完整正文提升为 `model-base-v2`，在保留各模型原有指导的基础上，补入任务完成、环境调查、工具使用、编辑、验证、权限、委托和结果报告规则。正文长度不证明模型效果，质量与额外输入成本仍需真实模型对照评测。
 

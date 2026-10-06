@@ -41,6 +41,10 @@ impl CatalogRecord {
             settings: (info.settings != ash_protocol::ModelSettings::default())
                 .then_some(MetadataSource::ProviderSeed),
             display_name: Some(MetadataSource::ProviderSeed),
+            description: info
+                .description
+                .as_ref()
+                .map(|_| MetadataSource::ProviderSeed),
             context_window: match info.context_window {
                 ContextWindow::Known(_) => Some(MetadataSource::ProviderSeed),
                 ContextWindow::Unknown => None,
@@ -147,6 +151,10 @@ fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
         record.info.access = access;
     }
     let source = MetadataSource::ProviderLive;
+    if let Some(description) = &patch.description {
+        record.info.description = Some(description.clone());
+        record.provenance.description = Some(source);
+    }
     if let Some(display_name) = patch
         .display_name
         .as_ref()
@@ -200,7 +208,23 @@ fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
         source,
     );
     if let Some(efforts) = &patch.supported_reasoning_efforts {
-        record.info.supported_reasoning_efforts = efforts.clone();
+        // A discovery result owns the supported set and its order. Missing explanation is
+        // unknown evidence, so preserve known copy only for the same effort on this model.
+        record.info.supported_reasoning_efforts = efforts
+            .iter()
+            .map(|option| {
+                let mut merged = option.clone();
+                if merged.description.is_none() {
+                    merged.description = record
+                        .info
+                        .supported_reasoning_efforts
+                        .iter()
+                        .find(|previous| previous.effort == option.effort)
+                        .and_then(|previous| previous.description.clone());
+                }
+                merged
+            })
+            .collect();
         record.provenance.supported_reasoning_efforts = Some(source);
     }
     if let Some(effort) = patch.model_reasoning_effort {
@@ -240,6 +264,7 @@ fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<Metad
     let sources = [
         provenance.settings,
         provenance.display_name,
+        provenance.description,
         provenance.context_window,
         provenance.auto_compact_token_limit,
         provenance.capabilities.tools,
@@ -294,15 +319,25 @@ fn merge_settings(
     }
     if let Some(tiers) = &incoming.service_tiers {
         current.service_tiers = Some(tiers.clone());
+        if let Some(ash_protocol::ModelAcceleration::ServiceTier { service_tier }) =
+            &current.acceleration
+            && !tiers.iter().any(|entry| &entry.id == service_tier)
+        {
+            current.acceleration = None;
+        }
         if current
             .default_service_tier
-            .is_some_and(|tier| !tiers.contains(&tier))
+            .as_ref()
+            .is_some_and(|tier| !tiers.iter().any(|entry| &entry.id == tier))
         {
             current.default_service_tier = None;
         }
     }
     if incoming.default_service_tier.is_some() {
-        current.default_service_tier = incoming.default_service_tier;
+        current.default_service_tier = incoming.default_service_tier.clone();
+    }
+    if incoming.acceleration.is_some() {
+        current.acceleration = incoming.acceleration.clone();
     }
     if incoming.tool_output_limit.is_some() {
         current.tool_output_limit = incoming.tool_output_limit;

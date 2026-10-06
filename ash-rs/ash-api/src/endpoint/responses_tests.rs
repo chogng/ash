@@ -24,13 +24,13 @@ fn responses_encode_explicit_verbosity_and_summary_without_enabling_effort() {
 }
 
 #[test]
-fn fast_service_tier_uses_each_endpoint_contract_and_is_omitted_from_token_counting() {
+fn priority_service_tier_preserves_its_id_and_is_omitted_from_token_counting() {
     let mut request = ModelRequest::text("hello");
     for (endpoint, tier) in [
-        (ApiEndpoint::OpenAiResponses, "fast"),
+        (ApiEndpoint::OpenAiResponses, "priority"),
         (ApiEndpoint::ChatGptResponses, "priority"),
     ] {
-        request.service_tier = Some(ash_protocol::ModelServiceTier::Fast);
+        request.service_tier = Some("priority".into());
         let body = build_request(endpoint, "gpt-6-astra", &request).unwrap();
         assert_eq!(body["service_tier"], tier);
         assert!(
@@ -39,7 +39,7 @@ fn fast_service_tier_uses_each_endpoint_contract_and_is_omitted_from_token_count
                 .get("service_tier")
                 .is_none()
         );
-        request.service_tier = Some(ash_protocol::ModelServiceTier::Standard);
+        request.service_tier = Some("default".into());
         let body = build_request(endpoint, "gpt-6-astra", &request).unwrap();
         if endpoint == ApiEndpoint::OpenAiResponses {
             assert_eq!(body["service_tier"], "default");
@@ -47,7 +47,7 @@ fn fast_service_tier_uses_each_endpoint_contract_and_is_omitted_from_token_count
             assert!(body.get("service_tier").is_none());
         }
     }
-    request.service_tier = Some(ash_protocol::ModelServiceTier::Priority);
+    request.service_tier = Some("priority".into());
     assert_eq!(
         build_request(ApiEndpoint::OpenAiResponses, "grok-4.7", &request).unwrap()["service_tier"],
         "priority"

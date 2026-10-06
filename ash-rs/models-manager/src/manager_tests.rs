@@ -140,12 +140,14 @@ fn gpt_6_1_sol_is_selectable_and_resolves_its_declared_metadata() {
     assert!(
         !info
             .supported_reasoning_efforts
-            .contains(&ReasoningEffort::None)
+            .iter()
+            .any(|option| option.effort == ReasoningEffort::None)
     );
     assert!(
         !info
             .supported_reasoning_efforts
-            .contains(&ReasoningEffort::Minimal)
+            .iter()
+            .any(|option| option.effort == ReasoningEffort::Minimal)
     );
 }
 
@@ -803,8 +805,22 @@ async fn corrupt_disk_cache_is_rebuilt_from_discovery() {
 #[tokio::test]
 async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
     let mut seed = ModelInfo::new(model_id("alpha"), "Alpha");
+    seed.description = Some("Seed overview".into());
+    seed.supported_reasoning_efforts = vec![ash_protocol::ModelReasoningEffortOption {
+        effort: ReasoningEffort::Medium,
+        description: Some("Seed explanation".into()),
+    }];
     seed.settings.verbosity = CapabilitySupport::Supported;
     seed.settings.default_verbosity = Some(ash_protocol::ModelVerbosity::Low);
+    seed.settings.service_tiers = Some(vec![ash_protocol::ModelServiceTier {
+        id: "priority".into(),
+        name: "Fast".into(),
+        description: "Priority processing".into(),
+    }]);
+    seed.settings.default_service_tier = Some("priority".into());
+    seed.settings.acceleration = Some(ash_protocol::ModelAcceleration::ServiceTier {
+        service_tier: "priority".into(),
+    });
     seed.settings.input_modalities = Some(vec![
         ash_protocol::ModelInputModality::Text,
         ash_protocol::ModelInputModality::Image,
@@ -819,6 +835,7 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
     );
     let scope = dynamic_scope("strict", "settings-account");
     let first = ModelMetadataPatch {
+        supported_reasoning_efforts: Some(vec![ReasoningEffort::Medium.into()]),
         settings: ash_protocol::ModelSettings {
             tool_output_limit: Some(ash_protocol::ModelToolOutputLimit::Tokens(4000)),
             ..Default::default()
@@ -826,8 +843,18 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
         ..Default::default()
     };
     let unsupported = ModelMetadataPatch {
+        description: Some("Live overview".into()),
+        supported_reasoning_efforts: Some(vec![ash_protocol::ModelReasoningEffortOption {
+            effort: ReasoningEffort::High,
+            description: Some("Live explanation".into()),
+        }]),
         settings: ash_protocol::ModelSettings {
             verbosity: CapabilitySupport::Unsupported,
+            service_tiers: Some(vec![ash_protocol::ModelServiceTier {
+                id: "flex".into(),
+                name: "Flex".into(),
+                description: "Flexible processing".into(),
+            }]),
             ..Default::default()
         },
         ..Default::default()
@@ -864,10 +891,48 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
     );
     let after = manager.refresh(scope, source).await.unwrap();
     assert_eq!(
+        before.entries()[0].info().description.as_deref(),
+        Some("Seed overview")
+    );
+    assert_eq!(
+        before.entries()[0].info().supported_reasoning_efforts[0]
+            .description
+            .as_deref(),
+        Some("Seed explanation")
+    );
+    assert_eq!(
+        after.entries()[0].info().description.as_deref(),
+        Some("Live overview")
+    );
+    assert_eq!(
+        before.entries()[0].info().supported_reasoning_efforts[0].effort,
+        ReasoningEffort::Medium
+    );
+    assert_eq!(
+        after.entries()[0].info().supported_reasoning_efforts[0]
+            .description
+            .as_deref(),
+        Some("Live explanation")
+    );
+    assert_eq!(
         after.entries()[0].info().settings.verbosity,
         CapabilitySupport::Unsupported
     );
     assert_eq!(after.entries()[0].info().settings.default_verbosity, None);
+    assert_eq!(
+        after.entries()[0].info().settings.default_service_tier,
+        None
+    );
+    assert_eq!(after.entries()[0].info().settings.acceleration, None);
+    assert_eq!(
+        before.entries()[0]
+            .info()
+            .settings
+            .default_service_tier
+            .as_deref(),
+        Some("priority")
+    );
+    assert!(before.entries()[0].info().settings.acceleration.is_some());
     assert_eq!(
         after.entries()[0].info().settings.tool_output_limit,
         Some(ash_protocol::ModelToolOutputLimit::Tokens(4000))

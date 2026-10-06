@@ -8,6 +8,28 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use std::time::Duration;
 
+fn catalog_levels(levels: &[ReasoningEffort]) -> Vec<ash_protocol::ModelReasoningEffortOption> {
+    levels.iter().map(|effort| ash_protocol::ModelReasoningEffortOption {
+        effort: *effort,
+        description: Some(match effort {
+            ReasoningEffort::None => "No reasoning. Best for straightforward tasks.",
+            ReasoningEffort::Minimal | ReasoningEffort::Low => "Less reasoning for quick, straightforward tasks.",
+            ReasoningEffort::Medium => "Balanced reasoning for everyday tasks.",
+            ReasoningEffort::High => "More reasoning for complex tasks and careful verification.",
+            ReasoningEffort::ExtraHigh => "Deeper reasoning for difficult tasks; may take longer.",
+            ReasoningEffort::Max => "Maximum reasoning. May use more tokens and take longer; use for the hardest tasks.",
+        }.into()),
+    }).collect()
+}
+
+fn selector(
+    levels: &[ReasoningEffort],
+    current: Option<ReasoningEffort>,
+    mode: CollaborationMode,
+) -> EffortSelector {
+    EffortSelector::new(&catalog_levels(levels), current, mode)
+}
+
 fn key(selector: &mut EffortSelector, code: KeyCode) -> Outcome {
     selector.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
 }
@@ -46,7 +68,7 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
         CollaborationMode::Ask,
         CollaborationMode::Multitask,
     ] {
-        let mut selector = EffortSelector::new(&levels, Some(ReasoningEffort::High), mode);
+        let mut selector = selector(&levels, Some(ReasoningEffort::High), mode);
         key(&mut selector, KeyCode::Left);
         key(&mut selector, KeyCode::Left);
         key(&mut selector, KeyCode::Tab);
@@ -55,7 +77,7 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
             Outcome::Apply { effort: ReasoningEffort::Low, mode: result } if result == mode));
         assert!(matches!(key(&mut selector, KeyCode::Esc), Outcome::Dismiss));
     }
-    let mut selector = EffortSelector::new(&levels, None, CollaborationMode::Multitask);
+    let mut selector = selector(&levels, None, CollaborationMode::Multitask);
     key(&mut selector, KeyCode::Tab);
     assert!(matches!(
         key(&mut selector, KeyCode::Enter),
@@ -68,7 +90,7 @@ fn effort_selector_stages_edits_and_restores_the_original_task_mode() {
 
 #[test]
 fn effort_selector_held_arrows_adjust_but_held_controls_do_not_apply_or_toggle() {
-    let mut selector = EffortSelector::new(
+    let mut selector = selector(
         &[
             ReasoningEffort::Low,
             ReasoningEffort::High,
@@ -121,7 +143,7 @@ fn effort_selector_keyboard_selection_colors_every_level_without_filling_the_bac
                 context.danger(),
             ];
             for width in [24, 120] {
-                let mut selector = EffortSelector::new(
+                let mut selector = selector(
                     &levels,
                     Some(ReasoningEffort::None),
                     CollaborationMode::Agent,
@@ -177,7 +199,7 @@ fn effort_selector_centers_each_description_line_in_both_languages() {
     for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
         let context = RenderContext::new(&theme, 0).with_language(language);
         for width in [24, 60, 120] {
-            let mut selector = EffortSelector::new(
+            let mut selector = selector(
                 &levels,
                 Some(ReasoningEffort::None),
                 CollaborationMode::Agent,
@@ -221,7 +243,7 @@ fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_ch
     for palette in [ThemePalette::dark(), ThemePalette::light()] {
         let theme = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
         let context = RenderContext::new(&theme, 0);
-        let mut selector = EffortSelector::new(
+        let mut selector = selector(
             &[ReasoningEffort::Low, ReasoningEffort::Max],
             Some(ReasoningEffort::Max),
             CollaborationMode::Agent,
@@ -255,7 +277,7 @@ fn effort_selector_max_colors_advance_on_fixed_ticks_and_stop_after_selection_ch
 #[test]
 fn effort_selector_centers_a_bounded_group_and_labels_both_axis_ends() {
     let context = crate::render::test_context();
-    let mut selector = EffortSelector::new(
+    let mut selector = selector(
         &[
             ReasoningEffort::Low,
             ReasoningEffort::High,
@@ -334,7 +356,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
             ash_protocol::ModelId::new("test-model").unwrap(),
         );
         let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "Test model");
-        info.supported_reasoning_efforts = levels.to_vec();
+        info.supported_reasoning_efforts = catalog_levels(levels);
         info.model_reasoning_effort = levels.last().copied();
         let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
             models: vec![
@@ -350,7 +372,14 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
         });
         let data = crate::models::ModelPickerData::new(catalog, config);
         let mut selector = data.effort_selector(CollaborationMode::Agent).unwrap();
-        assert_eq!(selector.levels, levels);
+        assert_eq!(
+            selector
+                .levels
+                .iter()
+                .map(|option| option.effort)
+                .collect::<Vec<_>>(),
+            levels
+        );
         assert_eq!(selector.selected, count - 1);
         let buffer = render(&selector, 120, context);
         let layout = selector.layout(buffer.area, context);
@@ -403,7 +432,7 @@ fn effort_selector_compresses_then_scrolls_without_losing_selected_ticks() {
     ];
     let context = crate::render::test_context();
     for width in [1, 8, 12, 24, 40, 64, 80, 120] {
-        let mut selector = EffortSelector::new(&levels, Some(levels[0]), CollaborationMode::Agent);
+        let mut selector = selector(&levels, Some(levels[0]), CollaborationMode::Agent);
         for selected in 0..levels.len() {
             let buffer = render(&selector, width, context);
             let layout = selector.layout(buffer.area, context);
@@ -464,7 +493,7 @@ fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
         for capability in [ColorLevel::TrueColor, ColorLevel::Ansi256] {
             let theme = RenderTheme::from_palette(palette, capability).with_terminal_defaults();
             let context = RenderContext::new(&theme, 0);
-            let mut selector = EffortSelector::new(
+            let mut selector = selector(
                 &[ReasoningEffort::Low, ReasoningEffort::High],
                 Some(ReasoningEffort::High),
                 CollaborationMode::Multitask,
@@ -508,7 +537,7 @@ fn effort_selector_multitask_wave_moves_without_changing_text_or_effort() {
 #[test]
 fn effort_selector_multitask_wave_preserves_hover_and_press_feedback() {
     let context = crate::render::test_context();
-    let mut selector = EffortSelector::new(
+    let mut selector = selector(
         &[ReasoningEffort::High],
         Some(ReasoningEffort::High),
         CollaborationMode::Multitask,
@@ -571,7 +600,7 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
         ReasoningEffort::ExtraHigh,
         ReasoningEffort::Max,
     ];
-    let mut selector = EffortSelector::new(
+    let mut selector = selector(
         &levels,
         Some(ReasoningEffort::Max),
         CollaborationMode::Agent,
@@ -611,7 +640,7 @@ fn effort_selector_narrow_layout_keeps_selected_levels_and_pointer_targets_align
 fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
     let theme = RenderTheme::from_palette(ThemePalette::light(), ColorLevel::TrueColor);
     let context = RenderContext::new(&theme, 0).with_language(crate::nls::Language::Chinese);
-    let selector = EffortSelector::new(
+    let selector = selector(
         &[
             ReasoningEffort::Low,
             ReasoningEffort::High,
@@ -634,7 +663,7 @@ fn effort_selector_localizes_live_content_and_wrapped_descriptions() {
 #[test]
 fn effort_selector_hover_and_press_do_not_change_the_keyboard_selection() {
     let context = crate::render::test_context();
-    let mut selector = EffortSelector::new(
+    let mut selector = selector(
         &[
             ReasoningEffort::Low,
             ReasoningEffort::High,
@@ -669,4 +698,50 @@ fn effort_selector_hover_and_press_do_not_change_the_keyboard_selection() {
             assert_eq!(buffer[layout.levels[selected].marker].symbol(), "▲");
         }
     }
+}
+
+#[test]
+fn effort_selector_uses_catalog_copy_and_leaves_unknown_descriptions_empty() {
+    let levels = [
+        ash_protocol::ModelReasoningEffortOption {
+            effort: ReasoningEffort::Low,
+            description: Some("Fast responses with lighter reasoning".into()),
+        },
+        ash_protocol::ModelReasoningEffortOption {
+            effort: ReasoningEffort::High,
+            description: None,
+        },
+    ];
+    let theme = RenderTheme::from_palette(ThemePalette::dark(), ColorLevel::TrueColor);
+    let mut screens = Vec::new();
+    for language in [crate::nls::Language::English, crate::nls::Language::Chinese] {
+        let context = RenderContext::new(&theme, 0).with_language(language);
+        let mut selector = EffortSelector::new(
+            &levels,
+            Some(ReasoningEffort::Low),
+            CollaborationMode::Agent,
+        );
+        assert_eq!(
+            selector.description(),
+            "Fast responses with lighter reasoning"
+        );
+        screens.push(format!(
+            "{language:?}\n{}",
+            text(&render(&selector, 70, context))
+        ));
+        key(&mut selector, KeyCode::Right);
+        assert_eq!(selector.description(), "");
+        assert!(matches!(
+            key(&mut selector, KeyCode::Enter),
+            Outcome::Apply {
+                effort: ReasoningEffort::High,
+                ..
+            }
+        ));
+        screens.push(format!(
+            "{language:?} unknown\n{}",
+            text(&render(&selector, 70, context))
+        ));
+    }
+    crate::tui_assert_snapshot!("effort_catalog_copy", screens.join("\n\n"));
 }

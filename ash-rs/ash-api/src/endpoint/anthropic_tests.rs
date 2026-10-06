@@ -57,7 +57,8 @@ fn provider_prelude_preserves_canonical_content_and_cache_budget() {
 #[test]
 fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
     let mut request = ModelRequest::text("hello");
-    request.service_tier = Some(ash_protocol::ModelServiceTier::Fast);
+    request.speed = Some(ash_protocol::ModelSpeed::Fast);
+    request.service_tier = Some("standard_only".into());
     assert_eq!(
         build_request("claude-opus-5-5", &request).unwrap()["speed"],
         "fast"
@@ -82,7 +83,8 @@ fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
             .value(),
         "other-beta,fast-mode-2026-02-01"
     );
-    request.service_tier = Some(ash_protocol::ModelServiceTier::Standard);
+    request.speed = None;
+    request.service_tier = Some("standard_only".into());
     assert!(
         build_request("claude-opus-5-5", &request)
             .unwrap()
@@ -100,7 +102,7 @@ fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
         build_request("claude-opus-5-5", &request).unwrap()["service_tier"],
         "standard_only"
     );
-    request.service_tier = Some(ash_protocol::ModelServiceTier::Priority);
+    request.service_tier = Some("auto".into());
     assert_eq!(
         build_request("claude-sonnet-4-6", &request).unwrap()["service_tier"],
         "auto"

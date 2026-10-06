@@ -9,14 +9,17 @@ fn model_settings_and_explicit_request_controls_round_trip() {
         "defaultVerbosity": "low",
         "reasoningSummary": "supported",
         "defaultReasoningSummary": "none",
-        "serviceTiers": ["standard", "priority"],
-        "defaultServiceTier": "standard",
+        "serviceTiers": [{"id":"default","name":"Standard","description":"Standard processing"}, {"id":"priority","name":"Fast","description":"Faster responses, increased usage"}],
+        "defaultServiceTier": "default",
+        "acceleration": {"type":"serviceTier","serviceTier":"priority"},
         "toolOutputLimit": {"mode": "tokens", "limit": 10000}
     });
     let settings: ModelSettings = serde_json::from_value(value.clone()).unwrap();
     settings.validate().unwrap();
     assert_eq!(serde_json::to_value(&settings).unwrap(), value);
     let mut request = ModelRequest::text("hello");
+    request.service_tier = Some("priority".into());
+    request.speed = Some(ModelSpeed::Fast);
     request.verbosity = Some(ModelVerbosity::High);
     request.reasoning_summary = Some(ModelReasoningSummary::Detailed);
     let value = serde_json::to_value(&request).unwrap();
@@ -1139,6 +1142,7 @@ fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
         verbosity: None,
         reasoning_summary: None,
         service_tier: None,
+        speed: None,
         instructions: None,
         input: vec![
             InputItem::Message(Message {

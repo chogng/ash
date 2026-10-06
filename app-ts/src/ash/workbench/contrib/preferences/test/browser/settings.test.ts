@@ -662,7 +662,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let rejectAdvisorSave = false;
 	const chatService = {
 		onDidChangeModels: modelsChanged.event,
-		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherAdvisorModel, displayName: 'Muse Spark 1.3', supportedReasoningEfforts: ['high'] }, { model, displayName: 'GPT Test' }],
+		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherAdvisorModel, displayName: 'Muse Spark 1.3', supportedReasoningEfforts: [{ effort: 'high' }] }, { model, displayName: 'GPT Test' }],
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => {
 			if (rejectAdvisorSave) { throw new Error('Preference write failed'); }

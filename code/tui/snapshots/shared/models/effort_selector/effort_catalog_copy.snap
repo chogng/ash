@@ -1,0 +1,29 @@
+---
+source: code/tui/src/models/effort_selector_tests.rs
+expression: "screens.join(\"\\n\\n\")"
+---
+English
+                Faster      Smarter
+                ───▲───────────────    Multitask  off
+                  low        high
+
+                 Fast responses with lighter reasoning
+
+English unknown
+                Faster      Smarter
+                ───────────────▲───    Multitask  off
+                  low        high
+
+
+
+Chinese
+                 更快         更聪明
+                 ───▲───────────────    多任务  关闭
+                   low        high
+
+                        较轻的推理，更快的响应
+
+Chinese unknown
+                 更快         更聪明
+                 ───────────────▲───    多任务  关闭
+                   low        high

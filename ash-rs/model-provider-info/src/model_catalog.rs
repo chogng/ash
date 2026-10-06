@@ -15,15 +15,31 @@ pub static STATIC_MODEL_CATALOG: LazyLock<Vec<StaticModelSpec>> = LazyLock::new(
     parse_catalog(include_str!("../models.json")).expect("bundled model catalog is valid")
 });
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ModelCatalog {
+    #[serde(rename = "$schema")]
+    schema: Option<String>,
     models: Vec<StaticModelSpec>,
+}
+
+/// Schema of the editable catalog, including its nullable capability declarations.
+pub fn model_catalog_schema() -> schemars::Schema {
+    schemars::schema_for!(ModelCatalog)
 }
 
 // Validate at the data boundary: a malformed registered model is an error, not an unknown model.
 fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> {
     let mut catalog: ModelCatalog = serde_json::from_str(json)?;
+    if catalog
+        .schema
+        .as_deref()
+        .is_some_and(|schema| schema != "./models.schema.json")
+    {
+        return Err(serde_json::Error::custom(
+            "model catalog schema must reference ./models.schema.json",
+        ));
+    }
     let mut identities = HashSet::new();
     for spec in &mut catalog.models {
         spec.settings
@@ -40,6 +56,11 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
         if spec.display_name.trim().is_empty() {
             return Err(serde_json::Error::custom("model display name is empty"));
         }
+        ash_protocol::ModelInfo::validate_presentation(
+            spec.description.as_deref(),
+            &spec.supported_reasoning_efforts,
+        )
+        .map_err(serde_json::Error::custom)?;
         match spec.context_window {
             ContextWindow::Known(capacity) => {
                 // Without separate presets the full declared capacity is the only budget.
@@ -75,7 +96,10 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
             ));
         }
         if let Some(effort) = spec.model_reasoning_effort
-            && !spec.supported_reasoning_efforts.contains(&effort)
+            && !spec
+                .supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == effort)
         {
             return Err(serde_json::Error::custom(
                 "default reasoning effort is not supported",

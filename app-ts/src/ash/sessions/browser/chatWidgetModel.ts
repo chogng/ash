@@ -199,7 +199,7 @@ export class ChatWidgetModel extends Disposable {
 			? selection.model === identity ? selection.effort : undefined
 			: lastTurn?.model && modelRefIdentity(lastTurn.model) === identity ? lastTurn.reasoningEffort ?? undefined : undefined;
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
-		return effort && entry?.supportedReasoningEfforts?.includes(effort) ? effort : undefined;
+		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
 	}
 
 	get items(): readonly IChatListItem[] {
@@ -304,7 +304,7 @@ export class ChatWidgetModel extends Disposable {
 		const model = this.selectedModel;
 		if (!model || this.isAutomaticModel) throw new Error('Select a model before setting its thinking effort');
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === modelRefIdentity(model));
-		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.includes(effort))) {
+		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.some(option => option.effort === effort))) {
 			throw new Error('The selected model does not support this thinking effort');
 		}
 		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;

@@ -14,6 +14,8 @@ export interface IModelCardOptions {
 export class ModelCard extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly fast: Switch;
+	private readonly fastLabelDomNode: HTMLElement;
+	private readonly fastDescriptionDomNode: HTMLElement;
 	private readonly context: Switch;
 	private readonly contextRow: HTMLElement;
 	private readonly contextLabelDomNode: HTMLElement;
@@ -26,11 +28,15 @@ export class ModelCard extends Disposable {
 		this.domNode = h(ownerDocument, 'section');
 		this.domNode.className = 'ash-chat-model-card';
 		this.domNode.tabIndex = -1;
+		this.fastLabelDomNode = h(ownerDocument, 'span');
 		this.fast = this._register(new Switch(this.domNode, {
-			label: localize('chat.modelPicker.fast', 'Fast'),
+			content: this.fastLabelDomNode,
 			ariaLabel: localize('chat.modelPicker.fast', 'Fast'),
 			contentPlacement: 'before-control',
 		}));
+		this.fastDescriptionDomNode = h(ownerDocument, 'p');
+		this.fastDescriptionDomNode.className = 'ash-chat-model-card-description';
+		this.domNode.append(this.fastDescriptionDomNode);
 		this.contextRow = h(ownerDocument, 'div');
 		this.contextRow.className = 'ash-chat-model-card-context';
 		this.domNode.append(this.contextRow);
@@ -68,6 +74,13 @@ export class ModelCard extends Disposable {
 		const expanded = entry.contextWindowOptions[1];
 		const label = canExpand ? (expanded >= 1_000_000 ? `${Number((expanded / 1_000_000).toFixed(2))}M` : `${Number((expanded / 1_000).toFixed(1))}k`) : '';
 		const capacity = entry.contextWindow;
+		const name = entry.acceleration ? localizeModelOption(entry.acceleration.name) : localize('chat.modelPicker.fast', 'Fast');
+		const description = entry.acceleration ? localizeModelOption(entry.acceleration.description) : '';
+		this.fastLabelDomNode.textContent = name;
+		this.fast.setAriaLabel(name);
+		this.fast.input.setAttribute('aria-description', description);
+		this.fastDescriptionDomNode.textContent = description;
+		this.fastDescriptionDomNode.hidden = description.length === 0;
 		this.fast.checked = entry.fast === true;
 		this.fast.enabled = entry.supportsFast === true && !this.isSaving;
 		this.fast.busy = this.isSaving;
@@ -101,5 +114,16 @@ export class ModelCard extends Disposable {
 				if (focusedInput && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) { focusedInput.focus(); }
 			}
 		}
+	}
+}
+
+// Translate Ash-owned catalog copy; text supplied by a custom provider retains its own wording.
+function localizeModelOption(value: string): string {
+	switch (value) {
+		case 'Fast': return localize('chat.modelPicker.fast', 'Fast');
+		case 'Faster responses, increased usage': return localize('chat.modelPicker.fasterUsage', 'Faster responses, increased usage');
+		case 'Priority processing, increased usage': return localize('chat.modelPicker.priorityUsage', 'Priority processing, increased usage');
+		case 'Uses a separate high-speed model, increased usage': return localize('chat.modelPicker.highspeedUsage', 'Uses a separate high-speed model, increased usage');
+		default: return value;
 	}
 }

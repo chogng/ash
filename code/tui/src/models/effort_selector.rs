@@ -39,7 +39,7 @@ pub(crate) enum Outcome {
 
 #[derive(Debug)]
 pub(crate) struct EffortSelector {
-    levels: Vec<ReasoningEffort>,
+    levels: Vec<ash_protocol::ModelReasoningEffortOption>,
     selected: usize,
     original_mode: CollaborationMode,
     multitask: bool,
@@ -50,7 +50,7 @@ pub(crate) struct EffortSelector {
 
 impl EffortSelector {
     pub(super) fn new(
-        levels: &[ReasoningEffort],
+        levels: &[ash_protocol::ModelReasoningEffortOption],
         current: Option<ReasoningEffort>,
         mode: CollaborationMode,
     ) -> Self {
@@ -59,7 +59,7 @@ impl EffortSelector {
         Self {
             levels: levels.to_vec(),
             selected: current
-                .and_then(|value| levels.iter().position(|level| *level == value))
+                .and_then(|value| levels.iter().position(|option| option.effort == value))
                 .unwrap_or(0),
             original_mode: mode,
             multitask: mode == CollaborationMode::Multitask,
@@ -104,7 +104,7 @@ impl EffortSelector {
                     self.original_mode
                 };
                 return Outcome::Apply {
-                    effort: self.levels[self.selected],
+                    effort: self.levels[self.selected].effort,
                     mode,
                 };
             }
@@ -123,7 +123,7 @@ impl EffortSelector {
     }
 
     pub(crate) fn tick(&mut self, now: Instant) -> bool {
-        if self.levels[self.selected] != ReasoningEffort::Max && !self.multitask {
+        if self.levels[self.selected].effort != ReasoningEffort::Max && !self.multitask {
             return false;
         }
         let phase = (now.saturating_duration_since(self.opened).as_millis() / 80 % 48) as usize;
@@ -134,19 +134,11 @@ impl EffortSelector {
         true
     }
 
-    fn description(&self) -> &'static str {
-        match self.levels[self.selected] {
-            ReasoningEffort::None => "No reasoning. Best for straightforward tasks.",
-            ReasoningEffort::Minimal | ReasoningEffort::Low => {
-                "Less reasoning for quick, straightforward tasks."
-            }
-            ReasoningEffort::Medium => "Balanced reasoning for everyday tasks.",
-            ReasoningEffort::High => "More reasoning for complex tasks and careful verification.",
-            ReasoningEffort::ExtraHigh => "Deeper reasoning for difficult tasks; may take longer.",
-            ReasoningEffort::Max => {
-                "Maximum reasoning. May use more tokens and take longer; use for the hardest tasks."
-            }
-        }
+    fn description(&self) -> &str {
+        self.levels[self.selected]
+            .description
+            .as_deref()
+            .unwrap_or_default()
     }
 
     pub(crate) fn body_rows(&self, width: u16, context: RenderContext<'_>) -> u16 {
@@ -165,7 +157,7 @@ impl EffortSelector {
         let label_width = self
             .levels
             .iter()
-            .map(|level| level.as_str().len() as u16)
+            .map(|option| option.effort.as_str().len() as u16)
             .max()
             .unwrap();
         let label_span = (label_width / 2 + 1) * 2 + 1;
@@ -211,7 +203,7 @@ impl EffortSelector {
                 } else {
                     center + spacing.div_ceil(2)
                 };
-                let width = (self.levels[index].as_str().len() as u16).min(scale_width);
+                let width = (self.levels[index].effort.as_str().len() as u16).min(scale_width);
                 let label_x = center
                     .saturating_sub(width / 2)
                     .max(x)
@@ -314,7 +306,7 @@ impl EffortSelector {
         {
             let target = Target::Level(index);
             let selected = self.selected == index;
-            let level = self.levels[index];
+            let level = self.levels[index].effort;
             // Colors belong to effort identities, so a model's subset or order
             // cannot change the meaning of a selected label and its arrow.
             let selected_color = match level {

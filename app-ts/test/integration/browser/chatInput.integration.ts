@@ -1,6 +1,7 @@
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import type { ModelCatalogEntry } from '../../../src/ash/workbench/services/chat/common/modelCatalog.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
@@ -20,7 +21,7 @@ import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -34,15 +35,27 @@ services.registerSingleton(IActionWidgetService, () => services.createInstance(A
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
 services.registerInstance(IAccessibleViewService, accessibleView);
+const modelChanged = resources.add(new Emitter<void>());
+let models: readonly ModelCatalogEntry[] = [{
+	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model', contextWindowOptions: [],
+	description: 'A model for everyday tasks',
+	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
+	modelReasoningEffort: 'low',
+	supportsFast: true, fast: false, acceleration: { name: 'Fast', description: 'Faster responses, increased usage' },
+}];
 services.registerInstance(ILanguageModelsService, {
 	readApprovalReviewModel: async () => ({ type: 'automatic' }),
 	setApprovalReviewModel: async () => {},
-	onDidChangeModels: Event.None,
-	setModelPreferences: async () => {},
-	listModels: async () => [],
+	onDidChangeModels: modelChanged.event,
+	setModelPreferences: async (_model, update) => {
+		models = models.map(entry => ({ ...entry, fast: update.fast ?? entry.fast }));
+		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined });
+		modelChanged.fire();
+	},
+	listModels: async () => models,
 	getDefaultNewChatModel: () => undefined,
 	rememberSelectedModel: () => {},
-	listModelCatalog: async () => [],
+	listModelCatalog: async () => models,
 	listCustomModelProviders: async () => [],
 	saveCustomModelProvider: async () => {},
 	testProviderModel: async () => ({ type: 'passed' }),
@@ -62,7 +75,9 @@ registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
 const delegate: ChatInputDelegate = {
 	send: async () => {}, executeCommand: async () => {}, executeServerCommand: async () => {}, interrupt: async () => {},
-	selectModel: async () => {}, selectReasoningEffort: async () => {}, selectAutomaticModel: async () => {},
+	selectModel: async () => {}, selectReasoningEffort: async effort => {
+		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, selectedReasoningEffort: effort, interaction: undefined });
+	}, selectAutomaticModel: async () => {},
 	listAgents: async () => [], selectAgent: () => {}, selectMode: () => {}, openModelSettings: async () => {},
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
@@ -86,6 +101,7 @@ const state: ChatInputState = {
 };
 part.render(state);
 window.ashChatInputIntegration = {
+	showModels: () => part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined }),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
 	showQuestions: () => part.render({ ...state, interaction: {
 		requestId: 'questions', request: { type: 'userInput', request: { questions: [

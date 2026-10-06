@@ -175,7 +175,7 @@ test('Review settings select an independent connection, model and effort through
 	const models = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
 		listModelProviders: async () => [{ provider: 'openai', connection: 'openai', displayName: 'OpenAI API', configured: true }],
-		listModelCatalog: async () => [{ model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', supportedReasoningEfforts: ['low', 'medium'] }],
+		listModelCatalog: async () => [{ model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }] }],
 		setApprovalReviewModel: async (selection: ApprovalReviewModelSelection) => { selections.push(selection); },
 	};
 	services.registerInstance(ILanguageModelsService, models as unknown as ILanguageModelsService);

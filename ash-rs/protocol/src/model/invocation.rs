@@ -17,13 +17,11 @@ use serde_json::Value;
 use ts_rs::TS;
 use ts_rs::TypeVisitor;
 
-/// Provider service classes used by model invocations.
+/// Inference speed is independent of provider scheduling and billing service tiers.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum ModelServiceTier {
-    Standard,
+pub enum ModelSpeed {
     Fast,
-    Priority,
 }
 
 /// Pixel and patch ceilings applied to one ephemeral provider-bound image clone.
@@ -93,7 +91,9 @@ pub struct ModelRequest {
     pub reasoning_summary: Option<crate::ModelReasoningSummary>,
     /// Requested provider service tier; absence uses the provider default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub service_tier: Option<ModelServiceTier>,
+    pub service_tier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<ModelSpeed>,
     pub instructions: Option<String>,
     pub input: Vec<InputItem>,
     pub tools: Vec<ToolDefinition>,
@@ -172,6 +172,7 @@ impl ModelRequest {
             verbosity: None,
             reasoning_summary: None,
             service_tier: None,
+            speed: None,
             instructions: None,
             input: vec![InputItem::Message(Message::text(MessageRole::User, prompt))],
             tools: Vec::new(),

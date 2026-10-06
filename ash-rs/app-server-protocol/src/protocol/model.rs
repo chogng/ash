@@ -64,6 +64,7 @@ pub struct ContextToolDefinition {
 pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
+    pub description: Option<String>,
     /// True only when this ID belongs to the last successful endpoint observation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -83,7 +84,7 @@ pub struct ModelCatalogEntry {
     #[ts(optional = nullable)]
     pub available_context_window: Option<u32>,
     pub capabilities: ModelCapabilities,
-    pub supported_reasoning_efforts: Vec<ReasoningEffort>,
+    pub supported_reasoning_efforts: Vec<ash_protocol::ModelReasoningEffortOption>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
@@ -97,6 +98,7 @@ impl ModelCatalogEntry {
         Self {
             model,
             display_name: info.display_name.clone(),
+            description: info.description.clone(),
             discovered: None,
             context_window: match info.context_window {
                 ContextWindow::Known(tokens) => Some(tokens),

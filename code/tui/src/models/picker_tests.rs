@@ -228,8 +228,8 @@ fn model_picker_without_configured_connections_still_offers_builtin_models() {
 fn effort_values_do_not_change_model_name_search() {
     let mut entry = catalog_entry("openai", "gpt-ash", "GPT Ash");
     entry.supported_reasoning_efforts = vec![
-        ash_protocol::ReasoningEffort::Low,
-        ash_protocol::ReasoningEffort::High,
+        ash_protocol::ReasoningEffort::Low.into(),
+        ash_protocol::ReasoningEffort::High.into(),
     ];
     entry.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
     let choices = model_choices(
@@ -256,20 +256,20 @@ fn effort_labels_align_across_models_with_different_level_counts() {
         catalog_entry("openai", "mini", "GPT-5 Mini"),
     ];
     entries[0].supported_reasoning_efforts = vec![
-        ReasoningEffort::Low,
-        ReasoningEffort::Medium,
-        ReasoningEffort::High,
+        ReasoningEffort::Low.into(),
+        ReasoningEffort::Medium.into(),
+        ReasoningEffort::High.into(),
     ];
     entries[0].model_reasoning_effort = Some(ReasoningEffort::Medium);
     entries[1].supported_reasoning_efforts = vec![
-        ReasoningEffort::Minimal,
-        ReasoningEffort::Low,
-        ReasoningEffort::Medium,
-        ReasoningEffort::High,
-        ReasoningEffort::ExtraHigh,
+        ReasoningEffort::Minimal.into(),
+        ReasoningEffort::Low.into(),
+        ReasoningEffort::Medium.into(),
+        ReasoningEffort::High.into(),
+        ReasoningEffort::ExtraHigh.into(),
     ];
     entries[1].model_reasoning_effort = Some(ReasoningEffort::Medium);
-    entries[2].supported_reasoning_efforts = vec![ReasoningEffort::None];
+    entries[2].supported_reasoning_efforts = vec![ReasoningEffort::None.into()];
     entries[2].model_reasoning_effort = Some(ReasoningEffort::None);
     let choices = model_choices(
         &ModelListResult {
@@ -345,8 +345,8 @@ fn model_hints_follow_selected_pin_state_capabilities_and_search_focus() {
 
     let mut adjustable = catalog_entry("openai", "adjustable", "Adjustable");
     adjustable.supported_reasoning_efforts = vec![
-        ash_protocol::ReasoningEffort::Low,
-        ash_protocol::ReasoningEffort::High,
+        ash_protocol::ReasoningEffort::Low.into(),
+        ash_protocol::ReasoningEffort::High.into(),
     ];
     let catalog = ModelListResult {
         models: vec![adjustable, catalog_entry("openai", "simple", "Simple")],
@@ -709,12 +709,12 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
         let mut entry = catalog_entry("openai", &format!("model-{bits}"), &format!("Model {bits}"));
         entry.supported_reasoning_efforts = if bits & 1 != 0 {
             vec![
-                ReasoningEffort::None,
-                ReasoningEffort::Low,
-                ReasoningEffort::High,
+                ReasoningEffort::None.into(),
+                ReasoningEffort::Low.into(),
+                ReasoningEffort::High.into(),
             ]
         } else {
-            vec![ReasoningEffort::None]
+            vec![ReasoningEffort::None.into()]
         };
         entry.model_reasoning_effort = Some(ReasoningEffort::None);
         if bits & 2 != 0 {
@@ -845,7 +845,8 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
     use crossterm::event::KeyCode;
     use crossterm::event::KeyModifiers;
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
-    entry.supported_reasoning_efforts = vec![ReasoningEffort::Low, ReasoningEffort::High];
+    entry.supported_reasoning_efforts =
+        vec![ReasoningEffort::Low.into(), ReasoningEffort::High.into()];
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     entry.maximum_context_window = Some(1_050_000);
     entry.context_window = Some(272_000);
@@ -905,9 +906,9 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
     use ratatui::style::Modifier;
     let mut entry = catalog_entry("openai", "gpt-6-astra", "GPT-6 Astra");
     entry.supported_reasoning_efforts = vec![
-        ReasoningEffort::Low,
-        ReasoningEffort::Medium,
-        ReasoningEffort::High,
+        ReasoningEffort::Low.into(),
+        ReasoningEffort::Medium.into(),
+        ReasoningEffort::High.into(),
     ];
     entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
@@ -984,9 +985,9 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
                 );
                 if bits & 1 != 0 {
                     entry.supported_reasoning_efforts = vec![
-                        ReasoningEffort::Low,
-                        ReasoningEffort::Medium,
-                        ReasoningEffort::High,
+                        ReasoningEffort::Low.into(),
+                        ReasoningEffort::Medium.into(),
+                        ReasoningEffort::High.into(),
                     ];
                     entry.model_reasoning_effort = Some(ReasoningEffort::Medium);
                 }

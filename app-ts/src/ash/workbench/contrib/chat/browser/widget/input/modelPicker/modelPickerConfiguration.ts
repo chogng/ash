@@ -44,7 +44,9 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 		const button = this.button.domNode;
 		const updateHelpHint = (): void => {
 			const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
-			if (hint) button.setAttribute('aria-description', hint);
+			const selected = modelPickerEffortOptions(this.entry, this.selectedEffort).find(option => option.checked);
+			const description = [selected?.description, hint].filter(Boolean).join(' ');
+			if (description) button.setAttribute('aria-description', description);
 			else button.removeAttribute('aria-description');
 		};
 		updateHelpHint();
@@ -59,7 +61,7 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.ChatModelConfiguration,
 					{ type: AccessibleViewType.Help },
-					() => localize('chat.modelPicker.effortHelp', "Thinking level menu. Press Enter or Space to open it. Use Up and Down Arrow to choose a level, Enter to apply it, or Escape to return to the button. The level marked Default uses the model's configured effort."),
+					() => [localize('chat.modelPicker.effortHelp', "Thinking level menu. Press Enter or Space to open it. Use Up and Down Arrow to choose a level, Enter to apply it, or Escape to return to the button. The level marked Default uses the model's configured effort."), ...modelPickerEffortOptions(this.entry, this.selectedEffort).filter(option => option.description).map(option => `${option.label}: ${option.description}`)].join('\n'),
 					() => button.focus(),
 					AccessibilityVerbositySettingId.ChatModelConfiguration,
 				);
@@ -82,8 +84,8 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 
 	private show(): void {
 		if (this.contextView.visible) return;
-		const defaultEffort = this.entry.modelReasoningEffort;
-		const actions: IAction[] = modelPickerEffortOptions(this.entry, this.selectedEffort).map(option => {
+		const options = modelPickerEffortOptions(this.entry, this.selectedEffort);
+		const actions: IAction[] = options.map(option => {
 			const { effort, label } = option;
 			return {
 				id: `ash.chat.input.effort.${effort ?? 'default'}`,
@@ -115,8 +117,9 @@ export class ModelPickerConfiguration extends ButtonActionViewItem {
 		heading.setAttribute('role', 'presentation');
 		heading.textContent = localize('chat.modelPicker.thinkingEffort', 'Thinking Level');
 		menu.element.prepend(heading);
-		if (defaultEffort !== undefined) {
-			menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${defaultEffort}'] button`)?.setAttribute('aria-description', modelPickerEffortLabel(undefined));
+		for (const option of options) {
+			const description = [option.description, option.isDefault ? modelPickerEffortLabel(undefined) : undefined].filter(Boolean).join(' ');
+			if (description) menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`)?.setAttribute('aria-description', description);
 		}
 		this.menu.value = menu;
 		const shown = this.contextView.show({

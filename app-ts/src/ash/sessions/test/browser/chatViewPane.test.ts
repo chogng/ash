@@ -283,7 +283,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		model: { provider: "openai", model: "gpt-6.1-sol" },
 		displayName: "GPT-6.1 Sol",
 		contextWindow: 128000,
-		supportedReasoningEfforts: ["low", "medium", "high"] as const,
+		supportedReasoningEfforts: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }] as const,
 		modelReasoningEffort: 'medium' as const,
 	};
 	const fake = fakeApi({
@@ -1773,7 +1773,7 @@ interface FakeOptions {
 		readonly model: ModelRef;
 		readonly displayName: string;
 		readonly contextWindow?: number | null;
-		readonly supportedReasoningEfforts?: readonly ('none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max')[];
+		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null }[];
 		readonly modelReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 	}[];
 	readonly configuredProviders?: readonly string[];
@@ -2071,12 +2071,16 @@ test('A manual model choice stays with its chat while later new chats use the ne
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
-	const discovered = createTestModel({
+	const discovered: Awaited<ReturnType<IRendererHost['model']['listProviderModels']>>[number] = createTestModel({
 		model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model', discovered: true,
+		description: 'Private model overview',
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [], fastEnabled: false,
 		autoCompactTokenLimit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallelToolCalls: 'unknown', personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown' },
-		supportedReasoningEfforts: [], modelReasoningEffort: null, defaultPersonality: null,
+		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }], modelReasoningEffort: null, defaultPersonality: null,
 	});
+	discovered.capabilities.fastMode = 'supported';
+	discovered.settings.serviceTiers = [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }];
+	discovered.settings.acceleration = { type: 'serviceTier', serviceTier: 'priority' };
 	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
 	const fake = fakeApi();
 	let loads = 0;
@@ -2091,9 +2095,10 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	await initial.complete({ models: [] });
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
-		model: discovered.model, displayName: discovered.displayName, discovered: true,
+		model: discovered.model, displayName: discovered.displayName, description: discovered.description, discovered: true,
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, contextWindowOptions: [],
-		supportsFast: false, fast: false, supportedReasoningEfforts: [],
+		supportsFast: true, fast: false, supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],
+		acceleration: { name: 'Priority lane', description: 'Faster processing' },
 	};
 	assert.deepEqual(await discovery, [pickerEntry]);
 	assert.deepEqual(await models.listModelCatalog(), [pickerEntry]);
@@ -2101,6 +2106,21 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	await models.setModelVisible(discovered.model, true);
 	assert.deepEqual(await models.listModels(), [pickerEntry]);
 	assert.equal(loads, 2);
+	let changes = 0;
+	using subscription = models.onDidChangeModels(() => changes++);
+	discovered.settings.serviceTiers[0].description = 'Updated processing terms';
+	const refreshed = await models.refreshModels();
+	assert.deepEqual(refreshed[0].acceleration, { name: 'Priority lane', description: 'Updated processing terms' });
+	assert.equal(changes, 1);
+	assert.equal(pickerEntry.acceleration.description, 'Faster processing');
+	discovered.description = 'Updated overview';
+	discovered.supportedReasoningEfforts[0].description = 'Updated explanation';
+	const explained = await models.refreshModels();
+	assert.equal(explained[0].description, 'Updated overview');
+	assert.deepEqual(explained[0].supportedReasoningEfforts, [{ effort: 'low', description: 'Updated explanation' }]);
+	assert.equal(changes, 2);
+	assert.equal(pickerEntry.description, 'Private model overview');
+	assert.equal(pickerEntry.supportedReasoningEfforts[0].description, 'Quick tasks');
 });
 
 test("Language models service includes ready Kimi connections in the model catalog", async () => {
@@ -2174,8 +2194,8 @@ test("ChatWidgetModel selects models per chat without changing the global model"
 });
 
 test('ChatWidgetModel sends the selected model thinking effort with its Turn', async () => {
-	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
-	const second = { model: { provider: 'openai', model: 'gpt-6-astra' }, displayName: 'Second', supportedReasoningEfforts: ['medium'] as const };
+	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }] as const };
+	const second = { model: { provider: 'openai', model: 'gpt-6-astra' }, displayName: 'Second', supportedReasoningEfforts: [{ effort: 'medium' }] as const };
 	const activeSession = session('session-1', 'thread-1');
 	const previous = thread('previous answer');
 	const fake = fakeApi({
@@ -2205,7 +2225,7 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 });
 
 test('New Chat keeps its thinking effort when it creates a Thread', async () => {
-	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: ['low', 'high'] as const };
+	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }] as const };
 	const fake = fakeApi({
 		models: [entry],
 		createSession: session('session-1', undefined, 'New Chat'),
@@ -2590,7 +2610,7 @@ function fakeApi(options: FakeOptions = {}): {
 			setModelPreferences: async () => {},
 			listModels: async () => {
 				modelListRequests.push(undefined);
-				return { models: (options.models ?? []).map(entry => createTestModel({ ...entry, supportedReasoningEfforts: [...(entry.supportedReasoningEfforts ?? [])] })) };
+				return { models: (options.models ?? []).map(entry => createTestModel({ ...entry, supportedReasoningEfforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })) })) };
 			},
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
 			listProviderModels: async (connection: string) => {

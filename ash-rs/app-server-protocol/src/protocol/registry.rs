@@ -2099,6 +2099,8 @@ use ash_protocol::MessageBoundary;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::MessageCheckpoint;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelAcceleration;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelAccess;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelBillingEvidence;
@@ -2141,6 +2143,8 @@ use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelReasoningEffortOption;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReasoningSummary;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReferenceCostReason;
@@ -2152,6 +2156,8 @@ use ash_protocol::ModelReferenceCostSummary;
 use ash_protocol::ModelServiceTier;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelSettings;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelSpeed;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelToolOutputLimit;
 #[cfg(any(test, feature = "export"))]
@@ -5461,8 +5467,11 @@ typescript_bindings! {
     ModelVerbosity,
     ModelReasoningSummary,
     ModelServiceTier,
+    ModelSpeed,
+    ModelAcceleration,
     ModelToolOutputLimit,
     ReasoningEffort,
+    ModelReasoningEffortOption,
     ReasoningState,
     Personality,
     ModelCatalogEntry,

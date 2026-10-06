@@ -306,6 +306,7 @@ impl ModelCatalogSource for XaiCatalogSource {
                         .reasoning_efforts
                         .iter()
                         .filter_map(|value| effort(value))
+                        .map(ash_protocol::ModelReasoningEffortOption::from)
                         .collect();
                     Ok(DiscoveredModel::new(id).with_metadata(ModelMetadataPatch {
                         access: Some(ModelAccess::Subscription),

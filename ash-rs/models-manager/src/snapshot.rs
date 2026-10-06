@@ -64,6 +64,7 @@ pub struct ModelCapabilitiesProvenance {
 pub struct ModelMetadataProvenance {
     pub settings: Option<MetadataSource>,
     pub display_name: Option<MetadataSource>,
+    pub description: Option<MetadataSource>,
     pub context_window: Option<MetadataSource>,
     pub auto_compact_token_limit: Option<MetadataSource>,
     pub capabilities: ModelCapabilitiesProvenance,

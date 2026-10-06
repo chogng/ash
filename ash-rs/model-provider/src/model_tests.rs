@@ -1989,6 +1989,7 @@ fn request_with_original_image() -> ModelRequest {
         verbosity: None,
         reasoning_summary: None,
         service_tier: None,
+        speed: None,
         instructions: None,
         input: vec![ash_api::InputItem::Message(ash_api::Message {
             role: ash_api::MessageRole::User,
@@ -2547,7 +2548,7 @@ fn fast_model_preference_reaches_openai_requests_and_off_selects_standard() {
         let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
         assert_eq!(
             body["service_tier"],
-            if enabled { "fast" } else { "default" }
+            if enabled { "priority" } else { "default" }
         );
     }
 }
@@ -2679,7 +2680,7 @@ fn model_settings_are_applied_to_the_real_request_and_user_values_take_precedenc
     }
     request.verbosity = Some(ash_protocol::ModelVerbosity::High);
     request.reasoning_summary = Some(ash_protocol::ModelReasoningSummary::Detailed);
-    request.service_tier = Some(ash_protocol::ModelServiceTier::Priority);
+    request.service_tier = Some("priority".into());
     model.invoke(&request).unwrap();
     let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
     assert_eq!(body["text"]["verbosity"], "high");
@@ -2701,6 +2702,94 @@ fn known_input_modalities_reject_an_unsupported_attachment_before_transport() {
         .unwrap();
     assert!(matches!(
         model.invoke(&request_with_original_image()),
+        Err(ModelProviderError::InvalidRequest(_))
+    ));
+    assert!(transport.request.lock().unwrap().is_none());
+}
+
+#[test]
+fn catalog_tier_ids_drive_acceleration_and_explicit_choices_override_the_preference() {
+    let transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let selected = model_ref("openai", "gpt-6.1-sol");
+    let mut info = model_provider_info::find_static_model(&selected)
+        .unwrap()
+        .model();
+    info.settings
+        .service_tiers
+        .as_mut()
+        .unwrap()
+        .push(ash_protocol::ModelServiceTier {
+            id: "flex".into(),
+            name: "Flex".into(),
+            description: "Flexible processing".into(),
+        });
+    info.settings.acceleration = Some(ash_protocol::ModelAcceleration::ServiceTier {
+        service_tier: "flex".into(),
+    });
+    let mut config = provider_config("openai");
+    config.fast_models.insert(selected.model.clone());
+    let model = runtime
+        .runtime(ModelRuntimeRequest::new(selected, config).with_info(info))
+        .unwrap();
+    let mut request = ModelRequest::text("hello");
+    model.invoke(&request).unwrap();
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap().2["service_tier"],
+        "flex"
+    );
+    request.service_tier = Some("default".into());
+    model.invoke(&request).unwrap();
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap().2["service_tier"],
+        "default"
+    );
+    transport.request.lock().unwrap().take();
+    request.service_tier = Some("undeclared".into());
+    assert!(matches!(
+        model.invoke(&request),
+        Err(ModelProviderError::InvalidRequest(_))
+    ));
+    assert!(transport.request.lock().unwrap().is_none());
+}
+
+#[test]
+fn explicit_standard_tier_disables_stored_speed_and_speed_requires_model_support() {
+    let transport = Arc::new(CapturingTransport::new(
+        json!({"content":[{"type":"text","text":"ok"}], "stop_reason":"end_turn", "usage":{"input_tokens":1,"output_tokens":1}}),
+    ));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let mut config = provider_config("anthropic");
+    config
+        .fast_models
+        .insert(ModelId::new("claude-opus-5-5").unwrap());
+    let model = runtime
+        .build_model(&config, &model_ref("anthropic", "claude-opus-5-5"))
+        .unwrap();
+    let mut request = ModelRequest::text("hello");
+    request.service_tier = Some("standard_only".into());
+    model.invoke(&request).unwrap();
+    let (_, headers, body) = transport.request.lock().unwrap().take().unwrap();
+    assert!(body.get("speed").is_none());
+    assert!(
+        headers
+            .iter()
+            .all(|header| header.name() != "anthropic-beta")
+    );
+    request.speed = Some(ash_protocol::ModelSpeed::Fast);
+    request.service_tier = None;
+    model.invoke(&request).unwrap();
+    let (_, _, body) = transport.request.lock().unwrap().take().unwrap();
+    assert_eq!(body["speed"], "fast");
+    assert_eq!(body["service_tier"], "standard_only");
+    let model = runtime
+        .build_model(
+            &provider_config("anthropic"),
+            &model_ref("anthropic", "claude-sonnet-4-6"),
+        )
+        .unwrap();
+    assert!(matches!(
+        model.invoke(&request),
         Err(ModelProviderError::InvalidRequest(_))
     ));
     assert!(transport.request.lock().unwrap().is_none());

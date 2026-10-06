@@ -131,6 +131,10 @@ check-config-migrations:
 generate-config-schema:
     cargo run --quiet -p ash-config-schema -- ash-rs/config/schema.json
 
+# Derive the editable model catalog schema from its Rust parser declarations.
+generate-model-catalog-schema *args:
+    {{ python }} -B scripts/cargo.py run -p ash-model-provider-info --bin generate-model-catalog-schema -- {{ args }}
+
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
     pnpm --dir app-ts run protocol:generate

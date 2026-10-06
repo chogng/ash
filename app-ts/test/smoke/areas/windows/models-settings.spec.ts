@@ -279,3 +279,50 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 	}
 });
+
+
+test('Model acceleration copy follows the catalog and its preference survives a restart in Chinese', async ({ target, workbench, restartWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses the product model catalog and persisted connection preferences.');
+	const openModelCard = async (chinese: boolean): Promise<void> => {
+		const page = workbench.page;
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
+		}
+		await page.locator('.ash-chat-view-pane [data-action-id="ash.chat.input.model"] button').press('ArrowDown');
+		const picker = page.locator('.ash-chat-model-picker');
+		const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
+		if (await automatic.isChecked()) { await automatic.press('Space'); }
+		const search = picker.getByRole('combobox');
+		await search.fill('GPT-6.1 Sol');
+		await search.press('ArrowDown');
+		await search.press('ArrowRight');
+	};
+	await openModelCard(false);
+	let card = workbench.page.locator('.ash-chat-model-card');
+	let fast = card.getByRole('switch', { name: 'Fast', exact: true });
+	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Faster responses, increased usage');
+	await expect(fast).toHaveAttribute('aria-description', /Faster responses, increased usage/);
+	await expect(fast).toBeFocused();
+	await fast.press('Space');
+	await expect(fast).toBeChecked();
+	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
+	await expect(fast).toBeFocused();
+	await fast.press('Escape');
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('agents');
+	await workbench.settingsEditor.selectCategory('general');
+	const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
+	await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();
+	({ workbench } = await restartWorkbench());
+	await openModelCard(true);
+	card = workbench.page.locator('.ash-chat-model-card');
+	fast = card.getByRole('switch', { name: '快速', exact: true });
+	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('响应更快，用量增加');
+	await expect(fast).toHaveAttribute('aria-description', /响应更快，用量增加/);
+	await expect(fast).toBeChecked();
+	await fast.press('Space');
+	await expect(fast).not.toBeChecked();
+	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
+	await expect(fast).toBeFocused();
+});

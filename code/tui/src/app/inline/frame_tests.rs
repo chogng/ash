@@ -551,9 +551,9 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     );
     let mut info = ash_protocol::ModelInfo::new(model.model.clone(), "GPT Test");
     info.supported_reasoning_efforts = vec![
-        ash_protocol::ReasoningEffort::Low,
-        ash_protocol::ReasoningEffort::Medium,
-        ash_protocol::ReasoningEffort::High,
+        ash_protocol::ReasoningEffort::Low.into(),
+        ash_protocol::ReasoningEffort::Medium.into(),
+        ash_protocol::ReasoningEffort::High.into(),
     ];
     info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {

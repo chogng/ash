@@ -454,37 +454,41 @@ impl Provider {
     ) -> Result<ModelRequest, ModelProviderError> {
         let mut request = request.clone();
         request.max_output_tokens = request.max_output_tokens.or(self.config.max_output_tokens);
-        use ash_protocol::ModelServiceTier;
-        request.service_tier = request.service_tier.or_else(|| {
-            if self.config.provider.as_str() == "openai"
-                || (model.capabilities.fast_mode == CapabilitySupport::Supported
-                    && self.config.connection.as_str() != "xai-subscription")
-            {
-                match (
-                    self.config.provider.as_str(),
-                    self.config.fast_models.contains(&model.id),
-                ) {
-                    ("openai", true) => Some(ModelServiceTier::Fast),
-                    // Claude's speed flag and Priority capacity are separate upstream features.
-                    ("anthropic", true) => Some(match model.id.as_str() {
-                        "claude-opus-5-5" | "claude-opus-4-8" => ModelServiceTier::Fast,
-                        _ => ModelServiceTier::Priority,
-                    }),
-                    ("google" | "xai", true) => Some(ModelServiceTier::Priority),
-                    ("openai" | "anthropic" | "google" | "xai", false) => {
-                        Some(ModelServiceTier::Standard)
+        // Explicit request controls take precedence over the stored product preference.
+        // The immutable model declaration owns the mechanism, not provider/model-name branches.
+        if request.service_tier.is_none() && self.config.connection.as_str() != "xai-subscription" {
+            if request.speed.is_none() && self.config.fast_models.contains(&model.id) {
+                match &model.settings.acceleration {
+                    Some(ash_protocol::ModelAcceleration::ServiceTier { service_tier }) => {
+                        request.service_tier = Some(service_tier.clone());
                     }
-                    _ => None,
+                    Some(ash_protocol::ModelAcceleration::Speed { speed, .. }) => {
+                        request.speed = Some(*speed);
+                    }
+                    Some(ash_protocol::ModelAcceleration::Model { .. }) | None => {}
                 }
-            } else {
-                model.settings.default_service_tier
             }
-        });
+            request.service_tier = request
+                .service_tier
+                .or_else(|| model.settings.default_service_tier.clone());
+        }
         crate::request_settings::apply_settings(model, self.protocol(), &mut request)?;
         let _ = request.sanitize_image_details(
             model.capabilities.image_detail_original == CapabilitySupport::Supported,
         );
         Ok(request)
+    }
+
+    fn upstream_model<'a>(&'a self, model: &'a Model) -> &'a str {
+        let id = if self.config.fast_models.contains(&model.id)
+            && let Some(ash_protocol::ModelAcceleration::Model { model, .. }) =
+                &model.settings.acceleration
+        {
+            model.as_str()
+        } else {
+            model.id.as_str()
+        };
+        self.config.upstream_model(id)
     }
 
     fn is_start_plan(&self) -> bool {
@@ -589,7 +593,7 @@ impl Provider {
             };
             let response = self.execute_attempt(
                 &target,
-                model.id.as_str(),
+                model,
                 &request,
                 &attempt_client,
                 cancellation,
@@ -613,7 +617,7 @@ impl Provider {
                     let retry_client = AttemptClient::new(&diagnostic);
                     let response = self.execute_attempt(
                         &renewed,
-                        model.id.as_str(),
+                        model,
                         &request,
                         &retry_client,
                         cancellation,
@@ -642,7 +646,7 @@ impl Provider {
     fn execute_attempt(
         &self,
         target: &ResolvedProviderTarget<'_>,
-        model: &str,
+        model: &Model,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
@@ -650,7 +654,7 @@ impl Provider {
     ) -> Result<ModelResponse, ModelProviderError> {
         use sha2::Digest;
         let endpoint = self.target.endpoint(self.adapter.endpoint());
-        let model = self.config.upstream_model(model);
+        let model = self.upstream_model(model);
         let mut digest = sha2::Sha256::new();
         let mut hash = |value: &str| {
             digest.update((value.len() as u64).to_be_bytes());
@@ -792,7 +796,7 @@ impl Provider {
             );
             let result = self.adapter.measure_input(
                 &target,
-                model.id.as_str(),
+                self.upstream_model(model),
                 &request,
                 &diagnostic,
                 cancellation,

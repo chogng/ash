@@ -29,13 +29,26 @@ pub struct ModelMetadataPatch {
     pub settings: ash_protocol::ModelSettings,
     pub access: Option<ash_protocol::ModelAccess>,
     pub display_name: Option<String>,
+    pub description: Option<String>,
     pub context_window: Option<ContextWindow>,
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilitiesPatch,
-    pub supported_reasoning_efforts: Option<Vec<ReasoningEffort>>,
+    pub supported_reasoning_efforts: Option<Vec<ash_protocol::ModelReasoningEffortOption>>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     pub lifecycle: Option<ModelLifecycle>,
+}
+
+impl ModelMetadataPatch {
+    pub fn validate(&self) -> Result<(), String> {
+        ash_protocol::ModelInfo::validate_presentation(
+            self.description.as_deref(),
+            self.supported_reasoning_efforts
+                .as_deref()
+                .unwrap_or_default(),
+        )?;
+        self.settings.validate().map_err(str::to_owned)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

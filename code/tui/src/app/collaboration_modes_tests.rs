@@ -913,6 +913,7 @@ fn effort_data() -> crate::models::ModelPickerData {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(
                     ash_protocol::ProviderId::new("openai").unwrap(),
@@ -929,9 +930,18 @@ fn effort_data() -> crate::models::ModelPickerData {
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![
-                    ReasoningEffort::Low,
-                    ReasoningEffort::High,
-                    ReasoningEffort::Max,
+                    ash_protocol::ModelReasoningEffortOption {
+                        effort: ReasoningEffort::Low,
+                        description: Some("Less reasoning for quick, straightforward tasks.".into()),
+                    },
+                    ash_protocol::ModelReasoningEffortOption {
+                        effort: ReasoningEffort::High,
+                        description: Some("More reasoning for complex tasks and careful verification.".into()),
+                    },
+                    ash_protocol::ModelReasoningEffortOption {
+                        effort: ReasoningEffort::Max,
+                        description: Some("Maximum reasoning. May use more tokens and take longer; use for the hardest tasks.".into()),
+                    },
                 ],
                 model_reasoning_effort: Some(ReasoningEffort::Low),
                 default_personality: None,

@@ -108,6 +108,7 @@ fn generate_message(
             verbosity: None,
             reasoning_summary: None,
             service_tier: None,
+            speed: None,
             instructions: Some(
                 "Write a Git commit message for exactly the supplied Turn. Output only a Conventional Commit subject and, only when useful, a blank line followed by a concise body. Do not mention later work, hidden reasoning, Thread IDs, or trailers."
                     .into(),

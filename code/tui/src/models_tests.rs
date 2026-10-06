@@ -76,6 +76,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
             ModelId::new(model).unwrap(),
         ),
         display_name: model.into(),
+        description: None,
         context_window: None,
         maximum_context_window: None,
         default_context_window: None,
@@ -170,11 +171,14 @@ impl ash_app_server_client::JsonRpcTransport for ConfigTransport {
 #[test]
 fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
     let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
-    selected.supported_reasoning_efforts = vec![
+    selected.supported_reasoning_efforts = [
         ReasoningEffort::Low,
         ReasoningEffort::High,
         ReasoningEffort::Max,
-    ];
+    ]
+    .into_iter()
+    .map(Into::into)
+    .collect();
     selected.model_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
         models: vec![selected],
@@ -249,7 +253,7 @@ fn collaboration_effort_without_a_default_initializes_the_first_supported_level(
         super::Command::IncreaseEffort,
     ] {
         let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
-        selected.supported_reasoning_efforts = vec![ReasoningEffort::Low];
+        selected.supported_reasoning_efforts = vec![ReasoningEffort::Low.into()];
         let catalog = ModelListResult {
             models: vec![selected],
         };
@@ -351,7 +355,8 @@ fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
             .iter()
             .map(|(provider, model, levels, default, _)| {
                 let mut model = entry(provider, model, ModelAccess::ApiKey);
-                model.supported_reasoning_efforts = levels.clone();
+                model.supported_reasoning_efforts =
+                    levels.iter().copied().map(Into::into).collect();
                 model.model_reasoning_effort = Some(*default);
                 model
             })
@@ -398,6 +403,7 @@ fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
             .models
             .iter()
             .flat_map(|model| &model.supported_reasoning_efforts)
+            .map(|option| option.effort)
             .find(|level| !levels.contains(level))
             .unwrap();
         let writes = transport.state.lock().unwrap().1.len();
@@ -405,7 +411,7 @@ fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
             super::execute(
                 &mut client,
                 super::Command::SetEffort {
-                    effort: *unsupported
+                    effort: unsupported
                 },
                 &catalog,
             )

@@ -147,11 +147,15 @@ where
                         "model '{provider}/{model}' does not support reasoning effort"
                     )));
                 }
-                if !entry.supported_reasoning_efforts.contains(&effort) {
+                if !entry
+                    .supported_reasoning_efforts
+                    .iter()
+                    .any(|option| option.effort == effort)
+                {
                     let supported = entry
                         .supported_reasoning_efforts
                         .iter()
-                        .map(|e| e.as_str())
+                        .map(|option| option.effort.as_str())
                         .collect::<Vec<_>>()
                         .join(", ");
                     return Err(ModelCommandError(format!(

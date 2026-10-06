@@ -2,7 +2,7 @@
 
 通用模板可以覆盖这六家，但必须同时描述**模型规格、参数约束和接入差异**。统一字段名后，还要知道它适用于哪个型号、哪个协议、什么条件，以及如何编码成请求。每个模型都使用同一套结构，按官方证据填写；字段多或提示词长，都不能单独证明完整性。
 
-本文供维护模型目录、请求构造器和模型设置界面的开发者使用。官方文档核对日期为 **2026-10-05**。下面的字段结构是设计建议，尚未成为当前 `models.json` 的解析格式，也不代表 Rust 协议和请求构造器已支持这些字段。当前可解析字段和已有调用链见 [crate README](../README.md#统一静态模型清单)。
+本文供维护模型目录、请求构造器和模型设置界面的开发者使用。官方文档核对日期为 **2026-10-05**。下面的完整字段结构是设计建议，不代表 Rust 协议和请求构造器已支持所有字段。服务等级的 ID、名称、说明及默认值，以及服务等级／速度／高速型号三种加速声明，已经通过 `settings.serviceTiers`、`defaultServiceTier`、`acceleration` 接入当前目录、请求和模型设置卡。模型简介、带说明的推理档位和从实际解析声明生成的 JSON Schema 也已接入；当前可解析字段和已有调用链见 [crate README](../README.md#统一静态模型清单)。
 
 官方字段对照覆盖标题中的六家；产品目录也包含 DeepSeek、Meta 等供应商，具体条目以 [`models.json`](../models.json) 为准。接入配置规则见 [模型接入配置](../../../docs/config.md#模型接入配置)。
 
@@ -250,22 +250,59 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 ## 7. 与当前 Ash 的逐项缺口
 
-当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/settings.rs) 和 [接入定义](../src/definition.rs) 为准。后续落地应从 Rust 契约生成 JSON Schema 和 TypeScript 类型，避免另建一份手工 schema。
+当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/settings.rs) 和 [接入定义](../src/definition.rs) 为准。当前目录的 [JSON Schema](../models.schema.json) 从 Rust 解析声明生成，App Server 的 JSON Schema 和 TypeScript 类型从共享协议生成，避免另建一份手工类型。当前服务等级格式与示例见 [可解析的模型设置](../README.md#统一静态模型清单)。
 
 | 范围 | 当前状态 | 规范要求补充 |
 | --- | --- | --- |
-| 身份与基础正文 | 已有准确身份、显示名、完整提示词和 revision | 字段级来源、适用型号/接入版本与复核状态 |
+| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词和 revision | 字段级来源、适用型号/接入版本与复核状态 |
 | 上下文 | 已有容量、执行预算选项、压缩阈值 | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组 |
 | 模态 | `ModelSettings` 有 text/image/audio 输入列表 | video/document、输出模态、组合、媒体限制与操作范围 |
-| 推理 | 已有支持档位与默认档位 | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则 |
-| 请求设置 | 已有 verbosity、摘要、服务等级支持与默认值 | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
+| 推理 | 已有带可选说明的支持档位与默认档位 | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则 |
+| 请求设置 | 已有 verbosity、摘要；服务等级含 ID、名称、说明与默认值，加速机制独立声明 | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
 | 工具 | 已有工具和并行能力标记、工具输出预算 | 工具选择、strict、schema 子集、数量限制、结果/历史协议 |
 | 接入 | 已有 API profile、独立流式/语音协议、计数声明 | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入 |
 | 缓存与状态 | 协议实现已有部分缓存、会话行为 | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义 |
 
 完整性的检查单位是“实际能否按正确条件构造请求并解析结果”。Codex 的展示顺序、升级提示、搜索工具选择等还包含自身产品策略；这些字段要有 Ash 的明确负责方和调用用途，不能为了增加行数照抄。
 
-## 8. 落地时的验证要求
+## 8. Codex 字段与 Ash 的对应关系
+
+Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_models.rs` 的 `ModelInfo`，内置实例在 `codex-rs/models-manager/models.json`；`codex-rs/app-server-protocol/src/protocol/v2/model.rs` 的 `Model` 是供客户端选择模型的较小结果。它们是 Codex 自己的契约，不是跨供应商的标准。下面按当前本地源码逐项列出对应关系；没有对应消费者的字段不加入 Ash 目录。
+
+| Codex `ModelInfo` 字段 | Ash 对应字段或负责方 | 当前处理 |
+| --- | --- | --- |
+| `slug`、`display_name`、`description` | `model_id`、`display_name`、`description` | 静态、动态目录保留；简介可省略 |
+| `supported_reasoning_levels`、`default_reasoning_level` | `supported_reasoning_efforts[{effort,description}]`、`model_reasoning_effort` | 保留档位顺序及说明；Codex `xhigh` 对应 JSON `extraHigh`，请求仍按协议编码 |
+| `service_tiers`、`default_service_tier` | `settings.serviceTiers[{id,name,description}]`、`defaultServiceTier` | 原样保留请求 ID；默认值必须引用列表成员 |
+| `additional_speed_tiers` | `settings.acceleration` | Ash 用明确的等级、速度参数或高速型号声明加速；不复制另一份速度列表 |
+| `input_modalities` | `settings.inputModalities` | 现有 text/image/audio；不推断尚无协议的模态 |
+| `support_verbosity`、`default_verbosity` | `settings.verbosity`、`defaultVerbosity` | 支持情况与默认值分开，未知状态保持未知 |
+| `supports_reasoning_summary_parameter`、`default_reasoning_summary` | `settings.reasoningSummary`、`defaultReasoningSummary` | 参数能力与返回的推理历史分别处理 |
+| `supports_image_detail_original` | `capabilities.imageDetailOriginal` | 保留明确能力声明 |
+| `context_window`、`max_context_window` | `context_window`、`context_window_options` | 容量和 Ash 执行预算分开；动态 Codex 导入用已声明最大容量作为上限 |
+| `auto_compact_token_limit` | `auto_compact_token_limit` | 由 Core 与配置合并执行，并受有效预算约束 |
+| `effective_context_window_percent` | Core 上下文预算计算 | 目录没有同名字段；预算算法由 Core 维护，不能直接搬入 Codex 的保留比例 |
+| `comp_hash` | Core 压缩兼容性与历史协议 | 尚无对应消费链，不声明为已支持 |
+| `truncation_policy` | `settings.toolOutputLimit` | 保留计量方式与限额；token 限额的当前估算语义见模型计价文档 |
+| `visibility`、`priority` | 动态目录适配与客户端可见性设置 | Codex 订阅导入过滤隐藏项并保留排序；不把账户展示策略写进静态型号规格 |
+| `supported_in_api`、`available_access_programs` | 接入定义、凭据与运行时权限 | API 和订阅接入独立校验；型号元数据不证明账户权益 |
+| `availability_nux`、`upgrade`、`model_specialty` | 产品展示与型号生命周期 | 尚无对应的 Ash 展示消费者，不复制 Codex 提示 |
+| `model_messages` | `instructions`、Core 指令组装与各功能负责方 | 仅模型基础正文进入目录；工具、权限、协作和运行时指导由其所属模块组装 |
+| `include_skills_usage_instructions`、`include_plugin_usage_instructions`、`include_apps_usage_instructions` | Skills、插件和连接工具指令组装 | 属于 Ash 功能策略，不从型号名字或 Codex 标志开关功能 |
+| `shell_type`、`apply_patch_tool_type` | Shell、文件修改工具与工具运行时 | 使用 Ash 工具契约，不复制 Codex 工具实现选择 |
+| `web_search_tool_type`、`supports_search_tool`、`experimental_supported_tools` | 搜索和工具声明、工具注册 | 工具开放、协议和权限由工具负责方校验，不由静态目录授权 |
+| `supports_experimental_context` | Core 上下文管理 | 尚无对应型号开关，不声称支持 Codex 的实验协议 |
+| `use_responses_lite` | 接入 API profile 与 `ash-api` | 尚未实现该协议，不能只增加目录布尔值 |
+| `supports_reasoning_effort_updates` | 接入历史编码与请求构造器 | 尚无同名能力声明；当前 effort 通过普通请求参数发送 |
+| `guardian`、`node_repl_auto_review_required`、`node_repl_disabled`、`auto_review_model_override` | Guardian、权限、审批模型和 REPL 功能 | 属于 Ash 执行策略；不能从外部目录改写安全或工具配置 |
+| `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort` | 工具模式与协作功能 | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位 |
+| `used_fallback_model_metadata` | Codex 内部解析标记 | 不属于 JSON 型号声明，也不写入 Ash 目录 |
+
+Codex 示例 JSON 还可能含有不在这份 `ModelInfo` 中的字段，例如 `prefer_websockets`、`supports_parallel_tool_calls`、`minimal_client_version`、`requires_sandboxed_review`。因此复制示例不能代替核对实际消费类型。Ash 已有并行工具声明；传输由接入定义负责，客户端版本与审批限制由相应功能负责。Ash 的 Schema 拒绝未声明字段。
+
+修改当前目录请使用 [README 的可解析示例](../README.md#统一静态模型清单)，并运行 `just generate-model-catalog-schema --check`。本文第 3–6 节的通用参数、绑定和来源结构仍是未实现的设计建议，不能直接写入 `models.json`。
+
+## 9. 落地时的验证要求
 
 1. 同一语义只定义一份 Rust 契约；静态 JSON、动态模型信息与插件声明在各自入口校验。
 2. 每个接入用本地协议测试证明字段路径、文档化值映射、必填项和合法组合。默认值不得超过范围；未知字段、冲突配置和不支持的用户值在发送前失败。

@@ -743,9 +743,9 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
     info.context_window = ash_protocol::ContextWindow::Known(1_050_000);
     info.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
     info.supported_reasoning_efforts = vec![
-        ash_protocol::ReasoningEffort::Low,
-        ash_protocol::ReasoningEffort::Medium,
-        ash_protocol::ReasoningEffort::High,
+        ash_protocol::ReasoningEffort::Low.into(),
+        ash_protocol::ReasoningEffort::Medium.into(),
+        ash_protocol::ReasoningEffort::High.into(),
     ];
     info.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {

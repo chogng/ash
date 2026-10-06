@@ -91,10 +91,14 @@ fn codex_binary() -> PathBuf {
 struct CodexModel {
     id: String,
     display_name: String,
+    description: Option<String>,
     hidden: bool,
     default_reasoning_effort: Option<String>,
     #[serde(default)]
     supported_reasoning_efforts: Vec<CodexReasoningEffort>,
+    #[serde(default)]
+    service_tiers: Vec<ash_protocol::ModelServiceTier>,
+    default_service_tier: Option<String>,
 }
 
 impl CodexModel {
@@ -103,6 +107,7 @@ impl CodexModel {
             slug: self.id,
             priority: None,
             display_name: Some(self.display_name),
+            description: self.description,
             visibility: (!self.hidden).then_some("list".into()),
             context_window: None,
             default_reasoning_level: self.default_reasoning_effort,
@@ -111,8 +116,11 @@ impl CodexModel {
                 .into_iter()
                 .map(|effort| ReasoningLevel {
                     effort: effort.reasoning_effort,
+                    description: effort.description,
                 })
                 .collect(),
+            service_tiers: self.service_tiers,
+            default_service_tier: self.default_service_tier,
             ..CatalogEntry::default()
         }
     }
@@ -122,6 +130,7 @@ impl CodexModel {
 #[serde(rename_all = "camelCase")]
 struct CodexReasoningEffort {
     reasoning_effort: String,
+    description: Option<String>,
 }
 
 #[cfg(test)]

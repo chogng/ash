@@ -265,15 +265,27 @@ fn normalize_models(
             let efforts = entry
                 .supported_reasoning_levels
                 .into_iter()
-                .filter_map(|level| ReasoningEffort::parse(&level.effort))
+                .filter_map(|level| {
+                    ReasoningEffort::parse(&level.effort).map(|effort| {
+                        ash_protocol::ModelReasoningEffortOption {
+                            effort,
+                            description: level.description,
+                        }
+                    })
+                })
                 .collect::<Vec<_>>();
             settings.validate().map_err(|message| {
                 CatalogSourceError::new(CatalogSourceErrorKind::InvalidPayload, message)
             })?;
+            let fast_mode = settings
+                .acceleration
+                .as_ref()
+                .map(|_| CapabilitySupport::Supported);
             Ok(DiscoveredModel::new(id).with_metadata(ModelMetadataPatch {
                 settings,
                 access: Some(ModelAccess::Subscription),
                 display_name: entry.display_name,
+                description: entry.description,
                 context_window: entry
                     .max_context_window
                     .or(entry.context_window)
@@ -284,6 +296,7 @@ fn normalize_models(
                     reasoning: (!efforts.is_empty()).then_some(CapabilitySupport::Supported),
                     parallel_tool_calls: entry.supports_parallel_tool_calls.map(capability),
                     image_detail_original: entry.supports_image_detail_original.map(capability),
+                    fast_mode,
                     ..ModelCapabilitiesPatch::default()
                 },
                 supported_reasoning_efforts: Some(efforts),
@@ -315,6 +328,7 @@ struct CatalogEntry {
     #[serde(default)]
     priority: Option<i32>,
     display_name: Option<String>,
+    description: Option<String>,
     visibility: Option<String>,
     context_window: Option<u32>,
     max_context_window: Option<u32>,
@@ -330,11 +344,15 @@ struct CatalogEntry {
     default_reasoning_level: Option<String>,
     #[serde(default)]
     supported_reasoning_levels: Vec<ReasoningLevel>,
+    #[serde(default)]
+    service_tiers: Vec<ash_protocol::ModelServiceTier>,
+    default_service_tier: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct ReasoningLevel {
     effort: String,
+    description: Option<String>,
 }
 
 fn capability(supported: bool) -> CapabilitySupport {
@@ -362,6 +380,15 @@ impl CatalogEntry {
                 .unwrap_or(CapabilitySupport::Unknown),
             default_reasoning_summary: self.default_reasoning_summary,
             tool_output_limit: self.truncation_policy,
+            service_tiers: (!self.service_tiers.is_empty()).then(|| self.service_tiers.clone()),
+            default_service_tier: self.default_service_tier.clone(),
+            acceleration: self
+                .service_tiers
+                .iter()
+                .find(|tier| tier.id == "priority")
+                .map(|tier| ash_protocol::ModelAcceleration::ServiceTier {
+                    service_tier: tier.id.clone(),
+                }),
             ..ash_protocol::ModelSettings::default()
         }
     }

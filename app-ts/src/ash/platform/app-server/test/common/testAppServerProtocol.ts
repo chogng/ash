@@ -61,10 +61,11 @@ export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'displa
 			tools: 'supported', reasoning: 'supported', parallelToolCalls: 'unknown',
 			personality: 'unknown', imageDetailOriginal: 'unknown', fastMode: 'unknown',
 		},
+		description: null,
 		supportedReasoningEfforts: [],
 		modelReasoningEffort: null,
 		defaultPersonality: null,
-		settings: { inputModalities: null, verbosity: 'unknown', defaultVerbosity: null, reasoningSummary: 'unknown', defaultReasoningSummary: null, serviceTiers: null, defaultServiceTier: null, toolOutputLimit: null },
+		settings: { inputModalities: null, verbosity: 'unknown', defaultVerbosity: null, reasoningSummary: 'unknown', defaultReasoningSummary: null, serviceTiers: null, defaultServiceTier: null, acceleration: null, toolOutputLimit: null },
 		...entry,
 	};
 }

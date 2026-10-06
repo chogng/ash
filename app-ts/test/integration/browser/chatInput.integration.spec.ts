@@ -38,3 +38,57 @@ test('question controls resolve the editor background variable for each palette'
 		await expect(page.getByRole('combobox', { name: 'Your choice' })).toHaveCSS('background-color', background);
 	}
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`model picker describes acceleration and retains keyboard state in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('[data-action-id="ash.chat.input.model"] button');
+		await trigger.press('ArrowDown');
+		const picker = page.locator('.ash-chat-model-picker');
+		const search = picker.getByRole('combobox');
+		await expect(picker).toContainText('A model for everyday tasks');
+		await search.press('ArrowRight');
+		const card = picker.locator('.ash-chat-model-card');
+		const fast = card.getByRole('switch', { name: locale === 'zh-CN' ? '快速' : 'Fast', exact: true });
+		const description = locale === 'zh-CN' ? '响应更快，用量增加' : 'Faster responses, increased usage';
+		await expect(card.locator('.ash-chat-model-card-description')).toHaveText(description);
+		await expect(fast).toHaveAttribute('aria-description', description);
+		await expect(fast).toBeFocused();
+		await fast.press('Space');
+		await expect(fast).toBeChecked();
+		await expect(fast).toBeFocused();
+		await fast.press('Space');
+		await expect(fast).not.toBeChecked();
+		await page.setViewportSize({ width: 320, height: 600 });
+		const explanation = card.locator('.ash-chat-model-card-description');
+		expect(await explanation.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await fast.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`thinking levels retain catalog descriptions and keyboard selection in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('[data-action-id="ash.chat.input.effort"] button');
+		const lowCopy = locale === 'zh-CN' ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
+		const highCopy = locale === 'zh-CN' ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
+		await expect(trigger).toHaveAttribute('aria-description', lowCopy);
+		await trigger.press('ArrowDown');
+		const menu = page.locator('.ash-chat-model-configuration-menu');
+		const low = menu.locator('[data-action-id="ash.chat.input.effort.low"] button');
+		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
+		await expect(low).toBeFocused();
+		await expect(low).toHaveAttribute('aria-description', `${lowCopy} ${locale === 'zh-CN' ? '默认' : 'Default'}`);
+		await page.keyboard.press('ArrowDown');
+		await expect(high).toBeFocused();
+		await expect(high).toHaveAttribute('aria-description', highCopy);
+		await page.keyboard.press('Enter');
+		await expect(menu).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		await expect(trigger).toHaveAttribute('aria-description', highCopy);
+	});
+}

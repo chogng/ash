@@ -195,6 +195,7 @@ pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCat
         ModelMetadataProvenance {
             settings: None,
             display_name: None,
+            description: None,
             context_window: None,
             auto_compact_token_limit: None,
             capabilities: Default::default(),

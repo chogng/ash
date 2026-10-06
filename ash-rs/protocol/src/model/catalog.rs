@@ -106,6 +106,24 @@ impl fmt::Display for ReasoningEffort {
     }
 }
 
+/// A selectable effort and its catalog explanation. Missing copy is unknown metadata;
+/// the effort remains a request value and never implies a fixed token budget.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelReasoningEffortOption {
+    pub effort: ReasoningEffort,
+    pub description: Option<String>,
+}
+
+impl From<ReasoningEffort> for ModelReasoningEffortOption {
+    fn from(effort: ReasoningEffort) -> Self {
+        Self {
+            effort,
+            description: None,
+        }
+    }
+}
+
 impl std::str::FromStr for ReasoningEffort {
     type Err = String;
 
@@ -230,12 +248,13 @@ fn unknown_capability_support() -> CapabilitySupport {
 pub struct ModelInfo {
     pub id: ModelId,
     pub display_name: String,
+    pub description: Option<String>,
     #[serde(default)]
     pub access: ModelAccess,
     pub context_window: ContextWindow,
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
-    pub supported_reasoning_efforts: Vec<ReasoningEffort>,
+    pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
@@ -243,10 +262,46 @@ pub struct ModelInfo {
 }
 
 impl ModelInfo {
+    /// Validates catalog copy before a static, discovered, or persisted row is published.
+    pub fn validate_presentation(
+        description: Option<&str>,
+        efforts: &[ModelReasoningEffortOption],
+    ) -> Result<(), String> {
+        if description.is_some_and(|copy| copy.trim().is_empty()) {
+            return Err("model description must not be blank".into());
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for option in efforts {
+            if !seen.insert(option.effort.as_str()) {
+                return Err(format!("duplicate reasoning effort '{}'", option.effort));
+            }
+            if option
+                .description
+                .as_ref()
+                .is_some_and(|copy| copy.trim().is_empty())
+            {
+                return Err(format!(
+                    "reasoning effort '{}' description must not be blank",
+                    option.effort
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        Self::validate_presentation(
+            self.description.as_deref(),
+            &self.supported_reasoning_efforts,
+        )?;
+        self.settings.validate().map_err(str::to_owned)
+    }
+
     pub fn new(id: ModelId, display_name: impl Into<String>) -> Self {
         Self {
             id,
             display_name: display_name.into(),
+            description: None,
             access: ModelAccess::Unknown,
             context_window: ContextWindow::Unknown,
             auto_compact_token_limit: None,
