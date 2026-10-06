@@ -34887,6 +34887,19 @@
             }
           ]
         },
+        "settings": {
+          "$ref": "#/$defs/ModelSettings",
+          "default": {
+            "defaultReasoningSummary": null,
+            "defaultServiceTier": null,
+            "defaultVerbosity": null,
+            "inputModalities": null,
+            "reasoningSummary": "unknown",
+            "serviceTiers": null,
+            "toolOutputLimit": null,
+            "verbosity": "unknown"
+          }
+        },
         "supportedReasoningEfforts": {
           "items": {
             "$ref": "#/$defs/ReasoningEffort"
@@ -35165,6 +35178,14 @@
       ],
       "type": "object"
     },
+    "ModelInputModality": {
+      "enum": [
+        "text",
+        "image",
+        "audio"
+      ],
+      "type": "string"
+    },
     "ModelInstructionSelection": {
       "description": "The model guidance chosen for an invocation. Generic is an explicit supported choice.",
       "oneOf": [
@@ -35411,6 +35432,15 @@
       ],
       "type": "object"
     },
+    "ModelReasoningSummary": {
+      "enum": [
+        "none",
+        "auto",
+        "concise",
+        "detailed"
+      ],
+      "type": "string"
+    },
     "ModelRef": {
       "properties": {
         "model": {
@@ -35648,6 +35678,135 @@
       ],
       "type": "object"
     },
+    "ModelServiceTier": {
+      "description": "Provider service classes used by model invocations.",
+      "enum": [
+        "standard",
+        "fast",
+        "priority"
+      ],
+      "type": "string"
+    },
+    "ModelSettings": {
+      "additionalProperties": false,
+      "description": "Request settings frozen with the same model snapshot as its capacity.\nMissing lists/defaults and Unknown capabilities are absence of evidence, not restrictions.\nEndpoint support and user choices are checked separately by the invocation owner.",
+      "properties": {
+        "defaultReasoningSummary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelReasoningSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "defaultServiceTier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelServiceTier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "defaultVerbosity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelVerbosity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "inputModalities": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/ModelInputModality"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "reasoningSummary": {
+          "$ref": "#/$defs/CapabilitySupport",
+          "default": "unknown"
+        },
+        "serviceTiers": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/ModelServiceTier"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "toolOutputLimit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelToolOutputLimit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "verbosity": {
+          "$ref": "#/$defs/CapabilitySupport",
+          "default": "unknown"
+        }
+      },
+      "type": "object"
+    },
+    "ModelToolOutputLimit": {
+      "description": "Limits model-visible tool text; original durable tool results remain intact.\nToken limits use the shared output utility's UTF-8 byte approximation, not token measurement.",
+      "oneOf": [
+        {
+          "properties": {
+            "limit": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mode": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "limit"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "limit": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mode": {
+              "const": "tokens",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "limit"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ModelUsage": {
       "properties": {
         "cacheWriteInputTokens": {
@@ -35755,6 +35914,14 @@
         "complete"
       ],
       "type": "object"
+    },
+    "ModelVerbosity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
     },
     "NetworkCheckDto": {
       "additionalProperties": false,

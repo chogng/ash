@@ -30,6 +30,7 @@ model-provider-info = { workspace = true }
 ash-models-manager = { workspace = true }
 ash-model-tokenizer = { workspace = true }
 ash-protocol = { workspace = true }
+ash-utils-output-truncation = { workspace = true }
 ash-ollama = { workspace = true }
 ash-secrets = { workspace = true }
 ash-websocket-client = { workspace = true }

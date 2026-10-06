@@ -3,6 +3,19 @@ use crate::ImageDetail;
 use crate::ReasoningConfig;
 
 #[test]
+fn responses_request_settings_are_rejected_by_messages() {
+    for (verbosity, summary) in [
+        (Some(ash_protocol::ModelVerbosity::High), None),
+        (None, Some(ash_protocol::ModelReasoningSummary::Detailed)),
+    ] {
+        let mut request = ModelRequest::text("hello");
+        request.verbosity = verbosity;
+        request.reasoning_summary = summary;
+        assert!(build_request("test", &request).is_err());
+    }
+}
+
+#[test]
 fn provider_prelude_preserves_canonical_content_and_cache_budget() {
     let mut request = ModelRequest::text("latest request");
     request.instructions = Some("Ash instructions".into());

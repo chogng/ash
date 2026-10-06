@@ -634,7 +634,7 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
                     "chatgpt_plan_type":"plus"}})),
                 "access_token":"catalog-token", "refresh_token":"never-used",
                 "account_id":"account-1"
-            }, "last_refresh":"2026-09-25T00:00:00Z"
+            }
         }))
         .unwrap(),
     )
@@ -659,7 +659,8 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
         }
         assert!(
             std::time::Instant::now() < deadline,
-            "Subscription catalog was not cached"
+            "Subscription catalog was not cached; catalog requests: {}",
+            client.calls.load(std::sync::atomic::Ordering::SeqCst)
         );
         thread::sleep(Duration::from_millis(5));
     }
@@ -2902,7 +2903,7 @@ fn configured_provider_resolves_default_model_with_its_saved_endpoint() {
     let resolver = ModelProviderSnapshotResolver {
         model_provider: provider.clone(),
     };
-    let _ = resolver.resolve(&store.read_snapshot().unwrap().values);
+    let _ = resolver.resolve(&store.read_snapshot().unwrap().values, None);
     let request = provider.request.lock().unwrap().clone().unwrap();
     assert_eq!(
         request.model,
@@ -2937,7 +2938,7 @@ fn subscription_model_resolution_uses_the_vendor_provider_config() {
         ..ResolvedConfig::default()
     };
 
-    let _ = resolver.resolve(&config);
+    let _ = resolver.resolve(&config, None);
 
     let request = provider.request.lock().unwrap().clone().unwrap();
     assert_eq!(request.model, config.model.unwrap());
@@ -2970,7 +2971,11 @@ fn same_model_identity_uses_the_active_access_mode_for_billing() {
 }
 
 impl ModelSnapshotResolver for RecordingSnapshotResolver {
-    fn resolve(&self, config: &ResolvedConfig) -> Arc<dyn ModelInvoker> {
+    fn resolve(
+        &self,
+        config: &ResolvedConfig,
+        _: Option<&ash_protocol::Model>,
+    ) -> Arc<dyn ModelInvoker> {
         Arc::new(SnapshotModel {
             model: config
                 .model
@@ -3730,7 +3735,7 @@ fn missing_model_or_provider_is_a_configuration_failure_before_invocation() {
             ..ResolvedConfig::default()
         },
     ] {
-        let model = resolver.resolve(&config);
+        let model = resolver.resolve(&config, None);
         assert_eq!(
             model.invoke(&ash_protocol::ModelRequest::text("hello")),
             Err(ModelProviderError::ConfigurationMissing)
@@ -4487,4 +4492,56 @@ fn remote_message_board_configuration_requires_host_credential() {
         error.to_string().contains("message-board credential"),
         "{error}"
     );
+}
+
+#[test]
+fn model_settings_snapshot_passes_effective_catalog_metadata_to_the_provider() {
+    let path = config_path("model-settings-snapshot");
+    let config = Arc::new(ConfigStore::open(&path).unwrap());
+    let revision = configure_test_provider(&config, ConfigRevision::INITIAL);
+    select_model(&config, "select-settings", revision, "before-update");
+    let mut info = ash_protocol::ModelInfo::new(ModelId::new("before-update").unwrap(), "Before");
+    info.context_window = ash_protocol::ContextWindow::Known(128000);
+    info.settings.verbosity = ash_protocol::CapabilitySupport::Supported;
+    info.settings.default_verbosity = Some(ash_protocol::ModelVerbosity::Low);
+    let mut registry = ProviderConfigRegistry::builtin();
+    registry
+        .register(
+            ProviderDefinition::new(
+                ProviderId::new("test").unwrap(),
+                "Test",
+                ProviderAdapter::OpenAiCompatible,
+                ApiProfile::OpenAiResponses,
+                EndpointPolicy::ConfiguredOnly,
+                ModelCatalogPolicy::AllowUnlisted,
+            )
+            .with_api_key_policy(model_provider_info::ApiKeyPolicy::Unsupported)
+            .with_models([info.clone()]),
+        )
+        .unwrap();
+    let provider = Arc::new(RecordingModelProvider::default());
+    let service = ConfigBackedModelService {
+        config,
+        dir_config: None,
+        provider_configs: registry.clone(),
+        models_manager: ModelsManager::new(registry.clone()),
+        catalog_provider: Arc::new(ModelProviderRuntime::new(registry)),
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(ModelProviderSnapshotResolver {
+            model_provider: provider.clone(),
+        }),
+    };
+    let frozen = service
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
+    frozen
+        .context_budget(ModelSelection::ConfiguredDefault)
+        .unwrap();
+    let captured = provider.request.lock().unwrap().clone().unwrap();
+    let captured_info = captured.info.unwrap();
+    assert_eq!(captured_info.id, info.id);
+    assert_eq!(captured_info.settings, info.settings);
+    assert_eq!(captured_info.context_window, info.context_window);
+    assert_eq!(captured_info.auto_compact_token_limit, Some(115200));
 }

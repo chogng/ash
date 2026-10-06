@@ -317,6 +317,9 @@ impl ProviderDefinition {
         }
         let mut model_ids = BTreeSet::new();
         for model in &self.models {
+            model.settings.validate().map_err(|message| {
+                self.invalid(format!("model '{}' settings: {message}", model.id))
+            })?;
             if !model_ids.insert(model.id.clone()) {
                 return Err(self.invalid(format!("duplicate model ID '{}'", model.id)));
             }

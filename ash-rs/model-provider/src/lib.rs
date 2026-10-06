@@ -7,6 +7,7 @@ mod error;
 mod lazy_client;
 mod provider;
 mod providers;
+mod request_settings;
 mod semantic_models;
 mod semantic_runtime;
 

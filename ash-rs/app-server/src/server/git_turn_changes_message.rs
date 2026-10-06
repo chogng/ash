@@ -105,6 +105,8 @@ fn generate_message(
     let outcome = (|| {
         let prompt = commit_message_prompt(threads, &record)?;
         let request = ash_protocol::ModelRequest {
+            verbosity: None,
+            reasoning_summary: None,
             service_tier: None,
             instructions: Some(
                 "Write a Git commit message for exactly the supplied Turn. Output only a Conventional Commit subject and, only when useful, a blank line followed by a concise body. Do not mention later work, hidden reasoning, Thread IDs, or trailers."

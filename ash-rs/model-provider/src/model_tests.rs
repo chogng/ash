@@ -2019,6 +2019,8 @@ fn final_image_detail_gate_uses_model_capability_not_protocol_family() {
 
 fn request_with_original_image() -> ModelRequest {
     ModelRequest {
+        verbosity: None,
+        reasoning_summary: None,
         service_tier: None,
         instructions: None,
         input: vec![ash_api::InputItem::Message(ash_api::Message {
@@ -2660,4 +2662,97 @@ fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference
             }
         }
     }
+}
+
+#[test]
+fn model_settings_are_applied_to_the_real_request_and_user_values_take_precedence() {
+    let mut response = responses_response("ok");
+    response["input_tokens"] = json!(321);
+    let transport = Arc::new(CapturingTransport::new(response));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let selected = model_ref("openai", "gpt-6.1-sol");
+    let mut info = model_provider_info::find_static_model(&selected)
+        .unwrap()
+        .model();
+    info.capabilities.parallel_tool_calls = CapabilitySupport::Unsupported;
+    info.settings.tool_output_limit = Some(ash_protocol::ModelToolOutputLimit::Bytes(180));
+    let model = runtime
+        .runtime(ModelRuntimeRequest::new(selected, provider_config("openai")).with_info(info))
+        .unwrap();
+    let mut request = ModelRequest::text("inspect the output");
+    request.tools.push(ToolDefinition {
+        name: ToolName::new("read").unwrap(),
+        description: "Read".into(),
+        parameters: json!({"type":"object","properties":{},"required":[],"additionalProperties":false}),
+        strict: true,
+    });
+    request.input.push(ash_protocol::InputItem::ToolResult(
+        ash_protocol::ToolResult {
+            call_id: ash_protocol::ToolCallId::new("read-1").unwrap(),
+            name: ToolName::new("read").unwrap(),
+            content: vec![
+                ash_protocol::ContentPart::Text("head".repeat(100)),
+                ash_protocol::ContentPart::Text("tail".repeat(100)),
+            ],
+            is_error: false,
+        },
+    ));
+    model.invoke(&request).unwrap();
+    let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(body["text"]["verbosity"], "low");
+    assert_eq!(body["parallel_tool_calls"], false);
+    assert!(body.get("reasoning").is_none());
+    let output_parts = body["input"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["type"] == "function_call_output")
+        .unwrap()["output"]
+        .as_array()
+        .unwrap();
+    assert_eq!(output_parts.len(), 1);
+    let output = output_parts[0]["text"].as_str().unwrap();
+    assert!(output.len() <= 180);
+    assert!(output.contains("truncated"));
+    assert!(matches!(
+        model.measure_input(&request).unwrap(),
+        ContextTokenMeasurementOutcome::Measured(_)
+    ));
+    let (endpoint, _, counted) = transport.request.lock().unwrap().clone().unwrap();
+    assert!(endpoint.ends_with("/responses/input_tokens"));
+    assert_eq!(counted["input"][1]["output"], body["input"][1]["output"]);
+    assert_eq!(counted["parallel_tool_calls"], false);
+    assert_eq!(counted["text"], body["text"]);
+    if let ash_protocol::InputItem::ToolResult(result) = &request.input[1] {
+        assert_eq!(result.content.len(), 2);
+    } else {
+        panic!("original result must be retained");
+    }
+    request.verbosity = Some(ash_protocol::ModelVerbosity::High);
+    request.reasoning_summary = Some(ash_protocol::ModelReasoningSummary::Detailed);
+    request.service_tier = Some(ash_protocol::ModelServiceTier::Priority);
+    model.invoke(&request).unwrap();
+    let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(body["text"]["verbosity"], "high");
+    assert_eq!(body["reasoning"]["summary"], "detailed");
+    assert_eq!(body["service_tier"], "priority");
+}
+
+#[test]
+fn known_input_modalities_reject_an_unsupported_attachment_before_transport() {
+    let transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let selected = model_ref("openai", "gpt-6.1-sol");
+    let mut info = model_provider_info::find_static_model(&selected)
+        .unwrap()
+        .model();
+    info.settings.input_modalities = Some(vec![ash_protocol::ModelInputModality::Text]);
+    let model = runtime
+        .runtime(ModelRuntimeRequest::new(selected, provider_config("openai")).with_info(info))
+        .unwrap();
+    assert!(matches!(
+        model.invoke(&request_with_original_image()),
+        Err(ModelProviderError::InvalidRequest(_))
+    ));
+    assert!(transport.request.lock().unwrap().is_none());
 }

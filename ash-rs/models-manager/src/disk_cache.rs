@@ -123,7 +123,13 @@ impl DiskCatalogCache {
             catalogs: document
                 .catalogs
                 .into_iter()
-                .filter(|catalog| catalog.scope.provider() == provider)
+                .filter(|catalog| {
+                    catalog.scope.provider() == provider
+                        && catalog
+                            .models
+                            .iter()
+                            .all(|model| model.metadata.settings.validate().is_ok())
+                })
                 .collect(),
             ..document
         })

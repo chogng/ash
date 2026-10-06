@@ -227,6 +227,8 @@ impl ContextAssembler {
             ToolChoice::Auto
         };
         Ok(ModelRequest {
+            verbosity: None,
+            reasoning_summary: None,
             service_tier: None,
             instructions: resolved_instructions(plan),
             input,

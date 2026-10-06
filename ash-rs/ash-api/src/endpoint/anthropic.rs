@@ -177,6 +177,11 @@ fn build_request_with_prelude(
     request: &ModelRequest,
     prelude: &[&str],
 ) -> Result<Value, ApiError> {
+    if request.verbosity.is_some() || request.reasoning_summary.is_some() {
+        return Err(ApiError::InvalidRequest(
+            "Responses text and summary parameters require a Responses endpoint".into(),
+        ));
+    }
     crate::requests::require_materialized_attachments(request)?;
     for item in &request.input {
         let content = match item {

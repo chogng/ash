@@ -447,37 +447,44 @@ impl Provider {
         })
     }
 
-    fn prepare_request(&self, model: &Model, request: &ModelRequest) -> ModelRequest {
+    fn prepare_request(
+        &self,
+        model: &Model,
+        request: &ModelRequest,
+    ) -> Result<ModelRequest, ModelProviderError> {
         let mut request = request.clone();
         request.max_output_tokens = request.max_output_tokens.or(self.config.max_output_tokens);
         use ash_protocol::ModelServiceTier;
-        request.service_tier = if self.config.provider.as_str() == "openai"
-            || (model.capabilities.fast_mode == CapabilitySupport::Supported
-                && self.config.connection.as_str() != "xai-subscription")
-        {
-            match (
-                self.config.provider.as_str(),
-                self.config.fast_models.contains(&model.id),
-            ) {
-                ("openai", true) => Some(ModelServiceTier::Fast),
-                // Claude's speed flag and Priority capacity are separate upstream features.
-                ("anthropic", true) => Some(match model.id.as_str() {
-                    "claude-opus-5-5" | "claude-opus-4-8" => ModelServiceTier::Fast,
-                    _ => ModelServiceTier::Priority,
-                }),
-                ("google" | "xai", true) => Some(ModelServiceTier::Priority),
-                ("openai" | "anthropic" | "google" | "xai", false) => {
-                    Some(ModelServiceTier::Standard)
+        request.service_tier = request.service_tier.or_else(|| {
+            if self.config.provider.as_str() == "openai"
+                || (model.capabilities.fast_mode == CapabilitySupport::Supported
+                    && self.config.connection.as_str() != "xai-subscription")
+            {
+                match (
+                    self.config.provider.as_str(),
+                    self.config.fast_models.contains(&model.id),
+                ) {
+                    ("openai", true) => Some(ModelServiceTier::Fast),
+                    // Claude's speed flag and Priority capacity are separate upstream features.
+                    ("anthropic", true) => Some(match model.id.as_str() {
+                        "claude-opus-5-5" | "claude-opus-4-8" => ModelServiceTier::Fast,
+                        _ => ModelServiceTier::Priority,
+                    }),
+                    ("google" | "xai", true) => Some(ModelServiceTier::Priority),
+                    ("openai" | "anthropic" | "google" | "xai", false) => {
+                        Some(ModelServiceTier::Standard)
+                    }
+                    _ => None,
                 }
-                _ => None,
+            } else {
+                model.settings.default_service_tier
             }
-        } else {
-            None
-        };
+        });
+        crate::request_settings::apply_settings(model, self.protocol(), &mut request)?;
         let _ = request.sanitize_image_details(
             model.capabilities.image_detail_original == CapabilitySupport::Supported,
         );
-        request
+        Ok(request)
     }
 
     fn is_start_plan(&self) -> bool {
@@ -551,16 +558,29 @@ impl Provider {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
+        let model = self.resolve_model(model_id)?;
+        self.execute_model_with_cancellation(&model, request, cancellation, sink)
+    }
+
+    // Bound runtimes use their captured metadata; discovery cannot rewrite an accepted call.
+    fn execute_model_with_cancellation(
+        &self,
+        model: &Model,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
         let diagnostic = DiagnosticClient::new(
             self.client.clone(),
             self.diagnostics.clone(),
             ResponseOperation::Model,
         );
         let result = (|| {
-            let model = self.resolve_model(model_id)?;
-            let request = self.prepare_request(&model, request);
+            // Catalog metadata is frozen; credentials remain revocable for every invocation.
+            self.ensure_account()?;
+            let request = self.prepare_request(model, request)?;
             check_cancellation(cancellation)?;
-            let target = self.target.resolve_for_model(model_id, cancellation)?;
+            let target = self.target.resolve_for_model(&model.id, cancellation)?;
             target.ensure_account(&self.account_identity)?;
             let attempt_client = AttemptClient::new(&diagnostic);
             let mut attempt = AttemptEvents {
@@ -707,6 +727,13 @@ impl Provider {
         model_id: &ModelId,
     ) -> Result<ContextTokenMeasurementCapability, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
+        Ok(self.model_input_token_measurement_capability(&model))
+    }
+
+    fn model_input_token_measurement_capability(
+        &self,
+        model: &Model,
+    ) -> ContextTokenMeasurementCapability {
         let provider = if !matches!(self.remote_measurement, RemoteMeasurement::Disabled) {
             self.adapter
                 .input_token_measurement_capability(model.id.as_str())
@@ -714,11 +741,11 @@ impl Provider {
             ContextTokenMeasurementCapability::Unavailable
         };
         if provider != ContextTokenMeasurementCapability::Unavailable {
-            Ok(provider)
+            provider
         } else if self.local_counter.supports(model.id.as_str()) {
-            Ok(ContextTokenMeasurementCapability::Local)
+            ContextTokenMeasurementCapability::Local
         } else {
-            Ok(ContextTokenMeasurementCapability::Unavailable)
+            ContextTokenMeasurementCapability::Unavailable
         }
     }
 
@@ -729,10 +756,21 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
+        self.measure_model_with_cancellation(&model, request, cancellation)
+    }
+
+    fn measure_model_with_cancellation(
+        &self,
+        model: &Model,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
+        self.ensure_account()?;
+        let request = self.prepare_request(model, request)?;
         let request = if self.is_start_plan() {
-            std::borrow::Cow::Owned(providers::start_plan::measurement_request(request))
+            std::borrow::Cow::Owned(providers::start_plan::measurement_request(&request))
         } else {
-            std::borrow::Cow::Borrowed(request)
+            std::borrow::Cow::Borrowed(&request)
         };
         let target = match &self.remote_measurement {
             RemoteMeasurement::Enabled(target) => Some(target.clone()),
@@ -785,12 +823,17 @@ impl Provider {
         }
     }
 
-    fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
+    fn ensure_account(&self) -> Result<(), ModelProviderError> {
         if self.target.identity()? != self.account_identity {
             return Err(ModelProviderError::Credential(
                 "the connection account changed or is no longer ready".into(),
             ));
         }
+        Ok(())
+    }
+
+    fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
+        self.ensure_account()?;
         let model_ref = ModelRef::new(self.definition.id.clone(), model_id.clone());
         // Built-in membership is independent of a remote listing, including an empty or stale one.
         let mut model = if let Some(spec) = model_provider_info::find_static_model(&model_ref) {
@@ -1631,6 +1674,8 @@ impl Default for ModelProviderRuntime {
 pub struct ModelRuntimeRequest {
     pub model: ModelRef,
     pub config: ModelProviderConfig,
+    /// Effective metadata captured from the same catalog as the Turn's context budget.
+    pub info: Option<Model>,
 }
 
 /// Receives provider-neutral model deltas from one immutable model invocation.
@@ -1644,7 +1689,16 @@ pub trait ModelEventSink {
 
 impl ModelRuntimeRequest {
     pub fn new(model: ModelRef, config: ModelProviderConfig) -> Self {
-        Self { model, config }
+        Self {
+            model,
+            config,
+            info: None,
+        }
+    }
+
+    pub fn with_info(mut self, info: Model) -> Self {
+        self.info = Some(info);
+        self
     }
 }
 
@@ -1734,7 +1788,29 @@ impl ModelProvider for ModelProviderRuntime {
         &self,
         request: ModelRuntimeRequest,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
-        self.build_model(&request.config, &request.model)
+        let Some(info) = request.info else {
+            return self.build_model(&request.config, &request.model);
+        };
+        if info.id != request.model.model {
+            return Err(ModelProviderError::InvalidRequest(
+                "model metadata identity mismatch".into(),
+            ));
+        }
+        info.settings
+            .validate()
+            .map_err(|message| ModelProviderError::InvalidRequest(message.into()))?;
+        let runtime = self.with_configs([&request.config])?;
+        let normalized = runtime
+            .configs
+            .normalize_for(&request.config, &request.model.provider)?;
+        let provider = runtime.instantiate_normalized(normalized)?;
+        // The caller supplies a catalog-validated identity, including models learned by discovery.
+        // Static membership cannot validate an account-scoped discovered model.
+        provider.ensure_account()?;
+        Ok(Arc::new(RegisteredModelInvoker {
+            provider,
+            model: info,
+        }))
     }
 }
 
@@ -1753,9 +1829,12 @@ impl ModelInvoker for RegisteredModelInvoker {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let request = self.prepare_request(request);
-        self.provider
-            .complete_with_cancellation(&self.model.id, &request, cancellation)
+        self.provider.execute_model_with_cancellation(
+            &self.model,
+            request,
+            cancellation,
+            &mut DiscardModelEvents,
+        )
     }
 
     fn output_transport(&self) -> ModelOutputTransport {
@@ -1768,15 +1847,18 @@ impl ModelInvoker for RegisteredModelInvoker {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let request = self.prepare_request(request);
+        if self.output_transport() == ModelOutputTransport::Unary {
+            return Err(ModelProviderError::Unavailable(
+                "the configured model endpoint does not support streaming".into(),
+            ));
+        }
         self.provider
-            .stream_with_cancellation(&self.model.id, &request, cancellation, sink)
+            .execute_model_with_cancellation(&self.model, request, cancellation, sink)
     }
 
     fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
         self.provider
-            .input_token_measurement_capability(&self.model.id)
-            .unwrap_or(ContextTokenMeasurementCapability::Unavailable)
+            .model_input_token_measurement_capability(&self.model)
     }
 
     fn measure_input_with_cancellation(
@@ -1784,15 +1866,8 @@ impl ModelInvoker for RegisteredModelInvoker {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
-        let request = self.prepare_request(request);
         self.provider
-            .measure_input_with_cancellation(&self.model.id, &request, cancellation)
-    }
-}
-
-impl RegisteredModelInvoker {
-    fn prepare_request(&self, request: &ModelRequest) -> ModelRequest {
-        self.provider.prepare_request(&self.model, request)
+            .measure_model_with_cancellation(&self.model, request, cancellation)
     }
 }
 

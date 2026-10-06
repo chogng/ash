@@ -120,7 +120,11 @@ fn shared_permission_instructions_follow_the_recorded_turn_mode_and_survive_relo
         for asset in ash_prompts::permissions_instructions(mode) {
             assert_eq!(body.matches(asset.body().trim()).count(), 1);
         }
-        assert_eq!(body.matches("## Shared working rules").count(), 1);
+        assert_eq!(
+            body.matches(ash_prompts::AGENT_INSTRUCTIONS.body().trim())
+                .count(),
+            1
+        );
         assert_eq!(
             fixture
                 .controller

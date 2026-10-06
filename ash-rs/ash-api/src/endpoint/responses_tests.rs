@@ -2,6 +2,28 @@ use super::*;
 use crate::Message;
 
 #[test]
+fn responses_encode_explicit_verbosity_and_summary_without_enabling_effort() {
+    let mut request = ModelRequest::text("hello");
+    request.verbosity = Some(ash_protocol::ModelVerbosity::High);
+    request.reasoning_summary = Some(ash_protocol::ModelReasoningSummary::Detailed);
+    for endpoint in [ApiEndpoint::OpenAiResponses, ApiEndpoint::ChatGptResponses] {
+        let body = build_request(endpoint, "test", &request).unwrap();
+        assert_eq!(body["text"], json!({"verbosity":"high"}));
+        assert_eq!(body["reasoning"], json!({"summary":"detailed"}));
+        request.reasoning = Some(crate::ReasoningConfig {
+            effort: ReasoningEffort::Low,
+            summary: true,
+        });
+        request.reasoning_summary = Some(ash_protocol::ModelReasoningSummary::None);
+        let body = build_request(endpoint, "test", &request).unwrap();
+        assert_eq!(body["reasoning"], json!({"effort":"low"}));
+        request.reasoning = None;
+        request.reasoning_summary = Some(ash_protocol::ModelReasoningSummary::Detailed);
+    }
+    assert!(super::super::chat_completions::build_request("test", &request).is_err());
+}
+
+#[test]
 fn fast_service_tier_uses_each_endpoint_contract_and_is_omitted_from_token_counting() {
     let mut request = ModelRequest::text("hello");
     for (endpoint, tier) in [

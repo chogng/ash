@@ -113,6 +113,7 @@ impl CodexModel {
                     effort: effort.reasoning_effort,
                 })
                 .collect(),
+            ..CatalogEntry::default()
         }
     }
 }

@@ -87,6 +87,10 @@ impl Default for ModelImageInputPolicy {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verbosity: Option<crate::ModelVerbosity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_summary: Option<crate::ModelReasoningSummary>,
     /// Requested provider service tier; absence uses the provider default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<ModelServiceTier>,
@@ -165,6 +169,8 @@ fn sanitize_content(
 impl ModelRequest {
     pub fn text(prompt: impl Into<String>) -> Self {
         Self {
+            verbosity: None,
+            reasoning_summary: None,
             service_tier: None,
             instructions: None,
             input: vec![InputItem::Message(Message::text(MessageRole::User, prompt))],

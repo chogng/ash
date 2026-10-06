@@ -25,6 +25,8 @@ pub struct ModelCapabilitiesPatch {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ModelMetadataPatch {
+    #[serde(default)]
+    pub settings: ash_protocol::ModelSettings,
     pub access: Option<ash_protocol::ModelAccess>,
     pub display_name: Option<String>,
     pub context_window: Option<ContextWindow>,

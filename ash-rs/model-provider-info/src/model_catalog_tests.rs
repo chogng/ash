@@ -127,6 +127,57 @@ fn editing_one_models_base_prompt_keeps_other_entries_independent() {
     second["instructions"] = json!({"revision":"v2", "body":"Independent model prompt"});
     let parsed = parse_catalog(&json!({"models":[first, second]}).to_string()).unwrap();
     assert_ne!(parsed[0].instructions.body, parsed[1].instructions.body);
-    assert_eq!(parsed[0].instructions.revision, "model-base-v1");
+    assert_eq!(parsed[0].instructions.revision, "model-base-v2");
     assert_eq!(parsed[1].instructions.revision, "v2");
+}
+
+#[test]
+fn invalid_request_defaults_fail_before_catalog_publication() {
+    for settings in [
+        json!({"inputModalities":[]}),
+        json!({"inputModalities":["image"]}),
+        json!({"inputModalities":["text","text"]}),
+        json!({"defaultVerbosity":"low"}),
+        json!({"verbosity":"unsupported","defaultVerbosity":"low"}),
+        json!({"defaultReasoningSummary":"auto"}),
+        json!({"serviceTiers":["standard"],"defaultServiceTier":"fast"}),
+        json!({"serviceTiers":["standard","standard"]}),
+        json!({"toolOutputLimit":{"mode":"tokens","limit":0}}),
+        json!({"toolOutputLimit":{"mode":"words","limit":100}}),
+        json!({"defautVerbosity":"low"}),
+    ] {
+        let mut model = row();
+        model["settings"] = settings.clone();
+        assert!(
+            parse_catalog(&json!({"models":[model]}).to_string()).is_err(),
+            "{settings}"
+        );
+    }
+}
+
+#[test]
+fn bundled_openai_settings_reach_runtime_model_metadata() {
+    let spec = find_static_model(&ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6.1-sol").unwrap(),
+    ))
+    .unwrap();
+    let model = spec.model();
+    assert_eq!(
+        model.settings.default_verbosity,
+        Some(ash_protocol::ModelVerbosity::Low)
+    );
+    assert_eq!(
+        model.capabilities.parallel_tool_calls,
+        ash_protocol::CapabilitySupport::Supported
+    );
+    assert_eq!(
+        model.capabilities.image_detail_original,
+        ash_protocol::CapabilitySupport::Supported
+    );
+    assert!(
+        spec.instructions
+            .body
+            .contains("## Handling context and output budgets")
+    );
 }

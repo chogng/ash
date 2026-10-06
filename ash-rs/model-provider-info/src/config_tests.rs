@@ -10,6 +10,15 @@ fn provider_id(value: &str) -> ProviderId {
 }
 
 #[test]
+fn plugin_model_settings_are_validated_before_registry_commit() {
+    let mut provider = definition("plugin", EndpointPolicy::ConfiguredOnly);
+    let mut model = ash_protocol::ModelInfo::new(ModelId::new("test").unwrap(), "Test");
+    model.settings.tool_output_limit = Some(ash_protocol::ModelToolOutputLimit::Tokens(0));
+    provider.models.push(model);
+    assert!(ProviderConfigRegistry::from_definitions([provider]).is_err());
+}
+
+#[test]
 fn custom_context_presets_set_internal_output_limits() {
     for protocol in [
         CustomProviderProtocol::Responses,

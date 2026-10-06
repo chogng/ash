@@ -86,6 +86,8 @@ pub struct ModelCatalogEntry {
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
+    #[serde(default)]
+    pub settings: ash_protocol::ModelSettings,
 }
 
 impl ModelCatalogEntry {
@@ -119,6 +121,7 @@ impl ModelCatalogEntry {
             supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
             model_reasoning_effort: info.model_reasoning_effort,
             default_personality: info.default_personality,
+            settings: info.settings.clone(),
         }
     }
 }

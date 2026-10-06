@@ -288,7 +288,7 @@ impl ResponsesModelSession {
         let model = self.provider.resolve_model(
             &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
         )?;
-        let request = self.provider.prepare_request(&model, request);
+        let request = self.provider.prepare_request(&model, request)?;
         let mut events = Events {
             inner: sink,
             failure: None,
@@ -311,7 +311,7 @@ impl ResponsesModelSession {
         let model = self.provider.resolve_model(
             &model_provider_info::ModelId::new(&self.model).expect("validated model ID"),
         )?;
-        let request = self.provider.prepare_request(&model, request);
+        let request = self.provider.prepare_request(&model, request)?;
         self.session
             .warm_up(&request, cancellation)
             .await

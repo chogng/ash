@@ -98,3 +98,36 @@ fn chatgpt_catalog_uses_codex_priority_and_preserves_equal_priority_order() {
         ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol"]
     );
 }
+
+#[test]
+fn remote_model_catalog_imports_request_defaults_and_capabilities() {
+    let entries = serde_json::from_value(serde_json::json!([{
+        "slug":"gpt-settings", "visibility":"list", "context_window":272000, "max_context_window":872000,
+        "input_modalities":["text","image"], "supports_parallel_tool_calls":false,
+        "supports_image_detail_original":true, "support_verbosity":true, "default_verbosity":"low",
+        "supports_reasoning_summary_parameter":true, "default_reasoning_summary":"none",
+        "truncation_policy":{"mode":"tokens","limit":10000}
+    }])).unwrap();
+    let imported = normalize_models(entries).unwrap();
+    let info = &imported[0].metadata;
+    assert_eq!(
+        info.context_window,
+        Some(ash_protocol::ContextWindow::Known(872000))
+    );
+    assert_eq!(
+        info.capabilities.parallel_tool_calls,
+        Some(ash_protocol::CapabilitySupport::Unsupported)
+    );
+    assert_eq!(
+        info.capabilities.image_detail_original,
+        Some(ash_protocol::CapabilitySupport::Supported)
+    );
+    assert_eq!(
+        info.settings.default_verbosity,
+        Some(ash_protocol::ModelVerbosity::Low)
+    );
+    assert_eq!(
+        info.settings.tool_output_limit,
+        Some(ash_protocol::ModelToolOutputLimit::Tokens(10000))
+    );
+}

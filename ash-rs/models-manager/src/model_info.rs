@@ -193,6 +193,7 @@ pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCat
         ModelLifecycle::Unknown,
         ModelMetadataQuality::Unknown,
         ModelMetadataProvenance {
+            settings: None,
             display_name: None,
             context_window: None,
             auto_compact_token_limit: None,

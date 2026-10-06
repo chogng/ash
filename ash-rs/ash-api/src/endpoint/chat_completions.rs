@@ -129,6 +129,11 @@ impl OpenAiChatCompletionsBodySink<'_> {
 }
 
 pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    if request.verbosity.is_some() || request.reasoning_summary.is_some() {
+        return Err(ApiError::InvalidRequest(
+            "Responses text and summary parameters require a Responses endpoint".into(),
+        ));
+    }
     crate::requests::openai_tools::validate_tools(&request.tools)?;
     crate::requests::require_materialized_attachments(request)?;
     for item in &request.input {

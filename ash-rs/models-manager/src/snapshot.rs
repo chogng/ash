@@ -62,6 +62,7 @@ pub struct ModelCapabilitiesProvenance {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModelMetadataProvenance {
+    pub settings: Option<MetadataSource>,
     pub display_name: Option<MetadataSource>,
     pub context_window: Option<MetadataSource>,
     pub auto_compact_token_limit: Option<MetadataSource>,

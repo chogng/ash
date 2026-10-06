@@ -799,3 +799,136 @@ async fn corrupt_disk_cache_is_rebuilt_from_discovery() {
         1
     );
 }
+
+#[tokio::test]
+async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
+    let mut seed = ModelInfo::new(model_id("alpha"), "Alpha");
+    seed.settings.verbosity = CapabilitySupport::Supported;
+    seed.settings.default_verbosity = Some(ash_protocol::ModelVerbosity::Low);
+    seed.settings.input_modalities = Some(vec![
+        ash_protocol::ModelInputModality::Text,
+        ash_protocol::ModelInputModality::Image,
+    ]);
+    let manager = ModelsManager::new(
+        ProviderConfigRegistry::from_definitions([definition(
+            "strict",
+            ModelCatalogPolicy::ListedOnly,
+        )
+        .with_models([seed])])
+        .unwrap(),
+    );
+    let scope = dynamic_scope("strict", "settings-account");
+    let first = ModelMetadataPatch {
+        settings: ash_protocol::ModelSettings {
+            tool_output_limit: Some(ash_protocol::ModelToolOutputLimit::Tokens(4000)),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let unsupported = ModelMetadataPatch {
+        settings: ash_protocol::ModelSettings {
+            verbosity: CapabilitySupport::Unsupported,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let source = Arc::new(QueueSource::new([
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::Partial,
+            [DiscoveredModel::new(model_id("alpha")).with_metadata(first)],
+        )),
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::Partial,
+            [DiscoveredModel::new(model_id("alpha")).with_metadata(unsupported)],
+        )),
+    ]));
+    let before = manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        before.entries()[0].info().settings.default_verbosity,
+        Some(ash_protocol::ModelVerbosity::Low)
+    );
+    assert_eq!(
+        before.entries()[0]
+            .info()
+            .settings
+            .input_modalities
+            .as_ref()
+            .unwrap()
+            .len(),
+        2
+    );
+    let after = manager.refresh(scope, source).await.unwrap();
+    assert_eq!(
+        after.entries()[0].info().settings.verbosity,
+        CapabilitySupport::Unsupported
+    );
+    assert_eq!(after.entries()[0].info().settings.default_verbosity, None);
+    assert_eq!(
+        after.entries()[0].info().settings.tool_output_limit,
+        Some(ash_protocol::ModelToolOutputLimit::Tokens(4000))
+    );
+    assert!(after.generation() > before.generation());
+    assert_eq!(
+        before.entries()[0].info().settings.default_verbosity,
+        Some(ash_protocol::ModelVerbosity::Low)
+    );
+}
+
+#[tokio::test]
+async fn invalid_settings_observation_does_not_replace_a_successful_catalog() {
+    let manager = ModelsManager::new(registry());
+    let scope = dynamic_scope("strict", "invalid-settings");
+    let source = Arc::new(QueueSource::new([
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::Partial,
+            [DiscoveredModel::new(model_id("alpha"))],
+        )),
+        Ok(modified(
+            &scope,
+            DiscoveryCoverage::CompleteAgentCatalog,
+            [
+                DiscoveredModel::new(model_id("other")).with_metadata(ModelMetadataPatch {
+                    settings: ash_protocol::ModelSettings {
+                        tool_output_limit: Some(ash_protocol::ModelToolOutputLimit::Tokens(0)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+            ],
+        )),
+    ]));
+    manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert!(
+        matches!(manager.refresh(scope.clone(), source).await, Err(ModelsManagerError::Source { error, .. }) if error.kind() == CatalogSourceErrorKind::InvalidPayload)
+    );
+    let snapshot = manager
+        .read(
+            scope,
+            CatalogReadPolicy::CacheOnly,
+            CatalogReadSource::Offline,
+        )
+        .await
+        .unwrap();
+    assert!(
+        snapshot
+            .entries()
+            .iter()
+            .any(|entry| entry.model().model == model_id("alpha")
+                && entry.availability() == ModelAvailability::Available)
+    );
+    assert!(
+        !snapshot
+            .entries()
+            .iter()
+            .any(|entry| entry.model().model == model_id("other"))
+    );
+}

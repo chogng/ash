@@ -2,6 +2,33 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn model_settings_and_explicit_request_controls_round_trip() {
+    let value = json!({
+        "inputModalities": ["text", "image"],
+        "verbosity": "supported",
+        "defaultVerbosity": "low",
+        "reasoningSummary": "supported",
+        "defaultReasoningSummary": "none",
+        "serviceTiers": ["standard", "priority"],
+        "defaultServiceTier": "standard",
+        "toolOutputLimit": {"mode": "tokens", "limit": 10000}
+    });
+    let settings: ModelSettings = serde_json::from_value(value.clone()).unwrap();
+    settings.validate().unwrap();
+    assert_eq!(serde_json::to_value(&settings).unwrap(), value);
+    let mut request = ModelRequest::text("hello");
+    request.verbosity = Some(ModelVerbosity::High);
+    request.reasoning_summary = Some(ModelReasoningSummary::Detailed);
+    let value = serde_json::to_value(&request).unwrap();
+    assert_eq!(value["verbosity"], "high");
+    assert_eq!(value["reasoningSummary"], "detailed");
+    assert_eq!(
+        serde_json::from_value::<ModelRequest>(value).unwrap(),
+        request
+    );
+}
+
+#[test]
 fn user_input_client_identity_round_trips_and_old_history_remains_readable() {
     for item in [
         json!({"type":"userMessage", "itemId":"item", "turnId":"turn", "text":"rebase"}),
@@ -1109,6 +1136,8 @@ fn durable_tool_result_preserves_structured_image_content_and_reads_legacy_text(
 #[test]
 fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
     let mut request = ModelRequest {
+        verbosity: None,
+        reasoning_summary: None,
         service_tier: None,
         instructions: None,
         input: vec![

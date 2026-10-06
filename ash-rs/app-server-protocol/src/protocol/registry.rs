@@ -2070,6 +2070,8 @@ use ash_protocol::ModelId;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInputEstimate;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelInputModality;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInvocationId;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInvocationOutcome;
@@ -2080,17 +2082,27 @@ use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelReasoningSummary;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReferenceCostReason;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReferenceCostRecord;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReferenceCostSummary;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelServiceTier;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelSettings;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelToolOutputLimit;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelUsage;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelUsageSummary;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelUsageTotal;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelVerbosity;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::PendingInteraction;
 #[cfg(any(test, feature = "export"))]
@@ -5328,6 +5340,12 @@ typescript_bindings! {
     ModelAccess,
     ModelOutputTransport,
     ModelCapabilities,
+    ModelSettings,
+    ModelInputModality,
+    ModelVerbosity,
+    ModelReasoningSummary,
+    ModelServiceTier,
+    ModelToolOutputLimit,
     ReasoningEffort,
     ReasoningState,
     Personality,

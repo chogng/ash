@@ -41,6 +41,8 @@ pub struct StaticModelSpec {
     #[serde(default)]
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
+    #[serde(default)]
+    pub settings: ash_protocol::ModelSettings,
 }
 
 impl StaticModelSpec {
@@ -63,6 +65,7 @@ impl StaticModelSpec {
         model.capabilities = self.capabilities;
         model.supported_reasoning_efforts = self.supported_reasoning_efforts.clone();
         model.model_reasoning_effort = self.model_reasoning_effort;
+        model.settings = self.settings.clone();
         model
     }
 }

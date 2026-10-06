@@ -26,6 +26,9 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
     let mut catalog: ModelCatalog = serde_json::from_str(json)?;
     let mut identities = HashSet::new();
     for spec in &mut catalog.models {
+        spec.settings
+            .validate()
+            .map_err(serde_json::Error::custom)?;
         let provider = ProviderId::new(&spec.provider_id).map_err(serde_json::Error::custom)?;
         let model = ModelId::new(&spec.model_id).map_err(serde_json::Error::custom)?;
         if !identities.insert((provider, model)) {

@@ -123,19 +123,23 @@ impl ModelCatalogSource for ChatGptCatalogSource {
                     )
                 })?;
                 let target = target.api_target();
-                let url = target
-                    .endpoint(&format!(
-                        "models?client_version={}",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .map_err(|_| {
-                        CatalogSourceError::new(
-                            CatalogSourceErrorKind::InvalidRequest,
-                            "Invalid ChatGPT models endpoint",
-                        )
-                    })?;
+                let url = target.endpoint("models").map_err(|_| {
+                    CatalogSourceError::new(
+                        CatalogSourceErrorKind::InvalidRequest,
+                        "Invalid ChatGPT models endpoint",
+                    )
+                })?;
+                // The bound target validates a path; query parameters belong to the operation.
+                let mut url = url::Url::parse(&url).map_err(|_| {
+                    CatalogSourceError::new(
+                        CatalogSourceErrorKind::InvalidRequest,
+                        "Invalid ChatGPT models endpoint",
+                    )
+                })?;
+                url.query_pairs_mut()
+                    .append_pair("client_version", env!("CARGO_PKG_VERSION"));
                 let request = target
-                    .request(HttpMethod::Get, url, Vec::new(), Vec::new())
+                    .request(HttpMethod::Get, url.to_string(), Vec::new(), Vec::new())
                     .map_err(|_| {
                         CatalogSourceError::new(
                             CatalogSourceErrorKind::InvalidRequest,
@@ -249,6 +253,7 @@ fn normalize_models(
         .into_iter()
         .filter(|entry| entry.visibility.as_deref() == Some("list"))
         .map(|entry| {
+            let settings = entry.settings();
             let id = ModelId::new(entry.slug).map_err(|_| {
                 CatalogSourceError::new(
                     CatalogSourceErrorKind::InvalidPayload,
@@ -262,13 +267,23 @@ fn normalize_models(
                 .into_iter()
                 .filter_map(|level| ReasoningEffort::parse(&level.effort))
                 .collect::<Vec<_>>();
+            settings.validate().map_err(|message| {
+                CatalogSourceError::new(CatalogSourceErrorKind::InvalidPayload, message)
+            })?;
             Ok(DiscoveredModel::new(id).with_metadata(ModelMetadataPatch {
+                settings,
                 access: Some(ModelAccess::Subscription),
                 display_name: entry.display_name,
-                context_window: entry.context_window.map(ContextWindow::Known),
+                context_window: entry
+                    .max_context_window
+                    .or(entry.context_window)
+                    .map(ContextWindow::Known),
+                auto_compact_token_limit: entry.auto_compact_token_limit,
                 capabilities: ModelCapabilitiesPatch {
                     tools: Some(CapabilitySupport::Supported),
                     reasoning: (!efforts.is_empty()).then_some(CapabilitySupport::Supported),
+                    parallel_tool_calls: entry.supports_parallel_tool_calls.map(capability),
+                    image_detail_original: entry.supports_image_detail_original.map(capability),
                     ..ModelCapabilitiesPatch::default()
                 },
                 supported_reasoning_efforts: Some(efforts),
@@ -294,7 +309,7 @@ struct Catalog {
     models: Vec<CatalogEntry>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Default, serde::Deserialize)]
 struct CatalogEntry {
     slug: String,
     #[serde(default)]
@@ -302,6 +317,16 @@ struct CatalogEntry {
     display_name: Option<String>,
     visibility: Option<String>,
     context_window: Option<u32>,
+    max_context_window: Option<u32>,
+    auto_compact_token_limit: Option<u32>,
+    supports_parallel_tool_calls: Option<bool>,
+    supports_image_detail_original: Option<bool>,
+    input_modalities: Option<Vec<ash_protocol::ModelInputModality>>,
+    support_verbosity: Option<bool>,
+    default_verbosity: Option<ash_protocol::ModelVerbosity>,
+    supports_reasoning_summary_parameter: Option<bool>,
+    default_reasoning_summary: Option<ash_protocol::ModelReasoningSummary>,
+    truncation_policy: Option<ash_protocol::ModelToolOutputLimit>,
     default_reasoning_level: Option<String>,
     #[serde(default)]
     supported_reasoning_levels: Vec<ReasoningLevel>,
@@ -310,4 +335,34 @@ struct CatalogEntry {
 #[derive(serde::Deserialize)]
 struct ReasoningLevel {
     effort: String,
+}
+
+fn capability(supported: bool) -> CapabilitySupport {
+    if supported {
+        CapabilitySupport::Supported
+    } else {
+        CapabilitySupport::Unsupported
+    }
+}
+
+impl CatalogEntry {
+    fn settings(&self) -> ash_protocol::ModelSettings {
+        // Remote wire booleans are optional evidence. A missing parameter capability must never
+        // become supported merely because the current adapter happens to implement that field.
+        ash_protocol::ModelSettings {
+            input_modalities: self.input_modalities.clone(),
+            verbosity: self
+                .support_verbosity
+                .map(capability)
+                .unwrap_or(CapabilitySupport::Unknown),
+            default_verbosity: self.default_verbosity,
+            reasoning_summary: self
+                .supports_reasoning_summary_parameter
+                .map(capability)
+                .unwrap_or(CapabilitySupport::Unknown),
+            default_reasoning_summary: self.default_reasoning_summary,
+            tool_output_limit: self.truncation_policy,
+            ..ash_protocol::ModelSettings::default()
+        }
+    }
 }

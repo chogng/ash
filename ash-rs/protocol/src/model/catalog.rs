@@ -238,6 +238,8 @@ pub struct ModelInfo {
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
+    #[serde(default)]
+    pub settings: crate::ModelSettings,
 }
 
 impl ModelInfo {
@@ -252,6 +254,7 @@ impl ModelInfo {
             supported_reasoning_efforts: Vec::new(),
             model_reasoning_effort: None,
             default_personality: None,
+            settings: crate::ModelSettings::default(),
         }
     }
 }

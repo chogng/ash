@@ -276,6 +276,9 @@ pub(super) fn build_request(
     if let Some(instructions) = &request.instructions {
         body.insert("instructions".into(), Value::String(instructions.clone()));
     }
+    if let Some(verbosity) = request.verbosity {
+        body.insert("text".into(), json!({"verbosity": verbosity}));
+    }
     if !request.tools.is_empty() {
         body.insert(
             "tools".into(),
@@ -297,9 +300,21 @@ pub(super) fn build_request(
                 "effort": reasoning_effort(reasoning.effort),
             }),
         );
-        if reasoning.summary {
+        if let Some(summary) = request
+            .reasoning_summary
+            .filter(|summary| *summary != ash_protocol::ModelReasoningSummary::None)
+        {
+            body["reasoning"]["summary"] = json!(summary);
+        } else if request.reasoning_summary.is_none() && reasoning.summary {
             body["reasoning"]["summary"] = json!("auto");
         }
+    }
+    if request.reasoning.is_none()
+        && let Some(summary) = request
+            .reasoning_summary
+            .filter(|summary| *summary != ash_protocol::ModelReasoningSummary::None)
+    {
+        body.insert("reasoning".into(), json!({"summary": summary}));
     }
     body.insert("include".into(), json!(["reasoning.encrypted_content"]));
     if let Some(max_output_tokens) = request.max_output_tokens {

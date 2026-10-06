@@ -111,6 +111,10 @@ ModelsManager::refresh(scope, source)
 `ModelMetadataQuality` 随 snapshot entry 暴露。Static seed 的 availability 是 `Unverified`，不是
 账号 entitlement 证明。
 
+`ModelSettings` 同样逐项合并：缺失列表、默认值与 `Unknown` 不擦除已有资料；明确不支持 verbosity 或摘要参数时清除对应旧默认值，服务档位收窄时清除已不适用的默认档位。无效动态配置在原子提交前拒绝，不替换成功目录。`settings` 的来源标记表示最近提供该组资料的来源；组内未覆盖的字段仍沿用已有值。
+
+App Server 的列表返回有效 `settings`，每轮调用把同一目录中的预算、能力、推理默认值和请求配置传给 provider 并冻结。后续刷新不改写已接受执行；凭据撤销和账号切换仍由 provider 在每次调用前检查。
+
 Freshness 使用 manager policy 与 source 明确给出的 cache hint 中更保守的时长：
 
 | 状态 | `CachePreferred` | `RequireFresh` | `CacheOnly` |
@@ -147,7 +151,7 @@ Unknown merge、fresh/stale/expired、304 generation 稳定和 per-scope singlef
 scope 或 resolution 时必须同步相应 table test、本文和系统文档；新增 protocol-visible 字段还要同步
 App Server DTO/schema fixture。
 
-当前实现有 per-scope 进程内缓存及按供应商文件、账户 scope 隔离的持久发现记录；尚无全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入动态目录；不支持发现的供应商在 TUI 中没有发现条目。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/updated` 通知；显式刷新使用 `provider/models/list`。
+当前实现有 per-scope 进程内缓存及按供应商文件、账户 scope 隔离的持久发现记录；尚无全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入动态目录；不支持发现的供应商在 TUI 中没有发现条目。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities、settings 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/updated` 通知；显式刷新使用 `provider/models/list`。
 
 跨 provider 模型选择同样尚未实现：当前 `ModelsManager::resolve` 只校验一个准确 `ModelRef`，没有候选排序、`ModelSelectionDecision`、替换原因或客户端警告。计划实现必须复用本 crate 的同一批 snapshot 与 `ModelRequirements`，只在 Agent 或工作流运行创建前选择一次；准确模型不可用时先检查同 catalog scope 的已验证兼容候选，再检查同 provider 的其他允许 scope，最后检查其他允许 provider。选择结果冻结后，catalog refresh 或真实调用失败都不能触发后台换模型。完整行为与类型边界见 [`docs/models-manager.md`](../../docs/models-manager.md#103-模型选择与替换)。
 

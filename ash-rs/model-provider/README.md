@@ -35,7 +35,7 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 | --- | --- | --- |
 | `ModelProvider` | `ModelRuntimeRequest → ModelInvoker` port | composition/invocation safe point |
 | `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry、shared `ModelsManager`、lazy operation client 和可选 local tokenizer service |
-| `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
+| `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` 与可选有效 `Model` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
 | `ModelInvoker::image_input_policy` | 按已解析的模型能力提供图片尺寸与 patch 限制 | 与请求计量和调用使用同一实例 |
 | `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port | 与 invocation 相同 immutable snapshot |
@@ -48,8 +48,17 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 | `EchoModel` | deterministic test/local fixture | 不是 production model |
 | `ModelProviderError` | config/model/API/credential/unavailable error | 保留 failure domain |
 
-App Server 应在每次 model invocation safe point 重新 resolve invoker；config update 影响下一次
-invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
+App Server 在接受每轮执行时，用同一目录快照计算预算并绑定有效模型资料。配置和目录更新影响后续执行，不原地修改已经运行的 `RegisteredModelInvoker`；账号就绪状态在每次调用前重新检查。
+
+## 模型请求配置
+
+`ModelRuntimeRequest::with_info` 接收调用方已解析的有效模型资料，模型身份必须与选择一致；未传入时由 runtime 解析静态目录。绑定后调用与计数均使用捕获的 `Model`，不会重新用静态条目覆盖动态资料。
+
+- 显式请求的 verbosity、摘要与服务档位优先于模型默认值；服务档位未显式指定时应用连接的 fast 配置，再使用模型默认值。
+- Responses 编码 `text.verbosity` 与 `reasoning.summary`；摘要 `none` 表示省略参数。明确传入这些字段的 Chat Completions 或 Messages 请求会报错，不静默丢弃。
+- 已声明不支持并行工具时关闭请求并行标志；原图能力继续经现有图片处理检查。已声明模态列表时，发送前拒绝不支持的图片或音频输入。
+- 工具输出限额只作用于发往模型的副本，每个工具结果的所有文本部分共用一个预算，原始历史和持久记录保持完整。tokens 模式使用共享输出工具的 UTF-8 字节近似，不代表 tokenizer 实测值。
+- ChatGPT 远端目录导入明确返回的模态、参数支持与默认值、并行工具、原图能力、容量和截断策略；本地 Codex `model/list` 没有返回的字段保持未声明。
 
 ## 内部接口地图
 
@@ -83,9 +92,8 @@ ModelProviderRuntime::runtime(ModelRuntimeRequest)
       └─ RegisteredModelInvoker { provider, model }
 
 RegisteredModelInvoker::{invoke_with_cancellation, stream_with_cancellation}
-├─ prepare_request: apply normalized defaults
-└─ Provider::execute_with_cancellation
-   ├─ resolve_model + sanitize request + resolve authenticated target
+└─ Provider::execute_model_with_cancellation
+   ├─ 检查账号 + 应用冻结模型配置 + sanitize request + resolve authenticated target
    ├─ ProviderAdapter::{endpoint, model_id}: provider-specific selection
    └─ execute_attempt: dispatch by explicit output_transport
       ├─ streaming: ash_api::ApiEndpoint::stream_with_client_and_cancellation

@@ -241,6 +241,8 @@ impl ContextCompactionService for ModelContextCompactionService {
                 CoreError::Context(format!("failed to encode compaction source: {error}"))
             })?;
             ModelRequest {
+                verbosity: None,
+                reasoning_summary: None,
                 instructions: Some(COMPACTION_PROMPT.body().into()),
                 input: vec![InputItem::Message(Message {
                     role: MessageRole::User,

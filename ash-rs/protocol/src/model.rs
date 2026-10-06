@@ -1,6 +1,13 @@
 mod accounting;
 mod catalog;
 mod invocation;
+mod settings;
+
+pub use settings::ModelInputModality;
+pub use settings::ModelReasoningSummary;
+pub use settings::ModelSettings;
+pub use settings::ModelToolOutputLimit;
+pub use settings::ModelVerbosity;
 
 pub use accounting::ModelBillingEvidence;
 pub use accounting::ModelBillingRecord;

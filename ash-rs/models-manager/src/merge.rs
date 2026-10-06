@@ -38,6 +38,8 @@ impl CatalogRecord {
             fast_mode: known_capability_source(info.capabilities.fast_mode),
         };
         let provenance = ModelMetadataProvenance {
+            settings: (info.settings != ash_protocol::ModelSettings::default())
+                .then_some(MetadataSource::ProviderSeed),
             display_name: Some(MetadataSource::ProviderSeed),
             context_window: match info.context_window {
                 ContextWindow::Known(_) => Some(MetadataSource::ProviderSeed),
@@ -137,6 +139,10 @@ pub(crate) fn mark_unverified(records: &mut BTreeMap<ModelId, CatalogRecord>) {
 }
 
 fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
+    if patch.settings != ash_protocol::ModelSettings::default() {
+        merge_settings(&mut record.info.settings, &patch.settings);
+        record.provenance.settings = Some(MetadataSource::ProviderLive);
+    }
     if let Some(access) = patch.access {
         record.info.access = access;
     }
@@ -232,6 +238,7 @@ fn known_capability_source(value: CapabilitySupport) -> Option<MetadataSource> {
 
 fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<MetadataSource> {
     let sources = [
+        provenance.settings,
         provenance.display_name,
         provenance.context_window,
         provenance.auto_compact_token_limit,
@@ -256,4 +263,48 @@ fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<Metad
             MetadataSource::ProviderLive => 4,
             MetadataSource::UserConfigured => 5,
         })
+}
+
+// Remote catalogs may omit settings that the bundled declaration already knows. Merge supplied
+// fields only; an explicit unsupported parameter also removes its former default.
+fn merge_settings(
+    current: &mut ash_protocol::ModelSettings,
+    incoming: &ash_protocol::ModelSettings,
+) {
+    if let Some(modalities) = &incoming.input_modalities {
+        current.input_modalities = Some(modalities.clone());
+    }
+    if incoming.verbosity != CapabilitySupport::Unknown {
+        current.verbosity = incoming.verbosity;
+        if incoming.verbosity == CapabilitySupport::Unsupported {
+            current.default_verbosity = None;
+        }
+    }
+    if incoming.default_verbosity.is_some() {
+        current.default_verbosity = incoming.default_verbosity;
+    }
+    if incoming.reasoning_summary != CapabilitySupport::Unknown {
+        current.reasoning_summary = incoming.reasoning_summary;
+        if incoming.reasoning_summary == CapabilitySupport::Unsupported {
+            current.default_reasoning_summary = None;
+        }
+    }
+    if incoming.default_reasoning_summary.is_some() {
+        current.default_reasoning_summary = incoming.default_reasoning_summary;
+    }
+    if let Some(tiers) = &incoming.service_tiers {
+        current.service_tiers = Some(tiers.clone());
+        if current
+            .default_service_tier
+            .is_some_and(|tier| !tiers.contains(&tier))
+        {
+            current.default_service_tier = None;
+        }
+    }
+    if incoming.default_service_tier.is_some() {
+        current.default_service_tier = incoming.default_service_tier;
+    }
+    if incoming.tool_output_limit.is_some() {
+        current.tool_output_limit = incoming.tool_output_limit;
+    }
 }

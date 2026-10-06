@@ -110,6 +110,17 @@ impl ModelContextCatalog {
             .ok_or_else(configuration_missing)?;
         ModelContext::resolve(&self.entry(model)?, provider, &self.registry)?.require_budget()
     }
+
+    pub(super) fn info(&self, config: &ResolvedConfig) -> Result<ModelInfo, CoreError> {
+        let model = config.model.as_ref().ok_or_else(configuration_missing)?;
+        let provider = config
+            .providers
+            .get(&model.provider)
+            .ok_or_else(configuration_missing)?;
+        self.entry(model)?
+            .model_info(provider)
+            .map_err(|error| CoreError::Model(error.to_string()))
+    }
 }
 
 fn configuration_missing() -> CoreError {

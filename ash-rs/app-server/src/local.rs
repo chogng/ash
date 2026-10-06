@@ -84,7 +84,6 @@ use github::GitHubOAuth;
 use model_provider_info::ModelProviderConfig;
 use model_provider_info::ProviderAccessMode;
 use model_provider_info::ProviderConfigRegistry;
-use model_provider_info::find_static_model;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -2258,7 +2257,11 @@ fn development_built_in_skill_root() -> Option<PathBuf> {
 /// invocation, so configuration changes can affect later invocations without changing one already
 /// in progress.
 trait ModelSnapshotResolver: Send + Sync {
-    fn resolve(&self, config: &ResolvedConfig) -> Arc<dyn ModelInvoker>;
+    fn resolve(
+        &self,
+        config: &ResolvedConfig,
+        info: Option<&ash_protocol::Model>,
+    ) -> Arc<dyn ModelInvoker>;
 }
 
 struct ModelProviderSnapshotResolver {
@@ -2266,7 +2269,11 @@ struct ModelProviderSnapshotResolver {
 }
 
 impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
-    fn resolve(&self, config: &ResolvedConfig) -> Arc<dyn ModelInvoker> {
+    fn resolve(
+        &self,
+        config: &ResolvedConfig,
+        info: Option<&ash_protocol::Model>,
+    ) -> Arc<dyn ModelInvoker> {
         let Some(model_ref) = config.model.as_ref() else {
             return Arc::new(UnavailableModel::from_error(
                 ash_model_provider::ModelProviderError::ConfigurationMissing,
@@ -2279,7 +2286,13 @@ impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
             ));
         };
         self.model_provider
-            .runtime(ModelRuntimeRequest::new(model_ref.clone(), provider))
+            .runtime({
+                let request = ModelRuntimeRequest::new(model_ref.clone(), provider);
+                match info {
+                    Some(info) => request.with_info(info.clone()),
+                    None => request,
+                }
+            })
             .unwrap_or_else(|error| Arc::new(UnavailableModel::from_error(error)))
     }
 }
@@ -2324,7 +2337,13 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<ModelImageInputPolicy, CoreError> {
         let config = self.config_for_selection(selection)?;
-        Ok(self.resolver.resolve(&config).image_input_policy())
+        Ok(self
+            .resolver
+            .resolve(
+                &config,
+                Some(&self.context_catalog(&config)?.info(&config)?),
+            )
+            .image_input_policy())
     }
 
     fn reasoning_config(
@@ -2332,21 +2351,13 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let Some(model) = config.model.as_ref() else {
+        if config.model.is_none() {
             return Ok(None);
-        };
-        let default_effort = if config
-            .providers
-            .get(&model.provider)
-            .is_some_and(|provider| provider.access_mode() == ProviderAccessMode::Subscription)
-        {
-            self.catalog_provider
-                .model_info(&config.providers[&model.provider], model)
-                .map_err(|error| CoreError::Model(error.to_string()))?
-                .model_reasoning_effort
-        } else {
-            find_static_model(model).and_then(|model| model.model_reasoning_effort)
-        };
+        }
+        let default_effort = self
+            .context_catalog(&config)?
+            .info(&config)?
+            .model_reasoning_effort;
         let effort = config.model_reasoning_effort.or(default_effort);
         Ok(effort.map(|effort| ash_protocol::ReasoningConfig {
             effort,
@@ -2359,8 +2370,11 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<ContextTokenMeasurementCapability, CoreError> {
         let config = self.config_for_selection(selection)?;
-        ProviderModelService::new(self.resolver.resolve(&config))
-            .input_token_measurement_capability(ModelSelection::ConfiguredDefault)
+        ProviderModelService::new(self.resolver.resolve(
+            &config,
+            Some(&self.context_catalog(&config)?.info(&config)?),
+        ))
+        .input_token_measurement_capability(ModelSelection::ConfiguredDefault)
     }
 
     fn measure_input(
@@ -2370,11 +2384,11 @@ impl ModelService for ConfigBackedModelService {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
         let config = self.config_for_selection(selection)?;
-        ProviderModelService::new(self.resolver.resolve(&config)).measure_input(
-            ModelSelection::ConfiguredDefault,
-            request,
-            cancellation,
-        )
+        ProviderModelService::new(self.resolver.resolve(
+            &config,
+            Some(&self.context_catalog(&config)?.info(&config)?),
+        ))
+        .measure_input(ModelSelection::ConfiguredDefault, request, cancellation)
     }
 
     fn invoke(
@@ -2384,13 +2398,14 @@ impl ModelService for ConfigBackedModelService {
         cancellation: &CancellationToken,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let budget = self.context_catalog(&config)?.budget(&config)?;
+        let catalog = self.context_catalog(&config)?;
+        let budget = catalog.budget(&config)?;
         let request = model_context::request_with_output_limit(request, budget);
-        ProviderModelService::new(self.resolver.resolve(&config)).invoke(
-            ModelSelection::ConfiguredDefault,
-            &request,
-            cancellation,
+        ProviderModelService::new(
+            self.resolver
+                .resolve(&config, Some(&catalog.info(&config)?)),
         )
+        .invoke(ModelSelection::ConfiguredDefault, &request, cancellation)
     }
 
     fn stream(
@@ -2401,9 +2416,14 @@ impl ModelService for ConfigBackedModelService {
         sink: &mut dyn CoreModelStreamSink,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let budget = self.context_catalog(&config)?.budget(&config)?;
+        let catalog = self.context_catalog(&config)?;
+        let budget = catalog.budget(&config)?;
         let request = model_context::request_with_output_limit(request, budget);
-        ProviderModelService::new(self.resolver.resolve(&config)).stream(
+        ProviderModelService::new(
+            self.resolver
+                .resolve(&config, Some(&catalog.info(&config)?)),
+        )
+        .stream(
             ModelSelection::ConfiguredDefault,
             &request,
             cancellation,
@@ -3005,13 +3025,18 @@ impl FrozenModelSource {
         // Freeze configuration failures too: execution persists their actionable cause on the
         // Turn instead of rejecting snapshot creation with a generic dispatch error.
         let budget = self.contexts.budget(&config);
+        let info = self.contexts.info(&config);
+        let provider = match &info {
+            Ok(info) => self.resolver.resolve(&config, Some(info)),
+            Err(error) => {
+                Arc::new(UnavailableModel::new(error.to_string())) as Arc<dyn ModelInvoker>
+            }
+        };
         let reasoning = config
-            .model
-            .as_ref()
-            .and_then(|model| {
-                config.model_reasoning_effort.or_else(|| {
-                    find_static_model(model).and_then(|spec| spec.model_reasoning_effort)
-                })
+            .model_reasoning_effort
+            .or_else(|| match &info {
+                Ok(info) => info.model_reasoning_effort,
+                Err(_) => None,
             })
             .map(|effort| ash_protocol::ReasoningConfig {
                 effort,
@@ -3019,7 +3044,7 @@ impl FrozenModelSource {
             });
         Ok(Arc::new(FrozenModelService {
             source: self.clone(),
-            provider: ProviderModelService::new(self.resolver.resolve(&config)),
+            provider: ProviderModelService::new(provider),
             budget,
             billing_scope: billing_scope_for_config(&config),
             reasoning,

@@ -158,13 +158,19 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
   "supported_reasoning_efforts": ["low", "medium", "high"],
   "model_reasoning_effort": "medium",
   "instructions": {
-    "revision": "model-base-v1",
+    "revision": "model-base-v2",
     "body": "Complete Agent base instructions for this model.\n"
   }
 }
 ```
 
 条目放在顶层 `models` 数组中。只有身份、显示名和完整提示词必填；省略上下文容量表示未知，省略能力表示 `unknown`，不代表不支持，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
+
+`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务档位及默认值、工具输出限额。类型与校验由 [`ModelSettings`](../protocol/src/model/settings.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
+
+已与本地 Codex 清单准确匹配的 8 个 OpenAI 型号补入已声明的模态、verbosity、摘要和工具输出预算，并补齐并行工具与原图能力。服务档位使用 Ash 现有的 standard/fast/priority 契约，由接入 adapter 编码；声明不证明账号权益。其他型号保留未知值，不根据名字补造能力。Codex 的展示、升级提示、搜索工具类型及尚无调用方的字段未进入这份数据。
+
+内置完整正文提升为 `model-base-v2`，在保留各模型原有指导的基础上，补入任务完成、环境调查、工具使用、编辑、验证、权限、委托和结果报告规则。正文长度不证明模型效果，质量与额外输入成本仍需真实模型对照评测。
 
 `context_window` 是模型容量。执行预算就是容量时，无需填写 `context_window_options`；解析后的唯一档位和默认预算都等于容量。需要较小的普通预算或扩展预算时，选项按升序声明一或两个值，第一项就是默认预算，所有值不得超过容量，不再单独维护 `default_context_window`。未知容量不能声明档位。目录只在解析边界补全运行时元数据，新增协议字段不会要求逐模型填写。用户覆盖仍由 `models-manager` 合并，并受当前目录容量限制；压缩推荐使用有效预算的 90%，条目的显式压缩阈值与用户覆盖也受这一上限限制。
 

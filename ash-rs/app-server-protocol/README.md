@@ -7,6 +7,8 @@
   `environmentId` 指明所属环境，`dirId` 指明目录身份。URI 本身不提供文件访问权限。
 - Rust DTO 与方法注册表是唯一协议来源；修改后必须从仓库根运行 `just generate-protocol`，并提交 JSON Schema、三张 TypeScript 方法映射与运行时解码器。
 
+`model/list` 的 `ModelCatalogEntry.settings` 返回当前连接和目录生效后的模型请求配置，来源类型为共享 protocol 的 `ModelSettings`。列表不暴露基础提示词正文。新执行使用同一批目录资料绑定模型默认参数和预算，目录刷新只影响后续执行。
+
 ## 编译与导出
 
 - 默认构建使用空实现 `JsonSchema` / `TS` 派生，保留属性但不生成实现；握手 hash 由构建脚本从已提交的 `schema/metadata.json` 写入编译常量。
