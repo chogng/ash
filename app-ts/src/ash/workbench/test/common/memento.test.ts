@@ -1,227 +1,101 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Emitter } from "../../../base/common/event.js";
-import type { JsonValue } from "../../../base/common/jsonValue.js";
-import { isRecord } from "../../../base/common/types.js";
-import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../platform/storage/common/storage.js";
-import { Memento } from "../../../workbench/common/memento.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
+import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../platform/storage/common/storage.js';
+import { Memento } from '../../../workbench/common/memento.js';
 
 interface TestMementoState {
-	readonly version: 2;
-	readonly expanded: boolean;
-	readonly selected: string | null;
+	expanded: boolean;
+	selected: string;
 }
 
-test("Memento saves validated private state on the Storage lifecycle", async () => {
-	const storage = new TestStorageService();
-	const memento = createTestMemento(storage);
+test('Memento saves scoped state only when its owner requests a save', async () => {
+	using storage = new TestStorageService();
+	const memento = new Memento<TestMementoState>('test.view', storage);
+	const state = memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	Object.assign(state, { expanded: true, selected: 'changes' });
+	await storage.flush();
+	assert.equal(storage.get('memento/test.view', StorageScope.WORKSPACE), undefined);
 
-	assert.deepEqual(memento.state, defaultTestState());
-	memento.update({
-		version: 2,
-		expanded: true,
-		selected: "changes",
-	});
-	assert.equal(
-		storage.get("memento/test.view", StorageScope.WORKSPACE),
-		undefined,
-	);
-
-	await storage.flush(WillSaveStateReason.SHUTDOWN);
-	assert.equal(
-		storage.get("memento/test.view", StorageScope.WORKSPACE),
-		JSON.stringify({
-			version: 2,
-			expanded: true,
-			selected: "changes",
-		}),
-	);
-
-	memento.dispose();
-	const restored = createTestMemento(storage);
-	assert.deepEqual(restored.state, {
-		version: 2,
-		expanded: true,
-		selected: "changes",
-	});
-	restored.dispose();
+	memento.saveMemento();
+	const restored = new Memento<TestMementoState>('test.view', storage);
+	assert.deepEqual(restored.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE), { expanded: true, selected: 'changes' });
+	assert.equal(memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE), state);
 });
 
-test("Memento migrates and normalizes a persisted state", async () => {
-	const storage = new TestStorageService();
-	storage.store(
-		"memento/test.view",
-		JSON.stringify({ version: 1, expanded: true }),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
-	const memento = createTestMemento(storage);
+test('Memento separates scopes and records the selected storage targets', () => {
+	using storage = new TestStorageService();
+	const memento = new Memento<TestMementoState>('test.view', storage);
+	memento.getMemento(StorageScope.APPLICATION, StorageTarget.USER).selected = 'application';
+	memento.getMemento(StorageScope.PROFILE, StorageTarget.USER).selected = 'profile';
+	memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE).selected = 'workspace';
+	const changes: Array<{ scope: StorageScope; target: StorageTarget | undefined; }> = [];
+	using listeners = new DisposableStore();
+	listeners.add(storage.onDidChangeValue(({ scope, target }) => changes.push({ scope, target })));
+	memento.saveMemento();
 
-	assert.deepEqual(memento.state, {
-		version: 2,
-		expanded: true,
-		selected: null,
-	});
-	await storage.flush();
-	assert.equal(
-		storage.get("memento/test.view", StorageScope.WORKSPACE),
-		JSON.stringify({
-			version: 2,
-			expanded: true,
-			selected: null,
-		}),
-	);
-
-	memento.dispose();
-});
-
-test("Memento reports malformed state, falls back, and repairs storage", async () => {
-	const storage = new TestStorageService();
-	storage.store(
-		"memento/test.view",
-		"{broken",
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
-	const errors: unknown[] = [];
-	const memento = createTestMemento(storage, (error) => errors.push(error));
-
-	assert.deepEqual(memento.state, defaultTestState());
-	assert.equal(errors.length, 1);
-	await storage.flush();
-	assert.equal(
-		storage.get("memento/test.view", StorageScope.WORKSPACE),
-		JSON.stringify(defaultTestState()),
-	);
-
-	memento.dispose();
-});
-
-test("Memento reloads external state without discarding pending local state", async () => {
-	const storage = new TestStorageService();
-	const memento = createTestMemento(storage);
-	const changes: Array<{ readonly selected: string | null; readonly external: boolean; }> = [];
-	memento.onDidChange(({ state, external }) => {
-		changes.push({ selected: state.selected, external });
-	});
-
-	storage.storeExternal(
-		"memento/test.view",
-		JSON.stringify({
-			version: 2,
-			expanded: true,
-			selected: "external",
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
-	assert.equal(memento.state.selected, "external");
-
-	memento.update({
-		version: 2,
-		expanded: false,
-		selected: "local",
-	});
-	storage.storeExternal(
-		"memento/test.view",
-		JSON.stringify({
-			version: 2,
-			expanded: true,
-			selected: "newer-external",
-		}),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
-	assert.equal(memento.state.selected, "local");
-	await storage.flush();
-	const stored = JSON.parse(
-		storage.get("memento/test.view", StorageScope.WORKSPACE)!,
-	) as { readonly selected: string; };
-	assert.equal(
-		stored.selected,
-		"local",
-	);
 	assert.deepEqual(changes, [
-		{ selected: "external", external: true },
-		{ selected: "local", external: false },
+		{ scope: StorageScope.APPLICATION, target: StorageTarget.USER },
+		{ scope: StorageScope.PROFILE, target: StorageTarget.USER },
+		{ scope: StorageScope.WORKSPACE, target: StorageTarget.MACHINE },
 	]);
-
-	memento.dispose();
+	assert.deepEqual([StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE].map(scope => JSON.parse(storage.get('memento/test.view', scope)!)), [
+		{ selected: 'application' }, { selected: 'profile' }, { selected: 'workspace' },
+	]);
 });
 
-test("Memento rejects unstable identifiers", () => {
-	const storage = new TestStorageService();
-	assert.throws(
-		() => new Memento(storage, {
-			id: "../view",
-			scope: StorageScope.PROFILE,
-			target: StorageTarget.MACHINE,
-			defaultValue: defaultTestState,
-			parse: parseTestState,
-			serialize: serializeTestState,
-		}),
-		/Invalid Workbench Memento ID/,
-	);
+test('Memento reload retains the state object and removes stale properties', () => {
+	using storage = new TestStorageService();
+	const memento = new Memento<TestMementoState>('test.view', storage);
+	const state = memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	Object.assign(state, { expanded: true, selected: 'local' });
+	storage.storeExternal('memento/test.view', '{"selected":"external"}', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.equal(state.selected, 'local');
+
+	memento.reloadMemento(StorageScope.WORKSPACE);
+	assert.equal(memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE), state);
+	assert.deepEqual(state, { selected: 'external' });
+	delete memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE).selected;
+	memento.saveMemento();
+	assert.equal(storage.get('memento/test.view', StorageScope.WORKSPACE), undefined);
 });
 
-function createTestMemento(
-	storage: IStorageService,
-	onError?: (error: unknown) => void,
-): Memento<TestMementoState> {
-	return new Memento(storage, {
-		id: "test.view",
-		scope: StorageScope.WORKSPACE,
-		target: StorageTarget.MACHINE,
-		defaultValue: defaultTestState,
-		parse: parseTestState,
-		serialize: serializeTestState,
-		onError,
-	});
-}
+test('Memento changes are limited to its key and scope and stop when the listener owner is disposed', () => {
+	using storage = new TestStorageService();
+	const memento = new Memento<TestMementoState>('test.view', storage);
+	using listeners = new DisposableStore();
+	const values: string[] = [];
+	memento.onDidChangeValue(StorageScope.WORKSPACE, listeners)(event => values.push(event.key));
+	storage.storeExternal('memento/other.view', '{}', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.storeExternal('memento/test.view', '{}', StorageScope.PROFILE, StorageTarget.MACHINE);
+	storage.storeExternal('memento/test.view', '{}', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	listeners.dispose();
+	storage.storeExternal('memento/test.view', '{}', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.deepEqual(values, ['memento/test.view']);
+});
 
-function defaultTestState(): TestMementoState {
-	return {
-		version: 2,
-		expanded: false,
-		selected: null,
-	};
-}
-
-function parseTestState(value: unknown): TestMementoState {
-	if (!isRecord(value) || typeof value.expanded !== "boolean") {
-		throw new TypeError("Test Memento state is invalid");
+test('Memento rejects invalid identifiers and malformed persisted objects', () => {
+	using storage = new TestStorageService();
+	assert.throws(() => new Memento('../view', storage), /Invalid Workbench Memento ID/);
+	for (const source of ['{broken', '[]', 'null', '{"constructor":{}}']) {
+		storage.store('memento/test.view', source, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const memento = new Memento<TestMementoState>('test.view', storage);
+		assert.throws(() => memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE));
 	}
-	if (value.version === 1) {
-		return {
-			version: 2,
-			expanded: value.expanded,
-			selected: null,
-		};
-	}
-	if (
-		value.version !== 2 ||
-		(value.selected !== null && typeof value.selected !== "string")
-	) {
-		throw new TypeError("Test Memento state is invalid");
-	}
-	return {
-		version: 2,
-		expanded: value.expanded,
-		selected: value.selected,
-	};
-}
+});
 
-function serializeTestState(state: TestMementoState): JsonValue {
-	return {
-		version: state.version,
-		expanded: state.expanded,
-		selected: state.selected,
-	};
-}
+test('Memento rejects non-JSON component state before storing it', () => {
+	using storage = new TestStorageService();
+	const memento = new Memento<{ size: number }>('test.view', storage);
+	memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE).size = Number.NaN;
+	assert.throws(() => memento.saveMemento(), /finite number/);
+	assert.equal(storage.get('memento/test.view', StorageScope.WORKSPACE), undefined);
+});
 
-class TestStorageService implements IStorageService {
-	private readonly _onDidChangeValue = new Emitter<IStorageValueChangeEvent>();
-	private readonly _onWillSaveState = new Emitter<IWillSaveStateEvent>();
+class TestStorageService extends Disposable implements IStorageService {
+	private readonly _onDidChangeValue = this._register(new Emitter<IStorageValueChangeEvent>());
+	private readonly _onWillSaveState = this._register(new Emitter<IWillSaveStateEvent>());
 	private readonly values = new Map<string, string>();
 
 	readonly onDidChangeValue = this._onDidChangeValue.event;

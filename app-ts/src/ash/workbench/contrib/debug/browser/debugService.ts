@@ -56,7 +56,8 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	private readonly focusedFrameEmitter = this._register(new Emitter<IDebugStackFrame | undefined>());
 	private currentFocusedStackFrame: IDebugStackFrame | undefined;
-	private readonly stateMemento: Memento<PersistedDebugState>;
+	private readonly stateMemento: Memento<Record<string, JsonValue>>;
+	private stateDirty = false;
 	private readonly sessionRecords = new Map<string, DebugSessionRecord>();
 	private readonly completedPostTasks = new Set<string>();
 	private currentConfigurations: readonly IDebugConfiguration[] = Object.freeze([]);
@@ -94,9 +95,26 @@ export class DebugService extends Disposable implements IDebugService {
 		const debugState = CONTEXT_DEBUG_STATE.bindTo(contextKeys);
 		this._register(this.onDidChangeSession(session => debugState.set(session?.state ?? 'inactive')));
 		this._register(toDisposable(() => debugState.reset()));
-		this.stateMemento = this._register(new Memento(storage, { id: "debug.workspace", scope: StorageScope.WORKSPACE, target: StorageTarget.USER, defaultValue: () => EMPTY_STATE, parse: parsePersistedDebugState, serialize: serializePersistedDebugState }));
-		this.restoreState(this.stateMemento.state);
-		this._register(this.stateMemento.onDidChange(event => { if (event.external) this.restoreState(event.state); }));
+		this.stateMemento = new Memento("debug.workspace", storage);
+		try {
+			this.restorePersistedState();
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+		this._register(storage.onWillSaveState(() => {
+			if (this.stateDirty) {
+				this.stateMemento.saveMemento();
+				this.stateDirty = false;
+			}
+		}));
+		this.stateMemento.onDidChangeValue(StorageScope.WORKSPACE, this._store)(event => {
+			// Pending breakpoint edits belong to this session, not to another window's storage update.
+			if (event.external && !this.stateDirty) {
+				this.stateMemento.reloadMemento(StorageScope.WORKSPACE);
+				this.restorePersistedState();
+			}
+		});
 		this._register(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
 		this._register(adapters.onDidChange(() => { this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.refresh().catch(error => this.reportError(error)); }));
 		this._register(workspace.onDidChangeWorkspace(() => { this.refreshGeneration += 1; this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
@@ -436,7 +454,41 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	private persistState(): void {
-		this.stateMemento.update({ version: 2, breakpoints: Object.freeze(this.currentBreakpoints.map(breakpoint => Object.freeze({ resource: breakpoint.resource.toString(), lineNumber: breakpoint.lineNumber, enabled: breakpoint.enabled, ...breakpointExpressions(breakpoint) }))), functionBreakpoints: this.currentFunctionBreakpoints, dataBreakpoints: Object.freeze(this.currentDataBreakpoints.filter(point => point.canPersist)), watchExpressions: this.currentWatchExpressions, exceptionBreakpoints: this.exceptionBreakpointsByType });
+		const state: PersistedDebugState = {
+			version: 2,
+			breakpoints: this.currentBreakpoints.map(breakpoint => ({
+				resource: breakpoint.resource.toString(),
+				lineNumber: breakpoint.lineNumber,
+				enabled: breakpoint.enabled,
+				...breakpointExpressions(breakpoint),
+			})),
+			functionBreakpoints: this.currentFunctionBreakpoints,
+			dataBreakpoints: this.currentDataBreakpoints.filter(point => point.canPersist),
+			watchExpressions: this.currentWatchExpressions,
+			exceptionBreakpoints: this.exceptionBreakpointsByType,
+		};
+		const stored = this.stateMemento.getMemento(StorageScope.WORKSPACE, StorageTarget.USER);
+		const serialized = serializePersistedDebugState(state);
+		if (JSON.stringify(stored) !== JSON.stringify(serialized)) {
+			Object.assign(stored, serialized);
+			this.stateDirty = true;
+		}
+	}
+
+	private restorePersistedState(): void {
+		const stored = this.stateMemento.getMemento(StorageScope.WORKSPACE, StorageTarget.USER);
+		if (Object.keys(stored).length === 0) {
+			this.restoreState(EMPTY_STATE);
+			return;
+		}
+		const state = parsePersistedDebugState(stored);
+		const serialized = serializePersistedDebugState(state);
+		this.stateDirty = JSON.stringify(stored) !== JSON.stringify(serialized);
+		for (const key of Object.keys(stored)) {
+			delete stored[key];
+		}
+		Object.assign(stored, serialized);
+		this.restoreState(state);
 	}
 
 	private reportError(error: unknown): void {
@@ -570,7 +622,7 @@ function normalizePersistedString(value: unknown, path: string, maximum: number)
 	return value.trim();
 }
 
-function serializePersistedDebugState(state: PersistedDebugState): JsonValue {
+function serializePersistedDebugState(state: PersistedDebugState): Record<string, JsonValue> {
 	const conditions = (point: IBaseBreakpoint): Record<string, JsonValue> => ({
 		id: point.id,
 		enabled: point.enabled,

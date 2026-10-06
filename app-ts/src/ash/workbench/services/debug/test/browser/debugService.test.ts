@@ -82,6 +82,40 @@ test("DebugService persists workspace breakpoints and watch expressions", async 
 	assert.deepEqual(third.breakpoints, []);
 });
 
+test('DebugService reloads external state, preserves pending edits and releases storage listeners on disposal', async () => {
+	using storage = new TestStorageService();
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	const root = URI.file('/workspace');
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	const externalState = (expression: string) => JSON.stringify({ version: 2, breakpoints: [], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: [expression], exceptionBreakpoints: {} });
+	storage.storeExternal('memento/debug.workspace', externalState('remote'), StorageScope.WORKSPACE, StorageTarget.USER);
+	assert.deepEqual(service.watchExpressions, ['remote']);
+	service.addWatchExpression('local');
+	storage.storeExternal('memento/debug.workspace', externalState('newer-remote'), StorageScope.WORKSPACE, StorageTarget.USER);
+	assert.deepEqual(service.watchExpressions, ['remote', 'local']);
+	await storage.flush();
+	assert.deepEqual(JSON.parse(storage.get('memento/debug.workspace', StorageScope.WORKSPACE)!).watchExpressions, ['remote', 'local']);
+	service.dispose();
+	storage.storeExternal('memento/debug.workspace', externalState('after-disposal'), StorageScope.WORKSPACE, StorageTarget.USER);
+	await storage.flush();
+	assert.deepEqual(service.watchExpressions, ['remote', 'local']);
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), externalState('after-disposal'));
+});
+
+test('DebugService rejects persisted state with an invalid Debug schema', () => {
+	using storage = new TestStorageService();
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new DebugAdapterFactoryRegistry();
+	const root = URI.file('/workspace');
+	storage.store('memento/debug.workspace', '{"version":99}', StorageScope.WORKSPACE, StorageTarget.USER);
+	assert.throws(() => createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters), /Debug workspace state version is unsupported/);
+});
+
 test('DebugService persists durable breakpoint families and retires session addresses', async () => {
 	const root = URI.file('C:\\project');
 	const storage = new TestStorageService();
@@ -279,9 +313,9 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	private enqueue(state: { messages: Array<{ readonly sequence: number; readonly message: unknown; }>; next: number; }, message: unknown): void { state.messages.push({ sequence: state.next++, message }); }
 }
 
-class TestStorageService implements IStorageService {
-	private readonly changeEmitter = new Emitter<IStorageValueChangeEvent>();
-	private readonly saveEmitter = new Emitter<IWillSaveStateEvent>();
+class TestStorageService extends Disposable implements IStorageService {
+	private readonly changeEmitter = this._register(new Emitter<IStorageValueChangeEvent>());
+	private readonly saveEmitter = this._register(new Emitter<IWillSaveStateEvent>());
 	private readonly values = new Map<string, string>();
 	readonly onDidChangeValue = this.changeEmitter.event;
 	readonly onWillSaveState = this.saveEmitter.event;
@@ -299,6 +333,10 @@ class TestStorageService implements IStorageService {
 	keys(scope: StorageScope): readonly string[] { return [...this.values.keys()].filter(key => key.startsWith(`${scope}:`)).map(key => key.slice(scope.length + 1)); }
 	isNew(_scope: StorageScope): boolean { return false; }
 	async flush(reason: WillSaveStateReason = WillSaveStateReason.PERIODIC): Promise<void> { this.saveEmitter.fire({ reason }); }
+	storeExternal(key: string, value: string, scope: StorageScope, target: StorageTarget): void {
+		this.values.set(`${scope}:${key}`, value);
+		this.changeEmitter.fire({ key, scope, target, external: true });
+	}
 }
 
 function workspaceService(root: URI): IWorkspaceContextService {

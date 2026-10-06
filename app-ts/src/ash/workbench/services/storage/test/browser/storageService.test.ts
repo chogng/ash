@@ -170,24 +170,23 @@ test("Browser storage saves and reloads Mementos across workspace changes", asyn
 		backend: dom.window.localStorage,
 		flushInterval: 0,
 	});
-	const memento = new Memento(storage, {
-		id: "test.workspace",
-		scope: StorageScope.WORKSPACE,
-		target: StorageTarget.MACHINE,
-		defaultValue: () => ({ value: "default" }),
-		parse: parseWorkspaceTestState,
-		serialize: (state) => ({ value: state.value }),
+	using listeners = new DisposableStore();
+	const memento = new Memento<{ value: string }>("test.workspace", storage);
+	const state = memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	listeners.add(storage.onWillSaveState(() => memento.saveMemento()));
+	memento.onDidChangeValue(StorageScope.WORKSPACE, listeners)(event => {
+		if (event.external) memento.reloadMemento(StorageScope.WORKSPACE);
 	});
-	memento.update({ value: "workspace-a" });
+	state.value = "workspace-a";
 
 	await storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 	storage.switchWorkspace("workspace-b");
-	assert.equal(memento.state.value, "workspace-b");
+	assert.equal(state.value, "workspace-b");
 
 	storage.switchWorkspace("workspace-a");
-	assert.equal(memento.state.value, "workspace-a");
+	assert.equal(state.value, "workspace-a");
 
-	memento.dispose();
+	listeners.dispose();
 	storage.dispose();
 	dom.window.close();
 });
@@ -285,10 +284,3 @@ test("Browser storage reports malformed persisted documents and falls back", () 
 	storage.dispose();
 	dom.window.close();
 });
-
-function parseWorkspaceTestState(value: unknown): { readonly value: string; } {
-	if (typeof value !== "object" || value === null || !("value" in value) || typeof value.value !== "string") {
-		throw new TypeError("Workspace test state is invalid");
-	}
-	return { value: value.value };
-}
