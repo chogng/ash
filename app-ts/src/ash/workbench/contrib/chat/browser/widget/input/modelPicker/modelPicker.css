@@ -10,6 +10,11 @@
 	max-width: 100%;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
+	border-radius: var(--ash-corner-radius-circle);
+}
+
+.ash-chat-model-picker-control:hover {
+	background: var(--ash-toolbar-hover-background);
 }
 
 .ash-chat-model-picker-control > .ash-chat-input-model-action {

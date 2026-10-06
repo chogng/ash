@@ -288,6 +288,29 @@ for (const locale of ['en', 'zh-CN']) {
 
 
 for (const surface of ['chat', 'cowork']) {
+	test(`Model widget highlights both triggers and their gap on hover in ${surface}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?surface=${surface}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const control = page.locator('.ash-chat-model-picker-control');
+		const model = control.locator('.ash-chat-input-model-action');
+		const options = control.locator('.ash-chat-input-configuration-action');
+		await page.mouse.move(0, 0);
+		await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		for (const background of ['rgb(45, 45, 45)', 'rgb(225, 225, 225)', 'rgb(255, 255, 0)']) {
+			await control.evaluate((element, value) => element.style.setProperty('--ash-toolbar-hover-background', value), background);
+			await model.hover();
+			await expect(control).toHaveCSS('background-color', background);
+			await options.hover();
+			await expect(control).toHaveCSS('background-color', background);
+			const modelBounds = (await model.boundingBox())!;
+			const optionsBounds = (await options.boundingBox())!;
+			await page.mouse.move((modelBounds.x + modelBounds.width + optionsBounds.x) / 2, modelBounds.y + modelBounds.height / 2);
+			await expect(control).toHaveCSS('background-color', background);
+			await page.mouse.move(0, 0);
+			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		}
+	});
+
 	test(`Both model triggers stay in one retained widget with toolbar navigation in ${surface}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?surface=${surface}&modelSet=multiple`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());

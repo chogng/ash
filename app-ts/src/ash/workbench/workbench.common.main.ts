@@ -23,6 +23,7 @@ import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import './contrib/marketplace/browser/marketplace.contribution.js';
 import './contrib/language/browser/languageServers.contribution.js';
 import './contrib/localization/common/localization.contribution.js';
+import './contrib/commands/common/commands.contribution.js';
 import './contrib/authentication/browser/authentication.contribution.js';
 import './contrib/skills/browser/skills.contribution.js';
 import './contrib/onboarding/browser/onboarding.contribution.js';

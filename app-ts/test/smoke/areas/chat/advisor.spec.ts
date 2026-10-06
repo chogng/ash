@@ -160,6 +160,25 @@ test('Model picker keeps search quiet and aligns menu rows and the chosen icon',
 	await picker.getByRole('combobox').press('Escape');
 });
 
+test('Model widget hover uses the same background as the input toolbar', async ({ workbench }) => {
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const control = page.locator('.ash-chat-model-picker-control');
+	const selector = control.locator('.ash-chat-input-model-action');
+	const contextSelector = page.locator("[data-action-id='ash.chat.input.attach'] button");
+	await page.mouse.move(0, 0);
+	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await contextSelector.hover();
+	const hoverBackground = await contextSelector.evaluate(element => getComputedStyle(element).backgroundColor);
+	expect(hoverBackground).not.toBe('rgba(0, 0, 0, 0)');
+	await selector.hover();
+	await expect(control).toHaveCSS('background-color', hoverBackground);
+	await page.mouse.move(0, 0);
+	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
 test('Disconnected model picker explains the empty catalog and opens settings', async ({ target, workbench }) => {
 	test.skip(target.appServerMode !== 'disabled', 'This state requires a disconnected backend.');
 	const page = workbench.page;

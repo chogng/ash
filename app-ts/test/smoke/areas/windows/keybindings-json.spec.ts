@@ -12,6 +12,54 @@ async function replaceJson(input: Locator, source: string): Promise<void> {
 	}, source);
 }
 
+test('runCommands executes a saved shortcut in order and stops on a failed command', async ({ workbench, reloadWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	let group = workbench.editors.groupAt(0);
+	await replaceJson(group.editor.input, JSON.stringify([
+		{ key: 'ctrl+alt+y', command: 'runCommands', args: { commands: [
+			'workbench.action.files.newUntitledFile',
+			{ command: 'workbench.action.files.newUntitledFile', args: [] },
+		] } },
+		{ key: 'ctrl+alt+z', command: 'runCommands', args: { commands: [
+			'workbench.action.files.newUntitledFile',
+			'ash.test.missingCommand',
+			'workbench.action.files.newUntitledFile',
+		] } },
+	]));
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	({ workbench } = await reloadWorkbench());
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	group = workbench.editors.groupAt(0);
+	await group.editor.input.press('Control+Alt+Y');
+	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(2);
+	await expect(group.element.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await group.editor.input.press('Control+Alt+Z');
+	await expect(workbench.page.locator('.ash-notification', { hasText: 'Unknown command: ash.test.missingCommand' })).toBeVisible();
+	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(3);
+	await expect(group.element.getByRole('tab', { name: 'Untitled-3', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('runCommands loads in Sessions and executes the saved shortcut through its editor services', async ({ target, workbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const group = workbench.editors.groupAt(0);
+	await replaceJson(group.editor.input, JSON.stringify([
+		{ key: 'ctrl+alt+y', command: 'runCommands', args: { commands: [
+			'sessions.open.code',
+			'workbench.action.files.newUntitledFile',
+			{ command: 'workbench.action.files.newUntitledFile', args: [] },
+		] } },
+	]));
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.keyboard.press('Control+Alt+Y');
+	const editors = page.locator('[data-part="editor"]');
+	await expect(editors.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(2);
+	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(editors.getByRole('textbox', { name: 'Untitled-2', exact: true })).toBeVisible();
+});
+
 test('Keybindings JSON saves the profile file, applies shortcuts after reload and uses Chinese labels', async ({ target, application, workbench, reloadWorkbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
