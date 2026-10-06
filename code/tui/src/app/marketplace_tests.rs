@@ -23,6 +23,8 @@ use ash_app_server_protocol::protocol::marketplace::MarketplaceCapabilityKindDto
 use ash_app_server_protocol::protocol::marketplace::MarketplaceInstalledPackageDto;
 use ash_app_server_protocol::protocol::marketplace::MarketplacePackageDetailsDto;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
+use ash_app_server_protocol::protocol::plugins::PluginListResult;
+use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
@@ -943,10 +945,23 @@ fn marketplace_sources_collapse_with_keyboard_and_pointer_and_keep_packages_unde
     );
 }
 
-fn plugin_result(enabled: bool) -> ash_app_server_protocol::protocol::plugins::PluginListResult {
-    serde_json::from_value(json!({"revision":7,"activationGeneration":3,"packages":[{
-        "id":"tools@ash","version":"1.2.3","digest":"sha256:fixture","enabled":enabled,"granted":true,"effective":enabled,"revoked":false
-    }]})).unwrap()
+fn plugin_result(enabled: bool) -> PluginListResult {
+    PluginListResult {
+        revision: 7,
+        activation_generation: 3,
+        packages: vec![PluginPackageDto {
+            id: "tools@ash".into(),
+            version: "1.2.3".into(),
+            digest: "sha256:fixture".into(),
+            display_name: "Tools".into(),
+            permissions: vec![],
+            has_editor_extensions: false,
+            enabled,
+            granted: true,
+            effective: enabled,
+            revoked: false,
+        }],
+    }
 }
 
 #[test]

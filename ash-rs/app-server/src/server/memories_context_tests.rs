@@ -368,9 +368,14 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
     let measured = model.measured.lock().unwrap();
-    assert_eq!(measured.len(), 2);
+    // Preflight measures the original request, the checkpoint request, then the rebuilt request.
+    assert_eq!(measured.len(), 3);
     assert!(measured[0].contains("MEMORY_REVOKED_DURING_PREPARATION"));
-    assert!(!measured[1].contains("MEMORY_REVOKED_DURING_PREPARATION"));
+    assert!(
+        measured[1..]
+            .iter()
+            .all(|request| !request.contains("MEMORY_REVOKED_DURING_PREPARATION"))
+    );
     assert_eq!(
         threads
             .read_thread(&thread.thread_id)

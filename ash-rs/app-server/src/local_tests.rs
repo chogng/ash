@@ -2333,8 +2333,22 @@ fn local_composition_restores_codebase_generation_after_reopen() {
     let generation = rebuilt["result"]["generation"].as_u64().unwrap();
     assert!(generation > 0);
     assert_eq!(rebuilt["result"]["state"], "ready");
-    drop(connection);
-    drop(server);
+    let final_snapshot = {
+        let dir_root = ash_file_access::Dir::open_local(dir.path()).unwrap();
+        let state = ash_state::StateRuntime::open(profile.path()).unwrap();
+        let store = ash_codebase_store::CodebaseStore::open(&state, &dir_root.id()).unwrap();
+        let persisted_index = store
+            .open_codebase(dir_root, ash_codebase::CodebaseLimits::default())
+            .unwrap();
+        drop(connection);
+        drop(server);
+        // Shutdown joins the watcher worker, which may publish a pending rebuild after the RPC.
+        // Capture that final publication before closing the existing database reader.
+        let final_snapshot = persisted_index.snapshot().unwrap();
+        assert!(final_snapshot.generation >= generation);
+        assert_eq!(final_snapshot.indexed_file_count, 1);
+        final_snapshot
+    };
 
     {
         let dir_root = ash_file_access::Dir::open_local(dir.path()).unwrap();
@@ -2345,7 +2359,7 @@ fn local_composition_restores_codebase_generation_after_reopen() {
             .unwrap()
             .snapshot()
             .unwrap();
-        assert_eq!(restored.generation, generation);
+        assert_eq!(restored, final_snapshot);
     }
 
     let reopened = open();
@@ -2376,7 +2390,7 @@ fn local_composition_restores_codebase_generation_after_reopen() {
         std::thread::sleep(Duration::from_millis(10));
     };
     assert_eq!(status["result"]["state"], "ready");
-    assert!(status["result"]["generation"].as_u64().unwrap() >= generation);
+    assert!(status["result"]["generation"].as_u64().unwrap() >= final_snapshot.generation);
     let search = local_call(
         &reopened,
         &mut reopened_connection,

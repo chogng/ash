@@ -1214,7 +1214,7 @@ fn github_notifications_and_fork_rpc_use_typed_account_and_repository_boundaries
     assert_eq!(requests.len(), 4);
     assert_eq!(
         requests[0].url(),
-        "https://api.github.com/notifications?all=false&participating=false&per_page=100&page=1"
+        "https://api.github.com/notifications?all=false&participating=false&per_page=50&page=1"
     );
     assert_eq!(
         requests[3].url(),

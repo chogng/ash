@@ -95,7 +95,7 @@ fn production_product_services_delegates_to_the_plugins_manager() {
             .github_account
             .as_ref()
             .map(|value| value.client_id.as_str()),
-        Some("Iv23lieaFUjG1LamZy3K")
+        Some("Ov23linTZCPimNOTyngv")
     );
 
     let registry = config.marketplaces().values().next().unwrap();

@@ -3488,12 +3488,13 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     let requests = model.requests();
     assert_eq!(requests.len(), 1);
+    let shared_instructions = ash_prompts::AGENT_INSTRUCTIONS.freeze().as_text();
     assert_eq!(
         requests[0]
             .instructions
             .as_deref()
             .unwrap()
-            .matches("## Shared working rules")
+            .matches(shared_instructions.body.as_str())
             .count(),
         1
     );

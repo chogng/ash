@@ -21,6 +21,8 @@ use crate::thread::interaction::query::QueryQuestion;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
+use ash_app_server_protocol::protocol::plugins::PluginListResult;
+use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
@@ -839,9 +841,22 @@ fn policy_stays_below_input_and_inline_tips_do_not_fade() {
 fn plugins_inline_marks_disabled_items_and_restores_draft_after_close() {
     let mut app = app();
     app.insert_text("keep this draft");
-    let plugins = serde_json::from_value(serde_json::json!({"revision":1,"activationGeneration":1,"packages":[{
-        "id":"review@ash","version":"1","digest":"sha256:fixture","enabled":false,"granted":true,"effective":false,"revoked":false
-    }]})).unwrap();
+    let plugins = PluginListResult {
+        revision: 1,
+        activation_generation: 1,
+        packages: vec![PluginPackageDto {
+            id: "review@ash".into(),
+            version: "1".into(),
+            digest: "sha256:fixture".into(),
+            display_name: "Review".into(),
+            permissions: vec![],
+            has_editor_extensions: false,
+            enabled: false,
+            granted: true,
+            effective: false,
+            revoked: false,
+        }],
+    };
     app.update(crate::marketplace::Event(
         crate::marketplace::Page::Plugins(plugins),
     ));
