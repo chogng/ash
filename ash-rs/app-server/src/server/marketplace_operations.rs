@@ -78,7 +78,7 @@ impl AppServer {
             .find(|source| *source.package() == installed.package)
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         if matches!(params.action, Action::Enable | Action::Grant)
-            && (!cfg!(target_os = "macos")
+            && (!ash_editor_extension_host::ProductJavaScriptLauncher::supports_platform()
                 || !crate::marketplace_editor_extensions::javascript_entrypoint(&source)
                     .is_ok_and(|entry| entry.is_some()))
         {
@@ -151,13 +151,14 @@ impl AppServer {
                 continue;
             };
             let state = policy.snapshot(source.package(), source.capability());
-            let entrypoint = if cfg!(target_os = "macos") {
-                crate::marketplace_editor_extensions::javascript_entrypoint(&source)
-                    .ok()
-                    .flatten()
-            } else {
-                None
-            };
+            let entrypoint =
+                if ash_editor_extension_host::ProductJavaScriptLauncher::supports_platform() {
+                    crate::marketplace_editor_extensions::javascript_entrypoint(&source)
+                        .ok()
+                        .flatten()
+                } else {
+                    None
+                };
             extensions.push(MarketplaceEditorExtensionPolicyDto {
                 installation_id: package.installation_id.clone(),
                 package: marketplace_projection::package_ref(source.package().clone()),

@@ -249,6 +249,14 @@ pub struct ProductJavaScriptLauncher {
 }
 
 impl ProductJavaScriptLauncher {
+    /// Platforms with an implemented product JavaScript isolation boundary.
+    pub const fn supports_platform() -> bool {
+        cfg!(any(
+            target_os = "macos",
+            all(windows, target_pointer_width = "64")
+        ))
+    }
+
     pub fn new(executable: PathBuf) -> Self {
         Self { executable }
     }
@@ -264,7 +272,7 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
         let ProcessIsolationPolicy::RequireJavaScriptEnforcement(memory) = limits.isolation else {
             return Err(ExtensionHostError::IsolationUnavailable);
         };
-        if !cfg!(target_os = "macos")
+        if !Self::supports_platform()
             || !command.is_javascript()
             || command.executable() != self.executable
         {

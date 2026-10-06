@@ -75,6 +75,7 @@ pub(super) fn validate_registrations(
             return Err(protocol_error("registration IDs must be unique"));
         }
         let required = match &registration.kind {
+            RegistrationKind::TextDocumentEvents {} => ExtensionCapability::LanguageProvider,
             RegistrationKind::ExternalUriOpener { schemes, label } => {
                 if schemes.is_empty()
                     || schemes.len() > 2

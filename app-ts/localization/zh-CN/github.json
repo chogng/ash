@@ -1,5 +1,6 @@
 {
 	"ash": {
+		"github.mergeConflicts": "合并冲突",
 		"github.editor.title": "GitHub 拉取请求和议题",
 		"github.editor.owner": "所有者",
 		"github.editor.repository": "仓库",

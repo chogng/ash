@@ -1412,6 +1412,7 @@ dependencies = [
  "ash-async-utils",
  "ash-editor-extension-protocol",
  "ash-sandboxing",
+ "ash-windows-sandbox",
  "serde_json",
  "thiserror 2.0.19",
 ]
@@ -2004,11 +2005,14 @@ dependencies = [
  "ash-editor-extension-protocol",
  "ash-file-access",
  "ash-file-system",
+ "ash-sandboxing",
  "ash-v8-runtime",
+ "ash-windows-sandbox",
  "serde",
  "serde_json",
  "tempfile",
  "v8",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

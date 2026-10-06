@@ -1,11 +1,14 @@
 //! One-way confinement of a product-owned JS process after engine/source preparation.
 
 /// Denies direct I/O and child processes before any extension code executes.
-/// Only macOS is supported; an unsupported OS must refuse execution.
+/// Windows removes the startup thread token after validating the launcher's primary
+/// token/job restrictions. macOS installs process-wide Seatbelt at this point.
 pub fn restrict_javascript_process() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     return seatbelt::restrict();
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    return windows_sandbox::finish_locked_process_startup().map_err(|error| error.to_string());
+    #[cfg(not(any(target_os = "macos", windows)))]
     Err("JavaScript process isolation is unavailable on this platform".into())
 }
 
@@ -48,3 +51,7 @@ mod seatbelt {
 #[cfg(all(test, target_os = "macos"))]
 #[path = "isolation_tests.rs"]
 mod tests;
+
+#[cfg(all(test, windows, target_pointer_width = "64"))]
+#[path = "windows_isolation_tests.rs"]
+mod windows_tests;

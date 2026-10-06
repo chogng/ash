@@ -27,7 +27,7 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
-	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session", { onDidChange: Event.None, getSessionPullRequests: () => [], initialize: () => { } });
+	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session", { onDidChange: Event.None, getSessionPullRequests: () => [], initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } });
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
 	buttons[0].focus();
 	untitledSessions = [

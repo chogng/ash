@@ -357,6 +357,9 @@ fn registration_dto(
     ExtensionHostRegistrationDescriptorDto {
         registration_id: registration.registration_id,
         kind: match registration.kind {
+            RegistrationKind::TextDocumentEvents {} => {
+                ExtensionHostRegistrationKindDto::TextDocumentEvents {}
+            }
             RegistrationKind::ExternalUriOpener { schemes, label } => {
                 ExtensionHostRegistrationKindDto::ExternalUriOpener {
                     schemes: schemes

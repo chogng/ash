@@ -4,6 +4,7 @@ mod audit;
 mod desktop;
 mod filesystem;
 mod job;
+pub(crate) mod locked_process;
 mod network;
 mod process;
 mod proxy;

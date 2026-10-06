@@ -140,6 +140,11 @@
 	display: none;
 }
 
+.ash-sessions-list-pr > .ash-icon {
+	width: 12px;
+	height: 12px;
+}
+
 .ash-sessions-list-item:hover {
 	background: var(--ash-list-hover-background);
 }

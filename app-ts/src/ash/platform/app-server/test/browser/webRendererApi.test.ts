@@ -614,7 +614,8 @@ test('extension client callbacks round-trip immutable JSON and release their req
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
-	const registration = connected.api.extensionHost.registerClientHandler(async operation => {
+	const registration = connected.api.extensionHost.registerClientHandler(async (operation, _signal, source) => {
+		assert.deepEqual(source, { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3 });
 		assert.equal(operation.operation, 'executeCommand');
 		if (operation.operation !== 'executeCommand') throw new Error('Unexpected extension operation');
 		assert.equal(JSON.stringify(operation.arguments), '[{"paths":["src/main.ts"]}]');
@@ -622,7 +623,7 @@ test('extension client callbacks round-trip immutable JSON and release their req
 		return { result: 'command', value: Object.freeze({ paths: Object.freeze(['src/main.ts']) }) };
 	});
 	try {
-		const params = { operation: 'executeCommand', command: 'test.paths', arguments: [{ paths: ['src/main.ts'] }] };
+		const params = { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'executeCommand', command: 'test.paths', arguments: [{ paths: ['src/main.ts'] }] } };
 		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-1', method: 'extensionClient/request', params }) });
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-1', result: { result: 'command', value: { paths: ['src/main.ts'] } } });
@@ -669,7 +670,7 @@ test('extension disk requests are rejected before reaching a renderer service', 
 		return { result: 'done' };
 	});
 	try {
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-disk', method: 'extensionClient/request', params: { operation: 'readWorkspaceFile', path: 'data.txt' } }) });
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-disk', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'readWorkspaceFile', path: 'data.txt' } } }) });
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(calls, 0);
 		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Workspace file requests must be handled by App Server' });

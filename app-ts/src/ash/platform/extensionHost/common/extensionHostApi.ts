@@ -61,6 +61,10 @@ export interface ExtensionHostLanguageRegistration extends ExtensionHostRegistra
 	readonly completionTriggerCharacters?: readonly string[];
 }
 
+export interface ExtensionHostDocumentEventsRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'textDocumentEvents';
+}
+
 export interface ExtensionHostDebugAdapterRegistration extends ExtensionHostRegistrationBase {
 	readonly kind: "debugAdapter";
 	readonly debuggerType: string;
@@ -94,7 +98,7 @@ export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHos
 	readonly label: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export type ExtensionHostRegistration = ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
 export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'startupFinished'; };
 export interface ExtensionHostActivationRequest {
@@ -167,6 +171,7 @@ export interface ExtensionDocumentEdit {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| { operation: 'setDiagnostics'; collection: string; entries: ExtensionDiagnosticEntry[]; }
 	| { operation: 'executeCommand'; command: string; arguments: JsonValue[]; }
 	| { operation: 'readDocument'; uri: string; }
 	| { operation: 'listDocuments'; }
@@ -185,7 +190,26 @@ export type ExtensionClientResult =
 	| { result: 'selection'; index: number | null; }
 	| { result: 'done'; };
 
-export type ExtensionClientHandler = (operation: ExtensionClientOperation, signal: AbortSignal) => Promise<ExtensionClientResult>;
+export interface ExtensionClientSource {
+	readonly extensionId: string;
+	readonly activationGeneration: number;
+	readonly incarnation: number;
+}
+
+export interface ExtensionDiagnosticEntry {
+	readonly uri: string;
+	readonly version: number | null;
+	readonly diagnostics: readonly {
+		readonly start: { readonly line: number; readonly character: number; };
+		readonly end: { readonly line: number; readonly character: number; };
+		readonly message: string;
+		readonly severity: 'error' | 'warning' | 'information' | 'hint';
+		readonly source: string | null;
+		readonly code: string | null;
+	}[];
+}
+
+export type ExtensionClientHandler = (operation: ExtensionClientOperation, signal: AbortSignal, source: ExtensionClientSource) => Promise<ExtensionClientResult>;
 
 export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>("extensionHostApi");
 
@@ -369,6 +393,10 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	const input = record(value, "Extension Host registration");
 	const kind = input.kind;
 	const registrationId = boundedText(input.registrationId, "Extension Host registration ID", 256);
+	if (kind === 'textDocumentEvents') {
+		exactKeys(input, 'Extension document events registration', ['kind', 'registrationId']);
+		return Object.freeze({ kind, registrationId });
+	}
 	if (kind === 'customTextEditor') {
 		exactKeys(input, 'Custom text editor registration', ['kind', 'registrationId', 'viewType', 'displayName', 'selectors', 'priority'], ['languageIds']);
 		const selectors = boundedArray(input.selectors, 'Custom editor selectors', 64).map(selector => boundedText(selector, 'Custom editor selector', 512));

@@ -8,6 +8,17 @@ use super::ExtensionHostRegistrationKindDto;
 use serde_json::json;
 
 #[test]
+fn client_diagnostic_requests_have_broker_owned_extension_identity() {
+    let fixture = json!({"extensionId":"acme.editor","activationGeneration":7,"incarnation":3,"operation":{"operation":"setDiagnostics","collection":"lint","entries":[]}});
+    let request: super::ExtensionClientRequestParams =
+        serde_json::from_value(fixture.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), fixture);
+    let mut invalid = fixture;
+    invalid["operation"]["extensionId"] = json!("forged");
+    assert!(serde_json::from_value::<super::ExtensionClientRequestParams>(invalid).is_err());
+}
+
+#[test]
 fn invoke_start_round_trips_all_stale_snapshot_fences() {
     let fixture = json!({
         "extensionId": "acme/review:runtime",
@@ -71,6 +82,8 @@ fn registration_descriptor_matches_host_rpc_v1_shape() {
 #[test]
 fn channel_and_link_registration_wire_shapes_round_trip_and_reject_extra_fields() {
     for mut fixture in [
+        json!({"registrationId":"documents","kind":"textDocumentEvents"}),
+        json!({"registrationId":"completions","kind":"languageProvider","languageIds":["rust"],"operations":["completion"],"completionTriggerCharacters":["."]}),
         json!({"registrationId":"browser","kind":"externalUriOpener","schemes":["https"],"label":"Acme browser"}),
         json!({"registrationId":"edits","kind":"dataChannel","channelId":"editTelemetry"}),
         json!({"registrationId":"issues","kind":"linkPresentationProvider","uriPattern":"^https://example.com/","presentationKind":"issue"}),

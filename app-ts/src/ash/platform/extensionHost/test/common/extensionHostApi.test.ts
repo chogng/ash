@@ -24,8 +24,9 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 			],
 			registrations: [
 				{ registrationId: "commands", kind: "command", command: "acme.run", title: "Run" },
-				{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["completion", "hover"] },
+				{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["completion", "hover"], completionTriggerCharacters: ['.', '😀'] },
 				{ registrationId: "tests", kind: "testProfileProvider", providerId: "acme.tests", label: "Acme Tests" },
+				{ registrationId: 'documents', kind: 'textDocumentEvents' },
 			],
 		}],
 	});
@@ -36,6 +37,11 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 	assert.equal(snapshot.extensions[0]?.stderr, "extension diagnostic\n");
 	assert.equal(snapshot.extensions[0]?.outputEvents[1]?.operation.operation, "append");
 	assert.equal(Object.isFrozen(snapshot.extensions[0]?.registrations), true);
+	assert.deepEqual(snapshot.extensions[0]?.registrations[3], { registrationId: 'documents', kind: 'textDocumentEvents' });
+	const language = snapshot.extensions[0]!.registrations[1]!;
+	assert.ok(language.kind === 'languageProvider');
+	assert.deepEqual(language.completionTriggerCharacters, ['.', '😀']);
+	assert.equal(Object.isFrozen(language.completionTriggerCharacters), true);
 });
 
 test("rejects malformed fleet authority and oversized JSON payloads", () => {

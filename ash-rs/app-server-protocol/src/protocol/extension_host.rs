@@ -4,6 +4,21 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+/// The broker supplies this identity from the admitted invocation, never from extension input.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionClientRequestParams {
+    #[schemars(length(min = 1, max = 256))]
+    pub extension_id: String,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub activation_generation: u64,
+    #[schemars(range(min = 1))]
+    #[ts(type = "number")]
+    pub incarnation: u64,
+    pub operation: extension_protocol::ExtensionClientOperation,
+}
+
 /// Editor intent delivered to Rust; it never grants execution authority.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -286,6 +301,7 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    TextDocumentEvents {},
     ExternalUriOpener {
         #[schemars(length(min = 1, max = 2))]
         schemes: Vec<ExtensionHostExternalUriSchemeDto>,

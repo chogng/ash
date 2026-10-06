@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -27,6 +27,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 	const repository: GitRepository = { id: 'repo', label: 'repo', path: '', root: URI.file('/work') };
 	const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, workspacePath: '/work', head: { type: 'branch', name: 'feature', objectId: 'a'.repeat(40), upstream: undefined }, changes: [] };
 	const github = {
+		onDidChangeSessionPullRequests: Event.None, listSessionPullRequests: async () => [],
 		listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }],
 		listPullRequests: async (_repository, state) => ({ items: state === GitHubIssueState.Open ? [pullRequest] : [], nextPage: null }),
 		readPullRequest: async () => pullRequest,
@@ -61,10 +62,58 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
+	test('a recorded PR with unavailable remote state remains removable without an invented PR state', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 };
+		using context = fixture({ listSessionPullRequests: async () => [reference], listPullRequests: async () => ({ items: [], nextPage: null }), readPullRequest: async () => { throw new Error('Access removed'); } });
+		const requests = await context.load();
+		assert.equal(requests.length, 1);
+		assert.equal(requests[0].state, 'unavailable');
+		assert.deepEqual(requests[0].recordedReference, reference);
+	});
+	test('recorded PRs survive branch changes and duplicate discovery is merged', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 };
+		let associated = true;
+		using context = fixture({ listSessionPullRequests: async () => [reference], listPullRequests: async () => ({ items: associated ? [pullRequest] : [], nextPage: null }) });
+		const requests = await context.load();
+		assert.equal(requests.length, 1);
+		assert.deepEqual(requests[0].recordedReference, reference);
+		associated = false;
+		const changed = context.nextChange();
+		context.statusChanged.fire({ ...context.status, head: { type: 'branch', name: 'another', objectId: 'b'.repeat(40), upstream: undefined } });
+		await changed;
+		const restored = context.nextChange();
+		await restored;
+		assert.deepEqual(context.service.getSessionPullRequests('session')[0].recordedReference, reference);
+	});
+
+	test('attaching verifies the PR and preserves its normalized identity without credentials', async () => {
+		const writes: unknown[] = [];
+		using context = fixture({ attachSessionPullRequest: async (sessionId, reference) => { writes.push({ sessionId, reference }); } });
+		await assert.rejects(context.service.attachPullRequest('session', 'https://github.com/TEAM/Repo/pull/7/files'));
+		await assert.rejects(context.service.attachPullRequest('session', 'https://user:secret@github.com/team/repo/pull/7'));
+		assert.deepEqual(writes, []);
+		await context.service.attachPullRequest('session', 'https://github.com/TEAM/Repo/pull/7?view=split#review');
+		assert.deepEqual(writes, [{ sessionId: 'session', reference: { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 } }]);
+	});
+	test('an Enterprise grant resolves Git remotes classified as other', async () => {
+		using context = fixture({
+			listAccounts: async () => [{ id: 'enterprise-account', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n }],
+			listPullRequests: async (repository, state, _page, _token, options) => {
+				assert.deepEqual(repository, { accountId: 'enterprise-account', host: 'ghe.example', owner: 'team', name: 'repo' });
+				assert.deepEqual(options, { head: 'team:feature' });
+				return { items: state === GitHubIssueState.Open ? [pullRequest] : [], nextPage: null };
+			},
+			readPullRequest: async () => ({ ...pullRequest, url: 'https://ghe.example/team/repo/pull/7' }),
+		}, {
+			graph: async () => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'other', host: 'ghe.example', owner: 'team', repository: 'repo' } }], hasMore: false, nextCursor: undefined }),
+		});
+		assert.deepEqual((await context.load()).map(request => request.uri.toString()), ['https://ghe.example/team/repo/pull/7']);
+	});
 	test('reads all pages before choosing the attention icon and preserves every reason', async () => {
 		const reads: string[] = [];
 		using context = fixture({
-			listPullRequests: async (_repository, _state, page) => {
+			listPullRequests: async (_repository, _state, page, _token, options) => {
+				assert.deepEqual(options, { head: 'team:feature' });
 				reads.push(`pulls:${page}`);
 				return { items: page === 1 ? [{ ...pullRequest, headRepository: 'other/repo' }] : [pullRequest], nextPage: page === 1 ? 2 : null };
 			},
@@ -97,11 +146,13 @@ suite('Session GitHub associations', () => {
 		const started = new DeferredPromise<void>();
 		const pending = new DeferredPromise<GitHubPullRequest>();
 		let reads = 0;
-		using context = fixture({ readPullRequest: async () => {
-			if (++reads === 1) { return pullRequest; }
-			await started.complete();
-			return pending.p;
-		} });
+		using context = fixture({
+			readPullRequest: async () => {
+				if (++reads === 1) { return pullRequest; }
+				await started.complete();
+				return pending.p;
+			}
+		});
 		await context.load();
 		context.statusChanged.fire({ ...context.status, head: { type: 'branch', name: 'another-branch', objectId: 'b'.repeat(40), upstream: undefined } });
 		assert.deepEqual(context.service.getSessionPullRequests('session'), []);
@@ -130,5 +181,16 @@ suite('Session GitHub associations', () => {
 		await pending.complete(pullRequest);
 		await refreshed;
 		assert.deepEqual(context.service.getSessionPullRequests('session'), []);
+	});
+
+	test('disposing the owner cancels the in-flight GitHub request', async () => {
+		const started = new DeferredPromise<CancellationToken>();
+		const pending = new DeferredPromise<GitHubPullRequest>();
+		using context = fixture({ readPullRequest: async (_repository, _number, token) => { await started.complete(token!); return pending.p; } });
+		context.service.initialize();
+		const token = await started.p;
+		context.service.dispose();
+		assert.equal(token.isCancellationRequested, true);
+		await pending.complete(pullRequest);
 	});
 });

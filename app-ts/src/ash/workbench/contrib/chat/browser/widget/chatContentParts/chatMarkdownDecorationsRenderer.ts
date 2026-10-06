@@ -9,7 +9,6 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../../../nls.js';
 import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
-import { computePullRequestIcon, type ChatPullRequestState } from '../../../../../common/chatPullRequest.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
 
 /** Owns provider decorations for the sanitized anchors in one rendered Markdown block. */
@@ -86,8 +85,8 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 					presentation.changes ? `+${presentation.changes.insertions} −${presentation.changes.deletions}` : undefined,
 				].filter(value => value !== undefined && value !== '').join(' · ');
 				anchor.textContent = label;
-				if (presentation instanceof GitHubResourcePresentation && presentation.kind === 'pullRequest') {
-					const icon = computePullRequestIcon(presentation.status!.kind as ChatPullRequestState, { hasFailingChecks: presentation.secondaryStatus?.kind === 'error' });
+				if (presentation instanceof GitHubResourcePresentation && presentation.pullRequestIcon) {
+					const icon = presentation.pullRequestIcon;
 					const glyph = appendLabelIcon(anchor, icon);
 					glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
 					anchor.prepend(glyph);

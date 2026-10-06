@@ -24,13 +24,17 @@ use std::io::Write;
 
 const MAX_FRAME: usize = 32 * 1024 * 1024;
 const MAX_ARCHIVE: u64 = 8 * 1024 * 1024 * 1024;
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 
 // Column order is part of this versioned data contract. SQL identifiers only come from this
 // list, so a remote archive cannot add a table, execute SQL, or import account credentials.
 const TABLES: &[(&str, &str)] = &[
     ("history_records", "digest,record_json"),
     ("thread_streams", "thread_id,current_sequence"),
+    (
+        "thread_pull_requests",
+        "thread_id,host,owner,repository,number",
+    ),
     (
         "thread_batches",
         "thread_id,batch_id,expected_sequence,event_count",

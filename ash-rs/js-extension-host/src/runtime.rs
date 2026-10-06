@@ -528,7 +528,10 @@ fn run_engine(
                     HostRequestKind::Invoke(params) => {
                         if phase != Phase::Active
                             || params.extension_id != package.extension_id
-                            || !matches!(params.operation.as_str(), "execute" | "hover")
+                            || !matches!(
+                                params.operation.as_str(),
+                                "execute" | "hover" | "completion" | "documentEvent"
+                            )
                             || jobs.len() >= MAX_INVOCATIONS
                             || jobs.contains_key(&request.context.request_id)
                             || request.context.request_id > 9_007_199_254_740_991
@@ -753,7 +756,7 @@ fn client_request(
 
 fn current_invocation(
     scope: &mut v8::PinScope<'_, '_>,
-    _args: v8::FunctionCallbackArguments,
+    args: v8::FunctionCallbackArguments,
     mut result: v8::ReturnValue,
 ) {
     let value = scope.get_continuation_preserved_embedder_data();
@@ -764,6 +767,10 @@ fn current_invocation(
             .is_some_and(|bridge| bridge.contexts.contains_key(&(id as u64)))
     }) {
         result.set(value);
+    } else if args.get(0).is_boolean() && !args.get(0).boolean_value(scope) {
+        // Cached document reads and local disposal can run outside a callback. They only query
+        // identity; service calls still require the strict form and a live Rust request context.
+        result.set(v8::null(scope).into());
     } else {
         throw(scope, "VS Code service call has no active invocation");
     }
@@ -802,14 +809,15 @@ fn dispatch_client(
     }
     let operation: ExtensionClientOperation =
         serde_json::from_str(&text).map_err(|error| error.to_string())?;
-    // This host exposes only the supported read/UI API. In particular, the older RPC command and
-    // write operations cannot be reached by forging a request through the JavaScript bridge.
+    // Only the supported document/UI/diagnostic operations cross this bridge. Arbitrary commands
+    // and editor writes remain unavailable even if extension code forges the request JSON.
     if !matches!(
         operation,
         ExtensionClientOperation::ReadDocument { .. }
             | ExtensionClientOperation::ReadWorkspaceFile { .. }
             | ExtensionClientOperation::ShowMessage { .. }
             | ExtensionClientOperation::ShowQuickPick { .. }
+            | ExtensionClientOperation::SetDiagnostics { .. }
     ) {
         return Err("operation is outside JavaScript SDK v1".into());
     }

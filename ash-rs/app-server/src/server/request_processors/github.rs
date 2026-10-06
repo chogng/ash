@@ -83,6 +83,111 @@ use ash_app_server_protocol::protocol::issues::IssueState;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
 use ash_async_utils::CancellationToken;
 use ash_http_client::HttpClient;
+use core_api::AgentRuntime;
+
+impl super::AppServer {
+    pub(crate) fn with_thread_pull_requests(
+        mut self,
+        store: std::sync::Arc<ash_state::SqliteThreadStore>,
+    ) -> Self {
+        self.thread_pull_requests = Some(store);
+        self
+    }
+
+    pub(super) fn session_pull_requests(
+        &self,
+        method: ClientMethod,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::github::GitHubPullRequestReference;
+        use ash_app_server_protocol::protocol::github::GitHubSessionPullRequestParams;
+        use ash_app_server_protocol::protocol::github::GitHubSessionPullRequestsParams;
+        use ash_app_server_protocol::protocol::github::GitHubSessionPullRequestsResult;
+        let (session_id, reference) = match method {
+            ClientMethod::GitHubSessionPullRequests => {
+                let p: GitHubSessionPullRequestsParams = decode(params)?;
+                (p.session_id, None)
+            }
+            ClientMethod::GitHubSessionPullRequestAttach
+            | ClientMethod::GitHubSessionPullRequestDetach => {
+                let p: GitHubSessionPullRequestParams = decode(params)?;
+                (p.session_id, Some(p.reference))
+            }
+            _ => unreachable!("only Session PR reference methods are dispatched here"),
+        };
+        if self
+            .agent_runtime()
+            .read_session_catalog(&session_id)
+            .map_err(super::core_error)?
+            .is_none()
+        {
+            return Err(super::core_error(core_api::CoreError::NotFound(
+                session_id.to_string(),
+            )));
+        }
+        let thread_id = ash_protocol::ThreadId::new(session_id.as_str())
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let store = self
+            .thread_pull_requests
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::GitHubUnavailable))?;
+        match method {
+            ClientMethod::GitHubSessionPullRequests => {
+                let references = store.list_pull_requests(&thread_id).map_err(|error| {
+                    RpcError::with_details(
+                        -32070,
+                        AppServerErrorName::GitHubOperationFailed,
+                        error.to_string(),
+                    )
+                })?;
+                result(&GitHubSessionPullRequestsResult {
+                    references: references
+                        .into_iter()
+                        .map(|(repository, number)| GitHubPullRequestReference {
+                            repository:
+                                ash_app_server_protocol::protocol::issues::IssueRepository {
+                                    host: repository.host,
+                                    owner: repository.owner,
+                                    name: repository.name,
+                                },
+                            number,
+                        })
+                        .collect(),
+                })
+            }
+            ClientMethod::GitHubSessionPullRequestAttach
+            | ClientMethod::GitHubSessionPullRequestDetach => {
+                let reference = reference.expect("mutation params include a PR reference");
+                let repository = github::Repository::new(
+                    reference.repository.host,
+                    reference.repository.owner,
+                    reference.repository.name,
+                )
+                .map_err(github_error)?;
+                if reference.number == 0 || reference.number > 9_007_199_254_740_991 {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let changed = if method == ClientMethod::GitHubSessionPullRequestAttach {
+                    store.attach_pull_request(&thread_id, &repository, reference.number)
+                } else {
+                    store.detach_pull_request(&thread_id, &repository, reference.number)
+                }
+                .map_err(|error| {
+                    RpcError::with_details(
+                        -32070,
+                        AppServerErrorName::GitHubOperationFailed,
+                        error.to_string(),
+                    )
+                })?;
+                if changed {
+                    self.updates.publish_session_changed(&session_id);
+                }
+                result(&())
+            }
+            _ => unreachable!("only Session PR reference methods are dispatched here"),
+        }
+    }
+}
 use serde_json::Value;
 use std::sync::Arc;
 

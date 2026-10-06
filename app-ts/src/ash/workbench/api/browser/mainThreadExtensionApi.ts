@@ -26,8 +26,9 @@ import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import type { ITextModel } from '../../../editor/common/model.js';
-import type { ExtensionClientOperation, ExtensionClientResult, ExtensionDocumentSnapshot } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import type { ExtensionClientOperation, ExtensionClientResult, ExtensionClientSource } from '../../../platform/extensionHost/common/extensionHostApi.js';
+import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
+import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
 
 export interface ExtensionApiIssue {
 	readonly extensionId: string;
@@ -72,6 +73,8 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly namedOutputChannels = this._register(new DisposableMap<string, IOutputChannel>());
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
 	private readonly customEditors: MainThreadCustomEditors;
+	private readonly documents: MainThreadDocuments;
+	private readonly diagnostics: MainThreadDiagnostics;
 
 	constructor(
 		commands: CommandRegistry,
@@ -92,9 +95,11 @@ export class MainThreadExtensionApi extends Disposable {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super();
-		const clientHandler = this.api.registerClientHandler((operation, signal) => this.handleClientOperation(operation, signal));
+		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation, signal, source));
 		this._register(toDisposable(() => clientHandler.dispose()));
 		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
+		this.diagnostics = this._register(instantiation.createInstance(MainThreadDiagnostics));
+		this.documents = this._register(instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
@@ -112,10 +117,13 @@ export class MainThreadExtensionApi extends Disposable {
 		return this.activeContributions !== undefined;
 	}
 
-	private async handleClientOperation(operation: ExtensionClientOperation, signal: AbortSignal): Promise<ExtensionClientResult> {
+	private async handleClientOperation(operation: ExtensionClientOperation, signal: AbortSignal, source: ExtensionClientSource): Promise<ExtensionClientResult> {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
+			case 'setDiagnostics':
+				this.diagnostics.set(source, operation.collection, operation.entries);
+				return { result: 'done' };
 			case 'executeCommand': {
 				const value = await this.commandService.executeCommand(operation.command, ...operation.arguments);
 				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
@@ -189,6 +197,8 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 		this.projectOutput(snapshot);
 		this.customEditors.update(snapshot);
+		this.diagnostics.update(snapshot);
+		this.documents.update(snapshot);
 		return contributions.issues;
 	}
 
@@ -198,6 +208,8 @@ export class MainThreadExtensionApi extends Disposable {
 		this.activationController = new AbortController();
 		this.revokeContributions();
 		this.customEditors.clear();
+		this.documents.clear();
+		this.diagnostics.clear();
 		for (const key of this.namedOutputChannels.keys()) {
 			this.namedOutputChannels.deleteAndDispose(key);
 		}
@@ -239,7 +251,7 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'textDocumentEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
@@ -551,8 +563,4 @@ function combineSignals(first: AbortSignal, second: AbortSignal): { readonly sig
 			second.removeEventListener("abort", abortSecond);
 		},
 	};
-}
-
-function extensionDocumentSnapshot(model: ITextModel): ExtensionDocumentSnapshot {
-	return { uri: model.uri.toString(), version: model.getVersionId(), languageId: model.getLanguageId(), text: model.getValue() };
 }

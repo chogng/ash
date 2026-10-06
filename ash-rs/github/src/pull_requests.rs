@@ -118,17 +118,20 @@ impl GitHub {
         head: Option<&str>,
     ) -> Result<PullRequestPage> {
         validate_page(page)?;
-        let mut query = url::form_urlencoded::Serializer::new(String::new());
-        query
-            .append_pair("state", state.as_str())
-            .append_pair("sort", "updated")
-            .append_pair("direction", "desc")
-            .append_pair("per_page", "100")
-            .append_pair("page", &page.to_string());
-        if let Some(head) = head {
-            query.append_pair("head", head);
-        }
-        let query = query.finish();
+        // The URL serializer is not Send; release it before awaiting network I/O.
+        let query = {
+            let mut query = url::form_urlencoded::Serializer::new(String::new());
+            query
+                .append_pair("state", state.as_str())
+                .append_pair("sort", "updated")
+                .append_pair("direction", "desc")
+                .append_pair("per_page", "100")
+                .append_pair("page", &page.to_string());
+            if let Some(head) = head {
+                query.append_pair("head", head);
+            }
+            query.finish()
+        };
         let pull_requests: Vec<PullRequest> = self
             .api(
                 repository,

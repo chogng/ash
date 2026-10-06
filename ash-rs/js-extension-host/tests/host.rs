@@ -83,14 +83,30 @@ enum TestApi {
 }
 
 fn start_vscode(source: &str) -> Result<Running, ExtensionHostError> {
+    let (isolation, launcher): (_, Arc<dyn host::ExtensionHostLauncher>) =
+        if host::ProductJavaScriptLauncher::supports_platform() {
+            (
+                ProcessIsolationPolicy::RequireJavaScriptEnforcement(
+                    host::JavaScriptMemoryLimits::default(),
+                ),
+                Arc::new(host::ProductJavaScriptLauncher::new(PathBuf::from(env!(
+                    "CARGO_BIN_EXE_ash-js-extension-host"
+                )))),
+            )
+        } else {
+            (
+                ProcessIsolationPolicy::TrustedDevelopment,
+                Arc::new(TrustedDevelopmentLauncher),
+            )
+        };
     start_with_api(
         source,
         vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
         ],
-        ProcessIsolationPolicy::TrustedDevelopment,
-        Arc::new(TrustedDevelopmentLauncher),
+        isolation,
+        launcher,
         TestApi::Vscode,
     )
 }
@@ -199,6 +215,175 @@ fn hover_invocation(text: &str) -> ExtensionInvocation {
         "version": 7, "text": text, "position": {"lineIndex": 0, "columnIndex": 1}
     });
     request
+}
+
+#[test]
+fn author_sdk_document_callbacks_publish_diagnostics_and_completion_ranges() {
+    let running = start_with_capabilities(r#"
+        import { workspace, languages } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(workspace.registerTextDocumentEvents('example.documents', async (call, event) => {
+                await call.languages.setDiagnostics('lint', [{ uri:event.document.uri, version:event.document.version, diagnostics:[{
+                    start:{line:0,character:2}, end:{line:0,character:4}, message:'Check word', severity:'hint', source:'example', code:null
+                }] }]);
+            }), languages.registerCompletionProvider('example.complete', ['typescript'], {
+                provideCompletionItems(call, document, position, trigger) {
+                    if (document.getText() !== '😀ab' || position.character !== 4 || trigger.kind !== 'invoke') throw Error('Author completion context lost');
+                    return { isIncomplete:false, items:[{ id:'word', label:'abcd', kind:'text', range:{start:{line:0,character:2},end:position}, insertText:'abcd', insertTextFormat:'plainText' }] };
+                }
+            }, ['.']));
+        }
+    "#, vec![ExtensionCapability::LanguageProvider]).unwrap();
+    let mut request = hover_invocation("😀ab");
+    request.registration_id = "example.documents".into();
+    request.operation = "documentEvent".into();
+    request.payload = json!({"type":"open","document":{"uri":"file:///main.ts","version":7,"languageId":"typescript","text":"😀ab"}});
+    running.supervisor.begin_invoke(request).unwrap().wait_with_client(|operation, _, _| {
+        assert!(matches!(operation, ExtensionClientOperation::SetDiagnostics { entries, .. } if entries[0].version == Some(7) && entries[0].diagnostics[0].end.character == 4));
+        Ok(ExtensionClientResult::Done)
+    }).unwrap();
+    let mut completion = hover_invocation("😀ab");
+    completion.registration_id = "example.complete".into();
+    completion.operation = "completion".into();
+    completion.payload["position"]["columnIndex"] = json!(4);
+    completion.payload["context"] = json!({"kind":"invoke"});
+    let result = running.supervisor.invoke(completion).unwrap();
+    assert_eq!(
+        result.payload["items"][0]["range"],
+        json!({"start":{"lineIndex":0,"columnIndex":2},"end":{"lineIndex":0,"columnIndex":4}})
+    );
+}
+
+#[test]
+fn diagnostics_keep_the_version_read_before_an_await_when_live_documents_change() {
+    let running = start_vscode(r#"
+        const v = require('vscode');
+        exports.activate = context => {
+            const collection = v.languages.createDiagnosticCollection('lint');
+            context.subscriptions.push(collection, v.commands.registerCommand('example.hello', async () => {
+                const document = v.workspace.textDocuments[0];
+                const original = document.getText();
+                await v.window.showInformationMessage('pause');
+                const first = new v.Diagnostic(new v.Range(0,0,0,original.length), original);
+                const second = new v.Diagnostic(new v.Range(0,0,0,original.length), 'Second');
+                collection.set([[document.uri,[first]],[document.uri,[second]]]);
+                if (collection.get(document.uri).length !== 2) throw Error('Duplicate tuples were not merged');
+            }));
+        };
+        exports.deactivate = () => {
+            if (v.workspace.textDocuments[0].getText() !== 'new text') throw Error('Cached reads require no client call');
+        };
+    "#).unwrap();
+    let mut event = invocation("unused", json!([]), Duration::from_secs(5));
+    event.registration_id = "vscode.documents".into();
+    event.operation = "documentEvent".into();
+    event.payload = json!({"type":"open","document":{"uri":"file:///main.ts","version":1,"languageId":"typescript","text":"old"}});
+    running.supervisor.invoke(event.clone()).unwrap();
+    let command = running
+        .supervisor
+        .begin_invoke(invocation("hello", json!([]), Duration::from_secs(5)))
+        .unwrap();
+    let mut version = None;
+    command.wait_with_client(|operation, _, _| {
+        match operation {
+            ExtensionClientOperation::ShowMessage { .. } => {
+                event.payload = json!({"type":"change","document":{"uri":"file:///main.ts","version":2,"languageId":"typescript","text":"new text"},"reason":"edit","contentChanges":[]});
+                running.supervisor.invoke(event.clone()).unwrap();
+            }
+            ExtensionClientOperation::SetDiagnostics { entries, .. } => {
+                assert_eq!(entries[0].diagnostics.len(), 2);
+                assert_eq!(entries[0].diagnostics[0].message, "old");
+                version = entries[0].version;
+            }
+            operation => panic!("unexpected request {operation:?}"),
+        }
+        Ok(ExtensionClientResult::Done)
+    }).unwrap();
+    assert_eq!(version, Some(1));
+    running.supervisor.shutdown().unwrap();
+}
+
+#[test]
+fn vscode_document_events_drive_diagnostics_with_unsaved_versions_and_close_lifetimes() {
+    let running = start_vscode(r#"
+        const v = require('vscode');
+        exports.activate = context => {
+            const collection = v.languages.createDiagnosticCollection('lint');
+            let opened;
+            context.subscriptions.push(collection,
+                v.workspace.onDidOpenTextDocument(doc => { opened = doc; }),
+                v.workspace.onDidChangeTextDocument(event => {
+                    if (event.document !== opened || event.document.getText() !== '😀bad') throw Error('Document identity/text changed');
+                    if (event.contentChanges[0].range.start.character !== 2) throw Error('UTF16 change range lost');
+                    collection.set(event.document.uri, [new v.Diagnostic(new v.Range(0,2,0,5), 'Bad word', v.DiagnosticSeverity.Warning)]);
+                }),
+                v.workspace.onDidCloseTextDocument(doc => {
+                    if (!doc.isClosed || v.workspace.textDocuments.length) throw Error('Closed document retained');
+                    collection.delete(doc.uri);
+                }));
+        };
+    "#).unwrap();
+    for (kind, version, text) in [
+        ("open", 1, "😀"),
+        ("change", 2, "😀bad"),
+        ("close", 2, "😀bad"),
+    ] {
+        let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+        request.registration_id = "vscode.documents".into();
+        request.operation = "documentEvent".into();
+        request.payload = json!({"type":kind,"document":{"uri":"file:///main.ts","languageId":"typescript","version":version,"text":text},"reason":"edit","contentChanges":[{"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":2}},"rangeOffset":2,"rangeLength":0,"text":"bad"}]});
+        let mut calls = Vec::new();
+        running
+            .supervisor
+            .begin_invoke(request)
+            .unwrap()
+            .wait_with_client(|operation, _, _| {
+                calls.push(operation);
+                Ok(ExtensionClientResult::Done)
+            })
+            .unwrap();
+        if kind == "open" {
+            assert!(calls.is_empty());
+        } else if kind == "change" {
+            assert!(
+                matches!(&calls[0], ExtensionClientOperation::SetDiagnostics { entries, .. } if entries[0].version == Some(2) && entries[0].diagnostics[0].start.character == 2)
+            );
+        } else {
+            assert!(
+                matches!(&calls[0], ExtensionClientOperation::SetDiagnostics { entries, .. } if entries.is_empty())
+            );
+        }
+    }
+}
+
+#[test]
+fn vscode_completion_preserves_trigger_context_snippets_utf16_and_provider_disposal() {
+    let running = start_vscode(r#"
+        const v = require('vscode');
+        exports.activate = context => {
+            const registration = v.languages.registerCompletionItemProvider('typescript', {
+                provideCompletionItems(doc, position, token, trigger) {
+                    if (doc.getText() !== '😀al' || position.character !== 4 || trigger.triggerKind !== 1 || trigger.triggerCharacter !== '.') throw Error('Completion context lost');
+                    const item = new v.CompletionItem('alpha', v.CompletionItemKind.Function);
+                    item.insertText = new v.SnippetString('alpha(${1:value})');
+                    return new v.CompletionList([item], true);
+                }
+            }, '.');
+            context.subscriptions.push(registration, v.commands.registerCommand('example.hello', () => registration.dispose()));
+        };
+    "#).unwrap();
+    let mut request = hover_invocation("😀al");
+    request.registration_id = "vscode.completion.1".into();
+    request.operation = "completion".into();
+    request.payload["position"]["columnIndex"] = json!(4);
+    request.payload["context"] = json!({"kind":"triggerCharacter","triggerCharacter":"."});
+    let result = running.supervisor.invoke(request.clone()).unwrap();
+    assert_eq!(
+        result.payload,
+        json!({"isIncomplete":true,"items":[{"id":"0","label":"alpha","kind":"function","range":{"start":{"lineIndex":0,"columnIndex":2},"end":{"lineIndex":0,"columnIndex":4}},"insertText":"alpha(${1:value})","insertTextFormat":"snippet"}]})
+    );
+    run(&running, "hello", json!([])).unwrap();
+    assert!(running.supervisor.invoke(request).is_err());
 }
 
 #[test]
@@ -737,7 +922,7 @@ fn heap_quota_retires_only_the_extension_process() {
     );
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", all(windows, target_pointer_width = "64")))]
 fn start_confined(source: &str) -> Result<Running, ExtensionHostError> {
     start_with_launcher(
         source,
@@ -752,7 +937,7 @@ fn start_confined(source: &str) -> Result<Running, ExtensionHostError> {
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", all(windows, target_pointer_width = "64")))]
 #[test]
 fn product_js_launcher_enforces_aggregate_and_implicit_backing_store_budgets() {
     struct ObservedLauncher {
@@ -828,7 +1013,7 @@ export function activate(context) {{
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", all(windows, target_pointer_width = "64")))]
 #[test]
 fn product_js_context_excludes_unbudgeted_memory_and_constructor_paths() {
     let running = start_confined(r#"
@@ -869,7 +1054,7 @@ export function activate(context) {
     );
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", all(windows, target_pointer_width = "64")))]
 #[test]
 fn product_js_process_recovers_after_execution_deadline() {
     let running = start_confined(include_str!("fixtures/main.js")).unwrap();

@@ -1,4 +1,4 @@
-import { commands as ashCommands, languages as ashLanguages } from '@ash/extension';
+import { commands as ashCommands, languages as ashLanguages, workspace as ashWorkspace } from '@ash/extension';
 
 // This is the public editor contract inside the confined process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
@@ -14,6 +14,12 @@ export function createApi(configuration) {
 	const pending = new Map();
 	let subscriptions;
 	let providerSequence = 0;
+	const documents = new Map();
+	// Live documents can change during an await; diagnostic versions belong to the invocation's reads.
+	const observedDocuments = new Map();
+	const documentListeners = { open: new Set(), change: new Set(), close: new Set() };
+	let documentRegistration;
+	let collectionSequence = 0;
 
 	function unsupported(name) { throw new Error(`Unsupported VS Code API: ${name}`); }
 	function contract(name, members) {
@@ -42,6 +48,7 @@ export function createApi(configuration) {
 	async function invoke(callback) {
 		const id = globalThis.__ashInvocation();
 		pending.set(id, []);
+		observedDocuments.set(id, new Map());
 		try {
 			const result = await callback();
 			let drained = 0;
@@ -54,6 +61,7 @@ export function createApi(configuration) {
 			return result;
 		} finally {
 			pending.delete(id);
+			observedDocuments.delete(id);
 		}
 	}
 	function message(severity, text, ...items) {
@@ -132,20 +140,177 @@ export function createApi(configuration) {
 		}
 		toJSON() { return { scheme: this.scheme, authority: this.authority, path: this.path, query: this.query, fragment: this.fragment }; }
 	}
-	function document(snapshot) {
-		const uri = snapshot.uri === undefined ? undefined : Uri.parse(snapshot.uri);
-		return Object.freeze({
-			uri, version: snapshot.version, languageId: snapshot.languageId,
+	function observeDocument(snapshot) {
+		if (snapshot.uri !== undefined) observedDocuments.get(globalThis.__ashInvocation(false))?.set(snapshot.uri, snapshot.version);
+	}
+	function document(snapshot, live = false) {
+		const key = snapshot.uri;
+		observeDocument(snapshot);
+		const existing = live ? documents.get(key) : undefined;
+		if (existing && existing.snapshot.version > snapshot.version) return existing.value;
+		if (existing) { existing.snapshot = snapshot; return existing.value; }
+		const state = { snapshot, closed: false };
+		const value = Object.freeze({
+			uri: key === undefined ? undefined : Uri.parse(key),
+			get version() { observeDocument(state.snapshot); return state.snapshot.version; },
+			get languageId() { return state.snapshot.languageId; },
+			get isClosed() { return state.closed; },
+			get lineCount() { observeDocument(state.snapshot); return state.snapshot.text.split('\n').length; },
 			getText(range) {
-				if (!range) return snapshot.text;
-				const lines = snapshot.text.split('\n');
-				const offset = position => lines.slice(0, position.line).reduce((total, line) => total + line.length + 1, 0) + position.character;
-				return snapshot.text.slice(offset(range.start), offset(range.end));
+				observeDocument(state.snapshot);
+				if (!range) return state.snapshot.text;
+				return state.snapshot.text.slice(this.offsetAt(range.start), this.offsetAt(range.end));
+			},
+			offsetAt(position) {
+				observeDocument(state.snapshot);
+				const lines = state.snapshot.text.split('\n');
+				if (position.line < 0) return 0;
+				if (position.line >= lines.length) return state.snapshot.text.length;
+				return lines.slice(0, position.line).reduce((total, line) => total + line.length + 1, 0) + Math.max(0, Math.min(position.character, lines[position.line].replace(/\r$/, '').length));
+			},
+			positionAt(offset) {
+				observeDocument(state.snapshot);
+				const text = state.snapshot.text;
+				const bounded = Math.max(0, Math.min(Math.floor(offset), text.length));
+				const lines = text.slice(0, bounded).split('\n');
+				return new Position(lines.length - 1, lines.at(-1).replace(/\r$/, '').length);
+			},
+			lineAt(line) {
+				observeDocument(state.snapshot);
+				const index = typeof line === 'number' ? line : line.line;
+				const lines = state.snapshot.text.split('\n');
+				if (!Number.isSafeInteger(index) || index < 0 || index >= lines.length) throw new RangeError('Line is outside the document');
+				const text = lines[index].replace(/\r$/, '');
+				return Object.freeze({ lineNumber: index, text, range: new Range(index, 0, index, text.length), rangeIncludingLineBreak: index + 1 < lines.length ? new Range(index, 0, index + 1, 0) : new Range(index, 0, index, text.length), firstNonWhitespaceCharacterIndex: text.search(/\S/) < 0 ? text.length : text.search(/\S/), isEmptyOrWhitespace: !text.trim() });
+			},
+			getWordRangeAtPosition(position, regex) {
+				if (regex !== undefined) return unsupported('TextDocument custom word regex');
+				const text = this.lineAt(position).text;
+				for (const match of text.matchAll(/[\p{L}\p{N}_]+/gu)) {
+					if (match.index <= position.character && position.character <= match.index + match[0].length) return new Range(position.line, match.index, position.line, match.index + match[0].length);
+				}
+				return undefined;
+			},
+		});
+		state.value = value;
+		if (live && key !== undefined) documents.set(key, state);
+		return value;
+	}
+	function listenDocument(kind, listener, thisArg, disposables) {
+		if (typeof listener !== 'function') throw new TypeError('Document event requires a listener');
+		ensureDocumentEvents();
+		const entry = { listener, thisArg };
+		documentListeners[kind].add(entry);
+		const disposable = new Disposable(() => documentListeners[kind].delete(entry));
+		disposables?.push(disposable);
+		return disposable;
+	}
+	function ensureDocumentEvents() {
+		if (!documentRegistration) {
+			documentRegistration = ashWorkspace.registerTextDocumentEvents('vscode.documents', (_call, event) => invoke(async () => {
+				if (!['open', 'change', 'close'].includes(event.type) || !event.document) throw new TypeError('Invalid document event');
+				const value = document(event.document, true);
+				if (event.type === 'close') {
+					const state = documents.get(event.document.uri);
+					state.closed = true;
+					documents.delete(event.document.uri);
+				}
+				const content = event.type === 'change' ? { document: value, contentChanges: event.contentChanges.map(change => ({ ...change, range: new Range(change.range.start, change.range.end) })), reason: event.reason === 'undo' ? 1 : event.reason === 'redo' ? 2 : undefined } : value;
+				await Promise.all([...documentListeners[event.type]].map(entry => entry.listener.call(entry.thisArg, content)));
+			}));
+			subscriptions.push(documentRegistration);
+		}
+	}
+	class Diagnostic {
+		constructor(range, message, severity = 0) {
+			if (!(range instanceof Range) || typeof message !== 'string' || !message || !Number.isInteger(severity) || severity < 0 || severity > 3) throw new TypeError('Invalid diagnostic');
+			Object.assign(this, { range, message, severity });
+		}
+	}
+	function diagnosticCollection(name = '') {
+		if (typeof name !== 'string' || name.length > 256) throw new TypeError('Invalid diagnostic collection name');
+		ensureDocumentEvents();
+		const id = `vscode.diagnostics.${++collectionSequence}`;
+		let entries = new Map();
+		let disposed = false;
+		function publish(next) {
+			if (disposed) throw new Error('Diagnostic collection is disposed');
+			if (next.size > 1024) throw new RangeError('Too many diagnostic resources');
+			const payload = [...next].map(([uri, value]) => ({
+				uri, version: value.version, diagnostics: value.diagnostics.map(diagnostic => {
+					if (!diagnostic || ![0, 1, 2, 3].includes(diagnostic.severity) || typeof diagnostic.message !== 'string' || !diagnostic.message || !(diagnostic.range instanceof Range)) throw new TypeError('Invalid diagnostic');
+					if (diagnostic.relatedInformation !== undefined || diagnostic.tags !== undefined || typeof diagnostic.code === 'object') return unsupported('Diagnostic related information/tags/code targets');
+					return { start: diagnostic.range.start, end: diagnostic.range.end, message: diagnostic.message, severity: ['error', 'warning', 'information', 'hint'][diagnostic.severity], source: diagnostic.source ?? null, code: diagnostic.code === undefined ? null : String(diagnostic.code) };
+				})
+			}));
+			request({ operation: 'setDiagnostics', collection: id, entries: payload }, 'done');
+			entries = next;
+		}
+		return Object.freeze({
+			name,
+			set(uri, diagnostics) {
+				if (uri === undefined) { publish(new Map()); return; }
+				const values = uri instanceof Uri ? [[uri, diagnostics]] : uri;
+				if (!Array.isArray(values)) throw new TypeError('Diagnostic entries must be an array');
+				const next = new Map(entries);
+				const merged = new Map();
+				for (const [resource, items] of values) {
+					if (!(resource instanceof Uri)) throw new TypeError('Diagnostic resource must be a URI');
+					const key = resource.toString();
+					if (items === undefined) { next.delete(key); merged.delete(key); }
+					else {
+						if (!Array.isArray(items) || items.length > 10_000) throw new TypeError('Invalid diagnostic list');
+						const combined = [...(merged.get(key) ?? []), ...items];
+						merged.set(key, combined);
+						next.set(key, { version: observedDocuments.get(globalThis.__ashInvocation())?.get(key) ?? null, diagnostics: Object.freeze(combined) });
+					}
+				}
+				publish(next);
+			},
+			delete(uri) { const next = new Map(entries); next.delete(uri.toString()); publish(next); },
+			clear() { publish(new Map()); },
+			get(uri) { if (disposed) throw new Error('Diagnostic collection is disposed'); return entries.get(uri.toString())?.diagnostics ?? []; },
+			has(uri) { return entries.has(uri.toString()); },
+			forEach(callback, thisArg) { for (const [uri, value] of entries) callback.call(thisArg, Uri.parse(uri), value.diagnostics, this); },
+			*[Symbol.iterator]() { for (const [uri, value] of entries) yield [Uri.parse(uri), value.diagnostics]; },
+			dispose() {
+				if (disposed) return;
+				// Deactivation has no live client invocation; the Workbench retires its owners.
+				if (pending.has(globalThis.__ashInvocation(false))) publish(new Map());
+				disposed = true;
+				entries.clear();
 			},
 		});
 	}
+	const completionKinds = ['text', 'method', 'function', 'constructor', 'field', 'variable', 'class', 'interface', 'module', 'property', 'unit', 'value', 'enum', 'keyword', 'snippet', undefined, 'file', 'reference', 'folder', undefined, undefined, undefined, undefined, undefined, 'typeParameter'];
+	const completionNames = ['Text', 'Method', 'Function', 'Constructor', 'Field', 'Variable', 'Class', 'Interface', 'Module', 'Property', 'Unit', 'Value', 'Enum', 'Keyword', 'Snippet', 'Color', 'File', 'Reference', 'Folder', 'EnumMember', 'Constant', 'Struct', 'Event', 'Operator', 'TypeParameter'];
+	function completionResult(value, snapshot, position) {
+		const items = value == null ? [] : Array.isArray(value) ? value : value.items;
+		if (!Array.isArray(items) || items.length > 10_000) throw new TypeError('Invalid completion list');
+		return {
+			isIncomplete: value?.isIncomplete === true, items: items.map((item, index) => {
+				const label = typeof item.label === 'string' ? item.label : item.label?.label;
+				if (typeof label !== 'string' || !label || (item.kind !== undefined && !completionKinds[item.kind])) throw new TypeError('Invalid completion item');
+				if (item.command !== undefined || item.range?.inserting !== undefined) return unsupported('CompletionItem command/insert-replace ranges');
+				const range = item.textEdit?.range ?? item.range ?? snapshot.getWordRangeAtPosition(position) ?? new Range(position, position);
+				const insertion = item.textEdit?.newText ?? item.insertText ?? label;
+				const result = { id: String(index), label, kind: completionKinds[item.kind ?? 0], range, insertText: insertion instanceof SnippetString ? insertion.value : insertion, insertTextFormat: insertion instanceof SnippetString ? 'snippet' : 'plainText' };
+				for (const field of ['detail', 'filterText', 'sortText', 'preselect', 'commitCharacters']) if (item[field] !== undefined) result[field] = item[field];
+				if (item.documentation !== undefined) result.documentation = typeof item.documentation === 'string' ? item.documentation : item.documentation.value;
+				if (item.additionalTextEdits !== undefined) result.additionalTextEdits = item.additionalTextEdits.map(edit => ({ range: edit.range, text: edit.newText }));
+				return result;
+			})
+		};
+	}
+	class SnippetString { constructor(value = '') { this.value = value; } }
 	const api = contract('vscode', {
-		Disposable, Position, Range, Uri,
+		Disposable, Position, Range, Uri, Diagnostic, SnippetString,
+		DiagnosticSeverity: Object.freeze({ Error: 0, Warning: 1, Information: 2, Hint: 3 }),
+		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.map((name, index) => [name, index]))),
+		CompletionTriggerKind: Object.freeze({ Invoke: 0, TriggerCharacter: 1, TriggerForIncompleteCompletions: 2 }),
+		CompletionItem: class CompletionItem { constructor(label, kind) { this.label = label; this.kind = kind; } },
+		CompletionList: class CompletionList { constructor(items = [], isIncomplete = false) { this.items = items; this.isIncomplete = isIncomplete; } },
+		TextEdit: class TextEdit { constructor(range, newText) { this.range = range; this.newText = newText; } static replace(range, newText) { return new this(range, newText); } static insert(position, newText) { return new this(new Range(position, position), newText); } static delete(range) { return new this(range, ''); } },
 		Hover: class Hover { constructor(contents, range) { this.contents = Array.isArray(contents) ? contents : [contents]; this.range = range; } },
 		MarkdownString: class MarkdownString {
 			constructor(value = '') { this.value = value; }
@@ -170,13 +335,34 @@ export function createApi(configuration) {
 			},
 		}),
 		workspace: contract('workspace', {
+			get textDocuments() { return [...documents.values()].map(state => { observeDocument(state.snapshot); return state.value; }); },
+			onDidOpenTextDocument: (listener, thisArg, disposables) => listenDocument('open', listener, thisArg, disposables),
+			onDidChangeTextDocument: (listener, thisArg, disposables) => listenDocument('change', listener, thisArg, disposables),
+			onDidCloseTextDocument: (listener, thisArg, disposables) => listenDocument('close', listener, thisArg, disposables),
 			async openTextDocument(uri) {
 				if (!(uri instanceof Uri)) return unsupported('workspace.openTextDocument overload');
 				const result = await request({ operation: 'readDocument', uri: uri.toString() }, 'document');
-				return document(result.document);
+				return document(result.document, true);
 			},
 		}),
 		languages: contract('languages', {
+			createDiagnosticCollection: diagnosticCollection,
+			registerCompletionItemProvider(selector, provider, ...triggerCharacters) {
+				ensureDocumentEvents();
+				const entries = Array.isArray(selector) ? selector : [selector];
+				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerCompletionItemProvider selector filters');
+				if (typeof provider?.provideCompletionItems !== 'function' || provider.resolveCompletionItem !== undefined) return unsupported('CompletionItemProvider missing provideCompletionItems/resolveCompletionItem');
+				const registration = ashLanguages.registerCompletionProvider(`vscode.completion.${++providerSequence}`, entries, {
+					provideCompletionItems: (_call, snapshot, coordinate, context) => invoke(async () => {
+						const value = document(snapshot);
+						const position = new Position(coordinate.line, coordinate.character);
+						const result = await provider.provideCompletionItems(value, position, contract('CancellationToken', { isCancellationRequested: false }), { triggerKind: context.kind === 'triggerCharacter' ? 1 : context.kind === 'incompleteRefresh' ? 2 : 0, triggerCharacter: context.triggerCharacter });
+						return completionResult(result, value, position);
+					}),
+				}, triggerCharacters);
+				subscriptions.push(registration);
+				return registration;
+			},
 			registerHoverProvider(selector, provider) {
 				const entries = Array.isArray(selector) ? selector : [selector];
 				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerHoverProvider selector filters');

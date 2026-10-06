@@ -20,6 +20,8 @@ mod projects;
 mod teams;
 #[path = "sqlite/thread.rs"]
 mod thread;
+#[path = "sqlite/thread_pull_requests.rs"]
+mod thread_pull_requests;
 
 pub use approval_environment::SqliteEnvironmentStore;
 pub use git_turn_changes::SqliteTurnChangeStore;

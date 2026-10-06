@@ -70,16 +70,27 @@ async fn branch_pull_request_discovery_sends_an_encoded_head_filter() {
     http.push(200, json!([]));
     let client = github(http.clone());
     let result = client
-        .pull_requests(&repository(), IssueState::Open, 2, Some("contributor:feature/links&checks"))
+        .pull_requests(
+            &repository(),
+            IssueState::Open,
+            2,
+            Some("contributor:feature/links&checks"),
+        )
         .await
         .unwrap();
     assert!(result.pull_requests.is_empty());
     let requests = http.requests.lock().unwrap();
-    let url = url::Url::parse(&requests[0].url).unwrap();
+    let url = url::Url::parse(requests[0].url()).unwrap();
     let query: std::collections::BTreeMap<_, _> = url.query_pairs().collect();
-    assert_eq!(query.get("head").map(|value| value.as_ref()), Some("contributor:feature/links&checks"));
+    assert_eq!(
+        query.get("head").map(|value| value.as_ref()),
+        Some("contributor:feature/links&checks")
+    );
     assert_eq!(query.get("page").map(|value| value.as_ref()), Some("2"));
-    assert_eq!(query.get("sort").map(|value| value.as_ref()), Some("updated"));
+    assert_eq!(
+        query.get("sort").map(|value| value.as_ref()),
+        Some("updated")
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

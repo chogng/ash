@@ -24,8 +24,48 @@ export interface Hover {
 export interface HoverProvider {
 	provideHover(context: InvocationContext, document: TextDocument, position: Position): Hover | undefined | Promise<Hover | undefined>;
 }
+export interface CompletionItem {
+	readonly id: string;
+	readonly label: string;
+	readonly kind: 'text' | 'method' | 'function' | 'constructor' | 'field' | 'variable' | 'class' | 'interface' | 'module' | 'property' | 'unit' | 'value' | 'enum' | 'keyword' | 'snippet' | 'file' | 'reference' | 'folder' | 'typeParameter';
+	readonly range: Range;
+	readonly insertText: string;
+	readonly insertTextFormat: 'plainText' | 'snippet';
+	readonly detail?: string;
+	readonly documentation?: string;
+	readonly filterText?: string;
+	readonly sortText?: string;
+	readonly preselect?: boolean;
+	readonly commitCharacters?: readonly string[];
+	readonly additionalTextEdits?: readonly { readonly range: Range; readonly text: string; }[];
+}
+export type CompletionContext = { readonly kind: 'invoke' | 'incompleteRefresh'; } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string; };
+export interface CompletionProvider {
+	provideCompletionItems(context: InvocationContext, document: TextDocument, position: Position, trigger: CompletionContext): { readonly isIncomplete: boolean; readonly items: readonly CompletionItem[]; } | Promise<{ readonly isIncomplete: boolean; readonly items: readonly CompletionItem[]; }>;
+}
+export interface Diagnostic {
+	readonly start: Position;
+	readonly end: Position;
+	readonly message: string;
+	readonly severity: 'error' | 'warning' | 'information' | 'hint';
+	readonly source: string | null;
+	readonly code: string | null;
+}
+export interface DiagnosticEntry {
+	readonly uri: string;
+	/** Null is reserved for resources not read in this invocation. */
+	readonly version: number | null;
+	readonly diagnostics: readonly Diagnostic[];
+}
+export type TextDocumentEvent =
+	| { readonly type: 'open' | 'close'; readonly document: Omit<TextDocument, 'getText' | 'uri'> & { readonly uri: string; }; }
+	| { readonly type: 'change'; readonly document: Omit<TextDocument, 'getText' | 'uri'> & { readonly uri: string; }; readonly reason: string; readonly contentChanges: readonly { readonly range: Range; readonly rangeOffset: number; readonly rangeLength: number; readonly text: string; }[]; };
 /** Operations are scoped to this invocation and stop when its parent is cancelled or retired. */
 export interface InvocationContext {
+	readonly languages: {
+		/** Replaces this incarnation's entire named collection; an empty array clears it. */
+		setDiagnostics(collection: string, entries: readonly DiagnosticEntry[]): Promise<void>;
+	};
 	readonly workspace: {
 		/** Reads the editor's current text, including unsaved changes. */
 		openTextDocument(uri: string): Promise<TextDocument>;
@@ -50,6 +90,11 @@ export const commands: {
 /** Uses the initiating editor's immutable snapshot. Cancellation retires the host, including pending provider callbacks. */
 export const languages: {
 	registerHoverProvider(registrationId: string, languageIds: readonly string[], provider: HoverProvider): Disposable;
+	registerCompletionProvider(registrationId: string, languageIds: readonly string[], provider: CompletionProvider, triggerCharacters?: readonly string[]): Disposable;
+};
+export const workspace: {
+	/** Ordered callbacks, beginning with open events for existing models after activation. */
+	registerTextDocumentEvents(registrationId: string, listener: (context: InvocationContext, event: TextDocumentEvent) => void | Promise<void>): Disposable;
 };
 /** Export activate from the ESM entry. Import the SDK as '@ash/extension'; no Node module loader is supplied. */
 export type Activate = (context: ExtensionContext) => void | Promise<void>;

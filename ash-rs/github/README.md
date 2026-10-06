@@ -22,6 +22,10 @@ GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口�
 
 前端 `platform/github/common/githubService.ts` 定义 `IGitHubService` 和领域类型，`browser/appServerGitHubService.ts` 封装生成的协议、取消与错误分类。Web 和 Electron 都从现有 Renderer Host 获得该服务，Workbench 注册同一个实例；产品调用不经过 `workbench/api`。
 
+PR 列表支持 `head`（`owner:branch`）筛选，会话分支关联使用此条件查询，避免遍历仓库历史。PR 详情保留 GitHub 返回的 `mergeable`：`false` 表示无法合并，`null` 表示仍在计算，不能把未知结果显示为合并冲突。会话输入区和列表共享分支关联结果，并结合检查与审查线程显示需要处理的状态。
+
+会话还可手动附加 GitHub.com 或 Enterprise PR。`github/session/pullRequests` 读取引用，`github/session/pullRequest/attach` 和 `github/session/pullRequest/detach` 按仓库身份及编号增删引用；这三个方法只访问 `ash-state` 的 Session 根 Thread 存储，按 Session 串行执行，不携带账号或 `operationId`。实际变化发布 `session/changed`，重复操作不产生重复引用。标题与实时状态仍通过 GitHub API 读取，分支关联和手动引用合并去重。移除引用不关闭 PR，当前分支的自动关联仍保留；读取失败时显示状态不可用并保留移除入口。
+
 在 Workbench 或 Sessions 的命令面板运行 **GitHub Pull Requests and Issues**（`workbench.action.github.open`），输入仓库 owner 和名称，即可浏览 PR 与 Issue。PR 页面提供文件 Diff、检查结果、逐行评论草稿、评审提交、讨论回复与解决、修改与关闭、合并和自动合并；Issue 页面提供创建、修改、标签、负责人、评论与关闭/重新打开。创建 PR 接收已经推送的源分支，也接受 `owner:branch`。审查和创建/编辑草稿保存在当前窗口，关闭页签不会丢失；切换 GitHub 账号时清空私有数据和草稿。旧提交的非空审查草稿阻止提交；写入结果不确定时阻止重复写入，用户查看 GitHub 后可明确确认结果。Alt+F1 打开键盘帮助，Accessible View 提供详情文本。
 
 账号选择框支持多个 GitHub.com 和 Enterprise Server 账号，菜单提供个人访问令牌连接和所选账号登出。PR 页面支持请求或移除用户与团队审查者，按 GitHub 返回的权限编辑或删除逐行评论；写入前核对评论所属仓库与 PR，收到明确确认才更新界面。

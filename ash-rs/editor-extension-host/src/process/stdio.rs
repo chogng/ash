@@ -48,6 +48,20 @@ impl StdioExtensionHostProcess {
         launch: &ExtensionLaunchCommand,
         limits: &ExtensionHostLimits,
     ) -> Result<Self, ExtensionHostError> {
+        #[cfg(windows)]
+        if matches!(
+            limits.isolation,
+            crate::ProcessIsolationPolicy::RequireJavaScriptEnforcement(_)
+        ) {
+            let command = ash_sandboxing::SandboxCommand::new(
+                launch.executable(),
+                launch.arguments().iter().cloned(),
+                launch.working_directory(),
+            );
+            let child = windows_sandbox::spawn_locked_process(&command)
+                .map_err(|_| ExtensionHostError::IsolationUnavailable)?;
+            return Self::from_child(child, limits);
+        }
         let command = ash_sandboxing::SandboxCommand::new(
             launch.executable(),
             launch.arguments().iter().cloned(),
@@ -64,9 +78,16 @@ impl StdioExtensionHostProcess {
             .collect::<Result<Vec<_>, ExtensionHostError>>()?;
         // Confinement is applied inside the product child before extension code. This
         // shared process handle owns the group and also cleans it up on partial startup.
-        let mut child = ash_sandboxing::PreparedCommand::unrestricted(&command)
+        let child = ash_sandboxing::PreparedCommand::unrestricted(&command)
             .spawn(&environment)
             .map_err(|_| ExtensionHostError::SpawnFailed)?;
+        Self::from_child(child, limits)
+    }
+
+    fn from_child(
+        mut child: ash_sandboxing::ProcessHandle,
+        limits: &ExtensionHostLimits,
+    ) -> Result<Self, ExtensionHostError> {
         let stdin = child.take_stdin().ok_or(ExtensionHostError::SpawnFailed)?;
         let stdout = child.take_stdout().ok_or(ExtensionHostError::SpawnFailed)?;
         let stderr_pipe = child.take_stderr().ok_or(ExtensionHostError::SpawnFailed)?;

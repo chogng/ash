@@ -9608,6 +9608,54 @@
         {
           "properties": {
             "method": {
+              "const": "github/session/pullRequests",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubSessionPullRequestsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/session/pullRequest/attach",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubSessionPullRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/session/pullRequest/detach",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubSessionPullRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "github/account/connect",
               "type": "string"
             },
@@ -16145,6 +16193,54 @@
             },
             "result": {
               "$ref": "#/$defs/GitHubAccountsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/session/pullRequests",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubSessionPullRequestsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/session/pullRequest/attach",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/session/pullRequest/detach",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -22994,6 +23090,31 @@
         },
         {
           "additionalProperties": false,
+          "description": "Replaces only this extension incarnation's named diagnostic collection.",
+          "properties": {
+            "collection": {
+              "type": "string"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/ExtensionDiagnosticEntry"
+              },
+              "type": "array"
+            },
+            "operation": {
+              "const": "setDiagnostics",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "collection",
+            "entries"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "documents": {
               "items": {
@@ -23104,6 +23225,37 @@
           "type": "object"
         }
       ]
+    },
+    "ExtensionClientRequestParams": {
+      "additionalProperties": false,
+      "description": "The broker supplies this identity from the admitted invocation, never from extension input.",
+      "properties": {
+        "activationGeneration": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "extensionId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "incarnation": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/ExtensionClientOperation"
+        }
+      },
+      "required": [
+        "extensionId",
+        "activationGeneration",
+        "incarnation",
+        "operation"
+      ],
+      "type": "object"
     },
     "ExtensionClientResult": {
       "oneOf": [
@@ -23251,6 +23403,42 @@
       ],
       "type": "string"
     },
+    "ExtensionDiagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "end": {
+          "$ref": "#/$defs/ExtensionTextPosition"
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/ExtensionDiagnosticSeverity"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start": {
+          "$ref": "#/$defs/ExtensionTextPosition"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "message",
+        "severity"
+      ],
+      "type": "object"
+    },
     "ExtensionDiagnosticCodeDto": {
       "enum": [
         "sourceUnavailable",
@@ -23286,6 +23474,43 @@
         "message"
       ],
       "type": "object"
+    },
+    "ExtensionDiagnosticEntry": {
+      "additionalProperties": false,
+      "description": "Diagnostics carry the observed document version so old callbacks cannot mark newer text.",
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/ExtensionDiagnostic"
+          },
+          "type": "array"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "uri",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "ExtensionDiagnosticSeverity": {
+      "enum": [
+        "error",
+        "warning",
+        "information",
+        "hint"
+      ],
+      "type": "string"
     },
     "ExtensionDocumentEdit": {
       "additionalProperties": false,
@@ -24139,6 +24364,18 @@
     "ExtensionHostRegistrationDescriptorDto": {
       "description": "One provider registration published atomically by an activated extension process.",
       "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "textDocumentEvents",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "kind": {
@@ -28275,6 +28512,25 @@
       ],
       "type": "object"
     },
+    "GitHubPullRequestReference": {
+      "additionalProperties": false,
+      "description": "A durable PR identity; live state and account credentials are resolved separately.",
+      "properties": {
+        "number": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "repository",
+        "number"
+      ],
+      "type": "object"
+    },
     "GitHubPullRequestReview": {
       "additionalProperties": false,
       "properties": {
@@ -28990,6 +29246,48 @@
         "change",
         "users",
         "teams"
+      ],
+      "type": "object"
+    },
+    "GitHubSessionPullRequestParams": {
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "$ref": "#/$defs/GitHubPullRequestReference"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "reference"
+      ],
+      "type": "object"
+    },
+    "GitHubSessionPullRequestsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "GitHubSessionPullRequestsResult": {
+      "properties": {
+        "references": {
+          "items": {
+            "$ref": "#/$defs/GitHubPullRequestReference"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "references"
       ],
       "type": "object"
     },
@@ -30198,7 +30496,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/ExtensionClientOperation"
+              "$ref": "#/$defs/ExtensionClientRequestParams"
             }
           },
           "required": [

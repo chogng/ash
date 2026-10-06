@@ -304,6 +304,7 @@ pub struct AppServer {
     dir_services: Option<Arc<thread_dirs::ThreadDirs>>,
     issue_runtime: Option<Arc<issue_runtime::IssueRuntime>>,
     issue_cache: Option<Arc<Mutex<ash_state::SqliteIssueCache>>>,
+    thread_pull_requests: Option<Arc<ash_state::SqliteThreadStore>>,
     projects: Option<Arc<ash_projects::ProjectCoordinator>>,
     teams: Option<Arc<ash_teams::TeamCoordinator>>,
     team_memberships: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>,
@@ -654,6 +655,7 @@ impl AppServer {
             dir_services: None,
             issue_runtime: None,
             issue_cache: None,
+            thread_pull_requests: None,
             projects: None,
             teams: None,
             team_memberships: Arc::new(OnceLock::new()),
@@ -2247,6 +2249,11 @@ impl AppServer {
                 &request.params,
                 cancellation,
             ),
+            Some(
+                method @ (ClientMethod::GitHubSessionPullRequests
+                | ClientMethod::GitHubSessionPullRequestAttach
+                | ClientMethod::GitHubSessionPullRequestDetach),
+            ) => self.session_pull_requests(method, &request.params),
             Some(ClientMethod::GitHubCancel) => github_processor::cancel(
                 &self.request_scheduler,
                 &self.request_cancellations,

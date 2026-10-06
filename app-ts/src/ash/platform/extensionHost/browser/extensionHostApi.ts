@@ -136,7 +136,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 				this.assertNotDisposed();
 				worker = this.instantiation.createInstance(BrowserExtensionWorker, source, (operation: ExtensionClientOperation, signal: AbortSignal) => {
 					if (!this.clientHandler) throw new Error('No extension client handler is registered');
-					return this.clientHandler(operation, signal);
+					return this.clientHandler(operation, signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
 				});
 				this.workers.set(extension.id, worker);
 				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage() }, Date.now() + 30_000);
@@ -180,7 +180,7 @@ class BrowserExtensionWorker extends Disposable {
 	private nextId = 1;
 	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 
-	constructor(source: Uint8Array, clientHandler: ExtensionClientHandler,
+	constructor(source: Uint8Array, clientHandler: (operation: ExtensionClientOperation, signal: AbortSignal) => ReturnType<ExtensionClientHandler>,
 		@ICommandService commandService: ICommandService,
 		@IFileService files: IFileService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
@@ -327,7 +327,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		cancel: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId }),
 	};
 	return {
-		registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async (operation, context) => {
+		registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async ({ operation, ...source }, context) => {
 			if (operation.operation === 'readWorkspaceFile') {
 				throw new Error('Workspace file requests must be handled by App Server');
 			}
@@ -336,7 +336,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 				: operation.operation === 'updateConfiguration'
 					? { ...operation, value: normalizeExtensionHostPayload(operation.value) }
 					: operation;
-			const result = await handler(request, context.signal);
+			const result = await handler(request, context.signal, source);
 			// Domain payloads are immutable; the transport owns a separate mutable wire value.
 			switch (result.result) {
 				case 'command':

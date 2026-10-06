@@ -1,4 +1,6 @@
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import { languagePackCatalog } from '../../../src/ash/workbench/services/localization/common/localizationCatalog.zh-CN.js';
 import { Event, Emitter } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
@@ -21,6 +23,8 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { GitHubLinkPresentationContribution } from '../../../src/ash/workbench/contrib/github/browser/githubLinkPresentation.contribution.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
+import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
+import { ChatMarkdownDecorationsRenderer as CoworkMarkdownDecorationsRenderer } from '../../../src/ash/sessions/contrib/cowork/browser/widget/chatContentParts/chatMarkdownDecorationsRenderer.js';
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import '../../../src/ash/workbench/services/dataChannel/browser/dataChannelService.js';
 
@@ -56,7 +60,7 @@ class GitHubTransport implements AppServerTransport {
 			case 'github/pullRequest/read': {
 				const query = new URL(location.href).searchParams;
 				const state = query.get('prState') ?? 'draft';
-				this.respond(request, { number: 8, title: 'Fix GitHub links', body: 'Pull request details', url: 'https://github.com/team/repo/pull/8', state: state === 'merged' || state === 'closed' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06T00:00:00Z' : null, headCommit: sha, headBranch: 'feature/links', headRepository: query.has('deletedSource') ? null : 'contributor/fork', baseBranch: 'main', mergeable: null, autoMerge: false });
+				this.respond(request, { number: 8, title: 'Fix GitHub links', body: 'Pull request details', url: 'https://github.com/team/repo/pull/8', state: state === 'merged' || state === 'closed' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06T00:00:00Z' : null, headCommit: sha, headBranch: 'feature/links', headRepository: query.has('deletedSource') ? null : 'contributor/fork', baseBranch: 'main', mergeable: query.has('conflicts') ? false : null, autoMerge: false });
 				break;
 			}
 			case 'github/checks': this.heldChecks = request; break;
@@ -79,6 +83,9 @@ class GitHubTransport implements AppServerTransport {
 }
 
 const resources = new DisposableStore();
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
+	setNlsMessages('zh-CN', languagePackCatalog.bundles);
+}
 const services = resources.add(new InstantiationService());
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
@@ -104,6 +111,13 @@ const widget = resources.add(services.createInstance(ChatListWidget, container, 
 widget.setVisible(true);
 const render = (text: string): void => widget.render([{ id: 'message', type: 'agentMessage', text, transient: false }]);
 render(`[Repo](https://github.com/team/repo) [Issue](https://github.com/team/repo/issues/7) [PR](https://github.com/team/repo/pull/8) [Commit](https://github.com/team/repo/commit/${sha})`);
+if (new URL(location.href).searchParams.has('cowork')) {
+	const markdown = resources.add(new MarkdownElement({ ownerDocument: document, linkHandler: target => { void opener.open(target, { openExternal: true }); } }));
+	markdown.element.classList.add('cowork-test-message');
+	container.append(markdown.element);
+	markdown.setMarkdown('[PR](https://github.com/team/repo/pull/8)');
+	resources.add(services.createInstance(CoworkMarkdownDecorationsRenderer, markdown.element));
+}
 window.ashGitHubIntegration = {
 	requests: transport.requests, opened, releaseChecks: outcome => transport.releaseChecks(outcome), releaseIssue: () => transport.releaseIssue(),
 	render, replaceAccount: () => accounts.fire({ revision: 2n, accounts: [] }),

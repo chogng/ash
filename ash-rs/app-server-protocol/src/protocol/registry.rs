@@ -127,6 +127,8 @@ use crate::protocol::backup::BackupWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::TextDocumentsCapability;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionClientRequestParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyResult;
@@ -153,6 +155,12 @@ use extension_protocol::ExtensionClientOperation;
 use extension_protocol::ExtensionClientResult;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionConfigurationTarget;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDiagnostic;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDiagnosticEntry;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionDiagnosticSeverity;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionDocumentEdit;
 #[cfg(any(test, feature = "export"))]
@@ -1137,6 +1145,12 @@ use crate::protocol::github::GitHubReviewThreadsParams;
 use crate::protocol::github::GitHubReviewThreadsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubReviewersChangeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubSessionPullRequestParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubSessionPullRequestsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubSessionPullRequestsResult;
 
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubChecksParams;
@@ -4248,6 +4262,9 @@ client_methods! {
     GitHubNotificationsRead => "github/notifications/readAll" { params: GitHubNotificationsReadParams, response: (), serialization: HostedAccountExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubForkCreate => "github/repository/fork" { params: GitHubForkCreateParams, response: GitHubForkResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubAccountList => "github/account/list" { params: GitHubAccountListParams, response: GitHubAccountsResult, serialization: None, cancellation: "operationId", },
+    GitHubSessionPullRequests => "github/session/pullRequests" { params: GitHubSessionPullRequestsParams, response: GitHubSessionPullRequestsResult, serialization: SessionExclusive, },
+    GitHubSessionPullRequestAttach => "github/session/pullRequest/attach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
+    GitHubSessionPullRequestDetach => "github/session/pullRequest/detach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
     GitHubAccountConnect => "github/account/connect" { params: GitHubAccountConnectParams, response: GitHubAccount, serialization: GlobalExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubReviewCommentEdit => "github/pullRequest/comment/update" { params: GitHubReviewCommentEditParams, response: GitHubReviewComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubReviewCommentDelete => "github/pullRequest/comment/delete" { params: GitHubReviewCommentDeleteParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -4708,7 +4725,7 @@ macro_rules! host_methods {
 }
 
 host_methods! {
-    ExtensionClientRequest => "extensionClient/request" { params: ExtensionClientOperation, response: ExtensionClientResult, },
+    ExtensionClientRequest => "extensionClient/request" { params: ExtensionClientRequestParams, response: ExtensionClientResult, },
     TextDocumentList => "textDocument/list" { params: TextDocumentListParams, response: TextDocumentListResult, },
     TextDocumentRead => "textDocument/read" { params: TextDocumentReadParams, response: TextDocumentReadResult, },
     TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
@@ -5004,6 +5021,10 @@ typescript_bindings! {
     crate::protocol::github::GitHubAccountsResult,
     crate::protocol::github::GitHubAccountConnectParams,
     crate::protocol::github::GitHubAccountListParams,
+    crate::protocol::github::GitHubPullRequestReference,
+    crate::protocol::github::GitHubSessionPullRequestsParams,
+    crate::protocol::github::GitHubSessionPullRequestParams,
+    crate::protocol::github::GitHubSessionPullRequestsResult,
     crate::protocol::github::GitHubReviewCommentEditParams,
     crate::protocol::github::GitHubReviewCommentDeleteParams,
     crate::protocol::github::GitHubReviewerChange,
@@ -5213,6 +5234,10 @@ typescript_bindings! {
     ClientCapabilities,
     TextDocumentsCapability,
     ExtensionClientOperation,
+    ExtensionDiagnostic,
+    ExtensionDiagnosticEntry,
+    ExtensionDiagnosticSeverity,
+    ExtensionClientRequestParams,
     ExtensionClientResult,
     ExtensionConfigurationTarget,
     ExtensionDocumentEdit,

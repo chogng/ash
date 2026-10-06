@@ -141,3 +141,40 @@ test('a failed CI check remains visible while another check is pending', async (
 	await expect(pr).toContainText('Checks failed');
 	await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
 });
+
+test('Cowork uses the same PR icon and preserves keyboard focus when checks resolve', async ({ page }) => {
+	await page.goto('/github.html?cowork&prState=open');
+	const pr = page.locator('.cowork-test-message a');
+	await expect(pr.locator('svg[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
+	await pr.focus();
+	await page.keyboard.press('F2');
+	await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('failure'));
+	await expect(pr.locator('svg[data-ash-icon-id="git-pull-request-error"]')).toHaveCount(1);
+	await page.keyboard.press('Escape');
+	await expect(pr).toBeFocused();
+	await expect(pr.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+});
+
+test('merge conflicts are readable in both chat links and keyboard details', async ({ page }) => {
+	await page.goto('/github.html?cowork&prState=open&conflicts');
+	for (const pr of [page.locator('main a[href="https://github.com/team/repo/pull/8"]').first(), page.locator('.cowork-test-message a')]) {
+		await expect(pr).toHaveAccessibleName(/Open · Merge conflicts/);
+		await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+		await pr.focus();
+		await page.keyboard.press('F2');
+		const card = page.locator('.ash-github-resource-hover');
+		await expect(card).toHaveAttribute('data-github-content', /Merge conflicts/);
+		await expect(card.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+		await page.keyboard.press('Escape');
+		await expect(pr).toBeFocused();
+	}
+});
+
+test('Chinese PR attention text reaches the chat link and its details', async ({ page }) => {
+	await page.goto('/github.html?prState=open&conflicts&locale=zh-CN');
+	const pr = page.locator('main a[href="https://github.com/team/repo/pull/8"]');
+	await expect(pr).toHaveAccessibleName(/合并冲突/);
+	await pr.focus();
+	await page.keyboard.press('F2');
+	await expect(page.locator('.ash-github-resource-hover')).toHaveAttribute('data-github-content', /合并冲突/);
+});

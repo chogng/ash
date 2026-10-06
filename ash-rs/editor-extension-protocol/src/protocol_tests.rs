@@ -293,6 +293,68 @@ fn registration_fields_are_bounded_and_provider_sets_are_unique() {
 }
 
 #[test]
+fn document_events_require_language_capability_and_completion_triggers_are_unique_characters() {
+    for (capability, accepted) in [
+        (ExtensionCapability::Command, false),
+        (ExtensionCapability::LanguageProvider, true),
+    ] {
+        let mut params = activation();
+        params.capabilities = vec![capability];
+        let request = ExtensionHostRequest {
+            context: RequestContext::new(4, 8, 12),
+            request: HostRequestKind::Activate(params),
+        };
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "documents".into(),
+                    kind: RegistrationKind::TextDocumentEvents {},
+                }],
+            })),
+        };
+        assert_eq!(
+            response
+                .validate_for(&request, &ProtocolLimits::default())
+                .is_ok(),
+            accepted
+        );
+    }
+    for (triggers, accepted) in [
+        (vec![".", "😀"], true),
+        (vec![".", "."], false),
+        (vec!["ab"], false),
+        (vec![""], false),
+    ] {
+        let mut params = activation();
+        params.capabilities = vec![ExtensionCapability::LanguageProvider];
+        let request = ExtensionHostRequest {
+            context: RequestContext::new(4, 8, 12),
+            request: HostRequestKind::Activate(params),
+        };
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![RegistrationDescriptor {
+                    registration_id: "completions".into(),
+                    kind: RegistrationKind::LanguageProvider {
+                        language_ids: vec!["rust".into()],
+                        operations: vec![super::LanguageProviderOperation::Completion],
+                        completion_trigger_characters: triggers.into_iter().map(str::to_owned).collect(),
+                    },
+                }],
+            })),
+        };
+        assert_eq!(
+            response
+                .validate_for(&request, &ProtocolLimits::default())
+                .is_ok(),
+            accepted
+        );
+    }
+}
+
+#[test]
 fn invoke_response_payload_obeys_the_narrow_payload_quota() {
     let request = ExtensionHostRequest {
         context: RequestContext::new(7, 3, 11),

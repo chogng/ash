@@ -36,6 +36,7 @@ import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleSer
 import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lifecycle.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { IMarkerService, MarkerService } from '../../../../../platform/markers/common/markers.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -50,6 +51,102 @@ test('document highlights translate protocol kinds into editor kinds', async () 
 	}))));
 	const result = await languages.documentHighlightProvider.ordered(model)[0]!.provideDocumentHighlights(model, new Position(1, 3), source.token);
 	assert.deepEqual(result?.map(highlight => highlight.kind), [0, 1, 2]);
+});
+
+test('document subscriptions deliver model commits in order and retire on restart and disconnect', async () => {
+	const registration = { kind: 'textDocumentEvents' as const, registrationId: 'documents' };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [registration]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const models = services.get(IModelService);
+	const model = models.createModel('😀', null, URI.file('/main.ts'));
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	await waitFor(() => api.invocations.length === 1);
+	const pending = deferred<JsonValue>();
+	api.invocationResult = pending.promise;
+	model.applyEdits([{ range: new Range(1, 3, 1, 3), text: 'a' }]);
+	model.applyEdits([{ range: new Range(1, 4, 1, 4), text: 'b' }]);
+	await waitFor(() => api.invocations.length === 2);
+	assert.equal(api.invocations.length, 2, 'second commit waits for the first callback');
+	api.invocationResult = undefined;
+	pending.resolve(null);
+	await waitFor(() => api.invocations.length === 3);
+	assert.deepEqual(api.invocations.map(request => request.payload), [
+		{ type: 'open', document: { uri: model.uri.toString(), version: 1, languageId: 'plaintext', text: '😀' } },
+		{ type: 'change', document: { uri: model.uri.toString(), version: 2, languageId: 'plaintext', text: '😀a' }, reason: 'edit', contentChanges: [{ range: { start: { line: 0, character: 2 }, end: { line: 0, character: 2 } }, rangeOffset: 2, rangeLength: 0, text: 'a' }] },
+		{ type: 'change', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: '😀ab' }, reason: 'edit', contentChanges: [{ range: { start: { line: 0, character: 3 }, end: { line: 0, character: 3 } }, rangeOffset: 3, rangeLength: 0, text: 'b' }] },
+	]);
+	api.current = { generation: 2, extensions: [{ ...api.current.extensions[0]!, incarnation: 4 }] };
+	api.emitChanged(2);
+	await waitFor(() => api.invocations.length === 4);
+	assert.equal(api.invocationSignals[0]!.aborted, true);
+	assert.equal(api.invocations[3]!.incarnation, 4);
+	assert.deepEqual(api.invocations[3]!.payload, { type: 'open', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: '😀ab' } });
+	model.dispose();
+	await waitFor(() => api.invocations.length === 5);
+	assert.deepEqual(api.invocations[4]!.payload, { type: 'close', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: '😀ab' } });
+	api.emitConnection('restarting');
+	assert.equal(api.invocationSignals[4]!.aborted, true);
+	const next = models.createModel('after disconnect', null, URI.file('/next.ts'));
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(api.invocations.length, 5);
+	next.dispose();
+});
+
+test('diagnostic collections reject stale versions and keep extension ownership through retirement', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
+	api.current = { ...api.current, extensions: [...api.current.extensions, { ...api.current.extensions[0]!, id: 'acme.other', registrations: [] }] };
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const model = services.get(IModelService).createModel('bad', null, URI.file('/main.ts'));
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	const markers = services.get(IMarkerService);
+	const source = { extensionId: 'acme.demo', activationGeneration: 11, incarnation: 3 };
+	const other = { ...source, extensionId: 'acme.other' };
+	const diagnostic = { start: { line: 0, character: 0 }, end: { line: 0, character: 3 }, severity: 'warning' as const, message: 'Bad word', source: 'lint', code: 'W1' };
+	const entries = [{ uri: model.uri.toString(), version: 1, diagnostics: [diagnostic] }];
+	const signal = new AbortController().signal;
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries }, signal, source);
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries }, signal, other);
+	assert.equal(markers.read(model.uri).length, 2);
+	model.setValue('good');
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [{ ...entries[0]!, diagnostics: [] }] }, signal, source);
+	assert.equal(markers.read(model.uri).length, 2, 'old replacement cannot clear current diagnostics');
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source);
+	assert.equal(markers.read(model.uri).length, 1, 'other extension owns its collection');
+	api.current = { generation: 2, extensions: [{ ...api.current.extensions[0]!, incarnation: 4 }] };
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.equal(markers.read(model.uri).length, 0);
+	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source), /retired extension/);
+	model.dispose();
+});
+
+test('document callback errors do not suppress later commits and language changes close then reopen', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'textDocumentEvents', registrationId: 'documents' }]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const model = services.get(IModelService).createModel('initial', null, URI.file('/main.ts'));
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	await waitFor(() => api.invocations.length === 1);
+	api.invocationResult = Promise.reject(new Error('Extension listener failed'));
+	// Dispatch in the same turn so the rejection is consumed by the real subscription.
+	model.setValue('failed callback');
+	await waitFor(() => api.invocations.length === 2);
+	api.invocationResult = undefined;
+	model.setValue('next commit');
+	await waitFor(() => api.invocations.length === 3);
+	using languageRegistration = services.get(ILanguageService).registerLanguage({ id: 'typescript' });
+	model.setLanguage(services.get(ILanguageService).createById('typescript'));
+	await waitFor(() => api.invocations.length === 5);
+	assert.deepEqual(api.invocations.slice(3).map(request => request.payload), [
+		{ type: 'close', document: { uri: model.uri.toString(), version: 3, languageId: 'plaintext', text: 'next commit' } },
+		{ type: 'open', document: { uri: model.uri.toString(), version: 3, languageId: 'typescript', text: 'next commit' } },
+	]);
+	model.dispose();
 });
 
 test('extension editor menus capture the clicked input and reject malformed replacement menus before commit', async () => {
@@ -463,6 +560,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		this.invocations.push(request);
 		this.invocationSignals.push(signal);
 		if (this.invocationResult) return this.invocationResult;
+		if (request.operation === 'documentEvent') return null;
 		if (request.operation === "execute") return Object.freeze({ executed: true });
 		if (request.operation === "provideTasks") return Object.freeze({ tasks: Object.freeze([{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]) });
 		if (request.operation === "provideTestProfiles") return Object.freeze({ profiles: Object.freeze([{ id: "unit", label: "Unit", taskProviderRegistrationId: "tasks", taskId: "unit" }]) });
@@ -541,6 +639,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
 	services.registerInstance(IExtensionHostApi, api);
+	services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(ILifecycleService, () => services.createInstance(FixtureLifecycleService, undefined));
 	services.registerInstance(ITaskService, tasks as unknown as ITaskService);

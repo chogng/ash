@@ -272,6 +272,9 @@ import type { GitHubReviewThreadResolveParams } from './types/GitHubReviewThread
 import type { GitHubReviewThreadsParams } from './types/GitHubReviewThreadsParams.js';
 import type { GitHubReviewThreadsResult } from './types/GitHubReviewThreadsResult.js';
 import type { GitHubReviewersChangeParams } from './types/GitHubReviewersChangeParams.js';
+import type { GitHubSessionPullRequestParams } from './types/GitHubSessionPullRequestParams.js';
+import type { GitHubSessionPullRequestsParams } from './types/GitHubSessionPullRequestsParams.js';
+import type { GitHubSessionPullRequestsResult } from './types/GitHubSessionPullRequestsResult.js';
 import type { GitIndexDiffResult } from './types/GitIndexDiffResult.js';
 import type { GitIndexEditParams } from './types/GitIndexEditParams.js';
 import type { GitInitParams } from './types/GitInitParams.js';
@@ -874,6 +877,9 @@ export interface AppServerRequestMap {
   "github/notifications/readAll": { params: GitHubNotificationsReadParams; response: null };
   "github/repository/fork": { params: GitHubForkCreateParams; response: GitHubForkResult };
   "github/account/list": { params: GitHubAccountListParams; response: GitHubAccountsResult };
+  "github/session/pullRequests": { params: GitHubSessionPullRequestsParams; response: GitHubSessionPullRequestsResult };
+  "github/session/pullRequest/attach": { params: GitHubSessionPullRequestParams; response: null };
+  "github/session/pullRequest/detach": { params: GitHubSessionPullRequestParams; response: null };
   "github/account/connect": { params: GitHubAccountConnectParams; response: GitHubAccount };
   "github/pullRequest/comment/update": { params: GitHubReviewCommentEditParams; response: GitHubReviewComment };
   "github/pullRequest/comment/delete": { params: GitHubReviewCommentDeleteParams; response: null };
@@ -1295,6 +1301,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "github/notifications/readAll": { method: "github/notifications/readAll" },
   "github/repository/fork": { method: "github/repository/fork" },
   "github/account/list": { method: "github/account/list" },
+  "github/session/pullRequests": { method: "github/session/pullRequests" },
+  "github/session/pullRequest/attach": { method: "github/session/pullRequest/attach" },
+  "github/session/pullRequest/detach": { method: "github/session/pullRequest/detach" },
   "github/account/connect": { method: "github/account/connect" },
   "github/pullRequest/comment/update": { method: "github/pullRequest/comment/update" },
   "github/pullRequest/comment/delete": { method: "github/pullRequest/comment/delete" },

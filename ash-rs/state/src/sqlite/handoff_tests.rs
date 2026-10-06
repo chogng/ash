@@ -129,6 +129,11 @@ fn import_preserves_old_event_bytes_ids_and_excludes_configuration() {
     let target = store(to.path());
     let controller = ThreadController::with_store(source.clone());
     let root = thread(&controller, "known", Some("/remote/project"));
+    let repository =
+        github::Repository::new("ghe.example".into(), "team".into(), "repo".into()).unwrap();
+    source
+        .attach_pull_request(&root.thread_id, &repository, 12)
+        .unwrap();
     let connection = Connection::open(source.path()).unwrap();
     connection.execute_batch("CREATE TABLE credentials (value TEXT); INSERT INTO credentials VALUES ('outside-secret');").unwrap();
     let mut record = source.load(&root.thread_id).unwrap().remove(0);
@@ -171,6 +176,15 @@ fn import_preserves_old_event_bytes_ids_and_excludes_configuration() {
         )
         .unwrap();
     assert_eq!(receipt.threads, 1);
+    assert_eq!(
+        target.list_pull_requests(&root.thread_id).unwrap(),
+        vec![(repository.clone(), 12)]
+    );
+    assert!(
+        source
+            .detach_pull_request(&root.thread_id, &repository, 12)
+            .is_err()
+    );
     assert_eq!(target.load(&root.thread_id).unwrap(), vec![record]);
     let preserved: String = Connection::open(target.path())
         .unwrap()
@@ -424,10 +438,16 @@ fn archive_with_valid_transport_digest_and_invalid_agent_binding_is_rejected_ato
         None,
     );
     let archive = export(&source, &target, &MemoryAttachmentStore::default());
+    let bindings_table = TABLES
+        .iter()
+        .position(|(name, _)| *name == "agent_threads")
+        .unwrap();
     for index in [3, 4, 5] {
         let mut changed = false;
         let output = rewrite_archive(&archive, |frame| {
-            if let Frame::Row { table: 7, cells } = frame {
+            if let Frame::Row { table, cells } = frame
+                && *table == bindings_table
+            {
                 cells[index] = if index == 5 {
                     Cell::Text("{}".into())
                 } else {
@@ -509,7 +529,11 @@ fn archive_retention_indexes_must_match_original_prefix_events() {
             .unwrap();
     }
     let archive = export(&source, &target, &MemoryAttachmentStore::default());
-    for table in [9, 10] {
+    for name in ["history_prefix_records", "history_prefix_links"] {
+        let table = TABLES
+            .iter()
+            .position(|(table_name, _)| *table_name == name)
+            .unwrap();
         let mut changed = false;
         let output = rewrite_archive(&archive, |frame| {
             if let Frame::Row {
@@ -519,7 +543,7 @@ fn archive_retention_indexes_must_match_original_prefix_events() {
                 && *selected == table
                 && !changed
             {
-                cells[1] = if table == 9 {
+                cells[1] = if name == "history_prefix_records" {
                     let Cell::Integer(sequence) = &cells[1] else {
                         panic!("prefix sequence")
                     };

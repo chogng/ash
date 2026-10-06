@@ -445,6 +445,9 @@ impl RuntimeInner {
         let weak = Arc::downgrade(self);
         let invocation_id = id.clone();
         let client_host = Arc::clone(&self.client_host);
+        let extension_id = request.extension_id;
+        let activation_generation = request.activation_generation;
+        let incarnation = request.incarnation;
         if std::thread::Builder::new()
             .name("ash-extension-invocation".into())
             .spawn(move || {
@@ -454,7 +457,9 @@ impl RuntimeInner {
                     }
                     client_host.request_with_timeout(owner,
                         ash_app_server_protocol::protocol::registry::HostMethod::ExtensionClientRequest,
-                        &operation, token, remaining).map_err(|error| {
+                        &ash_app_server_protocol::protocol::extension_host::ExtensionClientRequestParams {
+                            extension_id: extension_id.clone(), activation_generation, incarnation, operation,
+                        }, token, remaining).map_err(|error| {
                             use crate::client_host::ClientHostError;
                             let code = match error {
                                 ClientHostError::Cancelled(_) | ClientHostError::CapabilityUnavailable => ash_editor_extension_host::HostErrorCode::Cancelled,
@@ -545,6 +550,7 @@ impl Drop for RuntimeInner {
 
 fn registration_allows_operation(registration: &RegistrationKind, operation: &str) -> bool {
     match registration {
+        RegistrationKind::TextDocumentEvents {} => operation == "documentEvent",
         RegistrationKind::ExternalUriOpener { .. } => {
             matches!(operation, "canOpenExternalUri" | "openExternalUri")
         }

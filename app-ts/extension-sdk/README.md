@@ -6,7 +6,7 @@ client; `readTextFile` uses the Rust filesystem service and its current director
 The cross-layer direction and installation boundary are documented in
 [`docs/editor-extensions.md`](../../docs/editor-extensions.md).
 
-API v1 supports commands, hover providers, immutable editor document snapshots, bounded UTF-8 workspace file
+API v1 supports commands, hover and completion providers, ordered document events, diagnostics, immutable editor document snapshots, bounded UTF-8 workspace file
 reads, notifications and Quick Pick. Register commands and providers during activation and put their disposables
 in `context.subscriptions`. Each callback receives a context bound to its own invocation; do not retain
 it for background calls after the command returns. Command IDs and callback JSON results are bounded
@@ -36,6 +36,24 @@ the SDK converts them to the transport format and rejects positions outside the 
 Return `undefined` for no result, or `{ contents, range? }` with text or language-tagged code blocks.
 The editor owns rendering and accessible hover controls. Disposal rejects new calls to the provider;
 cancelling an invocation retires the entire extension isolate and recovery creates a fresh instance.
+
+`languages.registerCompletionProvider(id, languageIds, provider, triggerCharacters?)` receives the same
+immutable document snapshot and UTF-16 position, plus the invocation, trigger-character or incomplete-refresh
+context. Return `{ isIncomplete, items }`; item ranges use `line`/`character`, and insertion text can be plain
+text or a snippet. The existing editor suggestion list owns filtering, display and insertion.
+
+`workspace.registerTextDocumentEvents(id, listener)` requires `languageProvider`. After activation the
+window sends open events for existing models, then ordered open/change/close events. Change ranges and
+offsets are UTF-16 and refer to the previous text; the accompanying snapshot contains the committed version.
+Language changes close the old document and open the new language. Callbacks can await invocation-scoped
+services. The connection retains at most 64 pending events per subscription; exceeding that limit stops
+the subscription and reports an error, rather than skipping edits. A new incarnation receives fresh open events.
+
+`call.languages.setDiagnostics(collection, entries)` replaces the entire named collection for that
+extension incarnation; `[]` clears it. Each entry has a URI, observed document version (or null for an
+unread resource) and diagnostics with zero-based UTF-16 start/end, severity, message, nullable source and code.
+A replacement containing an outdated document version is ignored. Collections allow 1,024 resources,
+10,000 total markers and 128 collection names per extension. Disconnect, stop and restart remove their markers.
 
 The example exercises current editor text,
 Rust disk reads, notification and a plaintext hover, so unsaved editor text is not mistaken for disk content.

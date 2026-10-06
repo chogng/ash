@@ -8,6 +8,34 @@ is canonical for the renderer implementation and extension points.
 Creator's Sites mode, contribution boundaries, implementation order and acceptance
 requirements are described in [Creator Sites](CREATOR_SITES.md).
 
+Code's composer shows manually attached pull requests alongside those associated
+with Git branches in the selected Session's execution directory.
+`contrib/github/browser/githubService.ts` consumes
+the frontend Git and GitHub services and owns this derived state; it does not change
+the canonical Session snapshot. `contrib/chat/browser/sessionChatInputToolbar.ts`
+and the sidebar consume the same result. The sidebar selects the highest-priority
+icon across repositories; accessible names retain all attention reasons. Branch
+changes remove automatic associations but retain manual attachments; ordinary PR
+updates preserve link focus.
+Account changes cancel reads and clear private data.
+
+Attach PR accepts a GitHub.com or Enterprise pull request URL and verifies access
+before saving its host, repository and number. App Server stores these references
+on the Session's root Thread in the profile SQLite database, through
+`github/session/pullRequests`, `github/session/pullRequest/attach` and
+`github/session/pullRequest/detach`. Changes notify subscribed windows through
+`session/changed`. Titles, status and account credentials are never persisted with
+the reference. Reopening a Session restores attachments, including Sessions without
+a workspace; unreadable PRs retain an explicit unavailable status and a Remove
+action. Remove detaches the saved reference without closing the PR or removing an
+association still supplied by the current branch. Session deletion clears its
+references, and history transfer carries them with the root Thread.
+
+Discovery and periodic refresh follow the selected Session. Other Sessions retain
+their last result for the current window and refresh when selected again; Sessions
+that have not been selected have no resolved association yet. PR artifacts produced
+by agents are not automatically recorded by this service.
+
 ## Ownership
 
 | Area                                  | Owner                                                                                                                                                                                          | Current implementation                                                                                                                                                                                                                                                                                                                                                                                                                                   |

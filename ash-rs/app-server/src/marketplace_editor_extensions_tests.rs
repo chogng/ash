@@ -290,7 +290,7 @@ fn providers(provider: Arc<dyn PluginProvider>) -> ash_core_plugins::PluginProvi
     .unwrap()
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", all(windows, target_pointer_width = "64")))]
 #[path = "marketplace_editor_extensions_web_tests.rs"]
 mod web;
 

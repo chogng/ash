@@ -1,6 +1,8 @@
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import { languagePackCatalog } from '../../../src/ash/workbench/services/localization/common/localizationCatalog.zh-CN.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
@@ -19,6 +21,8 @@ import type { ISession } from '../../../src/ash/sessions/services/sessions/commo
 import { GitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
 import { SessionChatInputToolbar } from '../../../src/ash/sessions/contrib/chat/browser/sessionChatInputToolbar.js';
 import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/sessionsList.js';
+import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
+import type { GitHubPullRequestReference } from '../../../src/ash/platform/github/common/githubService.js';
 
 interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
 type State = 'open' | 'draft' | 'closed' | 'merged';
@@ -31,6 +35,7 @@ class Transport implements AppServerTransport {
 	public unresolvedComments = false;
 	public mergeable: boolean | null = null;
 	public signedIn = true;
+	private references: GitHubPullRequestReference[] = JSON.parse(sessionStorage.getItem('test-backend-pr-references') ?? '[]');
 	public on(event: string, listener: (payload: unknown) => void): void {
 		let listeners = this.listeners.get(event);
 		if (!listeners) { listeners = new Set(); this.listeners.set(event, listeners); }
@@ -38,7 +43,7 @@ class Transport implements AppServerTransport {
 	}
 	public off(event: string, listener: (payload: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
 	private emit(event: string, payload: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(payload); } }
-	private reply(request: Request, result: unknown): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ id: request.id, result }) }); }
+	private reply(request: Request, result: unknown): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) }); }
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
 			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'sessions-pr-test', workspaceRoot: '/workspace' });
@@ -52,6 +57,19 @@ class Transport implements AppServerTransport {
 		const state = this.states.get(number)!;
 		const pr = { number, title: `Changes in ${repository?.name}`, body: '', url: `https://github.com/team/${repository?.name}/pull/${number}`, state: state === 'closed' || state === 'merged' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06' : null, mergeable: this.mergeable, headCommit: String(number).repeat(40), headBranch: 'feature', headRepository: `team/${repository?.name}`, baseBranch: 'main', autoMerge: false };
 		switch (request.method) {
+			case 'github/session/pullRequests': this.reply(request, { references: this.references }); break;
+			case 'github/session/pullRequest/attach': {
+				const reference = request.params.reference as GitHubPullRequestReference;
+				if (!this.references.some(item => JSON.stringify(item) === JSON.stringify(reference))) { this.references.push(reference); }
+				this.persistReferences(request);
+				break;
+			}
+			case 'github/session/pullRequest/detach': {
+				const reference = request.params.reference as GitHubPullRequestReference;
+				this.references = this.references.filter(item => JSON.stringify(item) !== JSON.stringify(reference));
+				this.persistReferences(request);
+				break;
+			}
 			case 'initialize': this.reply(request, createTestInitializeResult()); break;
 			case 'github/account/list': this.reply(request, { accounts: this.signedIn ? [{ id: 'account', host: 'github.com', login: 'User', status: 'ready', credentialRevision: '1' }] : [] }); break;
 			case 'github/pullRequest/list': this.reply(request, { pullRequests: request.params.state === pr.state ? [pr] : [], nextPage: null }); break;
@@ -62,9 +80,17 @@ class Transport implements AppServerTransport {
 			default: throw new Error(`Unexpected session PR request: ${request.method}`);
 		}
 	}
+	private persistReferences(request: Request): void {
+		sessionStorage.setItem('test-backend-pr-references', JSON.stringify(this.references));
+		this.reply(request, null);
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'session/changed', params: { sessionId: request.params.sessionId, agentTreeChanged: false } }) });
+	}
 }
 
 const resources = new DisposableStore();
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
+	setNlsMessages('zh-CN', languagePackCatalog.bundles);
+}
 const transport = new Transport();
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
@@ -74,7 +100,7 @@ resources.add(bindColorTheme(theme, document.body));
 const selected = resources.add(new Emitter<void>());
 const statusChanged = resources.add(new Emitter<GitStatus>());
 const accountsChanged = resources.add(new Emitter<AccountState>());
-const session: ISession = { sessionId: 'session', title: 'Implement PR integration', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
+const session: ISession = { sessionId: 'session', title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 let selection: SessionsViewSelection | undefined = { kind: 'session', active: { session, threadId: 'thread' } };
 let branch = 'feature';
 const gitStatus = (id: string): GitStatus => ({ repositoryId: id, streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'branch', name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });
@@ -93,7 +119,8 @@ document.body.append(main);
 const opened: string[] = [];
 const opener = { open: async (uri: URI) => { opened.push(uri.toString()); return true; } } as IOpenerService;
 const notifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
-const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications));
+const quickInput = resources.add(new QuickInputController(document.body));
+const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput));
 toolbar.render();
 const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github));
 github.initialize();

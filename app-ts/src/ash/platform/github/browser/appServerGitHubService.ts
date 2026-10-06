@@ -1,6 +1,8 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../base/common/errors.js';
 import { generateUuid } from '../../../base/common/uuid.js';
+import { Event } from '../../../base/common/event.js';
+import type { GitHubPullRequestReference } from '../common/githubService.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
@@ -8,11 +10,34 @@ import type { AppServerMethod, MethodParams, MethodResult } from '../../app-serv
 import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
 import type { IGitHubService, GitHubAccount, GitHubNotificationFilter, GitHubNotification, GitHubCreateFork, GitHubFork, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
 
-type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel'>;
+type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel' | `github/session/${string}`>;
 enum RequestKind { Read, Write }
 
 export class AppServerGitHubService implements IGitHubService {
+	public readonly onDidChangeSessionPullRequests: Event<string> = listener => this.connection.onNotification(notification => {
+		if (notification.method === 'session/changed') { listener(notification.params.sessionId); }
+	});
 	constructor(private readonly connection: AppServerProtocolClient) { }
+
+	public async listSessionPullRequests(sessionId: string): Promise<readonly GitHubPullRequestReference[]> {
+		const result = await this.referenceRequest('github/session/pullRequests', { sessionId });
+		return result.references.map(reference => ({ repository: { ...reference.repository }, number: reference.number }));
+	}
+	public async attachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void> {
+		await this.referenceRequest('github/session/pullRequest/attach', { sessionId, reference });
+	}
+	public async detachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void> {
+		await this.referenceRequest('github/session/pullRequest/detach', { sessionId, reference });
+	}
+
+	private async referenceRequest<M extends Extract<AppServerMethod, `github/session/${string}`>>(method: M, params: MethodParams<M>): Promise<MethodResult<M>> {
+		try {
+			return await appServerRequest(this.connection, method, params);
+		} catch (error) {
+			if (error instanceof AppServerRemoteError) { throw githubError(error); }
+			throw new GitHubError(method === 'github/session/pullRequests' ? GitHubErrorCode.Unavailable : GitHubErrorCode.SubmissionUncertain);
+		}
+	}
 
 	public async listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]> {
 		return (await this.request('github/account/list', {}, RequestKind.Read, token)).accounts.map(account => ({ ...account, credentialRevision: BigInt(account.credentialRevision) }));
@@ -179,6 +204,7 @@ export class AppServerGitHubService implements IGitHubService {
 export function createDisconnectedGitHubService(): IGitHubService {
 	const unavailable = async (): Promise<never> => { throw new GitHubError(GitHubErrorCode.Unavailable); };
 	return {
+		onDidChangeSessionPullRequests: Event.None, listSessionPullRequests: unavailable, attachSessionPullRequest: unavailable, detachSessionPullRequest: unavailable,
 		listAccounts: unavailable, listNotifications: unavailable, markNotificationRead: unavailable, markNotificationsRead: unavailable, createFork: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
 		readCommit: unavailable,
 		readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,

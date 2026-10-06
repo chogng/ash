@@ -7,6 +7,33 @@ use crate::RequestContext;
 use serde_json::json;
 
 #[test]
+fn diagnostic_replacements_preserve_versions_and_reject_forged_ownership_and_invalid_ranges() {
+    let value = json!({
+        "context": {"protocolVersion":1,"requestId":41,"incarnation":3,"activationGeneration":7},
+        "callId":9, "operation": {"operation":"setDiagnostics","collection":"lint","entries":[{
+            "uri":"file:///main.ts", "version":7, "diagnostics":[{
+                "start":{"line":0,"character":2}, "end":{"line":0,"character":4},
+                "message":"Check this", "severity":"warning", "source":"test", "code":null
+            }]
+        }]}
+    });
+    let request: ExtensionClientRequest = serde_json::from_value(value.clone()).unwrap();
+    request.validate(&ProtocolLimits::default()).unwrap();
+    assert_eq!(serde_json::to_value(&request).unwrap(), value);
+    let mut invalid = value.clone();
+    invalid["operation"]["entries"][0]["diagnostics"][0]["end"]["character"] = json!(1);
+    assert!(
+        serde_json::from_value::<ExtensionClientRequest>(invalid)
+            .unwrap()
+            .validate(&ProtocolLimits::default())
+            .is_err()
+    );
+    let mut forged = value;
+    forged["operation"]["extensionId"] = json!("other");
+    assert!(serde_json::from_value::<ExtensionClientRequest>(forged).is_err());
+}
+
+#[test]
 fn workspace_read_preserves_parent_identity_and_has_a_distinct_disk_result() {
     let request = ExtensionClientRequest {
         context: RequestContext {

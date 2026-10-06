@@ -21,6 +21,9 @@ pub use client::ExtensionClientRequest;
 pub use client::ExtensionClientResponse;
 pub use client::ExtensionClientResult;
 pub use client::ExtensionConfigurationTarget;
+pub use client::ExtensionDiagnostic;
+pub use client::ExtensionDiagnosticEntry;
+pub use client::ExtensionDiagnosticSeverity;
 pub use client::ExtensionDocumentEdit;
 pub use client::ExtensionDocumentSnapshot;
 pub use client::ExtensionHostStdinFrame;
@@ -225,6 +228,8 @@ impl<'de> Deserialize<'de> for RegistrationDescriptor {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    /// Document observation shares the language capability ceiling; models remain client-owned.
+    TextDocumentEvents {},
     ExternalUriOpener {
         schemes: Vec<ExternalUriScheme>,
         label: String,

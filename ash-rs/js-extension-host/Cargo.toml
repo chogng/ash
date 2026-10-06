@@ -16,11 +16,18 @@ serde.workspace = true
 v8-runtime.workspace = true
 v8 = { workspace = true, features = ["v8_enable_sandbox"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sandbox.workspace = true
+
 [dev-dependencies]
 host = { package = "ash-editor-extension-host", path = "../editor-extension-host" }
 ash-file-system.workspace = true
 ash-file-access.workspace = true
 tempfile.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+ash-sandboxing.workspace = true
+windows-sys-061 = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_IO", "Win32_System_Diagnostics_Debug", "Win32_Security_Authorization", "Win32_Security_Isolation", "Win32_System_Com", "Win32_System_Console"] }
 
 [lints.rust]
 # Module resolution and heap-limit callbacks enter V8's FFI scopes; execution stays in this process.

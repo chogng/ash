@@ -20,6 +20,136 @@ use core_api::ModelSelection;
 use std::sync::mpsc;
 
 struct CaptureModel(mpsc::Sender<ModelRequest>);
+
+#[test]
+fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connections() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let store = Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap());
+    let threads = Arc::new(ThreadController::with_store(store.clone()));
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            agent_id: ash_protocol::AgentId::new("agent-pr").unwrap(),
+            origin: ash_protocol::ThreadOrigin::Root,
+            agent: None,
+            session_id: ash_protocol::SessionId::new("pr-session").unwrap(),
+            thread_id: ThreadId::new("pr-session").unwrap(),
+            title: "PR work".into(),
+            execution_target: None,
+        })
+        .unwrap();
+    let (sender, _) = mpsc::channel();
+    let server = AppServer::new(threads, Arc::new(CaptureModel(sender)))
+        .with_thread_pull_requests(store.clone());
+    let mut first = server.connection();
+    let mut second = server.connection();
+    for connection in [&mut first, &mut second] {
+        call(
+            &server,
+            connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"pr-references","version":"1"}}),
+        );
+        let subscribed = call(
+            &server,
+            connection,
+            "session/catalog/subscribe",
+            serde_json::json!({}),
+        );
+        assert!(subscribed.get("result").is_some(), "{subscribed}");
+    }
+    let reference = serde_json::json!({"repository":{"host":"GHE.example","owner":"TEAM","name":"Repo"},"number":12});
+    let params = serde_json::json!({"sessionId":"pr-session","reference":reference});
+    second.outbound_notifications.drain();
+    let attached = call(
+        &server,
+        &mut first,
+        "github/session/pullRequest/attach",
+        params.clone(),
+    );
+    assert!(attached.get("result").is_some(), "{attached}");
+    assert!(
+        second
+            .outbound_notifications
+            .drain()
+            .iter()
+            .any(|notification| notification["method"] == "session/changed"
+                && notification["params"]["sessionId"] == "pr-session")
+    );
+    let listed = call(
+        &server,
+        &mut second,
+        "github/session/pullRequests",
+        serde_json::json!({"sessionId":"pr-session"}),
+    );
+    assert_eq!(
+        listed["result"]["references"],
+        serde_json::json!([{"repository":{"host":"ghe.example","owner":"team","name":"repo"},"number":12}])
+    );
+    assert!(
+        call(
+            &server,
+            &mut first,
+            "github/session/pullRequest/attach",
+            params.clone()
+        )
+        .get("error")
+        .is_none()
+    );
+    assert_eq!(
+        store
+            .list_pull_requests(&ThreadId::new("pr-session").unwrap())
+            .unwrap()
+            .len(),
+        1
+    );
+    let missing = call(
+        &server,
+        &mut first,
+        "github/session/pullRequest/attach",
+        serde_json::json!({"sessionId":"missing","reference":reference}),
+    );
+    assert!(missing.get("error").is_some());
+    drop(server);
+    let reopened = Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap());
+    let (sender, _) = mpsc::channel();
+    let restarted = AppServer::new(
+        Arc::new(ThreadController::with_store(reopened.clone())),
+        Arc::new(CaptureModel(sender)),
+    )
+    .with_thread_pull_requests(reopened);
+    let mut connection = restarted.connection();
+    call(
+        &restarted,
+        &mut connection,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"pr-references","version":"1"}}),
+    );
+    let restored = call(
+        &restarted,
+        &mut connection,
+        "github/session/pullRequests",
+        serde_json::json!({"sessionId":"pr-session"}),
+    );
+    assert_eq!(restored["result"], listed["result"]);
+    assert!(
+        call(
+            &restarted,
+            &mut connection,
+            "github/session/pullRequest/detach",
+            params
+        )
+        .get("error")
+        .is_none()
+    );
+    let empty = call(
+        &restarted,
+        &mut connection,
+        "github/session/pullRequests",
+        serde_json::json!({"sessionId":"pr-session"}),
+    );
+    assert_eq!(empty["result"]["references"], serde_json::json!([]));
+}
 impl ModelService for CaptureModel {
     fn invoke(
         &self,

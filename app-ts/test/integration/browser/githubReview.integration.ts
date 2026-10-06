@@ -14,6 +14,8 @@ import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/br
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
 import { AppServerGitHubService } from '../../../src/ash/platform/github/browser/appServerGitHubService.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IGitService, type GitCommand } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
@@ -38,7 +40,6 @@ import { IGitHubConnectionService } from '../../../src/ash/workbench/services/ac
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
-import { GitHubReviewModel, IGitHubReviewModel } from '../../../src/ash/workbench/contrib/github/browser/githubReviewModel.js';
 
 if (new URL(location.href).searchParams.has('zh')) { setNlsMessages('zh-CN', messages); }
 interface Request { id: number; method: string; params: Record<string, unknown>; }
@@ -117,8 +118,9 @@ class ReviewTransport implements AppServerTransport {
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
+services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-review', backend: window.localStorage, flushInterval: 0 })));
 setIconResolver(document, icon => getIconDefinition(icon));
-const theme = resources.add(new TestThemeService(darkColorTheme)); services.registerInstance(IThemeService, theme); registerCodeEditorServices(services);
+const theme = resources.add(new TestThemeService(darkColorTheme)); services.registerInstance(IThemeService, theme);
 resources.add(bindColorTheme(theme, document.body));
 const transport = new ReviewTransport(); const client = new AppServerProtocolClient(transport); resources.add(toDisposable(() => client.dispose())); await client.connect();
 services.registerInstance(IGitHubService, new AppServerGitHubService(client));
@@ -140,9 +142,9 @@ services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => { } });
 services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ITextModelResourceService, resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } })));
-services.registerInstance(IGitHubReviewModel, resources.add(services.createInstance(GitHubReviewModel)));
 const dialogs = resources.add(new DialogService()); services.registerInstance(IDialogService, dialogs); services.registerInstance(IDialogsModel, dialogs.model); services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
 resources.add(new DialogHandlerContribution(dialogs.model, services.get(IWorkbenchDialogHandler)));
+registerCodeEditorServices(services);
 let pane: EditorPane | undefined;
 services.registerInstance(IEditorPart, { get activePane() { return pane; } } as IEditorPart);
 services.registerInstance(IEditorService, {

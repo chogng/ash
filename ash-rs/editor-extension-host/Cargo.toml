@@ -17,5 +17,8 @@ extension-protocol = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sandbox.workspace = true
+
 [lints]
 workspace = true

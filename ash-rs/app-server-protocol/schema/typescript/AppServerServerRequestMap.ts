@@ -7,7 +7,7 @@ import type { BrowserObserveResult } from './types/BrowserObserveResult.js';
 import type { BrowserPerformParams } from './types/BrowserPerformParams.js';
 import type { BrowserPerformResult } from './types/BrowserPerformResult.js';
 import type { BrowserSharingSetParams } from './types/BrowserSharingSetParams.js';
-import type { ExtensionClientOperation } from './types/ExtensionClientOperation.js';
+import type { ExtensionClientRequestParams } from './types/ExtensionClientRequestParams.js';
 import type { ExtensionClientResult } from './types/ExtensionClientResult.js';
 import type { TextDocumentApplyParams } from './types/TextDocumentApplyParams.js';
 import type { TextDocumentApplyResult } from './types/TextDocumentApplyResult.js';
@@ -19,7 +19,7 @@ import type { TextDocumentReleaseParams } from './types/TextDocumentReleaseParam
 import type { JsonRpcError, JsonRpcRequest, JsonRpcResponse } from './protocol.js';
 
 export interface AppServerServerRequestMap {
-  "extensionClient/request": { params: ExtensionClientOperation; response: ExtensionClientResult };
+  "extensionClient/request": { params: ExtensionClientRequestParams; response: ExtensionClientResult };
   "textDocument/list": { params: TextDocumentListParams; response: TextDocumentListResult };
   "textDocument/read": { params: TextDocumentReadParams; response: TextDocumentReadResult };
   "textDocument/apply": { params: TextDocumentApplyParams; response: TextDocumentApplyResult };

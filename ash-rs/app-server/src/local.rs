@@ -1753,6 +1753,9 @@ pub fn open_app_server_with_codebase_providers(
     server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
+    if options.session_state_mode == SessionStateMode::Durable {
+        server = server.with_thread_pull_requests(Arc::new(require_history_owner(&database_path)?));
+    }
     server = server
         .with_local_teams(&database_path)
         .map_err(OpenAppServerError)?;

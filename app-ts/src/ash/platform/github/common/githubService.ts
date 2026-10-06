@@ -1,5 +1,6 @@
 import type { AccountStatus } from '../../accounts/common/accountService.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
+import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export enum GitHubIssueState { Open = 'open', Closed = 'closed' }
@@ -26,6 +27,12 @@ export class GitHubError extends Error {
 }
 
 export interface GitHubAccount { readonly id: string; readonly host: string; readonly login: string; readonly status: AccountStatus; readonly credentialRevision: bigint; }
+
+/** Durable association without account credentials or cached remote status. */
+export interface GitHubPullRequestReference {
+	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
+	readonly number: number;
+}
 export enum GitHubNotificationFilter { Unread = 'unread', All = 'all', Participating = 'participating' }
 export enum GitHubForkBranches { All = 'all', Default = 'default' }
 export interface GitHubNotification { readonly id: string; readonly title: string; readonly subjectType: string; readonly reason: string; readonly unread: boolean; readonly updatedAt: string; readonly repository: GitHubRepository; readonly url: string; }
@@ -93,7 +100,7 @@ export enum GitHubDiffSide { Left = 'LEFT', Right = 'RIGHT' }
 export enum GitHubReviewThreadState { Resolved = 'resolved', Unresolved = 'unresolved' }
 export interface GitHubReviewCommentInput { readonly path: string; readonly line: number; readonly side: GitHubDiffSide; readonly body: string; }
 export interface GitHubReview { readonly commit: string; readonly event: GitHubReviewEvent; readonly body: string; readonly comments?: readonly GitHubReviewCommentInput[]; }
-export type GitHubFileContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'binary' | 'tooLarge' };
+export type GitHubFileContent = { readonly kind: 'text'; readonly text: string; } | { readonly kind: 'binary' | 'tooLarge'; };
 export interface GitHubReviewComment { readonly id: string; readonly body: string; readonly url: string; readonly author: string | null; readonly canUpdate: boolean; readonly canDelete: boolean; }
 export interface GitHubReviewComments { readonly comments: readonly GitHubReviewComment[]; readonly nextCursor: string | null; }
 export interface GitHubReviewThread {
@@ -127,6 +134,10 @@ export interface GitHubLabel { readonly name: string; readonly color: string; }
 
 /** GitHub business operations use the account grant owned by the backend login service. */
 export interface IGitHubService {
+	readonly onDidChangeSessionPullRequests: Event<string>;
+	listSessionPullRequests(sessionId: string): Promise<readonly GitHubPullRequestReference[]>;
+	attachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void>;
+	detachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void>;
 	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
 	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
 	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;

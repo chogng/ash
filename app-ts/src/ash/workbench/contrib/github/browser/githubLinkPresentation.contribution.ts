@@ -18,6 +18,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { GitHubCommitResolver, type IGitHubCommitTarget } from './githubCommitResolver.js';
+import { computePullRequestIcon } from '../../../common/chatPullRequest.js';
 import { createCommitResourceHover, createIssueResourceHover, createPullRequestResourceHover, createRepositoryResourceHover, getIssueResourceStatus, getPullRequestChecksStatus, getPullRequestChecksStatusLabel, getPullRequestResourceStatus, GitHubResourcePresentation } from './githubResourceHover.js';
 import { LazyGitHubResourceResolver, parseGitHubReferenceTarget, type IGitHubReferenceTarget } from './lazyGitHubResourceHover.js';
 
@@ -145,7 +146,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 									onDidClickBaseBranch: () => open(`${repositoryHref}/tree/${encodeURIComponent(pullRequest.baseBranch)}`),
 									headBranchLink: headHref ? { href: headHref, onClick: () => open(headHref) } : undefined,
 								});
-							}));
+							}, computePullRequestIcon(getPullRequestResourceStatus(pullRequest).kind, { hasMergeConflicts: pullRequest.mergeable === false, hasFailingChecks: checksStatus === 'failure' })));
 						};
 						watcher.addResource(autorun(reader => {
 							resolver.getPullRequestState(target).read(reader);

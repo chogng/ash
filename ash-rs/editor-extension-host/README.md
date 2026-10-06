@@ -148,7 +148,7 @@ composition 主动取消；进程中自报的 package identity 不是授权依�
 默认 `ProcessIsolationPolicy::RequirePlatformEnforcement` 要求产品提供的 launcher 在 entrypoint 运行前
 同时安装 sandbox、memory/CPU/process hard limit、独立 stdio、空继承环境和可整体终止的 process tree。
 任何一项无法保证都必须返回 `IsolationUnavailable`。产品 JS 命令单独使用
-`RequireJavaScriptEnforcement`：macOS 的 `ProductJavaScriptLauncher` 只接受产品自带的 V8 宿主，
+`RequireJavaScriptEnforcement`：macOS 与 64 位 Windows 的 `ProductJavaScriptLauncher` 只接受产品自带的 V8 宿主，
 子进程在执行扩展前安装系统隔离、V8 堆与堆外缓冲区预算，执行仍有截止时间。JS 预算不代表整个进程的系统内存上限。
 独立可执行扩展不能选用此策略。`TrustedDevelopmentLauncher` 只接受显式 `TrustedDevelopment` policy，
 仅用于可信本地开发。所有 stdio 进程的整组清理由共享 sandboxing ProcessHandle 管理。
@@ -177,7 +177,7 @@ App Server 或其他 composition root 必须：
 1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
    `ExtensionActivationSpec`，并把 directory capability 加入同一 live gate；
 2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，并交给产品打包的 V8 executable；
-3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；缺少符合所选策略的 launcher 时将生产能力标记为不可用；
+3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS 与 64 位 Windows JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；缺少符合所选策略的 launcher 时将生产能力标记为不可用；
 4. 定期调用 `reconcile()`，把 snapshot 变化原子投影到 provider owners；
 5. 使用异步 invocation session 或后台 waiter 暴露调用，使 cancel request 不被一个阻塞 RPC 串行化；
 6. connection 断开、authority 撤销和 shutdown 时取消 owned invocations 并调用 `shutdown()`；
@@ -218,7 +218,7 @@ crash recovery 已实现。
 
 当前限制：
 
-- macOS JS 产品 launcher 已接入；其他系统 JS 执行和独立可执行扩展的生产平台 launcher 尚未开放；
+- macOS 与 64 位 Windows JS 产品 launcher 已接入；其他系统 JS 执行和独立可执行扩展的生产平台 launcher 尚未开放；
 - activation-event matching 和 lazy activation 属于上层 composition，监管器只接收 activation facts；
 - 空闲崩溃检测依赖上层 health loop；
 - v1 的 extension-originated event 目前只覆盖命名 Output channel；其他事件必须先明确领域 owner 与背压语义；

@@ -28,6 +28,28 @@ export const commands = Object.freeze({
 });
 
 export const languages = Object.freeze({
+	registerCompletionProvider(registrationId, languageIds, provider, triggerCharacters = []) {
+		if (typeof registrationId !== 'string' || !registrationId || !Array.isArray(languageIds) || !languageIds.length || languageIds.some(id => typeof id !== 'string' || !id) || new Set(languageIds).size !== languageIds.length || typeof provider?.provideCompletionItems !== 'function') {
+			throw new TypeError('A completion provider requires an ID, unique language IDs and provideCompletionItems');
+		}
+		if (!Array.isArray(triggerCharacters) || triggerCharacters.length > 64 || triggerCharacters.some(value => typeof value !== 'string' || [...value].length !== 1) || new Set(triggerCharacters).size !== triggerCharacters.length) throw new TypeError('Invalid completion trigger characters');
+		const selector = Object.freeze([...languageIds]);
+		return register({
+			registrationId, kind: 'languageProvider', languageIds: selector, operations: ['completion'], completionTriggerCharacters: [...triggerCharacters], operation: 'completion', async callback(context, payload) {
+				if (!selector.includes(payload.languageId) || !Number.isSafeInteger(payload.version) || payload.version < 1 || typeof payload.text !== 'string') throw new TypeError('Invalid completion document snapshot');
+				const position = checkedPosition({ line: payload.position?.lineIndex, character: payload.position?.columnIndex }, payload.text);
+				const document = Object.freeze({ uri: payload.resource, languageId: payload.languageId, version: payload.version, text: payload.text, getText() { return payload.text; } });
+				const result = await provider.provideCompletionItems(context, document, position, payload.context);
+				if (!result || !Array.isArray(result.items) || result.items.length > 10_000 || typeof result.isIncomplete !== 'boolean') throw new TypeError('Invalid completion result');
+				return {
+					isIncomplete: result.isIncomplete, items: result.items.map(item => ({
+						...item, range: checkedRange(item.range, payload.text),
+						...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits.map(edit => ({ ...edit, range: checkedRange(edit.range, payload.text) })) }),
+					}))
+				};
+			}
+		});
+	},
 	registerHoverProvider(registrationId, languageIds, provider) {
 		if (typeof registrationId !== 'string' || !registrationId || !Array.isArray(languageIds) || !languageIds.length || languageIds.some(id => typeof id !== 'string' || !id) || new Set(languageIds).size !== languageIds.length || typeof provider?.provideHover !== 'function') {
 			throw new TypeError('A hover provider requires an ID, unique language IDs and provideHover');
@@ -58,11 +80,25 @@ export const languages = Object.freeze({
 	},
 });
 
+export const workspace = Object.freeze({
+	registerTextDocumentEvents(registrationId, listener) {
+		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Document events require an ID and listener');
+		return register({ registrationId, kind: 'textDocumentEvents', operation: 'documentEvent', callback: listener });
+	},
+});
+
 function checkedPosition(position, text) {
 	if (!Number.isSafeInteger(position?.line) || position.line < 0 || !Number.isSafeInteger(position?.character) || position.character < 0) { throw new TypeError('Invalid UTF-16 position'); }
 	const line = text.split('\n')[position.line];
 	if (line === undefined || position.character > line.replace(/\r$/, '').length) { throw new RangeError('Position is outside the document'); }
 	return Object.freeze({ line: position.line, character: position.character });
+}
+
+function checkedRange(range, text) {
+	const start = checkedPosition(range?.start, text);
+	const end = checkedPosition(range?.end, text);
+	if (start.line > end.line || start.line === end.line && start.character > end.character) throw new RangeError('Range must be ordered');
+	return { start: { lineIndex: start.line, columnIndex: start.character }, end: { lineIndex: end.line, columnIndex: end.character } };
 }
 
 function commandContext(requestId) {
@@ -80,6 +116,11 @@ function commandContext(requestId) {
 		await request({ operation: 'showMessage', message, severity }, 'done');
 	}
 	return Object.freeze({
+		languages: Object.freeze({
+			async setDiagnostics(collection, entries) {
+				await request({ operation: 'setDiagnostics', collection, entries }, 'done');
+			},
+		}),
 		workspace: Object.freeze({
 			async openTextDocument(uri) {
 				const { document } = await request({ operation: 'readDocument', uri }, 'document');

@@ -8,6 +8,7 @@ import type { ILinkPresentation, ILinkPresentationStatus } from '../../../../pla
 import type { GitHubChecks, GitHubCommit, GitHubIssueDetails, GitHubPullRequest, GitHubRepositoryInfo } from '../../../../platform/github/common/githubService.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { computePullRequestIcon, type ChatPullRequestState } from '../../../common/chatPullRequest.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
 
 export type GitHubChecksStatus = 'pending' | 'success' | 'failure' | 'neutral';
 
@@ -56,7 +57,7 @@ export class GitHubResourcePresentation implements ILinkPresentation {
 	public readonly tooltip: string | undefined;
 	public readonly ariaLabel: string | undefined;
 
-	constructor(presentation: ILinkPresentation, public readonly createHover: () => IGitHubResourceHover) {
+	constructor(presentation: ILinkPresentation, public readonly createHover: () => IGitHubResourceHover, public readonly pullRequestIcon?: ThemeIcon) {
 		this.kind = presentation.kind;
 		this.title = presentation.title;
 		this.detail = presentation.detail;
@@ -80,7 +81,7 @@ export function createIssueResourceHover(data: IIssueResourceHoverData): IGitHub
 export function createPullRequestResourceHover(data: IPullRequestResourceHoverData): IGitHubResourceHover {
 	const state = getPullRequestResourceStatus(data.pullRequest);
 	const card = resourceHover(data, data.pullRequest.title, `#${data.number}`, state.label, data.pullRequest.body);
-	const icon = computePullRequestIcon(state.kind, { hasFailingChecks: data.checksStatus === 'failure' });
+	const icon = computePullRequestIcon(state.kind, { hasMergeConflicts: data.pullRequest.mergeable === false, hasFailingChecks: data.checksStatus === 'failure' });
 	const status = card.element.querySelector<HTMLElement>('.ash-github-hover-metadata')!;
 	const glyph = appendIcon(icon, status);
 	glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
@@ -123,9 +124,11 @@ export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): IL
 	if (pullRequest.state === 'closed') {
 		return { kind: 'closed', label: localize('github.status.closed', 'Closed') };
 	}
-	return pullRequest.draft
-		? { kind: 'draft', label: localize('github.status.draft', 'Draft') }
-		: { kind: 'open', label: localize('github.status.open', 'Open') };
+	if (pullRequest.draft) {
+		return { kind: 'draft', label: localize('github.status.draft', 'Draft') };
+	}
+	const label = localize('github.status.open', 'Open');
+	return { kind: 'open', label: pullRequest.mergeable === false ? `${label} · ${localize('github.mergeConflicts', 'Merge conflicts')}` : label };
 }
 
 export function getPullRequestChecksStatus(checks: GitHubChecks | undefined): GitHubChecksStatus | undefined {

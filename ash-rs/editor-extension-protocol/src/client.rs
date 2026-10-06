@@ -25,6 +25,44 @@ impl ExtensionClientRequest {
             ));
         }
         validate_encoded_size(&self.operation, limits.maximum_payload_bytes)?;
+        if let ExtensionClientOperation::SetDiagnostics {
+            collection,
+            entries,
+        } = &self.operation
+        {
+            if collection.is_empty() || collection.len() > 256 || entries.len() > 1024 {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid diagnostic collection".into(),
+                ));
+            }
+            let mut resources = std::collections::BTreeSet::new();
+            let mut count = 0;
+            for entry in entries {
+                if entry.uri.is_empty()
+                    || entry.uri.len() > 8192
+                    || !resources.insert(&entry.uri)
+                    || entry.version == Some(0)
+                {
+                    return Err(ProtocolError::InvalidProtocol(
+                        "invalid diagnostic resource or version".into(),
+                    ));
+                }
+                count += entry.diagnostics.len();
+                for diagnostic in &entry.diagnostics {
+                    if diagnostic.message.is_empty()
+                        || (diagnostic.start.line, diagnostic.start.character)
+                            > (diagnostic.end.line, diagnostic.end.character)
+                    {
+                        return Err(ProtocolError::InvalidProtocol(
+                            "invalid diagnostic message or range".into(),
+                        ));
+                    }
+                }
+            }
+            if count > 10_000 {
+                return Err(ProtocolError::QuotaExceeded("diagnostics"));
+            }
+        }
         validate_encoded_size(self, limits.maximum_frame_bytes)
     }
 }
@@ -52,6 +90,11 @@ pub enum ExtensionClientOperation {
         path: String,
     },
     ListDocuments,
+    /// Replaces only this extension incarnation's named diagnostic collection.
+    SetDiagnostics {
+        collection: String,
+        entries: Vec<ExtensionDiagnosticEntry>,
+    },
     ApplyEdit {
         documents: Vec<ExtensionDocumentEdit>,
     },
@@ -133,6 +176,41 @@ pub struct ExtensionDocumentSnapshot {
     pub version: u32,
     pub language_id: String,
     pub text: String,
+}
+
+/// Diagnostics carry the observed document version so old callbacks cannot mark newer text.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionDiagnosticEntry {
+    pub uri: String,
+    pub version: Option<u32>,
+    pub diagnostics: Vec<ExtensionDiagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionDiagnostic {
+    pub start: ExtensionTextPosition,
+    pub end: ExtensionTextPosition,
+    pub message: String,
+    pub severity: ExtensionDiagnosticSeverity,
+    pub source: Option<String>,
+    pub code: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "export", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionDiagnosticSeverity {
+    Error,
+    Warning,
+    Information,
+    Hint,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

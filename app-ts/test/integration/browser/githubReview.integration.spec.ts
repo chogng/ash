@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function load(page: Page): Promise<void> {
+	page.on('pageerror', error => console.error(error.stack));
 	await page.goto('/githubReview.html');
 	await page.getByRole('textbox', { name: 'Owner', exact: true }).fill('team');
 	await page.getByRole('textbox', { name: 'Repository', exact: true }).fill('repo');

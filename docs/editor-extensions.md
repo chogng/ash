@@ -22,8 +22,8 @@
 当前代码同时存在声明式目录、可信浏览器 Worker 和 Rust 可执行扩展 Host。声明式目录只读取
 `package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。此前新增的 `ash-extensions` Rust
 作者 SDK 不再作为产品扩展入口继续建设。TS SDK v1 与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
-授权磁盘读取、通知、Quick Pick 和停用释放；本地包安装、启用、授权和 macOS JS 系统隔离已接入。完整 API、其他系统的 JS 隔离和旧作者 SDK 源码退场尚未完成。
-Open VSX 已接入现有 Rust 包管理。VSIX 安装先加载受支持的声明式贡献；macOS 用户另外启用并授权后，可执行使用受支持 VS Code API 的 CommonJS JavaScript 包。
+授权磁盘读取、通知、Quick Pick 和停用释放；本地包安装、启用、授权和 macOS、64 位 Windows JS 系统隔离已接入。完整 API、其余系统的 JS 隔离和旧作者 SDK 源码退场尚未完成。
+Open VSX 已接入现有 Rust 包管理。VSIX 安装先加载受支持的声明式贡献；macOS 与 64 位 Windows 用户另外启用并授权后，可执行使用受支持 VS Code API 的 CommonJS JavaScript 包。
 现有 Host RPC v1 的细节在下文作为当前实现记录保留，不能当作新方向的实现要求。
 
 这里的声明式 `Extension` 是领域 consumer，不是独立 Marketplace 或 package family；当前远端
@@ -45,12 +45,12 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 | 可执行扩展崩溃                                          | 清除旧 incarnation 注册，按有界预算重新握手和激活；超限进入 crash loop                                                | 不无限重启，不把旧请求重绑定到新进程                           |
 | 调用超时或取消后没有 terminal response                  | 结果标为 unknown outcome，终止旧 incarnation 后恢复                                                                   | 不声称副作用没有发生                                           |
 | 需要 VS Code Extension API                              | 已支持命令、通知、单选 Quick Pick、只读文档和 Hover 的基础子集                                                        | 包可安装不代表全部 API 可用；不提供 Node 运行环境              |
-| 本地 SDK JS 包                                          | 工作区相对路径安装；分别启用、授权后，macOS 产品宿主执行                                                              | 不自动授权，也不放宽独立可执行扩展的限制                       |
+| 本地 SDK JS 包                                          | 工作区相对路径安装；分别启用、授权后，macOS 或 64 位 Windows 产品宿主执行                                                              | 不自动授权，也不放宽独立可执行扩展的限制                       |
 | 生产平台不支持所需隔离                                  | 运行失败并报告 isolation unavailable                                                                                  | 不允许无 sandbox 的第三方执行                                  |
 
 当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Marketplace executable source 都会
 先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
-Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现。macOS 产品已注入
+Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现。macOS 与 64 位 Windows 产品已注入
 JS 专用 launcher，启用且授权的本地 SDK 包和兼容的 Open VSX 包可以运行；独立可执行扩展仍要求整个进程的系统硬限制，目前产品 launcher 拒绝启动它们。
 后续章节说明这些流程、所有权、信任与失败边界、完成度及演进。
 
@@ -145,10 +145,17 @@ SDK 的 `ExtensionError.code` 保留 Rust 服务的错误分类。
 `languages.registerHoverProvider` 已接入现有 TS 语言服务。manifest 需声明 `languageProvider`；回调取得
 当前编辑器的不可变文本、版本和从 0 开始的 UTF-16 坐标，可返回文本、代码块和可选范围。
 未保存内容来自当前编辑器，不重新读盘；SDK 校验语言选择器、坐标和范围，TS 编辑器负责展示与无障碍交互。
-Provider 与命令共用调用身份、受限服务、取消和释放规则；其他语言 Provider 的作者接口尚未开放。
+`languages.registerCompletionProvider` 使用同一份快照和坐标，支持触发字符、未完成列表刷新、普通文本和 snippet 插入。
+`workspace.registerTextDocumentEvents` 在激活后发送现有模型的打开事件，随后顺序发送打开、修改、关闭事件；
+语言变化先关闭旧语言再打开新语言。事件回调可以等待调用内服务；单订阅最多保留 64 个待处理事件，超限停止订阅并报告错误，不跳过修改。
+`call.languages.setDiagnostics` 替换当前扩展运行实例的命名诊断集合，空数组清除；带过期文档版本的替换不会覆盖新结果。
+停用、重启和断开连接清除实例持有的标记。单集合最多 1,024 个资源、10,000 条诊断，单扩展最多 128 个集合。
+Provider、事件与命令共用调用身份、受限服务、取消和释放规则；其他语言 Provider 的作者接口尚未开放。
 
 宿主将纯 JS 执行和 Promise 续执行纳入截止时间；取消会退役整个扩展运行实例，在途调用不会重放到新进程。
 macOS 产品宿主先读取包快照并初始化 V8，再通过 Seatbelt 禁止直接文件访问、网络和创建子进程，随后才处理握手和执行扩展。
+64 位 Windows 使用无网络能力的 AppContainer、每次启动独立的限制 SID 和单进程 Job。初始线程仅在可信准备阶段能读取扩展包；执行 JS 前释放该权限，已有与后续工作线程均使用受限主令牌。无需管理员权限或账户安装；终止后移除该次启动的包读取授权和 AppContainer 配置。宿主错误通过退出码交给监管器，不弹系统错误窗口。
+本机已验证 Windows x64 的真实 V8 执行、VS Code 文档事件/诊断/补全、内存预算、超时恢复及文件/TCP/UDP/进程隔离；macOS 和 Windows ARM64 未在本轮运行。
 每个运行实例有 64 MiB V8 堆预算与独立的 64 MiB 堆外 ArrayBuffer 预算；极小 TypedArray 的内联存储计入 JS 堆。
 堆超额会终止执行，V8 可取得最多 4 MiB 的结束执行余量；堆外缓冲区累计超额立即结束扩展进程。它们不是整个进程的系统内存上限。
 共享、可调整大小的缓冲区和 WebAssembly 不开放，因为其分配绕过该 ArrayBuffer 接口。独立可执行扩展的原有系统硬限制不变。
@@ -210,7 +217,7 @@ GitHub 的独立 TS 扩展入口、TS SDK 的 GitHub API 和逐扩展权限接�
 | Rust GitHub 领域能力与 TS 产品服务调用              | 已有实现；尚未开放为逐扩展授权的 SDK API                                                                         |
 | 产品窗口禁用 Node、开启上下文隔离和沙箱             | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC                                                           |
 | TS SDK v1 与独立 Rust V8 宿主                       | 已实现并通过独立进程测试；支持命令、悬停 Provider、文档快照、授权文件读取、通知、Quick Pick 和释放               |
-| 第三方 SDK v1 生产执行与系统隔离                    | macOS JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其他平台尚未开放                          |
+| 第三方 SDK v1 生产执行与系统隔离                    | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放                          |
 | 完整 TS API                                         | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方 SDK 权限边界                                              |
 | Open VSX 搜索、下载、安装、更新和卸载               | 已接入 Rust Manager 与 Marketplace 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
 | Rust 作者 SDK 与后端可执行扩展入口                  | 已停止作为产品扩展方向；源码仍在，此前服务反向调用补充未完成验证                                                 |
@@ -261,7 +268,7 @@ VSIX，随后安装复用同一份已验证内容。校验和与包内 publisher
 
 Marketplace 的“编辑器扩展（Open VSX）”筛选及安装确认说明：安装加载受支持的主题、语法、
 代码片段等声明式资源；脚本执行需要在命令面板“管理市场扩展执行”中分别启用和授权。
-macOS Rust V8 宿主执行受支持的 CommonJS 包，可信 Worker 不执行下载包。完整兼容 API 尚未完成。`universal` 正式版本是当前支持的包目标；平台专用包和预发布包未接入。
+macOS 与 64 位 Windows Rust V8 宿主执行受支持的 CommonJS 包，可信 Worker 不执行下载包。完整兼容 API 尚未完成。`universal` 正式版本是当前支持的包目标；平台专用包和预发布包未接入。
 
 ### 0.6 已支持的 VS Code JavaScript 接口
 
@@ -273,15 +280,19 @@ macOS Rust V8 宿主执行受支持的 CommonJS 包，可信 Worker 不执行下
 | 接口       | 当前支持范围                                                                                               |
 | ---------- | ---------------------------------------------------------------------------------------------------------- |
 | 包入口     | `browser` 优先，否则 `main`；单文件 CommonJS bundle，入口可省略 `.js`；`require` 只提供 `vscode`           |
-| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；启用且授权后立即激活                    |
+| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；按命令、语言或启动完成事件激活                    |
 | 命令       | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg`                      |
 | 界面       | 三种消息通知（无按钮或选项）；字符串或 label 项的单选 `window.showQuickPick` 与 `placeHolder`              |
-| 文档       | `workspace.openTextDocument(Uri)` 读取调用窗口的只读快照；`uri`、`version`、`languageId`、`getText(range)` |
-| 语言       | 字符串语言 ID 的 `languages.registerHoverProvider`，UTF-16 Position、Hover 内容和 Range                    |
-| 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Disposable` 的上述用法，不提供完整类型成员         |
+| 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围 |
+| 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离 |
+| 语言       | 字符串语言 ID 的 Hover 和 CompletionItem Provider；触发字符、未完成列表、snippet、附加文本编辑                    |
+| 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员         |
 
-接口未实现时明确报错；不提供 Node 模块、相对 CommonJS 模块加载、文件或网络直连、任意后端 RPC、完整 ExtensionContext、
-文档变化事件和 `activationEvents` 延迟启动。服务调用只在命令或 Hover 回调内有效，不能在激活阶段或回调结束后访问窗口。
+接口未实现时明确报错；不提供 Node 模块、相对 CommonJS 模块加载、文件或网络直连、任意后端 RPC、完整 ExtensionContext。
+补全不支持 resolve、命令、分别插入/替换的范围，以及 Color、EnumMember、Constant、Struct、Event、Operator kind；
+诊断不支持 relatedInformation、tags 或带目标链接的 code。服务调用只在命令、语言 Provider 或文档事件回调内有效，不能在激活阶段或回调结束后访问窗口。
+文档事件对象随修改更新；语言 Provider 使用不可变快照。`workspace.textDocuments` 在激活后的事件送达或显式读取文档时建立，激活阶段不是完整的初始文档列表。
+本轮扩大窗口操作范围后，市场执行授权契约版本升为 2；旧授权需重新启用并授权。
 V8 将调用身份随 Promise 续执行保留；并行命令不共享身份，过期续执行不能借用后来的调用。
 命令忽略通知的 Thenable 时，宿主仍等待该通知结束再关闭调用。
 
@@ -343,7 +354,7 @@ Legacy Plugin v1 的 `editorExtensions[]` 仍可作为本地兼容来源。Marke
 `ash/editor-extensions.json` consumer sidecar 把声明绑定到同 digest 内的 exact `executable`
 capability；没有独立 `MarketplaceEditorExtensionAdmission` grant 时 deployment 不会被接纳或启动。
 Admission authority 必须为 policy commit 推进 generation，并在可变时发布变更；Host 据此撤销旧
-fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定当前 Environment 的显式 source 与目录 Grant。独立可执行扩展交给能够实施系统沙箱与进程资源上限的 launcher；JS 扩展交给产品打包的 V8 宿主，在 macOS 实施系统沙箱和第 0.1 节的 JS 内存预算。缺少所选运行方式要求的 launcher 时拒绝启动，不能自动改用可信开发 launcher。
+fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定当前 Environment 的显式 source 与目录 Grant。独立可执行扩展交给能够实施系统沙箱与进程资源上限的 launcher；JS 扩展交给产品打包的 V8 宿主，在 macOS 与 64 位 Windows 实施系统沙箱和第 0.1 节的 JS 内存预算。缺少所选运行方式要求的 launcher 时拒绝启动，不能自动改用可信开发 launcher。
 
 一个 `ExtensionHostSupervisor` 只监管一个扩展程序。它先取得 live activation lease，再 spawn、执行
 Initialize/Activate，最后一次发布整批 registrations。每次 provider invocation 重新取得 lease，并绑定
@@ -520,11 +531,11 @@ Environment 或有效目录集合切换时停止旧进程。
 默认 process/protocol limits 为 1 MiB frame、512 KiB payload、256 registrations、32 个普通和 8 个
 control in-flight requests、256 KiB stderr、4096 个 / 512 KiB queued/retained Output events、10 秒
 startup、30 秒 request、2 秒 cancel grace、5 秒 shutdown。独立可执行扩展默认请求 512 MiB 进程内存、
-300 秒 CPU 和单进程上限。macOS JS 扩展分别限制 V8 堆和 ArrayBuffer 为 64 MiB，执行有超时；这不是整个进程的内存上限。restart policy 在 60 秒窗口内
+300 秒 CPU 和单进程上限。macOS 与 64 位 Windows JS 扩展分别限制 V8 堆和 ArrayBuffer 为 64 MiB，执行有超时；这不是整个进程的内存上限。restart policy 在 60 秒窗口内
 最多允许 5 次，以 100 ms 起步、最高 5 秒指数退避。确切实现和修改义务见 Host crate README。
 
 `TrustedDevelopmentLauncher` 只允许显式可信本地开发。生产第三方执行必须注入能实施所请求隔离的
-launcher。macOS JS 使用 `ProductJavaScriptLauncher`；其他平台或独立可执行扩展缺少符合要求的 launcher 时，App Server 对外能力必须为 false。
+launcher。macOS 与 64 位 Windows JS 使用 `ProductJavaScriptLauncher`；其他平台或独立可执行扩展缺少符合要求的 launcher 时，App Server 对外能力必须为 false。
 
 ## 6. 失败、刷新和恢复语义
 
@@ -574,10 +585,10 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Workbench Commands/Language/Tasks/Testing bridge                 | 已实现（窄契约）   | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile                                     |
 | Workbench DataChannel/LinkPresentation bridge                    | 已实现             | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证                               |
 | Workbench executable Debug bridge                                | 尚未完成           | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam                                              |
-| 生产第三方 launcher                                              | 部分具备           | macOS JS 已实现系统隔离和独立内存预算；其他平台和独立可执行扩展缺少所需 launcher 时 capability=false              |
+| 生产第三方 launcher                                              | 部分具备           | macOS 与 64 位 Windows JS 已实现系统隔离和独立内存预算；其余平台和独立可执行扩展缺少所需 launcher 时 capability=false              |
 | Open VSX 按事件启动                                              | 已实现（限定事件） | Rust 调度命令、语言、窗口恢复事件及 `*`；等待状态无进程，首次调用绑定实际注册                                     |
 | Open VSX 来源、VSIX 安装和声明式贡献                             | 已实现             | 复用 Manager；精确版本、校验和、来源和安全解压；接入共享声明式目录                                                |
-| Open VSX 基础 JS 扩展运行                                        | 已实现             | macOS 显式启用与授权，标准 CommonJS 入口与 `require('vscode')`；原包命令和重启、撤销已验证                        |
+| Open VSX 基础 JS 扩展运行                                        | 已实现             | macOS 与 64 位 Windows 显式启用与授权，标准 CommonJS 入口与 `require('vscode')`；原包命令和重启、撤销已验证                        |
 | 完整 VS Code 扩展 API                                            | 尚未完成           | 只支持下述 API 子集；Node、完整 ExtensionContext 和扩展文档事件尚未提供                                           |
 | 扩展直接使用 Node / Electron 能力                                | 不开放             | 目标 JS 宿主维持第 0.3 节的权限限制                                                                               |
 

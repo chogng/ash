@@ -98,7 +98,7 @@ fn an_old_api_contract_does_not_authorize_the_current_host() {
     };
     std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
         "schemaVersion": 1, "revision": 3, "records": {
-            "exact-capability": { "package": package, "contractVersion": 0, "enabled": true, "granted": true }
+            "exact-capability": { "package": package, "contractVersion": 1, "enabled": true, "granted": true }
         }
     })).unwrap()).unwrap();
     let policy = EditorExtensionPolicy::open(path.clone()).unwrap();

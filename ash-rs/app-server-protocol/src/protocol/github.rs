@@ -7,6 +7,34 @@ use crate::protocol::issues::IssueSummary;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// A durable PR identity; live state and account credentials are resolved separately.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestReference {
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubSessionPullRequestsParams {
+    pub session_id: crate::protocol::common::SessionId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubSessionPullRequestParams {
+    pub session_id: crate::protocol::common::SessionId,
+    pub reference: GitHubPullRequestReference,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubSessionPullRequestsResult {
+    pub references: Vec<GitHubPullRequestReference>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GitHubMergeMethod {

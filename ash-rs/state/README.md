@@ -5,6 +5,7 @@
 - 提供本机输入历史的 SQLite 存储，独立迁移、原子追加与裁剪、稳定游标和文字搜索。
 - 提供 Thread、Git Turn Changes、Project 与 Memory 的 SQLite 存储；各领域使用独立 migration component，Session tree 仍由 Thread 的 `session_id` 聚合。
 - 会话列表和单会话刷新从每个 Session 一条的记录读取；记录与 Thread 事件同事务更新，旧数据库升级时从 Thread 目录生成。
+- 事件存储格式 12 增加 `thread_pull_requests`，保存 Session 根 Thread 的手动 PR 引用。主机、仓库及编号规范化后去重，不保存标题、状态或账号凭据；删除根 Thread 时同事务清理引用。历史归档格式 2 包含此表，引用遵守相同的迁移停写约束。
 - Thread 目录与事件同事务写入；目录记录带版本和内容哈希，读取时校验，损坏记录从事件重建。
 - Thread 和 Session 列表使用独立 SQLite 读连接；正常启动只索引查询缺失目录和需要恢复的 Thread。
 - Memory 读取授权与正文在同一事务中读取；独立保存授权版本和无正文命令回执，旧数据库升级后默认关闭自动读取。

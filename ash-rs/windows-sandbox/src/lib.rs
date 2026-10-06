@@ -7,6 +7,21 @@ pub(crate) mod windows;
 
 pub mod provisioning;
 
+/// Starts a product-owned 64-bit process with a private restricted token, an AppContainer
+/// without capabilities and a single-process kill-on-close job. Only the initial thread
+/// receives temporary startup authority to read the package. The trusted entry point must
+/// call [`finish_locked_process_startup`] before evaluating third-party code. No account
+/// provisioning, administrator rights or product-install ACL changes are required.
+/// The process handle removes the launch's package ACL grants and AppContainer on drop.
+#[cfg(windows)]
+pub use windows::locked_process::spawn as spawn_locked_process;
+
+/// Permanently releases the startup thread's impersonation token after attesting the
+/// primary token, job and mitigation settings installed by [`spawn_locked_process`].
+/// Worker threads already use the locked primary token from their creation.
+#[cfg(windows)]
+pub use windows::locked_process::finish_startup as finish_locked_process_startup;
+
 use ash_file_access::Dir;
 use ash_sandboxing::PreparedCommand;
 use ash_sandboxing::SandboxBackend;

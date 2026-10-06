@@ -1,4 +1,5 @@
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
+import { appendLabelIcon } from '../../../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -8,6 +9,7 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../../../nls.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../../../workbench/contrib/github/browser/githubResourceHover.js';
+import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
 
 /** Owns provider decorations for the sanitized anchors in one rendered Markdown block. */
 export class ChatMarkdownDecorationsRenderer extends Disposable {
@@ -83,6 +85,14 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 					presentation.changes ? `+${presentation.changes.insertions} −${presentation.changes.deletions}` : undefined,
 				].filter(value => value !== undefined && value !== '').join(' · ');
 				anchor.textContent = label;
+				if (presentation instanceof GitHubResourcePresentation && presentation.pullRequestIcon) {
+					const icon = presentation.pullRequestIcon;
+					const glyph = appendLabelIcon(anchor, icon);
+					anchor.prepend(glyph);
+					if (icon.color) {
+						glyph.style.color = `var(${colorCssVariable(icon.color.id)})`;
+					}
+				}
 				const content = (): HTMLElement | string => {
 					card.clear();
 					if (presentation instanceof GitHubResourcePresentation) {
