@@ -1,0 +1,21 @@
+.ash-call-hierarchy {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	min-height: 0;
+}
+
+.ash-call-hierarchy-directions {
+	display: flex;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-call-hierarchy-tree {
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-call-hierarchy .stanza-editor-language-hierarchy-item {
+	justify-content: flex-start;
+	max-width: 100%;
+}

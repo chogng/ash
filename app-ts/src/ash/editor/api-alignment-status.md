@@ -1,5 +1,52 @@
 # Editor API 对齐状态
 
+## 2026-10-06：右键菜单基座续批
+
+用户要求继续对齐上轮列出的 26 个生产文件，并确认迁移后删除 4 个旧导航／层级入口。这里只读参照上游公开契约和行为；实现从 Ash 当前状态与 DOM owner 迁移。
+
+26 个缺失生产文件与 3 个对应测试文件已创建，均接入 Ash 的实际调用链。用户确认的 4 个旧入口已删除，生产导入、注册及测试同步迁移。
+
+| 范围 | 新建生产文件 | 已接通行为 |
+| --- | --- | --- |
+| `gotoSymbol` | 10 | 五类位置查询、引用分组与去重、只读预览、F4／F6／F12 循环与焦点、正文修饰键点击及分栏打开 |
+| `codeAction` | 7 | 查询与取消模型、动作类别与首选筛选、菜单分组、真实快捷键解析、自动提示、通用命令／整理导入／全部修复 |
+| `rename` | 1 | 输入与完成／取消、重命名提交、经既有 Bulk Edit 预览后应用或取消 |
+| Workbench 调用／类型层级 | 8 | 各自的查询模型、按需展开树、方向切换、Peek 与样式；Editor 不再反向装载 Workbench 层级入口 |
+
+路径与职责已经对应，完整上游 API 尚未全部具备。共享语言提供者仍使用 Ash 的 snapshot／AbortSignal 请求，引用查询的 compact 语义及控件公开签名也与上游有差异；当前动作数组没有可释放的 provider list 资源。因此这些文件不计为完整上游签名对齐，也不改变下文待处理声明的统计。
+
+验证：相关单测累计 51 项通过；Chromium 定向批次 81 项通过，修正中文场景装配后剩余 1 项单独通过，共覆盖 82 项。包含中文输入、引用预览及提示标签，预览接受／取消，查询／解析取消，分栏参数和一次撤销。Web 产品及 Electron UI 的右键菜单与中文重启冒烟各 2 项通过。Stanza、Renderer 与 Host 的正常构建、结构／样式归属检查及语言目录检查通过。完整 Editor 单测未完成：两项既有 URI-list 粘贴／拖放断言使用正斜杠路径，在 Windows 实际返回反斜杠路径；随后共享测试编译目录中的文件缺失，导致套件中断。语言检查仍报告一项非本批的 Marketplace 译文缺失，未改动该目录。
+
+连接 App Server 的 Electron 冒烟：右键菜单行为 1 项通过；中文重启场景在 `app-ts/test/automation/test.ts:183` 等待应用 `close` 事件时超过 30 秒，尚未通过。失败发生在菜单验证前的重启步骤，不计为完整连接场景通过。
+
+第一切片：导航／速览菜单或 F12 → `goToCommands.ts` → `goToSymbol.ts` 查询与 `ReferencesController` 会话 → 当前模型、选区与 Peek → 跳转／取消／去重结果 → 既有导航单测和真实浏览器菜单、Peek 场景。View 继续拥有坐标、滚动和 Zone 挂载，引用控件拥有列表及预览 DOM；不改变文本模型 owner。
+
+| 准确路径（相对 `app-ts/src/ash/`） | 修改前关系、调用方及本批动作 |
+| --- | --- |
+| `editor/contrib/gotoSymbol/browser/goToSymbol.ts` | 仅 VS Code；导航动作与定义预检消费，统一查询入口 |
+| `editor/contrib/gotoSymbol/browser/referencesModel.ts` | 仅 VS Code；引用控制器消费，持有去重、分组、定位与循环结果 |
+| `editor/contrib/gotoSymbol/browser/peek/referencesController.ts` | 仅 VS Code；导航动作消费，迁入旧导航会话与取消 owner |
+| `editor/contrib/gotoSymbol/browser/peek/referencesWidget.ts`、`peek/referencesTree.ts`、`peek/referencesWidget.css`（后三项均在同一 `gotoSymbol/browser/` 下） | 仅 VS Code；控制器消费，迁入列表、预览和其样式 |
+| `editor/contrib/gotoSymbol/browser/symbolNavigation.ts` | 仅 VS Code；结果循环命令消费，持有当前导航结果 |
+| `editor/contrib/gotoSymbol/browser/link/clickLinkGesture.ts`、`link/goToDefinitionAtPosition.ts`、`link/goToDefinitionAtPosition.css`（后两项在同一 `gotoSymbol/browser/` 下） | 仅 VS Code；正文修饰键点击／悬停消费，手势、定义预检及高亮 |
+| `editor/contrib/gotoSymbol/browser/goToCommands.ts` | 双方都有；菜单入口，迁到新查询／引用控制器 |
+| `editor/contrib/gotoSymbol/browser/languageNavigationController.ts`、`languageNavigation.contribution.ts`（后者在同目录） | 仅 Ash；用户已确认迁移后删除，旧调用与注册全部退出 |
+| `editor/editor.all.ts`、`editor/contrib/stickyScroll/browser/stickyScrollController.ts` | 双方都有；装载与固定行导航调用改用对应入口 |
+| `editor/contrib/peekView/browser/media/peekViewWidget.css` | 双方都有；移出引用／层级专属选择器，保留通用 Peek 样式 |
+| `editor/common/languages.ts` | 双方都有；补引用结果的标准 Location／LocationLink 契约，不移动共享 provider 到 contribution |
+| `editor/test/browser/languageNavigation.test.ts`、`editor/test/browser/editorExtensions.test.ts` | 双方已有；迁移实际注册和取消断言 |
+| `editor/contrib/gotoSymbol/test/browser/referencesModel.test.ts` | 仅 VS Code；独立编写分组、去重、范围变化、定位与循环回归 |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（相对 `app-ts/`） | Ash 既有测试；增加新入口行为并保留菜单、选区、焦点与取消回归 |
+| `localization/zh-CN/editor.json`、`src/ash/workbench/services/localization/common/localizationCatalogs.ts`（相对 `app-ts/`） | Ash 既有本地化 owner；新增文案同步生成并验证中文 |
+
+本页末尾保留层级和 Code Action 切片的准入记录；以上验证只覆盖本批已接通行为。
+
+导航依赖准入补充：`editor/standalone/browser/standaloneServices.ts`（双方都有）消费共享 singleton 描述符；`editor/test/browser/testCodeEditor.ts`（Ash 既有测试装配）注册引用预览所需的真实模型服务与文本解析服务，消费相同 singleton 描述符。引用预览以 `ITextModelService` 管理跨资源模型引用，不自行读取文件或建立第二份文本。`workbench/contrib/accessibility/browser/editorAccessibilityHelp.ts`（双方都有）补结果循环与预览焦点帮助。所有新增文案走已登记本地化路径。
+
+重命名切片：F2／菜单 → `rename.ts` 准备及提交 → `renameWidget.ts` 输入、验证、完成／取消 → 同一 provider 与快照提交一次编辑 → 重命名请求、取消、撤销的单测与浏览器回归。准入路径 `editor/contrib/rename/browser/rename.ts`（双方都有，仅移出 DOM、输入状态与焦点）；`editor/contrib/rename/browser/renameWidget.ts`（仅 VS Code，输入 DOM 与 Promise 完成 owner）；`editor/contrib/rename/browser/renameWidget.css`（双方都有，只核对输入控件归属）；`editor/contrib/rename/test/browser/renameController.test.ts`（既有测试）、已登记浏览器与本地化文件。View 仍提供滚动后坐标，输入完成不改变请求／提交 owner。
+
+收尾准入：`editor/browser/README.md`（双方都有，Ash 既有说明）更新 Code Action 查询、菜单、灯泡的实际 owner 与已接通的命令；仅修改已过时的能力段落。正文修饰键点击的额外分栏修饰键由已准入的 `referencesController.ts` 经现有 `ICodeEditorService.openCodeEditor` 传给 Workbench 开窗 owner，验证实际调用参数；普通跳转仍走原来的宿主入口。已准入层级 Peek 的行资源改由现有 `DisposableMap` 持有，方向按钮同步选中状态；不新增状态 owner。
+
 ## 2026-10-06：编辑器右键菜单批次
 
 入口为 Editor Context Menu，经菜单注册表、当前编辑器的 ContextKey 与 EditorAction 进入既有功能控制器。请求、选区、编辑和 Peek 生命周期继续由原 owner 持有。本批范围与验证如下；未运行的验证不能记为通过。
@@ -2502,3 +2549,13 @@ Standalone 通用 Worker 续批：`editor.createWebWorker` 从窗口模型服务
 扩展 URL 打开方式位于上游对应路径 `workbench/api/browser/mainThreadUriOpeners.ts`，由 Code 和 Sessions 入口加载，使用已有 Ash 扩展协议读取注册与调用。配置补全更新接口位于上游对应 `externalUriOpener/common/configuration.ts` 的 `updateContributedOpeners`。这里保留 Ash 可执行扩展的代次、权限和取消约定；不计为 VS Code JavaScript Extension API、惰性 URL 激活或持久化扩展建议的完整对齐。
 
 URL 规则的图形设置入口：用户在 Application > Links 增删规则，经同路径 `preferences/browser/settingsLayout.ts` 和 `settingsWidgets.ts` 进入现有 Configuration Service，仍由 `externalUriOpener/common/configuration.ts` 拥有键、默认值、校验和建议。沿用已授权的 Ash Settings 元数据契约；未新增设置状态或存储。字符串映射控件复用原建议列表的焦点、键盘和释放机制，从 schema 读取打开方式 ID 与名称。保留手动填写和不可用扩展 ID；实际保存继续写用户 settings.json。
+
+层级切片准入：Peek 菜单／层级键盘命令 → 各自 Workbench contribution → common 查询模型 → Tree DataSource → Peek 控件 → 展开、方向切换、打开、取消。共享语言 registry 继续拥有 provider 契约；common 模型保留 provider 与准备快照，Peek 用 Ash AsyncDataTree 管理展开与异步节点释放，不复制递归 DOM 状态。
+
+准确路径（均相对 `app-ts/src/ash/`）：`workbench/contrib/callHierarchy/common/callHierarchy.ts`、`workbench/contrib/typeHierarchy/common/typeHierarchy.ts`（仅 VS Code，新建查询模型）；`workbench/contrib/callHierarchy/browser/callHierarchyTree.ts`、`workbench/contrib/typeHierarchy/browser/typeHierarchyTree.ts`（仅 VS Code，新建树节点及 DataSource）；`workbench/contrib/callHierarchy/browser/callHierarchyPeek.ts`、`workbench/contrib/typeHierarchy/browser/typeHierarchyPeek.ts`（仅 VS Code，新建 Peek 与树 DOM owner）；`workbench/contrib/callHierarchy/browser/media/callHierarchy.css`、`workbench/contrib/typeHierarchy/browser/media/typeHierarchy.css`（仅 VS Code，各自控件样式）；两目录下既有 `browser/callHierarchy.contribution.ts`、`browser/typeHierarchy.contribution.ts`（双方都有，接入各自控制器及注册）；`editor/contrib/callHierarchy/browser/languageHierarchyController.ts`、`languageHierarchy.contribution.ts`（仅 Ash，用户已确认迁移后删除）；已登记 `editor/editor.all.ts` 和通用 Peek CSS（移出层级装配和专属选择器）；`editor/test/browser/languageHierarchy.test.ts`（既有测试，迁移真实贡献入口，保留 provider 身份、数据和取消覆盖）；已登记浏览器、本地化及无障碍帮助文件。验证：层级单测、菜单／展开／切换／迟到结果的真实浏览器回归及正常 Renderer 构建。当前模型接口仍消费 Ash 已有 snapshot／AbortSignal provider，不将完整上游 provider API 计为完成。
+
+Code Action 切片准入：Quick Fix／Refactor／Source 菜单及自动提示 → `codeActionController.ts` → `CodeActionModel` 快照与取消 → `getCodeActions` 查询、`CodeActionItem` 原 provider 解析 → `toMenuItems` 与快捷键 resolver → 共享 ActionWidget 或 LightBulbWidget → 一次提交、禁用／筛选／预览、迟到结果释放。代码操作数组无独立 provider list 资源；模型拥有请求，控制器拥有菜单，content widget 拥有提示 DOM。
+
+准确路径（相对 `app-ts/src/ash/`）：`editor/contrib/codeAction/common/types.ts`（仅 VS Code，动作 kind/filter/item/set）；`editor/contrib/codeAction/browser/codeAction.ts`（仅 VS Code，查询）；`editor/contrib/codeAction/browser/codeActionModel.ts`（仅 VS Code，迁入请求状态与失效监听）；`editor/contrib/codeAction/browser/codeActionMenu.ts`（仅 VS Code，迁入分组和禁用／预览行生成）；`editor/contrib/codeAction/browser/codeActionKeybindingResolver.ts`（仅 VS Code，读取真实快捷键并按 kind／preferred 选择）；`editor/contrib/codeAction/browser/lightBulbWidget.ts`、`lightBulbWidget.css`（仅 VS Code，实际自动提示与同一菜单入口）；`editor/contrib/codeAction/browser/codeActionController.ts`（双方都有，只移出请求／行生成，接入模型、提示和解析，保留批量编辑提交）；`editor/common/languages.ts`（双方都有，补 TriggerType）；`platform/actionWidget/browser/actionList.ts`（双方都有，为标准 IActionListItem.keybinding 接现有 Menu.getKeybinding，不另造快捷键控件）；`editor/contrib/codeAction/test/browser/codeActionKeybindingResolver.test.ts`、`codeActionModel.test.ts`（仅 VS Code，真实快捷键规则及请求状态回归）；`editor/contrib/codeAction/test/browser/codeAction.test.ts`（既有，保留原 provider 解析、版本、预览和新旧菜单交错覆盖）；已登记浏览器／本地化／帮助文件。Shared provider 仍为 Ash snapshot／AbortSignal 契约，未计为完整上游签名。
+
+Code Action 命令依赖准入补充：`editor/contrib/codeAction/browser/codeActionCommands.ts`（双方都有）是快捷键 resolver 的实际目标。除既有 Quick Fix／Refactor／Source 三个动作调用迁移，补 `editor.action.codeAction`、`editor.action.organizeImports` 和 `editor.action.fixAll` 的真实注册；`common/types.ts` 补实际命令消费的 CodeActionCommandArgs／AutoApply，Controller 同一入口消费 filter／preferred／autoApply，Model 只从标准 filter 构建 provider.only。没有只显示快捷键但无法执行的命令目标。对应浏览器测试仍在已登记 standalone 场景文件，新增键盘调用以及一次提交断言。

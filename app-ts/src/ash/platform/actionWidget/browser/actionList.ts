@@ -9,6 +9,7 @@ import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
+import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
@@ -30,6 +31,7 @@ export interface IActionListItem<T> {
 	readonly group?: { readonly title: string; readonly icon?: Icon; };
 	readonly checked?: boolean;
 	readonly canPreview?: boolean;
+	readonly keybinding?: ResolvedKeybinding;
 }
 
 export interface IActionListOptions {
@@ -216,6 +218,7 @@ export class ActionList<T> extends Disposable {
 			actions,
 			className: 'ash-action-widget-menu',
 			getCheckedActionsRepresentation: () => 'radio',
+			getKeybinding: action => entries.get(action.id)?.keybinding,
 			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
 		}));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));

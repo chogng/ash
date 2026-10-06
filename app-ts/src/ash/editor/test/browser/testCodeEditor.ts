@@ -1,3 +1,8 @@
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
+import { ITextModelService } from '../../common/services/resolverService.js';
+import { InMemoryTextModelService } from '../../common/services/inMemoryTextModelService.js';
+import { IModelService } from '../../common/services/model.js';
+import { ModelService } from '../../common/services/modelService.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import '../../browser/services/contribution.js';
@@ -153,6 +158,17 @@ export function registerCodeEditorServices(services: InstantiationService): void
 	}
 	if (!services.has(IWorkspaceContextService)) {
 		services.registerInstance(IWorkspaceContextService, new StandaloneWorkspaceContextService());
+	}
+	if (!services.has(IModelService)) {
+		services.registerSingleton(IModelService, accessor => new ModelService(accessor.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }));
+	}
+	if (!services.has(ITextModelService)) {
+		services.registerSingleton(ITextModelService, () => services.createInstance(InMemoryTextModelService));
+	}
+	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
+		if (!services.has(id)) {
+			services.registerInstance(id, descriptor);
+		}
 	}
 }
 

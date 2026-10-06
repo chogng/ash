@@ -118,6 +118,19 @@ export interface LanguageLocation {
 	readonly selectionRange?: Range;
 }
 
+/** Standard navigation result; targetSelectionRange identifies the symbol inside its declaration. */
+export interface LocationLink {
+	readonly uri: URI;
+	readonly range: IRange;
+	readonly originSelectionRange?: IRange;
+	readonly targetSelectionRange?: IRange;
+}
+
+export interface Location {
+	readonly uri: URI;
+	readonly range: IRange;
+}
+
 export interface Command {
 	id: string;
 	title: string;
@@ -465,6 +478,8 @@ export interface LanguageTypeHierarchyProvider {
 	provideSupertypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 }
+
+export enum CodeActionTriggerType { Invoke = 1, Auto = 2 }
 
 export interface LanguageCodeAction {
 	readonly title: string;

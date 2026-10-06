@@ -1,7 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { ShowLightbulbIconMode } from '../../../src/ash/editor/common/config/editorOptions.js';
 
 test('editor context menu runs navigation, rename and formatting through the focused editor', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/standalone.html');
+	expect(errors).toEqual([]);
 	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
 	for (const command of ['Go to Definition', 'Go to Declaration', 'Go to Type Definition', 'Go to Implementations', 'Go to References']) {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
@@ -4752,6 +4756,145 @@ test('standalone marker API preserves other models when one owner updates a mode
 			['inmemory://stanza/owned.txt'],
 		],
 	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('generic code action and organize imports commands apply their matching action once', async ({ page }) => {
+	await page.goto('/standalone.html');
+	for (const [command, args, text] of [
+		['editor.action.codeAction', { kind: 'refactor.extract', apply: 'ifSingle' }, 'refactor.extract beta alpha'],
+		['editor.action.organizeImports', undefined, 'source.organizeImports beta alpha'],
+	] as const) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		await page.evaluate(([command, args]) => window.ashStandaloneIntegration.runFoldingCommand(command, args), [command, args] as const);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(text);
+		await expect(page.locator('.ash-action-widget')).toHaveCount(0);
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+for (const outcome of ['accept', 'cancel'] as const) {
+	test(`rename input previews its edit before ${outcome}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		if (outcome === 'cancel') {
+			await page.evaluate(() => window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN'));
+		}
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareEditorContextMenu(true);
+			window.ashStandaloneIntegration.prepareCodeActionPreview();
+		});
+		await page.locator('#action-preview-editor .stanza-editor-input').press('F2');
+		const name = page.getByRole('textbox', { name: outcome === 'cancel' ? '新的符号名称' : 'New symbol name', exact: true });
+		await name.fill('renamed');
+		await name.press('ControlOrMeta+Enter');
+		const apply = page.locator('#action-preview-pane').getByRole('button', { name: outcome === 'cancel' ? '应用所选修改' : 'Apply selected', exact: true });
+		await expect(apply).toBeEnabled();
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+		if (outcome === 'accept') {
+			await apply.click();
+		} else {
+			await page.locator('#action-preview-pane').getByRole('button', { name: '取消', exact: true }).click();
+		}
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(outcome === 'accept' ? 'renamed' : 'value');
+		await expect(name).toBeHidden();
+		expect(errors).toEqual([]);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+test('reference preview and automatic code action labels use the Chinese catalog', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.setActionMenuLanguage('zh-CN');
+		window.ashStandaloneIntegration.prepareEditorContextMenu(true);
+	});
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await input.press('Shift+F10');
+	const peek = page.getByRole('menuitem', { name: 'Peek', exact: true });
+	await peek.focus();
+	await peek.press('ArrowRight');
+	await page.getByRole('menuitem', { name: 'Peek References', exact: true }).click();
+	await expect(page.getByRole('listbox', { name: '引用', exact: true })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: '引用预览', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	// Product language changes recreate the editor; this fixture creates that editor after loading the catalog.
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview());
+	await expect(page.locator('#action-preview-editor').getByRole('button', { name: '显示代码操作', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('definition modifier gesture highlights, cancels and follows the configured click modifier', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	for (const [multiCursorModifier, trigger] of [['alt', 'ControlOrMeta'], ['ctrlCmd', 'Alt']] as const) {
+		await page.evaluate(modifier => {
+			window.ashStandaloneIntegration.prepareEditorContextMenu(true);
+			window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: modifier });
+		}, multiCursorModifier);
+		const point = await page.evaluate(() => window.ashStandaloneIntegration.languageHoverPoint());
+		await page.mouse.move(point.x, point.y);
+		await page.keyboard.down(trigger);
+		await expect(page.locator('#caller .stanza-editor-definition-link')).toHaveCount(1);
+		await page.keyboard.up(trigger);
+		await expect(page.locator('#caller .stanza-editor-definition-link')).toHaveCount(0);
+		await page.keyboard.down(trigger);
+		await page.mouse.click(point.x, point.y);
+		await page.keyboard.up(trigger);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection)).toBe('[1,7 -> 1,11]');
+	}
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('automatic code action lightbulb opens the shared menu and follows configuration and themes', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+	const lightbulb = page.getByRole('button', { name: 'Show code actions', exact: true });
+	await expect(lightbulb).toBeVisible();
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
+		await expect(lightbulb).toBeVisible();
+		expect(await lightbulb.evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
+	}
+	await lightbulb.click();
+	await expect(page.locator('.ash-action-widget').getByRole('menuitem')).toHaveCount(4);
+	await page.getByRole('menuitem', { name: 'Apply quickfix', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('quickfix beta alpha');
+	await expect(input).toBeFocused();
+	await page.evaluate(mode => window.ashStandaloneIntegration.updateContributionOptions({ lightbulb: { enabled: mode } }), ShowLightbulbIconMode.Off);
+	await expect(lightbulb).not.toBeVisible();
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('reference Peek cycles results, switches focus and continues navigation after opening a result', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareReferencePreview());
+	await page.locator('#caller > .stanza-editor .stanza-editor-input').first().focus();
+	await page.keyboard.press('Shift+F12');
+	const results = page.locator('.stanza-editor-language-locations button');
+	await expect(results.first()).toBeFocused();
+	await page.keyboard.press('F4');
+	await expect(results.nth(1)).toBeFocused();
+	await page.keyboard.press('F6');
+	await expect(page.locator('.stanza-editor-language-preview .stanza-editor-input')).toBeFocused();
+	await page.keyboard.press('F6');
+	await expect(results.nth(1)).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(results).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor().selections)).toEqual(['[2,1 -> 2,6]']);
+	await page.keyboard.press('F12');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor().selections)).toEqual(['[1,1 -> 1,6]']);
+	await page.keyboard.press('Escape');
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 

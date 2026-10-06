@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../common/core/range.js';
 import { createLanguageFeatureEditor, flushLanguageRequests } from './testLanguageFeatureEditor.js';
-import type { LanguageHierarchyController } from '../../contrib/callHierarchy/browser/languageHierarchyController.js';
-await import('../../contrib/callHierarchy/browser/languageHierarchy.contribution.js');
+await import('../../../workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js');
+await import('../../../workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js');
 
 test('hierarchy preserves provider identity and opaque data while expanding a real peek', async () => {
 	using fixture = createLanguageFeatureEditor();
@@ -18,11 +18,11 @@ test('hierarchy preserves provider identity and opaque data while expanding a re
 		},
 		provideOutgoingCalls: () => [],
 	});
-	await fixture.editor.getContribution<LanguageHierarchyController>('editor.contrib.languageHierarchy')!.showCallHierarchy();
+	await fixture.editor.getAction('editor.showCallHierarchy')!.run();
 	fixture.container.querySelector<HTMLButtonElement>('.stanza-editor-language-hierarchy-expand')!.click();
 	await flushLanguageRequests();
 	assert.deepEqual(followedData, { opaque: 'root' });
-	assert.equal(fixture.container.querySelector('.stanza-editor-language-hierarchy-children .stanza-editor-language-hierarchy-item')?.textContent, 'caller');
+	assert.equal(fixture.container.querySelectorAll('.stanza-editor-language-hierarchy-item')[1]?.textContent, 'caller');
 	assert.deepEqual(fixture.errors, []);
 });
 
@@ -41,8 +41,10 @@ for (const change of ['content', 'language', 'dispose', 'provider', 'selection']
 				return new Promise(resolve => { finish = () => resolve([{ ...root, name: 'late' }]); });
 			},
 		});
-		await fixture.editor.getContribution<LanguageHierarchyController>('editor.contrib.languageHierarchy')!.showTypeHierarchy();
+		await fixture.editor.getAction('editor.showTypeHierarchy')!.run();
 		fixture.container.querySelector<HTMLButtonElement>('.stanza-editor-language-hierarchy-expand')!.click();
+		await flushLanguageRequests();
+		assert.ok(signal, 'The provider expansion must start before it is cancelled');
 		if (change === 'content') fixture.model.setValue('changed');
 		if (change === 'language') fixture.model.setLanguage('javascript');
 		if (change === 'dispose') fixture.model.dispose();

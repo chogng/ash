@@ -1,0 +1,5 @@
+.stanza-editor-definition-link {
+	color: var(--ash-text-link-active-foreground);
+	text-decoration: underline;
+	cursor: pointer;
+}

@@ -1,0 +1,12 @@
+.ash-editor-lightbulb {
+	padding-inline-start: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+}
+
+.ash-editor-lightbulb.has-preferred-fix {
+	color: var(--ash-text-link-active-foreground);
+}
+
+.ash-editor-lightbulb .ash-button {
+	color: inherit;
+}

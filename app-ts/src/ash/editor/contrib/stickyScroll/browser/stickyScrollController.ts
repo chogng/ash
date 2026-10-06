@@ -14,7 +14,7 @@ import { StickyLineCandidateProvider, type IStickyLineCandidateProvider } from "
 import { StickyScrollWidget, StickyScrollWidgetState } from "./stickyScrollWidget.js";
 import { StickyRange } from "./stickyScrollElement.js";
 import { isMacintosh } from '../../../../base/common/platform.js';
-import type { LanguageNavigationController } from '../../gotoSymbol/browser/languageNavigationController.js';
+import type { ReferencesController } from '../../gotoSymbol/browser/peek/referencesController.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -180,7 +180,7 @@ export class StickyScrollController extends Disposable {
 					this.clearDefinitionLink();
 					this.editor.setPosition(new Position(position.lineNumber, position.column + range.startOffset), 'stickyScroll');
 					this.editor.focus();
-					void this.editor.getContribution<LanguageNavigationController>('editor.contrib.languageNavigation')?.navigate('definition');
+					void this.editor.getContribution<ReferencesController>('editor.contrib.referencesController')?.navigate('definition');
 				}
 				return;
 			}

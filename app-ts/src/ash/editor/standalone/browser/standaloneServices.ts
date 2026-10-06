@@ -1,3 +1,4 @@
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ResolvedKeybindingItem } from '../../../platform/keybinding/common/resolvedKeybindingItem.js';
 import { KeybindingsRegistry, KeybindingRuleKind } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
@@ -228,6 +229,11 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.languageService = this.get(ILanguageService);
 		this.languageConfigurationService = this.get(ILanguageConfigurationService);
 		this.languageFeaturesService = this.get(ILanguageFeaturesService);
+		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
+			if (!this.has(id)) {
+				this.registerInstance(id, descriptor);
+			}
+		}
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }

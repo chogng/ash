@@ -1,0 +1,21 @@
+.stanza-editor-language-locations {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size20);
+}
+
+.stanza-editor-language-locations > section {
+	display: flex;
+	flex-direction: column;
+}
+
+.stanza-editor-language-location {
+	justify-content: flex-start;
+	text-align: left;
+}
+
+.stanza-editor-language-preview {
+	height: 180px;
+	min-width: 0;
+	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+}

@@ -1,104 +1,26 @@
 .stanza-editor-peek-view {
-	z-index: 9;
-	background: var(--ash-editor-background);
-	box-shadow: 0 6px 18px var(--ash-widget-shadow);
-	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  z-index: 9;
+  background: var(--ash-editor-background);
+  box-shadow: 0 6px 18px var(--ash-widget-shadow);
+  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
 }
 
 .stanza-editor-peek-view > .stanza-editor-zone-widget-container {
-	display: flex;
-	flex-direction: column;
-	background: var(--ash-editor-background);
+  display: flex;
+  flex-direction: column;
+  background: var(--ash-editor-background);
 }
 
 .stanza-editor-peek-view-header {
-	padding: 4px 8px;
-	color: var(--ash-description-foreground);
-	font-size: 11px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  padding: 4px 8px;
+  color: var(--ash-description-foreground);
+  font-size: 11px;
+  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
 }
 
 .stanza-editor-peek-view-body {
-	flex: 1;
-	min-height: 0;
-	overflow: auto;
-	padding: 8px;
-}
-
-.stanza-editor-language-locations {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.stanza-editor-language-location {
-	padding: 6px 8px;
-	color: var(--ash-editor-foreground);
-	font: inherit;
-	text-align: left;
-	background: transparent;
-	border: 0;
-	border-radius: var(--ash-corner-radius-x-small);
-}
-
-.stanza-editor-language-location:hover,
-.stanza-editor-language-location:focus-visible {
-	background: var(--ash-list-hover-background);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-}
-
-.stanza-editor-language-hierarchy,
-.stanza-editor-language-hierarchy-children {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.stanza-editor-language-hierarchy-children {
-	padding-left: 16px;
-	color: var(--ash-description-foreground);
-}
-
-.stanza-editor-language-hierarchy-row {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-}
-
-.stanza-editor-language-hierarchy-item,
-.stanza-editor-language-hierarchy-expand {
-	padding: 4px 8px;
-	color: var(--ash-editor-foreground);
-	font: inherit;
-	text-align: left;
-	background: transparent;
-	border: 0;
-	border-radius: var(--ash-corner-radius-x-small);
-}
-
-.stanza-editor-language-hierarchy-item {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.stanza-editor-language-hierarchy-expand {
-	color: var(--ash-description-foreground);
-	font-size: 11px;
-}
-
-.stanza-editor-language-hierarchy-item:hover,
-.stanza-editor-language-hierarchy-item:focus-visible,
-.stanza-editor-language-hierarchy-expand:hover,
-.stanza-editor-language-hierarchy-expand:focus-visible {
-	background: var(--ash-list-hover-background);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-}
-
-.stanza-editor-language-preview {
-	height: 180px;
-	min-width: 0;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
 }

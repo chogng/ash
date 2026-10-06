@@ -2,33 +2,36 @@ import { EditSources } from '../../../common/textModelEditSource.js';
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { Range } from "../../../common/core/range.js";
+
 import * as languages from '../../../common/languages.js';
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type View } from "../../../browser/view.js";
-import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { EditorOption } from '../../../common/config/editorOptions.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { CodeActionTriggerType } from '../../../common/languages.js';
+import { CodeActionAutoApply, CodeActionTriggerSource, type CodeActionItem, type CodeActionFilter } from '../common/types.js';
+import { CodeActionModel, CodeActionsState } from './codeActionModel.js';
+import { CodeActionKeybindingResolver } from './codeActionKeybindingResolver.js';
+import { toMenuItems } from './codeActionMenu.js';
+import { LightBulbWidget } from './lightBulbWidget.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import { localize } from '../../../../nls.js';
 import { IBulkEditService, type IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
 
-interface CodeActionEntry {
-	readonly action: languages.LanguageCodeAction;
-	readonly original: languages.LanguageCodeAction;
-	readonly provider: languages.LanguageCodeActionProvider;
-}
-
-/** Owns code-action requests and routes selected edits through cursor commands. */
+/** Owns action presentation and edit submission; CodeActionModel owns request validity. */
 export class CodeActionController extends Disposable {
 	static readonly ID = 'editor.contrib.codeActionController';
 	static get(editor: ICodeEditor): CodeActionController | null {
 		return editor.getContribution<CodeActionController>(CodeActionController.ID);
 	}
 	private menuContext: languages.LanguageCodeActionRequest | undefined;
-	private request: AbortController | undefined;
-	private context: languages.LanguageCodeActionRequest | undefined;
-	private actions: readonly CodeActionEntry[] = [];
+	private readonly model: CodeActionModel;
+	private readonly lightbulb: LightBulbWidget;
+	private readonly keybindings: CodeActionKeybindingResolver;
+	private actions: readonly CodeActionItem[] = [];
+	private get context(): languages.LanguageCodeActionRequest | undefined {
+		return this.model.state.type === CodeActionsState.Type.Triggered ? this.model.state.context : undefined;
+	}
 
 	constructor(
 		private readonly input: HTMLElement,
@@ -37,7 +40,7 @@ export class CodeActionController extends Disposable {
 		private readonly diagnostics: TextDecorationCollection<languages.LanguageDiagnostic>,
 		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined,
 		private readonly onError: (error: unknown) => void,
-		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
 		@IBulkEditService private readonly bulkEditService: IBulkEditService,
 	) {
@@ -45,10 +48,26 @@ export class CodeActionController extends Disposable {
 		if (diagnostics.textModel !== viewport.textModel || editor.getModel() !== viewport.textModel) {
 			throw new TypeError("Code action dependencies must share one text model");
 		}
+		this.model = this._register(instantiationService.createInstance(CodeActionModel, editor, diagnostics, onError));
+		this.lightbulb = this._register(instantiationService.createInstance(LightBulbWidget, editor));
+		this.keybindings = instantiationService.createInstance(CodeActionKeybindingResolver);
+		this._register(this.model.onDidChangeState(state => {
+			this.hideMenu();
+			this.lightbulb.hide();
+			if (state.type === CodeActionsState.Type.Triggered && state.trigger.type === CodeActionTriggerType.Auto) {
+				void state.actions.then(actions => {
+					if (this.model.state === state) { this.lightbulb.update(actions, state.trigger, state.position); }
+				}).catch(onError);
+			}
+		}));
+		this._register(this.lightbulb.onClick(trigger => {
+			void this.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'),
+				CodeActionTriggerSource.Lightbulb, { ...trigger.filter, includeSourceActions: true }).catch(onError);
+		}));
 		this._register(toDisposable(() => this.close()));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing) return;
-			if (event.key === "Escape" && this.request) {
+			if (event.key === "Escape" && this.context) {
 				stopEvent(event);
 				this.close();
 				return;
@@ -58,68 +77,36 @@ export class CodeActionController extends Disposable {
 			stopEvent(event);
 			editor.trigger('keyboard', 'editor.action.quickFix', {});
 		}));
-		this._register(viewport.textModel.onDidChangeContent(() => this.close()));
-		this._register(viewport.textModel.onDidChangeLanguage(() => this.close()));
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
-		this._register(editor.onDidChangeCursorSelection(() => this.close()));
 		this._register(editor.onDidScrollChange(() => this.close()));
 		this._register(editor.onDidLayoutChange(() => this.close()));
-		this._register(languageFeaturesService.codeActionProvider.onDidChange(() => this.close()));
-		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.readOnly)) this.close();
-		}));
 	}
 
-	public async manualTriggerAtCurrentPosition(only?: readonly string[]): Promise<void> {
+	public async manualTriggerAtCurrentPosition(notAvailableMessage: string, triggerAction: CodeActionTriggerSource, filter?: CodeActionFilter, autoApply = CodeActionAutoApply.Never): Promise<void> {
 		this.close();
-		const model = this.viewport.textModel;
-		if (this.isDisposed || model.isDisposed() || this.editor.getOption(EditorOption.readOnly)) return;
-		const range = this.editor.getSelection();
-		if (!range) return;
-		const controller = this.request = new AbortController();
-		const context = this.context = {
-			...languages.createLanguageFeatureRequest(model, model.getLanguageId(), controller.signal),
-			resource: model.uri,
-			range,
-			only,
-			diagnostics: this.diagnostics.decorations
-				.filter(decoration => Range.areIntersectingOrTouching(decoration.range, range))
-				.map(decoration => decoration.metadata),
-		};
+		const state = this.model.trigger({
+			type: CodeActionTriggerType.Invoke, triggerAction, filter, autoApply,
+		});
+		if (!state) { return; }
 		try {
-			const actions: CodeActionEntry[] = [];
-			for (const provider of this.languageFeaturesService.codeActionProvider.ordered(model)) {
-				if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-				try {
-					const provided = await provider.provideCodeActions(context, controller.signal);
-					if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-					for (const original of provided) {
-						const action = normalizeLanguageCodeAction(original);
-						// Providers can return broader results than requested; the selected action family controls the list.
-						if (only && !only.some(kind => action.kind === kind || action.kind?.startsWith(`${kind}.`))) continue;
-						actions.push({ action, original, provider });
-					}
-				} catch (error) {
-					if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-					this.onError(error);
-				}
-			}
-			if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-			if (actions.length === 0) {
-				this.viewport.announceAccessibilityStatus(localize('codeAction.empty', 'No code actions available.'));
+			const actions = await state.actions;
+			if (this.model.state !== state) { return; }
+			if (actions.allActions.length === 0) {
+				this.viewport.announceAccessibilityStatus(notAvailableMessage);
 				this.close();
 				return;
 			}
-			this.actions = actions;
+			this.actions = actions.allActions;
+			if (actions.validActions.length > 0 && (autoApply === CodeActionAutoApply.First
+				|| autoApply === CodeActionAutoApply.IfSingle && actions.validActions.length === 1)) {
+				await this.apply(actions.validActions[0]!);
+				return;
+			}
 			this.render();
 		} catch (error) {
-			if (languages.isLanguageFeatureRequestCurrent(context)) {
-				this.close();
-				this.onError(error);
-			}
+			if (this.model.state === state) { this.close(); this.onError(error); }
 		}
 	}
-
 	private render(): void {
 		const position = this.editor.getSelection()?.getStartPosition();
 		const context = this.context;
@@ -128,35 +115,18 @@ export class CodeActionController extends Disposable {
 		if (!coordinates) return;
 		const bounds = this.viewport.domNode.domNode.getBoundingClientRect();
 		this.menuContext = context;
-		const groups = new Map<string, IActionListItem<number>[]>();
-		this.actions.forEach((entry, index) => {
-			const title = codeActionGroupTitle(entry.action.kind);
-			let items = groups.get(title);
-			if (!items) {
-				items = [];
-				groups.set(title, items);
-			}
-			items.push({
-				kind: ActionListItemKind.Action,
-				item: index,
-				group: { title },
-				label: entry.action.disabledReason
-					? localize('codeAction.disabled', '{0} ({1})', entry.action.title, entry.action.disabledReason)
-					: entry.action.title,
-				disabled: entry.action.disabledReason !== undefined,
-				canPreview: entry.action.edit !== undefined || entry.provider.resolveCodeAction !== undefined,
-			});
-		});
-		const items: IActionListItem<number>[] = [];
-		for (const [title, groupItems] of groups) {
-			if (groups.size > 1) {
-				items.push({ kind: ActionListItemKind.Header, label: title });
-			}
-			items.push(...groupItems);
+		const items = toMenuItems(this.actions, true, this.keybindings.getResolver());
+		const groups = new Map<string, IActionListItem<CodeActionItem>[]>();
+		for (const item of items) {
+			if (item.kind !== ActionListItemKind.Action) { continue; }
+			const title = item.group!.title;
+			let group = groups.get(title);
+			if (!group) { group = []; groups.set(title, group); }
+			group.push(item);
 		}
 		const groupEntries = [...groups.entries()];
 		this.actionWidgetService.show(CodeActionController.ID, this.bulkEditService.hasPreviewHandler(), items, {
-			onSelect: (index, preview) => this.apply(index, preview),
+			onSelect: (entry, preview) => this.apply(entry, preview),
 			onHide: didCancel => {
 				this.menuContext = undefined;
 				if (this.context === context && didCancel !== false) this.close();
@@ -176,15 +146,13 @@ export class CodeActionController extends Disposable {
 		} : undefined);
 	}
 
-	private async apply(index: number, preview = false): Promise<void> {
-		const entry = this.actions[index];
+	private async apply(entry: CodeActionItem, preview = false): Promise<void> {
 		const context = this.context;
 		if (!entry || !context || !languages.isLanguageFeatureRequestCurrent(context) || entry.action.disabledReason !== undefined) return;
 		let editDispatched = false;
 		try {
-			const resolved = !entry.action.edit && entry.provider.resolveCodeAction
-				? normalizeLanguageCodeAction(await entry.provider.resolveCodeAction(entry.original, context, context.signal))
-				: entry.action;
+			const resolved = entry.action.edit || !entry.provider.resolveCodeAction
+				? entry.action : (await entry.resolve(context)).action;
 			if (!languages.isLanguageFeatureRequestCurrent(context)) return;
 			if (resolved.disabledReason !== undefined) {
 				this.viewport.announceAccessibilityStatus(resolved.disabledReason);
@@ -229,37 +197,16 @@ export class CodeActionController extends Disposable {
 		}
 	}
 
-	private close(): void {
+	private hideMenu(): void {
 		if (this.menuContext) {
 			this.menuContext = undefined;
 			this.actionWidgetService.hide();
 		}
-		this.request?.abort();
-		this.request = undefined;
-		this.context = undefined;
 		this.actions = [];
 	}
-}
-
-function codeActionGroupTitle(kind: string | undefined): string {
-	switch (kind?.split('.')[0]) {
-		case 'quickfix': return localize('codeAction.group.quickfix', 'Quick Fix');
-		case 'refactor': return localize('codeAction.group.refactor', 'Refactor');
-		case 'source': return localize('codeAction.group.source', 'Source Action');
-		default: return localize('codeAction.group.other', 'Other Actions');
+	private close(): void {
+		this.hideMenu();
+		this.model.reset();
+		this.lightbulb.hide();
 	}
-}
-
-function normalizeLanguageCodeAction(action: languages.LanguageCodeAction): languages.LanguageCodeAction {
-	if (!action || typeof action !== "object" || typeof action.title !== "string" || action.title.trim().length === 0) {
-		throw new TypeError("Code action title must be a non-empty string");
-	}
-	return Object.freeze({
-		title: action.title,
-		...(action.kind !== undefined ? { kind: action.kind } : {}),
-		...(action.isPreferred !== undefined ? { isPreferred: action.isPreferred } : {}),
-		...(action.disabledReason !== undefined ? { disabledReason: action.disabledReason } : {}),
-		...(action.edit ? { edit: languages.normalizeLanguageWorkspaceEdit(action.edit) } : {}),
-		...(action.data !== undefined ? { data: action.data } : {}),
-	});
 }

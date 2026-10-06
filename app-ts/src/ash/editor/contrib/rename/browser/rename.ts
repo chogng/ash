@@ -1,9 +1,11 @@
-import type { IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
+import { RenameWidget, CONTEXT_RENAME_INPUT_VISIBLE } from './renameWidget.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IBulkEditService, type IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
 import { EditSources } from '../../../common/textModelEditSource.js';
 import { localize } from '../../../../nls.js';
-import './renameWidget.css';
+
 import { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand, registerEditorContribution, type ServicesAccessor, type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
-import { addDisposableListener, getActiveElement, isNode, stopEvent, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type View } from '../../../browser/view.js';
 import * as languages from '../../../common/languages.js';
@@ -12,30 +14,29 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 
-import { ContextKeyExpr, RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { localize2 } from '../../../../nls.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 
-const renameInputVisible = new RawContextKey<boolean>('renameInputVisible', false);
+const renameInputVisible = CONTEXT_RENAME_INPUT_VISIBLE;
 const RenameCommandId = 'editor.action.rename';
 
-/** Owns the local rename input and applies provider edits through the editor edit contract. */
+/** Owns provider requests and applies edits; RenameWidget owns input and focus. */
 class RenameController extends Disposable {
 	static readonly ID = 'editor.contrib.renameController';
 	static get(editor: ICodeEditor): RenameController | null {
 		return editor.getContribution<RenameController>(RenameController.ID);
 	}
-	private readonly visible: IContextKey<boolean>;
-	private readonly element: HTMLDivElement;
-	private readonly input: HTMLInputElement;
-	private readonly status: HTMLSpanElement;
 	private request: AbortController | undefined;
 	private context: languages.LanguageRenameRequest | undefined;
 	private provider: languages.LanguageRenameProvider | undefined;
 	private committing = false;
+	private previewing = false;
+	private readonly widget: RenameWidget;
+	private inputResult: Promise<void> | undefined;
+	private inputRange: Range | undefined;
 
 	constructor(
 		private readonly editorInput: HTMLElement,
@@ -45,42 +46,20 @@ class RenameController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 		private readonly executeCommand: EditorCommandExecutor,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
-		@IContextKeyService contextKeys: IContextKeyService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IBulkEditService private readonly bulkEditService: IBulkEditService,
 	) {
 		super();
-		this.visible = renameInputVisible.bindTo(contextKeys);
+		this.widget = this._register(instantiationService.createInstance(RenameWidget, editor, viewport));
 		if (viewport.textModel !== editor.getModel()) {
 			throw new TypeError('Rename dependencies must share one text model');
 		}
-		const ownerDocument = viewport.domNode.domNode.ownerDocument;
-		this.element = h(ownerDocument, 'div');
-		this.element.className = 'stanza-editor-rename';
-		this.element.hidden = true;
-		this.visible.set(false);
-		this.input = h(ownerDocument, 'input');
-		this.input.className = 'stanza-editor-rename-input';
-		this.input.type = 'text';
-		this.input.setAttribute('aria-label', 'New symbol name');
-		this.status = h(ownerDocument, 'span');
-		this.status.className = 'stanza-editor-rename-status';
-		this.status.setAttribute('aria-live', 'polite');
-		this.element.append(this.input, this.status);
-		viewport.domNode.domNode.append(this.element);
-		this._register(toDisposable(() => {
-			this.cancel();
-			this.element.remove();
-		}));
-		this._register(addDisposableListener(this.element, 'pointerdown', event => event.stopPropagation()));
-		this._register(addDisposableListener(this.element, 'mousedown', event => event.stopPropagation()));
+		this._register(toDisposable(() => this.cancel()));
 		// Cancel before a provider can settle ahead of the editor's deferred blur event.
 		this._register(addDisposableListener(viewport.domNode.domNode, 'focusout', event => {
-			if (this.request && (!isNode(event.relatedTarget) || !viewport.domNode.domNode.contains(event.relatedTarget))) {
+			if (this.request && !this.previewing && (!isNode(event.relatedTarget) || !viewport.domNode.domNode.contains(event.relatedTarget))) {
 				this.cancel();
 			}
-		}));
-		this._register(addDisposableListener(this.input, 'input', () => {
-			this.input.removeAttribute('aria-invalid');
-			this.status.textContent = 'Enter to rename, Escape to cancel';
 		}));
 		this._register(addDisposableListener(editorInput, 'keydown', event => {
 			if (event.defaultPrevented || event.isComposing) return;
@@ -94,12 +73,11 @@ class RenameController extends Disposable {
 			stopEvent(event);
 			editor.trigger('keyboard', RenameCommandId, {});
 		}));
-		this._register(addDisposableListener(this.element, 'keydown', event => this.handleWidgetKeydown(event)));
 		this._register(viewport.textModel.onDidChangeContent(() => this.cancel()));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.cancel()));
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
 		this._register(editor.onDidChangeCursorSelection(() => this.cancel()));
-		this._register(editor.onDidBlurEditorWidget(() => this.cancel()));
+		this._register(editor.onDidBlurEditorWidget(() => { if (!this.previewing) { this.cancel(); } }));
 		this._register(languageFeaturesService.renameProvider.onDidChange(() => this.cancel()));
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.readOnly)) this.cancel();
@@ -140,51 +118,37 @@ class RenameController extends Disposable {
 					throw new TypeError('Rename preparation must describe a valid range at the requested position');
 				}
 				this.provider = provider;
-				this.status.textContent = 'Enter to rename, Escape to cancel';
-				this.input.value = preparation.placeholder;
-				const coordinates = this.viewport.getPositionContentCoordinates(Range.getStartPosition(preparation.range));
-				this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
-				this.element.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
-				this.element.hidden = false;
-				this.visible.set(true);
-				this.input.focus({ preventScroll: true });
-				this.input.select();
+				this.inputRange = Range.lift(preparation.range);
+				this.showInput(preparation.placeholder, context);
 				return;
 			} catch (error) {
 				if (languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);
 			}
 		}
 		if (languages.isLanguageFeatureRequestCurrent(context)) {
-			this.viewport.announceAccessibilityStatus('Rename is not available at this position.');
+			this.viewport.announceAccessibilityStatus(localize('rename.notAvailable', 'Rename is not available at this position.'));
 			this.cancel();
 		}
 	}
 
-	private handleWidgetKeydown(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing) return;
-		if (event.key === 'Escape') {
-			stopEvent(event);
-			this.editor.trigger('keyboard', 'cancelRenameInput', {});
-			return;
-		}
-		if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey) return;
-		stopEvent(event);
-		this.editor.trigger('keyboard', 'acceptRenameInput', {});
+	private showInput(currentName: string, context: languages.LanguageRenameRequest): void {
+		this.inputResult = this.widget.getInput(this.inputRange!, currentName, context.signal, this.bulkEditService.hasPreviewHandler()).then(result => {
+			if (result !== undefined && this.context === context) return this.applyName(result.newName, result.wantsPreview);
+		});
 	}
 
-	public async accept(): Promise<void> {
+	public async accept(wantsPreview = false): Promise<void> {
+		if (wantsPreview && !this.bulkEditService.hasPreviewHandler()) {
+			throw new Error(localize('rename.previewUnavailable', 'Rename preview is not available for this editor host.'));
+		}
+		this.widget.acceptInput(wantsPreview);
+		await this.inputResult;
+	}
+	private async applyName(newName: string, wantsPreview: boolean): Promise<void> {
 		const context = this.context;
 		const provider = this.provider;
 		if (this.committing || !context || !provider || !languages.isLanguageFeatureRequestCurrent(context)) return;
-		const newName = this.input.value.trim();
-		if (newName.length === 0) {
-			this.input.setAttribute('aria-invalid', 'true');
-			this.status.textContent = 'Name cannot be empty';
-			return;
-		}
 		this.committing = true;
-		this.input.readOnly = true;
-		this.element.setAttribute('aria-busy', 'true');
 		let editDispatched = false;
 		try {
 			const result = await provider.provideRenameEdits(Object.freeze({ ...context, newName }), context.signal);
@@ -192,6 +156,17 @@ class RenameController extends Disposable {
 			const edit = languages.normalizeLanguageWorkspaceEdit(result);
 			await this.executeCommand(RenameCommandId, async () => {
 				if (!languages.isLanguageFeatureRequestCurrent(context)) return;
+				if (wantsPreview) {
+					// Preview owns focus while this version-bound request remains active for approval.
+					this.previewing = true;
+					editDispatched = true;
+					await this.bulkEditService.apply(edit, {
+						editor: this.editor, label: localize('bulkEdit.renameLabel', 'Rename to {0}', newName),
+						code: 'undoredo.rename', respectAutoSaveConfig: true, showPreview: true,
+						token: context.signal, reason: EditSources.rename(undefined, newName),
+					});
+					return;
+				}
 				if (this.applyWorkspaceEdit) {
 					editDispatched = true;
 					await this.applyWorkspaceEdit(edit, {
@@ -223,30 +198,24 @@ class RenameController extends Disposable {
 			if (this.context === context) this.cancel();
 		} catch (error) {
 			if (editDispatched || languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);
+			if (languages.isLanguageFeatureRequestCurrent(context) && this.context === context) this.showInput(newName, context);
 		} finally {
 			if (this.context === context) {
+				this.previewing = false;
 				this.committing = false;
-				this.input.readOnly = false;
-				this.element.removeAttribute('aria-busy');
 			}
 		}
 	}
 
 	public cancel(): void {
-		const restoreFocus = this.element.contains(getActiveElement(this.element.ownerDocument));
 		this.request?.abort();
 		this.request = undefined;
 		this.context = undefined;
 		this.provider = undefined;
 		this.committing = false;
-		this.element.hidden = true;
-		this.visible.set(false);
-		this.element.removeAttribute('aria-busy');
-		this.input.readOnly = false;
-		this.input.removeAttribute('aria-invalid');
-		this.input.value = '';
-		this.status.textContent = '';
-		if (!this.isDisposed && restoreFocus) this.editorInput.focus({ preventScroll: true });
+		this.previewing = false;
+		this.inputRange = undefined;
+		this.widget.cancelInput(true, 'controller');
 	}
 }
 
@@ -287,6 +256,11 @@ class RenameAction extends EditorAction {
 registerEditorAction(RenameAction);
 
 const RenameInputCommand = EditorCommand.bindToContribution(RenameController.get);
+registerEditorCommand(new RenameInputCommand({
+	id: 'acceptRenameInputWithPreview',
+	precondition: ContextKeyExpr.and(EditorContextKeys.writable, renameInputVisible.isEqualTo(true)),
+	handler: controller => controller.accept(true),
+}));
 registerEditorCommand(new RenameInputCommand({
 	id: 'acceptRenameInput',
 	precondition: ContextKeyExpr.and(EditorContextKeys.writable, renameInputVisible.isEqualTo(true)),

@@ -6,12 +6,12 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorAction, registerInstantiatedEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
-import { type LanguageNavigationController, type LanguageNavigationKind } from './languageNavigationController.js';
+import { type ReferencesController, type SymbolNavigationKind } from './peek/referencesController.js';
 
 interface NavigationCommand {
 	readonly id: string;
 	readonly label: ILocalizedString;
-	readonly kind: LanguageNavigationKind;
+	readonly kind: SymbolNavigationKind;
 	readonly precondition: ContextKeyExpression;
 	readonly order: number;
 	readonly keybinding?: number;
@@ -40,7 +40,7 @@ class SymbolNavigationAction extends EditorAction {
 
 	public async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		editor.focus();
-		await editor.getContribution<LanguageNavigationController>('editor.contrib.languageNavigation')?.navigate(this.command.kind, {
+		await editor.getContribution<ReferencesController>('editor.contrib.referencesController')?.navigate(this.command.kind, {
 			peek: this.command.peek,
 			includeDeclaration: this.command.kind === 'references' ? !this.command.peek : undefined,
 		});

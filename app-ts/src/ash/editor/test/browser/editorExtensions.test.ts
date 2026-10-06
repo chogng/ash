@@ -41,7 +41,7 @@ test("Code bundle registers shared capabilities and installs document formatting
 		"editor.contrib.comment",
 		"editor.contrib.folding",
 		"editor.contrib.format",
-		"editor.contrib.languageNavigation",
+		"editor.contrib.referencesController",
 		"editor.contrib.hover",
 		"editor.contrib.multicursor",
 		"editor.contrib.selectionHighlighter",
