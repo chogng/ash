@@ -1,5 +1,44 @@
 # Editor API 对齐状态
 
+## 2026-10-06：编辑器右键菜单批次
+
+入口为 Editor Context Menu，经菜单注册表、当前编辑器的 ContextKey 与 EditorAction 进入既有功能控制器。请求、选区、编辑和 Peek 生命周期继续由原 owner 持有。本批范围与验证如下；未运行的验证不能记为通过。
+
+| 准确路径（相对 `app-ts/`） | 修改前文件关系与调用方 | 本批动作与验证 |
+| --- | --- | --- |
+| `src/ash/editor/contrib/gotoSymbol/browser/goToCommands.ts` | 仅 VS Code；`editor.all.ts` 装配 | 创建导航与 Peek 动作注册；Playwright 验证跳转和键盘子菜单 |
+| `src/ash/editor/contrib/gotoSymbol/browser/languageNavigationController.ts` | 仅 Ash，沿用台账既有保留决定；导航动作调用 | 键盘改走同一 action，保留请求与 Peek owner |
+| `src/ash/editor/editor.all.ts` | 双方都有；编辑器装配入口 | 加载导航命令模块 |
+| `src/ash/editor/common/editorContextKeys.ts` | 双方都有；菜单条件 | 增加语言导航 provider 上下文 |
+| `src/ash/editor/browser/widget/codeEditor/codeEditorWidget.ts` | 双方都有；编辑器上下文 owner | 按模型语言、provider 注册/撤销更新条件；Playwright 验证状态及双编辑器 |
+| `src/ash/platform/actions/common/actions.ts` | 双方都有；菜单注册表 | 增加 Peek 子菜单 ID |
+| `src/ash/editor/contrib/rename/browser/rename.ts` | 双方都有；RenameAction | 接入右键菜单；验证真实编辑与撤销 |
+| `src/ash/editor/contrib/format/browser/formatActions.ts` | 双方都有；格式化动作 | 接入文档/选区菜单；验证编辑、只读及选区条件 |
+| `src/ash/editor/contrib/multicursor/browser/multicursor.ts` | 双方都有；选区操作 | 增加 Change All Occurrences 动作；验证多处输入 |
+| `src/ash/editor/contrib/clipboard/browser/clipboard.ts` | 双方都有；剪贴板动作 | 填充 Copy As 子菜单；验证实际剪贴板内容 |
+| `src/ash/editor/standalone/browser/standaloneServices.ts` | 双方都有；独立编辑器服务装配 | 修正 Context View 容器契约，避免子菜单节点被主菜单清除 |
+| `src/ash/editor/contrib/stickyScroll/browser/stickyScrollController.ts` | 双方都有；固定行菜单入口 | 键盘打开菜单时聚焦首项；复用已有 Sticky Scroll Playwright 场景 |
+| `src/ash/editor/browser/editorExtensions.ts` | 双方都有；动作快捷键注册 | 主快捷键注册优先于辅助快捷键，验证菜单标签与实际输入 |
+| `src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.ts`、`src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.ts` | 仅 VS Code；工作台装配 | 创建层级动作与 Peek 菜单注册，调用既有层级控制器 |
+| `src/ash/workbench/workbench.common.main.ts` | 双方都有；产品组合入口 | 装载两处层级贡献，覆盖桌面与 Web |
+| `src/ash/workbench/contrib/quickaccess/browser/quickAccess.contribution.ts` | 双方都有；命令面板装配 | 补右键菜单底部命令面板入口，复用已有 Quick Access |
+| `src/ash/editor/contrib/callHierarchy/browser/languageHierarchyController.ts` | 仅 Ash，沿用台账既有保留决定；层级动作调用 | Peek 挂载完成后交付键盘焦点；请求和展开状态仍由原控制器拥有 |
+| `src/ash/base/common/keyCodes.ts` | 双方都有；物理按键映射 | 修正 F13–F24 覆盖编辑键；单测验证正反映射 |
+| `src/ash/base/test/common/keybindings.test.ts` | 双方都有；按键回归测试 | 覆盖功能键与 Insert/Delete 等编辑键 |
+| `src/ash/editor/contrib/codeAction/browser/codeActionCommands.ts` | 双方都有；代码动作注册 | 增加 Refactor/Source Action 入口和菜单条件 |
+| `src/ash/editor/contrib/codeAction/browser/codeActionController.ts` | 双方都有；代码动作请求与列表 owner | 传递种类筛选并过滤响应；Playwright 验证选择和编辑 |
+| `src/ash/workbench/contrib/accessibility/browser/editorAccessibilityHelp.ts` | 双方都有；无障碍帮助入口 | 补菜单键盘操作说明 |
+| `localization/zh-CN/editor.json`、`src/ash/workbench/services/localization/common/localizationCatalogs.ts` | Ash 本地化既有 owner 与生成输出 | 补中文文案并运行生成检查 |
+| `test/integration/browser/standalone.integration.ts`、`test/integration/browser/standalone.integration.spec.ts` | Ash 既有集成设施 | 注册真实 provider，经 DOM 菜单验证动作、焦点、撤销与撤销注册 |
+| `test/smoke/areas/editor/editor-input.spec.ts` | Ash 既有产品测试 | 通过真实右键、快捷键与剪贴板验证 Web/Electron UI/Electron；中文重启后验证菜单与无障碍帮助 |
+| `src/ash/editor/api-alignment-status.md` | Ash 既有台账 | 记录准入范围、文件缺口及验证结果 |
+
+上游其他 `gotoSymbol` 请求/树/Peek 文件、`renameWidget.ts` 与 Code Action 模型/菜单文件尚未按清单机械创建：当前调用链已由既有控制器和通用控件拥有对应状态，重复 owner 不属于文件补齐。文件存在不计为完整 API 对齐。
+
+本批最终验证：按键、菜单、剪贴板、导航及层级的 5 个单测文件共 27 项通过；Editor Chromium 定向回归 35 项通过，覆盖本批菜单、固定行菜单、代码动作请求取消、Peek 释放及悬停选项。完整 Editor 浏览器检查共 798 项，首次结果为 796 项通过：固定行键盘菜单未聚焦首项已修复并复测通过，悬停延时断言在未改动悬停代码的定向复测中通过；不把该次完整检查记为全绿。文件集合、CSS 归属、台账检查及 Stanza 类型检查通过。
+
+产品 Playwright：Web 与 Electron UI 各 2 项菜单场景通过，包含真实剪贴板、多处替换、撤销、命令面板、中文重启和无障碍帮助。连接 App Server 的 Electron 菜单操作通过；中文重启场景两次在等待旧 Electron 进程关闭时超时，仓库原有显示语言重启测试也在同一位置超时，因此该目标的中文重启验证尚未通过。本批未修改进程关闭链，也未跳过失败场景。Stanza 与 Renderer 生产构建通过；中文生成检查通过，但报告 1 个既有 Marketplace 文案缺失及 20 个与源文案相同的条目，本批新增菜单中文文案已生成。
+
 ## 颜色选择器复用 base 控件（2026-10-04）
 
 按本轮用户授权，选色交互共用 `base/browser/ui/colorPicker`，Editor 在现有控制器与颜色服务上补文档能力。生产链为色块或命令 → `ColorPickerController` → `ColorPickerWidget` → base `ColorPicker` → 提供者格式 → 一次可撤销编辑。

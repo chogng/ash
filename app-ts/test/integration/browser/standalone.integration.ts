@@ -1,4 +1,6 @@
 import { MultiDiffEditorPane } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorPane.js';
+import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
+import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
 import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -316,6 +318,8 @@ interface StandaloneHarness {
 	prepareBracketToken(): void;
 	prepareLineJoin(): void;
 	prepareMulticursor(): void;
+	prepareEditorContextMenu(providers: boolean, readOnly?: boolean): void;
+	changeEditorContextMenuState(change: 'language' | 'provider' | 'readonly' | 'selection' | 'other'): void;
 	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
 	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
 	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[] }>;
@@ -1037,6 +1041,59 @@ window.ashStandaloneIntegration = {
 		rename: callerEditor.getAction('editor.action.rename')?.isSupported() ?? false,
 		quickFix: callerEditor.getAction('editor.action.quickFix')?.isSupported() ?? false,
 	}),
+	prepareEditorContextMenu: (providers, readOnly = false) => {
+		languageRequestProviders.clear();
+		callerModel.setLanguage('plaintext');
+		callerEditor.updateOptions({ readOnly, contextmenu: true });
+		callerEditor.setValue('alpha beta alpha');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		if (!providers) return;
+		const location = { resource: callerResource, range: new stanza.Range(1, 7, 1, 11) };
+		languageRequestProviders.add(stanza.languages.registerDefinitionProvider('plaintext', { provideDefinition: () => [location] }));
+		languageRequestProviders.add(stanza.languages.registerDeclarationProvider('plaintext', { provideDeclaration: () => [location] }));
+		languageRequestProviders.add(stanza.languages.registerTypeDefinitionProvider('plaintext', { provideTypeDefinition: () => [location] }));
+		languageRequestProviders.add(stanza.languages.registerImplementationProvider('plaintext', { provideImplementation: () => [location] }));
+		languageRequestProviders.add(stanza.languages.registerReferenceProvider('plaintext', { provideReferences: () => [location] }));
+		const item = { name: 'alpha', symbolKind: 12, ...location, selectionRange: location.range };
+		languageRequestProviders.add(stanza.languages.registerCallHierarchyProvider('plaintext', {
+			prepareCallHierarchy: () => [item],
+			provideIncomingCalls: () => [{ item: { ...item, name: 'caller' }, fromRanges: [item.range] }],
+			provideOutgoingCalls: () => [],
+		}));
+		languageRequestProviders.add(stanza.languages.registerTypeHierarchyProvider('plaintext', {
+			prepareTypeHierarchy: () => [item],
+			provideSupertypes: () => [{ ...item, name: 'base' }],
+			provideSubtypes: () => [],
+		}));
+		languageRequestProviders.add(stanza.languages.registerDocumentFormattingEditProvider('plaintext', {
+			provideDocumentFormattingEdits: model => [{ range: model.getFullModelRange(), text: 'formatted' }],
+		}));
+		languageRequestProviders.add(stanza.languages.registerDocumentRangeFormattingEditProvider('plaintext', {
+			provideDocumentRangeFormattingEdits: (_model, range) => [{ range, text: 'selection' }],
+		}));
+		languageRequestProviders.add(stanza.languages.registerRenameProvider('plaintext', {
+			prepareRename: () => ({ range: new stanza.Range(1, 1, 1, 6), placeholder: 'alpha' }),
+			provideRenameEdits: request => ({ entries: [{ kind: 'textDocument', resource: request.resource, edits: [{ range: new stanza.Range(1, 1, 1, 6), text: request.newName! }] }] }),
+		}));
+		languageRequestProviders.add(stanza.languages.registerCodeActionProvider('plaintext', {
+			provideCodeActions: request => ['quickfix', 'refactor.extract', 'refactoring', 'source.organizeImports'].map(kind => ({
+				title: `Apply ${kind}`,
+				kind,
+				edit: { entries: [{ kind: 'textDocument', resource: request.resource, edits: [{ range: request.range, text: kind }] }] },
+			})),
+		}));
+	},
+	changeEditorContextMenuState: change => {
+		if (change === 'language') callerModel.setLanguage('typescript');
+		if (change === 'provider') languageRequestProviders.clear();
+		if (change === 'readonly') callerEditor.updateOptions({ readOnly: true });
+		if (change === 'selection') callerEditor.setPosition(new stanza.Position(1, 2));
+		if (change === 'other') {
+			ownedModel.setLanguage('typescript');
+			ownedEditor.focus();
+		}
+	},
 	prepareLanguageRequest: (kind, emptyDefinition = false) => {
 		languageRequestProviders.clear();
 		callerEditor.setValue('first second');

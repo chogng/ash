@@ -28,3 +28,44 @@ class QuickFixAction extends EditorAction {
 }
 
 registerEditorAction(QuickFixAction);
+
+export class RefactorAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.action.refactor',
+			label: localize2('refactor.label', 'Refactor...'),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
+			contextMenuOpts: { group: '1_modification', order: 2 },
+			kbOpts: {
+				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyR,
+				mac: { primary: KeyMod.WinCtrl | KeyMod.Shift | KeyCode.KeyR },
+				weight: KeybindingWeight.EditorContrib,
+			},
+		});
+	}
+
+	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
+		editor.focus();
+		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(['refactor']);
+	}
+}
+
+export class SourceAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.action.sourceAction',
+			label: localize2('source.label', 'Source Action...'),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
+			contextMenuOpts: { group: '1_modification', order: 2.1 },
+		});
+	}
+
+	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
+		editor.focus();
+		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(['source']);
+	}
+}
+
+registerEditorAction(RefactorAction);
+registerEditorAction(SourceAction);

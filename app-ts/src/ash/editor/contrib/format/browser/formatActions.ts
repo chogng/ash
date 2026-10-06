@@ -13,6 +13,7 @@ class FormatDocumentAction extends EditorAction {
 	constructor() {
 		super({
 			id: 'editor.action.formatDocument',
+			contextMenuOpts: { group: '1_modification', order: 1.3 },
 			label: localize2('formatDocument.label', 'Format Document'),
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasDocumentFormattingProvider.isEqualTo(true)),
 			kbOpts: {
@@ -37,6 +38,7 @@ class FormatSelectionAction extends EditorAction {
 	constructor() {
 		super({
 			id: 'editor.action.formatSelection',
+			contextMenuOpts: { group: '1_modification', order: 1.31, when: EditorContextKeys.hasNonEmptySelection.isEqualTo(true) },
 			label: localize2('formatSelection.label', 'Format Selection'),
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasDocumentSelectionFormattingProvider.isEqualTo(true)),
 			kbOpts: {

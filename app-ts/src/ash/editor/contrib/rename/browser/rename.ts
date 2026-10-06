@@ -275,6 +275,7 @@ class RenameAction extends EditorAction {
 			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasRenameProvider.isEqualTo(true)),
 			kbOpts: { kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true), primary: KeyCode.F2, weight: KeybindingWeight.EditorContrib },
 			canTriggerInlineEdits: true,
+			contextMenuOpts: { group: '1_modification', order: 1.1 },
 		});
 	}
 

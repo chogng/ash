@@ -86,6 +86,8 @@ export class LanguageHierarchyController extends Disposable {
 		widget.setBody(body);
 		for (const session of sessions) for (const root of session.roots) body.append(this.createNode(widget, session, root, [], defaultDirection(session.kind)));
 		widget.show(anchor);
+		// View zones attach during rendering, before their controls can take focus.
+		this.viewport.render(true, false);
 		(body.querySelector("button") as HTMLButtonElement | null)?.focus({ preventScroll: true });
 	}
 

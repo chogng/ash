@@ -414,7 +414,8 @@ export class StandaloneNotificationService extends Disposable implements INotifi
 }
 
 class StandaloneContextViewService extends ContextView implements IContextViewService {
-	get container(): HTMLElement { return this.element; }
+	// Child views need a stable host: showing this view replaces its own content.
+	get container(): HTMLElement { return this.element.ownerDocument.body; }
 
 	constructor(@IThemeService themeService: IThemeService) {
 		super(document.body);

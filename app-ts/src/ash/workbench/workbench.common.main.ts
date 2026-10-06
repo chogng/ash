@@ -38,6 +38,8 @@ import './contrib/automation/browser/automation.contribution.js';
 import '../editor/editor.code.all.js';
 import '../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import './contrib/codeEditor/browser/codeEditor.contribution.js';
+import './contrib/callHierarchy/browser/callHierarchy.contribution.js';
+import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import './contrib/documentEditor/browser/documentEditor.contribution.js';
 import './contrib/academic/browser/academicEditor.contribution.js';
 import './contrib/debug/browser/debug.contribution.js';

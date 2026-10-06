@@ -6,6 +6,13 @@ export namespace EditorContextKeys {
 	export const stickyScrollFocused = new RawContextKey<boolean>('stickyScrollFocused', false);
 	export const stickyScrollVisible = new RawContextKey<boolean>('stickyScrollVisible', false);
 	export const hasRenameProvider = new RawContextKey<boolean>('editorHasRenameProvider', false);
+	export const hasDefinitionProvider = new RawContextKey<boolean>('editorHasDefinitionProvider', false);
+	export const hasDeclarationProvider = new RawContextKey<boolean>('editorHasDeclarationProvider', false);
+	export const hasTypeDefinitionProvider = new RawContextKey<boolean>('editorHasTypeDefinitionProvider', false);
+	export const hasImplementationProvider = new RawContextKey<boolean>('editorHasImplementationProvider', false);
+	export const hasReferenceProvider = new RawContextKey<boolean>('editorHasReferenceProvider', false);
+	export const hasCallHierarchyProvider = new RawContextKey<boolean>('editorHasCallHierarchyProvider', false);
+	export const hasTypeHierarchyProvider = new RawContextKey<boolean>('editorHasTypeHierarchyProvider', false);
 	export const hasCodeActionsProvider = new RawContextKey<boolean>('editorHasCodeActionsProvider', false);
 	export const hasSignatureHelpProvider = new RawContextKey<boolean>('editorHasSignatureHelpProvider', false);
 	export const hasDocumentFormattingProvider = new RawContextKey<boolean>('editorHasDocumentFormattingProvider', false);

@@ -114,6 +114,12 @@ class ExecCommandCopyWithSyntaxHighlightingAction extends EditorAction {
 		super({
 			id: 'editor.action.clipboardCopyWithSyntaxHighlightingAction',
 			label: nls.localize2('actions.clipboard.copyWithSyntaxHighlightingLabel', 'Copy with Syntax Highlighting'),
+			menuOpts: [MenuId.EditorContextCopy, MenuId.MenubarCopy].map(menuId => ({
+				menuId,
+				group: '1_copy',
+				order: 1,
+				title: nls.localize('actions.clipboard.copyWithSyntaxHighlightingLabel', 'Copy with Syntax Highlighting'),
+			})),
 			precondition: undefined,
 			kbOpts: {
 				kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),

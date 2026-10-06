@@ -164,7 +164,8 @@ export abstract class Command {
 					}
 				}
 
-				for (const keybinding of [platformKeybindings?.primary ?? kbOpts.primary, ...(platformKeybindings?.secondary ?? kbOpts.secondary ?? [])]) {
+				// Equal-weight rules prefer the latest entry; menus should display the primary shortcut.
+				for (const keybinding of [...(platformKeybindings?.secondary ?? kbOpts.secondary ?? []).slice().reverse(), platformKeybindings?.primary ?? kbOpts.primary]) {
 					if (keybinding !== undefined && keybinding !== 0) {
 						KeybindingsRegistry.registerKeybindingRule({
 							command: this.id,

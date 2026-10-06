@@ -56,6 +56,32 @@ test("canonical key codes distinguish logical keys from physical scan codes", ()
 	assert.equal(IMMUTABLE_CODE_TO_KEY_CODE[ScanCode.KeyA], KeyCode.DependsOnKeyboardLayout);
 });
 
+test('function keys retain their physical identities without replacing editing keys', () => {
+	for (let number = 1; number <= 24; number++) {
+		const scanCode = ScanCodeUtils.toEnum(`F${number}`);
+		const keyCode = KeyCodeUtils.fromString(`F${number}`);
+		assert.deepEqual([
+			IMMUTABLE_CODE_TO_KEY_CODE[scanCode],
+			IMMUTABLE_KEY_CODE_TO_CODE[keyCode],
+			EVENT_KEY_CODE_MAP[111 + number],
+		], [keyCode, scanCode, keyCode]);
+	}
+	for (const [scanCode, keyCode] of [
+		[ScanCode.Insert, KeyCode.Insert],
+		[ScanCode.Delete, KeyCode.Delete],
+		[ScanCode.Home, KeyCode.Home],
+		[ScanCode.End, KeyCode.End],
+		[ScanCode.PageUp, KeyCode.PageUp],
+		[ScanCode.PageDown, KeyCode.PageDown],
+		[ScanCode.ArrowRight, KeyCode.RightArrow],
+		[ScanCode.ArrowLeft, KeyCode.LeftArrow],
+		[ScanCode.ScrollLock, KeyCode.ScrollLock],
+		[ScanCode.Pause, KeyCode.PauseBreak],
+	] as const) {
+		assert.deepEqual([IMMUTABLE_CODE_TO_KEY_CODE[scanCode], IMMUTABLE_KEY_CODE_TO_CODE[keyCode]], [keyCode, scanCode]);
+	}
+});
+
 test("keybinding parser distinguishes logical and physical chords", () => {
 	const parsed = parseKeybinding("ctrl+k shift+[KeyP]");
 

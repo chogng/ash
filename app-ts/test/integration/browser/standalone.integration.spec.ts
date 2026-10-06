@@ -1,5 +1,133 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('editor context menu runs navigation, rename and formatting through the focused editor', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+	for (const command of ['Go to Definition', 'Go to Declaration', 'Go to Type Definition', 'Go to Implementations', 'Go to References']) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		await input.press('Shift+F10');
+		await page.getByRole('menuitem', { name: command, exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection)).toBe('[1,7 -> 1,11]');
+		await expect(input).toBeFocused();
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+	await input.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Rename Symbol', exact: true }).click();
+	const rename = page.getByRole('textbox', { name: 'New symbol name', exact: true });
+	await expect(rename).toBeFocused();
+	await rename.fill('gamma');
+	await rename.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('gamma beta alpha');
+	await input.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
+	for (const [command, value] of [['Format Document', 'formatted'], ['Format Selection', 'selection beta alpha']]) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		await input.press('Shift+F10');
+		await page.getByRole('menuitem', { name: command, exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(value);
+		await expect(input).toBeFocused();
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('editor context menu supports Peek keyboard navigation, matching edits and Copy As', async ({ page, context }) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+	await input.press('Shift+F10');
+	const peek = page.getByRole('menuitem', { name: 'Peek', exact: true });
+	await peek.focus();
+	await peek.press('ArrowRight');
+	const callHierarchy = page.getByRole('menuitem', { name: 'Peek Call Hierarchy', exact: true });
+	await expect(callHierarchy).toBeFocused();
+	await callHierarchy.press('ArrowDown');
+	await page.getByRole('menuitem', { name: 'Peek Type Hierarchy', exact: true }).press('ArrowDown');
+	const definition = page.getByRole('menuitem', { name: 'Peek Definition', exact: true });
+	await expect(definition).toBeFocused();
+	await definition.press('Enter');
+	await expect(page.locator('.stanza-editor-language-preview')).toBeVisible();
+	await expect(page.locator('.stanza-editor-language-locations button').first()).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(page.locator('.stanza-editor-language-preview')).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await input.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Change All Occurrences', exact: true }).click();
+	await page.keyboard.insertText('gamma');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('gamma beta gamma');
+	await input.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(false));
+	await input.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Copy As', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Copy with Syntax Highlighting', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('alpha');
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('editor context menu filters refactor and source actions before applying the selected edit', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+	for (const [command, kind] of [['Refactor...', 'refactor.extract'], ['Source Action...', 'source.organizeImports']]) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		await input.press('Shift+F10');
+		await page.getByRole('menuitem', { name: command, exact: true }).click();
+		const actions = page.locator('.ash-action-widget').getByRole('menuitem');
+		await expect(actions).toHaveCount(1);
+		await page.getByRole('menuitem', { name: `Apply ${kind}`, exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(`${kind} beta alpha`);
+		await expect(input).toBeFocused();
+		await input.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('editor context menu opens and expands the call and type hierarchy with keyboard focus', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller .stanza-editor-input[aria-label="caller.txt"]');
+	for (const [command, expansion, child] of [['Peek Call Hierarchy', 'Callers for alpha', 'caller'], ['Peek Type Hierarchy', 'Supertypes for alpha', 'base']]) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		await input.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Peek', exact: true }).click();
+		await page.getByRole('menuitem', { name: command, exact: true }).click();
+		await expect(page.locator('.stanza-editor-language-hierarchy-item').first()).toBeFocused();
+		await page.getByRole('button', { name: expansion, exact: true }).click();
+		await expect(page.locator('.stanza-editor-language-hierarchy-item')).toHaveText(['alpha', child]);
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.stanza-editor-language-hierarchy')).toHaveCount(0);
+		await expect(input).toBeFocused();
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('editor context menu follows language, provider, selection and read-only state', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+	for (const change of ['language', 'provider', 'readonly', 'selection'] as const) {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
+		await page.evaluate(change => window.ashStandaloneIntegration.changeEditorContextMenuState(change), change);
+		await input.press('Shift+F10');
+		await expect(page.getByRole('menuitem', { name: 'Format Selection', exact: true })).toHaveCount(0);
+		if (change !== 'selection') {
+			await expect(page.getByRole('menuitem', { name: 'Rename Symbol', exact: true })).toHaveCount(0);
+			await expect(page.getByRole('menuitem', { name: 'Refactor...', exact: true })).toHaveCount(0);
+			await expect(page.getByRole('menuitem', { name: 'Source Action...', exact: true })).toHaveCount(0);
+		}
+		await expect(page.getByRole('menuitem', { name: 'Go to Definition', exact: true })).toHaveCount(change === 'readonly' || change === 'selection' ? 1 : 0);
+		await page.keyboard.press('Escape');
+		await expect(input).toBeFocused();
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.changeEditorContextMenuState('other'));
+	const other = page.locator('#owned > .stanza-editor .stanza-editor-input').first();
+	await other.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Go to Definition', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(other).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 for (const inputKind of ['EditContext', 'textarea'] as const) {
 	for (const eolName of ['lf', 'crlf'] as const) {
 		test(`${inputKind} ${eolName} models retain EOL through input, paste, undo and existing text`, async ({ page }) => {

@@ -75,6 +75,7 @@ export class MenuId {
 	static readonly EditorTitleContext = new MenuId("EditorTitleContext");
 	static readonly TouchBarContext = new MenuId("TouchBarContext");
 	static readonly EditorContext = new MenuId("EditorContext");
+	static readonly EditorContextPeek = new MenuId('EditorContextPeek');
 	static readonly StickyScrollContext = new MenuId("StickyScrollContext");
 	static readonly SimpleEditorContext = new MenuId("SimpleEditorContext");
 	static readonly EditorContextCopy = new MenuId("EditorContextCopy");

@@ -554,7 +554,9 @@ for (const identity of immutableKeyIdentities) {
 	registerKeyIdentity(...identity, true);
 }
 for (let index = 1; index <= 24; index += 1) {
-	registerKeyIdentity(ScanCode.F1 + index - 1, KeyCode.F1 + index - 1, 111 + index, `VK_F${index}`, true);
+	// USB places F13–F24 after the editing and numpad keys, separate from F1–F12.
+	const scanCode = index <= 12 ? ScanCode.F1 + index - 1 : ScanCode.F13 + index - 13;
+	registerKeyIdentity(scanCode, KeyCode.F1 + index - 1, 111 + index, `VK_F${index}`, true);
 }
 
 const layoutDependentKeyIdentities: readonly [ScanCode, KeyCode, number, string][] = [

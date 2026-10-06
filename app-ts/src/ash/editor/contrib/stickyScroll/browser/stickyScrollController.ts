@@ -4,7 +4,7 @@ import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { EditorOption } from "../../../common/config/editorOptions.js";
 import { type View } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, isNode, stopEvent } from "../../../../base/browser/dom.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -369,6 +369,7 @@ export class StickyScrollController extends Disposable {
 		this.contextMenuService.showContextMenu({
 			menuId: MenuId.StickyScrollContext,
 			contextKeyService: this.contextKeyService,
+			autoSelectFirstItem: isNode(anchor),
 			getAnchor: () => anchor,
 			onHide: () => {
 				this.menuOpen = false;

@@ -1158,12 +1158,24 @@ class EditorContextKeysManager extends Disposable {
 		const signatureHelp = EditorContextKeys.hasSignatureHelpProvider.bindTo(contextKeyService);
 		const rename = EditorContextKeys.hasRenameProvider.bindTo(contextKeyService);
 		const codeActions = EditorContextKeys.hasCodeActionsProvider.bindTo(contextKeyService);
+		const navigationProviders = [
+			[EditorContextKeys.hasDefinitionProvider.bindTo(contextKeyService), languageFeaturesService.definitionProvider],
+			[EditorContextKeys.hasDeclarationProvider.bindTo(contextKeyService), languageFeaturesService.declarationProvider],
+			[EditorContextKeys.hasTypeDefinitionProvider.bindTo(contextKeyService), languageFeaturesService.typeDefinitionProvider],
+			[EditorContextKeys.hasImplementationProvider.bindTo(contextKeyService), languageFeaturesService.implementationProvider],
+			[EditorContextKeys.hasReferenceProvider.bindTo(contextKeyService), languageFeaturesService.referenceProvider],
+			[EditorContextKeys.hasCallHierarchyProvider.bindTo(contextKeyService), languageFeaturesService.callHierarchyProvider],
+			[EditorContextKeys.hasTypeHierarchyProvider.bindTo(contextKeyService), languageFeaturesService.typeHierarchyProvider],
+		] as const;
 		this._register(toDisposable(() => {
 			for (const key of [
 				this.editorSimpleInput, this.editorFocus, this.textInputFocus, this.editorTextFocus,
 				this.editorReadonly, this.hasMultipleSelections, this.hasNonEmptySelection,
 				this.isComposing, this.languageId, documentFormatting, selectionFormatting, signatureHelp, rename, codeActions,
 			]) {
+				key.reset();
+			}
+			for (const [key] of navigationProviders) {
 				key.reset();
 			}
 		}));
@@ -1174,6 +1186,9 @@ class EditorContextKeysManager extends Disposable {
 			signatureHelp.set(languageFeaturesService.signatureHelpProvider.has(model));
 			rename.set(languageFeaturesService.renameProvider.has(model));
 			codeActions.set(languageFeaturesService.codeActionProvider.has(model));
+			for (const [key, registry] of navigationProviders) {
+				key.set(registry.has(model));
+			}
 			this.languageId.set(model.getLanguageId());
 		};
 		this._register(languageFeaturesService.documentFormattingEditProvider.onDidChange(updateLanguageFeatures));
@@ -1181,6 +1196,9 @@ class EditorContextKeysManager extends Disposable {
 		this._register(languageFeaturesService.signatureHelpProvider.onDidChange(updateLanguageFeatures));
 		this._register(languageFeaturesService.renameProvider.onDidChange(updateLanguageFeatures));
 		this._register(languageFeaturesService.codeActionProvider.onDidChange(updateLanguageFeatures));
+		for (const [, registry] of navigationProviders) {
+			this._register(registry.onDidChange(updateLanguageFeatures));
+		}
 		this._register(model.onDidChangeLanguage(updateLanguageFeatures));
 		updateLanguageFeatures();
 		this.updateConfiguration();

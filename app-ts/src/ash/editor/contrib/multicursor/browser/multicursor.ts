@@ -18,6 +18,7 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { TrackedRangeStickiness, type ITextModel } from '../../../common/model.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 
 const MAX_SELECTION_HIGHLIGHTS = 10_000;
 
@@ -220,6 +221,29 @@ class SelectHighlightsAction extends EditorAction {
 	}
 }
 
+class ChangeAllAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.action.changeAll',
+			label: localize2('multicursor.ChangeAll', 'Change All Occurrences'),
+			precondition: EditorContextKeys.writable,
+			contextMenuOpts: { group: '1_modification', order: 1.2 },
+			kbOpts: { primary: KeyMod.CtrlCmd | KeyCode.F2, kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true), weight: KeybindingWeight.EditorContrib },
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		const viewModel = editor._getViewModel();
+		if (!viewModel) return;
+		editor.focus();
+		// The next replacement must undo independently from text typed before this selection command.
+		editor.pushUndoStop();
+		viewModel.setSelections(this.id, selectAllOccurrences(viewModel.model, viewModel.getSelections()), CursorChangeReason.Explicit);
+		editor.revealRange(Range.fromPositions(viewModel.getPrimaryCursorState().modelState.position));
+	}
+}
+
+registerEditorAction(ChangeAllAction);
 const insertAbove = registerEditorAction(InsertCursorAbove);
 const insertBelow = registerEditorAction(InsertCursorBelow);
 const insertLineEnds = registerEditorAction(InsertCursorAtEndOfEachLineSelected);

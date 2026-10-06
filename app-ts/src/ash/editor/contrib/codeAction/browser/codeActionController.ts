@@ -70,7 +70,7 @@ export class CodeActionController extends Disposable {
 		}));
 	}
 
-	public async manualTriggerAtCurrentPosition(): Promise<void> {
+	public async manualTriggerAtCurrentPosition(only?: readonly string[]): Promise<void> {
 		this.close();
 		const model = this.viewport.textModel;
 		if (this.isDisposed || model.isDisposed() || this.editor.getOption(EditorOption.readOnly)) return;
@@ -81,6 +81,7 @@ export class CodeActionController extends Disposable {
 			...languages.createLanguageFeatureRequest(model, model.getLanguageId(), controller.signal),
 			resource: model.uri,
 			range,
+			only,
 			diagnostics: this.diagnostics.decorations
 				.filter(decoration => Range.areIntersectingOrTouching(decoration.range, range))
 				.map(decoration => decoration.metadata),
@@ -92,7 +93,12 @@ export class CodeActionController extends Disposable {
 				try {
 					const provided = await provider.provideCodeActions(context, controller.signal);
 					if (!languages.isLanguageFeatureRequestCurrent(context)) return;
-					actions.push(...provided.map(original => ({ action: normalizeLanguageCodeAction(original), original, provider })));
+					for (const original of provided) {
+						const action = normalizeLanguageCodeAction(original);
+						// Providers can return broader results than requested; the selected action family controls the list.
+						if (only && !only.some(kind => action.kind === kind || action.kind?.startsWith(`${kind}.`))) continue;
+						actions.push({ action, original, provider });
+					}
 				} catch (error) {
 					if (!languages.isLanguageFeatureRequestCurrent(context)) return;
 					this.onError(error);

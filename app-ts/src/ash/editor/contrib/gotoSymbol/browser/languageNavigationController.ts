@@ -53,16 +53,20 @@ export class LanguageNavigationController extends Disposable {
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph") || event.key !== "F12") return;
-		stopEvent(event);
+		let command: string;
 		if (event.shiftKey && (event.ctrlKey || event.metaKey)) {
-			void this.requestLocations("typeDefinition");
+			command = 'editor.action.peekImplementation';
 		} else if (event.ctrlKey || event.metaKey) {
-			void this.requestLocations("implementation");
+			command = 'editor.action.goToImplementation';
 		} else if (event.shiftKey) {
-			void this.requestLocations("references", { peek: true, includeDeclaration: true });
+			command = 'editor.action.goToReferences';
 		} else {
-			void this.requestLocations("definition", { peek: event.altKey });
+			command = event.altKey ? 'editor.action.peekDefinition' : 'editor.action.revealDefinition';
 		}
+		const action = this.editor.getAction(command);
+		if (!action?.isSupported()) return;
+		stopEvent(event);
+		void action.run().catch(this.onError);
 	}
 
 	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
@@ -157,6 +161,8 @@ export class LanguageNavigationController extends Disposable {
 		}
 		widget.setBody(body);
 		widget.show(anchor);
+		// View zones mount during rendering; keyboard focus must follow their attachment.
+		this.viewport.render(true, false);
 		(list.firstElementChild as HTMLButtonElement | null)?.focus({ preventScroll: true });
 
 		this.viewport.announceAccessibilityStatus(`${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"} found.`);
