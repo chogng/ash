@@ -1074,6 +1074,10 @@ use crate::protocol::github::GitHubFileContent;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubFileReadParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubForkCreateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubForkResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubIssue;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubIssueCreateParams;
@@ -1083,6 +1087,14 @@ use crate::protocol::github::GitHubIssueListParams;
 use crate::protocol::github::GitHubIssueListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubIssueUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubNotificationReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubNotificationsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubNotificationsReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubNotificationsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubNumberParams;
 #[cfg(any(test, feature = "export"))]
@@ -2440,6 +2452,10 @@ pub enum ClientRequestSerializationScope {
         repository_id: Option<String>,
         access: SerializationAccess,
     },
+    HostedAccount {
+        account_id: String,
+        access: SerializationAccess,
+    },
     HostedRepository {
         host: String,
         owner: String,
@@ -2466,6 +2482,8 @@ pub enum SerializationScopeDefinition {
     GlobalExclusive,
     GlobalSharedRead,
     RepositoryExclusive,
+    HostedAccountExclusive,
+    HostedAccountSharedRead,
     HostedRepositoryExclusive,
     HostedRepositorySharedRead,
     SessionExclusive,
@@ -2580,6 +2598,19 @@ impl ClientMethodDefinition {
                 })
             }
 
+            SerializationScopeDefinition::HostedAccountExclusive
+            | SerializationScopeDefinition::HostedAccountSharedRead => {
+                Some(ClientRequestSerializationScope::HostedAccount {
+                    account_id: serialization_parameter(params, "accountId")?,
+                    access: if self.serialization
+                        == SerializationScopeDefinition::HostedAccountExclusive
+                    {
+                        SerializationAccess::Exclusive
+                    } else {
+                        SerializationAccess::SharedRead
+                    },
+                })
+            }
             SerializationScopeDefinition::HostedRepositoryExclusive
             | SerializationScopeDefinition::HostedRepositorySharedRead => {
                 let repository: crate::protocol::issues::IssueRepository = serde_json::from_value(
@@ -4208,6 +4239,10 @@ client_methods! {
         serialization: None,
         cancellation: "operationId",
     },
+    GitHubNotificationsList => "github/notifications/list" { params: GitHubNotificationsParams, response: GitHubNotificationsResult, serialization: HostedAccountSharedRead, cancellation: "operationId", },
+    GitHubNotificationRead => "github/notifications/read" { params: GitHubNotificationReadParams, response: (), serialization: HostedAccountExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubNotificationsRead => "github/notifications/readAll" { params: GitHubNotificationsReadParams, response: (), serialization: HostedAccountExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubForkCreate => "github/repository/fork" { params: GitHubForkCreateParams, response: GitHubForkResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubAccountList => "github/account/list" { params: GitHubAccountListParams, response: GitHubAccountsResult, serialization: None, cancellation: "operationId", },
     GitHubAccountConnect => "github/account/connect" { params: GitHubAccountConnectParams, response: GitHubAccount, serialization: GlobalExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubReviewCommentEdit => "github/pullRequest/comment/update" { params: GitHubReviewCommentEditParams, response: GitHubReviewComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -4951,6 +4986,15 @@ typescript_bindings! {
     crate::protocol::github::GitHubMergeMethod,
     crate::protocol::github::GitHubReviewEvent,
     crate::protocol::github::GitHubCancelStatus,
+    crate::protocol::github::GitHubNotificationsParams,
+    crate::protocol::github::GitHubNotificationReadParams,
+    crate::protocol::github::GitHubNotificationsReadParams,
+    crate::protocol::github::GitHubNotification,
+    crate::protocol::github::GitHubNotificationsResult,
+    crate::protocol::github::GitHubForkCreateParams,
+    crate::protocol::github::GitHubForkResult,
+    crate::protocol::github::GitHubNotificationFilter,
+    crate::protocol::github::GitHubForkBranches,
     crate::protocol::github::GitHubAccount,
     crate::protocol::github::GitHubAccountsResult,
     crate::protocol::github::GitHubAccountConnectParams,

@@ -372,3 +372,45 @@ fn open_vsx_cannot_replace_a_pinned_marketplace_identity() {
     .unwrap();
     assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
 }
+
+#[test]
+fn github_enterprise_browser_configuration_has_distinct_host_and_rejects_ambiguous_origins() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("product-services.json");
+    let valid = serde_json::json!({"host":"git.example.com","clientId":"EnterprisePublic","brokerBaseUrl":"https://git-auth.example.com/"});
+    fs::write(
+        &path,
+        serde_json::json!({"schemaVersion":2,"githubEnterpriseAccounts":[valid.clone()]})
+            .to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        LocalProductServicesConfig::load(&path, root.path())
+            .unwrap()
+            .github_enterprise_accounts[0]
+            .host,
+        "git.example.com"
+    );
+    for host in [
+        "github.com",
+        "git.example.com/path",
+        "https://git.example.com",
+        "git.example.com:443",
+    ] {
+        let mut invalid = valid.clone();
+        invalid["host"] = serde_json::json!(host);
+        fs::write(
+            &path,
+            serde_json::json!({"schemaVersion":2,"githubEnterpriseAccounts":[invalid]}).to_string(),
+        )
+        .unwrap();
+        assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+    }
+    fs::write(
+        &path,
+        serde_json::json!({"schemaVersion":2,"githubEnterpriseAccounts":[valid.clone(),valid]})
+            .to_string(),
+    )
+    .unwrap();
+    assert!(LocalProductServicesConfig::load(&path, root.path()).is_err());
+}

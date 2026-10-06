@@ -1,3 +1,4 @@
+use super::message_queue::HostInputBudgets;
 use super::message_queue::InputBudgets;
 use super::message_queue::MessageBytes;
 use super::request_serialization::ConnectionClosed;
@@ -163,17 +164,17 @@ impl RequestLane {
 type HostRequestPermit = (MessageBytes, Option<MessageBytes>);
 
 fn reserve_host_request(
-    budgets: &InputBudgets,
+    budgets: &HostInputBudgets,
     lane: RequestLane,
 ) -> Result<HostRequestPermit, ()> {
     let budget = if lane == RequestLane::Control {
-        &budgets.host.control_requests
+        &budgets.control_requests
     } else {
-        &budgets.host.requests
+        &budgets.requests
     };
     let request = budget.try_reserve(1).ok_or(())?;
     let network = if lane == RequestLane::Network {
-        Some(budgets.host.network_requests.try_reserve(1).ok_or(())?)
+        Some(budgets.network_requests.try_reserve(1).ok_or(())?)
     } else {
         None
     };
@@ -187,12 +188,12 @@ pub(super) fn inline_admission(
     params: &serde_json::Value,
     bytes: usize,
 ) -> Result<(HostRequestPermit, MessageBytes), ()> {
-    let budgets = InputBudgets::default();
+    let budgets = HostInputBudgets::shared();
     let lane = RequestLane::for_message(method, params);
     let budget = if lane == RequestLane::Control {
-        &budgets.host.control
+        &budgets.control
     } else {
-        &budgets.host.ordinary
+        &budgets.ordinary
     };
     let bytes = budget.try_reserve(bytes).ok_or(())?;
     Ok((reserve_host_request(&budgets, lane)?, bytes))
@@ -476,7 +477,7 @@ impl<'env> RequestDispatchHandle<'env> {
         {
             return Err(());
         }
-        let permit = reserve_host_request(&self.budgets, lane)?;
+        let permit = reserve_host_request(&self.budgets.host, lane)?;
         match lane {
             RequestLane::Control => pending.control += 1,
             _ => pending.ordinary += 1,

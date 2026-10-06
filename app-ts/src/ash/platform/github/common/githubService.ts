@@ -26,6 +26,12 @@ export class GitHubError extends Error {
 }
 
 export interface GitHubAccount { readonly id: string; readonly host: string; readonly login: string; readonly status: AccountStatus; readonly credentialRevision: bigint; }
+export enum GitHubNotificationFilter { Unread = 'unread', All = 'all', Participating = 'participating' }
+export enum GitHubForkBranches { All = 'all', Default = 'default' }
+export interface GitHubNotification { readonly id: string; readonly title: string; readonly subjectType: string; readonly reason: string; readonly unread: boolean; readonly updatedAt: string; readonly repository: GitHubRepository; readonly url: string; }
+export interface GitHubCreateFork { readonly organization: string | null; readonly name: string; readonly branches: GitHubForkBranches; }
+/** Creation has been accepted; GitHub may still be copying Git objects. */
+export interface GitHubFork { readonly fullName: string; readonly url: string; readonly defaultBranch: string; }
 export enum GitHubReviewerChange { Request = 'request', Remove = 'remove' }
 export interface GitHubRequestedReviewers { readonly users: readonly string[]; readonly teams: readonly string[]; }
 /** Account selection is captured with a repository operation; omitted selection uses the login default. */
@@ -122,6 +128,10 @@ export interface IGitHubService {
 	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
 	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
 	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;
+	listNotifications(accountId: string, filter: GitHubNotificationFilter, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubNotification>>;
+	markNotificationRead(accountId: string, threadId: string, token?: CancellationToken): Promise<void>;
+	markNotificationsRead(accountId: string, token?: CancellationToken): Promise<void>;
+	createFork(repository: GitHubRepository, fork: GitHubCreateFork, token?: CancellationToken): Promise<GitHubFork>;
 	requestedReviewers(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubRequestedReviewers>;
 	changeReviewers(repository: GitHubRepository, number: number, change: GitHubReviewerChange, users: readonly string[], teams: readonly string[], token?: CancellationToken): Promise<GitHubRequestedReviewers>;
 	updateReviewComment(repository: GitHubRepository, number: number, commentId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;

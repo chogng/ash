@@ -51,7 +51,7 @@ fn driver() -> (Arc<GitHubOAuth>, Arc<FakeHttp>, Arc<MemorySecretStore>) {
 #[test]
 fn browser_authorization_uses_pkce_and_stores_only_the_account_projection() {
     let (driver, http, _) = driver();
-    let grant = driver.authorize().unwrap();
+    let grant = driver.authorize("github.com").unwrap();
     let authorization_url = Url::parse(&grant.authorization_url).unwrap();
     assert_eq!(
         authorization_url.origin().ascii_serialization(),
@@ -105,7 +105,7 @@ fn expired_access_token_refreshes_and_logout_removes_the_credential() {
     driver
         .store_credential(&Credential {
             host: "github.com".into(),
-            client_id: driver.browser.as_ref().unwrap().client_id.clone(),
+            client_id: driver.browsers.get("github.com").unwrap().client_id.clone(),
             access_token: "expired-access".into(),
             refresh_token: "old-refresh".into(),
             expires_at: Some(now().saturating_sub(1)),
@@ -138,7 +138,7 @@ fn repository_authorization_requires_a_live_ash_grant_and_does_not_survive_relog
     );
     let mut credential = Credential {
         host: "github.com".into(),
-        client_id: driver.browser.as_ref().unwrap().client_id.clone(),
+        client_id: driver.browsers.get("github.com").unwrap().client_id.clone(),
         access_token: "first-access".into(),
         refresh_token: String::new(),
         expires_at: Some(now() + 3600),
@@ -183,8 +183,11 @@ fn repository_authorization_requires_a_live_ash_grant_and_does_not_survive_relog
 #[test]
 fn callback_reads_complete_headers_from_an_accepted_nonblocking_socket() {
     let (driver, _, _) = driver();
-    let grant = driver.authorize().unwrap();
+    let grant = driver.authorize("github.com").unwrap();
     let mut client = TcpStream::connect(grant.listener.local_addr().unwrap()).unwrap();
+    // TCP connect can finish before a nonblocking listener reports accept readiness.
+    // Only the accepted socket's nonblocking reads are under test here.
+    grant.listener.set_nonblocking(false).unwrap();
     let (mut incoming, _) = grant.listener.accept().unwrap();
     incoming.set_nonblocking(true).unwrap();
     client
@@ -206,7 +209,7 @@ fn callback_reads_complete_headers_from_an_accepted_nonblocking_socket() {
 #[test]
 fn callback_requires_matching_state_and_cancellation_stops_exchange() {
     let (driver, http, _) = driver();
-    let grant = driver.authorize().unwrap();
+    let grant = driver.authorize("github.com").unwrap();
     let mut stream = TcpStream::connect(grant.listener.local_addr().unwrap()).unwrap();
     stream
         .write_all(
@@ -230,52 +233,83 @@ fn callback_requires_matching_state_and_cancellation_stops_exchange() {
 
 #[test]
 fn login_service_receives_the_completed_github_account() {
-    let (driver, http, _) = driver();
-    http.push(r#"{"access_token":"private-access","refresh_token":"private-refresh","expires_in":28800,"refresh_token_expires_in":15724800,"token_type":"bearer"}"#);
-    http.push(r#"{"id":42,"login":"octocat"}"#);
-    let service = Arc::new(LoginService::deferred(driver.clone()));
-    driver.install_login_service(&service).unwrap();
-    let started = service.begin(LoginMethod::GitHubBrowser).unwrap();
-    let BeginLogin::Browser {
-        authorization_url, ..
-    } = started
-    else {
-        panic!("expected browser authorization")
-    };
-    let url = Url::parse(&authorization_url).unwrap();
-    let redirect_uri = url
-        .query_pairs()
-        .find(|(key, _)| key == "redirect_uri")
-        .unwrap()
-        .1
-        .into_owned();
-    let state = url
-        .query_pairs()
-        .find(|(key, _)| key == "state")
-        .unwrap()
-        .1
-        .into_owned();
-    let callback = Url::parse(&redirect_uri).unwrap();
-    let mut stream = TcpStream::connect(("127.0.0.1", callback.port().unwrap())).unwrap();
-    stream
-        .write_all(
-            format!(
-                "GET {}?state={state}&code=private-code HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
-                callback.path()
-            )
-            .as_bytes(),
+    for (host, method, account_id) in [
+        ("github.com", LoginMethod::GitHubBrowser, "42"),
+        (
+            "git.example.com",
+            LoginMethod::GitHubEnterpriseBrowser {
+                host: "GIT.EXAMPLE.COM".into(),
+            },
+            "git.example.com/42",
+        ),
+    ] {
+        let http = Arc::new(FakeHttp::default());
+        let driver = GitHubOAuth::configured(
+            vec![GitHubBrowserConfig {
+                host: host.into(),
+                client_id: "Iv23publicclient".into(),
+                broker_base_url: Url::parse("https://broker.example/").unwrap(),
+            }],
+            http.clone(),
+            Arc::new(MemorySecretStore::default()),
         )
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        let accounts = service.read().unwrap().accounts;
-        if !accounts.is_empty() {
-            assert_eq!(accounts[0].account.provider, GITHUB_PROVIDER_ID);
-            assert_eq!(accounts[0].display_name.as_deref(), Some("octocat"));
-            break;
+        http.push(r#"{"access_token":"private-access","refresh_token":"private-refresh","expires_in":28800,"refresh_token_expires_in":15724800,"token_type":"bearer"}"#);
+        http.push(r#"{"id":42,"login":"octocat"}"#);
+        let service = Arc::new(LoginService::deferred(driver.clone()));
+        driver.install_login_service(&service).unwrap();
+        let started = service.begin(method).unwrap();
+        let BeginLogin::Browser {
+            authorization_url, ..
+        } = started
+        else {
+            panic!("expected browser authorization")
+        };
+        let url = Url::parse(&authorization_url).unwrap();
+        let redirect_uri = url
+            .query_pairs()
+            .find(|(key, _)| key == "redirect_uri")
+            .unwrap()
+            .1
+            .into_owned();
+        let state = url
+            .query_pairs()
+            .find(|(key, _)| key == "state")
+            .unwrap()
+            .1
+            .into_owned();
+        let callback = Url::parse(&redirect_uri).unwrap();
+        let mut stream = TcpStream::connect(("127.0.0.1", callback.port().unwrap())).unwrap();
+        stream
+            .write_all(
+                format!(
+                    "GET {}?state={state}&code=private-code HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+                    callback.path()
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let accounts = service.read().unwrap().accounts;
+            if !accounts.is_empty() {
+                assert_eq!(accounts[0].account.provider, GITHUB_PROVIDER_ID);
+                assert_eq!(accounts[0].account.account_id, account_id);
+                assert_eq!(accounts[0].display_name.as_deref(), Some("octocat"));
+                break;
+            }
+            assert!(Instant::now() < deadline, "GitHub login did not complete");
+            thread::sleep(Duration::from_millis(20));
         }
-        assert!(Instant::now() < deadline, "GitHub login did not complete");
-        thread::sleep(Duration::from_millis(20));
+        let requests = http.requests.lock().unwrap();
+        assert_eq!(
+            requests[1].0,
+            if host == "github.com" {
+                "https://api.github.com/user".to_owned()
+            } else {
+                format!("https://{host}/api/v3/user")
+            }
+        );
     }
 }
 
@@ -372,7 +406,7 @@ fn legacy_credential_migrates_once_and_a_connected_account_can_start_another_bro
             id: 42,
             login: "alice".into(),
         },
-        driver.browser.as_ref().unwrap().client_id.clone(),
+        driver.browsers.get("github.com").unwrap().client_id.clone(),
     );
     secrets
         .store(
@@ -465,7 +499,7 @@ fn token_accounts_work_without_browser_configuration_and_primary_catalog_matches
     }
     assert_eq!(driver.authorization().unwrap().account_id, "8");
     assert_eq!(driver.accounts().unwrap()[0].id, "8");
-    assert!(driver.authorize().is_err());
+    assert!(driver.authorize("github.com").is_err());
     driver
         .logout(&AccountRef {
             provider: GITHUB_PROVIDER_ID.into(),
@@ -508,4 +542,70 @@ fn logout_and_reconnecting_with_the_same_token_never_revives_an_old_grant() {
         .unwrap();
     assert_ne!(before.grant_id, driver.authorization().unwrap().grant_id);
     assert!(driver.token(&before).is_err());
+}
+
+#[test]
+fn enterprise_browser_login_uses_host_broker_identity_and_refresh() {
+    let http = Arc::new(FakeHttp::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let driver = GitHubOAuth::configured(
+        vec![GitHubBrowserConfig {
+            host: "git.example.com".into(),
+            client_id: "EnterpriseClient".into(),
+            broker_base_url: Url::parse("https://git-auth.example.com/").unwrap(),
+        }],
+        http.clone(),
+        secrets.clone(),
+    )
+    .unwrap();
+    assert!(driver.authorize("github.com").is_err());
+    assert!(driver.authorize("other.example.com").is_err());
+    let grant = driver.authorize("git.example.com").unwrap();
+    assert!(
+        grant
+            .authorization_url
+            .starts_with("https://git-auth.example.com/v1/oauth/github/authorize?")
+    );
+    http.push(r#"{"access_token":"enterprise-access","refresh_token":"enterprise-refresh","expires_in":0,"refresh_token_expires_in":1000,"token_type":"bearer"}"#);
+    http.push(r#"{"id":42,"login":"alice"}"#);
+    let state = grant.state.clone();
+    let address = grant.listener.local_addr().unwrap();
+    let path = grant.path.clone();
+    let driver_for_thread = driver.clone();
+    let result = thread::spawn(move || {
+        driver_for_thread.await_authorization(grant, &AtomicBool::new(false))
+    });
+    let mut stream = TcpStream::connect(address).unwrap();
+    stream
+        .write_all(
+            format!("GET {path}?state={state}&code=code HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+                .as_bytes(),
+        )
+        .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    let credential = result.join().unwrap().unwrap();
+    assert_eq!(credential.identity(), "git.example.com/42");
+    driver.store_credential(&credential).unwrap();
+    http.push(r#"{"access_token":"refreshed-enterprise","refresh_token":"enterprise-refresh","expires_in":28800,"token_type":"bearer"}"#);
+    http.push(r#"{"id":42,"login":"alice"}"#);
+    let authorization = driver.authorization_for("git.example.com/42").unwrap();
+    assert_eq!(authorization.host, "git.example.com");
+    assert_eq!(
+        driver.token(&authorization).unwrap().expose(),
+        b"refreshed-enterprise"
+    );
+    let requests = http.requests.lock().unwrap();
+    assert_eq!(
+        requests
+            .iter()
+            .map(|request| request.0.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "https://git-auth.example.com/v1/oauth/github/token",
+            "https://git.example.com/api/v3/user",
+            "https://git-auth.example.com/v1/oauth/github/token",
+            "https://git.example.com/api/v3/user"
+        ]
+    );
 }

@@ -6,7 +6,7 @@ import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../app-server/common/generated/index.js';
 import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
-import type { IGitHubService, GitHubAccount, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
+import type { IGitHubService, GitHubAccount, GitHubNotificationFilter, GitHubNotification, GitHubCreateFork, GitHubFork, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
 
 type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel'>;
 enum RequestKind { Read, Write }
@@ -20,6 +20,19 @@ export class AppServerGitHubService implements IGitHubService {
 	public async connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount> {
 		const account = await this.request('github/account/connect', { host, token: accessToken }, RequestKind.Write, token);
 		return { ...account, credentialRevision: BigInt(account.credentialRevision) };
+	}
+	public async listNotifications(accountId: string, filter: GitHubNotificationFilter, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubNotification>> {
+		const result = await this.request('github/notifications/list', { accountId, filter, page }, RequestKind.Read, token);
+		return { items: result.notifications.map(row => ({ ...row, repository: { ...row.repository, accountId } })), nextPage: result.nextPage };
+	}
+	public async markNotificationRead(accountId: string, threadId: string, token?: CancellationToken): Promise<void> {
+		await this.request('github/notifications/read', { accountId, threadId }, RequestKind.Write, token);
+	}
+	public async markNotificationsRead(accountId: string, token?: CancellationToken): Promise<void> {
+		await this.request('github/notifications/readAll', { accountId }, RequestKind.Write, token);
+	}
+	public async createFork(repository: GitHubRepository, fork: GitHubCreateFork, token?: CancellationToken): Promise<GitHubFork> {
+		return this.request('github/repository/fork', { repository, ...fork }, RequestKind.Write, token);
 	}
 	public async requestedReviewers(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubRequestedReviewers> {
 		return this.request('github/pullRequest/reviewers', { repository, number }, RequestKind.Read, token);
@@ -166,7 +179,7 @@ export class AppServerGitHubService implements IGitHubService {
 export function createDisconnectedGitHubService(): IGitHubService {
 	const unavailable = async (): Promise<never> => { throw new GitHubError(GitHubErrorCode.Unavailable); };
 	return {
-		listAccounts: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
+		listAccounts: unavailable, listNotifications: unavailable, markNotificationRead: unavailable, markNotificationsRead: unavailable, createFork: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
 		readCommit: unavailable,
 		readRepository: unavailable, listIssues: unavailable, readIssue: unavailable, createIssue: unavailable, updateIssue: unavailable,
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,

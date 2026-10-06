@@ -1056,6 +1056,10 @@ pub fn open_app_server_with_codebase_providers(
     providers: CodebaseProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
+    let mut github_browser_configurations = product_services
+        .as_ref()
+        .map(|services| services.github_enterprise_accounts.clone())
+        .unwrap_or_default();
     let github_account = product_services
         .as_ref()
         .and_then(|services| services.github_account.clone());
@@ -1316,6 +1320,12 @@ pub fn open_app_server_with_codebase_providers(
         if let Some(github) = &services.github_account {
             network_services.push(("github-account".into(), github.broker_base_url.to_string()));
         }
+        for github in &services.github_enterprise_accounts {
+            network_services.push((
+                format!("github-account/{}", github.host),
+                github.broker_base_url.to_string(),
+            ));
+        }
         for oauth in &services.connector_oauth {
             if let crate::product_services::ProductConnectorOAuthConfig::GitHubBrokered {
                 connector_id,
@@ -1512,16 +1522,19 @@ pub fn open_app_server_with_codebase_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
-    let github_oauth = match github_account {
-        Some(config) => GitHubOAuth::new(
-            config.client_id,
-            config.broker_base_url,
-            Arc::clone(&application_http),
-            Arc::clone(&profile_secrets),
-        )
-        .map_err(|error| OpenAppServerError(error.to_string()))?,
-        None => GitHubOAuth::tokens(Arc::clone(&application_http), Arc::clone(&profile_secrets)),
-    };
+    if let Some(config) = github_account {
+        github_browser_configurations.push(github::GitHubBrowserConfig {
+            host: "github.com".into(),
+            client_id: config.client_id,
+            broker_base_url: config.broker_base_url,
+        });
+    }
+    let github_oauth = GitHubOAuth::configured(
+        github_browser_configurations,
+        Arc::clone(&application_http),
+        Arc::clone(&profile_secrets),
+    )
+    .map_err(|error| OpenAppServerError(error.to_string()))?;
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),

@@ -1,4 +1,5 @@
 interface Environment {
+	GITHUB_HOST?: string;
 	GITHUB_CLIENT_ID: string;
 	GITHUB_CLIENT_SECRET: string;
 	STATE_SIGNING_SECRET: string;
@@ -13,11 +14,13 @@ interface SignedState {
 	redirectUri: string;
 	clientState: string;
 	issuedAt: number;
+	host: string;
 }
 
 export default {
 	async fetch(request: Request, environment: Environment): Promise<Response> {
 		const url = new URL(request.url);
+		if (environment.GITHUB_HOST !== undefined && (!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(environment.GITHUB_HOST) || environment.GITHUB_HOST.length > 255)) return response(503, 'Invalid GitHub host configuration');
 		if (!environment.GITHUB_CLIENT_ID || !environment.GITHUB_CLIENT_SECRET || !environment.STATE_SIGNING_SECRET) {
 			return response(503, 'GitHub authorization is not configured');
 		}
@@ -36,9 +39,10 @@ async function authorize(url: URL, environment: Environment): Promise<Response> 
 	if (clientId !== environment.GITHUB_CLIENT_ID || !redirectUri || !validLoopback(redirectUri) || !base64url43(clientState) || !base64url43(challenge) || single(url.searchParams, 'code_challenge_method') !== 'S256') {
 		return response(400, 'Invalid authorization request');
 	}
-	const state = await sign({ redirectUri, clientState, issuedAt: Math.floor(Date.now() / 1000) }, environment.STATE_SIGNING_SECRET);
-	const github = new URL('https://github.com/login/oauth/authorize');
+	const state = await sign({ redirectUri, clientState, issuedAt: Math.floor(Date.now() / 1000), host: environment.GITHUB_HOST ?? 'github.com' }, environment.STATE_SIGNING_SECRET);
+	const github = new URL(`https://${environment.GITHUB_HOST ?? 'github.com'}/login/oauth/authorize`);
 	github.searchParams.set('client_id', clientId);
+	if (!clientId.startsWith('Iv')) github.searchParams.set('scope', 'read:user repo notifications');
 	github.searchParams.set('redirect_uri', new URL(callbackPath, url.origin).href);
 	github.searchParams.set('state', state);
 	github.searchParams.set('code_challenge', challenge);
@@ -48,7 +52,7 @@ async function authorize(url: URL, environment: Environment): Promise<Response> 
 
 async function callback(url: URL, environment: Environment): Promise<Response> {
 	const state = await verify(single(url.searchParams, 'state'), environment.STATE_SIGNING_SECRET);
-	if (!state || !validLoopback(state.redirectUri) || !base64url43(state.clientState)) return response(400, 'Invalid authorization response');
+	if (!state || state.host !== (environment.GITHUB_HOST ?? 'github.com') || !validLoopback(state.redirectUri) || !base64url43(state.clientState)) return response(400, 'Invalid authorization response');
 	const code = single(url.searchParams, 'code');
 	const error = single(url.searchParams, 'error');
 	if ((!code && !error) || (code && error)) return response(400, 'Invalid authorization response');
@@ -82,8 +86,10 @@ async function exchange(request: Request, url: URL, environment: Environment): P
 		githubForm.set('grant_type', 'refresh_token');
 		githubForm.set('refresh_token', refreshToken!);
 	}
-	const upstream = await fetch('https://github.com/login/oauth/access_token', {
+	const upstream = await fetch(`https://${environment.GITHUB_HOST ?? 'github.com'}/login/oauth/access_token`, {
 		method: 'POST',
+		// Workers supports only follow/manual; never forward this secret-bearing form to a redirect target.
+		redirect: 'manual',
 		headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
 		body: githubForm,
 	});

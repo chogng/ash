@@ -65,7 +65,7 @@ pub struct AccountState {
 }
 
 /// Interactive login flow selected by a product client.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LoginMethod {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
@@ -76,10 +76,11 @@ pub enum LoginMethod {
     BigModelStartPlanBrowser,
     ZaiStartPlanBrowser,
     GitHubBrowser,
+    GitHubEnterpriseBrowser { host: String },
 }
 
 impl LoginMethod {
-    pub fn provider_id(self) -> &'static str {
+    pub fn provider_id(&self) -> &'static str {
         match self {
             Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "chatgpt-subscription",
             Self::KimiDeviceCode => "kimi-subscription",
@@ -88,7 +89,7 @@ impl LoginMethod {
             Self::ZaiBrowser => "zai-coding-plan",
             Self::BigModelStartPlanBrowser => "bigmodel-start-plan",
             Self::ZaiStartPlanBrowser => "zai-start-plan",
-            Self::GitHubBrowser => "github",
+            Self::GitHubBrowser | Self::GitHubEnterpriseBrowser { .. } => "github",
         }
     }
 }

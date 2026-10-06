@@ -28,12 +28,32 @@ impl GitHub {
         endpoint: &str,
         body: Option<Value>,
     ) -> Result<T> {
+        Repository::new(
+            repository.host.clone(),
+            repository.owner.clone(),
+            repository.name.clone(),
+        )?;
         let operation = if method == HttpMethod::Get {
             Operation::Read
         } else {
             Operation::Write
         };
-        self.request(repository, method, endpoint, body, operation)
+        self.request(&repository.host, method, endpoint, body, operation)
+            .await
+    }
+
+    pub(crate) async fn account_api<T: DeserializeOwned>(
+        &self,
+        method: HttpMethod,
+        endpoint: &str,
+        body: Option<Value>,
+    ) -> Result<T> {
+        let operation = if method == HttpMethod::Get {
+            Operation::Read
+        } else {
+            Operation::Write
+        };
+        self.request(&self.authorization.host, method, endpoint, body, operation)
             .await
     }
 
@@ -44,8 +64,13 @@ impl GitHub {
         variables: Value,
         operation: Operation,
     ) -> Result<Value> {
+        Repository::new(
+            repository.host.clone(),
+            repository.owner.clone(),
+            repository.name.clone(),
+        )?;
         self.request(
-            repository,
+            &repository.host,
             HttpMethod::Post,
             "graphql",
             Some(serde_json::json!({"query":query,"variables":variables})),
@@ -56,21 +81,13 @@ impl GitHub {
 
     async fn request<T: DeserializeOwned>(
         &self,
-        repository: &Repository,
+        host: &str,
         method: HttpMethod,
         endpoint: &str,
         body: Option<Value>,
         operation: Operation,
     ) -> Result<T> {
-        Repository::new(
-            repository.host.clone(),
-            repository.owner.clone(),
-            repository.name.clone(),
-        )?;
-        if !repository
-            .host
-            .eq_ignore_ascii_case(&self.authorization.host)
-        {
+        if !host.eq_ignore_ascii_case(&self.authorization.host) {
             return Err(Error::AuthenticationRequired);
         }
         self.cancellation.check().map_err(|_| Error::Cancelled)?;
@@ -80,12 +97,12 @@ impl GitHub {
             .map_err(Error::from)?;
         let token =
             std::str::from_utf8(token.expose()).map_err(|_| Error::AuthenticationRequired)?;
-        let base = if repository.host.eq_ignore_ascii_case("github.com") {
+        let base = if host.eq_ignore_ascii_case("github.com") {
             "https://api.github.com".to_owned()
         } else {
-            format!("https://{}/api", repository.host)
+            format!("https://{host}/api")
         };
-        let url = if endpoint == "graphql" || repository.host.eq_ignore_ascii_case("github.com") {
+        let url = if endpoint == "graphql" || host.eq_ignore_ascii_case("github.com") {
             format!("{base}/{endpoint}")
         } else {
             format!("{base}/v3/{endpoint}")
@@ -191,7 +208,7 @@ fn decode_response<T: DeserializeOwned>(
             Error::InvalidResponse("GitHub response exceeds 8 MiB".into()),
         ));
     }
-    let value = if response.status() == 204 && response.body().is_empty() {
+    let value = if matches!(response.status(), 204 | 205) && response.body().is_empty() {
         Value::Null
     } else {
         serde_json::from_slice::<Value>(response.body()).map_err(|_| {

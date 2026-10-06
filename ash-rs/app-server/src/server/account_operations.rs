@@ -138,6 +138,9 @@ impl AppServer {
             }
             AccountLoginMethodDto::ZaiStartPlanBrowser => LoginMethod::ZaiStartPlanBrowser,
             AccountLoginMethodDto::GitHubBrowser => LoginMethod::GitHubBrowser,
+            AccountLoginMethodDto::GitHubEnterpriseBrowser { host } => {
+                LoginMethod::GitHubEnterpriseBrowser { host }
+            }
         };
         let login = self.login_service()?;
         let started = login.begin(method).map_err(login_error)?;

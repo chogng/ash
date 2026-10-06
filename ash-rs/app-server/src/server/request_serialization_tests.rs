@@ -274,3 +274,42 @@ fn closing_a_connection_cancels_and_forgets_its_operations() {
     assert!(cancellation.is_cancelled());
     assert!(registry.start(1, 11, Some("operation-1".into())).is_ok());
 }
+
+#[test]
+fn github_notification_writes_wait_for_same_account_readers_but_not_other_accounts() {
+    let scheduler = RequestScheduler::default();
+    let another_runtime = RequestScheduler::default();
+    let scope = |id: &str, access| RequestSerializationScope::HostedAccount {
+        account_id: id.into(),
+        access,
+    };
+    let reader = scheduler
+        .acquire(
+            1,
+            scope("notification-account", SerializationAccess::SharedRead),
+        )
+        .unwrap();
+    let source = ash_async_utils::CancellationSource::new();
+    let (send, receive) = mpsc::channel();
+    another_runtime.schedule(
+        2,
+        scope("notification-account", SerializationAccess::Exclusive),
+        source.token(),
+        move |permit| {
+            send.send(permit).unwrap();
+        },
+    );
+    let other = scheduler
+        .acquire(
+            2,
+            scope("other-notification-account", SerializationAccess::Exclusive),
+        )
+        .unwrap();
+    assert!(receive.try_recv().is_err());
+    drop(reader);
+    let writer = receive
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap()
+        .unwrap();
+    drop((other, writer));
+}

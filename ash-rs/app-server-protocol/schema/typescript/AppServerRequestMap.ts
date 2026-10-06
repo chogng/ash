@@ -230,6 +230,8 @@ import type { GitHubCommit } from './types/GitHubCommit.js';
 import type { GitHubCommitParams } from './types/GitHubCommitParams.js';
 import type { GitHubFileContent } from './types/GitHubFileContent.js';
 import type { GitHubFileReadParams } from './types/GitHubFileReadParams.js';
+import type { GitHubForkCreateParams } from './types/GitHubForkCreateParams.js';
+import type { GitHubForkResult } from './types/GitHubForkResult.js';
 import type { GitHubIssue } from './types/GitHubIssue.js';
 import type { GitHubIssueCreateParams } from './types/GitHubIssueCreateParams.js';
 import type { GitHubIssueListParams } from './types/GitHubIssueListParams.js';
@@ -239,6 +241,10 @@ import type { GitHubLabel } from './types/GitHubLabel.js';
 import type { GitHubLabelParams } from './types/GitHubLabelParams.js';
 import type { GitHubLabelsResult } from './types/GitHubLabelsResult.js';
 import type { GitHubMergeResult } from './types/GitHubMergeResult.js';
+import type { GitHubNotificationReadParams } from './types/GitHubNotificationReadParams.js';
+import type { GitHubNotificationsParams } from './types/GitHubNotificationsParams.js';
+import type { GitHubNotificationsReadParams } from './types/GitHubNotificationsReadParams.js';
+import type { GitHubNotificationsResult } from './types/GitHubNotificationsResult.js';
 import type { GitHubNumberParams } from './types/GitHubNumberParams.js';
 import type { GitHubPageParams } from './types/GitHubPageParams.js';
 import type { GitHubPullRequest } from './types/GitHubPullRequest.js';
@@ -863,6 +869,10 @@ export interface AppServerRequestMap {
   "issue/configure": { params: IssueConfigureParams; response: ConfigCommandResult };
   "issue/list": { params: IssueListParams; response: IssueListResult };
   "issue/read": { params: IssueReadParams; response: IssueReadResult };
+  "github/notifications/list": { params: GitHubNotificationsParams; response: GitHubNotificationsResult };
+  "github/notifications/read": { params: GitHubNotificationReadParams; response: null };
+  "github/notifications/readAll": { params: GitHubNotificationsReadParams; response: null };
+  "github/repository/fork": { params: GitHubForkCreateParams; response: GitHubForkResult };
   "github/account/list": { params: GitHubAccountListParams; response: GitHubAccountsResult };
   "github/account/connect": { params: GitHubAccountConnectParams; response: GitHubAccount };
   "github/pullRequest/comment/update": { params: GitHubReviewCommentEditParams; response: GitHubReviewComment };
@@ -1280,6 +1290,10 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "issue/configure": { method: "issue/configure" },
   "issue/list": { method: "issue/list" },
   "issue/read": { method: "issue/read" },
+  "github/notifications/list": { method: "github/notifications/list" },
+  "github/notifications/read": { method: "github/notifications/read" },
+  "github/notifications/readAll": { method: "github/notifications/readAll" },
+  "github/repository/fork": { method: "github/repository/fork" },
   "github/account/list": { method: "github/account/list" },
   "github/account/connect": { method: "github/account/connect" },
   "github/pullRequest/comment/update": { method: "github/pullRequest/comment/update" },

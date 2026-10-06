@@ -10,7 +10,7 @@ GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口�
 - 不维护 Issue Workflow、assignment、领取租约、执行阶段或交付状态机。
 - Issue 浏览缓存由 `ash-state` 维护；执行通过通用 Session/Agent API，Agent 使用获准的 Plugin 工具处理外部操作。
 
-`GitHub::for_selected_account` 接收明确账号、共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。GitHub.com 与 Enterprise Server 的同名账号分别保存，主机不匹配时不会发送凭据；登录由 `ash-login` 调用本 crate 的授权实现，密钥复用 `ash-secrets`。浏览器登录使用配置的 GitHub App；个人访问令牌连接不要求浏览器授权服务配置，通过目标主机的 `/user` 验证账号后保存。
+`GitHub::for_selected_account` 接收明确账号、共享 HTTP 客户端和请求取消令牌，捕获供应商验证过的主机、账号与授权身份。每次请求重新核对授权，并通过 Authorization 头发送对应主机的 token。登出、重新登录或 token 替换后，旧对象不能发起请求，读取结果也会被丢弃。已经确认的写入结果仍表示已完成的修改。GitHub.com 与 Enterprise Server 的同名账号分别保存，主机不匹配时不会发送凭据；登录由 `ash-login` 调用本 crate 的授权实现，密钥复用 `ash-secrets`。浏览器登录使用配置的 GitHub App 或 OAuth App；个人访问令牌连接不要求浏览器授权服务配置，通过目标主机的 `/user` 验证账号后保存。
 
 账号目录把主账号排在首位。连接 GitHub.com 账号会更新主账号；连接 Enterprise 不替换已有的 GitHub.com 主账号。未提供账号的消费者通过 `GitHub::for_account` 使用主账号；管理界面选择账号仅影响当前窗口，每个仓库请求携带该账号。按账号登出只移除对应授权，提供方登出移除其全部授权。旧单账号密钥在第一次读取时迁入账号目录并删除。
 
@@ -26,7 +26,13 @@ GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口�
 
 账号选择框支持多个 GitHub.com 和 Enterprise Server 账号，菜单提供个人访问令牌连接和所选账号登出。PR 页面支持请求或移除用户与团队审查者，按 GitHub 返回的权限编辑或删除逐行评论；写入前核对评论所属仓库与 PR，收到明确确认才更新界面。
 
-本地检出和推送委托 `ash-git`，用户明确选择仓库与远端。检出从目标仓库的 PR ref 获取完整提交，核对审阅的 SHA 后创建本地分支；未保存文件或磁盘改动阻止检出。推送使用 PR 源仓库和源分支，确认本地分支及提交后只推送该提交，不强制覆盖远端历史。远端所有 fetch/push URL 都必须属于指定仓库；API 账号选择不改变 Git 的 SSH/HTTPS 凭据。创建 fork、通知和 Enterprise 浏览器授权尚未接入。
+本地检出和推送委托 `ash-git`，用户明确选择仓库与远端。检出从目标仓库的 PR ref 获取完整提交，核对审阅的 SHA 后创建本地分支；未保存文件或磁盘改动阻止检出。推送使用 PR 源仓库和源分支，确认本地分支及提交后只推送该提交，不强制覆盖远端历史。远端所有 fetch/push URL 都必须属于指定仓库；API 账号选择不改变 Git 的 SSH/HTTPS 凭据。仓库菜单提供创建 fork，可选择组织、仓库名和仅复制默认分支；GitHub 受理后返回新仓库地址，Git 对象可能仍在复制。
+
+选择资源类型 **Notifications** 并加载，可查看所选账号的通知，不需要输入仓库。支持未读、全部、参与筛选、分页、单条和全部已读。通知属于账号而非工作区；同一账号的读取共享、修改独占，不同账号独立调度。全部已读可能由 GitHub 在后台处理，界面重新读取实际状态，不把受理当成处理完成。切换账号立即清除通知；只读请求取消后不显示迟到的私有数据，写入不重复提交。PR 和 Issue 通知只从所属主机及仓库的已校验 API URL 转成浏览器地址，其他类型打开该主机的通知收件箱。
+
+GitHub 通知 REST API 只支持 OAuth App 授权或经典 PAT，且需要 `notifications` 或 `repo` scope；GitHub App 用户令牌、安装令牌及细粒度 PAT 均不支持。产品发行配置使用已注册的 Ash Desktop OAuth App，浏览器授权申请 `read:user repo notifications`，覆盖 PR、Issue 和通知；授权服务必须配置同一 Client ID 及该 OAuth App 的客户端密钥。原 GitHub App 授权需要重新登录，不会自动获得通知权限；后端不持有可替代 GitHub 权限的凭据。
+
+仓库菜单中的 **Sign in to GitHub Enterprise** 通过现有账号登录服务启动浏览器授权。管理员在产品服务配置的 `githubEnterpriseAccounts` 数组中提供 `{ "host": "git.example.com", "clientId": "PUBLIC_CLIENT_ID", "brokerBaseUrl": "https://git-auth.example.com/" }`，每个主机仅一项。未配置的主机明确拒绝登录；授权服务使用该实例的 OAuth App 和客户端密钥，桌面仅接收公开配置。令牌交换、用户身份和刷新都绑定同一实例，账号 ID 包含主机，不能与 github.com 的同号账号混用。部署要求见 [授权服务说明](../../services/github-auth/README.md)。
 
 `workbench/contrib/github/browser/` 为常规 Workbench 和 Sessions 的聊天 Markdown 注册 GitHub.com 仓库、Issue、PR 和提交链接详情。卡片使用同一领域接口读取数据；PR 检查在打开卡片时按页加载，源分支使用返回的 `headRepository` 身份跳转，源仓库删除后只显示分支名。链接共享 Issue、PR 与提交读取，移除最后一个引用或切换账号时释放缓存并取消请求。Enter 打开原链接，F2 进入卡片，Tab 遍历链接，Escape 返回原链接；Accessible View 可读取完整描述。
 
@@ -34,4 +40,4 @@ App Server 在 `issue/list` 与 `issue/read` 中用 Git origin 关联 GitHub 仓
 
 仓库请求失败保留 GitHub 错误分类：认证失败返回 `AccountAuthenticationRequired`，输入错误返回 `InvalidParams`，其他分类使用 `GitHub*` 错误。工作区关联、配置与缓存失败仍属于 `IssueOperationFailed`；产品报告器保留自己的提交结果与错误契约。
 
-产品问题报告使用 `GitHubIssueReporter` 和共享 HTTP 客户端。报告仓库由产品配置的 `reportIssueUrl` 指定，只支持 GitHub.com；不会从当前工作区推断目标。`issueReporter/read` 提供目标与系统诊断，`issueReporter/search` 匿名搜索该仓库的相似问题，搜索取消使用连接内的 `operationId` 并等待原请求结束。`issueReporter/submit` 使用 Ash 当前授权直接创建 Issue，令牌不进入协议。创建只发送一次；响应丢失或服务端错误返回“提交结果不确定”，调用方保留草稿并提示先查看仓库。GitHub App 必须获得目标仓库的 Issues 写权限，配置步骤见 [授权服务说明](../../services/github-auth/README.md)。
+产品问题报告使用 `GitHubIssueReporter` 和共享 HTTP 客户端。报告仓库由产品配置的 `reportIssueUrl` 指定，只支持 GitHub.com；不会从当前工作区推断目标。`issueReporter/read` 提供目标与系统诊断，`issueReporter/search` 匿名搜索该仓库的相似问题，搜索取消使用连接内的 `operationId` 并等待原请求结束。`issueReporter/submit` 使用 Ash 当前授权直接创建 Issue，令牌不进入协议。创建只发送一次；响应丢失或服务端错误返回“提交结果不确定”，调用方保留草稿并提示先查看仓库。OAuth App 授权需要 `repo` scope，用户本身也必须有目标仓库的 Issue 写权限；使用 GitHub App 的发行配置另需 Issues 写权限。配置步骤见 [授权服务说明](../../services/github-auth/README.md)。

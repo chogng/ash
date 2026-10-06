@@ -39,7 +39,7 @@ async fn cancelling_live_http_ends_reads_and_marks_dispatched_writes_uncertain()
         let repository = crate::tests::repository();
         let response = client
             .request::<Value>(
-                &repository,
+                &repository.host,
                 if operation == Operation::Read {
                     HttpMethod::Get
                 } else {

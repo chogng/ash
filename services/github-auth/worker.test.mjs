@@ -58,6 +58,55 @@ test('authorization signs callback state and forwards only the code to the local
 	}
 });
 
+test('GitHub.com OAuth authorization requests notification scopes and exchanges a non-expiring token', async () => {
+	const oauth = { ...environment, GITHUB_CLIENT_ID: 'Ov23publicclient' };
+	const authorization = await worker.fetch(authorizationRequest({ client_id: oauth.GITHUB_CLIENT_ID }), oauth);
+	assert.equal(authorization.status, 302);
+	const github = new URL(authorization.headers.get('Location'));
+	assert.equal(github.origin, 'https://github.com');
+	assert.equal(github.searchParams.get('client_id'), oauth.GITHUB_CLIENT_ID);
+	assert.equal(github.searchParams.get('scope'), 'read:user repo notifications');
+	assert.equal(github.searchParams.get('redirect_uri'), `${origin}/v1/oauth/github/callback`);
+	assert.equal((await worker.fetch(authorizationRequest(), oauth)).status, 400);
+	const originalFetch = globalThis.fetch;
+	try {
+		globalThis.fetch = async (url, init) => {
+			assert.equal(url, 'https://github.com/login/oauth/access_token');
+			assert.equal(init.redirect, 'manual');
+			const body = new URLSearchParams(init.body);
+			assert.equal(body.get('client_id'), oauth.GITHUB_CLIENT_ID);
+			assert.equal(body.get('client_secret'), oauth.GITHUB_CLIENT_SECRET);
+			assert.equal(body.get('redirect_uri'), `${origin}/v1/oauth/github/callback`);
+			return new Response(JSON.stringify({ access_token: 'oauth-user-token', token_type: 'bearer' }));
+		};
+		const form = new URLSearchParams({ client_id: oauth.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'oauth-code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
+		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), oauth);
+		assert.deepEqual(await response.json(), { access_token: 'oauth-user-token', token_type: 'bearer' });
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test('token exchange rejects upstream redirects without forwarding client credentials', async () => {
+	const originalFetch = globalThis.fetch;
+	let calls = 0;
+	try {
+		globalThis.fetch = async (url, init) => {
+			calls++;
+			assert.equal(url, 'https://github.com/login/oauth/access_token');
+			assert.equal(init.redirect, 'manual');
+			return new Response(null, { status: 302, headers: { Location: 'https://other.example/token' } });
+		};
+		const form = new URLSearchParams({ client_id: environment.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'private-code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
+		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), environment);
+		assert.equal(response.status, 502);
+		assert.equal(await response.text(), 'GitHub token exchange failed');
+		assert.equal(calls, 1);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
 test('authorization rejects unsafe or repeated callback parameters', async () => {
 	for (const unsafe of ['https://example.com/steal', 'http://localhost:58123/github-oauth/' + 'A'.repeat(43), 'http://127.0.0.1:58123/other']) {
 		assert.equal((await worker.fetch(authorizationRequest({ redirect_uri: unsafe }), environment)).status, 400);
@@ -90,4 +139,32 @@ test('token exchange keeps the client secret on the server and returns refresh e
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
+});
+
+
+test('Enterprise authorization and token exchange stay on the configured host', async () => {
+    const enterprise = { ...environment, GITHUB_HOST: 'git.example.com', GITHUB_CLIENT_ID: 'enterpriseClient' };
+    const authorization = await worker.fetch(authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }), enterprise);
+    const github = new URL(authorization.headers.get('Location'));
+    assert.equal(github.origin, 'https://git.example.com');
+    assert.equal(github.searchParams.get('scope'), 'read:user repo notifications');
+    const callback = new URL(github.searchParams.get('redirect_uri'));
+    callback.searchParams.set('state', github.searchParams.get('state'));
+    callback.searchParams.set('code', 'enterprise-code');
+    assert.equal((await worker.fetch(new Request(callback), environment)).status, 400);
+    assert.equal((await worker.fetch(new Request(callback), enterprise)).status, 302);
+    const originalFetch = globalThis.fetch;
+    try {
+        globalThis.fetch = async (url, init) => {
+            assert.equal(url, 'https://git.example.com/login/oauth/access_token');
+            assert.equal(init.redirect, 'manual');
+            return new Response(JSON.stringify({ access_token: 'enterprise-token', token_type: 'bearer' }));
+        };
+        const form = new URLSearchParams({ client_id: enterprise.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
+        const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), enterprise);
+        assert.equal((await response.json()).access_token, 'enterprise-token');
+    } finally { globalThis.fetch = originalFetch; }
+    for (const host of ['bad.example/path', 'user@host', 'host:443', 'https://host']) {
+        assert.equal((await worker.fetch(authorizationRequest(), { ...enterprise, GITHUB_HOST: host })).status, 503);
+    }
 });

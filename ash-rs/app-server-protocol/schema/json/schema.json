@@ -274,6 +274,22 @@
             "type"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "type": {
+              "const": "gitHubEnterpriseBrowser",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "host"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -9512,6 +9528,70 @@
         {
           "properties": {
             "method": {
+              "const": "github/notifications/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubNotificationsParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/notifications/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubNotificationReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/notifications/readAll",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubNotificationsReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/repository/fork",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitHubForkCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "github/account/list",
               "type": "string"
             },
@@ -15985,6 +16065,70 @@
             },
             "result": {
               "$ref": "#/$defs/IssueReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/notifications/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubNotificationsResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/notifications/read",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/notifications/readAll",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "github/repository/fork",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitHubForkResult"
             }
           },
           "required": [
@@ -27301,6 +27445,69 @@
       ],
       "type": "object"
     },
+    "GitHubForkBranches": {
+      "enum": [
+        "all",
+        "default"
+      ],
+      "type": "string"
+    },
+    "GitHubForkCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branches": {
+          "$ref": "#/$defs/GitHubForkBranches"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "organization": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        }
+      },
+      "required": [
+        "operationId",
+        "repository",
+        "name",
+        "branches"
+      ],
+      "type": "object"
+    },
+    "GitHubForkResult": {
+      "additionalProperties": false,
+      "properties": {
+        "defaultBranch": {
+          "type": "string"
+        },
+        "fullName": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fullName",
+        "url",
+        "defaultBranch"
+      ],
+      "type": "object"
+    },
     "GitHubIssue": {
       "additionalProperties": false,
       "properties": {
@@ -27578,6 +27785,139 @@
         "commit",
         "merged",
         "message"
+      ],
+      "type": "object"
+    },
+    "GitHubNotification": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "repository": {
+          "$ref": "#/$defs/IssueRepository"
+        },
+        "subjectType": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "unread": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "subjectType",
+        "reason",
+        "unread",
+        "updatedAt",
+        "repository",
+        "url"
+      ],
+      "type": "object"
+    },
+    "GitHubNotificationFilter": {
+      "enum": [
+        "unread",
+        "all",
+        "participating"
+      ],
+      "type": "string"
+    },
+    "GitHubNotificationReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "accountId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "GitHubNotificationsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/GitHubNotificationFilter"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "operationId",
+        "accountId",
+        "filter",
+        "page"
+      ],
+      "type": "object"
+    },
+    "GitHubNotificationsReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "accountId"
+      ],
+      "type": "object"
+    },
+    "GitHubNotificationsResult": {
+      "additionalProperties": false,
+      "properties": {
+        "nextPage": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "notifications": {
+          "items": {
+            "$ref": "#/$defs/GitHubNotification"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "notifications"
       ],
       "type": "object"
     },

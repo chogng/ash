@@ -1025,13 +1025,15 @@ fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellatio
             .unwrap();
         });
     client.initialize();
+    // Repository admission spans App Server instances. This fixture needs its own key
+    // so another test's exclusive write cannot split the batch of held shared reads.
     for id in 2..10 {
         client.send(
             id,
             "github/labels/list",
             json!({
                 "operationId":format!("held-{id}"),
-                "repository":{"host":"github.com","owner":"team","name":"repo"},
+                "repository":{"host":"github.com","owner":"team","name":"network-saturation"},
             }),
         );
     }
@@ -1045,7 +1047,7 @@ fn stalled_github_reads_run_concurrently_without_blocking_queries_or_cancellatio
         "github/labels/list",
         json!({
             "operationId":"over-capacity",
-            "repository":{"host":"github.com","owner":"team","name":"repo"},
+            "repository":{"host":"github.com","owner":"team","name":"network-saturation"},
         }),
     );
     let rejected = client.read();
@@ -1125,7 +1127,7 @@ fn disconnect_drains_all_running_github_reads() {
             "github/labels/list",
             serde_json::json!({
                 "operationId":format!("disconnect-{id}"),
-                "repository":{"host":"github.com","owner":"team","name":"repo"},
+                "repository":{"host":"github.com","owner":"team","name":"disconnect-drain"},
             }),
         );
     }
@@ -1141,4 +1143,81 @@ fn disconnect_drains_all_running_github_reads() {
             | std::io::ErrorKind::ConnectionAborted
     )));
     served.join().unwrap();
+}
+
+#[test]
+fn github_notifications_and_fork_rpc_use_typed_account_and_repository_boundaries() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_credentials(repository_credentials(), http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (id, method, params, status, body) in [
+        (
+            2,
+            "github/notifications/list",
+            json!({"operationId":"inbox","accountId":"42","filter":"unread","page":1}),
+            200,
+            json!([{"id":"99","subject":{"type":"Issue","title":"Mention","url":"https://api.github.com/repos/team/repo/issues/7"},"repository":{"full_name":"team/repo"},"reason":"mention","unread":true,"updated_at":"now"}]),
+        ),
+        (
+            3,
+            "github/notifications/read",
+            json!({"operationId":"read-thread","accountId":"42","threadId":"99"}),
+            204,
+            serde_json::Value::Null,
+        ),
+        (
+            4,
+            "github/notifications/readAll",
+            json!({"operationId":"read-inbox","accountId":"42"}),
+            202,
+            json!({"message":"accepted"}),
+        ),
+        (
+            5,
+            "github/repository/fork",
+            json!({"operationId":"create-fork","accountId":"42","repository":{"host":"github.com","owner":"team","name":"repo"},"organization":null,"name":"my-fork","branches":"all"}),
+            202,
+            json!({"full_name":"alice/my-fork","html_url":"https://github.com/alice/my-fork","default_branch":"main"}),
+        ),
+    ] {
+        http.reply(status, body);
+        let response = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert!(response.get("result").is_some(), "{response}");
+        if id == 2 {
+            assert_eq!(
+                response["result"]["notifications"][0]["url"],
+                "https://github.com/team/repo/issues/7"
+            );
+        }
+        if id == 5 {
+            assert_eq!(response["result"]["fullName"], "alice/my-fork");
+        }
+    }
+    let denied = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":6,"method":"github/notifications/list","params":{"operationId":"wrong-account","accountId":"other","filter":"all","page":1}}),
+    );
+    assert_eq!(
+        denied["error"]["data"]["kind"],
+        "AccountAuthenticationRequired"
+    );
+    let requests = http.requests.lock().unwrap();
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests[0].url(),
+        "https://api.github.com/notifications?all=false&participating=false&per_page=100&page=1"
+    );
+    assert_eq!(
+        requests[3].url(),
+        "https://api.github.com/repos/team/repo/forks"
+    );
 }

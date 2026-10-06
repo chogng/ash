@@ -2189,7 +2189,11 @@ impl AppServer {
                 self.document_collaboration_presence_read(&request.params)
             }
             Some(
-                method @ (ClientMethod::GitHubReviewersRead
+                method @ (ClientMethod::GitHubNotificationsList
+                | ClientMethod::GitHubNotificationRead
+                | ClientMethod::GitHubNotificationsRead
+                | ClientMethod::GitHubForkCreate
+                | ClientMethod::GitHubReviewersRead
                 | ClientMethod::GitHubReviewersChange
                 | ClientMethod::GitHubReviewCommentEdit
                 | ClientMethod::GitHubReviewCommentDelete

@@ -30,6 +30,7 @@ pub struct LocalProductServicesConfig {
     pub(crate) open_vsx: Option<(MarketplaceName, ash_core_plugins::OpenVsxConfig)>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
     pub(crate) github_account: Option<GitHubAccountConfig>,
+    pub(crate) github_enterprise_accounts: Vec<github::GitHubBrowserConfig>,
     pub(crate) report_issue_url: Option<String>,
     pub(crate) image_generation: Option<ProductImageGenerationConfig>,
     pub(crate) git_attribution: Option<ProductGitAttributionConfig>,
@@ -116,6 +117,28 @@ impl LocalProductServicesConfig {
             .github_account
             .map(GitHubAccountConfig::try_from)
             .transpose()?;
+        let mut hosts = BTreeSet::new();
+        let github_enterprise_accounts = document
+            .github_enterprise_accounts
+            .into_iter()
+            .map(|value| {
+                let host = value.host.to_ascii_lowercase();
+                github::Repository::new(host.clone(), "account".into(), "identity".into())
+                    .map_err(product_config_error)?;
+                if host == "github.com" || !hosts.insert(host.clone()) {
+                    return Err(product_config_error(()));
+                }
+                let config = GitHubAccountConfig::try_from(GitHubAccountDocument {
+                    client_id: value.client_id,
+                    broker_base_url: value.broker_base_url,
+                })?;
+                Ok(github::GitHubBrowserConfig {
+                    host,
+                    client_id: config.client_id,
+                    broker_base_url: config.broker_base_url,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         if let Some(target) = &document.report_issue_url {
             github::report_repository(target).map_err(product_config_error)?;
         }
@@ -145,6 +168,7 @@ impl LocalProductServicesConfig {
             open_vsx,
             connector_oauth,
             github_account,
+            github_enterprise_accounts,
             report_issue_url: document.report_issue_url,
             authority_identity: authority_identity.finalize().into(),
         })
@@ -208,6 +232,8 @@ struct ProductServicesDocument {
     #[serde(default)]
     github_account: Option<GitHubAccountDocument>,
     #[serde(default)]
+    github_enterprise_accounts: Vec<GitHubEnterpriseAccountDocument>,
+    #[serde(default)]
     report_issue_url: Option<String>,
     #[serde(default)]
     image_generation: Option<ProductImageGenerationConfig>,
@@ -218,6 +244,14 @@ struct ProductServicesDocument {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GitHubAccountDocument {
+    client_id: String,
+    broker_base_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitHubEnterpriseAccountDocument {
+    host: String,
     client_id: String,
     broker_base_url: String,
 }

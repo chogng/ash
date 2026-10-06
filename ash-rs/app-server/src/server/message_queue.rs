@@ -39,8 +39,8 @@ struct BudgetInner {
     changed: Condvar,
 }
 
-/// Counts retained wire bytes across queues and their active consumers. A lease follows the
-/// message until execution or writing finishes; moving between owners does not charge twice.
+/// Counts the owner's capacity units: retained wire bytes for message queues, and slots
+/// for request or connection admission. Moving a lease between owners does not charge twice.
 #[derive(Clone, Debug)]
 pub(crate) struct MessageBudget(Arc<BudgetInner>);
 
@@ -120,6 +120,13 @@ pub(crate) struct HostInputBudgets {
     pub(crate) connections: MessageBudget,
 }
 
+impl HostInputBudgets {
+    pub(super) fn shared() -> Arc<Self> {
+        static HOST: OnceLock<Arc<HostInputBudgets>> = OnceLock::new();
+        Arc::clone(HOST.get_or_init(|| Arc::new(Self::default())))
+    }
+}
+
 impl Default for HostInputBudgets {
     fn default() -> Self {
         Self {
@@ -143,12 +150,11 @@ pub(crate) struct InputBudgets {
 
 impl Default for InputBudgets {
     fn default() -> Self {
-        static HOST: OnceLock<Arc<HostInputBudgets>> = OnceLock::new();
         Self {
             ordinary: MessageBudget::new(DEFAULT_MAX_MESSAGE_BYTES),
             control: MessageBudget::new(CONTROL_BYTES),
             host_replies: MessageBudget::new(DEFAULT_MAX_MESSAGE_BYTES),
-            host: Arc::clone(HOST.get_or_init(|| Arc::new(HostInputBudgets::default()))),
+            host: HostInputBudgets::shared(),
         }
     }
 }

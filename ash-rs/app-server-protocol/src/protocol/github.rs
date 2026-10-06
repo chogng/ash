@@ -692,3 +692,83 @@ pub struct GitHubRequestedReviewers {
     pub users: Vec<String>,
     pub teams: Vec<String>,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubNotificationsParams {
+    pub operation_id: String,
+    pub account_id: String,
+    pub filter: GitHubNotificationFilter,
+    pub page: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubNotificationReadParams {
+    pub operation_id: String,
+    pub account_id: String,
+    pub thread_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubNotificationsReadParams {
+    pub operation_id: String,
+    pub account_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubNotification {
+    pub id: String,
+    pub title: String,
+    pub subject_type: String,
+    pub reason: String,
+    pub unread: bool,
+    pub updated_at: String,
+    pub repository: IssueRepository,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubNotificationsResult {
+    pub notifications: Vec<GitHubNotification>,
+    pub next_page: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubForkCreateParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    pub organization: Option<String>,
+    pub name: String,
+    pub branches: GitHubForkBranches,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubForkResult {
+    pub full_name: String,
+    pub url: String,
+    pub default_branch: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubNotificationFilter {
+    Unread,
+    All,
+    Participating,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubForkBranches {
+    All,
+    Default,
+}

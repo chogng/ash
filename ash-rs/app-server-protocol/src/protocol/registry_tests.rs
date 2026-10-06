@@ -554,3 +554,33 @@ fn git_intents_round_trip_reviewed_identities_and_reject_open_ended_commands() {
         );
     }
 }
+
+#[test]
+fn github_notification_and_fork_admission_preserves_write_outcomes() {
+    for name in [
+        "github/notifications/read",
+        "github/notifications/readAll",
+        "github/repository/fork",
+    ] {
+        let method = super::client_method_definition(name).unwrap();
+        assert_eq!(
+            method
+                .cancellation_operation_id(&serde_json::json!({"operationId":"write"}))
+                .unwrap()
+                .as_deref(),
+            Some("write")
+        );
+        assert_eq!(
+            method.cancellation,
+            super::CancellationDefinition::OperationIdPreserveOutcome("operationId")
+        );
+    }
+    let method: crate::protocol::account::AccountLoginMethodDto = serde_json::from_value(
+        serde_json::json!({"type":"gitHubEnterpriseBrowser","host":"git.example.com"}),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(method).unwrap(),
+        serde_json::json!({"type":"gitHubEnterpriseBrowser","host":"git.example.com"})
+    );
+}

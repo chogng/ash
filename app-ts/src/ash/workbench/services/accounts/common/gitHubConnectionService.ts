@@ -3,7 +3,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 /** Window-scoped GitHub account connection and authorization presentation. */
 export interface IGitHubConnectionService {
 	readonly isConnecting: boolean;
-	connect(): Promise<void>;
+	connect(host?: string): Promise<void>;
 	cancel(): Promise<void>;
 }
 

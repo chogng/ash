@@ -108,7 +108,7 @@ pub struct AccountCreditBalanceDto {
     pub balance: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(tag = "type", rename_all = "camelCase")]
 pub enum AccountLoginMethodDto {
@@ -121,6 +121,7 @@ pub enum AccountLoginMethodDto {
     BigModelStartPlanBrowser,
     ZaiStartPlanBrowser,
     GitHubBrowser,
+    GitHubEnterpriseBrowser { host: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

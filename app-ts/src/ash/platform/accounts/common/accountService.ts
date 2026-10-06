@@ -28,7 +28,8 @@ export type AccountLoginMethod =
 	| { readonly type: 'zaiBrowser'; }
 	| { readonly type: 'bigModelStartPlanBrowser'; }
 	| { readonly type: 'zaiStartPlanBrowser'; }
-	| { readonly type: 'gitHubBrowser'; };
+	| { readonly type: 'gitHubBrowser'; }
+	| { readonly type: 'gitHubEnterpriseBrowser'; readonly host: string; };
 
 export type AccountLoginChallenge =
 	| { readonly type: 'connected'; readonly loginId: string; }

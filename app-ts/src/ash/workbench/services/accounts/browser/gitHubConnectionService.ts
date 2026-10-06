@@ -30,12 +30,12 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 		return this.isStarting || this.loginId !== undefined;
 	}
 
-	async connect(): Promise<void> {
+	async connect(host = 'github.com'): Promise<void> {
 		if (this.isConnecting) return;
 		this.isStarting = true;
 		this.cancelRequested = false;
 		try {
-			const challenge = await this.accounts.startLogin({ type: 'gitHubBrowser' });
+			const challenge = await this.accounts.startLogin(host === 'github.com' ? { type: 'gitHubBrowser' } : { type: 'gitHubEnterpriseBrowser', host });
 			this.isStarting = false;
 			const completion = this.completedWhileStarting.get(challenge.loginId);
 			this.completedWhileStarting.clear();

@@ -7580,7 +7580,7 @@ fn cancelled_subscription_login_preserves_connection_selection() {
         let server = server()
             .with_config_store(config.clone())
             .with_login_service(Arc::new(
-                LoginService::new(Arc::new(Driver { provider, method })).unwrap(),
+                LoginService::new(Arc::new(Driver { provider, method: method.clone() })).unwrap(),
             ));
         let mut connection = server.connection();
         initialize(&server, &mut connection);

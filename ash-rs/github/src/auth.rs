@@ -104,6 +104,14 @@ pub trait GitHubAccountManager: Send + Sync {
     ) -> Result<GitHubAccount, LoginError>;
 }
 
+/// Public OAuth settings for one GitHub host. The broker owns its app secret.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitHubBrowserConfig {
+    pub host: String,
+    pub client_id: String,
+    pub broker_base_url: Url,
+}
+
 struct BrowserAuthorization {
     client_id: String,
     authorize_url: Url,
@@ -112,7 +120,7 @@ struct BrowserAuthorization {
 
 /// Owns GitHub accounts; browser authorization additionally requires the product token broker.
 pub struct GitHubOAuth {
-    browser: Option<BrowserAuthorization>,
+    browsers: BTreeMap<String, BrowserAuthorization>,
     http: Arc<dyn HttpClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
@@ -128,55 +136,76 @@ impl GitHubOAuth {
         http: Arc<dyn HttpClient>,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Arc<Self>, LoginError> {
-        if client_id.is_empty() || !client_id.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
-            return Err(error(
-                LoginErrorKind::InvalidInput,
-                "GitHub client ID is invalid",
-            ));
-        }
-        if broker_base_url.scheme() != "https"
-            || broker_base_url.cannot_be_a_base()
-            || broker_base_url.host_str().is_none()
-            || !broker_base_url.username().is_empty()
-            || broker_base_url.password().is_some()
-            || broker_base_url.query().is_some()
-            || broker_base_url.fragment().is_some()
-            || !broker_base_url.path().ends_with('/')
-        {
-            return Err(error(
-                LoginErrorKind::InvalidInput,
-                "GitHub broker URL is invalid",
-            ));
-        }
-        let authorize_url = broker_base_url
-            .join("v1/oauth/github/authorize")
-            .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub broker URL is invalid"))?;
-        let token_url = broker_base_url
-            .join("v1/oauth/github/token")
-            .map_err(|_| error(LoginErrorKind::InvalidInput, "GitHub broker URL is invalid"))?;
-        Ok(Self::with_browser(
-            Some(BrowserAuthorization {
+        Self::configured(
+            vec![GitHubBrowserConfig {
+                host: "github.com".into(),
                 client_id,
-                authorize_url,
-                token_url,
-            }),
+                broker_base_url,
+            }],
             http,
             secrets,
-        ))
+        )
+    }
+
+    pub fn configured(
+        configurations: Vec<GitHubBrowserConfig>,
+        http: Arc<dyn HttpClient>,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Result<Arc<Self>, LoginError> {
+        let mut browsers = BTreeMap::new();
+        for config in configurations {
+            let host = normalized_host(&config.host)?;
+            let base = config.broker_base_url;
+            if config.client_id.is_empty()
+                || !config
+                    .client_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric())
+                || base.scheme() != "https"
+                || base.cannot_be_a_base()
+                || base.host_str().is_none()
+                || !base.username().is_empty()
+                || base.password().is_some()
+                || base.query().is_some()
+                || base.fragment().is_some()
+                || !base.path().ends_with('/')
+            {
+                return Err(error(
+                    LoginErrorKind::InvalidInput,
+                    "Invalid GitHub browser authorization configuration",
+                ));
+            }
+            let browser = BrowserAuthorization {
+                client_id: config.client_id,
+                authorize_url: base.join("v1/oauth/github/authorize").map_err(|_| {
+                    error(LoginErrorKind::InvalidInput, "Invalid GitHub broker URL")
+                })?,
+                token_url: base.join("v1/oauth/github/token").map_err(|_| {
+                    error(LoginErrorKind::InvalidInput, "Invalid GitHub broker URL")
+                })?,
+            };
+            if browsers.insert(host, browser).is_some() {
+                return Err(error(
+                    LoginErrorKind::InvalidInput,
+                    "Duplicate GitHub browser authorization host",
+                ));
+            }
+        }
+        Ok(Self::with_browser(browsers, http, secrets))
     }
 
     /// Token connections work independently of the product's browser authorization configuration.
     pub fn tokens(http: Arc<dyn HttpClient>, secrets: Arc<dyn SecretStore>) -> Arc<Self> {
-        Self::with_browser(None, http, secrets)
+        Self::with_browser(BTreeMap::new(), http, secrets)
     }
 
     fn with_browser(
-        browser: Option<BrowserAuthorization>,
+        browsers: BTreeMap<String, BrowserAuthorization>,
         http: Arc<dyn HttpClient>,
         secrets: Arc<dyn SecretStore>,
     ) -> Arc<Self> {
         Arc::new_cyclic(|self_weak| Self {
-            browser,
+            browsers,
             http,
             secrets,
             self_weak: self_weak.clone(),
@@ -292,16 +321,19 @@ impl GitHubOAuth {
         };
         if !credential.client_id.is_empty()
             && self
-                .browser
-                .as_ref()
+                .browsers
+                .get(&credential.host)
                 .is_some_and(|browser| credential.client_id != browser.client_id)
         {
             return Ok(None);
         }
-        if credential.needs_refresh() && credential.can_refresh() && self.browser.is_some() {
+        if credential.needs_refresh()
+            && credential.can_refresh()
+            && self.browsers.contains_key(&credential.host)
+        {
             match self.refresh_token(&credential) {
                 Ok(token) => {
-                    let user = self.user(&token.access_token)?;
+                    let user = self.user(&credential.host, &token.access_token)?;
                     if user.id.to_string() != credential.account_id {
                         return Err(error(
                             LoginErrorKind::Driver,
@@ -323,8 +355,8 @@ impl GitHubOAuth {
         Ok(Some(credential))
     }
 
-    fn authorize(&self) -> Result<BrowserGrant, LoginError> {
-        let browser = self.browser.as_ref().ok_or_else(|| {
+    fn authorize(&self, host: &str) -> Result<BrowserGrant, LoginError> {
+        let browser = self.browsers.get(host).ok_or_else(|| {
             error(
                 LoginErrorKind::Unavailable,
                 "GitHub browser authorization is not configured",
@@ -358,6 +390,7 @@ impl GitHubOAuth {
             .append_pair("code_challenge", &challenge)
             .append_pair("code_challenge_method", "S256");
         Ok(BrowserGrant {
+            host: host.to_owned(),
             listener,
             redirect_uri,
             path,
@@ -372,7 +405,7 @@ impl GitHubOAuth {
         grant: BrowserGrant,
         cancelled: &AtomicBool,
     ) -> Result<Credential, LoginError> {
-        let browser = self.browser.as_ref().ok_or_else(|| {
+        let browser = self.browsers.get(&grant.host).ok_or_else(|| {
             error(
                 LoginErrorKind::Unavailable,
                 "GitHub browser authorization is not configured",
@@ -421,8 +454,10 @@ impl GitHubOAuth {
                             )
                         })?;
                     let token = token.into_token()?;
-                    let user = self.user(&token.access_token)?;
-                    return Ok(Credential::new(token, user, browser.client_id.clone()));
+                    let user = self.user(&grant.host, &token.access_token)?;
+                    let mut credential = Credential::new(token, user, browser.client_id.clone());
+                    credential.host = grant.host.clone();
+                    return Ok(credential);
                 }
                 Err(failure) if failure.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(CANCELLATION_POLL_INTERVAL);
@@ -433,7 +468,7 @@ impl GitHubOAuth {
     }
 
     fn refresh_token(&self, credential: &Credential) -> Result<Token, LoginError> {
-        let browser = self.browser.as_ref().ok_or_else(|| {
+        let browser = self.browsers.get(&credential.host).ok_or_else(|| {
             error(
                 LoginErrorKind::Unavailable,
                 "GitHub browser authorization is not configured",
@@ -462,10 +497,14 @@ impl GitHubOAuth {
         token.into_token()
     }
 
-    fn user(&self, access_token: &str) -> Result<GitHubUser, LoginError> {
+    fn user(&self, host: &str, access_token: &str) -> Result<GitHubUser, LoginError> {
         let request = HttpRequest::new(
             HttpMethod::Get,
-            USER_URL,
+            if host == "github.com" {
+                USER_URL.to_owned()
+            } else {
+                format!("https://{host}/api/v3/user")
+            },
             vec![
                 HttpHeader::new("Accept", "application/vnd.github+json"),
                 HttpHeader::new("Authorization", format!("Bearer {access_token}")),
@@ -603,12 +642,25 @@ impl InteractiveLoginDriver for GitHubOAuth {
     }
 
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
-        if request.method != LoginMethod::GitHubBrowser {
-            return Err(error(
-                LoginErrorKind::InvalidInput,
-                "GitHub supports browser authorization",
-            ));
-        }
+        let host = match &request.method {
+            LoginMethod::GitHubBrowser => "github.com".to_owned(),
+            LoginMethod::GitHubEnterpriseBrowser { host } => {
+                let host = normalized_host(host)?;
+                if host == "github.com" {
+                    return Err(error(
+                        LoginErrorKind::InvalidInput,
+                        "Select an Enterprise GitHub host",
+                    ));
+                }
+                host
+            }
+            _ => {
+                return Err(error(
+                    LoginErrorKind::InvalidInput,
+                    "GitHub supports browser authorization",
+                ));
+            }
+        };
         let mut active = self.active.lock().map_err(lock_error)?;
         if !active.is_empty() {
             return Err(error(
@@ -616,7 +668,7 @@ impl InteractiveLoginDriver for GitHubOAuth {
                 "a GitHub login is already active",
             ));
         }
-        let grant = self.authorize()?;
+        let grant = self.authorize(&host)?;
         let authorization_url = grant.authorization_url.clone();
         let cancelled = Arc::new(AtomicBool::new(false));
         active.insert(request.login_id.clone(), Arc::clone(&cancelled));
@@ -820,6 +872,7 @@ impl GitHubAccountManager for GitHubOAuth {
 }
 
 struct BrowserGrant {
+    host: String,
     listener: TcpListener,
     redirect_uri: String,
     path: String,
@@ -1162,3 +1215,10 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> LoginError {
 #[cfg(test)]
 #[path = "auth_tests.rs"]
 mod tests;
+
+fn normalized_host(host: &str) -> Result<String, LoginError> {
+    let host = host.trim().to_ascii_lowercase();
+    crate::Repository::new(host.clone(), "account".into(), "identity".into())
+        .map_err(|_| error(LoginErrorKind::InvalidInput, "Invalid GitHub host"))?;
+    Ok(host)
+}
