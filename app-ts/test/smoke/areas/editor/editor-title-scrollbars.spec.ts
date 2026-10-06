@@ -28,7 +28,7 @@ test('editor title scrollbars preserve overflow, focus and clipping through size
 	const changeSetting = async (key: string, option: string): Promise<void> => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
 		const settings = page.locator('.ash-settings-editor');
-		await settings.locator('[data-settings-category-id="editor"]').click();
+		await workbench.settingsEditor.selectEditorCategory('editor-opening');
 		await settings.getByRole('searchbox', { name: 'Search settings' }).fill(`workbench.editor.titleScrollbar${key}`);
 		await settings.locator(`[data-configuration-key="workbench.editor.titleScrollbar${key}"]`).getByRole('combobox').click();
 		await page.getByRole('option', { name: option, exact: true }).click();

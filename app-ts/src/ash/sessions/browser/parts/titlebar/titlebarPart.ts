@@ -1,6 +1,6 @@
 import './media/titlebarpart.css';
 import './media/menubarControl.css';
-import '../../../common/sessionsColors.js';
+import '../../../common/theme.js';
 import { h } from '../../../../base/browser/dom.js';
 import type { ActionViewItemProvider } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import type { IAction } from '../../../../base/common/actions.js';

@@ -552,7 +552,7 @@ test("Single editor tab uses the available title width", async ({ target, workbe
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator(".ash-settings-editor");
 	await expect(settings).toBeVisible();
-	await settings.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
 	await settings.getByRole("searchbox", { name: "Search settings" }).fill("workbench.editor.showTabs");
 	const mode = settings.locator('[data-configuration-key="workbench.editor.showTabs"]');
 	await expect(mode).toBeVisible();
@@ -1220,7 +1220,7 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 		test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 		if (mode.startsWith('auto save')) {
 			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectCategory('editor');
+			await workbench.settingsEditor.selectEditorCategory('editor-files');
 			const settings = workbench.settingsEditor.element;
 			await settings.getByRole('searchbox').fill('@id:files.autoSave');
 			await settings.locator('[data-configuration-key="files.autoSave"]').getByRole('combobox').click();

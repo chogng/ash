@@ -2938,6 +2938,65 @@ test('Sessions titlebar aligns its application menu and actions', async ({ appli
 	await closed;
 });
 
+test('Workbench and Sessions tooltips keep separate colors across themes', async ({ application, target, workbench }) => {
+	for (const [theme, scheme, background, foreground] of [
+		['Ash Light', 'light', 'rgb(243, 243, 243)', 'rgb(97, 97, 97)'],
+		['Ash Dark', 'dark', 'rgb(37, 37, 38)', 'rgb(204, 204, 204)'],
+		['Ash High Contrast Dark', 'high-contrast-dark', 'rgb(12, 20, 31)', 'rgb(255, 255, 255)'],
+		['Ash High Contrast Light', 'high-contrast-light', 'rgb(255, 255, 255)', 'rgb(41, 41, 41)'],
+	]) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		const picker = workbench.page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill(theme);
+		await picker.getByRole('combobox').press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect(workbench.page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
+		await workbench.page.bringToFront();
+		await workbench.page.mouse.move(400, 180);
+		const workbenchControl = workbench.page.getByRole('toolbar', { name: 'Activity Bar global actions', exact: true }).getByRole('button', { name: 'Manage', exact: true });
+		await workbenchControl.hover();
+		const workbenchTooltip = workbench.page.getByRole('tooltip');
+		const workbenchHover = workbench.page.locator('.ash-context-view-hover');
+		await expect(workbenchTooltip).toBeVisible();
+		await expect(workbenchTooltip).toHaveCSS('background-color', background);
+		await expect(workbenchTooltip).toHaveCSS('color', foreground);
+		await expect(workbenchHover).toHaveCSS('background-color', background);
+		await expect.poll(() => workbenchHover.evaluate(element => getComputedStyle(element, '::before').backgroundColor)).toBe(background);
+		await workbench.page.mouse.move(400, 180);
+		await expect(workbenchTooltip).toHaveCount(0);
+
+		const page = await workbench.openAgentsWindow(target.kind);
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
+		await page.bringToFront();
+		await page.mouse.move(400, 180);
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).hover();
+		const tooltip = page.getByRole('tooltip');
+		const hover = page.locator('.ash-context-view-hover');
+		await expect(tooltip).toHaveText('Chat');
+		await expect(tooltip).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+		await expect(tooltip).toHaveCSS('color', 'rgb(255, 255, 255)');
+		await expect(hover).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+		await expect(hover).toHaveCSS('border-radius', '12px');
+		await expect.poll(() => hover.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
+		if (scheme.startsWith('high-contrast')) {
+			await expect(hover).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
+		}
+		await page.keyboard.press('Escape');
+		await expect(tooltip).toHaveCount(0);
+		const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
+		await returnFromSessions(page, application);
+		await closed;
+		await expect(workbench.page.locator('.ash-workbench')).toBeVisible();
+		await workbench.page.bringToFront();
+		await workbench.page.mouse.move(400, 180);
+		await workbenchControl.hover();
+		await expect(workbenchTooltip).toHaveCSS('background-color', background);
+		await expect(workbenchTooltip).toHaveCSS('color', foreground);
+		await workbench.page.mouse.move(400, 180);
+		await expect(workbenchTooltip).toHaveCount(0);
+	}
+});
+
 test('Sessions titlebar sidebar toggle stays transparent at rest and responds to pointer and keyboard', async ({ application, target, workbench }) => {
 	const workbenchToggle = workbench.page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	await expect(workbenchToggle).toHaveCSS('border-radius', '4px');

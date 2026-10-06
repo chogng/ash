@@ -3,6 +3,8 @@ import { Registry } from "../../../../platform/registry/common/platform.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import '../../../../editor/common/config/editorConfigurationSchema.js';
+import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
+import { localize } from '../../../../nls.js';
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
@@ -24,31 +26,52 @@ export const CodeEditorConfiguration = Object.freeze({
 			if (typeof value === "string" && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
 			throw new TypeError("editor.fontFamily must be a single-line string no longer than 256 characters");
 		},
-		setting: textSetting("Font family", "Use a CSS font-family list, or leave this empty to use the default monospace font.", "Default monospace"),
+		setting: {
+			valueType: 'text',
+			get title() { return localize('editor.fontFamily.title', 'Font family'); },
+			get description() { return localize('editor.fontFamily.description', 'Use a font family or comma-separated list. Leave empty to use {0}.', EDITOR_FONT_DEFAULTS.fontFamily); },
+			get placeholder() { return localize('editor.fontFamily.default', 'System default'); },
+		},
 	}),
 	fontSize: configurationRegistry.registerConfiguration<number>({
 		key: "editor.fontSize",
-		defaultValue: 13,
+		defaultValue: EDITOR_FONT_DEFAULTS.fontSize,
 		parse(value: unknown): number {
 			if (Number.isSafeInteger(value) && (value as number) >= 8 && (value as number) <= 40) return value as number;
 			throw new RangeError(`editor.fontSize must be an integer between 8 and 40; received ${String(value)}`);
 		},
-		setting: numberSetting("Font size", "Set the editor text size in pixels.", 8, 40),
+		setting: {
+			valueType: 'number',
+			get title() { return localize('editor.fontSize.title', 'Font size'); },
+			get description() { return localize('editor.fontSize.description', 'Set the editor text size in pixels. The default is {0}.', EDITOR_FONT_DEFAULTS.fontSize); },
+			minimum: 8,
+			maximum: 40,
+		},
 	}),
 	lineHeight: configurationRegistry.registerConfiguration<number>({
 		key: "editor.lineHeight",
-		defaultValue: 20,
+		defaultValue: EDITOR_FONT_DEFAULTS.lineHeight,
 		parse(value: unknown): number {
-			if (Number.isSafeInteger(value) && (value as number) >= 12 && (value as number) <= 80) return value as number;
-			throw new RangeError(`editor.lineHeight must be an integer between 12 and 80; received ${String(value)}`);
+			if (Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= 80) return value as number;
+			throw new RangeError(localize('editor.lineHeight.invalid', 'Editor line height must be an integer between 0 and 80; received {0}.', String(value)));
 		},
-		setting: numberSetting("Line height", "Set the height of each editor line in pixels.", 12, 80),
+		setting: {
+			valueType: 'number',
+			get title() { return localize('editor.lineHeight.title', 'Line height'); },
+			get description() { return localize('editor.lineHeight.description', 'Set the height of each editor line in pixels. Use 0 to calculate it from the font size. Values below 8 are font-size multipliers.'); },
+			minimum: 0,
+			maximum: 80,
+		},
 	}),
 	fontLigatures: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.fontLigatures",
 		defaultValue: false,
 		parse: value => parseBoolean(value, "editor.fontLigatures"),
-		setting: booleanSetting("Font ligatures", "Use programming ligatures when the selected font supports them."),
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('editor.fontLigatures.title', 'Font ligatures'); },
+			get description() { return localize('editor.fontLigatures.description', 'Use programming ligatures when the selected font supports them.'); },
+		},
 	}),
 	experimentalGpuAcceleration: configurationRegistry.registerConfiguration<"on" | "off">({
 		key: "editor.experimentalGpuAcceleration",

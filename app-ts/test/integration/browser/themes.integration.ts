@@ -32,7 +32,7 @@ import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css'
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
 import '../../../src/ash/workbench/contrib/pdf/browser/media/pdfEditor.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
-import '../../../src/ash/sessions/common/sessionsColors.js';
+import '../../../src/ash/sessions/common/theme.js';
 import '../../../src/ash/workbench/contrib/pdf/common/pdfColors.js';
 import { appendIcon } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { IconSelectBox } from '../../../src/ash/base/browser/ui/icons/iconSelectBox.js';

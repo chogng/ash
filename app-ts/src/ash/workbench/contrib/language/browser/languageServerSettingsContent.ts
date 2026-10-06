@@ -26,7 +26,7 @@ import { IRemoteAgentService } from '../../../services/remote/common/remoteAgent
 import { SettingsSearchQuery } from '../../preferences/browser/settingsSearch.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
 
-export const LanguageServerSettingsTarget = 'editor.group.language-servers';
+export const LanguageServerSettingsTarget = 'editor-language.group.language-servers';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.LanguageServers, defaultValue: true,
@@ -43,7 +43,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 
 /** Settings owns this form; the App Server keeps the profile configuration and revision authority. */
 export class LanguageServerSettingsContent extends Disposable implements SettingsContent {
-	public readonly categoryId = 'editor';
+	public readonly categoryId = 'editor-language';
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	public readonly domNode: HTMLElement;

@@ -1,11 +1,14 @@
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { DEFAULT_FONT_FAMILY } from '../../../../../../base/browser/fonts.js';
 import "./chatInputEditor.css";
 import { addDisposableListener, stopEvent, h } from "../../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../../base/common/event.js";
 import { RunOnceScheduler } from "../../../../../../base/common/async.js";
 import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../../../../editor/common/config/editorOptions.js";
-import { CodeEditorWidget } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
+import { CodeEditorWidget, type CodeEditorWidgetOptions } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { ChatInputConfiguration } from '../../chat.shared.contribution.js';
 import { EditorExtensionsRegistry, type EditorContributionRegistration } from "../../../../../../editor/browser/editorExtensions.js";
 import { LanguageCompletionService } from '../../../../../../editor/contrib/suggest/browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../../../editor/common/languageFeatureRegistry.js';
@@ -21,7 +24,6 @@ import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputE
 import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider } from "./chatCommandCompletion.js";
 import { createChatSkillCompletionProvider } from "./chatSkillCompletion.js";
 
-const CHAT_INPUT_LINE_HEIGHT = 20;
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
 const CHAT_INPUT_MIN_HEIGHT = 100;
@@ -40,7 +42,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private readonly minimumHeight: number;
 	private readonly maximumHeight: number;
 
-	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
@@ -76,7 +78,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
-			lineHeight: CHAT_INPUT_LINE_HEIGHT,
+			...this.getFontOptions(),
 			ariaLabel: options.ariaLabel,
 			placeholder: options.placeholder,
 			presentation: "embedded",
@@ -90,6 +92,11 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			contributions,
 		}));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (!Object.values(ChatInputConfiguration).some(key => event.affectsConfiguration(key))) return;
+			this.editor.updateOptions(this.getFontOptions());
+			layout.schedule();
+		}));
 		this._register(this.model.onDidChangeContent(() => {
 			layout.schedule();
 			this._onDidChange.fire(this.value);
@@ -135,6 +142,14 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		if (width <= 0) return;
 		this.editor.layout({ width, height: this.height });
 		this.syncHeight();
+	}
+
+	private getFontOptions(): Pick<CodeEditorWidgetOptions, 'fontFamily' | 'fontSize' | 'lineHeight'> {
+		return {
+			fontFamily: this.configurationService.getValue<string>(ChatInputConfiguration.fontFamily) || DEFAULT_FONT_FAMILY,
+			fontSize: this.configurationService.getValue<number>(ChatInputConfiguration.fontSize),
+			lineHeight: this.configurationService.getValue<number>(ChatInputConfiguration.lineHeight),
+		};
 	}
 
 	private syncHeight(): void {

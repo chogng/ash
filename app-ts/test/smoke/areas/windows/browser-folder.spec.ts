@@ -435,7 +435,7 @@ test('browser nests related files when Explorer file nesting is enabled', async 
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' }).click();
 	const settings = page.locator('.ash-settings-editor');
 	await expect(settings).toBeVisible();
-	await settings.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.selectEditorCategory('editor-files');
 	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('explorer.fileNesting.enabled');
 	const nestingToggle = settings.locator('[data-configuration-key="explorer.fileNesting.enabled"]');
 	await expect(nestingToggle).toBeVisible();

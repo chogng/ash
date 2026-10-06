@@ -8,8 +8,8 @@ const alias = (id: string, value: string, description: string): string => regist
 	dark: value, light: value, highContrastDark: value, highContrastLight: value,
 }, { description, owner });
 
-export const hoverForeground = color("hover.foreground", "#f5f5f7", "#f5f5f7", foreground, foreground, "Foreground for managed Hovers.");
-export const hoverBackground = color("hover.background", "#2d2e33", "#2d2e33", "#000000", "#ffffff", "Background for managed Hovers.");
+export const hoverForeground = color("hover.foreground", "#cccccc", "#616161", "#ffffff", "#292929", "Foreground for managed Hovers.");
+export const hoverBackground = color("hover.background", "#252526", "#f3f3f3", "#0c141f", "#ffffff", "Background for managed Hovers.");
 export const hoverBorder = color("hover.border", "#ffffff18", "#ffffff18", contrastBorder, contrastBorder, "Border around managed Hovers.");
 export const hoverShadow = color("hover.shadow", "#00000030", "#00000030", null, null, "Shadow around managed Hovers.");
 export const actionBarBackground = color("actionBar.background", "#313136", "#f5f5f6", "#000000", "#ffffff", "Background behind an inline ActionBar.");

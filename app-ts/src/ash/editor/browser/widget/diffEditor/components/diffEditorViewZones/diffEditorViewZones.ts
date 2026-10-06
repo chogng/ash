@@ -32,7 +32,6 @@ export class DiffEditorViewZones extends Disposable {
 		private readonly originalEditor: CodeEditorWidget,
 		private readonly modifiedEditor: CodeEditorWidget,
 		private readonly model: DiffModel,
-		private readonly lineHeight: number,
 		@IThemeService private readonly themeService: IThemeService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
@@ -82,7 +81,7 @@ export class DiffEditorViewZones extends Disposable {
 						}
 						this.modifiedZones.push(accessor.addZone({
 							afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
-							heightInPx: this.lineHeight,
+							heightInPx: this.modifiedEditor.getOption(EditorOption.lineHeight),
 							ordinal,
 							domNode: line,
 							marginDomNode,
@@ -159,6 +158,7 @@ export class DiffEditorViewZones extends Disposable {
 		const preference = this.configurationService.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
 		const semanticHighlighting = preference === true || (preference !== false && theme.semanticHighlighting === true);
 		for (const { element, lineNumber } of snapshot.lines) {
+			this.originalEditor.applyFontInfo(element);
 			const inlineDecorations = (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => decoration.options.inlineClassName
 				? [new InlineDecoration(decoration.range, decoration.options.inlineClassName, InlineDecorationType.Regular)]
 				: []);
@@ -174,7 +174,7 @@ export class DiffEditorViewZones extends Disposable {
 	}
 
 	private lineHeightFor(editor: CodeEditorWidget, lineNumber: number, wordWrap: boolean): number {
-		return wordWrap ? editor.getBottomForLineNumber(lineNumber) - editor.getTopForLineNumber(lineNumber) : this.lineHeight;
+		return wordWrap ? editor.getBottomForLineNumber(lineNumber) - editor.getTopForLineNumber(lineNumber) : editor.getOption(EditorOption.lineHeight);
 	}
 
 	private appendViewZone(zones: DiffViewZone[], afterLineNumber: number, heightInPx: number, ordinal: number): void {

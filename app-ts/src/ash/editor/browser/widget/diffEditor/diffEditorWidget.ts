@@ -31,7 +31,6 @@ import { DiffEditorGutter } from './features/gutterFeature.js';
 import { MovedBlocksLinesFeature } from './features/movedBlocksLinesFeature.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
-const DEFAULT_LINE_HEIGHT = 20;
 let diffEditorId = 0;
 
 /** Owns two editor views over caller-owned source models and one versioned diff. */
@@ -58,7 +57,6 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 	private readonly originalMoveAnchor: IEditorDecorationsCollection;
 	private readonly modifiedMoveAnchor: IEditorDecorationsCollection;
 	private movedTextToCompare: MovedText | undefined;
-	private readonly lineHeight: number;
 	private readonly showInlineChanges: boolean;
 	private readonly loopChanges: boolean;
 	private readonly originalLabel: string;
@@ -80,7 +78,6 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.diffOptions = instantiationService.createInstance(DiffEditorOptions, options);
 		this.codeEditorService.willCreateDiffEditor();
 		this.model = options.model;
-		this.lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 		this.showInlineChanges = options.showInlineChanges ?? true;
 		this.loopChanges = options.loopChanges ?? true;
 		this.originalLabel = options.originalAriaLabel ?? localize('diffEditor.original', 'Original');
@@ -114,7 +111,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			contributions: [],
 			isSimpleWidget: true,
 			minimap: { enabled: false },
-			lineHeight: this.lineHeight,
+			lineHeight: options.lineHeight,
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
 			fontLigatures: options.fontLigatures,
@@ -141,7 +138,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.originalMoveAnchor = this.originalEditor.createDecorationsCollection();
 		this.modifiedMoveAnchor = this.modifiedEditor.createDecorationsCollection();
 		this._register(toDisposable(() => { this.originalMoveAnchor.clear(); this.modifiedMoveAnchor.clear(); }));
-		this.diffViewZones = this._register(instantiationService.createInstance(DiffEditorViewZones, this.originalEditor, this.modifiedEditor, this.model, this.lineHeight));
+		this.diffViewZones = this._register(instantiationService.createInstance(DiffEditorViewZones, this.originalEditor, this.modifiedEditor, this.model));
 		this.overviewRuler = this._register(new OverviewRulerFeature(this.element, this.originalEditor, this.modifiedEditor));
 		this.revertButtons = this._register(new RevertButtonsFeature(this.modifiedEditor, this.model, this));
 		this.gutter = this._register(instantiationService.createInstance(DiffEditorGutter, this.element, this.modifiedEditor, this.model,
@@ -186,6 +183,11 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			}
 		}));
 		this._register(this.model.onDidChange(() => this.refresh()));
+		this._register(this.modifiedEditor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.fontInfo)) {
+				this.refresh();
+			}
+		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('diffEditor.renderIndicators')) {
 				this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);

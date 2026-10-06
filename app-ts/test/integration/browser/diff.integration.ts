@@ -110,6 +110,10 @@ const harness = {
 	setEditorFeatures(options: IDiffEditorOptions): void {
 		single.updateOptions(options);
 	},
+	setFontOptions(options: Pick<IDiffEditorOptions, 'fontFamily' | 'fontSize' | 'lineHeight' | 'fontLigatures'>): void {
+		single.originalEditor.updateOptions(options);
+		single.modifiedEditor.updateOptions(options);
+	},
 	async setMoves(enabled: boolean): Promise<void> {
 		await editorServices.get(IConfigurationService).updateValue('diffEditor.experimental.showMoves', enabled);
 		model.updateOptions({ ...diffOptions, computeMoves: enabled });

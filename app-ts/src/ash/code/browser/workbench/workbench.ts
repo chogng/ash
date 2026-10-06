@@ -18,7 +18,7 @@ try {
 	}
 	await import('../../../workbench/workbench.web.main.js');
 	await import('../../../sessions/common/configuration.js');
-	await import('../../../sessions/common/sessionsColors.js');
+	await import('../../../sessions/common/theme.js');
 	await import('../../../sessions/contrib/providers/appServer/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');
 	await import('../../../sessions/browser/turnMultiDiffSource.contribution.js');

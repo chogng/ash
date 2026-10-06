@@ -1,5 +1,9 @@
 {
   "ash": {
+    "diffEditor.lineHeight.invalid": "差异编辑器行高必须是非负有限数值。",
+    "editor.lineHeight.title": "行高",
+    "editor.lineHeight.description": "设置编辑器每行的像素高度。设为 0 时根据字号自动计算，小于 8 的值表示字号的倍数。",
+    "editor.lineHeight.invalid": "编辑器行高必须是 0 到 80 之间的整数；收到 {0}。",
     "peek.submenu": "速览",
     "goToDefinition.label": "转到定义",
     "goToDeclaration.label": "转到声明",
@@ -771,6 +775,13 @@
     "codeAction.invalidApply": "代码操作 apply 必须是 first、ifSingle 或 never。",
     "codeAction.lightbulbShortcut": "显示代码操作（{0}）",
     "accessibility.editorNavigation": "在引用速览中，用方向键移动结果，F4 和 Shift+F4 循环结果，F6 在结果列表和预览编辑器之间切换焦点。按 Enter 打开结果后，F12 循环已保存的结果，Escape 结束循环。层级树用方向键移动和展开，方向按钮选择调用者、被调用者、父类型或子类型。Escape 关闭速览。",
-    "accessibility.editorCodeActions": "<keybinding:editor.action.quickFix> 打开代码操作。有可用操作时，行旁会出现按钮。重构和源代码操作菜单显示对应类别的操作。重命名用 Enter 提交，Escape 取消；支持预览时，用 Ctrl+Enter 或 Command+Enter 打开预览。"
+    "accessibility.editorCodeActions": "<keybinding:editor.action.quickFix> 打开代码操作。有可用操作时，行旁会出现按钮。重构和源代码操作菜单显示对应类别的操作。重命名用 Enter 提交，Escape 取消；支持预览时，用 Ctrl+Enter 或 Command+Enter 打开预览。",
+    "editor.fontFamily.title": "字体",
+    "editor.fontFamily.description": "输入字体名称或用逗号分隔的字体列表。留空时使用 {0}。",
+    "editor.fontSize.title": "字号",
+    "editor.fontSize.description": "设置编辑器文字的像素大小，默认值为 {0}。",
+    "editor.fontLigatures.title": "字体连字",
+    "editor.fontLigatures.description": "所选字体支持时，启用编程连字。",
+    "editor.fontFamily.default": "系统默认"
   }
 }

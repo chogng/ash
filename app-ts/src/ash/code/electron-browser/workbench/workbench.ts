@@ -13,7 +13,7 @@ try {
 	performance.mark('ash.desktop.contributions-start');
 	await import('../../../workbench/workbench.desktop.main.js');
 	await import('../../../sessions/common/configuration.js');
-	await import('../../../sessions/common/sessionsColors.js');
+	await import('../../../sessions/common/theme.js');
 	await import('../../../sessions/contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js');
 	await import('../../../sessions/contrib/providers/appServer/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');

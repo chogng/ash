@@ -340,6 +340,17 @@ suite('Workbench localization', () => {
 		assert.equal(description('scrollbar.background'), 'Scrollbar track background.');
 	});
 
+	test('Sessions tooltip color descriptions use the selected Chinese language catalog', async () => {
+		using localization = new WorkbenchLocalizationService();
+		await localization.whenReady;
+		initializeTestLocalization('zh-CN');
+		assert.deepEqual([
+			localization.translate('ash', 'color.sessions.tooltip.background', 'Background of tooltips in the Sessions window.'),
+			localization.translate('ash', 'color.sessions.tooltip.foreground', 'Text color of tooltips in the Sessions window.'),
+			localization.translate('ash', 'color.sessions.tooltip.border', 'Border of tooltips in the Sessions window.'),
+		], ['Sessions 窗口中悬浮提示的背景色。', 'Sessions 窗口中悬浮提示的文字颜色。', 'Sessions 窗口中悬浮提示的边框颜色。']);
+	});
+
 	test('paste and drop controls use the selected Chinese language catalog', async () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;

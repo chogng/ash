@@ -83,6 +83,20 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	const commands = container.get(ICommandService);
 	const widget = pane.getControl();
 	assert.ok(widget);
+	const fontConfiguration = container.get(IConfigurationService);
+	await fontConfiguration.updateValue(CodeEditorConfiguration.fontFamily, 'Arial');
+	await fontConfiguration.updateValue(CodeEditorConfiguration.fontSize, 18);
+	await fontConfiguration.updateValue(CodeEditorConfiguration.lineHeight, 28);
+	await fontConfiguration.updateValue(CodeEditorConfiguration.fontLigatures, true);
+	assert.equal(pane.getControl(), widget);
+	assert.deepEqual([widget.originalEditor, widget.modifiedEditor].map(editor => ({
+		family: editor.getOption(EditorOption.fontFamily),
+		size: editor.getOption(EditorOption.fontSize),
+		lineHeight: editor.getOption(EditorOption.lineHeight),
+		ligatures: editor.getOption(EditorOption.fontLigatures),
+	})), Array(2).fill({ family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' }));
+	await fontConfiguration.updateValue(CodeEditorConfiguration.fontSize, undefined);
+	await fontConfiguration.updateValue(CodeEditorConfiguration.lineHeight, undefined);
 	await commands.executeCommand(GOTO_NEXT_CHANGE);
 	assert.ok(widget.currentChangeRow >= 0);
 	await commands.executeCommand(SET_DIFF_VIEW_MODE_INLINE);

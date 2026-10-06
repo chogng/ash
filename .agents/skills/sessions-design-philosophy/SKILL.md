@@ -125,7 +125,7 @@ Activity Bar 是 Sessions 的产品页面导航。页面之间保持稳定顺序
 
 ### 悬停提示（Tooltip）
 
-- Sessions 的悬停提示使用 12px 大圆角，不显示指向控件的三角形箭头。背景、文字颜色、边框、阴影、字号、行高和内边距与共享 Workbench tooltip 保持一致。
+- Sessions Agent Window 的悬停提示使用 12px 大圆角，不显示指向控件的三角形箭头。`sessions.tooltip.background` 与 `sessions.tooltip.foreground` 的默认配色在浅色、深色和高对比度主题下均为黑底白字；`sessions.tooltip.border` 在高对比度下使用白色边框。Sessions 在窗口内将这些 token 映射给 tooltip，不能修改共享 Workbench tooltip token 的注册值。普通边框、阴影、字号、行高和内边距与共享 Workbench tooltip 保持一致。
 - Sessions 专属的 tooltip 外观集中在 `app-ts/src/ash/sessions/browser/media/workbench.css`，以 `.ash-sessions-window` 限定作用范围。Tooltip 挂在窗口根节点下，不在触发按钮或标题栏内部；样式不能依赖这些控件的后代关系。
 
 ### 颜色、状态与动效

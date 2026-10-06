@@ -189,12 +189,28 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			const part = this.part.value;
 			if (!part) return;
 			const update: {
+				fontFamily?: IEditorOptions['fontFamily'];
+				fontSize?: IEditorOptions['fontSize'];
+				lineHeight?: IEditorOptions['lineHeight'];
+				fontLigatures?: IEditorOptions['fontLigatures'];
 				lineNumbers?: IEditorOptions['lineNumbers'];
 				wordWrap?: IEditorOptions['wordWrap'];
 				minimap?: IEditorOptions['minimap'];
 				renderWhitespace?: IEditorOptions['renderWhitespace'];
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
 			} = {};
+			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily')) {
+				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily') || undefined;
+			}
+			if (this.options.fontSize === undefined && event.affectsConfiguration('editor.fontSize')) {
+				update.fontSize = this.configurationService.getValue('editor.fontSize');
+			}
+			if (this.options.lineHeight === undefined && event.affectsConfiguration('editor.lineHeight')) {
+				update.lineHeight = this.configurationService.getValue('editor.lineHeight');
+			}
+			if (this.options.fontLigatures === undefined && event.affectsConfiguration('editor.fontLigatures')) {
+				update.fontLigatures = this.configurationService.getValue('editor.fontLigatures');
+			}
 			if (this.options.lineNumbers === undefined && event.affectsConfiguration(lineNumbersConfiguration)) {
 				update.lineNumbers = this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off';
 			}
@@ -266,10 +282,10 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration),
 				wrappingIndent: this.options.wrappingIndent,
-				fontFamily: this.options.fontFamily,
-				fontSize: this.options.fontSize,
-				lineHeight: this.options.lineHeight,
-				fontLigatures: this.options.fontLigatures,
+				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily') || undefined),
+				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize'),
+				lineHeight: this.options.lineHeight ?? this.configurationService.getValue<number>('editor.lineHeight'),
+				fontLigatures: this.options.fontLigatures ?? this.configurationService.getValue<boolean>('editor.fontLigatures'),
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
 				minimap: this.options.minimap ?? this.readMinimapOptions(),
 				renderWhitespace: this.configurationService.getValue(renderWhitespaceConfiguration),

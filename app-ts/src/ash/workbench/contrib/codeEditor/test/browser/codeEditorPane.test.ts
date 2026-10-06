@@ -207,6 +207,8 @@ test('open code editor applies live view settings and actions without replacing 
 	const control = pane.getControl();
 	assert.ok(control instanceof CodeEditorWidget);
 	assert.equal(control.getOption(EditorOption.lineNumbers).renderType, 0);
+	assert.equal(control.getOption(EditorOption.fontSize), EDITOR_FONT_DEFAULTS.fontSize);
+	assert.equal(control.getRawOptions().lineHeight, 0);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
 	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
 	assert.equal(control.getOption(EditorOption.minimap).side, 'left');
@@ -222,6 +224,21 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.minimap).size, 'fit');
 	assert.equal(control.getOption(EditorOption.renderWhitespace), 'selection');
 	assert.equal(control.getOption(EditorOption.renderControlCharacters), true);
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Arial');
+	await configuration.updateValue(CodeEditorConfiguration.fontSize, 18);
+	await configuration.updateValue(CodeEditorConfiguration.lineHeight, 28);
+	await configuration.updateValue(CodeEditorConfiguration.fontLigatures, true);
+	assert.equal(pane.getControl(), control);
+	assert.deepEqual({
+		family: control.getOption(EditorOption.fontFamily),
+		size: control.getOption(EditorOption.fontSize),
+		lineHeight: control.getOption(EditorOption.lineHeight),
+		ligatures: control.getOption(EditorOption.fontLigatures),
+	}, { family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' });
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, '');
+	await configuration.updateValue(CodeEditorConfiguration.lineHeight, 0);
+	assert.equal(control.getOption(EditorOption.fontFamily), EDITOR_FONT_DEFAULTS.fontFamily);
+	assert.notEqual(control.getOption(EditorOption.lineHeight), 0);
 	await services.get(ICommandService).executeCommand('editor.action.toggleRenderWhitespace');
 	assert.equal(configuration.getValue(CodeEditorConfiguration.renderWhitespace), 'none');
 	assert.equal(control.getOption(EditorOption.renderWhitespace), 'none');

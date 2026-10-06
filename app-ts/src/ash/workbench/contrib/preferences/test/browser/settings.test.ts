@@ -94,6 +94,7 @@ const { SessionsConfiguration } = await import('../../../../../sessions/common/c
 const { WorkbenchThemesRegistry } = await import('../../../../common/theme.js');
 const { EditorSelectionConfiguration } = await import('../../../../common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../codeEditor/common/editorConfiguration.js');
+const { EDITOR_FONT_DEFAULTS } = await import('../../../../../editor/common/config/fontInfo.js');
 const { ContentSearchConfiguration } = await import('../../../search/common/searchConfiguration.js');
 const { GitConfiguration } = await import('../../../git/common/gitConfiguration.js');
 await import('../../../scm/browser/scm.contribution.js');
@@ -258,7 +259,7 @@ test('file opening preferences have a translated group and correctly typed contr
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
-		const group = createSettingsLayout(defaults.all).find(category => category.id === 'editor')?.groups.find(group => group.id === 'file-opening');
+		const group = createSettingsLayout(defaults.all).find(category => category.id === 'editor-opening')?.groups.find(group => group.id === 'file-opening');
 		assert.equal(group?.title, '文件打开');
 		assert.deepEqual(group?.settings.map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })), [
 			{ id: 'workbench.editor.openErrorDialog', title: '文件打开错误弹窗', valueType: 'boolean' },
@@ -269,6 +270,37 @@ test('file opening preferences have a translated group and correctly typed contr
 		assert.equal(binary.valueType === 'select' && binary.options[0]?.label, '默认');
 		assert.match(defaults.get('workbench.editor.openErrorDialog').description, /自动恢复文件时不显示错误弹窗/);
 		assert.throws(() => configurationRegistry.getConfiguration('workbench.editor.openErrorDialog')?.parse('false'), /文件打开错误弹窗必须为 true 或 false/);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
+test('font preferences show translated labels and the actual platform defaults', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const defaults = new DefaultSettings();
+		const fonts = createSettingsLayout(defaults.all).find(category => category.id === 'editor-fonts')!;
+		assert.equal(fonts.groups[0]?.title, '字体与排版');
+		assert.deepEqual(fonts.groups.flatMap(group => group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType }))), [
+			{ id: 'editor.fontFamily', title: '字体', type: 'text' },
+			{ id: 'editor.fontSize', title: '字号', type: 'number' },
+			{ id: 'editor.lineHeight', title: '行高', type: 'number' },
+			{ id: 'editor.fontLigatures', title: '字体连字', type: 'boolean' },
+		]);
+		const family = defaults.get('editor.fontFamily');
+		assert.equal(family.valueType === 'text' && family.placeholder, '系统默认');
+		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
+		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
+		const input = createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
+		assert.equal(input.groups[0]?.title, '消息输入');
+		assert.deepEqual(input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])), [
+			['chat.input.fontFamily', '字体', ''],
+			['chat.input.fontSize', '字号', 13],
+			['chat.input.lineHeight', '行高', 20],
+		]);
+		const inputFamily = defaults.get('chat.input.fontFamily');
+		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
 	} finally {
 		resetNlsResolver();
 	}
@@ -285,7 +317,16 @@ test('settingsLayout is the single projection from registered settings to catego
 		'appearance',
 		'layout',
 		'startup',
-		'editor',
+		'editor-fonts',
+		'editor-display',
+		'editor-editing',
+		'editor-suggestions',
+		'editor-language',
+		'editor-search',
+		'editor-diff',
+		'editor-opening',
+		'editor-files',
+		'chat-input',
 		'agents',
 		'teams',
 		'agent-defaults',
@@ -334,14 +375,14 @@ test('settingsLayout is the single projection from registered settings to catego
 	if (iconThemeSetting.valueType === 'select') {
 		assert.equal(iconThemeSetting.options.some(option => option.value === iconThemeSetting.configuration.defaultValue), true);
 	}
-	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
-	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor');
-	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor');
-	assert.equal(findSettingCategory(layout, 'workbench.editorLargeFileConfirmation'), 'editor');
-	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor');
-	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor');
-	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor');
-	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
+	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor-opening');
+	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor-display');
+	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor-display');
+	assert.equal(findSettingCategory(layout, 'workbench.editorLargeFileConfirmation'), 'editor-opening');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor-fonts');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor-display');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor-display');
+	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor-search');
 	assert.equal(findSettingCategory(layout, 'scm.diffDecorationsIgnoreTrimWhitespace'), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'general');
@@ -815,7 +856,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'network', 'editor'],
+		['general', 'network'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
@@ -823,7 +864,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'network', 'appearance', 'layout', 'startup', 'editor'],
+		['general', 'network', 'appearance', 'layout', 'startup'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -1151,10 +1192,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.textContent, 'Appearance');
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 
-	root.querySelector<HTMLElement>('[data-settings-category-id="editor"]')?.click();
-	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor');
+	root.querySelector<HTMLElement>('[data-settings-group-id="editor"]')?.click();
+	root.querySelector<HTMLElement>('[data-settings-category-id="editor-fonts"]')?.click();
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor-fonts');
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
-	assert.ok(root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor}"]`));
+	assert.equal(root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor}"]`), null);
 	assert.equal(root.querySelector('[data-settings-item-id^="models.item."]'), null);
 	const fontFamily = root.querySelector<HTMLInputElement>(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`);
 	assert.ok(fontFamily);
@@ -1183,7 +1225,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 1);
+	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 2);
+	assert.ok(root.querySelector('[data-settings-item-id="chat.input.fontFamily"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
 	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));

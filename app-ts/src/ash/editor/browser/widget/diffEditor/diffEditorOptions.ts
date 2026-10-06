@@ -4,6 +4,7 @@ import { type HideUnchangedRegionsOptions, diffEditorDefaultOptions } from '../.
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import type { IDiffEditorOptions } from '../../../common/config/editorOptions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { localize } from '../../../../nls.js';
 
 export interface DiffEditorWidgetOptions {
 	readonly container: HTMLElement;
@@ -131,8 +132,8 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		throw new TypeError('Diff editor widget requires a browser container');
 	}
 	if (!options.model || typeof options.model !== 'object') throw new TypeError('Diff editor widget requires a diff model');
-	if (options.lineHeight !== undefined && (!isFiniteNumber(options.lineHeight) || options.lineHeight <= 0)) {
-		throw new RangeError('Diff editor widget line height must be positive and finite');
+	if (options.lineHeight !== undefined && (!isFiniteNumber(options.lineHeight) || options.lineHeight < 0)) {
+		throw new RangeError(localize('diffEditor.lineHeight.invalid', 'Diff editor line height must be non-negative and finite.'));
 	}
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) {
 		throw new TypeError('Diff editor font family must be a non-empty string');

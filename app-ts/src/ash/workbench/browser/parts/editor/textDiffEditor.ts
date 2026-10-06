@@ -25,6 +25,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getDiffComputationOptions, getDiffWordWrap } from "../../../services/editor/common/editorConfiguration.js";
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
+import type { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 
 export interface DiffEditorPaneOptions {
 	readonly modelService: ITextModelResourceService;
@@ -209,6 +210,28 @@ class DiffEditorPaneSession extends Disposable {
 			diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
+			const fontOptions: {
+				fontFamily?: IEditorOptions['fontFamily'];
+				fontSize?: IEditorOptions['fontSize'];
+				lineHeight?: IEditorOptions['lineHeight'];
+				fontLigatures?: IEditorOptions['fontLigatures'];
+			} = {};
+			if (options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily')) {
+				fontOptions.fontFamily = configuration.getValue<string>('editor.fontFamily') || undefined;
+			}
+			if (options.fontSize === undefined && event.affectsConfiguration('editor.fontSize')) {
+				fontOptions.fontSize = configuration.getValue('editor.fontSize');
+			}
+			if (options.lineHeight === undefined && event.affectsConfiguration('editor.lineHeight')) {
+				fontOptions.lineHeight = configuration.getValue('editor.lineHeight');
+			}
+			if (options.fontLigatures === undefined && event.affectsConfiguration('editor.fontLigatures')) {
+				fontOptions.fontLigatures = configuration.getValue('editor.fontLigatures');
+			}
+			if (Object.keys(fontOptions).length > 0) {
+				this.editor.originalEditor.updateOptions(fontOptions);
+				this.editor.modifiedEditor.updateOptions(fontOptions);
+			}
 			const languageId = model.modified.getLanguageId();
 			if (event.affectsConfiguration("diffEditor.wordWrap") || event.affectsConfiguration("editor.wordWrap")) {
 				this.editor.setConfiguredWordWrap(getDiffWordWrap(configuration));
@@ -258,10 +281,10 @@ class DiffEditorPaneSession extends Disposable {
 			enableSplitViewResizing: configuration.getValue('diffEditor.enableSplitViewResizing'),
 			splitViewDefaultRatio: configuration.getValue('diffEditor.splitViewDefaultRatio'),
 			hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
-			lineHeight: options.lineHeight,
-			fontFamily: options.fontFamily,
-			fontSize: options.fontSize,
-			fontLigatures: options.fontLigatures,
+			lineHeight: options.lineHeight ?? configuration.getValue<number>('editor.lineHeight'),
+			fontFamily: options.fontFamily ?? (configuration.getValue<string>('editor.fontFamily') || undefined),
+			fontSize: options.fontSize ?? configuration.getValue<number>('editor.fontSize'),
+			fontLigatures: options.fontLigatures ?? configuration.getValue<boolean>('editor.fontLigatures'),
 			showLineNumbers: options.showLineNumbers,
 			showInlineChanges: options.showInlineChanges,
 			loopChanges: options.loopChanges,

@@ -27,7 +27,7 @@ import "../../contrib/chat/common/widget/chatColors.js";
 import "../../contrib/pdf/common/pdfColors.js";
 import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
 import "../../contrib/terminal/common/terminalColorRegistry.js";
-import "../../../sessions/common/sessionsColors.js";
+import "../../../sessions/common/theme.js";
 
 test('CSS variable manifest matches registered colors and sizes', async () => {
 	const path = join(process.cwd(), '../build/lib/stylelint/ash-known-variables.json');

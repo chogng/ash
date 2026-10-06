@@ -399,11 +399,61 @@ test('Browser Workbench and Sessions persist model visibility across page naviga
 	await expect(settings.getByRole('switch', { name: modelLabel })).toHaveAttribute('aria-checked', String(initiallyVisible));
 });
 
+test('Editor settings have separate pages with keyboard navigation and global search', async ({ workbench }) => {
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = workbench.settingsEditor.element;
+	const editorGroup = settings.getByRole('treeitem').filter({ has: workbench.page.locator('[data-settings-group-id="editor"]') });
+	await expect(editorGroup).toHaveAttribute('aria-expanded', 'false');
+	const navigation = settings.getByRole('tree', { name: 'Settings categories' });
+	await navigation.focus();
+	await navigation.press('Home');
+	for (let index = 0; index < 4; index++) await navigation.press('ArrowDown');
+	await expect(navigation).toHaveAttribute('aria-activedescendant', (await editorGroup.getAttribute('id'))!);
+	await navigation.press('ArrowRight');
+	await expect(editorGroup).toHaveAttribute('aria-expanded', 'true');
+	await navigation.press('ArrowDown');
+	await workbench.page.keyboard.press('Enter');
+	await expect(settings.locator('.ash-settings-page h3')).toHaveText('Fonts and spacing');
+	await expect(settings.locator('[data-settings-item-id]')).toHaveCount(4);
+	const fontFamily = settings.locator('[data-configuration-key="editor.fontFamily"]');
+	await expect(fontFamily).toHaveAttribute('placeholder', 'System default');
+	await expect(fontFamily).toHaveValue('');
+	await expect(settings.locator('[data-settings-item-id="editor.fontFamily"]')).toContainText('monospace');
+	await expect(settings.locator('[data-configuration-key="editor.fontSize"]')).toHaveValue(process.platform === 'darwin' ? '12' : '14');
+	for (const [category, setting] of [
+		['editor-display', 'editor.renderWhitespace'],
+		['editor-editing', 'editor.tabSize'],
+		['editor-suggestions', 'editor.codeLens'],
+		['editor-language', 'language-servers.configuration'],
+		['editor-search', 'search.maxResults'],
+		['editor-diff', 'diffEditor.renderSideBySide'],
+		['editor-opening', 'workbench.editor.showTabs'],
+		['editor-files', 'files.autoSave'],
+	]) {
+		await workbench.settingsEditor.selectEditorCategory(category!);
+		const control = category === 'editor-language'
+			? settings.locator(`[data-settings-item-id="${setting}"]`)
+			: settings.locator(`[data-configuration-key="${setting}"]`);
+		await expect(control).toBeVisible();
+		await expect(settings.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCount(0);
+	}
+	const search = settings.getByRole('searchbox', { name: 'Search settings' });
+	await search.fill('@id:editor.fontSize');
+	await expect(settings.locator('[data-settings-item-id]')).toHaveCount(1);
+	await expect(settings.getByRole('spinbutton', { name: 'Font size', exact: true })).toBeVisible();
+	await search.fill('');
+	await expect(settings.locator('[data-configuration-key="files.autoSave"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="editor.fontSize"]')).toHaveCount(0);
+	await workbench.quickaccess.runCommand('ash.languageServers.open');
+	await expect(settings.locator('.ash-settings-page h3')).toHaveText('Language servers');
+	await expect(settings.locator('.ash-language-server-settings')).toBeVisible();
+});
+
 test('Settings opens with editor display controls', async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.locator('.ash-modal-editor')).toBeVisible();
-	await page.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.selectEditorCategory('editor-display');
 	await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
 	await expect(page.locator('.ash-settings-card').first()).toHaveCSS('border-radius', '8px');
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
@@ -413,7 +463,8 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(rootTitle).toHaveCount(0);
 	await expect(rootDescription).toHaveCount(0);
 
-	await expect(page.getByRole('heading', { name: 'Editor selection', exact: true })).toBeVisible();
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
+	await expect(page.getByRole('heading', { name: 'Tabs and editors', exact: true })).toBeVisible();
 	for (const key of ['workbench.editor.showTabs', 'workbench.editor.defaultBinaryEditor']) {
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
@@ -423,6 +474,7 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		expect(Math.abs(rowBounds!.x + rowBounds!.width - 16 - controlBounds!.x - controlBounds!.width)).toBeLessThanOrEqual(1);
 	}
 
+	await workbench.settingsEditor.selectEditorCategory('editor-display');
 	await expect(page.getByRole('heading', { name: 'Minimap', exact: true })).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
@@ -466,7 +518,7 @@ test('File opening settings save through their controls and survive reloading th
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	const openSettings = async () => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
-		await settings.locator('[data-settings-category-id="editor"]').click();
+		await workbench.settingsEditor.selectEditorCategory('editor-opening');
 		await expect(settings.getByRole('heading', { name: 'File opening', exact: true })).toBeVisible();
 	};
 	await openSettings();
@@ -506,7 +558,7 @@ test('editor settings apply immediately, persist after reload and reset to their
 	await expect(numbers.first()).toHaveText('1');
 	let settings = workbench.settingsEditor;
 	await settings.openUserSettingsUI();
-	await settings.selectCategory('editor');
+	await settings.selectEditorCategory('editor-display');
 	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
 	let row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
 	let control = row.getByRole('switch');
@@ -524,7 +576,7 @@ test('editor settings apply immediately, persist after reload and reset to their
 	control = row.getByRole('switch');
 	await expect(numbers.first()).toHaveText('');
 	await settings.openUserSettingsUI();
-	await settings.selectCategory('editor');
+	await settings.selectEditorCategory('editor-display');
 	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
 	await expect(control).not.toBeChecked();
 	await row.hover();
@@ -780,13 +832,15 @@ test.describe('Manage menu', () => {
 		} else {
 			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toHaveCount(0);
 		}
-		await page.locator('[data-settings-category-id="editor"]').click();
+		await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 		const fontSizeControl = page.locator('[data-configuration-key="editor.fontSize"]').locator('..');
 		await expect(fontSizeControl).toHaveCSS('height', '24px');
 		await expect(fontSizeControl).toHaveCSS('width', '96px');
 		await expect(fontSizeControl).toHaveCSS('justify-self', 'end');
 		await expect(page.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCSS('height', '24px');
+		await workbench.settingsEditor.selectEditorCategory('editor-display');
 		await expect(page.locator('[data-configuration-key="editor.wordWrap"]').getByRole('combobox')).toHaveCSS('height', '24px');
+		await workbench.settingsEditor.selectEditorCategory('editor-files');
 		await expect(page.locator('[data-configuration-key="explorer.fileNesting.patterns"] .ash-string-map-row input').first()).toHaveCSS('height', '24px');
 	});
 

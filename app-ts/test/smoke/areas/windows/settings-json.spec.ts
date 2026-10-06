@@ -73,7 +73,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 	}
-	await workbench.settingsEditor.selectCategory('editor');
+	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	const row = settings.locator('[data-settings-item-id="editor.fontSize"]');
 	const menu = row.getByRole('button', { name: /^More actions/ });
@@ -94,14 +94,14 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('editor');
+	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	await expect(settings.getByRole('spinbutton', { name: 'Font size', exact: true })).toHaveValue('23');
 	await settings.locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('editor');
+	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	await expect(settings.getByRole('spinbutton', { name: 'Font size', exact: true })).toHaveValue('23');
 	await settings.locator('.ash-modal-editor-close').click();
@@ -188,10 +188,10 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await workbench.settingsEditor.selectCategory('editor');
+	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	const font = settings.getByRole('spinbutton', { name: 'Font size', exact: true });
-	await expect(font).toHaveValue('13');
+	await expect(font).toHaveValue(process.platform === 'darwin' ? '12' : '14');
 	await font.fill('20');
 	await font.press('Tab');
 	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();

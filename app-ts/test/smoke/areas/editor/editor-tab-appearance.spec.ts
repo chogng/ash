@@ -33,7 +33,7 @@ test('editor tab width settings resize existing tabs and persist after reload', 
 	const widths = async () => group.title.locator('.ash-tab').evaluateAll(tabs => tabs.map(tab => Math.round(tab.getBoundingClientRect().width * 100) / 100));
 	const fitWidths = await widths();
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('editor');
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
 	const settings = page.locator('.ash-settings-editor');
 	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.tabSizing');
 	const select = settings.locator('[data-configuration-key="workbench.editor.tabSizing"]').getByRole('combobox');
@@ -83,7 +83,7 @@ test('editor tab width settings resize existing tabs and persist after reload', 
 	await expect.poll(widths).toEqual([120, 120]);
 	const restored = await reloadWorkbench();
 	await restored.workbench.settingsEditor.openUserSettingsUI();
-	await restored.workbench.settingsEditor.selectCategory('editor');
+	await restored.workbench.settingsEditor.selectEditorCategory('editor-opening');
 	const restoredSettings = restored.workbench.page.locator('.ash-settings-editor');
 	await restoredSettings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.tabSizing');
 	await expect(restoredSettings.locator('[data-configuration-key="workbench.editor.tabSizing"]').getByRole('combobox')).toContainText('Fixed');
@@ -119,7 +119,7 @@ test('editor pill style includes the action in tab width and survives reload', a
 	const initialWidth = (await geometry()).width;
 	for (const option of ['Pill', 'Connected', 'Pill']) {
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectCategory('editor');
+		await workbench.settingsEditor.selectEditorCategory('editor-opening');
 		const settings = page.locator('.ash-settings-editor');
 		await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
 		const select = settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox');
@@ -162,7 +162,7 @@ test('editor pill style includes the action in tab width and survives reload', a
 	await expectTabActionCentered(item);
 	const restored = await reloadWorkbench();
 	await restored.workbench.settingsEditor.openUserSettingsUI();
-	await restored.workbench.settingsEditor.selectCategory('editor');
+	await restored.workbench.settingsEditor.selectEditorCategory('editor-opening');
 	const settings = restored.workbench.page.locator('.ash-settings-editor');
 	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
 	await expect(settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox')).toContainText('Pill');
@@ -255,7 +255,7 @@ test('editor label format setting persists and keeps untitled tabs free of direc
 	const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' });
 	const tabId = await tab.getAttribute('id');
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('editor');
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
 	const settings = page.locator('.ash-settings-editor');
 	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.labelFormat');
 	const setting = settings.locator('[data-configuration-key="workbench.editor.labelFormat"]');
@@ -271,7 +271,7 @@ test('editor label format setting persists and keeps untitled tabs free of direc
 	await page.locator('.ash-modal-editor-close').click();
 	const restored = await reloadWorkbench();
 	await restored.workbench.settingsEditor.openUserSettingsUI();
-	await restored.workbench.settingsEditor.selectCategory('editor');
+	await restored.workbench.settingsEditor.selectEditorCategory('editor-opening');
 	await restored.workbench.page.locator('.ash-settings-editor').getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.labelFormat');
 	await expect(restored.workbench.page.locator('[data-configuration-key="workbench.editor.labelFormat"]').getByRole('combobox')).toContainText('Absolute Path');
 });
@@ -322,7 +322,7 @@ test.describe('File tab label format', () => {
 		const initialWidth = (await geometry()).width;
 		for (const option of ['Pill', 'Connected']) {
 			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectCategory('editor');
+			await workbench.settingsEditor.selectEditorCategory('editor-opening');
 			const settings = page.locator('.ash-settings-editor');
 			await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
 			await settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox').click();
@@ -361,7 +361,7 @@ test.describe('File tab label format', () => {
 		const naturalWidths = await ordinary.evaluateAll(tabs => tabs.map(tab => tab.getBoundingClientRect().width));
 		for (const mode of ['Shrink', 'Fixed', 'Fit']) {
 			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectCategory('editor');
+			await workbench.settingsEditor.selectEditorCategory('editor-opening');
 			const settings = page.locator('.ash-settings-editor');
 			await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.tabSizing');
 			await settings.locator('[data-configuration-key="workbench.editor.tabSizing"]').getByRole('combobox').click();
@@ -425,7 +425,7 @@ test.describe('File tab label format', () => {
 		const id = await server.getAttribute('id');
 		for (const [option, description] of [['Absolute Path', /server$/u], ['Relative Path', /^server$/u], ['Parent Directory', /^server$/u], ['Default', /^server$/u]] as const) {
 			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectCategory('editor');
+			await workbench.settingsEditor.selectEditorCategory('editor-opening');
 			const settings = page.locator('.ash-settings-editor');
 			await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.labelFormat');
 			await settings.locator('[data-configuration-key="workbench.editor.labelFormat"]').getByRole('combobox').click();
@@ -731,7 +731,7 @@ test('editor icon setting updates existing tabs and survives pinning', async ({ 
 	const tabId = await tab.getAttribute('id');
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.locator('.ash-settings-editor');
-	await settings.locator('[data-settings-category-id="editor"]').click();
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
 	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.showIcons');
 	const toggle = settings.locator('[data-configuration-key="workbench.editor.showIcons"]');
 	await expect(toggle).toBeChecked();

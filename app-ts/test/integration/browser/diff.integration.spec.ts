@@ -760,6 +760,31 @@ test('multi diff edits the shared modified model while its original column stays
 	await expect(page.locator('#single .stanza-diff-inline-added').last()).toContainText('added');
 });
 
+test('diff font changes update alignment and the removed lines in inline view', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('head\nremoved\nshared', 'head\nshared'));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.evaluate(() => window.ashDiffIntegration.setFontOptions({ fontFamily: 'Arial', fontSize: 18, lineHeight: 30 }));
+	await expect.poll(() => page.evaluate(() => {
+		const lines = window.ashDiffIntegration.linePositions(3, 2);
+		return Math.abs(lines.originalTop - lines.modifiedTop);
+	})).toBeLessThan(1);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+	const removed = page.locator('#single .stanza-diff-inline-original-line');
+	await expect(removed).toHaveText('removed');
+	await expect(removed).toHaveCSS('font-size', '18px');
+	await expect(removed).toHaveCSS('line-height', '30px');
+	await expect(removed).toHaveCSS('height', '30px');
+	await page.evaluate(() => window.ashDiffIntegration.setFontOptions({ fontSize: 22, lineHeight: 36 }));
+	await expect(removed).toHaveCSS('font-size', '22px');
+	await expect(removed).toHaveCSS('height', '36px');
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+	await expect.poll(() => page.evaluate(() => {
+		const lines = window.ashDiffIntegration.linePositions(3, 2);
+		return Math.abs(lines.originalTop - lines.modifiedTop);
+	})).toBeLessThan(1);
+});
+
 test('wrapped and inserted lines stay aligned while the two editors scroll', async ({ page }) => {
 	await openDiffPage(page);
 	const tail = Array.from({ length: 100 }, (_, index) => `tail ${index}`).join('\n');

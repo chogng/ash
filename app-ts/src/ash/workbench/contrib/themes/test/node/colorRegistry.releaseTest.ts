@@ -9,7 +9,7 @@ import '../../../chat/common/widget/chatColors.js';
 import '../../../pdf/common/pdfColors.js';
 import '../../../preferences/common/settingsEditorColorRegistry.js';
 import '../../../terminal/common/terminalColorRegistry.js';
-import '../../../../../sessions/common/sessionsColors.js';
+import '../../../../../sessions/common/theme.js';
 import '../../../../../platform/theme/common/colors/chartsColors.js';
 import '../../../../../platform/theme/common/colors/componentColors.js';
 import '../../../../../platform/theme/common/colors/editorColors.js';

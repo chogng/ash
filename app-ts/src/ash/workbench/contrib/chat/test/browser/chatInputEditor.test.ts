@@ -19,11 +19,14 @@ for (const [name, value] of Object.entries({
 
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { ChatInputEditor } = await import("../../browser/widget/input/chatInputEditor.js");
+const { ChatInputConfiguration } = await import('../../browser/chat.shared.contribution.js');
+const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 const { createChatCommandCompletionProvider } = await import("../../browser/widget/input/chatCommandCompletion.js");
 const { createChatSkillCompletionProvider } = await import("../../browser/widget/input/chatSkillCompletion.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import("../../../../../editor/common/core/position.js");
+const { EditorOption } = await import('../../../../../editor/common/config/editorOptions.js');
 const { Range } = await import("../../../../../editor/common/core/range.js");
 const { LanguageCompletionTriggerKind } = await import("../../../../../editor/common/languages.js");
 const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
@@ -51,12 +54,58 @@ test('Chat registers its focused editor for global commands and removes it on di
 	assert.equal(editors.listCodeEditors().length, 1);
 	assert.deepEqual(lifecycle, ['will', 'add']);
 	assert.equal(editor.element.querySelectorAll('.stanza-editor-completion').length, 1);
+	const inputFont = editor.element.querySelector<HTMLElement>('.stanza-editor')!.style;
+	assert.equal(inputFont.fontSize, '13px');
+	assert.equal(inputFont.lineHeight, '20px');
+	assert.doesNotMatch(inputFont.fontFamily.split(', monospace')[0]!, /^Menlo/u);
 	assert.strictEqual(editors.getFocusedCodeEditor(), editors.listCodeEditors()[0]);
 	await services.invokeFunction(accessor => SelectAllCommand.runCommand(accessor, undefined));
 	assert.deepEqual(editors.getFocusedCodeEditor()?.getSelection(), new Selection(1, 1, 1, 8));
 	editor.dispose();
 	assert.equal(editors.listCodeEditors().length, 0);
 	assert.deepEqual(lifecycle, ['will', 'add', 'remove']);
+});
+
+test('Chat typography updates preserve the draft and selection, resize the input, and reset independently of file fonts', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	const services = createCodeEditorServices(editorServices);
+	const configuration = services.get(IConfigurationService);
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
+	editor.layout();
+	editor.value = Array.from({ length: 6 }, (_, index) => `Line ${index + 1}`).join('\n');
+	const codeEditor = services.get(ICodeEditorService).listCodeEditors()[0]!;
+	codeEditor.setSelection(new Selection(2, 2, 3, 3));
+	const selection = codeEditor.getSelection();
+	const draft = editor.value;
+	const font = editor.element.querySelector<HTMLElement>('.stanza-editor')!.style;
+	const family = font.fontFamily;
+	await waitFor(() => editor.element.style.height === '120px');
+	await configuration.updateValue(ChatInputConfiguration.fontFamily, 'Arial');
+	await configuration.updateValue(ChatInputConfiguration.fontSize, 18);
+	await configuration.updateValue(ChatInputConfiguration.lineHeight, 30);
+	await waitFor(() => editor.element.style.height === '180px');
+	assert.match(font.fontFamily, /^Arial,/u);
+	assert.equal(font.fontSize, '18px');
+	assert.equal(font.lineHeight, '30px');
+	assert.equal(editor.value, draft);
+	assert.deepEqual(codeEditor.getSelection(), selection);
+	await assert.rejects(configuration.updateValue(ChatInputConfiguration.fontFamily, 'Arial\nMenlo'));
+	await assert.rejects(configuration.updateValue(ChatInputConfiguration.fontSize, 7));
+	await assert.rejects(configuration.updateValue(ChatInputConfiguration.lineHeight, 7));
+	await configuration.updateValue(ChatInputConfiguration.lineHeight, 0);
+	assert.equal(font.lineHeight, `${codeEditor.getOption(EditorOption.fontInfo).lineHeight}px`);
+	for (const key of Object.values(ChatInputConfiguration)) await configuration.updateValue(key, undefined);
+	await waitFor(() => editor.element.style.height === '120px');
+	assert.equal(font.fontFamily, family);
+	assert.equal(font.fontSize, '13px');
+	assert.equal(font.lineHeight, '20px');
+	editor.dispose();
+	await configuration.updateValue(ChatInputConfiguration.fontSize, 16);
+	assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 0);
 });
 
 test("Chat completion providers use one-based editor positions and ranges", async () => {

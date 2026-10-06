@@ -295,7 +295,17 @@
     "chat.modelPicker.reasoningMedium": "日常任务中平衡速度与推理深度",
     "chat.modelPicker.reasoningHigh": "为复杂问题提供更深入的推理",
     "chat.modelPicker.reasoningExtraHigh": "为复杂问题提供超高推理深度",
-    "chat.modelPicker.reasoningMax": "为最困难的问题提供最高推理深度"
+    "chat.modelPicker.reasoningMax": "为最困难的问题提供最高推理深度",
+    "chat.input.fontFamily.title": "字体",
+    "chat.input.fontFamily.default": "系统默认",
+    "chat.input.fontFamily.description": "设置输入消息时使用的字体。留空时使用系统界面字体，不影响回复和代码块。",
+    "chat.input.fontFamily.invalid": "消息输入字体必须是单行字符串，且不超过 256 个字符。",
+    "chat.input.fontSize.title": "字号",
+    "chat.input.fontSize.description": "设置消息输入框文字的像素大小，默认值为 13。",
+    "chat.input.fontSize.invalid": "消息输入字号必须是 8 到 40 之间的整数。",
+    "chat.input.lineHeight.title": "行高",
+    "chat.input.lineHeight.description": "设置消息输入框每行的像素高度，默认值为 20。设为 0 时根据字号自动计算。",
+    "chat.input.lineHeight.invalid": "消息输入行高必须是 0，或 8 到 80 之间的整数。"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

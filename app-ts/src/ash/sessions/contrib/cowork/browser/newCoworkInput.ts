@@ -1,5 +1,5 @@
 import './media/chatInput.css';
-import '../../../common/sessionsColors.js';
+import '../../../common/theme.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';

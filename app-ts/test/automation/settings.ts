@@ -20,6 +20,11 @@ export class SettingsEditor {
 		await expect(category).toHaveAttribute('aria-selected', 'true');
 	}
 
+	public async selectEditorCategory(categoryId: string): Promise<void> {
+		await this.selectGroup('editor');
+		await this.selectCategory(categoryId);
+	}
+
 	public async selectGroup(groupId: string): Promise<void> {
 		const group = this.element.getByRole('treeitem').filter({ has: this.page.locator(`[data-settings-group-id="${groupId}"]`) });
 		if (await group.getAttribute('aria-expanded') !== 'true') {

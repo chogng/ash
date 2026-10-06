@@ -64,6 +64,10 @@ textarea {
 }
 
 .ash-sessions-window .ash-context-view-hover {
+	/* ContextView hosts the hover under the window root, outside the triggering control. */
+	--ash-hover-background: var(--ash-sessions-tooltip-background);
+	--ash-hover-foreground: var(--ash-sessions-tooltip-foreground);
+	--ash-hover-border: var(--ash-sessions-tooltip-border);
 	border-radius: var(--ash-corner-radius-x-large);
 }
 
