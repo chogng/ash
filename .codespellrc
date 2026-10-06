@@ -1,0 +1,19 @@
+[codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+check-hidden = true
+ignore-words = .codespellignore
+# Generated files, fixtures, and test sources containing deliberate typos.
+skip =
+    .codespell*,*.lock,*-lock.yaml,**/generated/*,
+    **/fixtures/*,**/test-data/*,**/testData/*,**/snapshots/*,*.snap,*.snap.new,
+    **/*_tests.rs,**/tests/*.rs,**/*.test.ts,
+    # Language grammars, separate non-English catalogs, and captured source data.
+    **/syntaxes/*,**/localization/zh-*/*,**/localization/fr/*,**/localization/ja/*,
+    app-rs/input-classifier/dictionaries/*,app-rs/input-classifier/models/*,docs/tools/*,
+    # Copied dependencies and generated contracts; the ConPTY file credits WezTerm.
+    third_party/*,**/vendor/*,
+    app-ts/src/ash/base/browser/dompurify/*,app-ts/src/ash/base/common/marked/*,
+    app-ts/src/ash/base/common/productIcons.ts,ash-rs/app-server-protocol/schema/*,schemas/*,
+    ash-rs/utils/pty/src/win/psuedocon.rs
+# Test hook name and the documented fuzzy-command example are intentional.
+ignore-regex = \bafterAll\b|/cofig\b

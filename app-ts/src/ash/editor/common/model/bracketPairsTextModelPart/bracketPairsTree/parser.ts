@@ -102,8 +102,8 @@ class Parser {
 			const maxCacheableLength = this.positionMapper.getDistanceToNextChange(this.tokenizer.offset);
 			if (maxCacheableLength === null || !lengthIsZero(maxCacheableLength)) {
 				const cachedNode = this.oldNodeReader.readLongestNodeAt(this.positionMapper.getOffsetBeforeChange(this.tokenizer.offset), curNode => {
-					// The edit could extend the ending token, thus we cannot re-use nodes that touch the edit.
-					// If there is no edit anymore, we can re-use the node in any case.
+					// The edit could extend the ending token, thus we cannot reuse nodes that touch the edit.
+					// If there is no edit anymore, we can reuse the node in any case.
 					if (maxCacheableLength !== null && !lengthLessThan(curNode.length, maxCacheableLength)) {
 						// Either the node contains edited text or touches edited text.
 						// In the latter case, brackets might have been extended (`end` -> `ending`), so even touching nodes cannot be reused.

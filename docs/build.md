@@ -66,6 +66,7 @@
 | `just build-rust`                                           | 构建根 Rust workspace                                                      |
 | `just check <package>`                                      | 检查指定 Rust 包                                                           |
 | `just lint`                                                 | 检查 Python 代码                                                           |
+| `just spellcheck`                                           | 检查仓库源码和文档中的常见英文拼写错误                                     |
 | `just fmt` / `just fmt-check`                               | 调用各语言工具，格式化或检查 Just、Rust、Python、TS/JS、配置与文档         |
 | `just rust-format` / `just rust-format-check`               | 单独格式化或检查 Rust，不需要前端依赖                                      |
 | `pnpm format:ts` / `pnpm format:ts:fix`                     | 检查或格式化第一方 TS/JS；可追加文件或目录                                 |
@@ -82,6 +83,10 @@
 TS/JS 入口通过 Git 选择 `app-ts/`、`build/`、`extensions/`、`test/`、`services/` 和 `ash-rs/js-extension-host/` 下的第一方源码，排除生成文件、第三方代码、声明文件和 fixtures。TypeScript 格式化器保留现有引号与换行布局；新代码的单引号和 import 单行规则仍遵循 [TypeScript 规范](../.github/instructions/typescript-coding-guidelines.instructions.md)。编辑器使用相同 TypeScript 版本、Tab 和分号设置，自动导入使用单引号。Prettier 的排除范围在 [`.prettierignore`](../.prettierignore)，文档中的代码块不由 Prettier 重排。全量检查报告现有格式差异，检查命令不修改源码；格式化可通过语言独立入口执行。
 
 Rust 入口从 Cargo metadata 选择第一方 workspace 包，不格式化 `vendor/` 与 `third_party/` 中的包；固定 stable rustfmt 支持的配置不包含 `imports_granularity`，一行一个 import 的要求继续按 Rust 规范执行。
+
+英文拼写检查使用固定版本 codespell。执行 `just install-python` 安装工具，再执行 `just spellcheck`；检查只报告错字，不自动改写文件。本地与 [Spelling CI](../.github/workflows/codespell.yml) 使用同一入口，从 Git 获取已跟踪及未忽略的新文件，跳过已删除文件和本地构建产物。
+
+扫描规则在 [`.codespellrc`](../.codespellrc)：排除生成内容、fixtures、测试源码、独立非英文翻译文件、语法正则、词干与训练数据、收集的外部资料和第三方副本。普通测试目录中的文档和 `.spec.ts` 仍检查。TUI 的混合翻译源码也参与扫描；[`.codespellignore`](../.codespellignore) 只收录已确认的名称、API 字段、缩写和源码中的法语词，每行一个、按字母排序，允许词在整个仓库生效。真实错字应修正，仅将已确认的误报加入允许词。
 
 `stylelint` 默认排除测试和测试数据中的 CSS，显式路径没有匹配生产 CSS 时返回失败。清单位于 [ash-known-variables.json](../build/lib/stylelint/ash-known-variables.json)，`colors`、`sizes` 来自注册表，`others` 仅收录已确认由组件或平台设置的变量；三类列表都需排序，不能重复。清单更新通过显式选择 `colorRegistry.releaseTest.ts` 完成，该文件不进入日常单测的默认选择。前端 `test:main` 和 CI 都运行这些检查。
 

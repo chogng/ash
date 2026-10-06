@@ -1,0 +1,31 @@
+name: Spelling
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codespell-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codespell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+      - name: Install pinned Python tools
+        run: just install-python
+      - name: Check English spelling
+        run: just spellcheck

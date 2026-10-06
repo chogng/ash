@@ -5,6 +5,7 @@ set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
 python := if os_family() == "windows" { "python" } else { "python3" }
 ruff := if os_family() == "windows" { "./scripts/.venv/Scripts/ruff.exe" } else { "./scripts/.venv/bin/ruff" }
+tools_python := if os_family() == "windows" { "./scripts/.venv/Scripts/python.exe" } else { "./scripts/.venv/bin/python" }
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 
 # Unit tests and PTY service binaries share one profile to reuse dependency outputs.
@@ -36,7 +37,11 @@ lint:
 python-format-check:
     {{ ruff }} format --check build scripts
 
-# Install the exact Python tool wheel before running lint or formatting.
+# Check English spelling in repository sources and documentation.
+spellcheck:
+    {{ tools_python }} -B scripts/spellcheck.py
+
+# Install the exact Python tool wheels before lint, formatting, or spellcheck.
 install-python:
     {{ python }} -B scripts/install_python_tools.py
 

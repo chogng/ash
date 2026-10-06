@@ -196,7 +196,7 @@ export interface IInjectedTextInlineDecorationsComputerContext {
 	 */
 	getInjectionOffsets(modelLineNumber: number): number[] | null;
 	/**
-	 * Get the break offets for a model line number
+	 * Get the break offsets for a model line number
 	 */
 	getBreakOffsets(modelLineNumber: number): number[];
 	/**
