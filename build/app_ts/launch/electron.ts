@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { watchHost } from '../host.ts';
+import { prepareAppServer } from '../appServer.ts';
 
 const sourceRoot = resolve(import.meta.dirname, '../../../app-ts');
 const require = createRequire(resolve(sourceRoot, 'package.json'));
@@ -64,6 +65,8 @@ async function stop(): Promise<void> {
 
 process.once('SIGINT', () => { void stop(); });
 process.once('SIGTERM', () => { void stop(); });
+if (environment.ASH_DESKTOP_UI_ONLY !== '1') await prepareAppServer('host-provided-node');
+if (stopped) process.exit(1);
 if (watch) {
 	watcher = await watchHost(current => {
 		ready = current;

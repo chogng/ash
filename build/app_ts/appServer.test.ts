@@ -5,8 +5,30 @@ import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
+import { prepareAppServer, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
 import { pythonCommand } from '../python.ts';
+
+for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const) {
+	for (const succeeds of [true, false]) {
+		test(`${javascriptRuntime} startup ${succeeds ? 'waits for preparation before selecting the runtime' : 'rejects failed preparation without selecting an old runtime'}`, async t => {
+			const commands: { command: string; args: string[]; }[] = [];
+			t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+			t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[]) => {
+				commands.push({ command, args: [...args] });
+				const child = new ChildProcess();
+				setImmediate(() => child.emit('close', succeeds ? 0 : 1, null));
+				return child;
+			});
+			syncBuiltinESMExports();
+			const preparation = prepareAppServer(javascriptRuntime);
+			if (succeeds) await preparation;
+			else await assert.rejects(preparation, /backend preparation exited with status 1/);
+			const expected = [pythonCommand(['-B', 'build/ash_rs/prepare.py', '--javascript-runtime', javascriptRuntime])];
+			if (succeeds && javascriptRuntime === 'host-provided-node') expected.push(pythonCommand(['-B', 'build/ash_rs/develop.py', '--select-prepared']));
+			assert.deepEqual(commands, expected);
+		});
+	}
+}
 
 test('app-server watcher selects Rust sources and Cargo manifests', () => {
 	assert.equal(shouldRebuildAppServer('ash-rs/app-server/src/main.rs'), true);

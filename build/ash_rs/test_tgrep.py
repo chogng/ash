@@ -47,10 +47,13 @@ class TgrepTests(unittest.TestCase):
             root = Path(temporary)
             lock = self.fixture(root)
             commands = []
+            build_directories = []
 
             def run(command, **kwargs):
                 commands.append(command)
                 if command[1] == "build":
+                    build_directories.append(Path(kwargs["cwd"]))
+                    self.assertFalse(build_directories[-1].is_relative_to(root / "cache"))
                     target = (
                         Path(kwargs["env"]["CARGO_TARGET_DIR"])
                         / "aarch64-apple-darwin/release/tgrep"
@@ -77,6 +80,7 @@ class TgrepTests(unittest.TestCase):
             self.assertEqual(commands[0][:3], ["git", "apply", "--check"])
             self.assertIn("--locked", commands[2])
             self.assertEqual(len(commands), 3)
+            self.assertFalse(build_directories[0].exists())
             self.assertEqual(
                 {path.name for path in first.executable.parent.iterdir()},
                 {"tgrep", "build.json", ".build.lock"},
@@ -127,7 +131,8 @@ class TgrepTests(unittest.TestCase):
             lock = self.fixture(root)
             patch_file = root / "engine.patch"
             patch_file.write_text(
-                'diff --git a/Cargo.toml b/Cargo.toml\n--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 +1,2 @@\n [workspace]\n+resolver = "2"\n'
+                'diff --git a/Cargo.toml b/Cargo.toml\n--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 +1,2 @@\n [workspace]\n+resolver = "2"\n',
+                newline="\n",
             )
             data = json.loads(lock.read_text())
             data["patch"]["sha256"] = hashlib.sha256(

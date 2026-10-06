@@ -245,6 +245,7 @@
     "chat.attach.binary": "{0} 必须是 UTF-8 文本文件或 PNG、JPEG、GIF、WebP 图片",
     "chat.attach.failed": "无法添加附件：{0}",
     "chat.input.dictationTranscribing": "正在转录…",
+    "chat.input.actions": "聊天输入操作",
     "chat.input.voice": "语音对话",
     "chat.input.voiceUnavailable": "语音对话暂不可用",
     "chat.providerKeys.manage": "管理模型接入",

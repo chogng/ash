@@ -1,4 +1,4 @@
-.ash-cowork > .ash-cowork-input-part {
+.ash-cowork > .ash-chat-input-part {
 	box-sizing: border-box;
 	min-height: 0;
 	flex: 0 0 auto;
@@ -9,7 +9,7 @@
 }
 
 /* One composer is retained while navigation changes the surrounding Parts. */
-.ash-cowork > .ash-cowork-input-part.ash-sessions-cowork-input.cowork-composer {
+.ash-cowork > .ash-chat-input-part.ash-sessions-cowork-input.cowork-composer {
 	--ash-chat-input-min-height: 112px;
 	--ash-chat-input-padding: var(--ash-spacing-size160);
 	--ash-chat-input-border: var(--ash-border);
@@ -26,7 +26,7 @@
 }
 
 .ash-cowork
-	> .ash-cowork-input-part.ash-sessions-cowork-input.cowork-composer.has-conversation {
+	> .ash-chat-input-part.ash-sessions-cowork-input.cowork-composer.has-conversation {
 	margin-bottom: 0;
 }
 
@@ -45,7 +45,7 @@
 	display: none;
 }
 
-.ash-sessions-cowork-input .ash-cowork-input-container {
+.ash-sessions-cowork-input .ash-chat-input-container {
 	position: relative;
 }
 

@@ -5,8 +5,6 @@ import type { ModelRef } from '../../../src/ash/workbench/services/chat/common/c
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import { ChatInputPart as CoworkChatInputPart } from '../../../src/ash/sessions/contrib/cowork/browser/widget/input/chatInputPart.js';
-import '../../../src/ash/sessions/contrib/cowork/browser/widget/media/chat.css';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -19,8 +17,6 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IDictationService } from '../../../src/ash/platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { ChatSpeechToTextService as CoworkSpeechToTextService, IChatSpeechToTextService as ICoworkSpeechToTextService } from '../../../src/ash/sessions/contrib/cowork/browser/speechToText/chatSpeechToTextService.js';
-import { DictationOnboardingService as CoworkDictationOnboardingService, IDictationOnboardingService as ICoworkDictationOnboardingService } from '../../../src/ash/sessions/contrib/cowork/browser/speechToText/dictationOnboarding.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -91,8 +87,6 @@ services.registerInstance(IConfigurationService, resources.add(new InMemoryConfi
 services.registerInstance(IDictationService, undefined);
 services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
-services.registerSingleton(ICoworkSpeechToTextService, () => services.createInstance(CoworkSpeechToTextService));
-services.registerSingleton(ICoworkDictationOnboardingService, () => services.createInstance(CoworkDictationOnboardingService));
 const notifications = resources.add(new NotificationService());
 const delegate: ChatInputDelegate = {
 	send: async () => { }, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
@@ -110,8 +104,11 @@ const delegate: ChatInputDelegate = {
 	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, openModelSettings: async () => { },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; },
 };
-const inputPart = new URLSearchParams(location.search).get('surface') === 'cowork' ? CoworkChatInputPart : ChatInputPart;
-const part = resources.add(services.createInstance<ChatInputPart | CoworkChatInputPart>(inputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, []));
+const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
+const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, ChatInputEditors, [], {
+	modePicker: cowork ? 'hidden' : 'visible',
+	modelPickerPosition: cowork ? 'trailing' : 'leading',
+}));
 const state: ChatInputState = {
 	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 	interaction: {

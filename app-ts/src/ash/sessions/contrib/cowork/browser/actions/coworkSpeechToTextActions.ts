@@ -1,8 +1,8 @@
 import { localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IDictationOnboardingService } from '../speechToText/dictationOnboarding.js';
-import { IChatSpeechToTextService } from '../speechToText/chatSpeechToTextService.js';
+import { IDictationOnboardingService } from '../../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IChatSpeechToTextService } from '../../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 
 registerAction2(class ShowDictationIntroductionAction extends Action2 {
 	constructor() {

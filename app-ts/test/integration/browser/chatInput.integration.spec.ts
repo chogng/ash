@@ -71,7 +71,7 @@ for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'co
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const trigger = page.locator('[data-action-id="ash.chat.input.model"] button');
 		await trigger.press('ArrowDown');
-		const prefix = surface === 'cowork' ? 'ash-cowork' : 'ash-chat';
+		const prefix = 'ash-chat';
 		const picker = page.locator(`.${prefix}-model-picker`);
 		const search = picker.getByRole('combobox');
 		await expect(picker.getByRole('menuitemradio', { name: 'Test Model', exact: true })).toHaveText('Test Model');

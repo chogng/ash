@@ -80,7 +80,7 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ChatInputPart, container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, []);
+	const part = partServices.createInstance(ChatInputPart, container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
 	part.render(state);
 	return part;
 }
@@ -473,7 +473,7 @@ function waitForSpeechState(service: IChatSpeechToTextService, state: ChatSpeech
 
 test('Input construction rejects a missing window dictation service', () => {
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, []), /Unknown service: chatSpeechToTextService/);
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatSpeechToTextService/);
 });
 
 test('approval shows every exact target as text and dispatches both decisions', async () => {

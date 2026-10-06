@@ -8,12 +8,12 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
-import { IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
+import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { ICoworkWidgetModel } from './widget/coworkWidget.js';
-import type { ChatInputDelegate, ChatInputState } from './widget/input/chatInput.js';
-import { ChatInputPart } from './widget/input/chatInputPart.js';
-import { ChatInputEditor } from './widget/input/chatInputEditor.js';
+import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatDragAndDrop } from './widget/chatDragAndDrop.js';
 import { NewChatContextAttachments } from './newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
@@ -27,7 +27,7 @@ import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChat
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
-/** Cowork owns the welcome layout, input operations and attachments for its panes. */
+/** Cowork owns its welcome layout and draft lifecycle; Workbench owns input operations. */
 export class NewCoworkInputWidget extends ChatInputPart {
 	private readonly heading: HTMLHeadingElement;
 	private submittedMessage = false;
@@ -73,6 +73,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		}, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
+				placeholder: '',
 				height: { minimum: 48, maximum: 240 },
 			}),
 		}, [{
@@ -82,7 +83,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], instantiationService, speechToText, onboarding);
+		}], { modePicker: 'hidden', modelPickerPosition: 'trailing' }, instantiationService, speechToText, onboarding);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');

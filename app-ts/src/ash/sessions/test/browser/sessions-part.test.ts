@@ -53,8 +53,6 @@ await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
 const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
-const { ChatSpeechToTextService: CoworkSpeechToTextService, IChatSpeechToTextService: ICoworkSpeechToTextService } = await import('../../contrib/cowork/browser/speechToText/chatSpeechToTextService.js');
-const { DictationOnboardingService: CoworkDictationOnboardingService, IDictationOnboardingService: ICoworkDictationOnboardingService } = await import('../../contrib/cowork/browser/speechToText/dictationOnboarding.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
 suiteTeardown(() => {
@@ -209,8 +207,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IChatService, chatService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	services.registerSingleton(ICoworkSpeechToTextService, () => services.createInstance(CoworkSpeechToTextService));
-	services.registerSingleton(ICoworkDictationOnboardingService, () => services.createInstance(CoworkDictationOnboardingService));
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
@@ -317,11 +313,13 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const codeView = part.domNode.querySelector('[data-conversation-kind="code"]')!;
 	await part.setConversationKind('cowork');
 	const coworkView = part.domNode.querySelector('[data-conversation-kind="cowork"]')!;
-	assert.ok(coworkView.querySelector('.ash-cowork-input-part'));
+	assert.ok(coworkView.querySelector('.ash-chat-input-part'));
+	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.mode"]'), null);
+	assert.ok(coworkView.querySelector('.ash-chat-input-container [data-action-id="ash.chat.input.model"]'));
 	assert.equal(coworkView.querySelector('.ash-chat'), null);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(codeView.isConnected, false);
-	const retainedCoworkInput = coworkView.querySelector('.ash-cowork-input-part');
+	const retainedCoworkInput = coworkView.querySelector('.ash-chat-input-part');
 	part.appendToDraft('Continue the presentation in Cowork');
 	const coworkDraft = (await part.captureActiveDraft())!.draft;
 	await part.setConversationKind('code');
@@ -330,7 +328,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const transferred = await part.captureActiveDraft();
 	transferred!.clear();
 	await part.setConversationKind('cowork');
-	assert.equal(coworkView.querySelector('.ash-cowork-input-part'), retainedCoworkInput);
+	assert.equal(coworkView.querySelector('.ash-chat-input-part'), retainedCoworkInput);
 	assert.equal(await part.captureActiveDraft(), undefined);
 	assert.equal(coworkView.querySelectorAll('.ash-cowork-attachment').length, 0);
 

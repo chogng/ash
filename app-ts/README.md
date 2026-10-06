@@ -38,6 +38,8 @@ Web 构建只包含浏览器 Workbench 与 Sessions 页面，输出到 `.build/a
 
 后端集成使用 `pnpm dev:web:full`，生产构建与启动分别使用 `pnpm build:web:full`、`pnpm start:web:full`。两种 Web 构建使用同一输出目录，预览和测试应匹配最后一次构建模式。
 
+连接后端的 Web 和 Electron 源码启动器在选取可执行文件前检查并准备当前源码对应的开发包；这一顺序也适用于直接调用启动器或 Vite 的入口。输入未变化时复用开发包，准备失败则停止启动。Web 启动日志输出实际使用的后端文件路径，便于核对联调版本。
+
 Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions 认证链接；F5 选择 `Ash Sessions Web (Chrome)`，准备前后端后自动打开该链接并连接 Chrome 调试器。只开发界面时使用 `pnpm dev:web:agents:ui` 或 `Ash Sessions Web (Chrome, UI Only)`，5173 根地址直接进入 Sessions。两种 Sessions 入口复用相同的浏览器页面、Vite 热更新和 Web 构建。切回 Workbench 后可继续使用同一浏览器会话。
 
 完整 Web 开发由 Vite 管理 Rust 监听器和 Web 启动进程。保存 Rust 或 Cargo 文件后先同步协议、编译并发布含独立 Node 的开发包；成功后通过 `ensure-selected` 切换受管后端。编译失败保留当前后端。Web 启动进程持续持有原入口，使重启后的监听地址和浏览器授权继续有效；页面重连时保留会话选择和未发送输入。停止 Vite 会释放监听器和入口授权；其他客户端共用的后端仍按共享生命周期管理。连接后端的 F5 配置通过 `serverReadyAction` 打开动态认证链接，停止服务器调试会同时停止其 `Browser Debug`；只停止浏览器调试时服务器继续运行，可在调试工具栏停止服务器。仅界面 F5 配置保留服务器与浏览器双向停止。

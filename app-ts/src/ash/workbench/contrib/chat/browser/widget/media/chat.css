@@ -432,6 +432,14 @@
 	margin-left: auto;
 }
 
+.ash-chat-input-toolbars.model-picker-trailing .ash-chat-input-model-selector {
+	margin-left: auto;
+}
+
+.ash-chat-input-toolbars.model-picker-trailing .ash-chat-input-mic {
+	margin-left: 0;
+}
+
 .ash-chat-input-toolbars .ash-chat-input-send,
 .ash-chat-input-toolbars .ash-chat-input-voice {
 	margin-left: auto;

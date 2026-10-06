@@ -12,6 +12,23 @@ const targetDirectory = resolve(repositoryRoot, configuredTargetDirectory || '.b
 const watchedTargetDirectory = relativeWatchedDirectory(sharedRustSource, targetDirectory);
 const debounceMs = 250;
 
+/** Prepare before selecting a runtime: file watchers only observe changes after startup. */
+export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node'): Promise<void> {
+	const commands = [['-B', 'build/ash_rs/prepare.py', '--javascript-runtime', javascriptRuntime]];
+	if (javascriptRuntime === 'host-provided-node') commands.push(['-B', 'build/ash_rs/develop.py', '--select-prepared']);
+	for (const arguments_ of commands) {
+		const { command, args } = pythonCommand(arguments_);
+		await new Promise<void>((resolvePromise, reject) => {
+			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
+			child.once('error', reject);
+			child.once('close', (code, signal) => {
+				if (code === 0) resolvePromise();
+				else reject(new Error(signal ? `backend preparation stopped by ${signal}` : `backend preparation exited with status ${code ?? 'unknown'}`));
+			});
+		});
+	}
+}
+
 export function shouldRebuildAppServer(file: string | null, ignoredDirectory?: string): boolean {
 	if (typeof file !== 'string') return false;
 	const normalized = file.replaceAll('\\', '/');

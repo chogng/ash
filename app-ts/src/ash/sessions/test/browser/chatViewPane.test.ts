@@ -3158,7 +3158,7 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 		listAgents: async () => [], selectAgent: () => { }, selectMode: () => { },
 		openModelSettings: async () => { }, resolveInteraction: async () => { },
 	};
-	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, []);
+	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
 	using changed = model.onDidChange(() => part.render(model.inputState));
 	part.render(model.inputState);
 	part.appendToDraft('Keep this draft');

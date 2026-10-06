@@ -8,10 +8,8 @@ import type { ISessionsConversationPane } from '../../../browser/parts/sessions/
 import { CoworkWidget } from './widget/coworkWidget.js';
 import { CoworkWidgetModel } from './coworkWidgetModel.js';
 import { NewCoworkInputWidget } from './newCoworkInput.js';
-import type { ChatInputDelegate } from './widget/input/chatInput.js';
+import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatTipService, IChatTipService } from './chatTipService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
-import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
 import './actions/coworkSpeechToTextActions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
@@ -42,5 +40,3 @@ export class CoworkPaneFactory extends Disposable {
 }
 
 registerSingleton(IChatTipService, ChatTipService, InstantiationType.Delayed);
-registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
-registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);

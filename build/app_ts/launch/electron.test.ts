@@ -13,7 +13,8 @@ for (const profile of ['default', 'custom'] as const) {
 		for (const directory of ['build/app_ts/launch', 'app-ts/node_modules/typescript/bin', 'app-ts/node_modules/electron']) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
-		for (const name of ['build/app_ts/launch/electron.ts', 'build/app_ts/host.ts', 'build/app_ts/paths.ts']) {
+		for (const name of ['build/app_ts/launch/electron.ts', 'build/app_ts/host.ts', 'build/app_ts/paths.ts', 'build/app_ts/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/protocol/sync.ts']) {
+			await mkdir(join(root, name, '..'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../../..', name), join(root, name));
 		}
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
@@ -45,7 +46,7 @@ for (const profile of ['default', 'custom'] as const) {
 		const home = join(root, profile === 'custom' ? 'custom-profile' : '.build/app-ts/dev/profile');
 		const userData = join(root, profile === 'custom' ? 'custom-user-data' : '.build/app-ts/dev/user-data');
 		const child = spawn(process.execPath, [join(root, 'build/app_ts/launch/electron.ts'), '--watch', '--fixture', ...(profile === 'custom' ? [`--user-data-dir=${userData}`] : [])], {
-			cwd: tmpdir(), windowsHide: true, stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ASH_HOME: profile === 'custom' ? home : undefined },
+			cwd: tmpdir(), windowsHide: true, stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ASH_DESKTOP_UI_ONLY: '1', ASH_HOME: profile === 'custom' ? home : undefined },
 		});
 		let output = '';
 		child.stdout.on('data', chunk => { output += chunk; });

@@ -10,7 +10,7 @@ import type { ResolvedChatContext } from "../../../../workbench/services/chat/co
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
 import { chatTranscriptListItems, type IChatListItem } from "./widget/chatListItems.js";
-import type { ChatInputState } from './widget/input/chatInput.js';
+import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../../base/common/observable.js';

@@ -4,7 +4,7 @@ import { createUuid } from '../../../../base/common/uuid.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import type { ChatAttachmentModel } from './attachments/chatAttachmentModel.js';
+import type { ChatAttachmentModel } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentModel.js';
 
 /** Acquires file and clipboard content; the shared attachment model owns the resulting entries. */
 export class NewChatContextAttachments extends Disposable {

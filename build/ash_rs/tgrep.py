@@ -69,13 +69,13 @@ def resolve_tgrep(
                 source.name,
                 lock["source"]["sha256"],
             )
-        with tempfile.TemporaryDirectory(prefix="source-", dir=cache) as temporary:
+        # MSVC's compiler and assembler cannot build under the deeply nested
+        # checksum cache. Keep transient sources and outputs in the system temp root.
+        with tempfile.TemporaryDirectory(prefix="ash-tgrep-") as temporary:
             directory = Path(temporary)
             _extract_source(source, directory)
-            # Cache sources are below Ash's checkout. Stop Git discovery here;
-            # otherwise apply treats the source as an Ash subdirectory and can
-            # skip every upstream-relative patch while returning success.
-            patch_environment = dict(os.environ, GIT_CEILING_DIRECTORIES=str(cache))
+            # Apply upstream-relative paths independently of any parent checkout.
+            patch_environment = dict(os.environ, GIT_CEILING_DIRECTORIES=str(directory.parent))
             for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
                 patch_environment.pop(name, None)
             subprocess.run(

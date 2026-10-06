@@ -3,12 +3,12 @@ import { Disposable, toDisposable, type IDisposable } from "../../../../../base/
 import type { Event } from "../../../../../base/common/event.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../../workbench/services/chat/common/chatService.js";
-import type { ChatInputDelegate } from "./input/chatInput.js";
+import type { ChatInputDelegate } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
-import type { IChatInputPart } from "./input/chatInputPart.js";
+import type { IChatInputPart } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";
-import type { ChatInputState } from "./input/chatInput.js";
+import type { ChatInputState } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
 import type { ModelReasoningEffort } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import type { IChatListItem } from "./chatListItems.js";
 import type { ResolvedChatContext } from "../../../../../workbench/services/chat/common/chatContextService.js";

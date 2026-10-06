@@ -87,7 +87,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], instantiationService, speechToText, onboarding);
+		}], { modePicker: 'visible', modelPickerPosition: 'leading' }, instantiationService, speechToText, onboarding);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');

@@ -1,3 +1,4 @@
+import '../media/chat.css';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
 import { DictationSession } from '../../speechToText/dictationSession.js';
@@ -60,6 +61,12 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 	{ id: "ask", label: "Ask", icon: Lxicon.chat4 },
 ];
 
+/** Picker composition is selected by the host; input state and operations keep one owner. */
+export interface ChatInputPartOptions {
+	readonly modePicker: 'visible' | 'hidden';
+	readonly modelPickerPosition: 'leading' | 'trailing';
+}
+
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
 	readonly element: HTMLElement;
@@ -117,6 +124,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		private readonly notifications: INotificationService,
 		editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors,
 		private readonly additionalActions: readonly IAction[] = [],
+		private readonly options: ChatInputPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
@@ -152,10 +160,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			skills: this.skills,
 		}));
 		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-			ariaLabel: "Chat input actions",
+			ariaLabel: localize('chat.input.actions', 'Chat input actions'),
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
 		this.inputToolbar.element.classList.add("ash-chat-input-toolbars");
+		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
 		this.dictationSession = this._register(instantiationService.createInstance(DictationSession, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation')));
@@ -378,7 +387,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const modeTooltip = this.mode === 'agent' && modeLabel !== mode.label
 			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
 			: localize('chat.modePicker.mode', 'Mode: {0}', modeLabel);
-		const modeAction = this.toolbarState.inputKind === "command"
+		const modeAction = this.options.modePicker === 'hidden' ? undefined : this.toolbarState.inputKind === "command"
 			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => { })
 			: new SelectorAction(
 				"ash.chat.input.mode",
@@ -459,7 +468,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			: [sendAction];
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
 		const additionalActions = this.additionalActions.map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
-		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [...additionalActions, modeAction, this.modelAction, ...(effortAction ? [effortAction] : []), micAction];
+		const modeActions = modeAction ? [modeAction] : [];
+		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(effortAction ? [effortAction] : []), micAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 		this.modelPickerPresentationChanged.fire();
 		this.pickerResponsiveLayout.layout();

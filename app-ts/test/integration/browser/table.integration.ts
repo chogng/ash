@@ -174,7 +174,7 @@ const contextViews = services.get(IContextViewService);
 const notifications = resources.add(new NotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
-}, []));
+}, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
 secondInput.element.id = 'second-input';
 secondInput.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 window.ashTableIntegration = {

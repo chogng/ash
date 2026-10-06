@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { developmentAshPackagePath } from './runtimeStore.ts';
+import { prepareAppServer } from './appServer.ts';
 import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../app-ts/src/ash/platform/app-server/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
 import type { WebListenInfo } from '../../app-ts/src/ash/platform/app-server/common/generated/WebListenInfo.ts';
@@ -16,10 +17,12 @@ interface WebLaunch {
 
 export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; }): Promise<WebLaunch> {
 	const root = resolve(import.meta.dirname, '../..');
+	await prepareAppServer('packaged-node');
 	const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 	const suffix = process.platform === 'win32' ? '.exe' : '';
 	const source = options.environment;
 	const executable = source.ASH_APP_SERVER_PATH ?? join(packageRoot, 'bin', `ash-app-server${suffix}`);
+	console.info(`[app-server] Launching Web backend ${executable}`);
 	let hostPlatform: AppServerHostPlatform;
 	switch (process.platform) {
 		case 'win32': hostPlatform = 'windows'; break;
