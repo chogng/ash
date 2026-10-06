@@ -8,12 +8,51 @@ The Agents Window uses a Sessions-owned workbench layout optimized for agent wor
 
 Exact dimensions, styling, action placement, and regression behavior belong in code, design tokens, component fixtures, and focused tests.
 
+## Shared Parts and mode content — target contract
+
+All non-phone Sessions product modes use the shared `SidebarPart`. A mode selects its own sidebar view container and views. Library, Creator home and Make must retain the sidebar in their desktop composition. Each mode supplies content to the shared window Parts; a product-page name does not justify a new Part or another window grid.
+
+| Surface | Shared host | Mode-owned content |
+| --- | --- | --- |
+| Left navigation and tools | `SidebarPart` | Registered `ViewContainer`, its `ViewPaneContainer` and `ViewPane` contributions |
+| Editing and central product pages | `EditorPart` | `EditorInput` and `EditorPane` opened through `IEditorService` |
+| Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor |
+| Bottom tools | `PanelPart` | Registered tool view containers and views |
+
+`ViewContainer` is the sidebar, auxiliary-bar and panel registration mechanism. Central editor pages use the editor input/pane mechanism rather than a separate mode container. An `EditorPane` can render a canvas, a browsing page or another rich interface; it is not limited to a text editor. Mode implementations own their documents, commands and content while the shared Parts own placement, resizing, focus and hosting lifecycle. Mode changes retain the same Sessions service and selection ownership.
+
+Layout variants arrange these shared hosts differently. Desktop-specific editor/detail docking and phone navigation may require separate layout implementations; they do not justify `LibraryPart`, `CreatorPart` or another Part for each page. Conversation-grid ownership remains governed by the Sessions model and its own composition contract, independently of document editing.
+
+This is the target architecture, not a completed migration. The current implementation below still uses `LibraryPart` and `CreatorPart` and hides the sidebar on some pages. Those page Parts must be replaced by contributions to the shared hosts, with their document state, dirty-file checks, focus and restoration behavior preserved.
+
+## Layout implementation boundary
+
+Sessions supports multiple intended layout families over the shared Parts. Shared services, retained Parts and disposal belong to `Workbench`; each concrete layout owns their arrangement, grid topology, geometry, visibility mapping and size restoration. A concrete layout belongs in its own implementation file when those responsibilities differ. Desktop-specific rules stay in `desktopWorkbench.ts` rather than accumulating in the shared `workbench.ts`.
+
+| Owner | Responsibility |
+| --- | --- |
+| `browser/workbench.ts` | Shared window lifecycle, service assembly, Part creation and initialization order |
+| `browser/workbenchFactory.ts` | Prepare window resources and select a supported concrete workbench at startup |
+| Concrete workbench and layout | Own the selected layout's Part containment, grid geometry, visibility mapping and persisted dimensions |
+| `browser/layoutPolicy.ts` | Supply shared appearance metrics and initial sizes |
+| Layout controllers and strategies | Translate session selection and product-page commands into the required Part composition and editor working-set restoration |
+| Sessions services and Parts | Own conversation identity, selection and content independently of the selected window layout |
+
+The desktop detail layout illustrates why this boundary matters: Auxiliary Bar content sits inside the Editor's grid node below one shared tab strip. The node can remain visible while editor content is hidden, and its width can include both editor content and Details. The desktop layout must therefore distinguish node visibility and size from editor-content visibility and size. A layout with independently placed Parts must own its own mapping without inheriting these desktop assumptions.
+
+Layout family and runtime are separate choices. Browser and Electron windows can use the same desktop layout. Chat, Code, Collaboration, Library and Creator are compositions within that layout; changing pages does not by itself require another Workbench subclass. A separate implementation is justified by different Part containment, geometry or lifecycle, not by a page name or file length. Common mechanisms remain shared, and layout variants consume the same Sessions services without creating another conversation or selection model.
+
+VS Code's Sessions `DesktopWorkbench` and `MobileWorkbench` split provides a reference for this responsibility boundary. Its regular Workbench also separates layout into `layout.ts`. Ash should preserve clear ownership for its own layouts; matching the upstream class hierarchy is not itself a design requirement.
+
 ## Workbench topology
 
-Startup selects one of two concrete workbenches: `DesktopWorkbench` for every
+The topology and page-specific Parts in this section describe the current implementation. The [shared-host target contract](#shared-parts-and-mode-content--target-contract) governs their replacement.
+
+The intended startup contract selects one of two concrete workbenches: `DesktopWorkbench` for every
 non-phone window, and `MobileWorkbench` for mobile web windows below the phone
-breakpoint. `Workbench` contains only their shared layout mechanics and is not
-instantiated directly.
+breakpoint. `Workbench` owns their shared window assembly and is not instantiated
+directly. Currently Ash constructs `DesktopWorkbench` with `DesktopWorkbenchLayout`
+for both browser and Electron; the phone workbench remains unimplemented.
 
 ```text
 Title bar

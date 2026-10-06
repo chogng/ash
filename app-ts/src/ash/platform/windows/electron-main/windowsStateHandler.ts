@@ -105,8 +105,8 @@ export class WindowsStateHandler {
 		);
 	}
 
-	/** Restores an exact workspace match, then last active state, then defaults. */
-	restoreWindowState(): IWindowState {
+	/** Restores known windows; only the first window restores unmatched last-active placement. */
+	restoreWindowState(lastActiveWindow?: IWindowBounds): IWindowState {
 		const exactState = this.windowsState.openedWindows.find((windowState) =>
 			matchesWindowIdentity(
 				windowState,
@@ -116,7 +116,7 @@ export class WindowsStateHandler {
 		);
 		const candidates = [
 			exactState?.uiState,
-			this.windowsState.lastActiveWindow?.uiState,
+			lastActiveWindow ? undefined : this.windowsState.lastActiveWindow?.uiState,
 		];
 
 		for (const candidate of candidates) {
@@ -137,8 +137,11 @@ export class WindowsStateHandler {
 		const state = this.defaultState ?? defaultWindowState(this.workbenchState);
 		// A default size is not a saved position: matching a rectangle at the
 		// origin can select a larger secondary display on a mixed-DPI desktop.
-		const display = state.x !== undefined && state.y !== undefined
-			? this.displayService.getDisplayMatching({ x: state.x, y: state.y, width: state.width, height: state.height })
+		const placement = lastActiveWindow ?? (state.x !== undefined && state.y !== undefined
+			? { x: state.x, y: state.y, width: state.width, height: state.height }
+			: undefined);
+		const display = placement
+			? this.displayService.getDisplayMatching(placement)
 			: this.displayService.getPrimaryDisplay();
 		const area = display.workArea;
 		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, state.width));

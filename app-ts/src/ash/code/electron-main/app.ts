@@ -1132,7 +1132,8 @@ export class AshApplication extends Disposable {
 		resources: DisposableStore,
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
-		const windowState = windowsStateHandler.restoreWindowState();
+		const lastActiveWindow = BrowserWindow.getFocusedWindow() ?? this.windowsMainService.getLastActiveWindow() ?? this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
+		const windowState = windowsStateHandler.restoreWindowState(lastActiveWindow?.getBounds());
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			workspace: workspaceContext.getWorkspace(),
@@ -1530,6 +1531,7 @@ export class AshApplication extends Disposable {
 		});
 		const titleBarStyle = this.titleBarStyle;
 		const wasOpen = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY) !== undefined;
+		const lastActiveWindow = BrowserWindow.getFocusedWindow() ?? this.windowsMainService.getLastActiveWindow() ?? this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 		await this.windowsMainService.openManagedWindow(
 			AGENTS_WINDOW_KEY,
 			options => new BrowserWindow(options),
@@ -1537,7 +1539,7 @@ export class AshApplication extends Disposable {
 				title: `${AshWorkbenchName} Sessions`,
 				titleBarStyle,
 				icon: this.windowIconPath,
-				state: sessionsWindowState.restoreWindowState(),
+				state: sessionsWindowState.restoreWindowState(lastActiveWindow?.getBounds()),
 				webPreferences: this.createSandboxWebPreferences(),
 				initialize: async (window, windowDisposables) => {
 					this.configureWindowNavigation(window, windowDisposables);

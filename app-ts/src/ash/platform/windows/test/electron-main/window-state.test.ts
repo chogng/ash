@@ -333,7 +333,7 @@ test("window state restores exact folder and workspace records", () => {
 	});
 
 	assert.deepEqual(
-		createHandler(stateService, folderWorkspace).restoreWindowState(),
+		createHandler(stateService, folderWorkspace).restoreWindowState(primaryDisplay.bounds),
 		{
 			mode: WindowMode.Normal,
 			x: 100,
@@ -344,7 +344,7 @@ test("window state restores exact folder and workspace records", () => {
 		},
 	);
 	assert.deepEqual(
-		createHandler(stateService, multiRootWorkspace).restoreWindowState(),
+		createHandler(stateService, multiRootWorkspace).restoreWindowState(primaryDisplay.bounds),
 		{
 			mode: WindowMode.Maximized,
 			x: 140,
@@ -422,6 +422,48 @@ test("first unmatched window inherits the last active window state", () => {
 			displayId: undefined,
 		},
 	);
+});
+
+test('new unmatched windows use VS Code defaults on the active display instead of saved last-active dimensions', () => {
+	const stateService = new TestStateService();
+	stateService.setItem('windowsState', {
+		version: 1,
+		lastActiveWindow: { uiState: { mode: WindowMode.Maximized, bounds: { x: 200, y: 100, width: 1000, height: 700 } } },
+		openedWindows: [],
+	});
+	const activeBounds = { x: 2200, y: 100, width: 1000, height: 700 };
+	for (const workArea of [
+		{ x: 1920, y: 0, width: 2560, height: 1400 },
+		{ x: 1920, y: 0, width: 1280, height: 984 },
+		{ x: 1920, y: 0, width: 960, height: 520 },
+	]) {
+		const display = { id: 2, bounds: workArea, workArea };
+		for (const [workspace, size] of [
+			[UNKNOWN_EMPTY_WINDOW_WORKSPACE, { width: 1200, height: 800 }],
+			[folderWorkspace, { width: 1440, height: 900 }],
+		] as const) {
+			const handler = new WindowsStateHandler({
+				stateService, workspace,
+				displayService: {
+					onDidChangeDisplays: Event.None,
+					getAllDisplays: () => [primaryDisplay, display],
+					getPrimaryDisplay: () => primaryDisplay,
+					getDisplayMatching: bounds => {
+						assert.deepEqual(bounds, activeBounds);
+						return display;
+					},
+				},
+			});
+			const width = Math.min(size.width, workArea.width);
+			const height = Math.min(size.height, workArea.height);
+			assert.deepEqual(handler.restoreWindowState(activeBounds), {
+				mode: WindowMode.Normal,
+				x: Math.round(workArea.x + (workArea.width - width) / 2),
+				y: Math.round(workArea.y + (workArea.height - height) / 2),
+				width, height, displayId: display.id, workArea,
+			});
+		}
+	}
 });
 
 test("window state is adjusted to the current single display", () => {

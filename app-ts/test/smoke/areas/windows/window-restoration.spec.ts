@@ -116,7 +116,7 @@ for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
 	});
 }
 
-test('Desktop places a new Agents window on the primary display of a simulated mixed-DPI desktop', async ({}, testInfo) => {
+test('Desktop places a new Agents window on the active display of a simulated mixed-DPI desktop', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
 	await mkdir(userDataDirectory, { recursive: true });
 	const session = await launch(userDataDirectory);
@@ -124,7 +124,7 @@ test('Desktop places a new Agents window on the primary display of a simulated m
 	try {
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
-		const expected = await application.evaluate(({ screen }) => {
+		const expected = await application.evaluate(({ BrowserWindow, screen }) => {
 			const originalAll = screen.getAllDisplays;
 			const originalPrimary = screen.getPrimaryDisplay;
 			const originalMatching = screen.getDisplayMatching;
@@ -149,6 +149,7 @@ test('Desktop places a new Agents window on the primary display of a simulated m
 				};
 				return overlap(primary) > overlap(secondary) ? primary : secondary;
 			};
+			BrowserWindow.getAllWindows()[0]!.setBounds(primary.workArea);
 			const width = Math.min(1440, primary.workArea.width);
 			const height = Math.min(900, primary.workArea.height);
 			return { x: Math.round(primary.workArea.x + (primary.workArea.width - width) / 2), y: Math.round(primary.workArea.y + (primary.workArea.height - height) / 2), width, height };
@@ -172,6 +173,73 @@ test('Desktop places a new Agents window on the primary display of a simulated m
 		await session.close();
 	}
 });
+
+for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
+	test(`Desktop new windows use VS Code defaults after resizing the active window at ${scaleFactor * 100}% display scaling`, async ({}, testInfo) => {
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(userDataDirectory, { recursive: true });
+		const session = await launch(userDataDirectory, undefined, [`--force-device-scale-factor=${scaleFactor}`]);
+		try {
+			const application = session.application;
+			const page = await application.firstWindow();
+			await new Workbench(page).waitForReady();
+			const defaults = await application.evaluate(({ screen }) => {
+				const area = screen.getPrimaryDisplay().workArea;
+				return { width: Math.min(1200, area.width), height: Math.min(800, area.height) };
+			});
+			await expect.poll(async () => {
+				const bounds = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds());
+				return Math.max(Math.abs(bounds.width - defaults.width), Math.abs(bounds.height - defaults.height));
+			}).toBeLessThanOrEqual(2);
+			const customBounds = await application.evaluate(({ BrowserWindow, screen }) => {
+				const area = screen.getPrimaryDisplay().workArea;
+				const bounds = { x: area.x, y: area.y, width: Math.min(800, area.width), height: Math.min(500, area.height) };
+				const window = BrowserWindow.getAllWindows()[0]!;
+				window.setBounds(bounds);
+				return window.getBounds();
+			});
+			const openedAgents = application.waitForEvent('window');
+			await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+			const agents = await openedAgents;
+			await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+			const agentsWindow = await application.browserWindow(agents);
+			try {
+				const agentsDefaults = await application.evaluate(({ screen }) => {
+					const area = screen.getPrimaryDisplay().workArea;
+					return { width: Math.min(1440, area.width), height: Math.min(900, area.height) };
+				});
+				await expect.poll(async () => {
+					const bounds = await agentsWindow.evaluate(window => window.getBounds());
+					return Math.max(Math.abs(bounds.width - agentsDefaults.width), Math.abs(bounds.height - agentsDefaults.height));
+				}).toBeLessThanOrEqual(2);
+			} finally {
+				await agentsWindow.dispose();
+			}
+			await expect.poll(async () => {
+				const state = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowsState?: { lastActiveWindow?: { uiState: { bounds: { width: number } } } } };
+				return Math.abs((state.windowsState?.lastActiveWindow?.uiState.bounds.width ?? NaN) - customBounds.width);
+			}).toBeLessThanOrEqual(2);
+			const openedWindow = application.waitForEvent('window');
+			await page.evaluate(async () => {
+				const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+				await bridge.invoke('ash:window:open', {});
+			});
+			const empty = await openedWindow;
+			await new Workbench(empty).waitForReady();
+			const emptyWindow = await application.browserWindow(empty);
+			try {
+				await expect.poll(async () => {
+					const { width, height } = await emptyWindow.evaluate(window => window.getBounds());
+					return Math.max(Math.abs(width - defaults.width), Math.abs(height - defaults.height));
+				}).toBeLessThanOrEqual(2);
+			} finally {
+				await emptyWindow.dispose();
+			}
+		} finally {
+			await session.close();
+		}
+	});
+}
 
 test('Desktop adapts open Workbench and Agents windows to display changes without changing zoom or focus', async ({}, testInfo) => {
 	const userDataDirectory = testInfo.outputPath('user-data');
