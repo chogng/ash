@@ -2,7 +2,7 @@ import { TestLanguageConfigurationService } from '../../../../../editor/test/com
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
@@ -225,6 +225,7 @@ test('initial untitled content is dirty and discarding it leaves an empty docume
 test("Stanza text model save tolerates its final reference closing before I/O completes", async () => {
 	const pending = deferred<void>();
 	const textFiles: ITextFileService = {
+		onDidSave: Event.None,
 		onDidChangeFiles: inertFileChanges,
 		async resolve(request) {
 			return {
@@ -341,6 +342,7 @@ test('failed background file checks preserve clean and dirty editor states', asy
 	const failure = new Error('File service is unavailable');
 	let unavailable = false;
 	const textFiles: ITextFileService = {
+		onDidSave: Event.None,
 		onDidChangeFiles: changes.event,
 		resolve: async () => {
 			if (unavailable) throw failure;
@@ -377,6 +379,7 @@ test('a background read that overlaps local edits leaves the saved revision and 
 	const proceed = deferred<void>();
 	let delayRead = false;
 	using models = new BrowserTextModelService(new BrowserTextResourceStore({
+		onDidSave: Event.None,
 		onDidChangeFiles: textFiles.onDidChangeFiles,
 		resolve: async request => {
 			if (delayRead) {
@@ -424,6 +427,7 @@ test('workspace rescans do not read untitled documents or mark them conflicted',
 });
 
 class TestTextFileService implements ITextFileService {
+	readonly onDidSave = Event.None;
 	resolveCount = 0;
 	readonly savedTexts: string[] = [];
 	private readonly fileChanges = new Emitter<IFileChangeEvent>();

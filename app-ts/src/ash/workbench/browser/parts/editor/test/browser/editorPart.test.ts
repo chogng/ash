@@ -20,6 +20,7 @@ import { BreadcrumbsService } from "../../breadcrumbs.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicEditorConfigurations, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration } from "../../editorConfiguration.js";
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
+import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { FileNotFoundError, type IFileService } from "../../../../../../platform/files/common/files.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../../../platform/configuration/common/configurationRegistry.js";
@@ -413,6 +414,7 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const textFileService = {
+		onDidSave: Event.None,
 		onDidChangeFiles: () => ({
 			dispose() { },
 			[Symbol.dispose]() { },
@@ -1326,7 +1328,9 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	registry.registerEditorPane(descriptor("ash.test.history", ".ts", () => new TestEditorPane("ash.test.history")));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	const contextKeys = new ContextKeyService();
-	const history = new HistoryService(editor, contextKeys);
+	using historyWorkspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:\\project') });
+	using historyConfiguration = new InMemoryConfigurationService();
+	const history = new HistoryService(editor, contextKeys, historyConfiguration, historyWorkspace);
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
 	const third = input("C:\\project\\third.ts");
@@ -1351,6 +1355,41 @@ test("HistoryService navigates backward and forward through opened editors", asy
 	dom.window.close();
 });
 
+test('HistoryService excludes configured resources and updates navigation when rules change', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		registry.registerEditorPane(descriptor('ash.test.historyRules', '.ts', () => new TestEditorPane('ash.test.historyRules')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		using contextKeys = new ContextKeyService();
+		using workspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:/project') });
+		using configuration = new InMemoryConfigurationService();
+		using history = new HistoryService(editor, contextKeys, configuration, workspace);
+		const first = input('C:/project/first.ts');
+		const excluded = input('C:/project/excluded.ts');
+		const third = input('C:/project/third.ts');
+		await configuration.updateValue('files.exclude', { '**/excluded.ts': true });
+		await editor.openEditor(first, { pinned: true });
+		await editor.openEditor(excluded, { pinned: true });
+		assert.equal(contextKeys.getValue('canNavigateBack'), true);
+		await history.goBack();
+		assert.equal(editor.activeInput, first);
+		await editor.openEditor(third, { pinned: true });
+		await configuration.updateValue('search.exclude', { '**/third.ts': true });
+		await history.goBack();
+		assert.equal(editor.activeInput, first);
+		assert.equal(contextKeys.getValue('canNavigateBack'), false);
+		await configuration.updateValue('search.exclude', { '**/excluded.ts': false });
+		await editor.openEditor(excluded, { pinned: true });
+		await history.goBack();
+		assert.equal(editor.activeInput, first);
+		await history.goForward();
+		assert.equal(editor.activeInput, excluded);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('HistoryService restores cursor, edit, and navigation locations', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();
@@ -1358,7 +1397,9 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	registry.registerEditorPane(descriptor('ash.test.selectionHistory', '.ts', () => pane = new TestSelectionPane('ash.test.selectionHistory')));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	const contextKeys = new ContextKeyService();
-	const history = new HistoryService(editor, contextKeys);
+	using historyWorkspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:\\project') });
+	using historyConfiguration = new InMemoryConfigurationService();
+	const history = new HistoryService(editor, contextKeys, historyConfiguration, historyWorkspace);
 	await editor.openEditor(input('C:\\project\\locations.ts'), { pinned: true });
 	assert.ok(pane);
 	using services = new InstantiationService();

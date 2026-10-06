@@ -18,6 +18,7 @@ test('File editor tracker reloads clean visible files after window focus and kee
 	let revision = 1;
 	let reads = 0;
 	const textFiles: ITextFileService = {
+		onDidSave: Event.None,
 		onDidChangeFiles: Event.None,
 		resolve: async request => {
 			reads++;

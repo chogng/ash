@@ -177,7 +177,9 @@ export class HistoryService extends Disposable implements IHistoryService {
 		this.updateContextKeys();
 		const timeline = this.timeline(filter);
 		const current = timeline.entries[timeline.index];
-		const index = direction === -1 && filter !== GoFilter.NONE && current && !this.matchesActiveLocation(current)
+		const active = this.editorPart.getEditorState().activeEditor;
+		const activeExcluded = active && !this.includeInHistory(active.instanceId);
+		const index = direction === -1 && (filter !== GoFilter.NONE || activeExcluded) && current && !this.matchesActiveLocation(current)
 			? timeline.index
 			: timeline.index + direction;
 		if (index < 0 || index >= timeline.entries.length) return;
@@ -228,8 +230,9 @@ export class HistoryService extends Disposable implements IHistoryService {
 		const all = this.timeline(GoFilter.NONE);
 		const edits = this.timeline(GoFilter.EDITS);
 		const navigation = this.timeline(GoFilter.NAVIGATION);
-		this.canNavigateBack.set(all.index > 0);
-		this.canNavigateForward.set(all.index >= 0 && all.index < all.entries.length - 1);
+		const active = this.editorPart.getEditorState().activeEditor;
+		this.canNavigateBack.set(all.index > 0 || all.index >= 0 && !!active && !this.includeInHistory(active.instanceId));
+		this.canNavigateForward.set(all.index < all.entries.length - 1);
 		this.canNavigateBackInEdits.set(edits.index > 0 || edits.index >= 0 && !this.matchesActiveLocation(edits.entries[edits.index]!));
 		this.canNavigateForwardInEdits.set(edits.index >= 0 && edits.index < edits.entries.length - 1);
 		this.canNavigateBackInNavigation.set(navigation.index > 0 || navigation.index >= 0 && !this.matchesActiveLocation(navigation.entries[navigation.index]!));

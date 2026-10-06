@@ -610,7 +610,14 @@ export class Workbench extends Disposable {
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
 		services.registerInstance(IFileSystemProviderService, fileService);
-		const textFileService = new TextFileService(fileService);
+		const configuration = this._register(new WorkbenchConfigurationService({
+			api: configurationApi,
+			initialSnapshot: initialConfigurationSnapshot,
+		}));
+		this.configurationService = configuration;
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IConfigurationResourceService, configuration);
+		const textFileService = this._register(services.createInstance(TextFileService, fileService));
 		services.registerInstance(ITextFileService, textFileService);
 		const workingCopyService = this._register(new BrowserWorkingCopyService());
 		services.registerInstance(IWorkingCopyService, workingCopyService);
@@ -622,13 +629,6 @@ export class Workbench extends Disposable {
 		const workingCopyBackups = this._register(createWorkingCopyBackupService(services, workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
-		const configuration = this._register(new WorkbenchConfigurationService({
-			api: configurationApi,
-			initialSnapshot: initialConfigurationSnapshot,
-		}));
-		this.configurationService = configuration;
-		services.registerInstance(IConfigurationService, configuration);
-		services.registerInstance(IConfigurationResourceService, configuration);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
 		const languageConfigurationService = services.get(ILanguageConfigurationService);

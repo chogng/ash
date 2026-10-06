@@ -1,3 +1,4 @@
+import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
@@ -27,7 +28,6 @@ import { WorkbenchConfigurationService } from '../../../../../workbench/services
 import { BrowserTextResourceStore } from '../../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { PreferencesService } from '../../../../../workbench/services/preferences/browser/preferencesService.js';
-import { TextFileService } from '../../../../../workbench/services/textfile/common/textFileService.js';
 import { UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/preferences/common/settingsFilesystemProvider.js';
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
@@ -171,7 +171,7 @@ test('the text-model save path updates configuration and accepts later external 
 	const enabled = registry.getConfiguration('editor.enabled')!.key;
 	using configuration = new WorkbenchConfigurationService({ registry });
 	using provider = new SettingsFileSystemProvider(configuration);
-	const textFiles = new TextFileService(provider);
+	using textFiles = createTestTextFileService(provider);
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
@@ -198,7 +198,8 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 	using configuration = new WorkbenchConfigurationService({ registry });
 	using provider = new SettingsFileSystemProvider(configuration);
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(provider)));
+	using textFiles = createTestTextFileService(provider);
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
 	const before = '{\n\t// editor.fontSize is mentioned here, not configured.\n\t"extension.data": { "editor.fontSize": 99 },\n}\n';
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: before }]);
@@ -237,7 +238,8 @@ test('revealing existing settings preserves edits and real external conflicts re
 	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 	using configuration = new WorkbenchConfigurationService({ registry });
 	using provider = new SettingsFileSystemProvider(configuration);
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(provider)));
+	using textFiles = createTestTextFileService(provider);
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
 	const source = '{ "editor.fontSize": 18, "extension.pending": true }';
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: source }]);

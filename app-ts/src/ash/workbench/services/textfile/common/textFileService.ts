@@ -1,6 +1,9 @@
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { type Event } from "../../../../base/common/event.js";
+import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { IFilesConfigurationService } from '../../filesConfiguration/common/filesConfigurationService.js';
 import { type URI } from "../../../../base/common/uri.js";
 import { FileRevisionConflictError, type IFileChangeEvent, type IFileService } from "../../../../platform/files/common/files.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -36,6 +39,13 @@ export interface TextFileSaveResult {
 	readonly revision: string | undefined;
 }
 
+export interface ITextFileSaveEvent {
+	readonly resource: URI;
+	/** Exact content accepted by the file provider, including the requested encoding. */
+	readonly content: string;
+	readonly revision: string;
+}
+
 /** A conditional file save was rejected because the resource changed after it was resolved. */
 export class TextFileSaveConflictError extends Error {
 	constructor(readonly resource: URI) {
@@ -61,6 +71,7 @@ export class TextFileTooLargeError extends Error {
 /** Resource-content boundary used by text editors independently of their model implementation. */
 export interface ITextFileService {
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
+	readonly onDidSave: Event<ITextFileSaveEvent>;
 	resolve(request: TextFileResolveRequest, signal: AbortSignal): Promise<ResolvedTextFileContent>;
 	save(request: TextFileSaveRequest, signal: AbortSignal): Promise<TextFileSaveResult>;
 }
@@ -68,10 +79,13 @@ export interface ITextFileService {
 export const ITextFileService = createServiceIdentifier<ITextFileService>("textFileService");
 
 /** Resolves bootstrap snapshots first and otherwise delegates workspace reads to the file service. */
-export class TextFileService implements ITextFileService {
+export class TextFileService extends Disposable implements ITextFileService {
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
+	private readonly saved = this._register(new Emitter<ITextFileSaveEvent>());
+	public readonly onDidSave = this.saved.event;
 
-	constructor(private readonly files: IFileService) {
+	constructor(private readonly files: IFileService, @IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService) {
+		super();
 		if (!files || typeof files.readFile !== "function" || typeof files.writeFile !== "function") {
 			throw new TypeError("Text file service requires a file service");
 		}
@@ -106,12 +120,16 @@ export class TextFileService implements ITextFileService {
 	async save(request: TextFileSaveRequest, signal: AbortSignal): Promise<TextFileSaveResult> {
 		validateSaveRequest(request);
 		throwIfCancelled(signal, "Text file save was cancelled");
+		const readonly = this.filesConfiguration.isReadonly(request.resource);
+		if (readonly) throw new Error(typeof readonly === 'string' ? readonly : localize('files.readonly', 'This file is read-only.'));
 		try {
+			const content = request.encoding === "utf8bom" ? "\uFEFF" + request.text : request.text;
 			const saved = await raceCancellationError(this.files.writeFile({
 				resource: request.resource,
-				content: request.encoding === "utf8bom" ? "\uFEFF" + request.text : request.text,
+				content,
 				...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),
 			}), signal, "Text file save was cancelled");
+			this.saved.fire({ resource: request.resource, content, revision: saved.revision });
 			return Object.freeze({ revision: saved.revision });
 		} catch (error) {
 			if (error instanceof FileRevisionConflictError) throw new TextFileSaveConflictError(request.resource);

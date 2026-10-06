@@ -68,7 +68,7 @@ function globSource(pattern: string): string {
 					index += 1;
 				}
 				if (pattern[index + 1] === '/') {
-					expression += '(?:[^/]+/)*';
+					expression += '(?:.*/)?';
 					index += 1;
 				} else {
 					expression += '.*';

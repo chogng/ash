@@ -1,0 +1,82 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'mocha';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
+import { MultiplexFileService } from '../../../../../platform/files/browser/multiplexFileService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { FileUserDataProvider } from '../../../../../platform/userData/common/fileUserDataProvider.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { FilesConfigurationService } from '../../../filesConfiguration/common/filesConfigurationService.js';
+import { ILifecycleService, type IWillShutdownEvent } from '../../../lifecycle/common/lifecycle.js';
+import { ITextFileService, TextFileService } from '../../../textfile/common/textFileService.js';
+import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
+import { IUserDataProfileService } from '../../../userDataProfile/common/userDataProfile.js';
+import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { IWorkingCopyHistoryService } from '../../common/workingCopyHistory.js';
+import { WorkingCopyHistoryService } from '../../common/workingCopyHistoryService.js';
+import { WorkingCopyHistoryTracker } from '../../common/workingCopyHistoryTracker.js';
+
+test('local history captures successful saves, honors exclusion and retention, and survives reopening', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-local-history-'));
+	try {
+		using disk = new DiskFileSystemProvider([URI.file(directory)]);
+		using files = new MultiplexFileService(disk);
+		using userData = new FileUserDataProvider(disk, URI.file(join(directory, 'profile')));
+		using registration = files.registerProvider('ash-userdata', userData);
+		using configuration = new InMemoryConfigurationService();
+		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file(directory) });
+		using policy = new FilesConfigurationService(configuration, workspace);
+		using textFiles = new TextFileService(files, policy);
+		using shutdown = new Emitter<IWillShutdownEvent>();
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IFileService, files);
+		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		services.registerInstance(ITextFileService, textFiles);
+		services.registerInstance(ILogService, new NullLoggerService());
+		services.registerInstance(ILifecycleService, { onWillShutdown: shutdown.event } as ILifecycleService);
+		services.registerSingleton(IWorkingCopyHistoryService, () => services.createInstance(WorkingCopyHistoryService));
+		using tracker = services.createInstance(WorkingCopyHistoryTracker);
+		const history = services.get(IWorkingCopyHistoryService);
+		const resource = URI.file(join(directory, 'main.ts'));
+		await configuration.updateValue('workbench.localHistory.maxFileEntries', 2);
+		for (const text of ['first', 'second', 'third']) {
+			await textFiles.save({ resource, text }, new AbortController().signal);
+		}
+		const joining: Promise<unknown>[] = [];
+		shutdown.fire({ reason: 'quit', join: operation => { joining.push(operation); } });
+		await Promise.all(joining);
+		assert.equal(joining.length, 1);
+		const entries = await history.getEntries(resource, CancellationToken.None);
+		assert.deepEqual(await Promise.all(entries.map(async entry => (await files.readFile(entry.location)).content)), ['third', 'second']);
+		await configuration.updateValue('workbench.localHistory.exclude', { '**/*.ts': true });
+		await textFiles.save({ resource, text: 'excluded' }, new AbortController().signal);
+		await tracker.flush();
+		assert.equal((await history.getEntries(resource, CancellationToken.None)).length, 2);
+		await configuration.updateValue('workbench.localHistory.exclude', {});
+		await configuration.updateValue('workbench.localHistory.enabled', false);
+		await textFiles.save({ resource, text: 'disabled' }, new AbortController().signal);
+		await tracker.flush();
+		assert.equal((await history.getEntries(resource, CancellationToken.None)).length, 2);
+		await configuration.updateValue('workbench.localHistory.enabled', true);
+		await configuration.updateValue('workbench.localHistory.maxFileSize', 0);
+		await textFiles.save({ resource, text: 'too large' }, new AbortController().signal);
+		await tracker.flush();
+		assert.equal((await history.getEntries(resource, CancellationToken.None)).length, 2);
+		using reopened = services.createInstance(WorkingCopyHistoryService);
+		assert.deepEqual((await reopened.getEntries(resource, CancellationToken.None)).map(entry => entry.id), entries.map(entry => entry.id));
+		await assert.rejects(reopened.addEntry({ resource, content: 'cancelled' }, CancellationToken.Cancelled), /cancelled/i);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});

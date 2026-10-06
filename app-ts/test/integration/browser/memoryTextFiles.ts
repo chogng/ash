@@ -1,4 +1,4 @@
-import { Emitter } from "../../../src/ash/base/common/event.js";
+import { Emitter, Event } from "../../../src/ash/base/common/event.js";
 import type { URI } from "../../../src/ash/base/common/uri.js";
 import type { IFileChangeEvent } from "../../../src/ash/platform/files/common/files.js";
 import { TextFileContentSource } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";
@@ -10,6 +10,7 @@ import type { TextFileSaveRequest } from "../../../src/ash/workbench/services/te
 
 /** Browser-only in-memory text-file service used by editor integration pages. */
 export class MemoryTextFiles implements ITextFileService {
+	readonly onDidSave = Event.None;
 	private readonly changes = new Emitter<IFileChangeEvent>();
 	private readonly contents = new Map<string, string>();
 	private readonly revisions = new Map<string, number>();

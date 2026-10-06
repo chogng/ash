@@ -1,3 +1,4 @@
+import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -23,7 +24,6 @@ import { ITextModelResourceService } from '../../../textmodelResolver/common/tex
 import { TextModelResolverService } from '../../../textmodelResolver/common/textModelResolverService.js';
 import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../workingCopy/common/workingCopyService.js';
-import { TextFileService } from '../../common/textFileService.js';
 import { AppServerTextDocumentHost } from '../../browser/appServerTextDocumentHost.js';
 import { ChatEditingService } from '../../../../contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -136,7 +136,7 @@ class Files extends Disposable implements IFileService {
 async function fixture() {
 	const lifetime = new DisposableStore();
 	const files = lifetime.add(new Files());
-	const models = lifetime.add(new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(files))));
+	const models = lifetime.add(new BrowserTextModelService(new BrowserTextResourceStore(lifetime.add(createTestTextFileService(files)))));
 	const workingCopies = lifetime.add(new BrowserWorkingCopyService());
 	const configuration = lifetime.add(new InMemoryConfigurationService());
 	const dialogs = new TestDialogService();

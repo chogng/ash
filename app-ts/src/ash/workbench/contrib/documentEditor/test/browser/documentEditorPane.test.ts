@@ -1792,6 +1792,7 @@ async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
 }
 
 class MemoryTextFiles implements ITextFileService {
+	readonly onDidSave = Event.None;
 	readonly onDidChangeFiles = (_listener: (event: IFileChangeEvent) => void) => ({
 		dispose(): void { },
 		[Symbol.dispose](): void { },

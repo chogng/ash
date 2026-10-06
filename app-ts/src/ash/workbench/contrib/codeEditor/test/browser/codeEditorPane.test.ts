@@ -397,7 +397,7 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const pending = deferred<ResolvedTextFileContent>();
-	const textFiles = { onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => ({ revision: undefined }) };
+	const textFiles = { onDidSave: Event.None, onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => ({ revision: undefined }) };
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
 	using services = paneServices(models);
@@ -677,6 +677,7 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 });
 
 class ImmediateTextFiles implements ITextFileService {
+	readonly onDidSave = Event.None;
 	readonly savedTexts: string[] = [];
 	readonly onDidChangeFiles = inertFileChanges;
 	failSave = false;

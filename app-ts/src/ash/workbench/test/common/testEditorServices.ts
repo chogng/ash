@@ -27,6 +27,26 @@ import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
+import type { IFileService } from '../../../platform/files/common/files.js';
+import { FilesConfigurationService, IFilesConfigurationService } from '../../services/filesConfiguration/common/filesConfigurationService.js';
+import { TextFileService } from '../../services/textfile/common/textFileService.js';
+
+/** Owns the real file-policy dependencies for file-service tests outside a Workbench. */
+export function createTestTextFileService(files: IFileService): TextFileService {
+	return new TestTextFileService(files);
+}
+
+class TestTextFileService extends TextFileService {
+	constructor(files: IFileService) {
+		const configuration = new InMemoryConfigurationService();
+		const workspace = new WorkspaceContextService({ id: 'test-text-files', folders: [] });
+		const policy = new FilesConfigurationService(configuration, workspace);
+		super(files, policy);
+		this._register(configuration);
+		this._register(workspace);
+		this._register(policy);
+	}
+}
 
 /** Uses real component services with an isolated browser-storage backend for each test scope. */
 export function createTestComponentServices(storage?: IStorageService, parent?: InstantiationService, document: Document = globalThis.document): InstantiationService {
@@ -68,6 +88,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	}
 	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'test-editor', folders: [] }));
+	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => new LabelService(services.get(IWorkspaceContextService)));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());

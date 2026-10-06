@@ -1,3 +1,4 @@
+import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +13,6 @@ import { UserDataProfileService } from '../../../userDataProfile/browser/userDat
 import { IFileTextModelService } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { getBrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
-import { TextFileService } from '../../../textfile/common/textFileService.js';
 import { IKeybindingEditingService, KeybindingsEditingService } from '../../common/keybindingEditing.js';
 import type { IUserFriendlyKeybinding } from '../../../../../platform/keybinding/common/keybinding.js';
 import { parseUserKeybindings } from '../../common/keybindingIO.js';
@@ -30,7 +30,7 @@ export class KeybindingTestServices extends Disposable {
 		this._register(toDisposable(() => rmSync(this.directory, { recursive: true, force: true })));
 		const disk = this._register(new DiskFileSystemProvider([URI.file(this.directory)]));
 		this.files = this._register(new FileUserDataProvider(disk, URI.file(this.directory)));
-		this.models = this._register(new BrowserTextModelService(getBrowserTextResourceStore(new TextFileService(this.files))));
+		this.models = this._register(new BrowserTextModelService(getBrowserTextResourceStore(this._register(createTestTextFileService(this.files)))));
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IFileTextModelService, this.models);
 		this.services.registerInstance(IUserDataProfileService, this.profiles);

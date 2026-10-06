@@ -314,7 +314,7 @@ export const SettingsNavigation = [
 						id: 'files',
 						get label() { return localize('settings.editor.files.label', 'Files and saving'); },
 						get description() { return localize('settings.editor.files.description', 'Configure file editing and save behavior.'); },
-						settings: ['files.*', 'explorer.fileNesting.*'],
+						settings: ['files.*', 'explorer.fileNesting.*', 'explorer.autoReveal', 'explorer.autoRevealExclude', 'workbench.localHistory.*'],
 					},
 				],
 			},

@@ -472,6 +472,7 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 });
 
 class BootstrapTextFiles implements ITextFileService {
+	readonly onDidSave = Event.None;
 	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {

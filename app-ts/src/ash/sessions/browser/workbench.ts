@@ -335,7 +335,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
-		const textFiles = new TextFileService(fileService);
+		const textFiles = this._register(services.createInstance(TextFileService, fileService));
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(new BrowserWorkingCopyService());
 		services.registerInstance(IWorkingCopyService, workingCopies);

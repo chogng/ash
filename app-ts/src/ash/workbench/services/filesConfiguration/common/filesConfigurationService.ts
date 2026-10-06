@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import type { IExpression } from '../../../../base/common/glob.js';
+import { parse, type IExpression } from '../../../../base/common/glob.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
@@ -13,31 +13,54 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { ResourceGlobMatcher } from '../../../common/resources.js';
 
 const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
-for (const key of ['files.readonlyInclude', 'files.readonlyExclude', 'files.exclude', 'search.exclude', 'explorer.autoRevealExclude', 'workbench.localHistory.exclude']) {
+const expressionSettings = [
+	['files.readonlyInclude', localize('files.readonlyIncludeTitle', 'Read-only file patterns')],
+	['files.readonlyExclude', localize('files.readonlyExcludeTitle', 'Writable file exceptions')],
+	['files.exclude', localize('files.excludeTitle', 'File exclusion patterns')],
+	['search.exclude', localize('files.searchExcludeTitle', 'Search exclusion patterns')],
+	['explorer.autoRevealExclude', localize('files.autoRevealExcludeTitle', 'Auto-reveal exclusion patterns')],
+	['workbench.localHistory.exclude', localize('files.historyExcludeTitle', 'Local history exclusion patterns')],
+] as const;
+for (const [key, title] of expressionSettings) {
+	const conditional = key === 'files.exclude' || key === 'search.exclude' || key === 'explorer.autoRevealExclude';
 	registry.registerConfiguration<IExpression>({
 		key,
 		defaultValue: {},
 		scope: ConfigurationScope.RESOURCE,
-		schema: { type: 'object', additionalProperties: { anyOf: [{ type: 'boolean' }, { type: 'object', required: ['when'], properties: { when: { type: 'string' } }, additionalProperties: false }] } },
+		schema: { type: 'object', additionalProperties: conditional ? { anyOf: [{ type: 'boolean' }, { type: 'object', required: ['when'], properties: { when: { type: 'string' } }, additionalProperties: false }] } : { type: 'boolean' } },
 		parse: value => {
 			if (!value || typeof value !== 'object' || Array.isArray(value)) {
-				throw new TypeError(`${key} must be a glob expression`);
+				throw new TypeError(localize('files.invalidGlobExpression', '{0} must be an object containing path patterns.', key));
 			}
 			for (const [pattern, rule] of Object.entries(value)) {
-				if (!pattern || typeof rule !== 'boolean' && (typeof rule !== 'object' || rule === null || Array.isArray(rule) || Object.keys(rule).length !== 1 || !('when' in rule) || typeof rule.when !== 'string')) {
-					throw new TypeError(`Invalid glob rule in ${key}: ${pattern}`);
+				if (!pattern || typeof rule !== 'boolean' && (!conditional || typeof rule !== 'object' || rule === null || Array.isArray(rule) || Object.keys(rule).length !== 1 || !('when' in rule) || typeof rule.when !== 'string')) {
+					throw new TypeError(conditional ? localize('files.invalidGlobRule', 'Invalid rule for {0} in {1}. Use true, false, or an object with a when string.', pattern, key) : localize('files.invalidBooleanGlobRule', 'Invalid rule for {0} in {1}. Use true or false.', pattern, key));
 				}
 			}
+			parse(value as IExpression);
 			return value as IExpression;
+		},
+		setting: {
+			valueType: 'stringMap', structuredValues: true, title,
+			description: conditional ? localize('files.globDescription', 'Match resource paths with *, **, ?, character classes or alternatives. Use true to enable, false to disable, or {"when":"$(basename).ts"} to require a sibling file.') : localize('files.booleanGlobDescription', 'Match resource paths with *, **, ?, character classes or alternatives. Use true to enable or false to disable a pattern.'),
+			keyLabel: localize('files.globPattern', 'Path pattern'),
+			valueLabel: localize('files.globRule', 'Rule'),
+			addLabel: localize('files.globAdd', 'Add pattern'),
+			removeLabel: localize('files.globRemove', 'Remove pattern'),
+			incompleteMessage: localize('files.globIncomplete', 'Enter a path pattern and a rule.'),
+			duplicateMessage: localize('files.globDuplicate', 'Each path pattern must be unique.'),
 		},
 	});
 }
 registry.registerConfiguration({ key: 'explorer.autoReveal', defaultValue: true, parse(value: unknown): boolean {
 	if (typeof value !== 'boolean') {
-		throw new TypeError('explorer.autoReveal must be boolean');
+		throw new TypeError(localize('files.invalidAutoReveal', 'Auto reveal must be a boolean.'));
 	}
 	return value;
-}, scope: ConfigurationScope.WINDOW });
+}, scope: ConfigurationScope.WINDOW, setting: {
+	valueType: 'boolean', title: localize('files.autoRevealTitle', 'Auto reveal'),
+	description: localize('files.autoRevealDescription', 'Select the active editor file in Explorer without moving keyboard focus.'),
+} });
 
 export interface IFilesConfigurationService {
 	readonly onDidChangeReadonly: Event<void>;

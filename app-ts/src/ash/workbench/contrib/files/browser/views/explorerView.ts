@@ -274,7 +274,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	private async autoReveal(resource: URI): Promise<void> {
 		await this.initialization;
-		if (this.isDisposed) return;
+		if (this.isDisposed || !this.explorerService.shouldAutoReveal(resource)) return;
 		// The condition rule must see siblings even when the parent is still collapsed.
 		const siblings = await this.fileService.readDirectory(dirname(resource));
 		if (this.isDisposed || !this.editorService.activeEditor || !extUriBiasedIgnorePathCase.isEqual(this.editorService.activeEditor.resource, resource)) return;

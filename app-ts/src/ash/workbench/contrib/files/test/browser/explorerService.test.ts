@@ -6,10 +6,12 @@ import { FileKind, type IFileChangeEvent, type IFileService } from '../../../../
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 
 test('Explorer service exposes the current view and releases it on disposal', () => {
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
-	using service = new ExplorerService(workspace, { onDidChangeFiles: Event.None } as IFileService);
+	using configuration = new InMemoryConfigurationService();
+	using service = new ExplorerService(workspace, { onDidChangeFiles: Event.None } as IFileService, configuration);
 	const selected = new ExplorerItem(URI.file('/project/main.ts'), 'main.ts', FileKind.File);
 	let focused = 0;
 	assert.deepEqual(service.getContext(), []);
@@ -38,7 +40,8 @@ test('Explorer service owns roots and workspace file invalidations without a vie
 	const secondRoot = URI.file('/next');
 	using workspace = new WorkspaceContextService({ id: 'project', uri: firstRoot });
 	using changes = new Emitter<IFileChangeEvent>();
-	using service = new ExplorerService(workspace, { onDidChangeFiles: changes.event } as IFileService);
+	using configuration = new InMemoryConfigurationService();
+	using service = new ExplorerService(workspace, { onDidChangeFiles: changes.event } as IFileService, configuration);
 	const observed: string[] = [];
 	using rootListener = service.onDidChangeRoot(() => observed.push(service.getRoot()?.resource.toString() ?? 'empty'));
 	using fileListener = service.onDidChangeResources(resources => observed.push(resources?.[0]?.toString() ?? 'all'));
@@ -48,4 +51,19 @@ test('Explorer service owns roots and workspace file invalidations without a vie
 	changes.fire({ resources: [URI.file('/project/main.ts'), URI.file('/next/other.ts')] });
 
 	assert.deepEqual(observed, [URI.file('/project/main.ts').toString(), secondRoot.toString(), URI.file('/next/other.ts').toString()]);
+});
+
+test('Explorer auto-reveal honors conditions and settings without changing manual selection', async () => {
+	using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
+	using configuration = new InMemoryConfigurationService();
+	using service = new ExplorerService(workspace, { onDidChangeFiles: Event.None } as IFileService, configuration);
+	const resource = URI.file('/root/main.js');
+	await configuration.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: '$(basename).ts' } });
+	assert.deepEqual([service.shouldAutoReveal(resource, name => name === 'main.ts'), service.shouldAutoReveal(resource, () => false)], [false, true]);
+	let selected: string | undefined;
+	using registration = service.registerView({ selectResource: async resource => { selected = resource?.path; }, getContext: () => [], getAccessibleContent: () => '', focus() { } });
+	await service.select(resource, 'force');
+	assert.equal(selected, '/root/main.js');
+	await configuration.updateValue('explorer.autoReveal', false);
+	assert.equal(service.shouldAutoReveal(URI.file('/root/other.ts')), false);
 });

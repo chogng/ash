@@ -467,6 +467,7 @@ test('Diff pane updates hidden unchanged regions when settings change', async ()
 });
 
 class BootstrapTextFiles implements ITextFileService {
+	readonly onDidSave = Event.None;
 	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {

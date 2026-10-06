@@ -1,3 +1,4 @@
+import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
@@ -10,13 +11,12 @@ import {
 	TextFileBinaryError,
 	TextFileContentSource,
 	TextFileSaveConflictError,
-	TextFileService,
 	TextFileTooLargeError,
 } from "../../../../../workbench/services/textfile/common/textFileService.js";
 
 test("TextFileService uses bootstrap content without reading the workspace", async () => {
 	const files = new TestFileService("workspace");
-	const service = new TextFileService(files);
+	using service = createTestTextFileService(files);
 	const resource = URI.file("C:\\project\\main.ts");
 
 	const content = await service.resolve({ resource, bootstrapText: "bootstrap" }, new AbortController().signal);
@@ -30,7 +30,7 @@ test("TextFileService uses bootstrap content without reading the workspace", asy
 
 test("TextFileService reads missing bootstrap content and observes cancellation", async () => {
 	const files = new TestFileService("workspace");
-	const service = new TextFileService(files);
+	using service = createTestTextFileService(files);
 	const resource = URI.file("C:\\project\\main.ts");
 	const content = await service.resolve({ resource }, new AbortController().signal);
 	assert.equal(content.text, "workspace");
@@ -47,7 +47,7 @@ test("TextFileService reads missing bootstrap content and observes cancellation"
 test("TextFileService cancels before starting a byte read when metadata resolution yields", async () => {
 	const pending = deferred<string>();
 	const files = new TestFileService(pending.promise);
-	const service = new TextFileService(files);
+	using service = createTestTextFileService(files);
 	const controller = new AbortController();
 	const resolving = service.resolve({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
 
@@ -59,7 +59,7 @@ test("TextFileService cancels before starting a byte read when metadata resoluti
 
 test("TextFileService preserves file-system failures", async () => {
 	const failure = new Error("unreadable");
-	const service = new TextFileService(new TestFileService(Promise.reject(failure)));
+	using service = createTestTextFileService(new TestFileService(Promise.reject(failure)));
 
 	await assert.rejects(
 		service.resolve({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal),
@@ -70,14 +70,14 @@ test("TextFileService preserves file-system failures", async () => {
 test("TextFileService decodes a UTF-8 BOM and rejects binary or invalid UTF-8 content", async () => {
 	const resource = URI.file("C:\\project\\content.txt");
 	const withBom = new TestFileService(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69]));
-	assert.equal((await new TextFileService(withBom).resolve({ resource }, new AbortController().signal)).text, "hi");
+	assert.equal((await createTestTextFileService(withBom).resolve({ resource }, new AbortController().signal)).text, "hi");
 
 	await assert.rejects(
-		new TextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve({ resource }, new AbortController().signal),
+		createTestTextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve({ resource }, new AbortController().signal),
 		TextFileBinaryError,
 	);
 	await assert.rejects(
-		new TextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve({ resource }, new AbortController().signal),
+		createTestTextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve({ resource }, new AbortController().signal),
 		TextFileBinaryError,
 	);
 });
@@ -87,7 +87,7 @@ test("TextFileService rejects oversized resources before reading their bytes", a
 	files.reportedSizeBytes = 32 * 1024 * 1024 + 1;
 
 	await assert.rejects(
-		new TextFileService(files).resolve({ resource: URI.file("C:\\project\\large.txt") }, new AbortController().signal),
+		createTestTextFileService(files).resolve({ resource: URI.file("C:\\project\\large.txt") }, new AbortController().signal),
 		TextFileTooLargeError,
 	);
 	assert.equal(files.readCount, 0);
@@ -95,7 +95,7 @@ test("TextFileService rejects oversized resources before reading their bytes", a
 
 test("TextFileService writes text and observes cancellation", async () => {
 	const files = new TestFileService("workspace");
-	const service = new TextFileService(files);
+	using service = createTestTextFileService(files);
 	const resource = URI.file("C:\\project\\main.ts");
 
 	const saved = await service.save({ resource, text: "saved", expectedRevision: "revision-1" }, new AbortController().signal);
@@ -111,7 +111,7 @@ test("TextFileService writes text and observes cancellation", async () => {
 test("TextFileService maps conditional file-write conflicts to its editor-facing error", async () => {
 	const files = new TestFileService("workspace");
 	files.rejectWritesWithRevisionConflict = true;
-	const service = new TextFileService(files);
+	using service = createTestTextFileService(files);
 	const resource = URI.file("C:\\project\\main.ts");
 
 	await assert.rejects(service.save({ resource, text: "saved", expectedRevision: "stale" }, new AbortController().signal), TextFileSaveConflictError);
@@ -189,7 +189,8 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 test("text-file editing preserves UTF-8 BOM through the model, resource adapter and save service", async () => {
 	for (const hasBom of [false, true]) {
 		const files = new TestFileService(new TextEncoder().encode((hasBom ? "\uFEFF" : "") + "first\r\nsecond"));
-		using models = new BrowserTextModelService(new BrowserTextResourceStore(new TextFileService(files)));
+		using service = createTestTextFileService(files);
+		using models = new BrowserTextModelService(new BrowserTextResourceStore(service));
 		using reference = await models.acquire({ resource: URI.file("C:\\project\\bom.txt") }, new AbortController().signal);
 		reference.model.applyOperations([{ range: new Range(1, 1, 1, 6), text: "saved" }]);
 		await reference.save(new AbortController().signal);
@@ -201,7 +202,7 @@ test("text-file editing preserves UTF-8 BOM through the model, resource adapter 
 
 test("text-file decoding retains a leading content character after the UTF-8 BOM", async () => {
 	const resource = URI.file("C:\\project\\bom.txt");
-	const service = new TextFileService(new TestFileService(new TextEncoder().encode("\uFEFF\uFEFFcontent")));
+	using service = createTestTextFileService(new TestFileService(new TextEncoder().encode("\uFEFF\uFEFFcontent")));
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(service));
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "\uFEFFcontent");

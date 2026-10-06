@@ -9,6 +9,7 @@ import './services/dataChannel/browser/dataChannelService.js';
 import './api/browser/mainThreadDataChannels.contribution.js';
 import './api/browser/mainThreadUriOpeners.js';
 import './contrib/bulkEdit/browser/bulkEditService.js';
+import './contrib/localHistory/browser/localHistory.contribution.js';
 /**
  * Shared Workbench registrations loaded by every renderer host.
  *

@@ -1,6 +1,7 @@
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -221,9 +222,9 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	});
 	services.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async () => false });
 	services.registerInstance(IFileService, {
-		stat: async (resource: URI) => { if (!existing.has(resource.fsPath)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
-		copy: async (source: URI, target: URI) => { copied.push(`${source.fsPath} -> ${target.fsPath}`); existing.add(target.fsPath); },
-		rename: async (source: URI, target: URI) => { renamed.push(`${source.fsPath} -> ${target.fsPath}`); existing.delete(source.fsPath); existing.add(target.fsPath); },
+		stat: async (resource: URI) => { if (!existing.has(resource.path)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
+		copy: async (source: URI, target: URI) => { copied.push(`${source.path} -> ${target.path}`); existing.add(target.path); },
+		rename: async (source: URI, target: URI) => { renamed.push(`${source.path} -> ${target.path}`); existing.delete(source.path); existing.add(target.path); },
 	} as unknown as FileServiceContract);
 	using commands = new CommandService(services);
 	await commands.executeCommand(COPY_FILE_COMMAND_ID);
@@ -284,8 +285,8 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 			if (resource.toString() === source.toString()) return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
 			throw new FileNotFoundError(resource);
 		},
-		copy: async (from: URI, to: URI) => { operations.push(`copy ${from.fsPath} -> ${to.fsPath}`); },
-		rename: async (from: URI, to: URI) => { operations.push(`move ${from.fsPath} -> ${to.fsPath}`); },
+		copy: async (from: URI, to: URI) => { operations.push(`copy ${from.path} -> ${to.path}`); },
+		rename: async (from: URI, to: URI) => { operations.push(`move ${from.path} -> ${to.path}`); },
 	} as unknown as FileServiceContract);
 	using secondCommands = new CommandService(secondServices);
 	await secondCommands.executeCommand(PASTE_FILE_COMMAND_ID);
@@ -358,7 +359,7 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 		} as unknown as IClipboardService);
 		services.registerInstance(ISystemFileTransferService, {
-			pasteSystemFiles: async (directory, moveRequested) => { pastes.push({ directory: directory.fsPath, moveRequested }); return true; },
+			pasteSystemFiles: async (directory, moveRequested) => { pastes.push({ directory: directory.path, moveRequested }); return true; },
 		});
 		services.registerInstance(IFileService, {} as FileServiceContract);
 		using commands = new CommandService(services);
@@ -402,11 +403,11 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		services.registerInstance(IClipboardService, {
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 		} as unknown as IClipboardService);
-		services.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async directory => { attemptedTransfers.push(directory.fsPath); return false; } });
+		services.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async directory => { attemptedTransfers.push(directory.path); return false; } });
 		services.registerInstance(IFileService, {
 			stat: async (resource: URI) => { throw new FileNotFoundError(resource); },
 			writeFileBytes: async (resource: URI, content: Uint8Array) => {
-				writes.push({ resource: resource.fsPath, bytes: [...content] });
+				writes.push({ resource: resource.path, bytes: [...content] });
 				return { stat: { resource, kind: FileKind.File, sizeBytes: content.length, readonly: false, modifiedAtMillis: undefined }, revision: 'copied' };
 			},
 		} as unknown as FileServiceContract);
@@ -686,5 +687,8 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 });
 
 function createExplorerService(workspace: WorkspaceContextService): ExplorerService {
-	return new ExplorerService(workspace, { onDidChangeFiles: Event.None } as FileServiceContract);
+	return new ExplorerService(workspace, { onDidChangeFiles: Event.None } as FileServiceContract, explorerConfiguration);
 }
+
+const explorerConfiguration = new InMemoryConfigurationService();
+suiteTeardown(() => explorerConfiguration.dispose());
