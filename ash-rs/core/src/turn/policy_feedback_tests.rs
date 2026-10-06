@@ -1,6 +1,6 @@
 use super::*;
-use ash_action_policy::AssessmentId;
 use ash_action_policy::BlockReason;
+use ash_protocol::AssessmentId;
 use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallId;

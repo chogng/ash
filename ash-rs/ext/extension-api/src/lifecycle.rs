@@ -71,7 +71,7 @@ pub trait ApprovalReviewContributor: Send + Sync {
         &self,
         request: &ash_action_policy::ActionReviewRequest,
         cancellation: &async_utils::CancellationToken,
-    ) -> Result<ash_action_policy::ClassifierAssessment, ExtensionError>;
+    ) -> Result<ash_protocol::ClassifierAssessment, ExtensionError>;
 }
 
 /// Facts emitted only after the matching Tool lifecycle event has committed.

@@ -63,7 +63,8 @@ src/
 ├── config.rs       # user config、normalized config、URL helpers
 ├── definition.rs   # provider declaration 与 validation
 ├── input_token_count.rs # count profile、target、model policy 与 normalized snapshot
-├── model_catalog.rs # 读取、校验 models.json 并生成 ProviderDefinition.models
+├── static_model_spec.rs # models.json 行与参数的解析声明、转换和编辑器字段说明
+├── model_catalog.rs # 校验、规范化 models.json 并生成 ProviderDefinition.models
 ├── registry.rs     # registration、merge、selection、normalization
 ├── providers/      # provider endpoint、adapter、profile 与 transport declarations
 ├── error.rs
@@ -147,6 +148,8 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 
 六家官方接口对照、通用字段结构和当前缺口见 [通用模型声明规范](docs/model-template.md)。该文档区分当前可解析字段、Codex 字段对应关系和未实现的通用参数设计；当前格式由 Rust 契约和生成的 Schema 定义。
 
+JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.rs) 的解析类型定义，字段注释进入生成 Schema。共享协议按数据职责组织，阅读关系见 [protocol 目录说明](../protocol/README.md#modelsjson-从哪里定义)。这两个入口一起维护：修改文件名不会自动改变 JSON，修改解析声明必须重新生成 Schema。
+
 产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和完整的 `instructions.body`，每个模型的正文与 revision 可以独立修改。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
 
 ```json
@@ -185,7 +188,7 @@ just generate-model-catalog-schema --check
 
 只有身份、显示名和完整提示词必填；省略上下文容量表示未知，能力字段使用 `true / false / null`，分别表示已确认支持、已确认不支持、未知；省略能力同样表示未知，也不会按厂商或模型名称猜测。`capabilities` 只填写已知的 `tools`、`reasoning`、`parallelToolCalls`、`imageDetailOriginal` 或 `fastMode`，没有已知能力时省略整个对象。没有推理档位、默认推理等级或特殊压缩阈值时，分别省略 `supported_reasoning_efforts`、`model_reasoning_effort` 和 `auto_compact_token_limit`。人格字段不属于这个目录。重复身份、未知字段、缺失提示词、空白正文/revision、零上下文窗口或不支持的默认推理等级会使目录校验失败。
 
-`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务等级选项及默认值、加速机制、工具输出限额。`verbosity` 和 `reasoningSummary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/settings.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
+`settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务等级选项及默认值、加速机制、工具输出限额。`verbosity` 和 `reasoningSummary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/parameters.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
 
 已与本地 Codex 清单准确匹配的 8 个 OpenAI 型号补入已声明的模态、verbosity、摘要和工具输出预算，并补齐并行工具与原图能力。服务等级的 `id` 保存供应商请求值，`name` 和 `description` 保存展示名称及说明；`Fast` 是名称，OpenAI 的等级 ID 是 `priority`，不再同时声明 `fast` 和 `priority` 两个选项。声明不证明账号权益。没有证据的字段继续保持未知。Codex 的模型简介和推理档位说明已进入这份数据；升级提示、展示排序、搜索工具类型及尚无调用方的字段不写入模型规格。
 

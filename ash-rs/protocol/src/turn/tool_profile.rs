@@ -1,3 +1,5 @@
+//! The model-visible tool surface frozen for one accepted Turn.
+
 use crate::ToolName;
 use schemars::JsonSchema;
 use serde::Deserialize;

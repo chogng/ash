@@ -1,10 +1,10 @@
 use super::*;
 use crate::local_tools::LocalShellToolService;
-use ash_action_policy::ActionPolicyRevision;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
+use ash_protocol::ActionPolicyRevision;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_sandboxing::PreparedCommand;

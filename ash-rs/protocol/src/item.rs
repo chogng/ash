@@ -1,3 +1,6 @@
+//! Durable transcript items and plan updates displayed within a Thread Turn.
+//! Model request messages are a separate contract in `model/message.rs`.
+
 mod plan;
 
 pub use plan::PlanStep;

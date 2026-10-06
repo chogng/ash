@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use ash_action_policy::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
-    ActionSource, CapabilitySet, ExecutionDecision, ResolvedAction, SandboxCompatibility,
-};
+use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::ExecutionDecision;
+use ash_action_policy::ResolvedAction;
+use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationSource;
 use ash_config::{
     ConfigGeneration, McpConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
@@ -14,6 +14,12 @@ use ash_mcp::{
     McpConnectFuture, McpPageCursor, McpServerDefinition, McpServerTransport, McpSession,
     McpSessionError, McpSessionFactory, McpSessionFuture,
 };
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionSource;
+use ash_protocol::CapabilitySet;
 use ash_protocol::{ToolCall, ToolCallId};
 use ash_rmcp_client::{
     CallToolRequestParams, CallToolResult, JsonObject, ListToolsResult, RmcpClientOptions,

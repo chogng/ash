@@ -1,11 +1,29 @@
-use action_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionPolicyEngine, ActionPolicyRevision,
-    ActionProvenance, ActionReviewRequest, ActionSource, AssessmentId, Capability, CapabilityKind,
-    CapabilitySet, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision,
-    ProcessInvocationKind, ResolvedAction, ReviewContext, ReviewEvidence, ReviewEvidenceKind,
-    ReviewEvidenceTrust, ReviewFailurePolicy, RiskLevel, SandboxCompatibility, UserAuthorization,
-};
+use action_policy::ActionClassifier;
+use action_policy::ActionPolicyEngine;
+use action_policy::ActionReviewRequest;
+use action_policy::ExecutionDecision;
+use action_policy::ResolvedAction;
+use action_policy::ReviewFailurePolicy;
+use action_policy::SandboxCompatibility;
 use async_utils::{CancellationSource, CancellationToken};
+use protocol::ActionDigest;
+use protocol::ActionKind;
+use protocol::ActionPolicyRevision;
+use protocol::ActionProvenance;
+use protocol::ActionSource;
+use protocol::AssessmentId;
+use protocol::Capability;
+use protocol::CapabilityKind;
+use protocol::CapabilitySet;
+use protocol::ClassifierAssessment;
+use protocol::ClassifierRecommendation;
+use protocol::ProcessInvocationKind;
+use protocol::ReviewContext;
+use protocol::ReviewEvidence;
+use protocol::ReviewEvidenceKind;
+use protocol::ReviewEvidenceTrust;
+use protocol::RiskLevel;
+use protocol::UserAuthorization;
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::convert::Infallible;

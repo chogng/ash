@@ -14,24 +14,26 @@ materialize 的 action、sandbox compatibility、exact one-action grants 和 adv
 
 | 领域 | 关键类型 | 所有权 |
 | --- | --- | --- |
-| Action identity | `ResolvedAction`, `ActionDigest`, `ActionKind`, `ActionProvenance` | host 负责完整 materialization；缺失 cwd、argv、resolved path 或来源会破坏 grant binding |
-| Capability | `Capability`, `CapabilityKind`, `CapabilitySet` | exact `kind + scope`，canonical ordering |
-| Safe point | `ActionReviewRequest`, `ActionPolicyRevision`, `ActionReviewPhase` | request 与当前 action-policy snapshot 必须 revision 相等 |
+| Action identity | `ResolvedAction`；protocol 的 `ActionDigest`, `ActionKind`, `ActionProvenance` | 本 crate 保存规则求值所需的完整动作；共享身份和来源由 protocol 定义，host 负责准确解析 |
+| Capability | protocol 的 `Capability`, `CapabilityKind`, `CapabilitySet` | exact `kind + scope`，canonical ordering；规则映射和授权约束由本 crate 执行 |
+| Safe point | `ActionReviewRequest`；protocol 的 `ActionPolicyRevision`, `ActionReviewPhase` | 本 crate 持有沙箱与执行上下文；共享数据保持与具体策略引擎无关，request 与当前 snapshot 必须 revision 相等 |
 | Deterministic input | `ash_execpolicy::ExecPolicySnapshot` | 只消费；selector、layer、revision 与 rule source 属于 `ash-execpolicy` |
 | Exact grants | `DeterministicPolicyGrant`, `UnsandboxedGrant`, `AutoReviewGrant`, `PermissionBypassGrant` | 都绑定 action digest、完整 capabilities 和 action-policy revision |
-| Advisory port | `ActionClassifier`, `ClassifierAssessment`, `ClassifierRecommendation` | classifier 只能建议，不能签发 authority |
+| Advisory port | `ActionClassifier`；protocol 的 `ClassifierAssessment`, `ClassifierRecommendation` | 分类器接口及建议校验由本 crate 定义；建议和绑定结果直接使用 protocol 类型 |
 | Final outcome | `ExecutionDecision`, `BlockReason`, `ApprovalRequest`, `SaferActionRequest` | caller 必须按 typed branch durable 记录并执行 |
 
-`ActionPolicyRevision::from_components` 把 exec-policy revision、exact-grant snapshot revision 和
+共享审核类型的唯一入口是 [`protocol/guardian.rs`](../protocol/src/guardian.rs)，本 crate 不重新导出
+这些类型；调用方直接依赖 protocol，避免为读取数据而依赖授权实现。
+
+`derive_action_policy_revision` 把 exec-policy revision、exact-grant snapshot revision 和
 reviewer policy revision 组合为一个 safe-point identity。只更新其中一项也会使旧 request/grant
 失效。
 
 ## 文件与调用关系
 
 ```text
-src/action.rs      action、capability、provenance、request/revision
-src/classifier.rs  advisory classifier contract 与 assessment validation
-src/context.rs     trust-labeled review evidence
+src/action.rs      完整动作、沙箱执行上下文、规则映射和策略版本计算
+src/classifier.rs  分类器接口与 validate_recommendation 授权能力约束校验
 src/grant.rs       explicit exact user grant
 src/grants.rs      exact grant snapshot lookup
 src/decision.rs    typed decisions 与 engine-only grants
@@ -86,7 +88,7 @@ classifier failure 按显式 `ReviewFailurePolicy` fail closed 或转人工。
 ## 验证与修改影响
 
 ```text
-cargo test -p ash-action-policy
+just verify ash-action-policy
 bazel test //ash-rs/action-policy:action-policy-unit-tests
 ```
 

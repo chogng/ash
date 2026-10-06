@@ -71,20 +71,31 @@ pub enum ModelAcceleration {
     },
 }
 
-/// Request settings frozen with the same model snapshot as its capacity.
-/// Missing lists/defaults and Unknown capabilities are absence of evidence, not restrictions.
-/// Endpoint support and user choices are checked separately by the invocation owner.
+/// Catalog declarations for supported parameters, Ash request defaults, and tool-result limits.
+///
+/// A declaration is frozen with model capacity for an in-flight Turn. Missing lists/defaults and
+/// `Unknown` support are absence of evidence. They do not grant endpoint support or account access.
+/// The invocation owner resolves user choices into [`crate::ModelRequest`] separately.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ModelSettings {
+    /// Declared input kinds; `None` means unknown, while a declared list includes text.
     pub input_modalities: Option<Vec<ModelInputModality>>,
+    /// Support for a verbosity request parameter, not a promise about actual response length.
     pub verbosity: CapabilitySupport,
+    /// Ash request default; requires confirmed verbosity support.
     pub default_verbosity: Option<ModelVerbosity>,
+    /// Support for returning reasoning summaries, separate from effort and replayable reasoning state.
     pub reasoning_summary: CapabilitySupport,
+    /// Ash summary default; omission leaves it unspecified, while [`ModelReasoningSummary::None`] suppresses summaries.
     pub default_reasoning_summary: Option<ModelReasoningSummary>,
+    /// Exact provider request IDs and display copy; a listed tier does not establish entitlement.
     pub service_tiers: Option<Vec<ModelServiceTier>>,
+    /// Ash request default referencing a declared tier ID; absence sends no default override.
     pub default_service_tier: Option<String>,
+    /// Mechanism selected by the product's acceleration preference; distinct from explicit request values.
     pub acceleration: Option<ModelAcceleration>,
+    /// Core's model-visible tool-result truncation budget, not a provider inference parameter.
     pub tool_output_limit: Option<ModelToolOutputLimit>,
 }
 

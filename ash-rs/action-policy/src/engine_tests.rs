@@ -1,9 +1,8 @@
 use super::*;
-use crate::{
-    ActionDigest, ActionKind, ActionProvenance, ActionSource, AssessmentId, Capability,
-    CapabilityKind, CapabilitySet, GrantId, ProcessInvocationKind, ResolvedAction,
-    SandboxDenialEvidence, UnsandboxedGrant, UserAllowlist,
-};
+use crate::GrantId;
+use crate::ResolvedAction;
+use crate::UnsandboxedGrant;
+use crate::UserAllowlist;
 use ash_async_utils::{CancellationSource, CancellationToken};
 use ash_execpolicy::ExecPolicyDefault;
 use ash_execpolicy::ExecPolicyEffect;
@@ -14,6 +13,16 @@ use ash_execpolicy::ExecPolicyRule;
 use ash_execpolicy::ExecPolicyRuleId;
 use ash_execpolicy::ExecPolicySelector;
 use ash_execpolicy::ExecPolicySnapshot;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionSource;
+use ash_protocol::AssessmentId;
+use ash_protocol::Capability;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
+use ash_protocol::ProcessInvocationKind;
+use ash_protocol::SandboxDenialEvidence;
 use ash_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 use std::fmt;
 

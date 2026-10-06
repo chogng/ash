@@ -371,7 +371,7 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
         dir_config: None,
     };
     let exec_policy = policy_config.snapshot().unwrap();
-    let action_policy_revision = ActionPolicyRevision::from_components(
+    let action_policy_revision = ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
         LOCAL_REVIEWER_POLICY_REVISION,
@@ -419,7 +419,7 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
         )),
     };
     let exec_policy = restrictive_config.snapshot().unwrap();
-    let action_policy_revision = ActionPolicyRevision::from_components(
+    let action_policy_revision = ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
         LOCAL_REVIEWER_POLICY_REVISION,
@@ -992,7 +992,8 @@ fn local_suite_reads_and_edits_with_spec_errors() {
     );
     let path = dir.path().join("src/main.rs");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(&path, "fn main() {\n    println!(\"old\");\n}\n").unwrap();
+    let original = "fn main() {\n    println!(\"old\");\n}\n";
+    fs::write(&path, original).unwrap();
     let cancellation = CancellationSource::new().token();
     let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
 
@@ -1013,8 +1014,10 @@ fn local_suite_reads_and_edits_with_spec_errors() {
         )
         .unwrap();
     assert!(
-        matches!(unread_edit, ToolExecutionOutput::Failure(message) if message.contains("has not been read"))
+        matches!(&unread_edit, ToolExecutionOutput::Failure(message) if message.contains("must be read again before editing")),
+        "{unread_edit:?}"
     );
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
 
     let read = suite
         .execute(
@@ -1048,7 +1051,8 @@ fn local_suite_reads_and_edits_with_spec_errors() {
     assert!(matches!(edit, ToolExecutionOutput::Success(text) if text.contains("new")));
     assert!(fs::read_to_string(&path).unwrap().contains("new"));
 
-    fs::write(&path, "fn main() { println!(\"external\"); }\n").unwrap();
+    let external = "fn main() { println!(\"external\"); }\n";
+    fs::write(&path, external).unwrap();
     let stale_edit = suite
         .execute(
             &ToolCall {
@@ -1066,9 +1070,10 @@ fn local_suite_reads_and_edits_with_spec_errors() {
         )
         .unwrap();
     assert!(
-        matches!(stale_edit, ToolExecutionOutput::Failure(message) if message.contains("changed on disk"))
+        matches!(&stale_edit, ToolExecutionOutput::Failure(message) if message.contains("must be read again before editing")),
+        "{stale_edit:?}"
     );
-    assert!(fs::read_to_string(path).unwrap().contains("external"));
+    assert_eq!(fs::read_to_string(path).unwrap(), external);
 }
 
 fn tool_call(arguments: serde_json::Value) -> ToolCall {

@@ -12,6 +12,7 @@ name = "guardian_reviewer"
 path = "src/lib.rs"
 
 [dependencies]
+protocol = { package = "ash-protocol", path = "../../protocol" }
 guardian-context = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

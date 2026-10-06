@@ -11,30 +11,13 @@ use crate::SteerTurnRequest;
 use crate::ToolAuthorization;
 use crate::ToolExecutionOutput;
 use ash_action_policy::ActionClassifier;
-use ash_action_policy::ActionDigest;
-use ash_action_policy::ActionKind;
 use ash_action_policy::ActionPolicyEngine;
-use ash_action_policy::ActionPolicyRevision;
-use ash_action_policy::ActionProvenance;
-use ash_action_policy::ActionReviewPhase;
 use ash_action_policy::ActionReviewRequest;
-use ash_action_policy::ActionSource;
 use ash_action_policy::ApprovalRequest;
-use ash_action_policy::AssessmentId;
-use ash_action_policy::Capability;
-use ash_action_policy::CapabilityKind;
-use ash_action_policy::CapabilitySet;
-use ash_action_policy::ClassifierAssessment;
-use ash_action_policy::ClassifierRecommendation;
 use ash_action_policy::ExecutionDecision;
 use ash_action_policy::ResolvedAction;
-use ash_action_policy::ReviewEvidence;
-use ash_action_policy::ReviewEvidenceKind;
-use ash_action_policy::ReviewEvidenceTrust;
 use ash_action_policy::ReviewFailurePolicy;
-use ash_action_policy::RiskLevel;
 use ash_action_policy::SandboxCompatibility;
-use ash_action_policy::UserAuthorization;
 use ash_async_utils::CancellationSource;
 use ash_execpolicy::ExecPolicyDefault;
 use ash_execpolicy::ExecPolicyEffect;
@@ -47,11 +30,27 @@ use ash_execpolicy::ExecPolicySelector;
 use ash_execpolicy::ExecPolicySnapshot;
 use ash_protocol::ActionApprovalDecision;
 use ash_protocol::ActionApprovalResponse;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionReviewPhase;
+use ash_protocol::ActionSource;
 use ash_protocol::AgentRequest;
 use ash_protocol::AgentResponse;
+use ash_protocol::AssessmentId;
+use ash_protocol::Capability;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
+use ash_protocol::ClassifierAssessment;
+use ash_protocol::ClassifierRecommendation;
 use ash_protocol::CommandId;
 use ash_protocol::DynamicToolOutput;
 use ash_protocol::DynamicToolResponse;
+use ash_protocol::ReviewEvidence;
+use ash_protocol::ReviewEvidenceKind;
+use ash_protocol::ReviewEvidenceTrust;
+use ash_protocol::RiskLevel;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
@@ -60,6 +59,7 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionAuthority;
 use ash_protocol::ToolName;
 use ash_protocol::TurnStatus;
+use ash_protocol::UserAuthorization;
 use ash_protocol::UserInput;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
@@ -1910,7 +1910,7 @@ fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
     });
     let fixture = fixture_with_modes(
         Arc::new(ReviewTool {
-            action_kind: ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Shell),
+            action_kind: ActionKind::LocalProcess(ash_protocol::ProcessInvocationKind::Shell),
             outputs: Mutex::new(VecDeque::from([safe_sandbox_denial()])),
             ..Default::default()
         }),
@@ -1991,7 +1991,7 @@ fn analysis_modes_block_mutation_before_review_or_execution_in_every_permission_
 fn analysis_investigation_process_keeps_read_only_sandbox_after_permission_bypass() {
     let fixture = fixture_with_modes(
         Arc::new(ReviewTool {
-            action_kind: ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Shell),
+            action_kind: ActionKind::LocalProcess(ash_protocol::ProcessInvocationKind::Shell),
             ..Default::default()
         }),
         Arc::new(AskPolicy),
@@ -2368,7 +2368,7 @@ impl ActionPolicyService for AskPolicy {
 }
 
 struct ContextApprovingClassifier {
-    observed: Arc<Mutex<Option<ash_action_policy::ReviewContext>>>,
+    observed: Arc<Mutex<Option<ash_protocol::ReviewContext>>>,
 }
 
 struct DenialApprovingClassifier {

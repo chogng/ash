@@ -250,7 +250,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 
 ## 7. 与当前 Ash 的逐项缺口
 
-当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/settings.rs) 和 [接入定义](../src/definition.rs) 为准。当前目录的 [JSON Schema](../models.schema.json) 从 Rust 解析声明生成，App Server 的 JSON Schema 和 TypeScript 类型从共享协议生成，避免另建一份手工类型。当前服务等级格式与示例见 [可解析的模型设置](../README.md#统一静态模型清单)。
+当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/parameters.rs) 和 [接入定义](../src/definition.rs) 为准。当前目录的 [JSON Schema](../models.schema.json) 从 Rust 解析声明生成，App Server 的 JSON Schema 和 TypeScript 类型从共享协议生成，避免另建一份手工类型。当前服务等级格式与示例见 [可解析的模型设置](../README.md#统一静态模型清单)。
 
 | 范围 | 当前状态 | 规范要求补充 |
 | --- | --- | --- |

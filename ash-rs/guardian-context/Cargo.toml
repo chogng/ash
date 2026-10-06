@@ -10,7 +10,6 @@ name = "guardian_context"
 doctest = false
 
 [dependencies]
-action-policy = { package = "ash-action-policy", path = "../action-policy" }
 protocol = { package = "ash-protocol", path = "../protocol" }
 serde_json = { workspace = true }
 

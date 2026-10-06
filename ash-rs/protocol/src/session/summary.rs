@@ -1,3 +1,6 @@
+//! Session activity, status, and summary data derived from Thread facts.
+//! These are displayable facts, not a session-manager runtime or lifecycle controller.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

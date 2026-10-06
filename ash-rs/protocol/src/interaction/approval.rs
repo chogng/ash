@@ -1,3 +1,6 @@
+//! User approval requests and responses for exact actions and capabilities.
+//! Automated risk assessment and final authorization are owned by action-policy and its reviewer.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

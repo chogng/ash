@@ -1,6 +1,6 @@
-use crate::ActionDigest;
-use crate::ActionPolicyRevision;
-use crate::CapabilitySet;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::CapabilitySet;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct GrantId(String);

@@ -130,8 +130,8 @@ fn managed_state_reads_receive_only_their_domain_read_permission() {
         .unwrap();
     assert_eq!(
         review.action().required_capabilities(),
-        &ash_action_policy::CapabilitySet::new([ash_action_policy::Capability::new(
-            ash_action_policy::CapabilityKind::FileRead,
+        &ash_protocol::CapabilitySet::new([ash_protocol::Capability::new(
+            ash_protocol::CapabilityKind::FileRead,
             "agent-message-board",
         )]),
     );
@@ -187,7 +187,7 @@ fn capability_extension_tools_freeze_scopes_and_require_user_approval() {
 
     assert_eq!(
         review.action().kind(),
-        &ash_action_policy::ActionKind::NetworkRequest
+        &ash_protocol::ActionKind::NetworkRequest
     );
     assert_eq!(review.action().required_capabilities().iter().count(), 2);
     assert!(matches!(

@@ -94,12 +94,14 @@
       "type": "object",
       "properties": {
         "fastMode": {
+          "description": "Whether acceleration is supported; settings.acceleration declares the request mechanism.",
           "type": [
             "boolean",
             "null"
           ]
         },
         "imageDetailOriginal": {
+          "description": "Whether original-detail image requests are supported; image input is declared separately.",
           "type": [
             "boolean",
             "null"
@@ -142,9 +144,11 @@
       "type": "object",
       "properties": {
         "body": {
+          "description": "Complete model-specific Agent instructions; runtime permission and project instructions are separate.",
           "type": "string"
         },
         "revision": {
+          "description": "Version of this complete base prompt, frozen with its body when a Turn is accepted.",
           "type": "string"
         }
       },
@@ -207,6 +211,7 @@
       "type": "object",
       "properties": {
         "acceleration": {
+          "description": "How the acceleration preference changes a request: tier, speed parameter, or exact model ID.",
           "anyOf": [
             {
               "$ref": "#/$defs/ModelAcceleration"
@@ -217,6 +222,7 @@
           ]
         },
         "defaultReasoningSummary": {
+          "description": "Ash's summary default; the string \"none\" suppresses summaries without disabling reasoning.",
           "anyOf": [
             {
               "$ref": "#/$defs/ModelReasoningSummary"
@@ -227,12 +233,14 @@
           ]
         },
         "defaultServiceTier": {
+          "description": "Ash's request default referencing a declared serviceTiers ID.",
           "type": [
             "string",
             "null"
           ]
         },
         "defaultVerbosity": {
+          "description": "Ash's request default; requires verbosity=true. This is not an inferred provider default.",
           "anyOf": [
             {
               "$ref": "#/$defs/ModelVerbosity"
@@ -243,6 +251,7 @@
           ]
         },
         "inputModalities": {
+          "description": "Declared input kinds; a declared list must include text. Omission means unknown.",
           "type": [
             "array",
             "null"
@@ -252,12 +261,14 @@
           }
         },
         "reasoningSummary": {
+          "description": "Support for returning reasoning summaries, separate from effort and replayable reasoning history.",
           "type": [
             "boolean",
             "null"
           ]
         },
         "serviceTiers": {
+          "description": "Exact provider tier IDs with display names and explanations; these do not grant account access.",
           "type": [
             "array",
             "null"
@@ -267,6 +278,7 @@
           }
         },
         "toolOutputLimit": {
+          "description": "Core's tool-result truncation budget; not a provider inference parameter or output-token limit.",
           "anyOf": [
             {
               "$ref": "#/$defs/ModelToolOutputLimit"
@@ -277,6 +289,7 @@
           ]
         },
         "verbosity": {
+          "description": "Support for a verbosity request parameter: true supported, false unsupported, null or omission unknown.",
           "type": [
             "boolean",
             "null"
@@ -358,6 +371,7 @@
       "type": "object",
       "properties": {
         "auto_compact_token_limit": {
+          "description": "Optional model-specific compaction threshold, constrained by the effective execution budget.",
           "type": [
             "integer",
             "null"
@@ -366,9 +380,11 @@
           "minimum": 0
         },
         "capabilities": {
+          "description": "Confirmed model capabilities; omitted members and null mean unknown, not false.",
           "$ref": "#/$defs/ModelCapabilitiesDeclaration"
         },
         "context_window": {
+          "description": "Declared model capacity in tokens; null or omission means unknown, not unlimited.",
           "type": [
             "integer",
             "null"
@@ -377,7 +393,7 @@
           "minimum": 0
         },
         "context_window_options": {
-          "description": "Normalized budgets: the first is the default. Omitted JSON presets use declared capacity.",
+          "description": "One or two ascending execution budgets within capacity; the first is Ash's default.\nOmission uses declared capacity. These budgets do not change the model's capacity.",
           "type": "array",
           "default": [],
           "items": {
@@ -399,9 +415,11 @@
           "$ref": "#/$defs/ModelInstructions"
         },
         "model_id": {
+          "description": "Exact catalog model ID; connection-specific upstream aliases are configured separately.",
           "type": "string"
         },
         "model_reasoning_effort": {
+          "description": "Ash's default effort; when present it must reference a declared selectable value.",
           "anyOf": [
             {
               "$ref": "#/$defs/ReasoningEffort"
@@ -412,12 +430,15 @@
           ]
         },
         "provider_id": {
+          "description": "Exact model vendor ID, independent of API-key or subscription connection identity.",
           "type": "string"
         },
         "settings": {
+          "description": "Parameter support, Ash defaults, acceleration mechanism, and model-visible tool-result budget.",
           "$ref": "#/$defs/ModelSettingsDeclaration"
         },
         "supported_reasoning_efforts": {
+          "description": "Selectable effort values and their display explanations, independent of a fixed token budget.",
           "type": "array",
           "default": [],
           "items": {

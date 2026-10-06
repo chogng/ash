@@ -1,3 +1,5 @@
+//! The code change selected for a review Turn; unrelated to permission-risk review.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

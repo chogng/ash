@@ -1,3 +1,6 @@
+//! Durable Turn requests, pending metadata, deadlines, cancellation, and delivery envelopes.
+//! Envelopes identify the task; App Server owns the connection that receives them.
+
 use crate::ActionApprovalRequest;
 use crate::ActionApprovalResponse;
 use crate::DynamicToolCall;

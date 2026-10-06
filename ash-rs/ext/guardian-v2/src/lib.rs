@@ -202,7 +202,7 @@ impl extension_api::ApprovalReviewContributor for PooledReviewer {
         &self,
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
-    ) -> Result<action_policy::ClassifierAssessment, extension_api::ExtensionError> {
+    ) -> Result<protocol::ClassifierAssessment, extension_api::ExtensionError> {
         use action_policy::ActionClassifier;
         self.0
             .classify(request, cancellation)

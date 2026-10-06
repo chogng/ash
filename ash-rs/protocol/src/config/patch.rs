@@ -1,3 +1,5 @@
+//! Partial-update fields distinguishing omission, explicit clearing, and replacement.
+
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;

@@ -11,6 +11,7 @@ use crate::ModelRef;
 use crate::Personality;
 use crate::ReasoningEffort;
 
+/// Evidence about support; `Unknown` means unverified, not unsupported.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CapabilitySupport {
@@ -89,6 +90,7 @@ pub struct ModelCapabilities {
     pub personality: CapabilitySupport,
     #[serde(default = "unknown_capability_support")]
     pub image_detail_original: CapabilitySupport,
+    /// Whether acceleration is supported; [`crate::ModelSettings::acceleration`] declares its mechanism.
     #[serde(default = "unknown_capability_support")]
     pub fast_mode: CapabilitySupport,
 }
@@ -108,6 +110,10 @@ fn unknown_capability_support() -> CapabilitySupport {
     CapabilitySupport::Unknown
 }
 
+/// Provider-neutral model metadata published by a catalog, independent of a live connection.
+///
+/// Capacity and parameter declarations guide request construction; this row does not prove account
+/// access or endpoint compatibility. The editable bundled row is owned by model-provider-info.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
@@ -117,12 +123,16 @@ pub struct ModelInfo {
     #[serde(default)]
     pub access: ModelAccess,
     pub context_window: ContextWindow,
+    /// Optional model-specific compaction threshold; Core determines the effective execution budget.
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
+    /// Selectable request values with optional display explanations; not fixed token budgets.
     pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
+    /// Catalog default when the user has not selected an effort; not the provider's implicit default.
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
+    /// Supported parameters and Ash defaults, not the values selected for a particular invocation.
     pub settings: crate::ModelSettings,
 }
 

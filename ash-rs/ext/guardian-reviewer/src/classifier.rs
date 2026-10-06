@@ -1,10 +1,11 @@
-use crate::protocol::{self, CURRENT_REVIEW_PROTOCOL};
+use crate::model_contract::{self, CURRENT_REVIEW_PROTOCOL};
 use crate::review_model::{ReviewModel, ReviewModelError, ReviewModelRequest};
-use action_policy::{
-    ActionClassifier, ActionReviewRequest, AssessmentId, ClassifierAssessment,
-    ClassifierRecommendation,
-};
+use action_policy::ActionClassifier;
+use action_policy::ActionReviewRequest;
 use async_utils::CancellationToken;
+use protocol::AssessmentId;
+use protocol::ClassifierAssessment;
+use protocol::ClassifierRecommendation;
 use std::fmt;
 
 const MAX_MODEL_INPUT_BYTES: usize = 64 * 1024;
@@ -80,7 +81,7 @@ impl<M: ReviewModel> LlmActionClassifier<M> {
                 max_estimated_tokens: MAX_MODEL_INPUT_TOKENS,
             },
             |context| {
-                protocol::input_with_context(request, context)
+                model_contract::input_with_context(request, context)
                     .map(|input| input.len() + fixed_bytes)
             },
         )
@@ -92,7 +93,7 @@ impl<M: ReviewModel> LlmActionClassifier<M> {
                 AutoReviewError::RequestTooLarge { bytes }
             }
         })?;
-        let input_json = protocol::input_with_context(request, &context)
+        let input_json = model_contract::input_with_context(request, &context)
             .map_err(|error| AutoReviewError::InvalidRequest(error.to_string()))?;
         Ok(ReviewModelRequest::new(
             CURRENT_REVIEW_PROTOCOL.system_prompt(),
@@ -106,11 +107,13 @@ impl<M: ReviewModel> LlmActionClassifier<M> {
         request: &ActionReviewRequest,
         response: &str,
     ) -> Result<ClassifierRecommendation, AutoReviewError> {
-        let recommendation = protocol::parse_recommendation(response)
+        let recommendation = model_contract::parse_recommendation(response)
             .map_err(|error| AutoReviewError::InvalidResponse(error.to_string()))?;
-        recommendation
-            .validate_against(request.action().required_capabilities())
-            .map_err(|error| AutoReviewError::InvalidResponse(error.to_string()))?;
+        action_policy::validate_recommendation(
+            &recommendation,
+            request.action().required_capabilities(),
+        )
+        .map_err(|error| AutoReviewError::InvalidResponse(error.to_string()))?;
         Ok(recommendation)
     }
 }
@@ -149,7 +152,7 @@ impl<M: ReviewModel> ActionClassifier for LlmActionClassifier<M> {
             });
         }
         let recommendation = Self::parse_recommendation(request, &response)?;
-        let response_json_bytes = protocol::response_json_bytes(&recommendation)
+        let response_json_bytes = model_contract::response_json_bytes(&recommendation)
             .map_err(|error| AutoReviewError::InvalidResponse(error.to_string()))?;
         Ok(ClassifierAssessment::new(
             AssessmentId::from_response(

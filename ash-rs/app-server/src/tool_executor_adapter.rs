@@ -4,13 +4,13 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use ash_action_policy::ActionReviewRequest;
-use ash_action_policy::ReviewEvidence;
 use ash_async_utils::CancellationToken;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
 use ash_file_access::Authorization;
 use ash_protocol::ContentPart;
+use ash_protocol::ReviewEvidence;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolExecutionOutput;

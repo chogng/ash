@@ -243,7 +243,7 @@ impl ExtensionRegistry {
         &self,
         request: &ash_action_policy::ActionReviewRequest,
         cancellation: &CancellationToken,
-    ) -> Result<ash_action_policy::ClassifierAssessment, ExtensionError> {
+    ) -> Result<ash_protocol::ClassifierAssessment, ExtensionError> {
         cancellation
             .check()
             .map_err(|error| ExtensionError::new(error.reason().to_string()))?;

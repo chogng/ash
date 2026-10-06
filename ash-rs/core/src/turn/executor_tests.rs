@@ -23,15 +23,7 @@ use crate::ToolOutputSink;
 use crate::ToolService;
 use crate::ToolUserInputOutcome;
 use crate::TurnExecutionOutcome;
-use ash_action_policy::ActionDigest;
-use ash_action_policy::ActionKind;
-use ash_action_policy::ActionPolicyRevision;
-use ash_action_policy::ActionProvenance;
 use ash_action_policy::ActionReviewRequest;
-use ash_action_policy::ActionSource;
-use ash_action_policy::Capability;
-use ash_action_policy::CapabilityKind;
-use ash_action_policy::CapabilitySet;
 use ash_action_policy::ExecutionDecision;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
@@ -42,7 +34,15 @@ use ash_agent_environment::RepositoryEnvironment;
 use ash_async_utils::CancellationSource;
 use ash_context_engine::ContextTokenMeasurement;
 use ash_context_engine::ContextTokenMeasurementSource;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionSource;
 use ash_protocol::AgentResponse;
+use ash_protocol::Capability;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
 use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
 use ash_protocol::ContentPart;
@@ -2635,7 +2635,7 @@ impl ToolService for NetworkApprovalTool {
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(b"network-parent"),
-                ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Direct),
+                ActionKind::LocalProcess(ash_protocol::ProcessInvocationKind::Direct),
                 "run a network command",
                 CapabilitySet::new([]),
             ),
@@ -3517,7 +3517,7 @@ impl ToolService for DeferredWeatherTools {
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
-                ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Direct),
+                ActionKind::LocalProcess(ash_protocol::ProcessInvocationKind::Direct),
                 "search tools",
                 CapabilitySet::new([]),
             ),
@@ -3658,7 +3658,7 @@ impl ToolService for BlockingTool {
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
-                ActionKind::LocalProcess(ash_action_policy::ProcessInvocationKind::Direct),
+                ActionKind::LocalProcess(ash_protocol::ProcessInvocationKind::Direct),
                 "wait for cancellation",
                 CapabilitySet::new([]),
             ),
@@ -3803,7 +3803,7 @@ impl ActionPolicyService for RejectingReviewPolicy {
     ) -> Result<ExecutionDecision, CoreError> {
         Ok(ExecutionDecision::Block(
             ash_action_policy::BlockReason::ReviewerDenied {
-                assessment_id: ash_action_policy::AssessmentId::new("rejected-action"),
+                assessment_id: ash_protocol::AssessmentId::new("rejected-action"),
                 reason: "review denied".into(),
             },
         ))

@@ -1,3 +1,5 @@
+//! Shared appearance, personality, permission, sandbox, and web-search preference values.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

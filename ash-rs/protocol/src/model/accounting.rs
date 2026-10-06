@@ -1,3 +1,6 @@
+//! Durable invocation, billing evidence, and reference-cost records.
+//! These are results, not editable catalog fields; model-accounting owns price calculation.
+
 use crate::ModelId;
 use crate::ModelInputEstimate;
 use crate::ModelInvocationId;

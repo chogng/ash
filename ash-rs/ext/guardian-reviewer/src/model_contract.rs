@@ -1,8 +1,19 @@
-use action_policy::{
-    ActionPolicyRevision, ActionProvenance, ActionReviewPhase, ActionReviewRequest, Capability,
-    CapabilityKind, CapabilitySet, ClassifierRecommendation, ResolvedAction, ReviewContext,
-    RiskLevel, SandboxCompatibility, UserAuthorization,
-};
+//! Guardian model prompt, strict response format, and translation into shared protocol facts.
+//! The private model format is separate from the backend contracts in protocol/guardian.rs.
+
+use action_policy::ActionReviewRequest;
+use action_policy::ResolvedAction;
+use action_policy::SandboxCompatibility;
+use protocol::ActionPolicyRevision;
+use protocol::ActionProvenance;
+use protocol::ActionReviewPhase;
+use protocol::Capability;
+use protocol::CapabilityKind;
+use protocol::CapabilitySet;
+use protocol::ClassifierRecommendation;
+use protocol::ReviewContext;
+use protocol::RiskLevel;
+use protocol::UserAuthorization;
 use serde::{Deserialize, Serialize};
 
 const SYSTEM_PROMPT: &str = include_str!("../prompt.md");

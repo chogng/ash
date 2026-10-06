@@ -1,3 +1,5 @@
+//! Caller intentions submitted to a Thread; commands become facts only after acceptance.
+
 use crate::ActionApprovalResponse;
 use crate::ApprovalMode;
 use crate::DynamicToolResponse;

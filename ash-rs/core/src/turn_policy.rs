@@ -93,24 +93,20 @@ impl ActionPolicyService for TurnActionPolicy {
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
     ) -> Result<ExecutionDecision, CoreError> {
-        if request.provenance().source() == &ash_action_policy::ActionSource::BuiltInTool
+        if request.provenance().source() == &ash_protocol::ActionSource::BuiltInTool
             && request.provenance().source_id() == "code-mode"
         {
             cancellation
                 .check()
                 .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-            let capabilities =
-                ash_action_policy::CapabilitySet::new([ash_action_policy::Capability::new(
-                    ash_action_policy::CapabilityKind::SystemConfiguration,
-                    "code-mode",
-                )]);
-            if request.action().kind() != &ash_action_policy::ActionKind::SystemOperation
+            let capabilities = ash_protocol::CapabilitySet::new([ash_protocol::Capability::new(
+                ash_protocol::CapabilityKind::SystemConfiguration,
+                "code-mode",
+            )]);
+            if request.action().kind() != &ash_protocol::ActionKind::SystemOperation
                 || request.action().required_capabilities() != &capabilities
                 || request.action_policy_revision().as_str() != self.revision()
-                || !matches!(
-                    request.phase(),
-                    ash_action_policy::ActionReviewPhase::Initial
-                )
+                || !matches!(request.phase(), ash_protocol::ActionReviewPhase::Initial)
                 || !matches!(
                     request.sandbox(),
                     ash_action_policy::SandboxCompatibility::NotApplicable { .. }
@@ -213,7 +209,7 @@ impl ash_action_policy::ActionClassifier for RegistryReviewer {
         &self,
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
-    ) -> Result<ash_action_policy::ClassifierAssessment, Self::Error> {
+    ) -> Result<ash_protocol::ClassifierAssessment, Self::Error> {
         self.0.review(request, cancellation)
     }
 }

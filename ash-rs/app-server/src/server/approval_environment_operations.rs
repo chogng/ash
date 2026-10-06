@@ -37,7 +37,7 @@ impl ReviewEnvironmentService for ThreadReviewEnvironment {
         &self,
         thread: &ash_protocol::ThreadId,
         request: &ash_action_policy::ActionReviewRequest,
-    ) -> Result<Vec<ash_action_policy::ReviewEvidence>, core_api::CoreError> {
+    ) -> Result<Vec<ash_protocol::ReviewEvidence>, core_api::CoreError> {
         let Some(scope) = self
             .dirs
             .thread_scope(thread, Permission::ReadFiles)

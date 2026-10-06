@@ -6,6 +6,7 @@
 
 `guardian-environment` 拥有资料及其确认状态；`guardian-context` 组装审核上下文并限制预算；
 `guardian-reviewer` 调用审核模型并校验结论。环境资料不能创建允许规则或授予操作权限。
+审核证据和信任类别直接使用 [`protocol/guardian.rs`](../protocol/src/guardian.rs)；已解析动作和执行上下文仍通过 action-policy 获取。
 State 分别保存用户描述和当前观察，只有变化才递增版本；App Server 拥有读取范围、整理模型调用
 和产品协议。模型不能维护授权。Sessions 与 TUI 使用 `/guardian setup` 管理资料。
 

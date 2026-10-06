@@ -154,13 +154,13 @@ impl AppServer {
 /// Reads catalog-owned rules without granting access to other files in the user's home.
 pub(super) struct InstructionToolService {
     catalogs: Arc<super::dir_contributions::DirContributions>,
-    revision: ash_action_policy::ActionPolicyRevision,
+    revision: ash_protocol::ActionPolicyRevision,
 }
 
 impl InstructionToolService {
     pub(super) fn new(
         catalogs: Arc<super::dir_contributions::DirContributions>,
-        revision: ash_action_policy::ActionPolicyRevision,
+        revision: ash_protocol::ActionPolicyRevision,
     ) -> Self {
         Self { catalogs, revision }
     }
@@ -186,16 +186,16 @@ impl ash_core::ToolService for InstructionToolService {
         }
         Ok(ash_action_policy::ActionReviewRequest::new(
             ash_action_policy::ResolvedAction::new(
-                ash_action_policy::ActionDigest::from_canonical_bytes(
+                ash_protocol::ActionDigest::from_canonical_bytes(
                     serde_json::to_vec(call)
                         .map_err(|error| core_api::CoreError::InvalidInput(error.to_string()))?,
                 ),
-                ash_action_policy::ActionKind::SystemOperation,
+                ash_protocol::ActionKind::SystemOperation,
                 "read a catalog instruction",
-                ash_action_policy::CapabilitySet::new([]),
+                ash_protocol::CapabilitySet::new([]),
             ),
-            ash_action_policy::ActionProvenance::new(
-                ash_action_policy::ActionSource::BuiltInTool,
+            ash_protocol::ActionProvenance::new(
+                ash_protocol::ActionSource::BuiltInTool,
                 "read_instruction",
             ),
             ash_action_policy::SandboxCompatibility::NotApplicable {

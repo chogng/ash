@@ -1,3 +1,5 @@
+//! Agent-authored plan steps and progress recorded with a Turn, without scheduling semantics.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

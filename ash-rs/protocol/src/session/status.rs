@@ -1,3 +1,5 @@
+//! Session lifecycle summarized from its Threads, rather than stored independently.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

@@ -1,3 +1,5 @@
+//! User-authored Turn input, including text, attachments, and explicit Skill references.
+
 use crate::AudioAttachmentRef;
 use crate::ImageAttachmentRef;
 use crate::SkillRef;

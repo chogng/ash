@@ -1,11 +1,12 @@
-#[path = "config/patch.rs"]
+//! Shared preference values and partial-update semantics used by domain configuration.
+//! Configuration storage, precedence, and application belong to their consuming domains.
+
 mod patch;
-#[path = "config/values.rs"]
-mod values;
+mod preferences;
 
 pub use patch::Patch;
-pub use values::ApprovalMode;
-pub use values::Personality;
-pub use values::SandboxMode;
-pub use values::Theme;
-pub use values::WebSearchMode;
+pub use preferences::ApprovalMode;
+pub use preferences::Personality;
+pub use preferences::SandboxMode;
+pub use preferences::Theme;
+pub use preferences::WebSearchMode;

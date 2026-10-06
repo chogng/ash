@@ -1,3 +1,7 @@
+//! Editable `models.json` rows and their conversion into provider-neutral protocol metadata.
+//! This parser owns the JSON shape; `model_catalog` validates references and normalizes budgets.
+//! Field comments also become descriptions in the generated editor schema.
+
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ContextWindow;
 use ash_protocol::Model;
@@ -21,7 +25,9 @@ use serde::Deserialize;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ModelInstructions {
+    /// Version of this complete base prompt, frozen with its body when a Turn is accepted.
     pub revision: String,
+    /// Complete model-specific Agent instructions; runtime permission and project instructions are separate.
     pub body: String,
 }
 
@@ -29,30 +35,39 @@ pub struct ModelInstructions {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct StaticModelSpec {
+    /// Exact model vendor ID, independent of API-key or subscription connection identity.
     pub provider_id: String,
+    /// Exact catalog model ID; connection-specific upstream aliases are configured separately.
     pub model_id: String,
     pub display_name: String,
     pub description: Option<String>,
     pub instructions: ModelInstructions,
+    /// Declared model capacity in tokens; null or omission means unknown, not unlimited.
     #[serde(
         default = "unknown_context_window",
         deserialize_with = "context_window"
     )]
     #[schemars(with = "Option<u32>", transform = remove_runtime_default)]
     pub context_window: ContextWindow,
-    /// Normalized budgets: the first is the default. Omitted JSON presets use declared capacity.
+    /// One or two ascending execution budgets within capacity; the first is Ash's default.
+    /// Omission uses declared capacity. These budgets do not change the model's capacity.
     #[serde(default)]
     pub context_window_options: Vec<u32>,
+    /// Optional model-specific compaction threshold, constrained by the effective execution budget.
     pub auto_compact_token_limit: Option<u32>,
+    /// Confirmed model capabilities; omitted members and null mean unknown, not false.
     #[serde(
         default = "unknown_capabilities",
         deserialize_with = "model_capabilities"
     )]
     #[schemars(with = "ModelCapabilitiesDeclaration", transform = remove_runtime_default)]
     pub capabilities: ModelCapabilities,
+    /// Selectable effort values and their display explanations, independent of a fixed token budget.
     #[serde(default)]
     pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
+    /// Ash's default effort; when present it must reference a declared selectable value.
     pub model_reasoning_effort: Option<ReasoningEffort>,
+    /// Parameter support, Ash defaults, acceleration mechanism, and model-visible tool-result budget.
     #[serde(default, deserialize_with = "model_settings")]
     #[schemars(with = "ModelSettingsDeclaration", transform = remove_runtime_default)]
     pub settings: ModelSettings,
@@ -123,7 +138,9 @@ struct ModelCapabilitiesDeclaration {
     tools: Option<bool>,
     reasoning: Option<bool>,
     parallel_tool_calls: Option<bool>,
+    /// Whether original-detail image requests are supported; image input is declared separately.
     image_detail_original: Option<bool>,
+    /// Whether acceleration is supported; settings.acceleration declares the request mechanism.
     fast_mode: Option<bool>,
 }
 
@@ -132,14 +149,23 @@ struct ModelCapabilitiesDeclaration {
 #[derive(Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ModelSettingsDeclaration {
+    /// Declared input kinds; a declared list must include text. Omission means unknown.
     input_modalities: Option<Vec<ModelInputModality>>,
+    /// Support for a verbosity request parameter: true supported, false unsupported, null or omission unknown.
     verbosity: Option<bool>,
+    /// Ash's request default; requires verbosity=true. This is not an inferred provider default.
     default_verbosity: Option<ModelVerbosity>,
+    /// Support for returning reasoning summaries, separate from effort and replayable reasoning history.
     reasoning_summary: Option<bool>,
+    /// Ash's summary default; the string "none" suppresses summaries without disabling reasoning.
     default_reasoning_summary: Option<ModelReasoningSummary>,
+    /// Exact provider tier IDs with display names and explanations; these do not grant account access.
     service_tiers: Option<Vec<ModelServiceTier>>,
+    /// Ash's request default referencing a declared serviceTiers ID.
     default_service_tier: Option<String>,
+    /// How the acceleration preference changes a request: tier, speed parameter, or exact model ID.
     acceleration: Option<ModelAcceleration>,
+    /// Core's tool-result truncation budget; not a provider inference parameter or output-token limit.
     tool_output_limit: Option<ModelToolOutputLimit>,
 }
 

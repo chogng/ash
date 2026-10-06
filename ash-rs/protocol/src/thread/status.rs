@@ -1,3 +1,5 @@
+//! Thread lifecycle and archive reasons; Turn progress is tracked separately.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

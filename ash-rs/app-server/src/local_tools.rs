@@ -1,19 +1,7 @@
 use ash_action_policy::ActionClassifier;
-use ash_action_policy::ActionDigest;
-use ash_action_policy::ActionKind;
 use ash_action_policy::ActionPolicyEngine;
-use ash_action_policy::ActionPolicyRevision;
-use ash_action_policy::ActionProvenance;
 use ash_action_policy::ActionReviewRequest;
-use ash_action_policy::ActionSource;
-use ash_action_policy::AssessmentId;
-use ash_action_policy::Capability;
-use ash_action_policy::CapabilityKind;
-use ash_action_policy::CapabilitySet;
-use ash_action_policy::ClassifierAssessment;
-use ash_action_policy::ClassifierRecommendation;
 use ash_action_policy::ExecutionDecision;
-use ash_action_policy::ProcessInvocationKind;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::ReviewFailurePolicy;
 use ash_action_policy::SandboxCompatibility;
@@ -44,6 +32,18 @@ use ash_file_access::Permission as DirPermission;
 use ash_install_context::ExecutableCandidates;
 use ash_install_context::InstallContext;
 use ash_install_context::ManagedExecutable;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionSource;
+use ash_protocol::AssessmentId;
+use ash_protocol::Capability;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
+use ash_protocol::ClassifierAssessment;
+use ash_protocol::ClassifierRecommendation;
+use ash_protocol::ProcessInvocationKind;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
@@ -161,7 +161,7 @@ pub(crate) fn compose_local_tools_with_config(
     let environment_id = ash_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
     let shell_policy = configured_shell_policy(&exec_policy);
-    let action_policy_revision = ActionPolicyRevision::from_components(
+    let action_policy_revision = ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
         LOCAL_REVIEWER_POLICY_REVISION,
@@ -1405,7 +1405,7 @@ static LOCAL_ACTION_POLICY_REVISION: LazyLock<ActionPolicyRevision> = LazyLock::
     let exec_policy = LocalToolConfig::default()
         .snapshot()
         .expect("static local execution policy is valid");
-    ActionPolicyRevision::from_components(
+    ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
         LOCAL_REVIEWER_POLICY_REVISION,
@@ -1445,7 +1445,7 @@ impl ActionClassifier for LocalPolicyClassifier {
         let _ = cancellation.check();
         let reason = if matches!(
             request.phase(),
-            ash_action_policy::ActionReviewPhase::SandboxDenial(_)
+            ash_protocol::ActionReviewPhase::SandboxDenial(_)
         ) {
             "the command requires authority outside the configured sandbox"
         } else {

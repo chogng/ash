@@ -1,5 +1,5 @@
 use super::*;
-use action_policy::ReviewEvidence;
+use protocol::ReviewEvidence;
 
 fn size(context: &ReviewContext) -> serde_json::Result<usize> {
     serde_json::to_vec(context).map(|bytes| bytes.len() + 100)

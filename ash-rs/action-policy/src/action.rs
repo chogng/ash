@@ -1,218 +1,72 @@
-use crate::ReviewContext;
+//! Materialized actions, sandbox execution context, and policy-specific identity and rule mappings.
+
 use ash_execpolicy::ExecPolicyCommand;
 use ash_execpolicy::ExecPolicyNetworkTarget;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionReviewPhase;
+use ash_protocol::ActionSource;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
+use ash_protocol::ReviewContext;
+use ash_protocol::SandboxDenialEvidence;
 use ash_sandboxing::SandboxPolicy;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
-use std::fmt;
+use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CapabilityKind {
-    FileRead,
-    FileWrite,
-    ProcessSpawn,
-    Network,
-    CredentialUse,
-    ExternalMutation,
-    SystemConfiguration,
-    UserInterface,
+pub(crate) fn capability_policy_name(value: &CapabilityKind) -> &'static str {
+    match value {
+        CapabilityKind::FileRead => "file_read",
+        CapabilityKind::FileWrite => "file_write",
+        CapabilityKind::ProcessSpawn => "process_spawn",
+        CapabilityKind::Network => "network",
+        CapabilityKind::CredentialUse => "credential_use",
+        CapabilityKind::ExternalMutation => "external_mutation",
+        CapabilityKind::SystemConfiguration => "system_configuration",
+        CapabilityKind::UserInterface => "user_interface",
+    }
 }
 
-impl CapabilityKind {
-    pub(crate) fn execpolicy_name(&self) -> &'static str {
-        match self {
-            Self::FileRead => "file_read",
-            Self::FileWrite => "file_write",
-            Self::ProcessSpawn => "process_spawn",
-            Self::Network => "network",
-            Self::CredentialUse => "credential_use",
-            Self::ExternalMutation => "external_mutation",
-            Self::SystemConfiguration => "system_configuration",
-            Self::UserInterface => "user_interface",
+pub(crate) fn action_policy_kind(value: &ActionKind) -> ash_execpolicy::ExecPolicyActionKind {
+    match value {
+        ActionKind::LocalProcess(_) => ash_execpolicy::ExecPolicyActionKind::LocalProcess,
+        ActionKind::FileSystemMutation => ash_execpolicy::ExecPolicyActionKind::FileSystemMutation,
+        ActionKind::NetworkRequest => ash_execpolicy::ExecPolicyActionKind::NetworkRequest,
+        ActionKind::BrowserInteraction => ash_execpolicy::ExecPolicyActionKind::BrowserInteraction,
+        ActionKind::ExternalServiceMutation => {
+            ash_execpolicy::ExecPolicyActionKind::ExternalServiceMutation
         }
+        ActionKind::CredentialUse => ash_execpolicy::ExecPolicyActionKind::CredentialUse,
+        ActionKind::SystemOperation => ash_execpolicy::ExecPolicyActionKind::SystemOperation,
     }
 }
 
-/// One scoped authority needed by a resolved action.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct Capability {
-    kind: CapabilityKind,
-    scope: String,
-}
-
-impl Capability {
-    pub fn new(kind: CapabilityKind, scope: impl Into<String>) -> Self {
-        Self {
-            kind,
-            scope: scope.into(),
-        }
-    }
-
-    pub fn kind(&self) -> &CapabilityKind {
-        &self.kind
-    }
-
-    pub fn scope(&self) -> &str {
-        &self.scope
+pub(crate) fn action_source_policy_name(value: &ActionSource) -> &'static str {
+    match value {
+        ActionSource::BuiltInTool => "built_in_tool",
+        ActionSource::Plugin => "plugin",
+        ActionSource::McpServer => "mcp_server",
+        ActionSource::DynamicTool => "dynamic_tool",
+        ActionSource::User => "user",
     }
 }
 
-/// Canonically ordered capabilities used for exact grant and recommendation comparisons.
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct CapabilitySet(BTreeSet<Capability>);
-
-impl CapabilitySet {
-    pub fn new(capabilities: impl IntoIterator<Item = Capability>) -> Self {
-        Self(capabilities.into_iter().collect())
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn is_subset(&self, other: &Self) -> bool {
-        self.0.is_subset(&other.0)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Capability> {
-        self.0.iter()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProcessInvocationKind {
-    Direct,
-    Shell,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
-pub enum ActionKind {
-    LocalProcess(ProcessInvocationKind),
-    FileSystemMutation,
-    NetworkRequest,
-    BrowserInteraction,
-    ExternalServiceMutation,
-    CredentialUse,
-    SystemOperation,
-}
-
-impl ActionKind {
-    pub(crate) fn execpolicy_kind(&self) -> ash_execpolicy::ExecPolicyActionKind {
-        match self {
-            Self::LocalProcess(_) => ash_execpolicy::ExecPolicyActionKind::LocalProcess,
-            Self::FileSystemMutation => ash_execpolicy::ExecPolicyActionKind::FileSystemMutation,
-            Self::NetworkRequest => ash_execpolicy::ExecPolicyActionKind::NetworkRequest,
-            Self::BrowserInteraction => ash_execpolicy::ExecPolicyActionKind::BrowserInteraction,
-            Self::ExternalServiceMutation => {
-                ash_execpolicy::ExecPolicyActionKind::ExternalServiceMutation
-            }
-            Self::CredentialUse => ash_execpolicy::ExecPolicyActionKind::CredentialUse,
-            Self::SystemOperation => ash_execpolicy::ExecPolicyActionKind::SystemOperation,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActionSource {
-    BuiltInTool,
-    Plugin,
-    McpServer,
-    DynamicTool,
-    User,
-}
-
-impl ActionSource {
-    pub(crate) fn execpolicy_name(&self) -> &'static str {
-        match self {
-            Self::BuiltInTool => "built_in_tool",
-            Self::Plugin => "plugin",
-            Self::McpServer => "mcp_server",
-            Self::DynamicTool => "dynamic_tool",
-            Self::User => "user",
-        }
-    }
-}
-
-/// Trusted provenance assigned by the host after resolving the exact tool binding.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct ActionProvenance {
-    source: ActionSource,
-    source_id: String,
-}
-
-impl ActionProvenance {
-    pub fn new(source: ActionSource, source_id: impl Into<String>) -> Self {
-        Self {
-            source,
-            source_id: source_id.into(),
-        }
-    }
-
-    pub fn source(&self) -> &ActionSource {
-        &self.source
-    }
-
-    pub fn source_id(&self) -> &str {
-        &self.source_id
-    }
-}
-
-/// SHA-256 identity of the host-canonical action, including all security-relevant fields.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct ActionDigest(String);
-
-impl ActionDigest {
-    pub fn from_canonical_bytes(bytes: impl AsRef<[u8]>) -> Self {
-        let digest = Sha256::digest(bytes.as_ref());
-        Self(format!("{digest:x}"))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for ActionDigest {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-/// Revision of the complete action-policy environment used for one review.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct ActionPolicyRevision(String);
-
-impl ActionPolicyRevision {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Derives a stable aggregate revision from all immutable policy inputs at a Turn safe point.
-    pub fn from_components(
-        exec_policy_revision: &ash_execpolicy::ExecPolicyRevision,
-        grant_snapshot_revision: &str,
-        reviewer_policy_revision: &str,
-    ) -> Self {
-        let mut digest = Sha256::new();
-        digest.update(exec_policy_revision.as_str().as_bytes());
-        digest.update([0]);
-        digest.update(grant_snapshot_revision.as_bytes());
-        digest.update([0]);
-        digest.update(reviewer_policy_revision.as_bytes());
-        Self(format!("{:x}", digest.finalize()))
-    }
+/// Derives the revision of the complete policy environment at a Turn safe point.
+pub fn derive_action_policy_revision(
+    exec_policy_revision: &ash_execpolicy::ExecPolicyRevision,
+    grant_snapshot_revision: &str,
+    reviewer_policy_revision: &str,
+) -> ActionPolicyRevision {
+    let mut digest = Sha256::new();
+    digest.update(exec_policy_revision.as_str().as_bytes());
+    digest.update([0]);
+    digest.update(grant_snapshot_revision.as_bytes());
+    digest.update([0]);
+    digest.update(reviewer_policy_revision.as_bytes());
+    ActionPolicyRevision::new(format!("{:x}", digest.finalize()))
 }
 
 /// A fully materialized action safe to summarize for review.
@@ -295,41 +149,6 @@ pub enum SandboxCompatibility {
     Supported(SandboxPolicy),
     Unsupported { reason: String },
     NotApplicable { reason: String },
-}
-
-/// Bounded evidence from a completed sandbox attempt that was denied by enforcement.
-///
-/// The host is expected to retain only the output needed for review, remove secrets, and create
-/// this value only after distinguishing sandbox enforcement from an ordinary command failure.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct SandboxDenialEvidence {
-    reason: String,
-    output: String,
-}
-
-impl SandboxDenialEvidence {
-    pub fn new(reason: impl Into<String>, output: impl Into<String>) -> Self {
-        Self {
-            reason: reason.into(),
-            output: output.into(),
-        }
-    }
-
-    pub fn reason(&self) -> &str {
-        &self.reason
-    }
-
-    pub fn output(&self) -> &str {
-        &self.output
-    }
-}
-
-/// Identifies whether review happens before execution or after a confirmed sandbox denial.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
-pub enum ActionReviewPhase {
-    Initial,
-    SandboxDenial(SandboxDenialEvidence),
 }
 
 /// Complete, immutable input to deterministic policy and optional classifier review.

@@ -1,6 +1,6 @@
 use ash_action_policy::BlockReason;
-use ash_action_policy::Capability;
 use ash_action_policy::SaferActionRequest;
+use ash_protocol::Capability;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use serde::Deserialize;

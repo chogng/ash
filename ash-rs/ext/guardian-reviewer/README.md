@@ -5,6 +5,11 @@
 - 管理审核并发、异步任务、期限、取消和暂时性失败重试。
 - 不执行被审核的动作、不签发授权、不改变沙箱策略。
 
+共享证据、风险等级、审核建议和绑定结果直接来自 [`protocol/guardian.rs`](../../protocol/src/guardian.rs)。
+`src/model_contract.rs` 保存本审核器的版本化提示与严格模型响应格式，并将响应转换成共享建议。
+能力范围校验调用 `action-policy::validate_recommendation`；策略引擎在作出授权决定时再次校验。
+当前模型契约版本为 `review-protocol-6`，模型提示和响应格式由本 crate 独立维护。
+
 `ReviewModel` 必须观察取消并限制响应；`ReviewerPool` 默认最多四个并发任务、90 秒总期限，仅暂时性服务失败最多重试三次。`LlmActionClassifier` 对输入 JSON、审核提示和响应 schema 的内容总和限制为 64 KiB、估算 16K token（UTF-8 字节数除以三并向上取整），响应限制为 16 KiB。请求预算由 `guardian-context` 移除较早的可选观察，保留完整用户指令、回答、委托与已准备动作；必要内容超限时拒绝调用模型。评估样本和端到端权限契约位于 `evals/` 与 `tests/eval_contract.rs`。
 
 系统职责、接口和配置见 [Agent 扩展](../../docs/extensions.md)。

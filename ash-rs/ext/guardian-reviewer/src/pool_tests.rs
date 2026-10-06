@@ -1,14 +1,14 @@
 use super::*;
 use crate::ReviewModelError;
 use crate::ReviewModelRequest;
-use action_policy::ActionDigest;
-use action_policy::ActionKind;
-use action_policy::ActionPolicyRevision;
-use action_policy::ActionProvenance;
-use action_policy::ActionSource;
-use action_policy::CapabilitySet;
 use action_policy::ResolvedAction;
 use action_policy::SandboxCompatibility;
+use protocol::ActionDigest;
+use protocol::ActionKind;
+use protocol::ActionPolicyRevision;
+use protocol::ActionProvenance;
+use protocol::ActionSource;
+use protocol::CapabilitySet;
 use std::sync::atomic::AtomicUsize;
 fn request() -> ActionReviewRequest {
     ActionReviewRequest::new(

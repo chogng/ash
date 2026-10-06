@@ -1,3 +1,5 @@
+//! Verified summaries of exact durable history ranges for context compaction.
+
 use crate::ContextCheckpointId;
 use crate::ItemId;
 use crate::ModelRef;

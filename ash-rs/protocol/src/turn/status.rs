@@ -1,3 +1,5 @@
+//! Turn lifecycle from acceptance through a terminal outcome.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

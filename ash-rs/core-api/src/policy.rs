@@ -10,7 +10,7 @@ pub trait ReviewEnvironmentService: Send + Sync {
         &self,
         thread: &ash_protocol::ThreadId,
         request: &ActionReviewRequest,
-    ) -> Result<Vec<ash_action_policy::ReviewEvidence>, CoreError>;
+    ) -> Result<Vec<ash_protocol::ReviewEvidence>, CoreError>;
 }
 
 /// Evaluates one fully resolved action without executing it or mutating durable Thread state.

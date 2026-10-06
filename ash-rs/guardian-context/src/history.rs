@@ -1,6 +1,6 @@
-use action_policy::ReviewEvidence;
-use action_policy::ReviewEvidenceKind;
-use action_policy::ReviewEvidenceTrust;
+use protocol::ReviewEvidence;
+use protocol::ReviewEvidenceKind;
+use protocol::ReviewEvidenceTrust;
 use protocol::ThreadId;
 use protocol::ThreadItem;
 

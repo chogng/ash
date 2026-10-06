@@ -1,10 +1,10 @@
 use crate::CoreError;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ApprovalRequest;
-use ash_action_policy::CapabilityKind;
 use ash_protocol::ActionApprovalCapability;
 use ash_protocol::ActionApprovalCapabilityKind;
 use ash_protocol::ActionApprovalRequest;
+use ash_protocol::CapabilityKind;
 use ash_protocol::SandboxDenialOutput;
 use ash_protocol::ToolReplaySafety;
 
@@ -91,7 +91,7 @@ pub(crate) fn approval_matches_review(
                 .collect::<Vec<_>>()
 }
 
-fn protocol_capability(capability: &ash_action_policy::Capability) -> ActionApprovalCapability {
+fn protocol_capability(capability: &ash_protocol::Capability) -> ActionApprovalCapability {
     ActionApprovalCapability {
         kind: match capability.kind() {
             CapabilityKind::FileRead => ActionApprovalCapabilityKind::FileRead,

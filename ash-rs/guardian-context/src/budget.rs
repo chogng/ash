@@ -1,6 +1,6 @@
-use action_policy::ReviewContext;
-use action_policy::ReviewEvidenceKind;
-use action_policy::ReviewEvidenceTrust;
+use protocol::ReviewContext;
+use protocol::ReviewEvidenceKind;
+use protocol::ReviewEvidenceTrust;
 use std::fmt;
 
 /// Limits apply to the complete serialized request, including its fixed instructions and schema.

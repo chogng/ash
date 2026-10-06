@@ -1,3 +1,5 @@
+//! Declarations, calls, and results for tools executed by a connected client.
+
 use crate::ToolCallId;
 use crate::ToolName;
 use schemars::JsonSchema;

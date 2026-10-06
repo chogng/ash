@@ -10,6 +10,7 @@ name = "guardian_environment"
 doctest = false
 
 [dependencies]
+protocol = { package = "ash-protocol", path = "../protocol" }
 action-policy = { package = "ash-action-policy", path = "../action-policy" }
 file-access = { package = "ash-file-access", path = "../file-access" }
 async-utils = { package = "ash-async-utils", path = "../async-utils" }

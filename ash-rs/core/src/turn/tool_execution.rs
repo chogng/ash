@@ -27,16 +27,16 @@ use crate::approval_request::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::RecordToolExecutionEscalation;
 use crate::thread_controller::RecordToolExecutionStart;
 use ash_action_policy::ActionReviewRequest;
-use ash_action_policy::CapabilityKind;
 use ash_action_policy::ExecutionDecision;
-use ash_action_policy::ReviewEvidenceKind;
-use ash_action_policy::SandboxDenialEvidence;
 use ash_async_utils::CancellationToken;
 use ash_protocol::AgentRequest;
 use ash_protocol::AgentResponse;
 use ash_protocol::ApprovalMode;
+use ash_protocol::CapabilityKind;
 use ash_protocol::ItemId;
 use ash_protocol::RequestUserInput;
+use ash_protocol::ReviewEvidenceKind;
+use ash_protocol::SandboxDenialEvidence;
 use ash_protocol::StreamCursor;
 use ash_protocol::StreamInstanceId;
 use ash_protocol::ThreadId;
@@ -782,11 +782,8 @@ impl ToolInteractionService for CoreToolInteractions {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.to_string()))?;
-        if request.action().kind() != &ash_action_policy::ActionKind::NetworkRequest
-            || !matches!(
-                request.phase(),
-                ash_action_policy::ActionReviewPhase::Initial
-            )
+        if request.action().kind() != &ash_protocol::ActionKind::NetworkRequest
+            || !matches!(request.phase(), ash_protocol::ActionReviewPhase::Initial)
             || request.provenance().source_id() != self.source_id
             || request.action().required_capabilities().iter().count() != 1
             || request

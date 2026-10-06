@@ -1,7 +1,10 @@
+//! User input, approval, questions, and client-hosted tool exchanges for Agent Turns.
+//! Durable interaction state is separate from App Server connection selection and delivery.
+
 mod approval;
 mod dynamic_tool;
-mod envelope;
 mod request_user_input;
+mod turn_interaction;
 mod user_input;
 
 pub use approval::ActionApprovalCapability;
@@ -13,18 +16,18 @@ pub use dynamic_tool::DynamicToolCall;
 pub use dynamic_tool::DynamicToolOutput;
 pub use dynamic_tool::DynamicToolResponse;
 pub use dynamic_tool::DynamicToolSpec;
-pub use envelope::AgentInteractionKind;
-pub use envelope::AgentRequest;
-pub use envelope::AgentRequestEnvelope;
-pub use envelope::AgentResponse;
-pub use envelope::AgentResponseEnvelope;
-pub use envelope::InteractionCancelReason;
-pub use envelope::InteractionDeadline;
-pub use envelope::PendingInteraction;
-pub use envelope::TurnInteraction;
 pub use request_user_input::RequestUserInput;
 pub use request_user_input::RequestUserInputResponse;
 pub use request_user_input::UserInputAnswer;
 pub use request_user_input::UserInputOption;
 pub use request_user_input::UserInputQuestion;
+pub use turn_interaction::AgentInteractionKind;
+pub use turn_interaction::AgentRequest;
+pub use turn_interaction::AgentRequestEnvelope;
+pub use turn_interaction::AgentResponse;
+pub use turn_interaction::AgentResponseEnvelope;
+pub use turn_interaction::InteractionCancelReason;
+pub use turn_interaction::InteractionDeadline;
+pub use turn_interaction::PendingInteraction;
+pub use turn_interaction::TurnInteraction;
 pub use user_input::UserInput;

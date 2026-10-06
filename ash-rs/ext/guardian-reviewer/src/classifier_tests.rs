@@ -1,19 +1,28 @@
 use super::*;
-use action_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance,
-    ActionReviewRequest, ActionSource, Capability, CapabilityKind, CapabilitySet,
-    ClassifierRecommendation, ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
-};
+use action_policy::ActionClassifier;
+use action_policy::ActionReviewRequest;
+use action_policy::ResolvedAction;
+use action_policy::SandboxCompatibility;
 use async_utils::CancellationSource;
+use protocol::ActionDigest;
+use protocol::ActionKind;
+use protocol::ActionPolicyRevision;
+use protocol::ActionProvenance;
+use protocol::ActionSource;
+use protocol::Capability;
+use protocol::CapabilityKind;
+use protocol::CapabilitySet;
+use protocol::ClassifierRecommendation;
+use protocol::ProcessInvocationKind;
 
 struct StaticModel(&'static str);
 
 #[test]
 fn model_receives_bounded_history_without_losing_user_authority_or_action() {
-    use action_policy::ReviewContext;
-    use action_policy::ReviewEvidence;
-    use action_policy::ReviewEvidenceKind;
-    use action_policy::ReviewEvidenceTrust;
+    use protocol::ReviewContext;
+    use protocol::ReviewEvidence;
+    use protocol::ReviewEvidenceKind;
+    use protocol::ReviewEvidenceTrust;
     struct Inspect;
     impl ReviewModel for Inspect {
         fn complete(
@@ -88,7 +97,7 @@ fn model_input_distinguishes_managed_network_from_unrestricted_network() {
         ),
     ));
     let input: serde_json::Value = serde_json::from_str(
-        &crate::protocol::input_with_context(&request, request.context()).unwrap(),
+        &crate::model_contract::input_with_context(&request, request.context()).unwrap(),
     )
     .unwrap();
     assert_eq!(input["sandbox"]["network"], "managed_proxy");
@@ -281,7 +290,7 @@ fn model_request_identifies_review_after_a_confirmed_sandbox_denial() {
             sandboxing::NetworkAccess::Denied,
         ),
     ))
-    .after_sandbox_denial(action_policy::SandboxDenialEvidence::new(
+    .after_sandbox_denial(protocol::SandboxDenialEvidence::new(
         "network access was denied",
         "connect: operation not permitted",
     ));

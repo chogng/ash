@@ -1,3 +1,5 @@
+//! Immutable history prefixes and exact message/workspace checkpoints used by forks and restore.
+
 use crate::ContentDigest;
 use crate::ItemId;
 use crate::ThreadId;

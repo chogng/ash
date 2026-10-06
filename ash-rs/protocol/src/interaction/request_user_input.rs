@@ -1,3 +1,5 @@
+//! Structured Agent questions and user answers that resolve a pending Turn interaction.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

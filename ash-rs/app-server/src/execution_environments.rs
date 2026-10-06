@@ -1,15 +1,7 @@
 //! Host-selected execution environments exposed to the existing Core tool lifecycle.
 
-use ash_action_policy::ActionDigest;
-use ash_action_policy::ActionKind;
-use ash_action_policy::ActionPolicyRevision;
-use ash_action_policy::ActionProvenance;
 use ash_action_policy::ActionReviewRequest;
-use ash_action_policy::ActionSource;
 use ash_action_policy::ApprovalRequest;
-use ash_action_policy::Capability;
-use ash_action_policy::CapabilityKind;
-use ash_action_policy::CapabilitySet;
 use ash_action_policy::ExecutionDecision;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
@@ -18,6 +10,14 @@ use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
 use ash_core::ToolService;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionSource;
+use ash_protocol::Capability;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;

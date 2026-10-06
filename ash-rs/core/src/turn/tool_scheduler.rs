@@ -725,7 +725,7 @@ impl ToolScheduler {
         // read-only sandbox even when a deterministic rule or approval would allow more access.
         let authorization = match (reviewed.action().kind(), reviewed.sandbox()) {
             (
-                ash_action_policy::ActionKind::LocalProcess(_),
+                ash_protocol::ActionKind::LocalProcess(_),
                 ash_action_policy::SandboxCompatibility::Supported(policy),
             ) => {
                 let snapshot = self.threads.read_thread(context.thread_id())?;
@@ -894,9 +894,9 @@ fn constrain_analysis_review(
     request: ash_action_policy::ActionReviewRequest,
     mode: ash_protocol::CollaborationMode,
 ) -> Result<ash_action_policy::ActionReviewRequest, CoreError> {
-    use ash_action_policy::ActionKind;
-    use ash_action_policy::CapabilityKind;
     use ash_action_policy::SandboxCompatibility;
+    use ash_protocol::ActionKind;
+    use ash_protocol::CapabilityKind;
     if !mode.is_analysis() {
         return Ok(request);
     }
@@ -914,7 +914,7 @@ fn constrain_analysis_review(
         )));
     }
     let isolated_control = request.provenance().source()
-        == &ash_action_policy::ActionSource::BuiltInTool
+        == &ash_protocol::ActionSource::BuiltInTool
         && request.provenance().source_id() == "code-mode";
     if !isolated_control
         && (matches!(

@@ -1,3 +1,5 @@
+//! Execution purpose frozen for a Turn, such as an ordinary task or code review.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

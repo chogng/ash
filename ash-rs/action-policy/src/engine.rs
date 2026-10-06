@@ -1,27 +1,27 @@
 use crate::ActionClassifier;
-use crate::ActionPolicyRevision;
-use crate::ActionReviewPhase;
 use crate::ActionReviewRequest;
 use crate::ApprovalRequest;
 use crate::AutoReviewGrant;
 use crate::BlockReason;
-use crate::ClassifierAssessment;
-use crate::ClassifierRecommendation;
 use crate::DeterministicPolicyGrant;
 use crate::ExecutionDecision;
 use crate::PolicyError;
 use crate::ReviewFailurePolicy;
-use crate::RiskLevel;
 use crate::SaferActionRequest;
 use crate::SandboxCompatibility;
 use crate::UserAllowlist;
-use crate::UserAuthorization;
 use ash_async_utils::CancellationToken;
 use ash_execpolicy::ExecPolicyCapability;
 use ash_execpolicy::ExecPolicyEffect;
 use ash_execpolicy::ExecPolicyEvaluation;
 use ash_execpolicy::ExecPolicySnapshot;
 use ash_execpolicy::ExecPolicySubject;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionReviewPhase;
+use ash_protocol::ClassifierAssessment;
+use ash_protocol::ClassifierRecommendation;
+use ash_protocol::RiskLevel;
+use ash_protocol::UserAuthorization;
 
 /// Final action authority that composes deterministic rules, grants, sandboxing, and review.
 pub struct ActionPolicyEngine<C> {
@@ -141,12 +141,15 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
             .required_capabilities()
             .iter()
             .map(|capability| {
-                ExecPolicyCapability::new(capability.kind().execpolicy_name(), capability.scope())
+                ExecPolicyCapability::new(
+                    crate::action::capability_policy_name(capability.kind()),
+                    capability.scope(),
+                )
             });
         let subject = ExecPolicySubject::new(
             request.action().digest().as_str(),
-            request.action().kind().execpolicy_kind(),
-            request.provenance().source().execpolicy_name(),
+            crate::action::action_policy_kind(request.action().kind()),
+            crate::action::action_source_policy_name(request.provenance().source()),
             request.provenance().source_id(),
             capabilities,
             request.action().command(),
@@ -228,10 +231,10 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
         {
             return Err(PolicyError::ClassifierBindingMismatch);
         }
-        if let Err(error) = assessment
-            .recommendation()
-            .validate_against(request.action().required_capabilities())
-        {
+        if let Err(error) = crate::validate_recommendation(
+            assessment.recommendation(),
+            request.action().required_capabilities(),
+        ) {
             return Ok(ExecutionDecision::Block(BlockReason::ReviewFailed {
                 reason: error.to_string(),
             }));
@@ -279,7 +282,7 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
         &self,
         request: &ActionReviewRequest,
         assessment: &ClassifierAssessment,
-        capabilities: &crate::CapabilitySet,
+        capabilities: &ash_protocol::CapabilitySet,
         risk: RiskLevel,
         user_authorization: UserAuthorization,
         reason: &str,

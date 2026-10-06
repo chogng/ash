@@ -35,6 +35,10 @@ pub enum ModelSpeed {
     Fast,
 }
 
+/// Values selected for one provider-neutral request after catalog defaults and user choices resolve.
+///
+/// The provider adapter translates this request into endpoint fields. Catalog declarations belong
+/// to [`crate::ModelInfo`]; this request contains neither account credentials nor authorization policy.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRequest {

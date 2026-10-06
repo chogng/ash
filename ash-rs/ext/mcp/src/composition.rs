@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use ash_action_policy::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewPhase,
-    ActionReviewRequest, ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet,
-    ExecutionDecision, ResolvedAction, SandboxCompatibility,
-};
+use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::ApprovalRequest;
+use ash_action_policy::ExecutionDecision;
+use ash_action_policy::ResolvedAction;
+use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
 use ash_config::{
     ConfigGeneration, McpCredentialBinding, McpServerEnablement, McpServerId, McpTransportConfig,
@@ -18,6 +18,15 @@ use ash_mcp::{
     McpCallError, McpRuntimeOptions, McpServerDefinition, McpServerTransport, McpSessionFactory,
     McpStartupPolicy,
 };
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionKind;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::ActionProvenance;
+use ash_protocol::ActionReviewPhase;
+use ash_protocol::ActionSource;
+use ash_protocol::Capability;
+use ash_protocol::CapabilityKind;
+use ash_protocol::CapabilitySet;
 use ash_protocol::ContentPart;
 use ash_protocol::ToolSourceProvenance;
 use ash_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};

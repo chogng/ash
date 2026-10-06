@@ -1,3 +1,5 @@
+//! How a Thread entered a session, including roots, forks, and delegated children.
+
 use crate::DelegationId;
 use crate::ThreadId;
 use crate::TurnId;

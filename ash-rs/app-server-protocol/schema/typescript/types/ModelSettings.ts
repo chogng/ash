@@ -7,4 +7,40 @@ import type { ModelServiceTier } from './ModelServiceTier.js';
 import type { ModelToolOutputLimit } from './ModelToolOutputLimit.js';
 import type { ModelVerbosity } from './ModelVerbosity.js';
 
-export type ModelSettings = { inputModalities: Array<ModelInputModality> | null, verbosity: CapabilitySupport, defaultVerbosity: ModelVerbosity | null, reasoningSummary: CapabilitySupport, defaultReasoningSummary: ModelReasoningSummary | null, serviceTiers: Array<ModelServiceTier> | null, defaultServiceTier: string | null, acceleration: ModelAcceleration | null, toolOutputLimit: ModelToolOutputLimit | null, };
+export type ModelSettings = {
+/**
+ * Declared input kinds; `None` means unknown, while a declared list includes text.
+ */
+inputModalities: Array<ModelInputModality> | null,
+/**
+ * Support for a verbosity request parameter, not a promise about actual response length.
+ */
+verbosity: CapabilitySupport,
+/**
+ * Ash request default; requires confirmed verbosity support.
+ */
+defaultVerbosity: ModelVerbosity | null,
+/**
+ * Support for returning reasoning summaries, separate from effort and replayable reasoning state.
+ */
+reasoningSummary: CapabilitySupport,
+/**
+ * Ash summary default; omission leaves it unspecified, while [`ModelReasoningSummary::None`] suppresses summaries.
+ */
+defaultReasoningSummary: ModelReasoningSummary | null,
+/**
+ * Exact provider request IDs and display copy; a listed tier does not establish entitlement.
+ */
+serviceTiers: Array<ModelServiceTier> | null,
+/**
+ * Ash request default referencing a declared tier ID; absence sends no default override.
+ */
+defaultServiceTier: string | null,
+/**
+ * Mechanism selected by the product's acceleration preference; distinct from explicit request values.
+ */
+acceleration: ModelAcceleration | null,
+/**
+ * Core's model-visible tool-result truncation budget, not a provider inference parameter.
+ */
+toolOutputLimit: ModelToolOutputLimit | null, };

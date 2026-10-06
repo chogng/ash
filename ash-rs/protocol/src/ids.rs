@@ -1,3 +1,6 @@
+//! Stable execution and interaction identifiers with shared boundary validation.
+//! Provider, model, and connection identities are defined separately in `model/identity.rs`.
+
 use std::fmt;
 
 macro_rules! identifier {
@@ -18,8 +21,8 @@ macro_rules! identifier {
         pub struct $name(#[schemars(length(min = 1))] String);
 
         impl $name {
-            pub fn new(value: impl Into<String>) -> Result<Self, super::InvalidIdentifier> {
-                super::validate_identifier(value, $label).map(Self)
+            pub fn new(value: impl Into<String>) -> Result<Self, InvalidIdentifier> {
+                validate_identifier(value, $label).map(Self)
             }
 
             pub fn as_str(&self) -> &str {
@@ -45,39 +48,101 @@ macro_rules! identifier {
     };
 }
 
-mod agent_id;
-mod agent_join_id;
-mod agent_message_id;
-mod command_id;
-mod context_checkpoint_id;
-mod delegation_id;
-mod item_id;
-mod model_invocation_id;
-mod project_id;
-mod request_id;
-mod session_id;
-mod team_id;
-mod team_run_id;
-mod thread_id;
-mod tool_call_id;
-mod turn_id;
+identifier!(
+    /// Persistent Agent identity shared by its independent execution branches.
+    AgentId,
+    "agent ID"
+);
 
-pub use agent_id::AgentId;
-pub use agent_join_id::AgentJoinId;
-pub use agent_message_id::AgentMessageId;
-pub use command_id::CommandId;
-pub use context_checkpoint_id::ContextCheckpointId;
-pub use delegation_id::DelegationId;
-pub use item_id::ItemId;
-pub use model_invocation_id::ModelInvocationId;
-pub use project_id::ProjectId;
-pub use request_id::RequestId;
-pub use session_id::SessionId;
-pub use team_id::TeamId;
-pub use team_run_id::TeamRunId;
-pub use thread_id::ThreadId;
-pub use tool_call_id::ToolCallId;
-pub use turn_id::TurnId;
+identifier!(
+    /// Stable identity for one durable parent-side Agent join.
+    AgentJoinId,
+    "Agent join ID"
+);
+
+identifier!(
+    /// Stable identity used to deduplicate one cross-Thread Agent message.
+    AgentMessageId,
+    "agent message ID"
+);
+
+identifier!(
+    /// Stable caller-supplied identity for one retry-safe product command.
+    CommandId,
+    "command ID"
+);
+
+identifier!(
+    /// Stable identity for one durable context-compaction checkpoint.
+    ContextCheckpointId,
+    "context checkpoint ID"
+);
+
+identifier!(
+    /// Stable identity for one parent-to-child Agent delegation.
+    DelegationId,
+    "delegation ID"
+);
+
+identifier!(
+    /// Stable identity for one durable transcript item within a Turn.
+    ItemId,
+    "item ID"
+);
+
+identifier!(
+    /// Stable identity for one request sent to a model provider.
+    ModelInvocationId,
+    "model invocation ID"
+);
+
+identifier!(
+    /// Stable identity for one long-lived multi-root project catalog.
+    ProjectId,
+    "project ID"
+);
+
+identifier!(
+    /// Stable identity for one outstanding bidirectional Agent interaction.
+    RequestId,
+    "request ID"
+);
+
+identifier!(
+    /// Stable identity for one product-level Agent session.
+    SessionId,
+    "session ID"
+);
+
+identifier!(
+    /// Stable identity of a long-lived Agent Team.
+    TeamId,
+    "Team ID"
+);
+
+identifier!(
+    /// Stable identity of one Team task across retries and restarts.
+    TeamRunId,
+    "Team run ID"
+);
+
+identifier!(
+    /// Stable identity for one independently ordered Agent execution branch.
+    ThreadId,
+    "thread ID"
+);
+
+identifier!(
+    /// Stable identity for one model-requested tool call and its eventual result.
+    ToolCallId,
+    "tool call ID"
+);
+
+identifier!(
+    /// Stable identity for one user-intent-driven Agent execution within a Thread.
+    TurnId,
+    "turn ID"
+);
 
 /// Rejection reason returned when an externally supplied protocol identity is invalid.
 #[derive(Clone, Debug, Eq, PartialEq)]

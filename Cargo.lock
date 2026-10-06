@@ -422,6 +422,7 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-execpolicy",
+ "ash-protocol",
  "ash-sandboxing",
  "serde",
  "sha2 0.10.9",
@@ -1776,7 +1777,6 @@ dependencies = [
 name = "ash-guardian-context"
 version = "0.1.0"
 dependencies = [
- "ash-action-policy",
  "ash-protocol",
  "serde_json",
 ]
@@ -1788,6 +1788,7 @@ dependencies = [
  "ash-action-policy",
  "ash-async-utils",
  "ash-file-access",
+ "ash-protocol",
  "schemars",
  "serde",
  "serde_json",
@@ -1805,6 +1806,7 @@ dependencies = [
  "ash-action-policy",
  "ash-async-utils",
  "ash-guardian-context",
+ "ash-protocol",
  "ash-sandboxing",
  "serde",
  "serde_json",

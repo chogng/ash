@@ -12,6 +12,7 @@ name = "ash_action_policy"
 path = "src/lib.rs"
 
 [dependencies]
+ash-protocol = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }
 ash-async-utils = { workspace = true }

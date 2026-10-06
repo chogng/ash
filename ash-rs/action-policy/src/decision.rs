@@ -1,8 +1,8 @@
-use crate::ActionDigest;
-use crate::ActionPolicyRevision;
-use crate::AssessmentId;
-use crate::CapabilitySet;
 use crate::GrantId;
+use ash_protocol::ActionDigest;
+use ash_protocol::ActionPolicyRevision;
+use ash_protocol::AssessmentId;
+use ash_protocol::CapabilitySet;
 use ash_sandboxing::SandboxPolicy;
 use std::fmt;
 

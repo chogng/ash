@@ -1,10 +1,4 @@
 use super::*;
-use action_policy::ActionDigest;
-use action_policy::ActionKind;
-use action_policy::ActionPolicyRevision;
-use action_policy::ActionProvenance;
-use action_policy::ActionSource;
-use action_policy::CapabilitySet;
 use action_policy::ResolvedAction;
 use action_policy::SandboxCompatibility;
 use async_utils::CancellationSource;
@@ -13,6 +7,12 @@ use file_access::Grant;
 use file_access::GrantSource;
 use file_access::Permission;
 use file_access::Permissions;
+use protocol::ActionDigest;
+use protocol::ActionKind;
+use protocol::ActionPolicyRevision;
+use protocol::ActionProvenance;
+use protocol::ActionSource;
+use protocol::CapabilitySet;
 
 #[derive(Default)]
 struct Store(Mutex<BTreeMap<String, EnvironmentProfile>>);

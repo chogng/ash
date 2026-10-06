@@ -1,3 +1,5 @@
+//! A Thread-owned task goal and its recorded progress and token budget.
+
 use crate::ThreadId;
 use schemars::JsonSchema;
 use serde::Deserialize;

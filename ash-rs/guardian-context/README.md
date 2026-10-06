@@ -6,4 +6,5 @@
 - 超预算时移除较早的可选观察并记录遗漏数；用户授权、委托和已准备动作保持完整。
 - 不读存储、不调用模型、不授予权限、不保存第二份会话历史。
 - Core 负责历史恢复与来源确认，reviewer 负责审核协议与模型请求，action-policy 负责授权裁决。
+- 审核上下文、证据及信任类别直接使用 [`protocol/guardian.rs`](../protocol/src/guardian.rs)；本 crate 不依赖 action-policy。
 - 验证：`just test ash-guardian-context`、`just check ash-guardian-context`、`just rust-warnings ash-guardian-context`。

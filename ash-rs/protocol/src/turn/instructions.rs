@@ -1,3 +1,5 @@
+//! Versioned instruction assets and their immutable composition for an accepted Turn.
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

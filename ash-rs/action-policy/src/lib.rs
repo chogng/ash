@@ -6,22 +6,16 @@
 
 mod action;
 mod classifier;
-mod context;
 mod decision;
 mod engine;
 mod grant;
 mod grants;
 
-pub use action::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewPhase,
-    ActionReviewRequest, ActionSource, Capability, CapabilityKind, CapabilitySet,
-    ProcessInvocationKind, ResolvedAction, SandboxCompatibility, SandboxDenialEvidence,
-};
-pub use classifier::{
-    ActionClassifier, AssessmentId, ClassifierAssessment, ClassifierRecommendation,
-    RecommendationValidationError, RiskLevel, UserAuthorization,
-};
-pub use context::{ReviewContext, ReviewEvidence, ReviewEvidenceKind, ReviewEvidenceTrust};
+pub use action::ActionReviewRequest;
+pub use action::ResolvedAction;
+pub use action::SandboxCompatibility;
+pub use classifier::ActionClassifier;
+pub use classifier::RecommendationValidationError;
 pub use decision::{
     ApprovalRequest, AutoReviewGrant, BlockReason, DeterministicPolicyGrant, ExecutionDecision,
     PermissionBypassGrant, PolicyError, ReviewFailurePolicy, SaferActionRequest,
@@ -29,3 +23,6 @@ pub use decision::{
 pub use engine::ActionPolicyEngine;
 pub use grant::{GrantId, UnsandboxedGrant};
 pub use grants::UserAllowlist;
+
+pub use action::derive_action_policy_revision;
+pub use classifier::validate_recommendation;

@@ -1,3 +1,5 @@
+//! Durable Thread facts, including the authority selected before each tool action.
+
 use crate::AgentContextSeed;
 use crate::AgentJoin;
 use crate::AgentJoinId;

@@ -21,11 +21,11 @@ pub use model::SourceKind;
 pub use scan::home_observations;
 
 use action_policy::ActionReviewRequest;
-use action_policy::ReviewEvidence;
-use action_policy::ReviewEvidenceKind;
-use action_policy::ReviewEvidenceTrust;
 use async_utils::CancellationToken;
 use file_access::Authorization;
+use protocol::ReviewEvidence;
+use protocol::ReviewEvidenceKind;
+use protocol::ReviewEvidenceTrust;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;

@@ -1,3 +1,5 @@
+//! Subscriber updates combining committed facts with transient content deltas.
+
 use crate::ItemId;
 use crate::SessionId;
 use crate::StreamCursor;
