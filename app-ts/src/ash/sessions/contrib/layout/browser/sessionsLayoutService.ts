@@ -21,6 +21,7 @@ import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/ed
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const documentEntry: ISessionsEntry = {
 	id: 'code', activityContext: 'sessions.activity.codeSelected', content: 'documents',
@@ -65,6 +66,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@INotificationService private readonly notifications: INotificationService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@ISessionsConversationService private readonly conversation: ISessionsConversationService,
 	) {
 		super();
 		this.pageGroupId = (editor as SessionsEditorPart).pageGroupId;
@@ -121,6 +123,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry): Promise<void> {
 		return this.runOperation(async () => {
 			await this.controller.prepareContentChange();
+			await this.conversation.setConversationKind(entry.content === 'documents' ? 'code' : 'cowork');
 			this.saveVisibility();
 			this.isChangingContent = true;
 			try {

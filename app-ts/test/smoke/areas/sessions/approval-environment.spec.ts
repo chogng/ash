@@ -12,12 +12,12 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await page.keyboard.insertText('/permission auto');
 	await editor.waitForEditorContents(text => text === '/permission auto');
 	await page.keyboard.press('Enter');
-	await expect(page.locator('.ash-sessions-chat-input').first().getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
+	await expect(page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first().getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('/permission manual');
 	await editor.waitForEditorContents(text => text === '/permission manual');
 	await page.keyboard.press('Enter');
-	const permissions = page.locator('.ash-sessions-chat-input').first().getByRole('button', { name: 'Permissions: Manual', exact: true });
+	const permissions = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first().getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await permissions.press('ArrowDown');
 	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
 	const prepare = menu.getByRole('menuitem', { name: 'Prepare review environment…', exact: true });

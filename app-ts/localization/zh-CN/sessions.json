@@ -1,5 +1,9 @@
 {
   "ash": {
+    "cowork.defaultmodel.invalid": "默认 Cowork 模型必须是字符串。",
+    "cowork.defaultmodel.title": "默认 Cowork 模型",
+    "cowork.defaultmodel.description": "新 Cowork 对话使用的模型。填写 auto 或 provider/model 标识。",
+    "cowork.defaultmodel.placeholder": "auto 或 provider/model",
     "sessions.activity.chat": "聊天",
     "sessions.activity.colab": "协作",
     "sessions.activity.library": "资料库",

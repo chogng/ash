@@ -1,0 +1,23 @@
+.ash-cowork-dictation-onboarding {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	border-radius: var(--ash-corner-radius-large);
+	background: var(--ash-editor-widget-background);
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-body1);
+}
+.ash-cowork-dictation-onboarding h3,
+.ash-cowork-dictation-onboarding p {
+	margin: 0;
+}
+.ash-cowork-dictation-onboarding p {
+	overflow-wrap: anywhere;
+}
+.ash-cowork-dictation-onboarding-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}

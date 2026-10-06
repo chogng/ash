@@ -125,6 +125,13 @@ Entry points can import from all sessions layers: `sessions/~`, `services/*/~`, 
 
 ## Key Constraint
 
+Cowork owns Chat and Collaboration conversation UI under `contrib/cowork/`.
+It must not import the Code UI in `workbench/contrib/chat/` or
+`sessions/contrib/chat/`. Necessary Ash implementations are copied into Cowork and
+maintained independently. Shared Workbench services, platform services and editor
+contracts remain available under the existing layer direction. The Sessions Part
+hosts the implementations through pane factories supplied by window composition.
+
 ```
 contrib/*  ──✕──▶  contrib/providers/*
 ```

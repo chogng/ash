@@ -69,7 +69,15 @@ Entry switching reuses the existing Parts, container instances and editor lifecy
 
 ### Implementation decisions
 
-Feature commands own entry selection. The shared layout service stores the active entry's layout descriptor and projects its contributed Activity Bar context key. It has no enum or switch over product names. Focusing SessionsPart inside Code keeps Code selected; focusing a View or changing a Library category does not select a different window entry.
+SessionsPart hosts two independently maintained conversation implementations.
+Code uses Chat; Chat, Collaboration and conversations beside product editors use
+Cowork. Entry navigation selects the implementation through
+`ISessionsConversationService` before revealing or focusing the Part. Each keeps
+its panes and editor DOM; only the active view is attached. Entry changes transfer
+unsent text, mode and attachments for every visible conversation without replacing
+the window's Session selection or navigation history.
+
+Feature commands own entry selection. The shared layout service stores the active entry's layout descriptor and applies its contributed Activity Bar context key. It has no enum or switch over product names. Focusing SessionsPart keeps the composing entry selected, including Code and Creator; focusing a View or changing a Library category does not select a different window entry.
 
 SessionsPart remains the shared Agent conversation host, including its multi-session grid. Code and Creator compositions can show SessionsPart beside EditorPart; chat surfaces do not become document editor groups. Creator and Library enter the shared EditorPart lifecycle. Switching a mode activates retained content without closing other tabs, discarding edits, recreating chat widgets or replacing document models. Actual close and window shutdown continue to use the existing save/discard/cancel checks.
 
@@ -231,7 +239,7 @@ See [LAYOUT_CONTROLLER.md](LAYOUT_CONTROLLER.md) for rule tags, persistence, and
 
 ## Mobile boundary
 
-Phone layouts replace selected parts and pickers with mobile subclasses while preserving the same service and provider contracts. Mobile composition and navigation are specified in [MOBILE.md](MOBILE.md).
+Phone layouts are planned to replace selected parts and pickers with mobile subclasses while preserving the same service and provider contracts. The phone workbench, composition and navigation remain unimplemented; the Creator composition above defines the non-phone window contract.
 
 ## Contributions and loading
 
@@ -252,4 +260,3 @@ Update this specification only when part ownership, grid topology, presentation 
 - [Sessions architecture](SESSIONS.md)
 - [Layout controllers](LAYOUT_CONTROLLER.md)
 - [Desktop scenarios](DESKTOP.md)
-- [Mobile layout](MOBILE.md)

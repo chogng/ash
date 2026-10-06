@@ -8,26 +8,26 @@ import { modelRefIdentity } from '../../../services/chat/common/modelCatalog.js'
 import { ModelCatalogConfiguration, isModelVisibleByDefault, type ModelVisibilityPreference } from '../common/languageModelsConfiguration.js';
 import type { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
 
-const SelectedChatModelStorageKey = 'chat.currentLanguageModel.chat';
+export const ChatModelPreferences = Object.freeze({ defaultModelSetting: ModelCatalogConfiguration.defaultModel, selectedModelStorageKey: 'chat.currentLanguageModel.chat' });
 
 export class LanguageModelsConfigurationService extends Disposable implements ILanguageModelsConfigurationService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
 	private readonly modelVisibility = new Map<string, ModelVisibilityPreference>();
-	constructor(@IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
 		super();
 		this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels));
 		this._register(storage.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE && event.key === SelectedChatModelStorageKey) { this.changed.fire(); }
+			if (event.scope === StorageScope.PROFILE && event.key === this.preferences.selectedModelStorageKey) { this.changed.fire(); }
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) { this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels)); }
-			if (event.affectsConfiguration(ModelCatalogConfiguration.defaultModel)) { this.changed.fire(); }
+			if (event.affectsConfiguration(this.preferences.defaultModelSetting)) { this.changed.fire(); }
 		}));
 	}
 	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined {
-		const configured = this.configuration.getValue<string>(ModelCatalogConfiguration.defaultModel).trim();
-		const remembered = this.storage.get(SelectedChatModelStorageKey, StorageScope.PROFILE);
+		const configured = this.configuration.getValue<string>(this.preferences.defaultModelSetting).trim();
+		const remembered = this.storage.get(this.preferences.selectedModelStorageKey, StorageScope.PROFILE);
 		for (const requested of [configured, remembered]) {
 			if (!requested) { continue; }
 			if (requested.toLowerCase() === 'auto') { return undefined; }
@@ -41,7 +41,7 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 
 	public rememberSelectedModel(model: ModelRef | undefined): void {
 		const value = model ? `${model.provider}/${model.model}` : 'auto';
-		this.storage.store(SelectedChatModelStorageKey, value, StorageScope.PROFILE, StorageTarget.USER);
+		this.storage.store(this.preferences.selectedModelStorageKey, value, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	public isModelVisible(model: ModelRef): boolean {

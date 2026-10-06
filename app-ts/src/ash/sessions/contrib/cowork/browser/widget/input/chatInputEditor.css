@@ -1,0 +1,13 @@
+.ash-cowork-input-editor {
+	position: relative;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	min-height: 100px;
+	overflow: visible;
+	--ash-editor-background: var(--ash-input-background);
+}
+
+.ash-cowork-input-editor .stanza-editor {
+	background-color: transparent;
+}

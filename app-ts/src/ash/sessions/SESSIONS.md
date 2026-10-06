@@ -68,6 +68,14 @@ It delegates model lifecycle operations to `ISessionsManagementService`.
 
 Visible-session slots have stable identities independent of list position. The view service coordinates membership, activation, directional placement, cancellation, and persisted leaf bindings; the Sessions Part owns rendering and split geometry. Explicit batch opening resolves and prepares its sessions before committing a visibility change. Geometry and layout operations remain independent of providers and comparison membership. See [LAYOUT.md](LAYOUT.md#sessions-part) for the grid and restoration contract.
 
+### `ISessionsConversationService`
+
+The Sessions Part owns conversation UI selection. Code uses the existing Chat
+implementation; Chat, Collaboration and conversations beside product editors use
+Cowork. Each implementation retains its own panes and models. Switching transfers
+the unsent drafts of all visible conversations while the window Sessions service
+keeps one selection, arrangement and navigation history.
+
 ### Scoped session context
 
 Surfaces that can represent a session other than the window-global active session use `ISessionContext`. Commands and menus resolve their target through that scope rather than assuming the active session.

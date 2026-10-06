@@ -15,7 +15,7 @@ import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionA
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
-import { LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
@@ -740,7 +740,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ModelApiId, api.model);
 		services.registerInstance(AppServerApiId, api.appServer);
 		services.registerInstance(ServerEventApiId, api.events);
-		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService)));
+		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
 		if (savedFontInfo !== undefined) {

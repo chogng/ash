@@ -7,6 +7,7 @@ import '../workbench/contrib/github/browser/githubLinkPresentation.contribution.
 import '../workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import '../workbench/contrib/chat/browser/chatEditing/chatEditing.contribution.js';
 import './contrib/files/browser/files.contribution.js';
+import './contrib/cowork/browser/cowork.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './browser/turnMultiDiffSource.contribution.js';
 import './contrib/editor/browser/emptyFileEditor.contribution.js';

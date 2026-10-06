@@ -20,7 +20,7 @@ import { IContextMenuService, IContextViewService } from "../../../platform/cont
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
-import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
+import { IChatService, type ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
 import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
@@ -51,6 +51,10 @@ for (const [name, value] of Object.entries({
 const { SessionsPart } = await import("../../browser/parts/sessions/sessionsPart.js");
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
+const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
+const { ChatSpeechToTextService: CoworkSpeechToTextService, IChatSpeechToTextService: ICoworkSpeechToTextService } = await import('../../contrib/cowork/browser/speechToText/chatSpeechToTextService.js');
+const { DictationOnboardingService: CoworkDictationOnboardingService, IDictationOnboardingService: ICoworkDictationOnboardingService } = await import('../../contrib/cowork/browser/speechToText/dictationOnboarding.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
 suiteTeardown(() => {
@@ -202,8 +206,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
 	services.registerInstance(ILanguageModelsService, chatService);
+	services.registerInstance(IChatService, chatService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(ICoworkSpeechToTextService, () => services.createInstance(CoworkSpeechToTextService));
+	services.registerSingleton(ICoworkDictationOnboardingService, () => services.createInstance(CoworkDictationOnboardingService));
 	using notifications = new NotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
@@ -230,9 +237,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const viewService = services.createInstance(SessionsService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
+	services.registerInstance(ICoworkTipService, resources.add(services.createInstance(CoworkTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
+	const cowork = resources.add(services.createInstance(CoworkPaneFactory));
 	const part = services.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
 		chatService,
@@ -246,6 +255,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 			inputs.push(input);
 			return input;
 		},
+		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
@@ -302,6 +312,27 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
 	assert.equal(part.domNode.querySelector('.ash-sessions-code-page'), null);
+
+	const retainedCodeInput = part.domNode.querySelector('.ash-chat-input-part');
+	const codeView = part.domNode.querySelector('[data-conversation-kind="code"]')!;
+	await part.setConversationKind('cowork');
+	const coworkView = part.domNode.querySelector('[data-conversation-kind="cowork"]')!;
+	assert.ok(coworkView.querySelector('.ash-cowork-input-part'));
+	assert.equal(coworkView.querySelector('.ash-chat'), null);
+	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
+	assert.equal(codeView.isConnected, false);
+	const retainedCoworkInput = coworkView.querySelector('.ash-cowork-input-part');
+	part.appendToDraft('Continue the presentation in Cowork');
+	const coworkDraft = (await part.captureActiveDraft())!.draft;
+	await part.setConversationKind('code');
+	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
+	assert.deepEqual((await part.captureActiveDraft())?.draft, coworkDraft);
+	const transferred = await part.captureActiveDraft();
+	transferred!.clear();
+	await part.setConversationKind('cowork');
+	assert.equal(coworkView.querySelector('.ash-cowork-input-part'), retainedCoworkInput);
+	assert.equal(await part.captureActiveDraft(), undefined);
+	assert.equal(coworkView.querySelectorAll('.ash-cowork-attachment').length, 0);
 
 	partListener.dispose();
 	part.dispose();

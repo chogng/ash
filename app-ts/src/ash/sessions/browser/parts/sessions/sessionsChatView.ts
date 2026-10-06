@@ -4,21 +4,12 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { IPositionedRectangle } from "../../../../base/browser/geometry.js";
 import type { IView } from "../../../../base/browser/ui/grid/grid.js";
-import { Disposable, setDisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { ICommandService } from "../../../../platform/commands/common/commands.js";
-import type { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import type { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
-import { ChatWidget } from "../../../../workbench/contrib/chat/browser/widget/chatWidget.js";
-import { ChatWidgetModel } from '../../chatWidgetModel.js';
-import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import type { IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { IChatService } from "../../../../workbench/services/chat/common/chatService.js";
-import type { SessionId } from "../../../services/sessions/common/session.js";
+import { Disposable, setDisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import type { ChatMode } from "../../../../workbench/services/chat/common/chatService.js";
+import type { SessionId, IActiveSessionThread, IUntitledChatSession } from "../../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
 import type { SessionsViewSelection } from "../../../services/sessions/browser/sessionsService.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import type { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { localize } from '../../../../nls.js';
 
@@ -26,18 +17,28 @@ import { SessionGridLayout, type ISessionGridEntry } from './sessionGridLayout.j
 
 let sessionsChatPaneInstanceId = 0;
 
+export interface ISessionsConversationPane extends IDisposable {
+	readonly element: HTMLElement;
+	readonly sessionId: SessionId | undefined;
+	readonly model: {
+		readonly inputState: { readonly mode: ChatMode; };
+		selectThread(active: IActiveSessionThread): Promise<void>;
+		selectUntitledSession(session: IUntitledChatSession): void;
+	};
+	focus(): void;
+	addContext(attachment: ChatContextAttachment): void;
+	appendToDraft(text: string): void;
+	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
+	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
+	setTabId(tabId: string | undefined): void;
+	setVisible(visible: boolean): void;
+}
+
 export interface SessionsChatViewOptions {
-	readonly chatService: IChatService;
 	readonly sessionService: ISessionsManagementService;
-	readonly contextMenuService: IContextMenuService;
-	readonly contextViewService: IContextViewService;
-	readonly accessibleViewService: IAccessibleViewService;
-	readonly notifications: INotificationService;
-	readonly commandService: ICommandService;
-	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel) => IChatInputPart;
+	readonly createPane: (container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
-	readonly createNewSession: () => void;
 }
 
 /** Owns the resizable grid of retained Chat panes in the Sessions Part. */
@@ -46,36 +47,22 @@ export class SessionsChatView extends Disposable {
 	private readonly grid: SessionGridLayout;
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionsChatGridEntry>();
-	private activePane: ChatWidget<ChatWidgetModel> | undefined;
+	private activePane: ISessionsConversationPane | undefined;
 	private dimension: IDimension | undefined;
 	private visible = true;
 
-	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
-	private readonly contextMenuService: IContextMenuService;
-	private readonly contextViewService: IContextViewService;
-	private readonly accessibleViewService: IAccessibleViewService;
-	private readonly notifications: INotificationService;
-	private readonly commandService: ICommandService;
-	private readonly createInputPart: SessionsChatViewOptions['createInputPart'];
+	private readonly createPane: SessionsChatViewOptions['createPane'];
 	private readonly activateSelection: (selection: SessionsViewSelection) => void;
 	private readonly closeSelection: (selection: SessionsViewSelection) => void;
-	private readonly createNewSession: () => void;
 
 	constructor(container: HTMLElement, options: SessionsChatViewOptions, @IInstantiationService private readonly services: IInstantiationService) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.chatService = options.chatService;
 		this.sessionService = options.sessionService;
-		this.contextMenuService = options.contextMenuService;
-		this.contextViewService = options.contextViewService;
-		this.accessibleViewService = options.accessibleViewService;
-		this.notifications = options.notifications;
-		this.commandService = options.commandService;
-		this.createInputPart = options.createInputPart;
+		this.createPane = options.createPane;
 		this.activateSelection = options.activateSelection;
 		this.closeSelection = options.closeSelection;
-		this.createNewSession = options.createNewSession;
 		this.domNode = h(ownerDocument, "section");
 		this.domNode.className = "ash-sessions-chat-view";
 		container.append(this.domNode);
@@ -108,8 +95,23 @@ export class SessionsChatView extends Disposable {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.domNode.classList.toggle('hidden', !visible);
 		this.grid.setVisible(visible);
 		for (const entry of this.entries.values()) entry.pane.setVisible(visible);
+	}
+
+	async captureDrafts(): Promise<ReadonlyMap<string, NonNullable<IOpenAgentsWindowOptions['draft']>>> {
+		return new Map(await Promise.all([...this.entries].map(async ([key, entry]) => [key, (await entry.pane.captureDraft())?.draft ?? { mode: entry.pane.model.inputState.mode, text: '', contexts: [] }] as const)));
+	}
+
+	async restoreDrafts(drafts: ReadonlyMap<string, NonNullable<IOpenAgentsWindowOptions['draft']>>): Promise<void> {
+		// Both UIs retain their live models; only unsent content moves when the product entry changes.
+		for (const [key, entry] of this.entries) {
+			const previous = await entry.pane.captureDraft();
+			previous?.clear();
+			const draft = drafts.get(key);
+			if (draft) { entry.pane.restoreDraft(draft); }
+		}
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
@@ -141,17 +143,10 @@ export class SessionsChatView extends Disposable {
 			if (!entry) {
 				entry = this.services.createInstance(SessionsChatGridEntry, this.domNode, {
 					selection,
-					chatService: this.chatService,
 					sessionService: this.sessionService,
-					contextMenuService: this.contextMenuService,
-					contextViewService: this.contextViewService,
-					accessibleViewService: this.accessibleViewService,
-					notifications: this.notifications,
-					commandService: this.commandService,
-					createInputPart: this.createInputPart,
+					createPane: this.createPane,
 					activateSelection: this.activateSelection,
 					closeSelection: this.closeSelection,
-					createNewSession: this.createNewSession,
 				});
 				setDisposableOwner(entry, this);
 				this.entries.set(key, entry);
@@ -230,7 +225,7 @@ interface SessionsChatGridEntryOptions extends Omit<SessionsChatViewOptions, 'pa
 
 class SessionsChatGridEntry extends Disposable implements IView {
 	readonly element: HTMLElement;
-	readonly pane: ChatWidget<ChatWidgetModel>;
+	readonly pane: ISessionsConversationPane;
 	readonly minimumWidth = 300;
 	readonly maximumWidth = Number.POSITIVE_INFINITY;
 	readonly minimumHeight = 240;
@@ -258,22 +253,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		close.setAttribute("aria-label", "Close visible session");
 		close.textContent = "×";
 		header.append(activate, close);
-		const model = services.createInstance(ChatWidgetModel, options.chatService, options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session }, options.sessionService);
-		this.pane = this._register(services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
-			this.element,
-			`ash-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
-			model,
-			options.createNewSession,
-			options.contextMenuService,
-			options.contextViewService,
-			options.commandService,
-			options.accessibleViewService,
-			options.notifications,
-			undefined,
-			undefined,
-			undefined,
-			(container: HTMLElement, delegate: ChatInputDelegate) => options.createInputPart(container, delegate, model),
-		));
+		this.pane = this._register(options.createPane(this.element, `ash-sessions-conversation-pane-${sessionsChatPaneInstanceId}`, options.selection));
 		this.pane.setTabId(this.title.id);
 		this.pane.setVisible(true);
 		this.element.append(header, this.pane.element);

@@ -1,0 +1,73 @@
+.ash-cowork-transcript-scrollable {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.ash-cowork-transcript {
+	padding: 6px 12px 16px;
+}
+.ash-cowork-empty {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label1);
+}
+.ash-cowork-empty {
+	padding: 20px 4px;
+	text-align: center;
+}
+.ash-cowork-item {
+	margin: 0 0 16px;
+	color: var(--ash-foreground);
+	font-size: var(--ash-font-size-body1);
+	line-height: 1.5;
+}
+.ash-cowork-item-label {
+	margin-bottom: 4px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-font-size-label2);
+	font-weight: var(--ash-font-weight-semi-bold);
+	text-transform: uppercase;
+}
+.ash-cowork-item-userMessage pre {
+	border-radius: var(--ash-corner-radius-medium);
+	background: var(--ash-input-background);
+}
+.ash-cowork-item pre {
+	overflow-wrap: anywhere;
+	margin: 0;
+	padding: 8px;
+	font: inherit;
+	white-space: pre-wrap;
+}
+.ash-cowork-item-reasoning,
+.ash-cowork-item-plan,
+.ash-cowork-item-toolCall,
+.ash-cowork-item-toolResult,
+.ash-cowork-item-turnError {
+	border-left: 2px solid var(--ash-border);
+	padding-left: 8px;
+	color: var(--ash-description-foreground);
+}
+.ash-cowork-item.error {
+	border-left-color: var(--ash-error-foreground);
+}
+.ash-cowork-turn-error-detail {
+	margin: 0 8px 8px;
+	color: var(--ash-description-foreground);
+}
+.ash-cowork-turn-error-action {
+	margin: 0 8px 4px;
+	padding: 4px 8px;
+	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-radius: var(--ash-corner-radius-small);
+	color: var(--ash-button-foreground);
+	background: var(--ash-button-secondary-background);
+	font: inherit;
+	cursor: pointer;
+}
+.ash-cowork-turn-error-action:hover {
+	background: var(--ash-button-hover-background);
+}
+.ash-cowork-turn-error-action:focus-visible {
+	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline-offset: var(--ash-stroke-thickness);
+}

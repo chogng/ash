@@ -5,8 +5,14 @@ import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/
 import { createTestModel } from '../../../platform/app-server/test/common/testAppServerProtocol.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import { LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
+import { CoworkModelPreferences } from '../../contrib/cowork/common/languageModels.js';
+import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
+import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '../../contrib/cowork/common/languageModelsConfiguration.js';
+import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
+import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
+import { resetNlsResolver } from '../../../nls.js';
 import { IModelApi } from '../../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/app-server/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -1806,7 +1812,7 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	services.registerInstance(IServerEventApi, api.events);
 	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(IStorageService, storage);
-	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService)));
+	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 	const chat = new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events });
 	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
 	return chat;
@@ -2004,6 +2010,59 @@ test("Language models service applies product visibility defaults and persists m
 		{ ...older.model, visible: true }, enabled[0]!.model,
 	]);
 	assert.throws(() => definition.parse([{ ...older.model, visible: 'true' }]), /must be a boolean/);
+});
+
+test('Cowork and Code keep independent defaults and model choices for the same draft', async () => {
+	const codeModel = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'Code model' };
+	const coworkModel = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Cowork model' };
+	const fake = fakeApi({ models: [codeModel, coworkModel], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
+	using configuration = new WorkbenchConfigurationService();
+	using storage = createTestStorage();
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-6.1-sol');
+	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'anthropic/claude-opus-5-5');
+	using chat = createChatService(fake.api, configuration, storage);
+	using sessions = new SessionsManagementService(fake.api);
+	const draft = sessions.createUntitledSession();
+	using code = createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
+	using services = new InstantiationService();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+	services.registerInstance(ICoworkModelPreferences, preferences);
+	using cowork = services.createInstance(CoworkWidgetModel, chat, { kind: 'untitled', session: draft }, sessions);
+	await Promise.all([code.initialize(), cowork.initialize()]);
+	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
+	await code.selectModel(codeModel.model);
+	await cowork.selectAutomaticModel();
+	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, undefined]);
+	await cowork.selectModel(codeModel.model);
+	await code.selectModel(coworkModel.model);
+	assert.deepEqual([code.selectedModel, cowork.selectedModel], [coworkModel.model, codeModel.model]);
+	await code.selectModel(codeModel.model);
+	await cowork.selectModel(coworkModel.model);
+	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
+	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, '');
+	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
+	using restoredCodePreferences = services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences);
+	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+	const catalog = await modelsFor(chat).listModels();
+	assert.deepEqual([restoredCodePreferences.getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)], [codeModel.model, coworkModel.model]);
+	assert.deepEqual(sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model, codeModel.model);
+	await cowork.send('Use the Cowork model');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, coworkModel.model);
+});
+
+test('Cowork default model settings use the Chinese catalog and reject invalid values', () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(CoworkModelPreferences.defaultModelSetting)!;
+		const schema = setting.setting;
+		assert.ok(schema?.valueType === 'text');
+		assert.deepEqual([schema.title, schema.description, schema.placeholder], ['默认 Cowork 模型', '新 Cowork 对话使用的模型。填写 auto 或 provider/model 标识。', 'auto 或 provider/model']);
+		assert.throws(() => setting.parse(42), /默认 Cowork 模型必须是字符串/);
+		assert.equal(setting.parse(' auto '), 'auto');
+	} finally { resetNlsResolver(); }
 });
 
 test('New chats use the configured model before the remembered picker choice', async () => {

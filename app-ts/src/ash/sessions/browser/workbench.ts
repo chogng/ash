@@ -16,7 +16,7 @@ import { EditorContextKeyController } from '../../workbench/browser/parts/editor
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
-import { LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { MarketplaceLanguagePackService } from '../../platform/languagePacks/browser/marketplaceLanguagePackService.js';
 import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacksService.js';
 import { ILocaleService } from '../../workbench/services/localization/common/locale.js';
@@ -68,6 +68,8 @@ import { ILanguageConfigurationService } from '../../editor/common/languages/lan
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { NewChatInputWidget } from '../contrib/chat/browser/newChatInput.js';
+import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
+import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
 import { migrateNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
@@ -351,7 +353,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(ModelApiId, options.api.model);
 		services.registerInstance(ServerEventApiId, options.api.events);
-		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService)));
+		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(ISkillService, options.api.skills);
 		services.registerInstance(IHooksService, options.api.hooks);
@@ -495,7 +497,7 @@ export abstract class Workbench extends Disposable {
 			sessionsPart!.focus();
 		}));
 		this._register(CommandsRegistry.register('sessions.addContextToAgent', async (_accessor, value) => {
-			const context = value as { readonly id: string; readonly name: string; readonly content: string };
+			const context = value as { readonly id: string; readonly name: string; readonly content: string; };
 			await services.get(ISessionsLayoutService).setConversationVisible(true);
 			sessionsPart!.addContext({ id: context.id, name: context.name, kind: 'file', resolve: async () => ({ name: context.name, content: context.content }) });
 			sessionsPart!.focus();
@@ -540,6 +542,7 @@ export abstract class Workbench extends Disposable {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsActivityBar)) updateActivityBarHelpHint();
 		}));
 		updateActivityBarHelpHint();
+		const cowork = this._register(services.createInstance(CoworkPaneFactory));
 		sessionsPart = this.sessionsPart = this._register(services.createInstance(SessionsPart, this.domNode, {
 			sessionService: sessions,
 			chatService: chat,
@@ -549,6 +552,7 @@ export abstract class Workbench extends Disposable {
 			notifications: notificationService,
 			commandService,
 			createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model),
+			createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { view.openNewSession(); }),
 			activateSelection: selection => view.activateSelection(selection),
 			closeSelection: selection => {
 				view.closeVisibleSelection(selection);
@@ -558,6 +562,7 @@ export abstract class Workbench extends Disposable {
 			},
 			createNewSession: () => { view.openNewSession(); },
 		} satisfies SessionsPartOptions));
+		services.registerInstance(ISessionsConversationService, sessionsPart);
 		const updateSessionsPart = (): void => {
 			const selection = view.getSelection();
 			sessionsPart?.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);

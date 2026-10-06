@@ -125,7 +125,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await expect(item).toBeVisible();
 	await item.click();
 	await details.getByRole('button', { name: 'Add to conversation', exact: true }).click();
-	await expect(page.locator('.ash-sessions-chat-input:visible').getByRole('button', { name: 'Remove library-product.png', exact: true })).toBeVisible();
+	await expect(page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input):visible').getByRole('button', { name: 'Remove library-product.png', exact: true })).toBeVisible();
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await expect(details.getByRole('button', { name: 'Use in Design', exact: true })).toBeEnabled();
 	await details.getByRole('button', { name: 'Use in Design', exact: true }).click();

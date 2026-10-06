@@ -6,6 +6,10 @@
 	overflow: hidden;
 }
 
+.ash-sessions-chat-view.hidden {
+	display: none;
+}
+
 .ash-sessions-chat-grid {
 	min-width: 0;
 	min-height: 0;
@@ -80,7 +84,7 @@
 	outline-offset: -1px;
 }
 
-.ash-sessions-chat-slot > .ash-chat {
+.ash-sessions-chat-slot > :is(.ash-chat, .ash-cowork) {
 	min-width: 0;
 	min-height: 0;
 	flex: 1 1 auto;

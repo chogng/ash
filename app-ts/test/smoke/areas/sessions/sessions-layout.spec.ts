@@ -170,7 +170,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 		await page.mouse.up();
 	};
 	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number; }[]> => panes.evaluateAll(elements => elements.map(element => {
-		const chat = element.querySelector<HTMLElement>('.ash-chat')!;
+		const chat = element.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')!;
 		return {
 			identity: chat.dataset.untitledSessionId ?? chat.dataset.sessionId,
 			active: element.classList.contains('active'),
@@ -180,7 +180,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	}));
 	const draftReference = async (): Promise<{ kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }> => ({
 		kind: 'untitled',
-		session: { untitledSessionId: (await panes.locator('.ash-chat').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
+		session: { untitledSessionId: (await panes.locator(':is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
 	});
 	await typeDraft('Chat first draft');
 	const chatReferences = [await draftReference()];
@@ -252,13 +252,13 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	const selected = (await snapshot()).find(slot => slot.active)!;
 	await page.locator('.ash-sessions-list-item[aria-current="page"]').click();
 	await expect(panes).toHaveCount(1);
-	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', selected.identity!);
+	await expect(panes.locator(':is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
 	await new Editor(panes.first()).waitForEditorContents(text => text === selected.text);
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	await expect(panes).toHaveCount(1);
 	await new Editor(panes.first()).waitForEditorContents(text => text === selected.text);
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(panes).toHaveCount(1);
-	await expect(panes.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', selected.identity!);
+	await expect(panes.locator(':is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
 	expect(failures).toEqual([]);
 });

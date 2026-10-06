@@ -178,10 +178,10 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await expect(ask).toBeEnabled();
 		await ask.click();
 		await expect(settings).toHaveCount(0);
-		const draft = new Editor(page.locator('.ash-sessions-chat-slot .ash-chat:visible').first());
+		const draft = new Editor(page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first());
 		await expect(draft.input).toBeFocused();
 		await draft.waitForEditorContents(text => text.includes('Help me configure'));
-		await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
+		await expect(page.locator(':is(.ash-chat-item-userMessage,.ash-cowork-item-userMessage)')).toHaveCount(0);
 	} else {
 		await expect(settings.locator('[data-hook-action="ask-scope"]')).toBeDisabled();
 		await page.keyboard.press('Escape');
