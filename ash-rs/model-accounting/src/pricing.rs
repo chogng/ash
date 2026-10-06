@@ -140,7 +140,6 @@ fn public_api_dimensions(
         "openai" => Some(("openai_api", "default")),
         "google" => Some(("gemini_api", "standard")),
         "xai" => Some(("xai_api", "default")),
-        "minimax" => Some(("minimax_api", "standard")),
         "kimi" => Some(("kimi_api", "standard")),
         _ => None,
     }

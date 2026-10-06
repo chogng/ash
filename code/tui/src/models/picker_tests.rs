@@ -171,13 +171,13 @@ fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
     let catalog = ModelListResult {
         models: vec![
             catalog_entry("openai", "gpt-ash", "GPT Ash"),
-            catalog_entry("mimo", "mimo-v2.5-pro", "MiMo V2.5 Pro"),
+            catalog_entry("kimi", "kimi-k3", "Kimi K3"),
         ],
     };
     let mut config = crate::test_support::empty_config_snapshot();
     config
         .providers
-        .insert("mimo".into(), provider_config("mimo"));
+        .insert("kimi".into(), provider_config("kimi"));
     config.providers.insert(
         "custom-empty".into(),
         ProviderConfigDto {
@@ -198,7 +198,7 @@ fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
         "pinnedModels".into(),
         serde_json::json!([
             {"provider":"openai","model":"gpt-ash"},
-            {"provider":"mimo","model":"mimo-v2.5-pro"}
+            {"provider":"kimi","model":"kimi-k3"}
         ]),
     );
     let view = model_choices(&catalog, &config).unwrap();
@@ -573,32 +573,11 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
             Some(1_048_576),
         ),
         ("xai", "grok-4.7", "Grok 4.7", true, Some(500_000)),
-        (
-            "minimax",
-            "MiniMax-M2.7",
-            "MiniMax M2.7",
-            true,
-            Some(204_800),
-        ),
-        (
-            "qwen",
-            "qwen3.8-max",
-            "Qwen 3.8 Max",
-            false,
-            Some(1_000_000),
-        ),
         ("kimi", "kimi-k3", "Kimi K3", false, Some(1_000_000)),
         (
             "deepseek",
             "deepseek-v4-pro",
             "DeepSeek V4 Pro",
-            false,
-            Some(1_000_000),
-        ),
-        (
-            "mimo",
-            "mimo-v2.6-pro",
-            "MiMo V2.6 Pro",
             false,
             Some(1_000_000),
         ),
@@ -613,7 +592,7 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
                     entry.capabilities.fast_mode = ash_protocol::CapabilitySupport::Supported;
                 }
                 entry.maximum_context_window = *window;
-                entry.context_window = if *provider == "qwen" {
+                entry.context_window = if *provider == "kimi" {
                     Some(272_000)
                 } else {
                     *window
@@ -627,15 +606,15 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
     let mut google = provider_config("google");
     google.fast_models.push("gemini-3.8-flash".into());
     config.providers.insert("google".into(), google);
-    let mut qwen = provider_config("qwen");
-    qwen.model_context.insert(
-        "qwen3.8-max".into(),
+    let mut kimi = provider_config("kimi");
+    kimi.model_context.insert(
+        "kimi-k3".into(),
         ash_app_server_protocol::protocol::config::ModelContextConfigDto {
             context_window: 272_000,
             auto_compact_token_limit: None,
         },
     );
-    config.providers.insert("qwen".into(), qwen);
+    config.providers.insert("kimi".into(), kimi);
     for (provider, model, _, fast, window) in rows {
         let preference = format!("{provider}/{model}");
         let choices = model_choices(&catalog, &config).unwrap();
@@ -658,7 +637,7 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
             (
                 "context",
                 window.filter(|maximum| *maximum >= 1_000_000).map(|_| {
-                    if provider == "qwen" {
+                    if provider == "kimi" {
                         super::ModelOption::Context1m
                     } else {
                         super::ModelOption::Context272k

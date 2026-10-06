@@ -135,7 +135,7 @@ Core 接收：冻结基础正文 + 当前 Role + 实际工具/环境 + 任务
 | GPT | 目标驱动、减少无意义停顿与重复验证，保留简短回答中的必要证据；参考 [GPT-5.6 指导](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6) 与 [GPT-6 指导](https://developers.openai.com/api/docs/guides/latest-model) |
 | Claude | 明确所需产物并限制额外工程化；参考 [Claude 提示词指导](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) 的通用原则 |
 | Gemini | 简洁指令、明确当前任务、证据与目标格式；参考 [Gemini 3 指导](https://ai.google.dev/gemini-api/docs/gemini-3) |
-| 工具调用 | 执行参数与回答分离，等待实际结果后继续；参考 Ash 工具通道、[Qwen Function Calling](https://www.alibabacloud.com/help/en/model-studio/qwen-function-calling) 和 [Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling) |
+| 工具调用 | 执行参数与回答分离，等待实际结果后继续；参考 Ash 工具通道和 [Z.AI Function Calling](https://docs.z.ai/guides/capabilities/function-calling) |
 
 正文不授予权限或代替 Role，也不能通过文字调整 API 设置。DeepSeek 的 `reasoning_content` 和 Gemini 思考签名的保存与重放仍属于供应商 adapter。[DeepSeek 文档](https://api-docs.deepseek.com/guides/thinking_mode/)、[Gemini 文档](https://ai.google.dev/gemini-api/docs/gemini-3)
 

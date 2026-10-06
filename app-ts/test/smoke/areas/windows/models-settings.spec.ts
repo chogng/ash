@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { expect, test } from '../../../automation/test.js';
 
-const defaultVisibleModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Grok 4.7', 'Gemini 3.8 Flash', 'Qwen 3.8 Max', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'MiniMax M3', 'MiMo V2.6 Pro', 'Muse Spark 1.3'];
+const defaultVisibleModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Grok 4.7', 'Gemini 3.8 Flash', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'Muse Spark 1.3'];
 const defaultEnabledModelNames = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'Grok 4.7'];
 
 test('Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help', async ({ target, workbench, restartWorkbench }) => {
@@ -161,7 +161,7 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		await search.fill('');
 		await expect(rows).toHaveCount(defaultVisibleModelNames.length);
 		const builtins = settings.locator('.ash-models-settings-api-row h5');
-		for (const removed of ['Qwen', 'Hugging Face', 'OpenAI-compatible']) {
+		for (const removed of ['Qwen', 'MiMo', 'MiniMax', 'Hugging Face', 'OpenAI-compatible']) {
 			expect(await builtins.allTextContents()).not.toContain(removed);
 		}
 		await settings.getByRole('button', { name: 'New provider', exact: true }).click();

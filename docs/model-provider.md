@@ -174,7 +174,6 @@ Provider 名称不能等同于 API 协议。同一 Provider 可以选择多个�
 | Kimi Code CLI | Kimi Code Chat Completions + CLI 当前 OAuth 文件凭据 |
 | xAI | Responses、Chat Completions |
 | Google | Gemini Interactions、GenerateContent、OpenAI-compatible Chat |
-| MiniMax | Anthropic Messages、OpenAI-compatible Chat |
 | Ollama | native Chat NDJSON、OpenAI-compatible Chat |
 | DeepSeek | OpenAI Chat、Anthropic-compatible endpoint |
 
@@ -191,17 +190,13 @@ Ash 当前 adapter 可以切换过去。OAuth 也只决定如何取得 credentia
 | OpenAI Realtime GA | [Realtime GA](https://developers.openai.com/api/docs/guides/realtime) | 独立 `realtimeApiProfile` 和模型 ID，不由 Luna 订阅授权 | `connect_realtime` 已实现；本地握手验证已存 API key，不再要求模型出现在文本目录；未实连语音模型 |
 | xAI | [Responses WebSocket mode](https://docs.x.ai/developers/advanced-api-usage/websocket-mode) 明确使用 `wss://api.x.ai/v1/responses` | Ash 当前 xAI definition 使用 Responses HTTP，尚未声明 WebSocket capability | `Unavailable`；独立验证 WebSocket 端点与凭据后再启用 |
 | Google Gemini | [Live API](https://ai.google.dev/api/live) 是 stateful WebSocket | 独立 `BidiGenerateContent`/Live 模型协议，不是当前 OpenAI-compatible Chat route | `Unavailable` |
-| Qwen | [文本流式输出](https://www.alibabacloud.com/help/en/model-studio/stream) 使用 SSE；[Realtime API](https://www.alibabacloud.com/help/en/model-studio/realtime) 另有 WebSocket | Realtime 属于 Omni/audio/ASR/TTS 等独立协议 | `Unavailable` |
-| MiniMax | [API overview](https://platform.minimax.io/docs/api-reference/api-overview) 的 WebSocket 面向 T2A；文本调用为独立 Chat API | 语音 WebSocket 不能替代当前 text Chat route | `Unavailable` |
 | Anthropic | [Messages streaming](https://platform.claude.com/docs/en/build-with-claude/streaming) 使用 SSE | 当前 Messages route 没有已核实的官方 WebSocket contract | `Unavailable` |
 | DeepSeek | [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion) 的 streaming 为 data-only SSE | 当前 Chat route 不支持已核实的 WebSocket mode | `Unavailable` |
 | Kimi | [Chat API](https://platform.kimi.ai/docs/api/chat) 的 streaming 为 SSE | Kimi OAuth 不改变该 wire contract | `Unavailable` |
 
 听写使用独立于文本调用的 `transcriptionApiProfile`：OpenAI 的 `gpt-live-transcribe` 走 Realtime 转写协议，xAI 的 `grok-voice-transcribe-2.0` 走 STT WebSocket。两者分别要求对应供应商的直接 API 凭据；上表中的 xAI 文本 Responses WebSocket 状态不影响 STT 能力。
 | Ollama | [Streaming responses](https://docs.ollama.com/api/streaming) 使用 NDJSON | 当前 native/compatible route 不是 WebSocket | `Unavailable` |
-| Hugging Face Router | [Chat completion streaming](https://huggingface.co/docs/inference-providers/en/tasks/chat-completion) 使用 SSE | Router Chat route 没有已核实的 WebSocket mode | `Unavailable` |
 | Z.AI | [Streaming](https://docs.z.ai/guides/capabilities/streaming) 使用 SSE | 当前 GLM Chat route 没有已核实的 WebSocket mode | `Unavailable` |
-| MiMo | [Responses API](https://mimo.mi.com/docs/en-US/api/chat/responses) 使用 SSE，且当前文档不支持 `previous_response_id` | 不能借用 OpenAI Responses WebSocket/session 假设 | `Unavailable` |
 | Generic OpenAI-compatible | 没有统一上游 authority | HTTP path/JSON 兼容不证明 handshake、event lifecycle、sticky state 或 prewarm 兼容 | `Unavailable`，fail closed |
 
 代码中的 `WebSocketApiProfile` 表达“Ash 允许哪一种 exact wire codec”，不是“供应商公司是否在任意
@@ -222,12 +217,8 @@ binding 都由 `ProviderDefinition.input_token_count` 明确声明 profile、tar
 | Kimi | [`estimate-token-count`](https://platform.kimi.ai/docs/api/estimate) | 部分具备：estimated remote | 文档 schema 只有 model/messages；带 tools/reasoning 的当前请求退回 unavailable |
 | Z.AI | [`POST /tokenizer`](https://docs.z.ai/api-reference/tools/tokenizer) | 部分具备：estimated remote | 使用 `usage.total_tokens`，支持 tools；带 Tool Call/Result 历史暂退 unavailable |
 | xAI | [`tokenize-text`](https://docs.x.ai/developers/rest-api-reference/inference/other) | ❌ full-request preflight unavailable | 只 tokenize 裸文本；[billing FAQ](https://docs.x.ai/developers/faq/billing) 说明 inference 还会加入预定义 tokens |
-| Qwen | [text generation](https://help.aliyun.com/en/model-studio/text-generation) | ❌ preflight unavailable | chat template 会增加控制 token，不能按裸文本计数 |
 | DeepSeek | [token usage / offline tokenizer](https://api-docs.deepseek.com/quick_start/token_usage) | 部分具备：local/estimated | 已接入完整 `ModelRef` binding、请求级模板渲染与 tokenizer runtime；当前仍需宿主提供固定资产清单 |
 | Ollama | [API usage fields](https://github.com/ollama/ollama/blob/main/docs/api.md) | ❌ preflight unavailable | `prompt_eval_count` 是调用完成后的 usage |
-| Hugging Face Router | [per-model tokenizer API](https://huggingface.co/docs/tokenizers/main/api/tokenizer) | 部分具备：local/estimated | 公共 `owner/repo` 首次使用时解析 immutable commit，按需下载并校验 `tokenizer.json`、`tokenizer_config.json` 与 standalone template；重启复用磁盘缓存 |
-| MiniMax | [Chat API](https://platform.minimaxi.com/docs/api-reference/text-post) | ❌ verified preflight unavailable | 当前官方文档只确认 response usage |
-| MiMo | [Responses API](https://mimo.mi.com/docs/en-US/api/chat/responses) | ❌ verified preflight unavailable | 当前官方文档只确认 response `usage.input_tokens` |
 | Generic OpenAI-compatible | 无统一标准 | ❌ unavailable | 必须由具体 provider definition 显式增加 count profile |
 
 #### 订阅网关的服务端计量覆盖

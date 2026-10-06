@@ -4,7 +4,7 @@
 > 语义由 [`ash-context-engine`](../context-engine/README.md) 拥有；provider 接入由
 > [`ash-model-provider`](../model-provider/README.md) 拥有。
 
-`ash-model-tokenizer` 对外只暴露整请求 `count_input_tokens(ModelRef, ModelRequest)`。内部按需发现并
+`ash-model-tokenizer` 对外只暴露整请求 `count_input_tokens(ModelRef, ModelRequest)`。内部按宿主提供的清单下载并
 固定 `tokenizer.json` 与 `tokenizer_config.json`，用 `hf-chat-template` 把 messages、Tools 与 Tool
 历史渲染为 prompt，再用 `tokenizers` 计数。它不声称本地结果必然等于远端 provider 的最终 usage。
 
@@ -18,7 +18,7 @@
 | `LocalTokenizerService` | provider adapter 使用的只读计数端口 | 必须返回随两份资产变化的 source revision |
 | `LocalTokenizationOutcome` | 区分已计数和不支持的请求 | 图片等没有 processor 的输入必须明确返回 unsupported |
 | `ManagedLocalTokenizerService` | 首次使用时后台发现/下载、持久化摘要清单并维护内存 LRU | 网络失败不得阻塞模型调用或每次请求重复下载 |
-| `HuggingFaceTokenizerAssetDiscoverer` | 将 `owner/repo` 的 `main` 解析为 immutable commit 和完整模板材料 | standalone `chat_template.jinja` 优先于 config 内嵌模板 |
+| `TokenizerAssetDiscoverer` | 宿主按完整 `ModelRef` 提供固定版本的资产清单 | 返回前解析不可变 revision 并计算内容摘要 |
 
 `hf-chat-template` 负责 Hugging Face 的 special token、Python/Jinja 兼容方法、`tojson`、
 `strftime_now` 与 named template 语义；Ash 仍拥有 revision/SHA、磁盘目录、后台准备和 LRU。
@@ -36,7 +36,7 @@
 ```text
 exact ModelRef + complete ModelRequest
   → LocalTokenizerService::count_input_tokens
-     → memory LRU / pinned disk cache / background Hub preparation
+     → memory LRU / pinned disk cache / background asset preparation
      → request::render_input
      → hf-chat-template render
      → Tokenizer::encode(add_special_tokens = false)
@@ -51,14 +51,12 @@ tokenizer 若仍无法编码渲染结果，则作为运行时错误返回，避�
 ## 3. 测试、限制与扩展
 
 ```bash
-cargo test -p ash-model-tokenizer
-cargo clippy -p ash-model-tokenizer --all-targets -- -D warnings
+just verify ash-model-tokenizer
 ```
 
 - **Current**：精确 `ModelRef` registry、双资产 revision/digest 固定、`hf-chat-template 1.0`、文本/Tool
   整请求投影、按需后台下载、重启复用磁盘缓存和四项默认内存 LRU 已实现。
-- **Current**：named `tool_use` 模板按请求是否带 Tools 自动选择；仓库存在 standalone
-  `chat_template.jinja` 时按 Transformers 优先级覆盖 config 内嵌模板，日期函数使用本地时钟。
+- **Current**：named `tool_use` 模板按请求是否带 Tools 自动选择，日期函数使用本地时钟；聊天模板由宿主提供的 `tokenizer_config.json` 固定。
 - **Current limitation**：当前多模态输入没有 processor，明确 unsupported；依赖模型专有外部函数的
   模板在渲染时降级为 unsupported。
 - **Current limitation**：本 crate 只报告本地模板栈的计数。远端 provider 是否添加隐藏 envelope、

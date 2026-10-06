@@ -24,8 +24,8 @@ import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../
 const flagshipModels: Readonly<Record<string, readonly string[]>> = {
 	openai: ['gpt-6.1-sol', 'gpt-6-astra'], anthropic: ['claude-opus-5-5', 'claude-fable-5-1'],
 	xai: ['grok-4.7'], meta: ['muse-spark-1.3'], google: ['gemini-3.1-pro-preview'],
-	qwen: ['qwen3.8-max'], kimi: ['kimi-k3'], deepseek: ['deepseek-v4-pro'],
-	glm: ['glm-5.3'], minimax: ['MiniMax-M3'], mimo: ['mimo-v2.6-pro'],
+	kimi: ['kimi-k3'], deepseek: ['deepseek-v4-pro'],
+	glm: ['glm-5.3'],
 };
 
 /** Both settings hosts edit the chat service's saved Advisor preference. */

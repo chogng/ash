@@ -54,7 +54,6 @@ use ash_mcp_extension::PluginConnectorMcpRuntimeProvider;
 use ash_mcp_extension::compose_mcp_tools_at_generation_with_runtime_intents_and_updates;
 use ash_mcp_extension::compose_mcp_tools_with_connectors_and_runtime_intents_and_updates;
 use ash_model_provider::HttpTokenizerAssetDownloader;
-use ash_model_provider::HuggingFaceTokenizerAssetDiscoverer;
 use ash_model_provider::ManagedLocalTokenizerService;
 use ash_model_provider::MemoryTokenizerCapacity;
 use ash_model_provider::ModelEventSink;
@@ -1343,14 +1342,9 @@ pub fn open_app_server_with_codebase_providers(
         ManagedLocalTokenizerService::new(
             options.profile_root.join("cache/model-tokenizers"),
             TokenizerAssetCatalog::new(),
-            tokenizer_downloader.clone(),
+            tokenizer_downloader,
             MemoryTokenizerCapacity::default(),
         )
-        .map(|service| {
-            service.with_discoverer(Arc::new(HuggingFaceTokenizerAssetDiscoverer::new(
-                tokenizer_downloader,
-            )))
-        })
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
     let provider_configs = ProviderConfigRegistry::builtin();

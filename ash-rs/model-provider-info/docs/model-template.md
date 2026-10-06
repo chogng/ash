@@ -1,0 +1,273 @@
+# GPT、Claude、Gemini、GLM、Kimi、Grok 通用模型声明规范
+
+通用模板可以覆盖这六家，但必须同时描述**模型规格、参数约束和接入差异**。统一字段名后，还要知道它适用于哪个型号、哪个协议、什么条件，以及如何编码成请求。每个模型都使用同一套结构，按官方证据填写；字段多或提示词长，都不能单独证明完整性。
+
+本文供维护模型目录、请求构造器和模型设置界面的开发者使用。官方文档核对日期为 **2026-10-05**。下面的字段结构是设计建议，尚未成为当前 `models.json` 的解析格式；本次没有扩展 Rust 协议或请求参数。当前目录格式和已有调用链见 [crate README](../README.md#统一静态模型清单)。本次已移除 Qwen、MiMo、MiniMax、Hugging Face 的内置模型与专用接入，保留其他既有供应商。
+
+## 1. 声明归属
+
+`models.json` 放在 `model-provider-info` 合理：模型规格、完整基础提示词、参数支持声明属于共享数据。`models-manager` 负责目录来源、刷新、合并和选择。通用规范不要求把端点、认证和全部厂商请求 JSON 塞进模型条目。
+
+| 内容 | 维护位置与职责 | 例子 |
+| --- | --- | --- |
+| 模型事实 | `model-provider-info/models.json`，以准确厂商＋模型 ID 为键 | 上下文、模态、型号级推理档位、生命周期 |
+| 接入声明 | `model-provider-info` 的接入定义；约束按模型＋接入协议绑定 | 地址、协议版本、生成/计数/流式操作、必需请求头、接入限制 |
+| 请求编码 | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用 | `reasoning.effort` 与 `output_config.effort` 的不同结构 |
+| 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验 | 模型会看图，但所选接入没有图像输入协议 |
+| Ash 执行策略 | 模型条目的独立 `host_policy` 部分；Core 和宿主执行 | 执行上下文预算、压缩阈值、工具结果截断预算 |
+| 基础提示词 | 模型条目的 `instructions`，版本化完整正文 | 工作原则、工具使用和结果报告 |
+| 运行时事实 | 账户、凭据、会话与调用记录的各自负责方 | 账户权限、实际服务等级、缓存命中、token 用量 |
+
+有效能力必须同时满足模型声明、所选接入协议和 Ash 已实现的调用能力；账户权限在运行时确认。API、订阅代理和第三方托管接入分别声明，不能从厂商公共 API 继承全部能力。
+
+Hugging Face 的 [Inference Providers](https://huggingface.co/docs/inference-providers/en/index) 可以按最快、最便宜或指定服务商路由同一个模型，因此完整适配还要记录实际服务商与路由约束。Ash 当前移除其内置推理接入和专用 tokenizer 自动发现入口，优先维护上述厂商的明确接入；自定义兼容端点、通用 tokenizer 资产绑定和聊天模板执行继续保留。通用声明规范仍需区分模型事实与托管接入能力。
+
+## 2. 官方接口逐家对照
+
+### 2.1 消息、输出预算和结构化输出
+
+下面列 HTTP JSON 字段，不把 SDK 的辅助参数名当作请求字段。表中的字段存在，不代表同一家所有型号都接受。
+
+| 模型家族／协议 | 输入与系统指导 | 输出 token 上限 | 结构化输出／工具定义 | 官方依据 |
+| --- | --- | --- | --- | --- |
+| GPT／Responses | `input`、`instructions` | `max_output_tokens`，包含推理 token | `text.format`；函数工具为 `tools[]` 的 `name`、`parameters`、`strict` 等字段 | [Responses reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create) |
+| Claude／Messages | `messages`、顶层 `system`；常规对话按内容块组织 | 必填 `max_tokens`，思考也占此预算 | `output_config.format`；工具为 `name`、`input_schema`，结果为 `tool_result` 内容块 | [Messages](https://platform.claude.com/docs/en/api/messages/create)、[结构化输出](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) |
+| Gemini／Interactions | `input`、`system_instruction` | `generation_config.max_output_tokens` | `response_format`；`tools`，`generation_config.tool_choice` | [Interactions reference](https://ai.google.dev/api/interactions-api) |
+| Gemini／GenerateContent | `contents`、`systemInstruction`；模型 ID 在 URL 中 | `generationConfig.maxOutputTokens` | `generationConfig.responseFormat`；旧字段 `responseMimeType`、`responseSchema` 需按版本区分；`tools.functionDeclarations`、`toolConfig` | [GenerateContent reference](https://ai.google.dev/api/generate-content) |
+| GLM／Z.AI Chat Completions | `messages`，含 `system`、`user`、`assistant`、`tool` | `max_tokens`，上限按型号 | 当前 reference 列 `response_format.type=text/json_object`；工具为 `tools[].function` | [Chat Completion](https://docs.z.ai/api-reference/llm/chat-completion) |
+| Kimi／Chat Completions | `messages`，多模态内容使用内容数组 | `max_completion_tokens`；`max_tokens` 已标弃用 | `response_format.type=text/json_object/json_schema`；`tools[].function` | [Chat API](https://platform.kimi.ai/docs/api/chat) |
+| Grok／Responses | `input`，有类型的输出项 | `max_output_tokens` | `text.format`；Chat／xAI SDK 指南另使用 `response_format`，两者按协议区分 | [协议对照](https://docs.x.ai/developers/model-capabilities/text/comparison)、[结构化输出的 Responses 示例](https://docs.x.ai/developers/model-capabilities/text/structured-outputs) |
+
+Gemini 已推荐 Interactions，GenerateContent 仍受支持。Ash 当前 Google 生成接入使用 OpenAI 兼容 Chat Completions，因此还要独立描述它的 `messages`、`reasoning_effort` 和兼容接口约束；上表的两套 Google 字段不能直接送到该接入。[官方接口选择](https://ai.google.dev/gemini-api/docs/interactions-overview)、[兼容接口](https://ai.google.dev/gemini-api/docs/openai)
+
+JSON 对象输出和按 JSON Schema 约束输出是两种能力。参数 schema、响应 schema 的支持子集也要分别记录；“支持 JSON”不能推出支持任意 schema。Claude 官方明确区分响应格式约束与工具 `strict`，并列出 schema 限制。[Claude 结构化输出](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+
+### 2.2 思考模式、深度、预算和返回内容
+
+| 家族 | 模式与深度字段 | 数值思考预算 | 思考内容与历史 | 必须保留的型号差异 |
+| --- | --- | --- | --- | --- |
+| GPT | Responses `reasoning.effort`；允许值、默认值按型号 | 不把 effort 换算成固定 token 数 | 摘要和继续对话所需的不透明内容分别声明 | GPT-6 Astra 不接受 `none`；不能给整个 GPT 家族一个通用关闭开关。[推理指南](https://developers.openai.com/api/docs/guides/reasoning) |
+| Claude | `thinking.type`、`output_config.effort` | 较早的扩展思考型号使用 `thinking.budget_tokens` | 思考块及签名按协议要求保存、重放 | Opus 5.5 自适应思考常开；Sonnet 5.5 的 `between_tools` 只适用于 `low/medium/high`。[Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking)、[Effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
+| Gemini | Interactions `generation_config.thinking_level`；GenerateContent `generationConfig.thinkingConfig.thinkingLevel` | Gemini 2.5 的 GenerateContent 使用 `thinkingBudget`；取值语义按型号 | Interactions `generation_config.thinking_summaries`；GenerateContent `generationConfig.thinkingConfig.includeThoughts`；摘要与思考签名分开处理 | Gemini 3 与 2.5 的控制不同；`minimal` 不能统一解释成关闭。[思考指南](https://ai.google.dev/gemini-api/docs/generate-content/thinking)、[Interactions reference](https://ai.google.dev/api/interactions-api) |
+| GLM | `thinking.type`、顶层 `reasoning_effort` | 当前引用不提供可普遍套用的独立 budget 字段 | `reasoning_content`；`thinking.clear_thinking` 控制历史保留 | GLM-5.3 只允许开启，深度为 `low/high/max`；5.2 还接受会映射为其他行为的兼容值。[型号迁移规则](https://docs.z.ai/guides/overview/migrate-to-glm-new) |
+| Kimi | K3 顶层 `reasoning_effort`；K2.x 使用 `thinking` | 当前引用不提供通用独立 budget 字段 | Preserved Thinking 要求原样返回完整 assistant 消息，包括 `reasoning_content` | K3 为 `low/high/max`、默认 `max`、思考常开；K2.6 可关闭；K2.7 Code 常开。[型号参数](https://platform.kimi.ai/docs/api/models-overview)、[思考历史](https://platform.kimi.ai/docs/guide/use-thinking-models) |
+| Grok | Responses `reasoning.effort`；SDK 示例也会出现 `reasoning_effort` | 当前引用不提供通用独立 budget 字段 | Responses `reasoning.encrypted_content` 是不透明历史；Chat 接口不返回对应密文 | 4.6/4.7 有 `xhigh`，4.5 的有效深度只有 `low/medium/high`；不可关闭。[推理指南](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
+
+必须分别描述四件事：是否思考、投入多深、允许用多少 token、是否返回摘要或历史凭据。同名 effort 不保证跨型号、跨厂商有相同投入。思考预算和整次响应预算还要描述共享关系，避免把推理 token 与可见输出预算重复计算。
+
+Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头的逐消息 effort 变更协议。不能把这类专门的 `role=system` 消息当成普通系统文本，也不能只靠一个“支持 system role”布尔值描述。[逐消息 effort](https://platform.claude.com/docs/en/build-with-claude/effort)
+
+### 2.3 约束实例：单个布尔值无法表达
+
+| 官方规则 | 模板需要记录什么 |
+| --- | --- |
+| Kimi K3 温度固定为 1、`top_p` 固定为 0.95，其他值报错；K2.6 的固定温度随思考模式变化 | `mutability=fixed`、固定值、模式条件、非法值处理；固定参数通常省略发送。[参数表](https://platform.kimi.ai/docs/api/models-overview) |
+| GLM `do_sample=false` 时 `temperature/top_p` 失效 | 参数之间的条件和 `ignored` 行为；官方 `stop` 正文与 schema 数量限制还存在差异，填入前需核实，不能挑较宽的限制。[Chat reference](https://docs.z.ai/api-reference/llm/chat-completion) |
+| Grok 推理模型拒绝 presence/frequency penalty 和 stop | 所选型号＋协议的明确拒绝规则；传值前报错。[Reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
+| Claude Sonnet 5.5 在 `between_tools` 下不允许会话中变更 effort | 模式与 effort 的允许组合，以及跨轮变更限制。[Effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
+| Kimi K3 支持 `tool_choice=required`，K2.6 和 K2.7 Code 不支持 | 型号级枚举，不能在厂商级统一开启 required。[参数表](https://platform.kimi.ai/docs/api/models-overview) |
+| Google 接口 schema 说明部分参数并非每个型号都能配置 | 接口字段声明与型号可用集合分别保存。[GenerationConfig](https://ai.google.dev/api/generate-content) |
+
+### 2.4 缓存、会话和加速
+
+这些能力属于具体接入操作，不能统一缩成 `cache=true` 或 `fast=true`。
+
+| 能力 | 已核对的官方差异 | 模板要求 |
+| --- | --- | --- |
+| 缓存控制 | OpenAI 新型号有 `prompt_cache_options` 与显式断点；Claude 有内容块 `cache_control`；Google GenerateContent 使用 `cachedContent` 引用 | 区分自动缓存、显式断点、缓存资源；分别记录 TTL、断点数量和操作范围。[OpenAI reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)、[Claude Messages](https://platform.claude.com/docs/en/api/messages/create)、[Google reference](https://ai.google.dev/api/generate-content) |
+| 状态保存 | Grok Responses 使用 `store`、`previous_response_id`；Gemini Interactions 使用 `store`、`previous_interaction_id` | 保存开关、关联 ID、历史重放与保留期限分别声明；缓存不是会话存储。[xAI 对照](https://docs.x.ai/developers/model-capabilities/text/comparison)、[Gemini 概览](https://ai.google.dev/gemini-api/docs/interactions-overview) |
+| 加速 | xAI `service_tier=priority` 是调度等级，响应报告实际等级；Kimi Highspeed 是不同模型 ID | 分开记录请求等级、响应实际等级、型号切换；不得由名字含 Flash 推出可切换 Fast。[xAI Priority](https://docs.x.ai/developers/advanced-api-usage/priority-processing)、[Kimi 型号规则](https://platform.kimi.ai/docs/api/models-overview) |
+| 传输 | xAI Responses 有单独 WebSocket 协议；Google Live 与文本生成是独立操作 | HTTP、SSE、WebSocket、实时语音分别绑定协议和凭据范围；不能由 HTTP 兼容推导 WebSocket。[xAI WebSocket](https://docs.x.ai/developers/advanced-api-usage/websocket-mode)、[Google Live](https://ai.google.dev/api/live) |
+
+## 3. 通用字段目录
+
+以下是建议覆盖的语义范围。各字段组的支持状态独立维护；无证据的属性省略具体值，并保留 `unknown`。字段名是提案，不是第二份手写 Rust 类型定义或现有 JSON Schema。
+
+### 3.1 模型事实
+
+| 字段组 | 建议字段 | 含义与边界 |
+| --- | --- | --- |
+| 身份 | `vendor_id`、`model_id`、`display_name`、`family`、`version` | 保留准确上游身份；别名与实际返回型号分开 |
+| 生命周期 | `lifecycle.status`、`released_at`、`deprecated_at`、`retired_at`、`replacement` | 日期仅填官方确认值；替代型号不触发自动换模 |
+| token 规格 | `limits.context_tokens`、`max_input_tokens`、`max_output_tokens`、`budget_semantics` | 上下文容量、输入上限、响应上限独立；写清推理、工具参数是否计入响应预算 |
+| 输入 | `input.modalities`、`media_constraints`、`instruction_channels`、`assistant_prefill` | text/image/audio/video/document；文件格式、尺寸、数量、时长；系统指导承载方式 |
+| 输出 | `output.modalities`、`modality_combinations` | 能否输出音频或图像与输入能力分开；记录允许同时请求的组合 |
+| 证据 | `evidence` | 每组值对应官方链接、型号/接口/区域、文档版本、复核日期和验证状态 |
+
+文件上传接口接收 PDF，不自动说明模型支持整份文档的所有页数、视觉内容或同一种计数方式。图片细节等级、视频帧处理、音频时长与文件资源生命周期都由所选接入补充。
+
+### 3.2 参数与能力约束
+
+| 字段组 | 建议字段 | 需要描述的规则 |
+| --- | --- | --- |
+| 思考 | `reasoning.mode`、`effort`、`token_budget`、`summary`、`history`、`change_scope` | 模式、真实深度、预算、返回内容、历史保留、跨轮修改条件各自独立 |
+| 采样 | `sampling.temperature`、`top_p`、`top_k`、`seed`、`presence_penalty`、`frequency_penalty`、`enabled` | 范围、固定值、默认值、互斥/失效条件；seed 不声明成确定性保证 |
+| 停止与候选 | `generation.stop_sequences`、`candidate_count`、`logprobs`、`top_logprobs` | 个数/长度限制、联动条件、推理模式限制 |
+| 输出格式 | `output.format`、`schema_profile`、`verbosity` | text、JSON 对象、JSON Schema、模态格式；schema 支持子集与普通文本长度控制分开 |
+| 客户端工具 | `tools.function_calling`、`choice`、`parallel_calls`、`strict_arguments`、`schema_profile`、`limits` | 允许选择的模式、指定函数、调用数量/名称长度、参数结构、并行开关 |
+| 工具历史 | `tools.history`、`result_modalities`、`call_id_policy` | Call/Result 配对、返回角色/内容块、必须保留的推理信息、工具错误表达 |
+| 托管工具 | `server_tools` | 检索、执行、MCP 等逐工具注册；厂商工具名称、版本与访问权限由接入绑定 |
+| 缓存 | `cache.automatic`、`explicit_breakpoints`、`resource_reference`、`ttl`、`invalidation` | 三种机制不合并；说明哪些字段变化会影响缓存 |
+| 会话 | `state.store`、`continuation`、`history_replay`、`compaction` | 存储默认、保留期限、前序引用、摘要/签名/密文重放、服务端压缩操作 |
+| 服务等级 | `execution.service_tiers`、`speed`、`accelerated_model`、`background` | 调度等级、速度参数、型号切换分别描述；后台执行与流式返回独立 |
+
+### 3.3 接入和响应契约
+
+| 字段组 | 建议字段 | 归属与作用 |
+| --- | --- | --- |
+| 操作绑定 | `connection_id`、`protocol`、`api_version`、`operation`、`model_binding`、`required_headers` | 模型＋接入＋操作的唯一身份；区分 URL 模型 ID 与 body 字段，不保存秘密 |
+| 参数映射 | `parameter_bindings`、`value_mappings`、`conditional_rules` | 保留字段路径与文档化值映射；由有类型的 codec 执行，JSON 不编写任意转换脚本 |
+| 流式 | `transport`、`stream.events`、`termination`、`usage_delivery` | 帧协议、增量类型、成功终止证据、何时报告完整 usage |
+| token 计数 | `token_count.operation`、`accuracy`、`coverage` | 生成前计数是否涵盖工具、模态、系统指导；完成后的 usage 不能代替计数操作 |
+| 用量 | `usage.input`、`output`、`reasoning`、`cache_read`、`cache_write`、`accounting_semantics` | 原始字段位置、包含关系和未知值；不把 reasoning 再加到已含它的 output |
+| 完成原因 | `finish_reasons`、`incomplete_reasons`、`tool_continuation` | 正常结束、预算用尽、工具等待、拒绝等与协议事件对应 |
+| 错误 | `errors.parameter_rejection`、`rate_limit`、`retry_after`、`request_id` | 记录协议能提供的证据；实际重试与取消由调用负责方执行 |
+
+账户 RPM/TPM 配额、已用量、当前额度和实时模型可用性是运行时数据，不写死进模型事实。价格使用独立、带日期的计价记录，见 [计价设计](../../docs/model-accounting.md)。
+
+## 4. 参数描述器
+
+每个可配置参数复用一种描述器，减少重复，又保留限制。`unknown` 与 `unsupported` 有不同含义：前者尚无足够证据，后者已确认不能使用。
+
+| 属性 | 建议类型 | 规则 |
+| --- | --- | --- |
+| `support` | `supported / unsupported / unknown` | 支持状态，不能由字段缺省推导“不支持” |
+| `value_type` | 有类型的值类别 | boolean、integer、number、enum、schema 等 |
+| `mutability` | `configurable / fixed` | 固定参数仍有有效值，但界面不能提供可调滑块 |
+| `allowed_values`／`range`／`fixed_value` | 枚举、边界或固定值 | 范围含单位与开闭边界；三者按类型选择 |
+| `upstream_default` | 已确认的值 | 官方未声明时省略；与 Ash 偏好分开 |
+| `required` | boolean 或有类型条件 | 例如 Messages 的输出上限必填 |
+| `conditions` | 参数路径＋操作符＋有类型值 | 描述模式、其他参数、协议版本与 beta 头限制 |
+| `invalid_value_behavior` | `reject / ignored / documented_mapping` | 区分错误、无效和明确的兼容映射 |
+| `change_scope` | 请求/轮次/会话约束 | 说明是否可在会话中修改以及历史影响 |
+| `evidence` | 证据 ID 列表 | 约束、默认值和支持范围均有对应来源 |
+
+描述器不允许用通用 `extra_body` 或任意 JSON 覆盖绕过校验。文档化映射必须明确列出接受值和最终行为；“接受七个字符串”不等于“七个深度”。参数未知时不能给用户显示已验证的开关；用户明确选择不受支持的值，应在请求前解释原因，不静默丢弃或换成另一个值。
+
+## 5. JSON 结构示例
+
+以下以 Kimi K3 的少量已确认字段展示结构。它是**提案示例**，不是可直接替换当前 `models.json` 的条目。未确认的媒体限制、输出预算计数细节及其他参数继续保持未知。
+
+```json
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "vendor_id": "kimi",
+      "model_id": "kimi-k3",
+      "display_name": "Kimi K3",
+      "reasoning": {
+        "mode": {
+          "support": "supported",
+          "value_type": "enum",
+          "mutability": "fixed",
+          "fixed_value": "enabled",
+          "evidence": ["kimi-parameters-2026-10-05"]
+        },
+        "effort": {
+          "support": "supported",
+          "value_type": "enum",
+          "mutability": "configurable",
+          "allowed_values": ["low", "high", "max"],
+          "upstream_default": "max",
+          "invalid_value_behavior": "reject",
+          "evidence": ["kimi-parameters-2026-10-05"]
+        },
+        "history": {
+          "support": "supported",
+          "policy": "preserve_complete_assistant_message",
+          "evidence": ["kimi-thinking-2026-10-05"]
+        }
+      },
+      "sampling": {
+        "temperature": {
+          "support": "supported",
+          "value_type": "number",
+          "mutability": "fixed",
+          "fixed_value": 1.0,
+          "invalid_value_behavior": "reject",
+          "evidence": ["kimi-parameters-2026-10-05"]
+        }
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "vendor_id": "kimi",
+      "model_id": "kimi-k3",
+      "connection_id": "kimi",
+      "protocol": "kimi_chat_completions",
+      "api_version": "v1",
+      "operation": "generate",
+      "parameter_bindings": {
+        "reasoning.effort": {
+          "request_path": ["reasoning_effort"],
+          "encoding": "enum_identity"
+        }
+      },
+      "history_codec": "kimi_preserved_thinking",
+      "evidence": ["kimi-chat-2026-10-05"]
+    }
+  ],
+  "evidence": {
+    "kimi-parameters-2026-10-05": {
+      "url": "https://platform.kimi.ai/docs/api/models-overview",
+      "reviewed_at": "2026-10-05",
+      "scope": {"model_id": "kimi-k3", "protocol": "kimi_chat_completions"},
+      "verification": "official_documentation"
+    },
+    "kimi-thinking-2026-10-05": {
+      "url": "https://platform.kimi.ai/docs/guide/use-thinking-models",
+      "reviewed_at": "2026-10-05",
+      "verification": "official_documentation"
+    },
+    "kimi-chat-2026-10-05": {
+      "url": "https://platform.kimi.ai/docs/api/chat",
+      "reviewed_at": "2026-10-05",
+      "verification": "official_documentation"
+    }
+  }
+}
+```
+
+示例把声明和绑定并列展示，便于阅读；长期存储仍按第 1 节职责归属。`enum_identity` 与 `history_codec` 表示协议层注册的有类型行为，不能把普通字符串当作可执行代码。`host_policy` 和 `instructions` 独立维护，不因 API 中存在同名字段而混在一起。
+
+证据至少区分官方文档、脱敏协议测试和真实服务验证。查到文档只能证明来源；本次未持有六家账户逐个实连，也未验证所有旧型号和区域组合。厂商总表的参数全集不能直接复制成每个型号的能力。
+
+## 6. Ash 策略与提示词模板
+
+| 内容 | 建议结构 | 如何生效 |
+| --- | --- | --- |
+| 执行预算 | `host_policy.context_options`、`default_context_tokens` | Ash 选择本次预算，受模型/接入容量约束 |
+| 自动压缩 | `host_policy.auto_compact_token_limit` | Core 使用预算阈值；区别于厂商压缩 API |
+| 工具输出限额 | `host_policy.tool_output_limit`，带计量方法和单位 | 保留完整原始结果，限制给模型的文本；当前 token 限额使用 UTF-8 字节近似，不能标为准确计数 |
+| 请求偏好 | `host_policy.request_defaults` | Ash 默认 effort/verbosity 等必须通过所选接入校验；不改写官方默认值 |
+| 基础指导 | `instructions.revision`、`instructions.body` | 模型专用完整正文，按新 Turn 冻结；不保存账户、工具清单或本次项目状态 |
+
+基础正文可以统一包含工作目标、工具和结果使用、编辑与验证、权限边界、任务完成和报告规则。型号专用指导只写有官方依据或评测证据的差异。Role、权限、项目指令、动态工具和用户当前任务由运行时加入；提示词不能开启推理档位、扩大 API 上限或授予工具权限。现有规则见 [Agent 指令设计](../../docs/agent-instructions.md)。
+
+## 7. 与当前 Ash 的逐项缺口
+
+当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/settings.rs) 和 [接入定义](../src/definition.rs) 为准。后续落地应从 Rust 契约生成 JSON Schema 和 TypeScript 类型，避免另建一份手工 schema。
+
+| 范围 | 当前状态 | 规范要求补充 |
+| --- | --- | --- |
+| 身份与基础正文 | 已有准确身份、显示名、完整提示词和 revision | 字段级来源、适用型号/接入版本与复核状态 |
+| 上下文 | 已有容量、执行预算选项、压缩阈值 | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组 |
+| 模态 | `ModelSettings` 有 text/image/audio 输入列表 | video/document、输出模态、组合、媒体限制与操作范围 |
+| 推理 | 已有支持档位与默认档位 | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则 |
+| 请求设置 | 已有 verbosity、摘要、服务等级支持与默认值 | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
+| 工具 | 已有工具和并行能力标记、工具输出预算 | 工具选择、strict、schema 子集、数量限制、结果/历史协议 |
+| 接入 | 已有 API profile、独立流式/语音协议、计数声明 | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入 |
+| 缓存与状态 | 协议实现已有部分缓存、会话行为 | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义 |
+
+完整性的检查单位是“实际能否按正确条件构造请求并解析结果”。Codex 的展示顺序、升级提示、搜索工具选择等还包含自身产品策略；这些字段要有 Ash 的明确负责方和调用用途，不能为了增加行数照抄。
+
+## 8. 落地时的验证要求
+
+1. 同一语义只定义一份 Rust 契约；静态 JSON、动态模型信息与插件声明在各自入口校验。
+2. 每个接入用本地协议测试证明字段路径、文档化值映射、必填项和合法组合。默认值不得超过范围；未知字段、冲突配置和不支持的用户值在发送前失败。
+3. 工具往返测试保留 Call/Result ID、顺序和厂商要求的思考历史；签名或密文不得由文本摘要替代。
+4. 流式测试覆盖完整终止、预算用尽、工具等待、取消、错误和最终 usage；零用量与未知用量分别表达。
+5. 界面与 TUI 只提供有效可配置项；固定温度、不能关闭的思考模式和不支持的服务等级都按声明呈现。切换模型不能带入旧型号的非法设置。
+6. 真实服务验证单独记录接入、型号、版本、日期和脱敏结果；本地 schema 与请求测试不能证明账户权益或模型质量。

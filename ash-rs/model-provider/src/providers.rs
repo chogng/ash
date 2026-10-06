@@ -16,15 +16,11 @@ use std::sync::Arc;
 mod anthropic;
 mod deepseek;
 mod google;
-mod huggingface;
 mod kimi;
 pub(crate) mod measurement;
-mod mimo;
-mod minimax;
 mod ollama;
 mod openai;
 mod openai_compatible;
-mod qwen;
 pub(crate) mod start_plan;
 mod xai;
 mod zai;
@@ -76,16 +72,10 @@ pub(crate) fn instantiate(
         ProviderAdapterKind::Anthropic => runtime_adapter(anthropic::AnthropicAdapter::new(config)),
         ProviderAdapterKind::Google => runtime_adapter(google::GoogleAdapter::new(config)),
         ProviderAdapterKind::Xai => runtime_adapter(xai::XaiAdapter::new(config)),
-        ProviderAdapterKind::Qwen => runtime_adapter(qwen::QwenAdapter::new(config)),
         ProviderAdapterKind::Kimi => runtime_adapter(kimi::KimiAdapter::new(config)),
         ProviderAdapterKind::DeepSeek => runtime_adapter(deepseek::DeepSeekAdapter::new(config)),
         ProviderAdapterKind::Ollama => runtime_adapter(ollama::OllamaAdapter::new(config)),
-        ProviderAdapterKind::HuggingFace => {
-            runtime_adapter(huggingface::HuggingFaceAdapter::new(config))
-        }
         ProviderAdapterKind::Zai => runtime_adapter(zai::ZaiAdapter::new(config)),
-        ProviderAdapterKind::MiniMax => runtime_adapter(minimax::MiniMaxAdapter::new(config)),
-        ProviderAdapterKind::Mimo => runtime_adapter(mimo::MimoAdapter::new(config)),
     }
 }
 

@@ -55,8 +55,6 @@ model provider 负责“如何用已选模型执行一次调用”
 - OpenAI、DeepSeek 一类接口主要返回 ID、owner、created 等基础信息；
 - Anthropic、Gemini、xAI 能返回部分或较丰富的 capability、token limit、modality、
   alias 或 pricing metadata；
-- Hugging Face 的 Hub catalog、Inference Providers router 和实际下游 provider 是不同 scope，
-  coverage 需要单独声明；
 - 一些 provider 目前只有官方静态模型矩阵，没有文档化的 runtime catalog endpoint；
 - OpenAI-compatible 自定义服务对 `GET /models` 的支持和字段质量都不能假定。
 
@@ -248,8 +246,7 @@ Provider definition 应显式声明 discovery strategy 或由具体 adapter 解�
 - normalized base URL 和 region；
 - credential account、organization、project 或 tenant；
 - provider 配置 revision；
-- 本地 Ollama daemon 或自定义 gateway 实例；
-- Hugging Face 的 provider routing/account 权限。
+- 本地 Ollama daemon 或自定义 gateway 实例。
 
 因此 cache key 不能只是 `ProviderId`：
 
@@ -374,11 +371,7 @@ App Server、Desktop 和 contract tests 比较。
 | Kimi | Unknown/StaticOnly | 当前可访问的[官方平台文档](https://platform.moonshot.ai/docs/)未确认本设计所需的 authenticated list contract | `Unknown` | 使用 curated metadata；取得官方 reference/fixture 前不猜 `/models` |
 | DeepSeek | Hybrid | [`GET /models`](https://api-docs.deepseek.com/api/list-models) | 基础 ID、owner | 动态 availability + 内置能力 metadata |
 | Ollama | Dynamic local | [`GET /api/tags`](https://docs.ollama.com/api/tags) + 按需 `/api/show` | 本地已安装模型、family、size、quantization；详情可补 template/model info/capability | 高频短 TTL；只对可见候选按需取详情 |
-| Hugging Face | Dynamic/Hybrid | [Router `GET /v1/models`](https://huggingface.co/docs/inference-providers/hub-api) | modality、live provider、context、tools、structured output、价格/延迟等 | 过滤 conversational/live route，限制结果规模 |
-| MiniMax | StaticOnly（待核实） | [官方 models guide](https://platform.minimax.io/docs/guides/models-intro) | 静态模型、feature 和 endpoint 信息 | 未确认 authenticated list API 前不猜 `/models` |
-| Qwen / Model Studio | StaticOnly（待核实） | [官方模型矩阵](https://help.aliyun.com/en/model-studio/models) | region、API surface、模型能力由静态文档描述 | 未确认官方 inference list 前不假定 `/models` |
 | Z.AI | StaticOnly（待核实） | [官方模型矩阵](https://docs.z.ai/guides/overview/overview) | 模型类型、context 和能力由静态文档描述 | 动态 endpoint 需官方文档确认 |
-| Xiaomi MiMo | Unknown/StaticOnly | 当前未找到可访问、可核对的官方网络协议 reference | `Unknown` | 仅使用已审阅的 configured metadata；动态 endpoint 需官方文档确认 |
 | OpenAI-compatible | Unknown/Hybrid | best-effort `GET /models` | 完全取决于 gateway | adapter capability 检测；失败后转静态/用户配置 |
 
 该表只说明“可从哪里发现什么”，不把某个具体 model ID 固化成架构。内置 metadata 需要带
@@ -1022,8 +1015,8 @@ model/list(stale)
 1. OpenAI、Anthropic；
 2. Gemini、DeepSeek；
 3. ✅ Ollama；
-4. xAI、Hugging Face；
-5. Kimi、MiniMax、Qwen、Z.AI、MiMo 等先使用 curated/static source，在有官方、可验证
+4. xAI；
+5. Kimi、Z.AI 等先使用 curated/static source，在有官方、可验证
    authenticated endpoint 后再接动态 discovery。
 
 每接入一个 provider，先建立第 6.2 节的验证记录，再实现 adapter。同时把 wire DTO/fixture 放到

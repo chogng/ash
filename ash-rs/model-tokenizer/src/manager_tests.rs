@@ -138,7 +138,7 @@ fn failed_download_stays_unavailable_instead_of_retrying_every_request() {
 #[test]
 fn lru_evicts_only_memory_and_reloads_the_disk_asset_without_downloading() {
     let fixture = ManagedFixture::new();
-    let second_model = model_ref("huggingface", "org/second");
+    let second_model = model_ref("local", "org/second");
     let mut catalog = TokenizerAssetCatalog::new();
     catalog
         .register(fixture.manifest(fixture.model.clone()))
@@ -279,7 +279,7 @@ impl ManagedFixture {
         .unwrap();
         Self {
             cache: tempfile::tempdir().unwrap(),
-            model: model_ref("huggingface", "org/model"),
+            model: model_ref("local", "org/model"),
             tokenizer,
             template,
         }

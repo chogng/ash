@@ -142,6 +142,8 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 
 ## 统一静态模型清单
 
+六家官方接口对照、通用字段结构和当前缺口见 [通用模型声明规范](docs/model-template.md)。该文档是设计建议；当前可解析字段仍以本节和 Rust 契约为准。
+
 产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和完整的 `instructions.body`，每个模型的正文与 revision 可以独立修改。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
 
 ```json

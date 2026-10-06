@@ -79,7 +79,19 @@ test('Model picker keeps search quiet and aligns menu rows and the chosen icon',
 	await expect(picker).toBeHidden();
 	await expect(page.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
 	const settings = page.locator('.ash-settings-editor');
-	for (const name of ['Gemini 3.8 Flash', 'Qwen 3.8 Max', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3']) {
+	for (const name of ['Qwen 3.8 Max', 'MiMo V2.6 Pro', 'MiniMax M3']) {
+		await expect(settings.getByRole('switch', { name: `Show ${name} in model picker`, exact: true })).toHaveCount(0);
+	}
+	for (const name of ['Gemini 3.8 Flash', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3']) {
+		const show = settings.getByRole('switch', { name: `Show ${name} in model picker`, exact: true });
+		await show.focus();
+		await show.press('Space');
+		await expect(show).not.toHaveAttribute('aria-busy', 'true');
+		await expect(show).toBeChecked();
+	}
+	// Enable enough rows to verify menu alignment with a visible scrollbar.
+	await settings.getByRole('button', { name: 'viewall models', exact: true }).click();
+	for (const name of ['Gemini 3.7 Flash', 'GLM-5.2']) {
 		const show = settings.getByRole('switch', { name: `Show ${name} in model picker`, exact: true });
 		await show.focus();
 		await show.press('Space');
@@ -372,7 +384,10 @@ test('Advisor settings and direct questions use one chat command', async ({ targ
 	await expect(picker).toBeVisible();
 	await expect(picker.getByPlaceholder('Choose an advisor model or open all settings')).toBeVisible();
 	await expect(picker.getByText('Manage Model Connections')).toBeVisible();
-	await expect(picker.getByText('GPT-5.6 Sol', { exact: true })).toBeVisible();
+	await expect(picker.getByText('GPT-6.1 Sol', { exact: true })).toBeVisible();
+	for (const name of ['Qwen 3.8 Max', 'MiMo V2.6 Pro', 'MiniMax M3']) {
+		await expect(picker.getByText(name, { exact: true })).toHaveCount(0);
+	}
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await command('/advisor Check cancellation');

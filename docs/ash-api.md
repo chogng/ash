@@ -336,7 +336,6 @@ Provider-specific wire quirk 的实现仍属于 API 协议层，例如：
 - DeepSeek SSE comment heartbeat；
 - Anthropic `ping` 和 content block lifecycle；
 - Z.AI HTTP/business error 双层状态；
-- MiniMax `base_resp`；
 - Ollama NDJSON `done`/`error`。
 
 但选择哪个 quirk/profile 的责任属于 model-provider。`ash-api` 不通过 Provider ID、URL 或 model
@@ -349,9 +348,7 @@ pub enum OpenAiChatProfile {
     Baseline,
     DeepSeek,
     Xai,
-    QwenCompatible,
     Zai,
-    MiniMax,
 }
 ```
 
@@ -515,7 +512,7 @@ Prompt cache 的 wire 语义属于 `requests/`：
 - Anthropic 当前把 tools、system 和 canonical 可复用输入前缀映射为 ephemeral `cache_control`，并解析 creation/read usage；
 - Gemini implicit cache 和 explicit cached-content reference；
 - xAI Chat header 与 Responses body key 的差异；
-- DeepSeek/Qwen/Z.AI 自动缓存 usage。
+- DeepSeek/Z.AI 自动缓存 usage。
 
 统一 usage 不是对 wire 字段做同名复制：`input_tokens` 表示包含缓存读取与缓存写入的总输入，
 `cached_input_tokens` 表示缓存读取，`cache_write_input_tokens` 表示缓存写入。OpenAI Responses 的
@@ -649,7 +646,7 @@ ash-rs/ash-api/src/
 
 ## 14. 供应商/配置档案验证矩阵
 
-以下是当前 Rust 调用路径，不将厂商提供但 Ash 尚未实现的接口列为已支持。统一契约测试覆盖全部 13 个内置 provider，真实服务验证单独记录。
+以下是当前 Rust 调用路径，不将厂商提供但 Ash 尚未实现的接口列为已支持。统一契约测试覆盖内置 provider，真实服务验证单独记录。
 
 | 通道 | 当前生成协议／认证 | 特有头或边界 | 本轮验证 |
 | --- | --- | --- | --- |
@@ -657,16 +654,12 @@ ash-rs/ash-api/src/
 | ChatGPT 订阅 | ChatGptResponses / OAuth | session-id；省略显式断点，拒绝计数 | Luna／low 实连、契约 |
 | Anthropic API key | Messages / x-api-key | anthropic-version=2023-06-01；不自动添加 beta | 官方契约、传输 |
 | Google | 兼容 Chat / Bearer | x-goog-api-client；countTokens 独立使用 x-goog-api-key | 官方契约、传输 |
-| xAI | XaiChatCompletions / Bearer | x-grok-conv-id；Responses 则使用 body cache key | 官方契约、传输 |
-| Qwen | 兼容 Chat / Bearer | 不混入 DashScope 专用 SSE 头 | 官方示例、传输 |
+| xAI | Responses / Bearer | API 与订阅代理使用独立认证 target；Chat 协议的头不自动用于 Responses | 官方契约、传输 |
 | DeepSeek | Chat / Bearer | hit/miss 用量与通用 Chat 分开解析 | 官方示例、传输 |
 | Kimi Open Platform | Chat / Bearer | 与 Kimi Code OAuth 分开 | 官方示例、传输 |
 | Kimi Code | Chat / OAuth | 设备和客户端标识由登录能力提供 | 本地登录／传输契约，未实连 |
 | Ollama | 本地兼容 Chat / 无认证 | 不继承保存的远端 API key | 本地契约、传输 |
-| Hugging Face | 路由 Chat / Bearer | router 契约不代表所有下游已验证 | 官方示例、传输 |
 | Z.AI | 兼容 Chat / Bearer | 保留语言偏好；tokenizer 为独立操作 | 既有契约、传输，未新增实连 |
-| MiniMax | 兼容 Chat / Bearer | 不由兼容标签启用 Anthropic 接口 | 官方示例、传输 |
-| MiMo | 兼容 Chat / Bearer（官方 SDK 示例） | 官方 curl 也展示 api-key；不据此判定 Bearer 无效 | 官方示例、传输 |
 | 自定义兼容端点 | 按配置选择协议／凭据 | 不根据 URL 或模型名继承订阅能力 | 契约、真实本地 HTTP |
 
 本轮修正了共享 JSON/SSE 请求头缺失、Google 生成与计数认证混用、xAI Chat 未映射缓存分组的问题。API 不读取密钥存储；credential service 从同一次密钥读取分别生成两个操作的认证头，计数不再搬用完整的生成 target。
@@ -677,7 +670,7 @@ ash-rs/ash-api/src/
 - Anthropic：[API overview](https://platform.claude.com/docs/en/api/overview)。现有 x-api-key 仍受支持；多 workspace key 需要额外 workspace 选择，当前配置没有该能力，不能宣称此类账户已覆盖。
 - Google：[OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai)、[API keys](https://ai.google.dev/gemini-api/docs/api-key)、[countTokens](https://ai.google.dev/api/tokens)。生成兼容接口与标准计数接口分别验证。
 - xAI：[Maximizing Cache Hits](https://docs.x.ai/developers/advanced-api-usage/prompt-caching/maximizing-cache-hits)。Chat 请求头和 Responses body 参数明确区分。
-- [DeepSeek](https://api-docs.deepseek.com/)、[Kimi](https://platform.kimi.ai/docs/api/overview)、[Qwen](https://docs.modelstudio.console.alibabacloud.com/en/model-studio/qwen-api-reference)、[Hugging Face](https://huggingface.co/docs/inference-providers/en/index)、[MiniMax](https://platform.minimax.io/docs/api-reference/text-chat-openai)、[MiMo](https://mimo.mi.com/docs/en-US/quick-start/summary/first-api-call)提供各自认证和端点示例。
+- [DeepSeek](https://api-docs.deepseek.com/)、[Kimi](https://platform.kimi.ai/docs/api/overview)提供各自认证和端点示例。
 - Zed 本地检出 `dfec59fb1c8e`：`crates/open_ai/src/open_ai.rs`、`crates/anthropic/src/anthropic.rs` 在 API 模块组装头；`open_ai/src/chat_completion_transport_tests.rs` 检查 method、URI、认证、自定义头。这种职责和测试方式可复用，具体字段仍以供应商来源为准。
 - [Warp BYOLLM/BYOK](https://docs.warp.dev/enterprise/enterprise-features/bring-your-own-llm)区分直连 key 和企业 IAM。工作区没有 Warp 源码，公开产品说明不足以验证具体请求头实现，不能替代供应商契约。
 
@@ -830,12 +823,6 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `ash-http-
 - [Prompt caching](https://docs.x.ai/developers/advanced-api-usage/prompt-caching)
 - [Model APIs](https://docs.x.ai/developers/rest-api-reference/inference/models)
 
-### Qwen / Alibaba Cloud 模型 Studio
-
-- [Streaming output](https://help.aliyun.com/en/model-studio/stream)
-- [Context cache](https://help.aliyun.com/en/model-studio/context-cache)
-- [Models and regional endpoints](https://help.aliyun.com/en/model-studio/models)
-
 ### DeepSeek
 
 - [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion)
@@ -852,11 +839,8 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `ash-http-
 
 ### 其他
 
-- [Hugging Face Chat Completion](https://huggingface.co/docs/inference-providers/tasks/chat-completion)
 - [Z.AI Chat Completion](https://docs.z.ai/api-reference/llm/chat-completion)
 - [Z.AI context caching](https://docs.z.ai/guides/capabilities/cache)
-- [MiniMax OpenAI-compatible API](https://platform.minimax.io/docs/api-reference/text-openai-api)
-- [MiniMax Anthropic-compatible API](https://platform.minimax.io/docs/api-reference/text-anthropic-api)
 
-Kimi 与 MiMo 保持 configured compatible endpoint，直到取得完整官方 streaming/cache/catalog
-reference 或经授权的脱敏 contract fixture。
+Kimi 公共 API 使用 Chat Completions 和 `https://api.moonshot.ai/v1`；Kimi Code、Desktop 与 CLI
+连接各自声明端点和凭据。型号参数与思考历史的官方依据见[通用模型声明规范](../ash-rs/model-provider-info/docs/model-template.md)。

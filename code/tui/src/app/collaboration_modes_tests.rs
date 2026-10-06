@@ -927,6 +927,7 @@ fn effort_data() -> crate::models::ModelPickerData {
                 auto_compact_token_limit: None,
                 available_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
+                settings: Default::default(),
                 supported_reasoning_efforts: vec![
                     ReasoningEffort::Low,
                     ReasoningEffort::High,

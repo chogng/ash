@@ -1233,7 +1233,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			{ model: { provider: 'openai', model: 'older' }, displayName: 'Older OpenAI' },
 			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
 		],
-		listModelProviders: async () => ['openai', 'qwen', 'openai-compatible', 'huggingface'].map(connection => ({ connection, provider: connection, displayName: connection, apiKeyPolicy: 'required', apiKeyConfigured: true })),
+		listModelProviders: async () => ['openai', 'openai-compatible'].map(connection => ({ connection, provider: connection, displayName: connection, apiKeyPolicy: 'required', apiKeyConfigured: true })),
 		setModelPreferences: async () => {},
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,

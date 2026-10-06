@@ -195,10 +195,9 @@ credential binding 属于各自的后续适配工作。静态 invocation resolut
 caller-owned cancellation。所有 estimated endpoint 使用额外 1%/至少 32 tokens 的保守记账余量；这
 只是 Ash 的预算策略，不是 provider 承诺的硬上界。Google 对不能无损映射到 native request 的远程
 图片返回 unavailable；Kimi 当前带 tools/reasoning 的请求返回 unavailable；Z.AI 当前带 Tool
-Call/Result 历史的请求返回 unavailable。DeepSeek/Hugging Face 的本地 tokenizer adapter 已实现，
+Call/Result 历史的请求返回 unavailable。DeepSeek 的本地 tokenizer adapter 已实现，
 使用 2%/至少 64 tokens 的保守余量；宿主通过 `ModelProviderRuntime::with_local_tokenizers` 注入已经
-验证的 registry 或 manager。App Server 当前为 Hugging Face 公共 `owner/repo` 注入按需发现、下载、
-磁盘缓存和内存 LRU；其他 provider/model 仍需宿主提供固定资产清单。官方预检或本地计数的非取消
+验证的 registry 或 manager。App Server 注入带磁盘缓存和内存 LRU 的 manager；模型资产需由宿主提供固定清单。官方预检或本地计数的非取消
 错误不会中止真实模型调用，而是继续降级到下一计量来源。
 
 完整结果与增量调用共用 `Provider::execute_with_cancellation`，caller token 经 `ash-api` 传给

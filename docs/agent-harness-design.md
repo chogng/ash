@@ -308,7 +308,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 - `ash-context-engine` 已统一压力线、模型硬窗口、精准计量与带保守记账余量的估算结果；
 - 生产 planner 仍由 `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录
   revision；最终 request 接近压力线或 compaction 后会调用声明式 model binding 对应的 remote
-  preflight：OpenAI exact，Anthropic、Google、Kimi、Z.AI estimated；DeepSeek/Hugging Face 可按
+  preflight：OpenAI exact，Anthropic、Google、Kimi、Z.AI estimated；DeepSeek 可按
   exact model binding 使用带资产 revision 的本地整请求 tokenizer，其结果当前声明为 estimated；
 - 模型响应在输出验证、取消仲裁和 steering 仲裁之前写入 durable `ModelUsageRecorded`，因此
   空响应重试和被 steering 丢弃的响应仍分别计账；模型驱动的 compaction 在解析 summary 前通过

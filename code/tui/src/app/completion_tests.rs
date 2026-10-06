@@ -318,6 +318,7 @@ fn status_line_context_follows_thread_snapshots() {
                 auto_compact_token_limit: None,
                 available_context_window: Some(100),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
+                settings: Default::default(),
                 supported_reasoning_efforts: vec![],
                 model_reasoning_effort: None,
                 default_personality: None,

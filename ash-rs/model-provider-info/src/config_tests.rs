@@ -10,6 +10,29 @@ fn provider_id(value: &str) -> ProviderId {
 }
 
 #[test]
+fn retired_providers_are_absent_from_catalog_connections_and_invocation() {
+    let registry = ProviderConfigRegistry::builtin();
+    for name in ["qwen", "mimo", "minimax", "huggingface"] {
+        let provider = provider_id(name);
+        assert!(registry.get(&provider).is_none());
+        assert!(
+            registry
+                .connection(&ModelConnectionId::new(name).unwrap())
+                .is_none()
+        );
+        assert!(
+            STATIC_MODEL_CATALOG
+                .iter()
+                .all(|model| model.provider_id != name)
+        );
+        assert_eq!(
+            registry.normalize(&ModelProviderConfig::new(provider.clone())),
+            Err(ProviderConfigError::UnknownProvider(provider))
+        );
+    }
+}
+
+#[test]
 fn plugin_model_settings_are_validated_before_registry_commit() {
     let mut provider = definition("plugin", EndpointPolicy::ConfiguredOnly);
     let mut model = ash_protocol::ModelInfo::new(ModelId::new("test").unwrap(), "Test");
@@ -221,17 +244,13 @@ fn builtins_declare_websocket_protocol_without_inference_from_http_compatibility
         "anthropic",
         "google",
         "xai",
-        "qwen",
         "kimi",
         "deepseek",
         "ollama",
-        "huggingface",
         "bigmodel",
         "bigmodel-coding-plan",
         "zai",
         "zai-coding-plan",
-        "minimax",
-        "mimo",
     ] {
         assert_eq!(
             registry
@@ -551,8 +570,8 @@ fn registry_merge_has_explicit_conflict_semantics() {
 #[test]
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
-    assert_eq!(registry.providers().count(), 16);
-    assert_eq!(registry.connections().len(), 24);
+    assert_eq!(registry.providers().count(), 12);
+    assert_eq!(registry.connections().len(), 20);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi
@@ -673,16 +692,6 @@ fn static_catalog_exposes_only_model_specific_reasoning_levels() {
             ],
         ),
         (
-            "qwen",
-            "qwen3.8-max",
-            &[
-                ReasoningEffort::None,
-                ReasoningEffort::Low,
-                ReasoningEffort::Medium,
-                ReasoningEffort::ExtraHigh,
-            ],
-        ),
-        (
             "kimi",
             "kimi-k3",
             &[
@@ -715,9 +724,6 @@ fn static_catalog_exposes_only_model_specific_reasoning_levels() {
             ],
         ),
         ("anthropic", "claude-haiku-4-5-20251001", &[]),
-        ("qwen", "qwen3.7-max", &[]),
-        ("minimax", "MiniMax-M3", &[]),
-        ("mimo", "mimo-v2.6-pro", &[]),
     ];
     for &(provider, model, expected) in cases {
         let entry = STATIC_MODEL_CATALOG
@@ -799,14 +805,10 @@ fn builtin_catalog_includes_current_chat_model_families() {
         ("google", "gemini-3.8-flash"),
         ("google", "gemini-3.1-pro-preview"),
         ("xai", "grok-4.7"),
-        ("qwen", "qwen3.8-max"),
-        ("qwen", "qwen3-coder-next"),
         ("kimi", "kimi-k3"),
         ("deepseek", "deepseek-flash"),
         ("glm", "glm-5.3"),
         ("glm", "glm-5.2"),
-        ("minimax", "MiniMax-M3"),
-        ("mimo", "mimo-v2.6-pro"),
     ] {
         assert!(
             registry
@@ -1058,9 +1060,6 @@ fn fast_modes_use_the_selected_connection_and_upstream_model_contract() {
         ("anthropic", "claude-sonnet-4-6", "claude-sonnet-4-6"),
         ("google", "gemini-3.8-flash", "gemini-3.8-flash"),
         ("xai", "grok-4.7", "grok-4.7"),
-        ("minimax", "MiniMax-M2.7", "MiniMax-M2.7-highspeed"),
-        ("minimax", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"),
-        ("minimax", "MiniMax-M2.1", "MiniMax-M2.1-highspeed"),
         (
             "kimi-subscription",
             "kimi-k2.7-code",
@@ -1099,8 +1098,6 @@ fn fast_modes_use_the_selected_connection_and_upstream_model_contract() {
         ("kimi", "kimi-k2.7-code"),
         ("anthropic", "claude-fable-5-1"),
         ("deepseek", "deepseek-v4-pro"),
-        ("qwen", "qwen3.8-max"),
-        ("mimo", "mimo-v2.6-pro"),
         ("glm", "glm-5.3"),
     ] {
         let mut config =

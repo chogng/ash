@@ -6,37 +6,29 @@ mod anthropic;
 pub(super) mod bigmodel;
 mod deepseek;
 mod google;
-mod huggingface;
 mod kimi;
 mod meta;
-mod mimo;
-mod minimax;
 mod ollama;
 mod openai;
 mod openai_compatible;
-mod qwen;
 mod xai;
 pub(super) mod zai;
 
-pub(crate) fn builtin() -> [ProviderDefinition; 19] {
+pub(crate) fn builtin() -> [ProviderDefinition; 15] {
     [
         openai::definition(),
         openai_compatible::definition(),
         google::definition(),
         xai::definition(),
-        qwen::definition(),
         kimi::definition(),
         deepseek::definition(),
         ollama::definition(),
-        huggingface::definition(),
         bigmodel::definition(),
         bigmodel::coding_plan_definition(),
         zai::definition(),
         zai::coding_plan_definition(),
         start_plan_definition("bigmodel-start-plan", "BigModel Start Plan"),
         start_plan_definition("zai-start-plan", "Z.AI Start Plan"),
-        minimax::definition(),
-        mimo::definition(),
         anthropic::definition(),
         meta::definition(),
     ]

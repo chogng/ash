@@ -153,6 +153,8 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 价格表必须按 `billing_platform` 区分按量 API 与订阅套餐。Ash 当前 catalog 中通过 ChatGPT subscription 或 Kimi Code subscription 调用的模型不产生可验证的逐 token 扣费，记录 token 用量但成本为 `Unpriced(SubscriptionPlan)`，不能套用同名 API 价格。
 
+MiniMax 已从内置接入和自动调用计价中移除。已发布的不可变价目表保留历史规则，供审计原有记录使用。
+
 ### 当前内置模型覆盖
 
 | Ash 模型 | 接入方式 | 首版计价状态 |
@@ -162,13 +164,10 @@ cache_hit_rate = cached_input_tokens / input_tokens
 | `anthropic/claude-sonnet-4-20250514` | Anthropic API key | 有公开历史价格；供应商当前标记为 retired，新调用需按实际计费平台判断 |
 | `google/gemini-3.6-flash` | Gemini 按量 API | 已覆盖 Standard、Batch、Flex、Priority |
 | `xai/grok-4.5` | xAI 按量 API | 已覆盖 Standard、Priority |
-| `qwen/qwen-plus` | Alibaba Cloud Model Studio 按量 API | 已覆盖默认北京 endpoint；其他区域使用独立规则 |
 | `kimi/kimi-k2.6` | Kimi 按量 API | 已覆盖 |
 | `kimi/kimi-k2.7-code` | Kimi Code subscription | `Unpriced(SubscriptionPlan)` |
 | `deepseek/deepseek-v4-pro` | DeepSeek 按量 API | 已覆盖峰谷 UTC 时段 |
 | `zai/glm-5.1` | Z.AI 按量 API | 已覆盖 |
-| `minimax/MiniMax-M3` | MiniMax 按量 API | 已覆盖两个上下文档位及 Standard、Priority |
-| `mimo/mimo-v2.5-pro` | Xiaomi MiMo 按量 API | 已覆盖国内与海外区域 |
 
 ### 加速调用如何进入计价
 
@@ -179,9 +178,8 @@ cache_hit_rate = cached_input_tokens / input_tokens
 | OpenAI 同一模型的服务等级 | GPT-5.6 | 请求 `fast` 或 `priority` | 响应 `service_tier`；`priority` 用 Fast 价，`default` 用 Standard 价 |
 | Google 同一模型的服务等级 | Gemini 3.6 Flash | 请求 `priority` | 响应 `x-gemini-service-tier`；被降到 `standard` 时用 Standard 价 |
 | xAI 同一模型的服务等级 | Grok 4.5 | 请求 `priority` | 响应 `service_tier`；只有 `priority` 使用 2 倍价格 |
-| MiniMax 同一模型的服务等级 | MiniMax M3 | 请求 `priority` | 官方当前未说明自动降级；成功调用按被接受的请求等级计价 |
 | 独立高速模型 ID | Kimi K2.7 Code HighSpeed | 请求 `kimi-k2.7-code-highspeed` | 响应实际模型；不能给普通模型追加 Fast 标签 |
-| 当前模型不支持加速 | Claude Sonnet 4、Qwen Plus、DeepSeek V4 Pro、GLM-5.1、MiMo V2.5 Pro | 不允许构造不存在的服务等级 | 只匹配这些模型已验证的公开规则 |
+| 当前模型不支持加速 | Claude Sonnet 4、DeepSeek V4 Pro、GLM-5.1 | 不允许构造不存在的服务等级 | 只匹配这些模型已验证的公开规则 |
 
 产品层可以把这些能力统一展示为“加速”，但调用事实和价目表必须保留供应商原始含义。`requested_service_tier`、`applied_service_tier`、`service_tier_evidence` 和 `resolved_model` 是独立字段，不能只留下一个通用 `Fast` 枚举。证据来源至少区分响应字段、响应头和供应商明确承诺按已接受请求值计费；没有足够证据时不能把请求值当成计费事实。
 
@@ -245,18 +243,6 @@ Batch 基准按官方 50% input/output 折扣及缓存 multiplier 叠加计算�
 | `>= 200K` | Standard | $4.00 | $0.60 | $12.00 |
 | `>= 200K` | Priority | $8.00 | $1.20 | $24.00 |
 
-### Qwen Plus
-
-Ash 默认 endpoint 是中国站 `dashscope.aliyuncs.com`，因此首版使用北京区域原价，币种为 CNY。其他 endpoint 必须通过 billing region 选择独立规则。官方页面注明这些是原价，不包含控制台限时优惠。[来源：Alibaba Cloud Model Studio qwen-plus](https://help.aliyun.com/en/model-studio/qwen-plus)
-
-| 输入区间 | 普通输入 | 隐式缓存读 | 显式缓存写 | 显式缓存读 | 普通输出 | Thinking 输出 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `<= 128K` | ¥0.80 | ¥0.16 | ¥1.00 | ¥0.08 | ¥2.00 | ¥8.00 |
-| `128K < input <= 256K` | ¥2.40 | ¥0.48 | ¥3.00 | ¥0.24 | ¥20.00 | ¥24.00 |
-| `256K < input <= 1M` | ¥4.80 | ¥0.96 | ¥6.00 | ¥0.48 | ¥48.00 | ¥64.00 |
-
-Qwen 的 thinking 请求使用不同输出单价，因此 billing context 必须记录 thinking mode；不能仅凭 `reasoning_tokens` 推断模式，也不能把它叠加到总输出 token 上再计一次。
-
 ### Kimi K2.6
 
 币种为 USD。[来源：Kimi K2.6 pricing](https://platform.kimi.ai/docs/pricing/chat-k26)
@@ -295,37 +281,13 @@ Kimi API 另有独立的高速模型 ID。下面的价格只用于未来明确�
 
 “限时免费”不是零成本永久规则，必须作为带复核期限的 rate rule；期限不明时不能用于硬预算的长期上界。
 
-### MiniMax M3
-
-币种为 USD，表内是官方页面展示的当前永久 50% off 价格。[来源：MiniMax Token Plan / Pay-as-you-go](https://platform.minimax.io/subscribe/token-plan?tab=api-enterprise)
-
-| 输入区间 | 服务等级 | 输入 | 缓存读 | 输出 |
-| --- | --- | ---: | ---: | ---: |
-| `<= 512K` | Standard | $0.30 | $0.06 | $1.20 |
-| `<= 512K` | Priority | $0.45 | $0.09 | $1.80 |
-| `512K < input <= 1M` | Standard | $0.60 | $0.12 | $2.40 |
-| `512K < input <= 1M` | Priority | $0.90 | $0.18 | $3.60 |
-
-MiniMax M3 的 Priority 档通过 `service_tier = priority` 启用，当前公开价格为 Standard 的 1.5 倍。当前公开表没有给 MiniMax M3 单列缓存写价格，因此存在缓存写 token 时不能把完整成本算成零。
-
-### Xiaomi MiMo V2.5 Pro
-
-官方按计费区域分别给出 CNY 与 USD 价格，缓存写入当前限时免费。[来源：Xiaomi MiMo API 定价](https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go)
-
-| 计费区域 | 币种 | 缓存命中输入 | 缓存未命中输入 | 输出 |
-| --- | --- | ---: | ---: | ---: |
-| 中国大陆 | CNY | ¥0.025 | ¥3.00 | ¥6.00 |
-| 海外 | USD | $0.0036 | $0.435 | $0.87 |
-
-缓存写“限时免费”同样需要有界 revision；无法确认活动仍有效时标记为未知费用。
-
 ## 为什么需要这些维度
 
 | 供应商规则示例 | 对 contract 的要求 |
 | --- | --- |
 | OpenAI 区分标准、Batch、Flex、Fast mode，短/长上下文、缓存读取、缓存写入和区域加价 | 记录实际服务等级、上下文区间、区域和缓存写入 token |
 | Anthropic 区分缓存读取、5 分钟与 1 小时缓存写入、Batch、Fast mode 和推理区域 | 缓存写入不能只保留一个合计数 |
-| xAI 与 MiniMax 的 Priority 只在响应确认后使用加速价格 | 同时保存请求等级和响应实际等级，按响应事实计价 |
+| xAI 的 Priority 只在响应确认后使用加速价格 | 同时保存请求等级和响应实际等级，按响应事实计价 |
 | Kimi HighSpeed 使用独立模型 ID | 服务等级和实际模型必须分开，不能只保存“是否加速” |
 | DeepSeek 公开价格区分缓存命中/未命中，并可按 UTC 峰谷时段变化 | 价格选择必须使用调用开始时间和缓存读取量 |
 
@@ -453,7 +415,7 @@ src/platform/modelAccounting/browser/modelAccountingAppServerAdapter.ts
 ### 阶段一：调用事实与计价核心
 
 - **已实现**：建立 `ash-model-accounting` crate、金额值对象、价目表 schema、唯一规则选择器、内容摘要和精确计价器；实现证据见 [`model-accounting/README.md`](../model-accounting/README.md)。
-- **已实现**：内置 OpenAI Fast、Gemini Priority、xAI Priority、MiniMax Priority 与 Kimi HighSpeed 的公开价目表 revision，并验证服务等级、模型 ID、长上下文和生效时间边界。
+- **已实现**：内置 OpenAI Fast、Gemini Priority、xAI Priority 与 Kimi HighSpeed 的公开价目表 revision，并验证服务等级、模型 ID、长上下文和生效时间边界。
 - **已实现**：在 `ash-protocol` 固定 `ModelInvocationId`、调用事实、精确金额字符串、逐项成本与完整/部分/未计价状态。
 - **已实现**：OpenAI Responses、Chat Completions 兼容接口和 Anthropic Messages 保留响应实际模型；响应含 `service_tier` 时一并保留。
 - **已实现**：Core 对每个成功模型响应只提交一条 `ModelInvocationRecorded`，旧 `ModelUsageRecorded` 不再用于新写入，原有 Thread/Turn/Goal 汇总从新事件继续计算。
@@ -499,7 +461,7 @@ src/platform/modelAccounting/browser/modelAccountingAppServerAdapter.ts
 | --- | --- |
 | 供应商 adapter | 缺失字段、缓存读取/写入拆分、实际模型、请求服务等级、实际计费服务等级及证据来源归一化 |
 | 价目表 | schema、摘要、来源、生效区间、规则不重叠、零匹配和多匹配 |
-| 计价器 | OpenAI Fast 降级、Google/xAI/MiniMax Priority、Kimi HighSpeed 模型、长上下文、区域、Anthropic 缓存 TTL/Batch、DeepSeek 峰谷 UTC 边界 |
+| 计价器 | OpenAI Fast 降级、Google/xAI Priority、Kimi HighSpeed 模型、长上下文、区域、Anthropic 缓存 TTL/Batch、DeepSeek 峰谷 UTC 边界 |
 | 数值 | checked arithmetic、单位换算、聚合无浮点误差、溢出拒绝 |
 | Thread 回放 | 每次请求唯一 ID、重试与压缩独立计数、legacy 事件只保留 token |
 | 查询库 | 重复事件幂等、checkpoint 恢复、损坏重建、Thread 删除级联 |
@@ -535,12 +497,9 @@ src/platform/modelAccounting/browser/modelAccountingAppServerAdapter.ts
 - [Google Gemini Priority inference](https://ai.google.dev/gemini-api/docs/priority-inference)
 - [xAI Grok 4.5](https://docs.x.ai/developers/models/grok-4.5)
 - [xAI Pricing](https://docs.x.ai/developers/pricing)
-- [Alibaba Cloud Model Studio qwen-plus](https://help.aliyun.com/en/model-studio/qwen-plus)
 - [Kimi K2.6 pricing](https://platform.kimi.ai/docs/pricing/chat-k26)
 - [Kimi K2.7 Code pricing](https://platform.kimi.ai/docs/pricing/chat-k27-code)
 - [DeepSeek API pricing](https://api-docs.deepseek.com/quick_start/pricing/)
 - [Z.AI pricing](https://docs.z.ai/guides/overview/pricing)
-- [MiniMax pay-as-you-go pricing](https://platform.minimax.io/subscribe/token-plan?tab=api-enterprise)
-- [Xiaomi MiMo API 定价](https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go)
 
 供应商页面会变化，所以每个价目表 revision 必须保存自己的来源、复核时间和生效区间。

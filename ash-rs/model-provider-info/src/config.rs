@@ -316,12 +316,9 @@ impl NormalizedModelProviderConfig {
         {
             return upstream.as_str();
         }
-        // These providers expose speed as a paired upstream model ID rather than a tier field.
+        // Kimi Code exposes speed as a paired upstream model ID rather than a tier field.
         if self.fast_models.iter().any(|id| id.as_str() == model) {
             match (self.provider.as_str(), model) {
-                ("minimax", "MiniMax-M2.7") => return "MiniMax-M2.7-highspeed",
-                ("minimax", "MiniMax-M2.5") => return "MiniMax-M2.5-highspeed",
-                ("minimax", "MiniMax-M2.1") => return "MiniMax-M2.1-highspeed",
                 ("kimi", "kimi-k2.7-code") => return "kimi-for-coding-highspeed",
                 _ => {}
             }

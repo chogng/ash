@@ -49,12 +49,12 @@ fn registry_binds_assets_to_the_complete_model_reference() {
     let fixture = Fixture::new();
     let mut registry = LocalTokenizerRegistry::new();
     registry
-        .register(fixture.binding("huggingface", "org/model"))
+        .register(fixture.binding("local", "org/model"))
         .unwrap();
 
-    assert!(registry.supports(&model_ref("huggingface", "org/model")));
+    assert!(registry.supports(&model_ref("local", "org/model")));
     assert!(!registry.supports(&model_ref("deepseek", "org/model")));
-    assert!(!registry.supports(&model_ref("huggingface", "org/other")));
+    assert!(!registry.supports(&model_ref("local", "org/other")));
 }
 
 #[test]
@@ -80,9 +80,9 @@ fn registry_rejects_asset_bytes_that_do_not_match_the_pin() {
 fn image_requests_are_explicitly_unsupported_without_a_multimodal_processor() {
     let fixture = Fixture::new();
     let mut registry = LocalTokenizerRegistry::new();
-    let model = model_ref("huggingface", "org/model");
+    let model = model_ref("local", "org/model");
     registry
-        .register(fixture.binding("huggingface", "org/model"))
+        .register(fixture.binding("local", "org/model"))
         .unwrap();
     let mut request = ModelRequest::text("hello");
     let ash_protocol::InputItem::Message(message) = &mut request.input[0] else {
@@ -111,9 +111,9 @@ fn a_template_runtime_rejection_falls_back_instead_of_breaking_invocation() {
     )
     .unwrap();
     let mut registry = LocalTokenizerRegistry::new();
-    let model = model_ref("huggingface", "org/model");
+    let model = model_ref("local", "org/model");
     registry
-        .register(fixture.binding("huggingface", "org/model"))
+        .register(fixture.binding("local", "org/model"))
         .unwrap();
 
     assert_eq!(
@@ -141,10 +141,10 @@ fn tool_requests_select_the_named_tool_use_template() {
         .unwrap(),
     )
     .unwrap();
-    let model = model_ref("huggingface", "org/model");
+    let model = model_ref("local", "org/model");
     let mut registry = LocalTokenizerRegistry::new();
     registry
-        .register(fixture.binding("huggingface", "org/model"))
+        .register(fixture.binding("local", "org/model"))
         .unwrap();
 
     let mut request = ModelRequest::text("hello");

@@ -1759,12 +1759,8 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
         ("anthropic", "claude-opus-5-5", true, true),
         ("google", "gemini-3.8-flash", true, true),
         ("xai", "grok-4.7", true, false),
-        ("qwen", "qwen3.8-max", false, true),
         ("kimi", "kimi-k3", false, true),
         ("deepseek", "deepseek-v4-pro", false, true),
-        ("minimax", "MiniMax-M3", false, true),
-        ("minimax", "MiniMax-M2.7", true, false),
-        ("mimo", "mimo-v2.6-pro", false, true),
         ("glm", "glm-5.3", false, true),
         ("meta", "muse-spark-1.3", false, true),
     ] {

@@ -215,7 +215,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private async loadApiConnections(version: number): Promise<void> {
 		try {
 			const [catalog, custom] = await Promise.all([this.languageModels.listModelProviders(), this.languageModels.listCustomModelProviders()]);
-			const providers = catalog.filter(provider => provider.apiKeyPolicy !== 'unsupported' && !['openai-compatible', 'qwen', 'huggingface', 'hugging-face'].includes(provider.connection) && !provider.connection.startsWith('custom-'));
+			const providers = catalog.filter(provider => provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			for (const provider of [...custom].sort((left, right) => left.order - right.order)) {
 				const configured = catalog.some(entry => entry.connection === provider.id && entry.apiKeyConfigured);

@@ -381,6 +381,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             auto_compact_token_limit: None,
             available_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
+            settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),
             model_reasoning_effort: None,
             default_personality: None,

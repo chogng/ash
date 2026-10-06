@@ -141,7 +141,7 @@ fn built_in_guidance_does_not_guess_aliases_or_apply_to_another_provider() {
         model("openai", "gpt-6-astra-custom"),
         model("custom-openai", "gpt-6-astra"),
         model("anthropic", "claude-sonnet-4-latest"),
-        model("minimax", "minimax-m3"),
+        model("plugin", "unknown-model"),
         model("zai", "glm-5.3"),
         model("anthropic", "claude-sonnet-4-20250514"),
     ] {

@@ -1525,39 +1525,6 @@ fn deepseek_uses_only_an_exact_model_binding_for_local_measurement() {
     );
 }
 
-#[test]
-fn huggingface_uses_the_same_model_bound_local_tokenizer_port() {
-    let transport = Arc::new(CapturingTransport::new(completion_response("unused")));
-    let local_tokenizers = Arc::new(FixedLocalTokenizer {
-        model: model_ref("huggingface", "org/model"),
-        tokens: 80,
-    });
-    let runtime = ModelProviderRuntime::builtin_with_client(transport)
-        .with_local_tokenizers(local_tokenizers);
-    let model = runtime
-        .build_model(
-            &provider_config("huggingface"),
-            &model_ref("huggingface", "org/model"),
-        )
-        .unwrap();
-
-    assert_eq!(
-        model.input_token_measurement_capability(),
-        ContextTokenMeasurementCapability::Local
-    );
-    let ContextTokenMeasurementOutcome::Measured(measurement) =
-        model.measure_input(&ModelRequest::text("hello")).unwrap()
-    else {
-        panic!("bound Hugging Face model should use the local tokenizer");
-    };
-    assert_eq!(measurement.measured_input().get(), 80);
-    assert_eq!(measurement.accounted_input().get(), 144);
-    assert_eq!(
-        measurement.accuracy(),
-        ContextTokenMeasurementAccuracy::Estimated
-    );
-}
-
 struct FixedLocalTokenizer {
     model: ModelRef,
     tokens: u32,
@@ -2417,17 +2384,13 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
         "openai-compatible",
         "google",
         "xai",
-        "qwen",
         "kimi",
         "deepseek",
         "ollama",
-        "huggingface",
         "bigmodel",
         "bigmodel-coding-plan",
         "zai",
         "zai-coding-plan",
-        "minimax",
-        "mimo",
         "anthropic",
         "meta",
     ];
@@ -2600,9 +2563,6 @@ fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference
         ("anthropic", "claude-haiku-4-5-20251001"),
         ("google", "gemini-3.8-flash"),
         ("xai", "grok-4.7"),
-        ("minimax", "MiniMax-M2.7"),
-        ("minimax", "MiniMax-M2.5"),
-        ("minimax", "MiniMax-M2.1"),
     ] {
         let response = match provider {
             "anthropic" => {
@@ -2647,17 +2607,6 @@ fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference
                     body["service_tier"],
                     if enabled { "priority" } else { "default" }
                 ),
-                "minimax" => {
-                    assert_eq!(
-                        body["model"],
-                        if enabled {
-                            format!("{id}-highspeed")
-                        } else {
-                            id.into()
-                        }
-                    );
-                    assert!(body.get("service_tier").is_none());
-                }
                 _ => unreachable!(),
             }
         }

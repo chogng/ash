@@ -14,7 +14,6 @@ pub use binding::PinnedTokenizerAsset;
 pub use catalog::RemoteTokenizerAsset;
 pub use catalog::TokenizerAssetCatalog;
 pub use catalog::TokenizerAssetManifest;
-pub use discovery::HuggingFaceTokenizerAssetDiscoverer;
 pub use discovery::TokenizerAssetDiscoverer;
 pub use downloader::HttpTokenizerAssetDownloader;
 pub use downloader::TokenizerAssetDownloader;

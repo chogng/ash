@@ -17,14 +17,10 @@ pub enum ProviderAdapter {
     Anthropic,
     Google,
     Xai,
-    Qwen,
     Kimi,
     DeepSeek,
     Ollama,
-    HuggingFace,
     Zai,
-    MiniMax,
-    Mimo,
 }
 
 /// A provider-independent model invocation API selected by a provider

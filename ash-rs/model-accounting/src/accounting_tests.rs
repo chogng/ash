@@ -243,6 +243,36 @@ fn invocation_pricing_rejects_subscription_prices() {
 }
 
 #[test]
+fn retired_provider_does_not_resume_invocation_pricing_from_historical_rates() {
+    let card = RateCard::bundled_accelerated_public_prices().unwrap();
+    let model = ModelRef::new(
+        ProviderId::new("minimax").unwrap(),
+        ModelId::new("MiniMax-M3").unwrap(),
+    );
+    let usage = ModelUsage {
+        input_tokens: Some(1_000),
+        output_tokens: Some(100),
+        cached_input_tokens: Some(0),
+        cache_write_input_tokens: Some(0),
+        reasoning_tokens: None,
+    };
+    let priced = card
+        .price_invocation(
+            Some(&model),
+            None,
+            ModelBillingScope::PublicApi,
+            Some(&usage),
+            1_788_480_000_000,
+        )
+        .unwrap();
+    assert!(priced.billing.is_none());
+    assert!(matches!(
+        priced.reference_cost,
+        ModelReferenceCostRecord::Unpriced { .. }
+    ));
+}
+
+#[test]
 fn invocation_pricing_records_highspeed_cost() {
     let card = RateCard::from_json(TEST_RATE_CARD).expect("valid rate card");
     let model = ModelRef::new(

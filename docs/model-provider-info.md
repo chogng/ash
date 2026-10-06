@@ -7,6 +7,7 @@
 >   WebSocket profile 也已使用独立的 fail-closed capability；多 profile allow-list 与用户 override
 >   仍待实现
 > - Crate 实现与修改路径：[`ash-rs/model-provider-info/README.md`](../ash-rs/model-provider-info/README.md)
+> - 六家官方接口对照与字段提案：[通用模型声明规范](../ash-rs/model-provider-info/docs/model-template.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`ash-api.md`](ash-api.md)
 

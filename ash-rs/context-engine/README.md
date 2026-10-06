@@ -131,8 +131,7 @@ cargo test -p ash-core context
 - **Current**：`ash-model-tokenizer` 已提供按完整 `ModelRef` 绑定、双资产 revision/digest 固定、
   `hf-chat-template` 执行、按需下载/磁盘缓存/内存 LRU；Provider runtime 统一消费本地计数。本地结果
   因远端可能追加 envelope 而记为 estimated，并使用 2%/至少 64 tokens 的保守余量。
-- **Current limitation**：Hugging Face 公共 `owner/repo` 已支持自动发现；其他 provider/model 仍需
-  固定资产清单。无法处理的请求返回 unavailable，Core 仍以 `deterministic-bytes-v1` 作为首轮估算。
+- **Current limitation**：模型本地计数需要宿主提供固定资产清单。无法处理的请求返回 unavailable，Core 仍以 `deterministic-bytes-v1` 作为首轮估算。
 - **Current limitation**：usage 校准与计量缓存尚未实现。
 - **Extension point**：真实 adapter 落地后，可以增加“何时请求远端预检”的上层策略；该策略不得
   改变本 crate 的预算公式，也不得让 usage 与调用前计量共用同一类型。

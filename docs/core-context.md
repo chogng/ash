@@ -4,10 +4,9 @@
 > `ContextManager`、持久化 checkpoint、预算压缩、供应商溢出恢复和 `ContextAssembler` 已接入
 > `TurnExecutor`。Skill 正文通过通用 `TurnInputContributor` 在 invocation safe point 注入；
 > 通用预算、精准/估算计量结果和边界判定已拆入 `ash-context-engine`；OpenAI exact，以及
-> Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
+> Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek local
 > tokenizer adapter 已接入；provider usage 会按冻结模型和估算 revision 校准未来 Core-managed
-> capacity；产品接入的未知窗口必须配置后才能执行。Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
-> 资产目录、reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
+> capacity；产品接入的未知窗口必须配置后才能执行。本地 tokenizer 的固定资产目录、reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
 >
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
