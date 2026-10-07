@@ -153,13 +153,13 @@ changing the surrounding layout never creates a second conversation or composer.
 
 Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: Layers, the retained CreatorEditorPane and Shape properties. Design can additionally show SessionsPart while retaining its editor and independent properties. Entry descriptors declare `conversation: 'optional'`; ISessionsLayoutService owns its visibility preference and conversation focus, while DesktopWorkbenchLayout independently selects the primary Part and remembers supporting conversation width. Current Creator home and Make keep the Creator navigation container and hide the canvas properties. Other workspaces still need their task-specific [Creator composition](#creator-conversation-and-editor-composition). Library uses categories in SidebarPart, its browsing EditorPane in EditorPart and asset details in AuxiliaryBarPart. These views borrow their page's document, selection and browsing state. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
 
-The Sessions Part contains its own nested two-dimensional split grid. Its leaves are not workbench editor groups, nor the chat groups inside an individual session.
+The Sessions Part hosts an independent instance of the shared EditorPart. Its editor groups each contain one live conversation view, independently of document groups and the chats inside an individual session.
 
 ## Grid behavior
 
 The main workbench grid is non-proportional. The composition's primary surface absorbs container resize and part-visibility deltas: SessionsPart for conversation-led entries and EditorPart for Creator workspaces. Supporting Parts preserve user-established sizes within their constraints.
 
-The Sessions grid retains user-established proportions even when a narrower composition temporarily clamps leaves to their minimum widths. The preferred widths are restored when the available area grows again.
+The shared EditorPart used by Sessions retains user-established proportions even when a narrower composition temporarily clamps leaves to their minimum widths. The preferred widths are restored when the available area grows again.
 
 The primary surface absorbs general window resize: SessionsPart for conversations, or EditorPart for product editing, including a Creator composition with a supporting Agent conversation. Creator preserves supporting conversation and side-panel widths as the editor expands and shrinks. The owning layout remembers user-established sizes when a host is hidden and restores them when it reappears.
 
@@ -171,7 +171,7 @@ Each visible session has one Sessions-owned view. The view presents the active c
 
 Chat-tab presentation is a property of the session view, not of the action that opened a chat. The view observes its configuration directly and consistently applies either tabbed or session-view presentation to every chat, including restored chats and chats opened through navigation or external entry points.
 
-In the side-by-side single-chat presentation, pinning a chat header keeps that chat visible while new chats reuse an unpinned group. If every visible group is pinned, opening another chat creates a group; chat pins persist with the chat-grid layout.
+In the side-by-side presentation, ordinary opens replace the active group's conversation and retain its siblings. Explicit side-by-side opens add a group. Ash intentionally uses this policy instead of VS Code Agents' transient and pinned slot search.
 
 `ISessionsService` owns:
 
@@ -182,13 +182,14 @@ In the side-by-side single-chat presentation, pinning a chat header keeps that c
 
 The Sessions Part renders that model. It does not create a second active-session store. Stable slot identities belong to the visible-session model; ordinary replacement transfers the slot to the new session. Retained sessions keep their views and live chat widgets across movement, reordering, and arrangement changes.
 
-Opening, closing, and directional insertion or movement operate through `ISessionsService`. The part owns the canonical split geometry and user sash sizes, using the shared grid primitive. Maximization and phone presentation project a single live view without changing that geometry. Ordinary structural edits preserve unaffected branches and sizes. Balanced tiling is an explicit arrangement operation over this grid, not a persistent mode or a comparison-specific layout.
+Opening, closing, and directional insertion or movement operate through `ISessionsService`. The Sessions host binds its visible selections to a shared EditorPart configured with one content item per group. Ordinary opens replace the active group content; opening an already visible Session focuses its existing group. EditorPart owns split geometry, user sash sizes, titles, and pane-host lifetimes. SessionGridLayout binds the persisted editor-group identities to live conversations without owning another grid. Unlike VS Code's separate Agents grid and transient/pinned slot policy, this host does not search for an unpinned group or add one during replacement. Maximization and phone presentation project a single live view without changing that geometry. Ordinary structural edits preserve unaffected branches and sizes. Balanced tiling is an explicit arrangement operation over this grid, not a persistent mode or a comparison-specific layout.
 
 Ash persists Session bindings, all untitled identities and the active selection in
-`sessions.viewState` version 2. `SessionGridLayout` separately owns widths in
-`sessions.gridState`. Old Chat/Code arrangements are merged without duplicating
-identities. Explicit navigation supersedes pending selection restoration. Pins,
-maximization and two-dimensional placement remain intended extensions described
+`sessions.viewState` version 2. `SessionGridLayout` stores the shared EditorPart's
+complete split tree and its group-to-conversation bindings in `sessions.gridState`
+version 2. The old horizontal-width records migrate once. Restoration reuses live
+panes and keeps the complete saved tree while providers resolve pending Sessions;
+explicit navigation can supersede that restoration. Maximization remains an intended extension described
 by this specification; current implementation limits are listed in the README.
 
 Session geometry does not determine Editor, Details, or other side-pane visibility policy. That policy remains with the layout controllers.

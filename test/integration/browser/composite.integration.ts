@@ -1,5 +1,12 @@
 import { h } from '../../../src/ash/base/browser/dom.js';
 import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
+import '../../../src/ash/base/browser/ui/grid/grid.css';
+import '../../../src/ash/base/browser/ui/splitview/splitview.css';
+import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
@@ -33,6 +40,8 @@ import { BrowserTextModelService } from '../../../src/ash/workbench/services/tex
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import type { IEditorPane } from '../../../src/ash/workbench/common/editor.js';
+import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessions/sessionGridLayout.js';
+import type { IView } from '../../../src/ash/base/browser/ui/grid/grid.js';
 
 interface CompositeState {
 	readonly id: string;
@@ -43,6 +52,11 @@ interface CompositeState {
 
 declare global {
 	interface Window {
+		ashSessionGridIntegration: {
+			show(ids: readonly string[], active: string): Promise<void>;
+			replace(id: string): Promise<void>;
+			active(): string;
+		};
 		ashCompositeIntegration: {
 			readonly events: readonly string[];
 			state(): readonly CompositeState[];
@@ -77,6 +91,11 @@ class FocusView extends ViewPane {
 }
 
 const resources = new DisposableStore();
+const locale = new URLSearchParams(location.search).get('locale');
+if (locale) {
+	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+	setNlsMessages(catalog.locale, catalog.bundles);
+}
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const registry = new WorkbenchViewRegistry();
 for (const id of ['first', 'second']) {
@@ -98,7 +117,7 @@ services.registerInstance(IContextMenuService, {
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
-panel.domNode.style.cssText = 'position:relative;width:800px;height:160px';
+panel.domNode.style.cssText = 'position:relative;width:800px;height:160px;overflow:hidden';
 panel.layout({ width: 800, height: 160 });
 services.registerInstance(IWorkbenchLayoutService, {
 	showPart: () => panel.setVisible(true),
@@ -123,7 +142,7 @@ const partEvents: { id: string; focus?: boolean; visible: boolean; }[] = [];
 resources.add(panel.onDidCompositeOpen(({ composite, focus }) => partEvents.push({ id: composite.getId(), focus, visible: true })));
 resources.add(panel.onDidCompositeClose(composite => partEvents.push({ id: composite.getId(), visible: false })));
 const editorHost = h(document, 'div');
-editorHost.style.cssText = 'position:relative;width:800px;height:260px';
+editorHost.style.cssText = 'position:relative;display:flex;width:800px;height:260px';
 document.body.append(editorHost);
 resources.add(toDisposable(() => editorHost.remove()));
 const resourceStore: ITextResourceStore = {
@@ -136,6 +155,7 @@ const models = resources.add(new BrowserTextModelService(resourceStore));
 modelServices.registerInstance(IFileTextModelService, models);
 modelServices.registerInstance(ITextModelResourceService, models);
 const editorServices = resources.add(createTestEditorServices(undefined, modelServices));
+resources.add(bindColorTheme(editorServices.get(IThemeService), document.documentElement));
 const editorRegistry = new EditorPaneRegistry();
 resources.add(editorRegistry.registerEditorPane({
 	id: CODE_EDITOR_ID, name: 'Text editor', canOpen: () => EditorPaneMatch.Default,
@@ -185,4 +205,49 @@ window.ashCompositeIntegration = {
 		document.body.append(firstRoot);
 		resources.add(toDisposable(() => firstRoot.remove()));
 	},
+};
+
+// Exercise the same Sessions view-to-editor binding without an agent backend.
+const sessionHost = h(document, 'section');
+sessionHost.id = 'session-grid';
+sessionHost.style.cssText = 'position:relative;display:flex;width:1000px;height:400px';
+document.body.append(sessionHost);
+resources.add(toDisposable(() => sessionHost.remove()));
+const sessionViews = new Map<string, IView>();
+const emptySessionView: IView = {
+	element: h(document, 'div'), minimumWidth: 0, maximumWidth: Infinity, minimumHeight: 0, maximumHeight: Infinity,
+	layout() { },
+};
+const sessionServices = resources.add(editorServices.createChild());
+sessionServices.registerInstance(IStorageService, storage);
+const sessionGrid = resources.add(sessionServices.createInstance(SessionGridLayout, sessionHost, emptySessionView));
+sessionGrid.layout(1000, 400);
+let sessionIds: readonly string[] = [];
+let activeSessionId = '';
+async function showSessions(ids: readonly string[], active: string): Promise<void> {
+	sessionIds = ids;
+	activeSessionId = active;
+	sessionGrid.reconcile(ids.map(id => {
+		let view = sessionViews.get(id);
+		if (!view) {
+			const element = h(document, 'div');
+			const input = h(document, 'input');
+			input.setAttribute('aria-label', `${id} prompt`);
+			element.append(input);
+			view = { element, minimumWidth: 100, maximumWidth: Infinity, minimumHeight: 100, maximumHeight: Infinity, layout() { } };
+			sessionViews.set(id, view);
+		}
+		return {
+			id, view, label: id,
+			activate: () => { activeSessionId = id; },
+			close: () => { void showSessions(sessionIds.filter(candidate => candidate !== id), sessionIds.find(candidate => candidate !== id)!); },
+			focus: () => view.element.querySelector('input')!.focus(),
+		};
+	}), active);
+	await sessionGrid.whenReady();
+}
+window.ashSessionGridIntegration = {
+	show: showSessions,
+	active: () => activeSessionId,
+	replace: id => showSessions(sessionIds.map(candidate => candidate === activeSessionId ? id : candidate), id),
 };

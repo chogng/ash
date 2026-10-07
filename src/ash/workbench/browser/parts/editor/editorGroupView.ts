@@ -703,6 +703,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const inputs = await extractExternalEditorInputs(dataTransfer);
 		let index = this.getEditorInsertionIndex(target, position);
 		for (const input of inputs) {
+			// A specialized host must not replace its content with an unsupported file drop.
+			if (!this.registry.getEditorPanesForInput(input).length) continue;
 			await this.openEditor(input, { index });
 			index += 1;
 		}

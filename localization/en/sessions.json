@@ -1,5 +1,6 @@
 {
   "ash": {
+    "sessions.conversation.editorName": "Session",
     "sessions.activity.chat": "Chat",
     "sessions.activity.colab": "Collaboration",
     "sessions.activity.library": "Library",

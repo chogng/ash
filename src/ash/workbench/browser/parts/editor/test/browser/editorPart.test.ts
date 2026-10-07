@@ -169,6 +169,41 @@ test('inactive editor opens keep the selected tab and its content visible', asyn
 	dom.window.close();
 });
 
+test('single-content editor groups replace pinned and sticky content without creating another group', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const panes: TestEditorPane[] = [];
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.single', '.ts', () => trackPane(panes, 'ash.test.single')));
+	using editor = createEditorPart(dom.window.document.body, { registry, editorLimit: 1 });
+	const first = input('C:/project/first.ts');
+	const second = input('C:/project/second.ts');
+	await editor.openEditor(first, { pinned: true });
+	const group = editor.activeGroup;
+	group.stickEditor(first);
+	const reasons: string[] = [];
+	using listener = group.onDidChangeEditors(event => { if (event.kind === 'editorClosed') reasons.push(event.reason); });
+	await editor.openEditor(second, { pinned: true });
+	assert.deepEqual({ groups: editor.groups, inputs: group.inputs, active: editor.activeInput, disposed: panes[0]!.disposed, reasons }, {
+		groups: [group], inputs: [second], active: second, disposed: true, reasons: ['replace'],
+	});
+	dom.window.close();
+});
+
+test('single-content replacement retains a dirty editor when its close decision is cancelled', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const first = input('C:/project/dirty.ts');
+	using workingCopy = new TestWorkingCopy(first.resource);
+	workingCopy.markDirty();
+	using registry = new EditorPaneRegistry();
+	const pane = new TestEditorPane('ash.test.singleDirty', workingCopy);
+	using registration = registry.registerEditorPane(descriptor('ash.test.singleDirty', '.ts', () => pane));
+	using editor = createEditorPart(dom.window.document.body, { registry, editorLimit: 1 });
+	await editor.openEditor(first);
+	await assert.rejects(editor.openEditor(input('C:/project/second.ts')), /Replacing the editor was cancelled/u);
+	assert.deepEqual({ inputs: editor.activeGroup.inputs, dirty: workingCopy.isDirty, disposed: pane.disposed }, { inputs: [first], dirty: true, disposed: false });
+	dom.window.close();
+});
+
 test('protected tabs reject user closure while lifecycle reset can release them', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const registry = new EditorPaneRegistry();

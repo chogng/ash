@@ -196,7 +196,10 @@ joins pending attachment resolution before flushing storage.
    choice is stored in the TypeScript UI profile state, while
    `chat.defaultModel` is a registered setting.
 6. `SessionsChatView` reconciles every visible selection with a retained
-   `ChatWidget` leaf in an internal, resizable `Grid`. Focus projects the leaf
+   `ChatWidget` pane hosted by the shared `EditorPart`. Each editor group holds
+   one conversation; ordinary opens replace the active group content and retain
+   sibling groups. SessionGridLayout binds conversations to the saved editor layout, while
+   EditorPart owns group layout, titles and pane hosts. Focus projects the leaf
    back to the active selection; closing a leaf does not archive its durable
    Session, and draft materialization preserves the leaf in place.
    The product composition owns the single view-service subscription and
@@ -296,8 +299,10 @@ Session model inside a Part would be architectural drift.
 
 ## Current limitations and staged evolution
 
-The Sessions Part currently arranges visible Session leaves in one horizontal
-Grid row. Two-dimensional placement persistence, provider grouping,
+The Sessions Part opens visible conversations in a horizontal row of shared editor
+groups; editor drag and drop can arrange them vertically. The complete split tree
+and conversation bindings restore when the window reopens, using the shared
+EditorPart's layout serialization. Provider grouping,
 search/filtering, archived history, and cross-window view-state persistence are
 future work. They should extend the Sessions view/layout owners without moving
 product policy into base modules or the regular Workbench layout.

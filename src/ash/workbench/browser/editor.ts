@@ -1,6 +1,6 @@
 import type { IResourceEditorInput } from '../common/editor.js';
 import { Emitter, type Event } from '../../base/common/event.js';
-import { AbstractDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { EditorOpenOptions } from '../services/editor/common/editorService.js';
 import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
 
@@ -39,9 +39,9 @@ export function registerBuiltinEditorPane(extensionId: string, editorId: string,
 }
 
 /** Owns editor declarations and matching; editor groups own the created panes. */
-export class EditorPaneRegistry implements IEditorPaneRegistry {
+export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistry {
 	private readonly descriptors = new Map<string, IEditorPaneDescriptor>();
-	private readonly changeEmitter = new Emitter<void>();
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	public registerEditorPane(descriptor: IEditorPaneDescriptor): IDisposable {

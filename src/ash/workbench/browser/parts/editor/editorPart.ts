@@ -56,6 +56,7 @@ import type { IBulkEditService } from "../../../../editor/browser/services/bulkE
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
+import { parseEditorWorkingSetLayout } from '../../../services/editor/common/editorWorkingSet.js';
 import { ModalEditorPart, type ModalEditorPartOptions } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
 import { editorInputKey } from "./editorTabsControl.js";
@@ -328,12 +329,44 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.editorGrid.resizeView(this.groupHosts.get(typeof group === 'string' ? group : group.id)!.view, size);
 	}
 
+	/** Ash extension: expose the same Grid state used by working sets without serializing editor inputs. */
+	public serializeLayout(): EditorWorkingSetLayout {
+		return this.editorGrid.serialize() as EditorWorkingSetLayout;
+	}
+
+	/** Rebind saved group identities while retaining the live panes and their focus. Missing groups are pruned. */
+	public restoreLayout(layout: EditorWorkingSetLayout, groupMapping: ReadonlyMap<EditorGroupId, EditorGroupId>): void {
+		const retained = filterWorkingSetLayout(layout, new Set(groupMapping.keys()));
+		if (!retained) return;
+		const mapped = new Set(groupMapping.values());
+		if (mapped.size !== groupMapping.size || [...mapped].some(id => !this.groupHosts.has(id))) throw new TypeError('Invalid Editor Grid group mapping');
+		const missing = this._groups.filter(host => !mapped.has(host.group.id));
+		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: true, priority: 'normal' }));
+		const rebound = remapWorkingSetLayout(retained, groupMapping);
+		const combined: EditorWorkingSetLayout = extra.length ? {
+			type: 'branch', orientation: 'horizontal', size: this.dimension.width, priority: 'normal',
+			children: [...(rebound.type === 'branch' && rebound.orientation === 'horizontal' ? rebound.children : [rebound]), ...extra],
+		} : rebound;
+		this.preserveFocus(() => {
+			this.gridSlot.clear();
+			this.gridSlot.value = SerializableGrid.deserialize<EditorGroupGridView>(this.contentDomNode, combined, {
+				fromJSON: data => {
+					const savedId = editorGroupIdFromGridData(data);
+					return this.groupHosts.get(savedId)!.view;
+				},
+			}, { styles: EDITOR_GROUP_GRID_STYLES });
+			this.observeGrid();
+			this.layoutEditorContent();
+			this.notifyConstraintsChanged();
+		});
+	}
+
 	public moveGroup(group: IEditorGroupView | EditorGroupId, location: IEditorGroupView | EditorGroupId, direction: GroupDirection): IEditorGroupView {
 		const source = this.groupHosts.get(typeof group === 'string' ? group : group.id)!;
 		const target = this.groupHosts.get(typeof location === 'string' ? location : location.id)!;
 		if (source === target) return source.group;
 		const directions = { [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right, [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down };
-		this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]);
+		this.preserveFocus(() => this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]));
 		this._groups.splice(this._groups.indexOf(source), 1);
 		this._groups.splice(this._groups.indexOf(target) + (direction === GroupDirection.LEFT || direction === GroupDirection.UP ? 0 : 1), 0, source);
 		this.layoutEditorContent();
@@ -834,7 +867,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const created = this.createGroup(id);
 		const targetIndex = sourceIndex + 1;
 		this._groups.splice(targetIndex, 0, created);
-		this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction);
+		this.preserveFocus(() => this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction));
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "groupAdded", group: created.group.getEditorState() }));
@@ -845,7 +878,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const index = this._groups.indexOf(host);
 		if (index < 0) return;
 		if (this._groups.length === 1) throw new Error("EditorPart cannot remove its last group");
-		this.editorGrid.removeView(host.view);
+		this.preserveFocus(() => this.editorGrid.removeView(host.view));
 		this._groups.splice(index, 1);
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
@@ -862,7 +895,18 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return index;
 	}
 
+	private preserveFocus(action: () => void): void {
+		const focused = this.domNode.ownerDocument.activeElement;
+		const owned = focused instanceof this.domNode.ownerDocument.defaultView!.HTMLElement && this.domNode.contains(focused);
+		action();
+		// Grid structure changes can reattach a retained pane; preserve its actual input focus.
+		if (owned && focused.isConnected) focused.focus({ preventScroll: true });
+	}
+
 	private dropEditor(event: EditorTabDropEvent): void {
+		// Independent editor hosts can have different pane registries. Reject a transfer
+		// the receiving host cannot render before moving or closing its source input.
+		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;
 		if (event.splitDirection) {
 			const created = this.insertGroup(event.target, event.splitDirection);
 			void event.source.moveEditorTo(event.input, created.group, 0)
@@ -920,7 +964,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				activeEditorIndex: group.activeInput ? group.inputs.indexOf(group.activeInput) : -1,
 				size: totalArea > 0 ? areas[index]! / totalArea : 1 / this._groups.length,
 			}))),
-			layout: this.editorGrid.serialize() as EditorWorkingSetLayout,
+			layout: this.serializeLayout(),
 		});
 		if (excludedGroups.length === 0) return state;
 		const groups = state.groups.filter(group => !excludedGroups.includes(group.id!));
@@ -1052,6 +1096,11 @@ function filterWorkingSetLayout(layout: EditorWorkingSetLayout, groups: Readonly
 	return { ...layout, children };
 }
 
+function remapWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlyMap<string, string>): EditorWorkingSetLayout {
+	if (layout.type === 'leaf') return { ...layout, data: { groupId: groups.get(layout.data.groupId)! } };
+	return { ...layout, children: layout.children.map(child => remapWorkingSetLayout(child, groups)) };
+}
+
 function emptyWorkingSet(): EditorWorkingSet {
 	return Object.freeze({
 		id: "empty",
@@ -1091,33 +1140,11 @@ function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
 		sizeTotal += group.size;
 	}
 	if (sizeTotal <= 0) throw new TypeError("Invalid editor working set layout");
-	if (value.layout !== undefined) validateWorkingSetLayout(value.layout, groupIds, value.groups.length);
+	if (value.layout !== undefined) {
+		if (groupIds.size !== value.groups.length) throw new TypeError('Editor Grid layout requires an ID for every group');
+		parseEditorWorkingSetLayout(value.layout, groupIds);
+	}
 	return value;
-}
-
-function validateWorkingSetLayout(value: unknown, groupIds: ReadonlySet<string>, expectedLeaves: number): void {
-	if (groupIds.size !== expectedLeaves) throw new TypeError("Editor Grid layout requires an ID for every group");
-	const seen = new Set<string>();
-	const visit = (candidate: unknown, parentOrientation: "horizontal" | "vertical" | undefined): void => {
-		if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) throw new TypeError("Invalid Editor Grid layout node");
-		const node = candidate as Record<string, unknown>;
-		if (!Number.isFinite(node.size) || (node.size as number) < 0 || (node.priority !== "low" && node.priority !== "normal" && node.priority !== "high")) {
-			throw new TypeError("Invalid Editor Grid layout geometry");
-		}
-		if (node.type === "leaf") {
-			if (typeof node.visible !== "boolean") throw new TypeError("Invalid Editor Grid leaf visibility");
-			const groupId = editorGroupIdFromGridData(node.data);
-			if (!groupIds.has(groupId) || seen.has(groupId)) throw new TypeError("Invalid Editor Grid group reference");
-			seen.add(groupId);
-			return;
-		}
-		if (node.type !== "branch" || (node.orientation !== "horizontal" && node.orientation !== "vertical") || node.orientation === parentOrientation || !Array.isArray(node.children) || node.children.length === 0) {
-			throw new TypeError("Invalid Editor Grid branch");
-		}
-		for (const child of node.children) visit(child, node.orientation);
-	};
-	visit(value, undefined);
-	if (seen.size !== expectedLeaves) throw new TypeError("Editor Grid layout does not contain every group");
 }
 
 function isEditorGroupId(value: unknown): value is string {

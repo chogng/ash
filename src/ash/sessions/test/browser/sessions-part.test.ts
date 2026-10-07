@@ -17,6 +17,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../base/common/event.js";
 import { DisposableStore, toDisposable, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -219,6 +220,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	});
 	services.registerInstance(ILanguageModelsService, chatService);
 	services.registerInstance(IChatService, chatService);
+	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new NotificationService();
@@ -257,7 +259,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	const cowork = resources.add(services.createInstance(CoworkPaneFactory));
-	using editorServices = createTestEditorServices(undefined, services);
+	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	const part = registerTestComponentServices(editorServices).createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
 		chatService,
@@ -306,7 +308,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	(part.domNode.querySelector("[role=tab]") as HTMLElement).click();
 	assert.ok(part.domNode.querySelector(".ash-editor-group:first-of-type .ash-sessions-chat-slot.active"));
 
-	(part.domNode.querySelector(".ash-tab-close") as HTMLButtonElement).click();
+	(part.domNode.querySelector(".ash-tab-close-action button") as HTMLButtonElement).click();
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
@@ -323,6 +325,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const second = viewService.openNewSession('Another draft');
 	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context' }] };
 	part.restoreDraft(separateDraft);
+	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, separateDraft);
 	assert.deepEqual(readNewChatDraftState(storage, `untitled:${second.untitledSessionId}`), separateDraft);

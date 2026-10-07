@@ -200,11 +200,16 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const reference = referenceForSelection(selection);
 		const previous = state.activeSelection.get();
 		const existing = state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
-		if (mode !== 'open' && existing >= 0) state.visibleReferences[existing] = reference;
+		if (existing >= 0) state.visibleReferences[existing] = reference;
 		else if (mode === 'add') state.visibleReferences.push(reference);
 		else {
-			// List and history navigation show only the requested Session, even when it already occupies a restored split.
-			state.visibleReferences = [reference];
+			// Ash uses single-content editor groups: ordinary opens replace the active
+			// Session in place and preserve siblings. Unlike VS Code's Agents pin policy,
+			// replacement does not search for another transient slot or create a group.
+			const current = state.activeReference.get();
+			const activeIndex = current ? state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(current)) : -1;
+			if (activeIndex >= 0) state.visibleReferences[activeIndex] = reference;
+			else state.visibleReferences = [reference];
 		}
 		transaction(tx => {
 			state.activeReference.set(reference, tx);

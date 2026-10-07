@@ -87,7 +87,7 @@ test("Sessions view records window-local untitled sessions without creating dura
 	assert.equal(sessions.startNewSessionCalls, 0);
 });
 
-test('new Sessions replace the restored split and share navigation history', async () => {
+test('new Sessions replace the active slot and preserve siblings across navigation history', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
 	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
@@ -99,15 +99,15 @@ test('new Sessions replace the restored split and share navigation history', asy
 
 	const first = view.openNewSession('First draft');
 	const second = view.openNewSession('Second draft');
-	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${second.untitledSessionId}`]);
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${second.untitledSessionId}`]);
 	view.navigateBack();
-	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${first.untitledSessionId}`]);
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${first.untitledSessionId}`]);
 	view.navigateForward();
-	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${second.untitledSessionId}`]);
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${second.untitledSessionId}`]);
 });
 
 for (const target of ['active', 'inactive', 'untitled'] as const) {
-	test(`opening the ${target} Session from a restored split shows only its content`, async () => {
+	test(`opening the ${target} Session from a restored split preserves siblings`, async () => {
 		using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 		using storage = createTestStorage();
 		const visible = [
@@ -137,12 +137,12 @@ for (const target of ['active', 'inactive', 'untitled'] as const) {
 			untitled: 'untitled:saved-draft',
 		}[target];
 		assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, {
-			visible: [expected], active: expected,
+			visible: ['session:session-1:thread-1', 'session:session-2:thread-2', 'untitled:saved-draft'], active: expected,
 		});
 	});
 }
 
-test('pane focus and closing a pane preserve the remaining split while history navigation shows one Session', async () => {
+test('pane focus and closing a pane preserve the remaining split while history navigation replaces the active slot', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2'), session('session-3', 'thread-3')]);
 	using storage = createTestStorage();
 	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
@@ -160,7 +160,7 @@ test('pane focus and closing a pane preserve the remaining split while history n
 		visible: ['session:session-1:thread-1', 'session:session-3:thread-3'], active: 'session:session-3:thread-3',
 	});
 	view.navigateBack();
-	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-2:thread-2']);
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', 'session:session-2:thread-2']);
 });
 
 test("Sessions view replaces a visible draft when it materializes", async () => {
