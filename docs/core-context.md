@@ -240,7 +240,7 @@ ContextManager/Planner 完成。
 
 ### 5.5 提示词所有权与组装
 
-提示词按功能归属：`model-provider-info/models.json` 保存模型规格与每个模型的完整基础正文，`ash-models-manager` 按准确身份选择并冻结；未登记模型的基础正文来自 `prompts/templates/agent/base_prompt.md`。Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../crates/prompts/README.md) 提供共享资产与冻结契约，并拥有 context compaction、审查目标与续接模板；代码审查与 Advisor 的角色正文归 `ash-agent-roles`。
+提示词按功能归属：`model-provider-info/models/<provider>.json` 保存模型规格与每个模型的完整基础正文，`ash-models-manager` 按准确身份选择并冻结；未登记模型的基础正文来自 `prompts/templates/agent/base_prompt.md`。Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../crates/prompts/README.md) 提供共享资产与冻结契约，并拥有 context compaction、审查目标与续接模板；代码审查与 Advisor 的角色正文归 `ash-agent-roles`。
 
 App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结 `agent-roles/assets/reviewer.md` 的正文与定义摘要 并标记 `TurnKind::Review`。`$create-instructions` 使用通用 Skill 激活流程创建指令文件。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、放置顺序、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` / `read_instruction` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配，并按准确指令文件读取路径加载 OnDemand 正文。写入工具提交后，由 host 在执行前校验目标路径的规则；缺少规则以工具错误返回模型，不能用同一批调用中新读到的规则直接执行写入。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
@@ -324,7 +324,7 @@ URL，canonical attachment reference 继续作为 durable authority。
 
 ### 7.1 预算输入
 
-内置模型的容量由 `models.json` 的 `context_window` 声明；`context_window_options` 只在需要独立预算档位时填写，第一项作为默认执行预算。没有档位声明时，目录解析生成等于容量的唯一档位；容量未知时预算仍未知。`models-manager` 按准确模型身份读取声明，合并用户配置和当前连接的目录容量；App Server 再把有效预算冻结给本轮 Core。Core 不按型号名称选择默认窗口或扩展档位。模型声明与校验规则见 [模型声明文档](model-provider-info.md#7-静态模型元数据)。
+内置模型的容量由 `models/<provider>.json` 的 `context_window` 声明；`context_window_options` 只在需要独立预算档位时填写，第一项作为默认执行预算。没有档位声明时，目录解析生成等于容量的唯一档位；容量未知时预算仍未知。`models-manager` 按准确模型身份读取声明，合并用户配置和当前连接的目录容量；App Server 再把有效预算冻结给本轮 Core。Core 不按型号名称选择默认窗口或扩展档位。模型声明与校验规则见 [模型声明文档](model-provider-info.md#7-静态模型元数据)。
 
 预算至少包含：
 

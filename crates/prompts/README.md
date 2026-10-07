@@ -10,7 +10,7 @@
 - `review_exit_prompt`、`TURN_INTERRUPTED_PROMPT`：审查完成、中断、失败及普通 Turn 中断后的续接说明。
 - `PromptArtifact`、`RenderedPrompt`：正文、来源、版本与渲染结果；摘要大小接口供 Core 使用相同编码计算预算。
 
-Core 按实际运行状态选择模板、分配上下文预算并组装请求。角色正文归 `agent-roles`，完整模型正文登记在 `model-provider-info/models.json`，由 `models-manager` 选择并冻结；本 crate 不读取配置、访问 Git、判断授权或调用模型。
+Core 按实际运行状态选择模板、分配上下文预算并组装请求。角色正文归 `agent-roles`，完整模型正文登记在 `model-provider-info/models/<provider>.json`，由 `models-manager` 选择并冻结；本 crate 不读取配置、访问 Git、判断授权或调用模型。
 
 权限说明按 Turn 已保存的 `approval_mode` 选择。Ash 的沙箱和授权按每次工具调用判定，因此使用自身的动作授权模板。不会注入 Codex 的 `sandbox_permissions`、`prefix_rule` 等参数，也不会把批准旁路说明为全盘访问。
 

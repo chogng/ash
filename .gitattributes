@@ -13,7 +13,7 @@
 /crates/prompts/templates/** text eol=lf
 /crates/collaboration-mode-templates/templates/** text eol=lf
 /crates/agent-roles/assets/** text eol=lf
-/crates/model-provider-info/models.json text eol=lf
+/crates/model-provider-info/models/*.json text eol=lf
 
 # Keep embedded classifier assets identical to their pinned release hashes.
 /app-rs/input-classifier/models/*.json text eol=lf

@@ -2,8 +2,94 @@ use super::*;
 use serde_json::json;
 
 fn row() -> serde_json::Value {
-    serde_json::from_str::<serde_json::Value>(include_str!("../models.json")).unwrap()["models"][0]
+    serde_json::from_str::<serde_json::Value>(include_str!("../models/openai.json")).unwrap()["models"][0]
         .clone()
+}
+
+#[test]
+fn provider_catalogs_preserve_source_and_model_order() {
+    let first = row();
+    let mut second = first.clone();
+    second["model_id"] = json!("second-model");
+    let mut third = first.clone();
+    third["provider_id"] = json!("other");
+    let openai = json!({"models":[second, first]}).to_string();
+    let other = json!({"models":[third]}).to_string();
+    let models = parse_catalogs(&[("other", &other), ("openai", &openai)]).unwrap();
+    assert_eq!(
+        models
+            .iter()
+            .map(|spec| (spec.provider_id.as_str(), spec.model_id.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("other", "gpt-6.1-sol"),
+            ("openai", "second-model"),
+            ("openai", "gpt-6.1-sol")
+        ]
+    );
+}
+
+#[test]
+fn provider_catalog_errors_identify_the_source_and_model() {
+    let model = row();
+    let catalog = json!({"models":[model]}).to_string();
+    let mismatch = parse_catalogs(&[("other", &catalog)])
+        .unwrap_err()
+        .to_string();
+    assert!(mismatch.contains("models/other.json"), "{mismatch}");
+    assert!(mismatch.contains("openai/gpt-6.1-sol"), "{mismatch}");
+    assert!(
+        mismatch.contains("must belong to provider other"),
+        "{mismatch}"
+    );
+
+    let duplicate = parse_catalogs(&[("openai", &catalog), ("openai", &catalog)])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        duplicate.contains("models/openai.json: duplicate model openai/gpt-6.1-sol"),
+        "{duplicate}"
+    );
+
+    let mut invalid = row();
+    invalid["context_window"] = json!(0);
+    let invalid = json!({"models":[invalid]}).to_string();
+    let error = parse_catalogs(&[("openai", &invalid)])
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("models/openai.json"), "{error}");
+
+    let mut invalid = row();
+    invalid["display_name"] = json!(" ");
+    let invalid = json!({"models":[invalid]}).to_string();
+    let error = parse_catalogs(&[("openai", &invalid)])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("models/openai.json: model openai/gpt-6.1-sol"),
+        "{error}"
+    );
+    assert!(error.contains("model display name is empty"), "{error}");
+}
+
+#[test]
+fn provider_catalogs_share_the_schema_relative_to_their_directory() {
+    for schema in [
+        "../models.schema.json",
+        "./models.schema.json",
+        "other.schema.json",
+    ] {
+        let catalog = json!({"$schema":schema, "models":[row()]}).to_string();
+        assert_eq!(
+            parse_catalog(&catalog).is_ok(),
+            schema == "../models.schema.json",
+            "{schema}"
+        );
+    }
+    for &(provider, json) in &BUNDLED_CATALOGS {
+        let catalog: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(catalog["$schema"], "../models.schema.json", "{provider}");
+    }
 }
 
 #[test]

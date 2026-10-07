@@ -1,4 +1,4 @@
-//! Editable `models.json` rows and their conversion into provider-neutral protocol metadata.
+//! Editable `models/<provider>.json` rows and their conversion into provider-neutral protocol metadata.
 //! This parser owns the JSON shape; `model_catalog` validates references and normalizes budgets.
 //! Field comments also become descriptions in the generated editor schema.
 

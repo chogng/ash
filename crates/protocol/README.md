@@ -22,10 +22,10 @@
 | [`config.rs`](src/config.rs) / `config/`                | `preferences.rs` 定义共享偏好取值，`patch.rs` 区分不更新、清空和替换；不负责配置存储和优先级                                                                                |
 | [`ids.rs`](src/ids.rs)                                  | 执行、任务和交互 ID 的声明与公共校验；模型身份单独归 `model/identity.rs`                                                                                                    |
 
-## `models.json` 从哪里定义
+## 模型目录从哪里定义
 
 [`StaticModelSpec`](../model-provider-info/src/static_model_spec.rs) 才是
-[`models.json`](../model-provider-info/models.json) 的解析入口，字段注释进入生成的
+[模型目录](../model-provider-info/models/) 的解析入口，字段注释进入生成的
 [`models.schema.json`](../model-provider-info/models.schema.json)，为编辑器提供字段解释。
 协议模块的划分帮助说明含义，但不会自动决定 JSON 的层级和字段命名。
 
@@ -40,14 +40,14 @@ JSON 命名按完整接口契约推广；当前统一范围是模型声明、目
 模型调用、消息、用量、配置存储及供应商报文按各自契约编码。修改其他接口的 JSON 字段时，
 同步调用方、校验、序列化测试、生成产物、文档和受影响的协议或存储版本。
 
-| 编辑内容                     | 类型及阅读入口                                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `provider_id`、`model_id`    | `StaticModelSpec` 保存编辑值，`model/identity.rs` 定义准确身份；连接 ID 不属于模型身份                                   |
-| 容量、能力、推理选项和默认值 | `StaticModelSpec` 转换成 `model/catalog.rs` 的 `ModelInfo`；档位语义见 `model/reasoning_effort.rs`                       |
-| `settings`                   | `model/parameters.rs` 的参数声明与约束；JSON 用 `true / false / null` 表达支持、不支持、未知，协议用 `CapabilitySupport` |
-| `model_messages` | `StaticModelSpec` 的基础正文、工具说明、模式与根／子 Agent 指导；每段正文摘要生成版本标识，随选择冻结，不包含实际授权或工具参数 |
-| 某次请求的参数与输入         | `model/invocation.rs`、`model/message.rs`；不写入静态模型目录                                                            |
-| 上下文检查、用量与费用结果   | `model/context_inspection.rs`、`model/usage.rs`、`model/accounting.rs`；由执行过程产生，不是模型规格                     |
+| 编辑内容                     | 类型及阅读入口                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `provider_id`、`model_id`    | `StaticModelSpec` 保存编辑值，`model/identity.rs` 定义准确身份；连接 ID 不属于模型身份                                          |
+| 容量、能力、推理选项和默认值 | `StaticModelSpec` 转换成 `model/catalog.rs` 的 `ModelInfo`；档位语义见 `model/reasoning_effort.rs`                              |
+| `settings`                   | `model/parameters.rs` 的参数声明与约束；JSON 用 `true / false / null` 表达支持、不支持、未知，协议用 `CapabilitySupport`        |
+| `model_messages`             | `StaticModelSpec` 的基础正文、工具说明、模式与根／子 Agent 指导；每段正文摘要生成版本标识，随选择冻结，不包含实际授权或工具参数 |
+| 某次请求的参数与输入         | `model/invocation.rs`、`model/message.rs`；不写入静态模型目录                                                                   |
+| 上下文检查、用量与费用结果   | `model/context_inspection.rs`、`model/usage.rs`、`model/accounting.rs`；由执行过程产生，不是模型规格                            |
 
 ## 模型契约的阅读入口
 
@@ -78,7 +78,7 @@ Core 的状态归并执行，精确费用累计由 `model-accounting` 计算，C
 Guardian 是工具操作执行前的风险审核，不是普通模型生成参数，也不是代码审查 Turn。
 本地 Codex 的 `openai_models/guardian.rs` 定义按工具类别划分的审核覆盖策略；
 `guardian_v2.rs` 定义分类模型与历史选择的实验配置。它们是 Codex 自己消费的目录约定，
-不能因为同样使用模型就直接复制到 Ash 的 `models.json`。
+不能因为同样使用模型就直接复制到 Ash 的 `models/<provider>.json`。
 
 Ash 的共享审核数据统一定义在 `guardian.rs`，Core、审核器、上下文整理和策略引擎直接使用
 protocol 的类型。审核数据不包含沙箱实例、规则求值器或执行授权；这些仍由实现模块拥有。

@@ -10,9 +10,20 @@ use std::sync::LazyLock;
 
 /// The sole bundled text model catalog. JSON owns specs and complete per-model base prompts.
 /// Providers stay grouped and releases are ordered newest first; unknown metadata stays unknown.
-pub static STATIC_MODEL_CATALOG: LazyLock<Vec<StaticModelSpec>> = LazyLock::new(|| {
-    parse_catalog(include_str!("../models.json")).expect("bundled model catalog is valid")
-});
+pub static STATIC_MODEL_CATALOG: LazyLock<Vec<StaticModelSpec>> =
+    LazyLock::new(|| parse_catalogs(&BUNDLED_CATALOGS).expect("bundled model catalog is valid"));
+
+// Keep presentation order explicit: filesystem enumeration must not reorder the product catalog.
+const BUNDLED_CATALOGS: [(&str, &str); 8] = [
+    ("openai", include_str!("../models/openai.json")),
+    ("anthropic", include_str!("../models/anthropic.json")),
+    ("google", include_str!("../models/google.json")),
+    ("xai", include_str!("../models/xai.json")),
+    ("kimi", include_str!("../models/kimi.json")),
+    ("deepseek", include_str!("../models/deepseek.json")),
+    ("glm", include_str!("../models/glm.json")),
+    ("meta", include_str!("../models/meta.json")),
+];
 
 #[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -27,85 +38,121 @@ pub fn model_catalog_schema() -> schemars::Schema {
     schemars::schema_for!(ModelCatalog)
 }
 
+fn parse_catalogs(sources: &[(&str, &str)]) -> Result<Vec<StaticModelSpec>, serde_json::Error> {
+    let mut models = Vec::new();
+    let mut identities = HashSet::new();
+    for &(provider, json) in sources {
+        let path = format!("models/{provider}.json");
+        let catalog = parse_catalog(json)
+            .map_err(|error| serde_json::Error::custom(format!("{path}: {error}")))?;
+        for spec in catalog {
+            if spec.provider_id != provider {
+                return Err(serde_json::Error::custom(format!(
+                    "{path}: model {}/{} must belong to provider {provider}",
+                    spec.provider_id, spec.model_id
+                )));
+            }
+            if !identities.insert((spec.provider_id.clone(), spec.model_id.clone())) {
+                return Err(serde_json::Error::custom(format!(
+                    "{path}: duplicate model {}/{}",
+                    spec.provider_id, spec.model_id
+                )));
+            }
+            models.push(spec);
+        }
+    }
+    Ok(models)
+}
+
 // Validate at the data boundary: a malformed registered model is an error, not an unknown model.
 fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> {
-    let mut catalog: ModelCatalog = serde_json::from_str(json)?;
+    let catalog: ModelCatalog = serde_json::from_str(json)?;
     if catalog
         .schema
         .as_deref()
-        .is_some_and(|schema| schema != "./models.schema.json")
+        .is_some_and(|schema| schema != "../models.schema.json")
     {
         return Err(serde_json::Error::custom(
-            "model catalog schema must reference ./models.schema.json",
+            "model catalog schema must reference ../models.schema.json",
         ));
     }
     let mut identities = HashSet::new();
-    for spec in &mut catalog.models {
-        spec.settings
-            .validate()
-            .map_err(serde_json::Error::custom)?;
-        let provider = ProviderId::new(&spec.provider_id).map_err(serde_json::Error::custom)?;
-        let model = ModelId::new(&spec.model_id).map_err(serde_json::Error::custom)?;
-        if !identities.insert((provider, model)) {
+    for spec in &catalog.models {
+        validate_model(spec).map_err(|error| {
+            serde_json::Error::custom(format!(
+                "model {}/{}: {error}",
+                spec.provider_id, spec.model_id
+            ))
+        })?;
+        if !identities.insert((&spec.provider_id, &spec.model_id)) {
             return Err(serde_json::Error::custom(format!(
                 "duplicate model {}/{}",
                 spec.provider_id, spec.model_id
             )));
         }
-        if spec.display_name.trim().is_empty() {
-            return Err(serde_json::Error::custom("model display name is empty"));
-        }
-        ash_protocol::ModelInfo::validate_presentation(
-            spec.description.as_deref(),
-            &spec.supported_reasoning_efforts,
-        )
-        .map_err(serde_json::Error::custom)?;
-        match (spec.context_window, spec.max_context_window) {
-            (ContextWindow::Known(default), ContextWindow::Known(maximum)) if maximum < default => {
-                return Err(serde_json::Error::custom(
-                    "maximum context window is below the default",
-                ));
-            }
-            (ContextWindow::Unknown, ContextWindow::Known(_)) => {
-                return Err(serde_json::Error::custom(
-                    "maximum context window requires a default",
-                ));
-            }
-            _ => {}
-        }
-        if spec.auto_compact_token_limit == Some(0) {
-            return Err(serde_json::Error::custom(
-                "auto compact token limit must be positive",
-            ));
-        }
-        if let Some(effort) = spec.default_reasoning_effort
-            && !spec
-                .supported_reasoning_efforts
-                .iter()
-                .any(|option| option.effort == effort)
-        {
-            return Err(serde_json::Error::custom(
-                "default reasoning effort is not supported",
-            ));
-        }
-        let messages = &spec.model_messages;
-        let texts = std::iter::once(&messages.system_instructions)
-            .chain(messages.tools.values().map(|tool| &tool.description))
-            .chain(messages.collaboration_modes.values())
-            .chain(messages.multi_agent.root.iter())
-            .chain(messages.multi_agent.subagent.iter());
-        let mut bytes = 0;
-        for text in texts {
-            if text.trim().is_empty() {
-                return Err(serde_json::Error::custom("model instruction text is empty"));
-            }
-            bytes += text.len();
-        }
-        if bytes > 64 * 1024 {
-            return Err(serde_json::Error::custom("model messages exceed 64 KiB"));
-        }
     }
     Ok(catalog.models)
+}
+
+fn validate_model(spec: &StaticModelSpec) -> Result<(), serde_json::Error> {
+    spec.settings
+        .validate()
+        .map_err(serde_json::Error::custom)?;
+    ProviderId::new(&spec.provider_id).map_err(serde_json::Error::custom)?;
+    ModelId::new(&spec.model_id).map_err(serde_json::Error::custom)?;
+    if spec.display_name.trim().is_empty() {
+        return Err(serde_json::Error::custom("model display name is empty"));
+    }
+    ash_protocol::ModelInfo::validate_presentation(
+        spec.description.as_deref(),
+        &spec.supported_reasoning_efforts,
+    )
+    .map_err(serde_json::Error::custom)?;
+    match (spec.context_window, spec.max_context_window) {
+        (ContextWindow::Known(default), ContextWindow::Known(maximum)) if maximum < default => {
+            return Err(serde_json::Error::custom(
+                "maximum context window is below the default",
+            ));
+        }
+        (ContextWindow::Unknown, ContextWindow::Known(_)) => {
+            return Err(serde_json::Error::custom(
+                "maximum context window requires a default",
+            ));
+        }
+        _ => {}
+    }
+    if spec.auto_compact_token_limit == Some(0) {
+        return Err(serde_json::Error::custom(
+            "auto compact token limit must be positive",
+        ));
+    }
+    if let Some(effort) = spec.default_reasoning_effort
+        && !spec
+            .supported_reasoning_efforts
+            .iter()
+            .any(|option| option.effort == effort)
+    {
+        return Err(serde_json::Error::custom(
+            "default reasoning effort is not supported",
+        ));
+    }
+    let messages = &spec.model_messages;
+    let texts = std::iter::once(&messages.system_instructions)
+        .chain(messages.tools.values().map(|tool| &tool.description))
+        .chain(messages.collaboration_modes.values())
+        .chain(messages.multi_agent.root.iter())
+        .chain(messages.multi_agent.subagent.iter());
+    let mut bytes = 0;
+    for text in texts {
+        if text.trim().is_empty() {
+            return Err(serde_json::Error::custom("model instruction text is empty"));
+        }
+        bytes += text.len();
+    }
+    if bytes > 64 * 1024 {
+        return Err(serde_json::Error::custom("model messages exceed 64 KiB"));
+    }
+    Ok(())
 }
 
 /// Finds a model by its exact stable vendor and model identity.

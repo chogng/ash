@@ -30,6 +30,6 @@ Ash 的内置目录目前为 GPT-6 Astra 提供 Ultra Fast。模型支持与账�
 
 要求在美国以外执行推理的工作区不支持 Ultra Fast；工作区所在地区本身不能决定资格。订阅套餐、工作区授权和区域条件见[官方速度说明](https://learn.chatgpt.com/docs/agent-configuration/speed#ultrafast-mode)，API 条件见[API Ultra Fast](https://developers.openai.com/api/docs/guides/ultrafast-mode)。
 
-Ash 保留账号返回的原始套餐标识：`prolite`、`pro`、`promax` 分别对应 Pro $100、$200、$500，不能把 `pro` 当成所有 Pro 套餐。`models.json` 为 Astra 声明 `ultrafast` 能力；ChatGPT 账号服务在订阅目录刷新时读取 cloud-managed requirements，按优先级合并独立的 Fast / Ultra Fast 限制。Enterprise / Edu 只有明确授权后才提供 Ultra Fast。此权限只存在于账号观察状态，不写入用户配置。
+Ash 保留账号返回的原始套餐标识：`prolite`、`pro`、`promax` 分别对应 Pro $100、$200、$500，不能把 `pro` 当成所有 Pro 套餐。`models/openai.json` 为 Astra 声明 `ultrafast` 能力；ChatGPT 账号服务在订阅目录刷新时读取 cloud-managed requirements，按优先级合并独立的 Fast / Ultra Fast 限制。Enterprise / Edu 只有明确授权后才提供 Ultra Fast。此权限只存在于账号观察状态，不写入用户配置。
 
 目录缓存包含用户、工作区和套餐身份。账号或套餐变更立即使旧授权失效；工作区权限随现有订阅观察周期刷新，授权观察有效期为五分钟。界面、偏好保存、HTTP 调用和 WebSocket 连接/预热都使用当前账号的可用档位；已保存但失去资格的 Ultra Fast 请求被拒绝，用户可以清除选择。

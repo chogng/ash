@@ -14,7 +14,7 @@
 | 默认 Agent  | `Default` 使用正常执行配置，不读取专用 Role | `general.toml` 已删除                                                                            |
 | Issue 入口  | 页面通过通用 Session 创建契约选择 `issue`   | TUI 已接入，旧执行工作流已移除                                                                   |
 | 默认 worker | 选择 `Default`，不继承父 Role 的协调职责    | 关键词匹配已删除，完整历史继承也保留角色隔离                                                     |
-| 模型专化    | Generic 或准确模型指导，收益经评测后确认    | 内置模型的规格与完整基础正文在 models.json 同一条目维护；效果未评测，见下文                      |
+| 模型专化    | Generic 或准确模型指导，收益经评测后确认    | 内置模型的规格与完整基础正文在 `models/<provider>.json` 同一条目维护；效果未评测，见下文         |
 | 本地性能    | 分别测选择、组装、持久化和并发              | 已测选择与组合，见 [本轮数据](benchmarks/agent-instructions-2026-09-09.md)；内存和磁盘启动仍待测 |
 | 模型行为    | 同模型、同 Role、同工具下比较模板           | 尚无任务成功率和成本实测                                                                         |
 | 文档维护    | 设计、当前实现、实验结果分别标注            | 本文建立初始记录                                                                                 |
@@ -23,14 +23,14 @@
 
 组合发生在共同规则、协作模式、模型指导与角色职责之间；模式决定当前 Turn 的处理方式，Role 决定 Agent 的职责和执行能力。更换模式不更换 Role，也不改变工具授权。一个 Role 不能撤掉共同约束，也不能通过正文授予工具、目录或外部服务权限。
 
-| 内容                      | 表达什么                                                         | 目标 owner                                                         |
-| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 基础提示词                | 保留无关修改、核验交付、如实报告、遵守宿主授权                   | models.json 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
-| 协作模式                  | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式        | Collaboration Mode Templates；模式标识由 Protocol 定义             |
-| 模型差异                  | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | models.json；Models Manager 选择并冻结                             |
-| Role                      | 协调、实现、审查等当前职责和交付要求                             | Agent Roles                                                        |
-| 工具与运行信息            | 实际可调用工具、环境、父子关系和取消状态                         | 各执行领域；Core 组装                                              |
-| 目录规则、Skill、任务材料 | 已授权规则与任务上下文，保留各自来源和层级                       | 既有 Instructions、Skill 与任务 owner                              |
+| 内容                      | 表达什么                                                         | 目标 owner                                                                      |
+| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 基础提示词                | 保留无关修改、核验交付、如实报告、遵守宿主授权                   | `models/<provider>.json` 按模型独立维护；未登记模型用 Prompts 的 base_prompt.md |
+| 协作模式                  | Agent、Plan、Debug、Multitask、Ask 当前采用的任务处理方式        | Collaboration Mode Templates；模式标识由 Protocol 定义                          |
+| 模型差异                  | 针对确定模型有效的表达与工具使用指导，写在该模型的完整基础正文中 | `models/<provider>.json`；Models Manager 选择并冻结                             |
+| Role                      | 协调、实现、审查等当前职责和交付要求                             | Agent Roles                                                                     |
+| 工具与运行信息            | 实际可调用工具、环境、父子关系和取消状态                         | 各执行领域；Core 组装                                                           |
+| 目录规则、Skill、任务材料 | 已授权规则与任务上下文，保留各自来源和层级                       | 既有 Instructions、Skill 与任务 owner                                           |
 
 - 共同规则不写“必须亲自编码”或“必须委托”。这些是职责选择，会与 `issue` 等角色冲突。
 - `Default` 不加载专用 Role 正文。正常执行能力来自共同规则、任务和实际工具，不依赖额外的通用 worker 文件。
@@ -124,7 +124,7 @@ Core 接收：冻结基础正文 + 按实际模式和根／子身份选择的模
 
 ## 内置模型指导初版
 
-当前内置模型的完整基础提示词与规格统一登记在 [`models.json`](../model-provider-info/models.json)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
+当前内置模型的完整基础提示词与规格统一登记在 [模型目录](../model-provider-info/models/)。每条 `model_messages.system_instructions` 正文都可以独立修改；初始正文由原共同规则与对应模型指导合并而来。未登记模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)，命中 JSON 时不会再加入这份默认正文。权限、Role 和协作模式继续由运行时组合。
 
 目录不填写 revision，`models-manager` 按每段正文的 SHA-256 摘要生成冻结资产的 revision。历史保存完整正文与当时的标识，恢复时不重新读取当前目录。基础正文中的委托协调章节已移入 `multi_agent`，由真实根／子 Agent 身份选择；`tools` 的说明只用于当前可用工具，`collaboration_modes` 按当前五种模式选择。宿主指令、参数和权限契约继续保留。当前基础正文保留原有模型指导，并包含任务完成、环境调查、工具使用、编辑、验证、权限、上下文和沟通规则。运行时传入的 Role、权限与工具仍决定实际可执行范围；正文不授予新能力。结构与调用链测试不等于效果评测。
 
@@ -367,16 +367,16 @@ aggregate_and_intervals / failure_examples / artifacts_and_digests / decision
 
 ## 实现入口与兼容性
 
-| 位置                                                                    | 当前职责                                                      |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `prompts/src/agent.rs`、`prompts/templates/agent/base_prompt.md`        | 未登记模型的默认基础正文与 revision                           |
-| `protocol/src/agent.rs`                                                 | Default/Exact 选择、共享 AgentConfiguration 与工具/Skill 上限 |
-| `protocol/src/turn/instructions.rs`                                     | 扁平共享资产、独立模式资产、模型指导与持久化校验              |
-| `app-server/src/server/agent_selection.rs`                              | 根、子 Thread 共用的准确来源解析和根 Skill 依赖准备           |
-| `model-provider-info/models.json`、`models-manager/src/instructions.rs` | 模型规格和完整正文登记、准确选择与新 Turn 冻结                |
-| `core/src/thread_controller.rs`                                         | 根配置与创建事实同批写入、幂等重放                            |
-| `core/src/multi_agent`                                                  | 角色隔离、委托恢复、上下文、并发和能力上限                    |
-| `crates/tui/src/issues`                                                   | Issue 浏览与通用 Session 创建、稳定首 Turn 请求               |
+| 位置                                                                               | 当前职责                                                      |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `prompts/src/agent.rs`、`prompts/templates/agent/base_prompt.md`                   | 未登记模型的默认基础正文与 revision                           |
+| `protocol/src/agent.rs`                                                            | Default/Exact 选择、共享 AgentConfiguration 与工具/Skill 上限 |
+| `protocol/src/turn/instructions.rs`                                                | 扁平共享资产、独立模式资产、模型指导与持久化校验              |
+| `app-server/src/server/agent_selection.rs`                                         | 根、子 Thread 共用的准确来源解析和根 Skill 依赖准备           |
+| `model-provider-info/models/<provider>.json`、`models-manager/src/instructions.rs` | 模型规格和完整正文登记、准确选择与新 Turn 冻结                |
+| `core/src/thread_controller.rs`                                                    | 根配置与创建事实同批写入、幂等重放                            |
+| `core/src/multi_agent`                                                             | 角色隔离、委托恢复、上下文、并发和能力上限                    |
+| `crates/tui/src/issues`                                                            | Issue 浏览与通用 Session 创建、稳定首 Turn 请求               |
 
 协议主版本为 2，Session/Thread/Turn capability version 为 4；旧后端必须在握手时拒绝，不能忽略角色字段后执行默认 Agent。新历史记录使用 schema 15，保留读取 12–14 的支持；旧执行器不能读取新记录并丢弃根角色约束。旧种子的冻结指令仍用于恢复，不根据已删除的 general 文件重新生成。
 

@@ -63,32 +63,32 @@ src/
 ├── config.rs       # user config、normalized config、URL helpers
 ├── definition.rs   # provider declaration 与 validation
 ├── input_token_count.rs # count profile、target、model policy 与 normalized snapshot
-├── static_model_spec.rs # models.json 行与参数的解析声明、转换和编辑器字段说明
-├── model_catalog.rs # 校验、规范化 models.json 并生成 ProviderDefinition.models
+├── static_model_spec.rs # models/<provider>.json 行与参数的解析声明、转换和编辑器字段说明
+├── model_catalog.rs # 校验、规范化 models/<provider>.json 并生成 ProviderDefinition.models
 ├── registry.rs     # registration、merge、selection、normalization
 ├── providers/      # provider endpoint、adapter、profile 与 transport declarations
 ├── error.rs
 └── lib.rs
 ```
 
-| Symbol                                     | 可见性                                | 当前职责                                                              | 方向约束                                               |
-| ------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
-| `ModelProviderConfig::validate_static`     | public method                         | zero output/context limits 与 configured URL shape                    | 不依赖 registry或网络                                  |
-| `ProviderDefinition::validate`             | public method                         | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效                            |
-| `InputTokenCountDefinition::validate`      | crate-private method                  | count URL、non-empty/unique model list                                | 不探测远端 model availability                          |
-| `STATIC_MODEL_CATALOG`                     | public static                         | 产品内置文本模型及静态 metadata                                       | 文本模型在 models.json 声明；语音目录归 `voice_models` |
-| `attach_static_models`                     | crate-private function                | catalog rows → provider models                                        | registry validation 前自动执行                         |
-| `ProviderConfigRegistry::register`         | public method                         | validate + reject duplicate                                           | built-in/plugin 定义走相同路径                         |
-| `ProviderConfigRegistry::merge`            | public method                         | prevalidate incoming + explicit conflict policy                       | merge 不能 partial apply                               |
-| `ProviderConfigRegistry::with_configs`     | public method                         | 将接入配置组装为 immutable registry                                   | 未知供应商报错；自定义声明和已注册插件定义保留         |
-| `ProviderConfigRegistry::normalize`        | public method                         | config + definition → normalized snapshot                             | endpoint/default/profile precedence 在此唯一实现       |
-| `normalize_for`                            | public method                         | 先 enforce selected/configured provider identity                      | 防止 model ref 与 config 串线                          |
-| `automatic_approval_review_model`          | public method                         | provider default 或 active model fallback                             | 不证明远端 entitlement                                 |
-| `validate_model_selection`                 | public compatibility/preflight method | 显式配置校验                                                          | 内置模型请求不依赖远端目录成员资格                     |
-| `normalize_base_url`                       | crate-private function                | apply explicit normalization rule                                     | 不追加 API route                                       |
-| `is_http_url`                              | crate-private function                | 最小 HTTP(S) shape check                                              | 不是 full URL/network validator                        |
-| `providers::builtin`                       | crate-private function                | built-in definitions                                                  | 每个 provider 在 sibling module 独立定义               |
-| `default_provider` / `configured_provider` | private helpers                       | shared definition constructors                                        | 不隐藏 provider-specific profile/default differences   |
+| Symbol                                     | 可见性                                | 当前职责                                                              | 方向约束                                                            |
+| ------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `ModelProviderConfig::validate_static`     | public method                         | zero output/context limits 与 configured URL shape                    | 不依赖 registry或网络                                               |
+| `ProviderDefinition::validate`             | public method                         | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效                                         |
+| `InputTokenCountDefinition::validate`      | crate-private method                  | count URL、non-empty/unique model list                                | 不探测远端 model availability                                       |
+| `STATIC_MODEL_CATALOG`                     | public static                         | 产品内置文本模型及静态 metadata                                       | 文本模型在 `models/<provider>.json` 声明；语音目录归 `voice_models` |
+| `attach_static_models`                     | crate-private function                | catalog rows → provider models                                        | registry validation 前自动执行                                      |
+| `ProviderConfigRegistry::register`         | public method                         | validate + reject duplicate                                           | built-in/plugin 定义走相同路径                                      |
+| `ProviderConfigRegistry::merge`            | public method                         | prevalidate incoming + explicit conflict policy                       | merge 不能 partial apply                                            |
+| `ProviderConfigRegistry::with_configs`     | public method                         | 将接入配置组装为 immutable registry                                   | 未知供应商报错；自定义声明和已注册插件定义保留                      |
+| `ProviderConfigRegistry::normalize`        | public method                         | config + definition → normalized snapshot                             | endpoint/default/profile precedence 在此唯一实现                    |
+| `normalize_for`                            | public method                         | 先 enforce selected/configured provider identity                      | 防止 model ref 与 config 串线                                       |
+| `automatic_approval_review_model`          | public method                         | provider default 或 active model fallback                             | 不证明远端 entitlement                                              |
+| `validate_model_selection`                 | public compatibility/preflight method | 显式配置校验                                                          | 内置模型请求不依赖远端目录成员资格                                  |
+| `normalize_base_url`                       | crate-private function                | apply explicit normalization rule                                     | 不追加 API route                                                    |
+| `is_http_url`                              | crate-private function                | 最小 HTTP(S) shape check                                              | 不是 full URL/network validator                                     |
+| `providers::builtin`                       | crate-private function                | built-in definitions                                                  | 每个 provider 在 sibling module 独立定义                            |
+| `default_provider` / `configured_provider` | private helpers                       | shared definition constructors                                        | 不隐藏 provider-specific profile/default differences                |
 
 ## 规范化调用图
 
@@ -148,9 +148,9 @@ Meta 使用 `meta` API Key 连接和 `https://api.meta.ai/v1`，按[官方 API �
 
 六家官方接口对照、通用字段结构和当前缺口见 [通用模型声明规范](docs/model-template.md)。该文档区分当前可解析字段、Codex 字段对应关系和未实现的通用参数设计；当前格式由 Rust 契约和生成的 Schema 定义。
 
-JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.rs) 的解析类型定义，字段注释进入生成 Schema。目录、共享模型声明、模型列表结果和模型偏好请求的字段统一使用 `snake_case`，包括嵌套字段和加速机制标签 `service_tier`；目录与模型设置拒绝旧的驼峰字段。前端适配器转换为 TypeScript 业务类型的 `camelCase` 字段。请求参数值和推理档位值保留各自约定，例如等级 ID `priority` 和档位 `extraHigh`。共享协议按数据职责组织，阅读关系见 [protocol 目录说明](../protocol/README.md#modelsjson-从哪里定义)。这两个入口一起维护：修改文件名不会自动改变 JSON，修改解析声明必须重新生成 Schema。
+JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.rs) 的解析类型定义，字段注释进入生成 Schema。目录、共享模型声明、模型列表结果和模型偏好请求的字段统一使用 `snake_case`，包括嵌套字段和加速机制标签 `service_tier`；目录与模型设置拒绝旧的驼峰字段。前端适配器转换为 TypeScript 业务类型的 `camelCase` 字段。请求参数值和推理档位值保留各自约定，例如等级 ID `priority` 和档位 `extraHigh`。共享协议按数据职责组织，阅读关系见 [protocol 目录说明](../protocol/README.md#模型目录从哪里定义)。这两个入口一起维护：修改文件名不会自动改变 JSON，修改解析声明必须重新生成 Schema。
 
-产品内置文本模型统一登记在 [`models.json`](models.json)。一个条目包含准确 provider/model 身份、规格和 `model_messages` 的基础、工具、模式与根／子 Agent 指导，每个模型的正文可以独立修改。目录不填写 revision；`models-manager` 根据每段正文的 SHA-256 摘要生成冻结资产的版本标识。`STATIC_MODEL_CATALOG` 是该文件一次解析、校验后的进程共享数据，不再有 Rust 模型清单或模板枚举。
+产品内置文本模型按准确厂商 `provider_id` 登记在 [模型目录](models/) 的各个 JSON 文件中；API、订阅和不同服务商接入共享同一厂商文件，GLM 条目只在 `models/glm.json` 维护。一个条目包含准确 provider/model 身份、规格和 `model_messages` 的基础、工具、模式与根／子 Agent 指导，每个模型的正文可以独立修改。目录不填写 revision；`models-manager` 根据每段正文的 SHA-256 摘要生成冻结资产的版本标识。`STATIC_MODEL_CATALOG` 按 `src/model_catalog.rs` 中显式登记的文件顺序聚合，保留各文件的模型顺序，完成校验后成为进程共享数据。Rust 只登记资源入口，不维护另一份模型条目或模板枚举。
 
 ```json
 {
@@ -186,7 +186,7 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
 }
 ```
 
-条目放在顶层 `models` 数组中。顶层 `$schema` 引用 `./models.schema.json`，编辑器可以检查字段名、类型和枚举并提供补全。Schema 从实际 JSON 解析声明生成，运行时仍负责重复 ID、默认值引用和上下文预算等跨字段校验。修改解析契约后运行：
+条目放在顶层 `models` 数组中。顶层 `$schema` 引用 `../models.schema.json`，编辑器可以检查字段名、类型和枚举并提供补全。Schema 从实际 JSON 解析声明生成，运行时还检查条目的厂商与所属文件一致、文件内及聚合目录中的身份唯一，并校验默认值引用和上下文预算。错误包含来源文件；条目语义校验错误还包含准确厂商与模型 ID。修改解析契约后运行：
 
 ```sh
 just generate-model-catalog-schema
@@ -242,7 +242,7 @@ Core 在现有工具说明之后加入模型专用 `description`，保留工具�
 
 `model_messages` 是本地模型指令声明，不是聊天消息数组，也不会整块发给供应商。Core 将基础、当前模式和身份指导与运行时指令组装成 `ModelRequest.instructions`，工具指导进入对应的工具说明；Responses 编码为顶层 `instructions`，Claude Messages 编码为顶层 `system`，Chat Completions 编码为 `system` 消息。当前 Gemini 接入使用 Chat Completions；官方 Gemini 协议的字段对照见通用模型声明规范。
 
-`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词及分组指导；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、协作模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，资源清单在 `BUILD.bazel`，修改后需重编译并重启。
+`ash-models-manager` 按准确身份选择正文，在新 Turn 接受前冻结所选基础提示词及分组指导；没有登记的模型使用 [`base_prompt.md`](../prompts/templates/agent/base_prompt.md)。权限、Role、协作模式、项目指令与工具由运行时另行加入。目录自身不含凭据、执行适配器或端点；订阅和 API 共享同一个厂商＋模型身份。JSON 通过 `include_str!` 编译嵌入，Bazel 从 `models/*.json` 收集编译资源，行尾规则在根 `.gitattributes`。修改后需重编译并重启；不存在运行时文件扫描或额外生成的合并 JSON。新增厂商目录时创建 `models/<provider>.json`，并在 `src/model_catalog.rs` 的 `BUNDLED_CATALOGS` 登记厂商与文件入口；新增同厂商模型只编辑对应文件。
 
 `connection.rs` 维护 `ModelConnectionDefinition`，包含独立 `ModelConnectionId`、所属厂商、订阅/API 类型和执行声明。端点、协议、认证、计数能力和限制属于接入的 transport 定义。GLM 四个服务 ID 共享 `glm` 厂商的唯一模型目录，凭据仍各自独立。`NormalizedModelProviderConfig::upstream_model` 显式处理上游 ID 差异。
 

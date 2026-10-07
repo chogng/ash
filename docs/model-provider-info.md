@@ -27,7 +27,7 @@
 
 ## 1. 结论
 
-`ash-model-provider-info` 提供不依赖网络或凭据状态的模型与接入声明。配置值可序列化、校验并生成 schema；内置模型规格和完整基础正文由 `models.json` 维护。这里不创建 HTTP client、不读取 credential，也不执行模型调用。
+`ash-model-provider-info` 提供不依赖网络或凭据状态的模型与接入声明。配置值可序列化、校验并生成 schema；内置模型规格和完整基础正文由 `models/<provider>.json` 维护。这里不创建 HTTP client、不读取 credential，也不执行模型调用。
 
 这里的“静态”指校验不依赖运行时状态；内置模型目录从编译嵌入的 JSON 一次解析后共享：
 
@@ -231,7 +231,7 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-[`crates/model-provider-info/models.json`](../crates/model-provider-info/models.json) 是产品内置文本模型的唯一声明点，`STATIC_MODEL_CATALOG` 提供其一次解析后的共享数据。每个条目必须包含厂商、模型 ID、显示名，以及可独立修改的完整基础提示词与 revision；模型容量、独立预算档位、已知能力和推理参数按需填写。`context_window_options` 第一项就是默认预算；没有档位声明时预算等于已知容量。省略容量或能力表示未知，不代表不支持。订阅/API 共享模型条目；`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
+产品内置文本模型的唯一声明来源是 [`crates/model-provider-info/models/`](../crates/model-provider-info/models/) 下按 `provider_id` 分开的 JSON 文件；API 和订阅共享厂商条目。`STATIC_MODEL_CATALOG` 按显式登记的文件顺序一次聚合、校验并提供共享数据。每个条目包含厂商、模型 ID、显示名和可独立修改的完整基础提示词；冻结资产 revision 由 `models-manager` 根据正文摘要生成，不填写在目录中。`context_window` 是默认上下文预算，`max_context_window` 声明可启用的最大预算。省略容量或能力表示未知，不代表不支持。`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
 
 模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
 
@@ -273,7 +273,7 @@ ash-model-provider-info → Core/App Server
 
 ## 9. 修改入口
 
-静态模型规格和提示词在 `models.json`，读取与校验在 `src/model_catalog.rs`；接入声明在 `src/connection.rs`，端点和协议细节在 `src/providers/`。用户配置和规范化结果在 `src/config.rs`，注册和校验在 `src/registry.rs`。测试使用相邻的 `*_tests.rs`，不另建重复目录。
+静态模型规格和提示词在 `models/<provider>.json`，读取与校验在 `src/model_catalog.rs`；接入声明在 `src/connection.rs`，端点和协议细节在 `src/providers/`。用户配置和规范化结果在 `src/config.rs`，注册和校验在 `src/registry.rs`。测试使用相邻的 `*_tests.rs`，不另建重复目录。
 
 ## 10. 验收
 

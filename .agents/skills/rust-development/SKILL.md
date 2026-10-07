@@ -17,7 +17,7 @@ Find the owning Cargo package and read its implementation and tests before editi
 
 ## Contracts
 
-For model or provider fields, follow [model-provider-fields](../model-provider-fields/SKILL.md). Model JSON uses `snake_case`; frontend adapters use `camelCase`. Preserve parameter spellings and other formats' rules; see [model naming](../../../crates/protocol/README.md#modelsjson-从哪里定义).
+For model or provider fields, follow [model-provider-fields](../model-provider-fields/SKILL.md). Model JSON uses `snake_case`; frontend adapters use `camelCase`. Preserve parameter spellings and other formats' rules; see [model naming](../../../crates/protocol/README.md#模型目录从哪里定义).
 
 Rename JSON fields together with callers, validation, serialization tests, generated types, docs, and affected protocol or storage versions. Generate schemas, fixtures, and bindings from their source definitions. Do not hand-edit generated files or duplicate protocol values.
 
