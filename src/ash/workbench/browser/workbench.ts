@@ -802,6 +802,10 @@ export class Workbench extends Disposable {
 			if (event.reason === 'load') event.veto(editorParts.confirmCloseAllEditors().then(confirmed => !confirmed), 'workspace editor changes');
 			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
 		}));
+		this._register(lifecycleService.onBeforeShutdownError(event => {
+			// pagehide forcibly disposes even before final joins; keep the previous valid backup through editor teardown.
+			if (event.reason === 'pageHide') workingCopyBackupTracker.completeShutdown();
+		}));
 		this._register(lifecycleService.onWillShutdown(event => {
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
 			event.join(() => workingCopyBackupTracker.shutdown(), "Working-copy backup drain", () => workingCopyBackupTracker.isShutdownCurrent);

@@ -456,6 +456,47 @@ test('backup shutdown retains the existing last registered dirty copy for a shar
 	assert.deepEqual((await backups.list()).map(backup => backup.content), ['second copy']);
 });
 
+test('pagehide before-shutdown backup failure retains the last valid snapshot through forced disposal', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test/' });
+	try {
+		Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
+		using services = new InstantiationService();
+		services.registerInstance(ILogService, new NullLoggerService());
+		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'failed-pagehide-check', flushInterval: 0 }));
+		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		using workingCopies = new BrowserWorkingCopyService();
+		using owner = new DisposableStore();
+		using backups = new MemoryBackups();
+		const errors: unknown[] = [];
+		const tracker = owner.add(new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error => errors.push(error)));
+		using copy = new TestWorkingCopy(URI.file('/shutdown/pagehide-before.ts'));
+		const registration = workingCopies.register(copy);
+		owner.add(registration);
+		copy.change('last valid snapshot');
+		await tracker.flush();
+		copy.change('cannot capture this version');
+		const captureError = new Error('Injected before-shutdown capture failure');
+		copy.duringBackup = () => { throw captureError; };
+		const phases: string[] = [];
+		lifecycle.onBeforeShutdown(event => event.veto(tracker.flush().then(() => false), 'working-copy backup flush'));
+		lifecycle.onBeforeShutdownError(event => { phases.push(`before-error:${event.reason}`); if (event.reason === 'pageHide') tracker.completeShutdown(); });
+		lifecycle.onWillShutdown(event => {
+			phases.push('will-shutdown');
+			event.join(() => tracker.shutdown(), 'final backup', () => tracker.isShutdownCurrent);
+		});
+		lifecycle.onDidShutdown(() => tracker.completeShutdown());
+		lifecycle.onDidShutdownError(reason => { phases.push('joined-error'); if (reason !== 'pageHide') tracker.cancelShutdown(); });
+		const shutdown = lifecycle.shutdown('pageHide').finally(() => owner.dispose());
+		await assert.rejects(shutdown, error => error instanceof AggregateError && error.errors[0].cause === captureError);
+		await tracker.flush();
+		assert.deepEqual({ phases, errors, content: (await backups.list()).map(backup => backup.content), willShutdown: lifecycle.willShutdown }, {
+			phases: ['before-error:pageHide'], errors: [], content: ['last valid snapshot'], willShutdown: false,
+		});
+	} finally {
+		browser.window.close();
+	}
+});
+
 test('failed pagehide drains before forced host disposal without restarting database operations', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test/' });
 	try {

@@ -75,7 +75,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		void this.flush().catch(this.onError);
 	}
 
-	/** Stops producers permanently after successful shutdown, before editor and database disposal. */
+	/** Stops producers after committed shutdown or forced pagehide teardown, before editor and database disposal. */
 	completeShutdown(): void {
 		if (this.stopped || this.isDisposed) return;
 		this.stopped = true;

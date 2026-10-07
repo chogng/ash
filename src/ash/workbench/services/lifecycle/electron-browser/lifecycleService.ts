@@ -15,7 +15,6 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 			void (async () => {
 				try {
 					await this.shutdown(reason);
-					await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'complete', token });
 				} catch (error) {
 					document.body.inert = false;
 					if (error instanceof ShutdownVetoError) {
@@ -27,7 +26,10 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 						kind: 'failed', token,
 						message: localize({ bundle: 'ash', key: 'workbench.closeSaveFailed' }, 'The window could not close because its state was not saved.'),
 					});
+					return;
 				}
+				// Successful shutdown has stopped its producers. A failed reply must not reopen editing.
+				await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'complete', token });
 			})().catch(error => console.error('Failed to complete window close request', error));
 		};
 		const closeRequests = subscribe<number>(WINDOW_PREPARE_CLOSE_CHANNEL, token => handleRequest(token, 'windowClose'));

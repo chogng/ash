@@ -507,15 +507,9 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 	await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
 	await group.editor.waitForEditorContents(content => content.includes('18'));
 });
-test('Electron backup shutdown failure resumes editing and a later close restores the new draft', async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
-	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-	const group = workbench.editors.groupAt(0);
-	await group.editor.input.focus();
-	await group.editor.input.type('before failed close');
-	const backupContents = (): Promise<string[]> => page.evaluate(async () => {
+
+async function workingCopyBackupContents(page: Page): Promise<string[]> {
+	return page.evaluate(async () => {
 		const database = await new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open('ash-working-copy-backups', 1);
 			request.onsuccess = () => resolve(request.result);
@@ -529,6 +523,17 @@ test('Electron backup shutdown failure resumes editing and a later close restore
 			});
 		} finally { database.close(); }
 	});
+}
+
+test('Electron backup shutdown failure resumes editing and a later close restores the new draft', async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.focus();
+	await group.editor.input.type('before failed close');
+	const backupContents = () => workingCopyBackupContents(page);
 	await expect.poll(backupContents).toContain('before failed close');
 	await application.evaluate(({ dialog }) => {
 		const state = globalThis as typeof globalThis & { backupCloseDialogs: string[]; restoreBackupCloseDialogs(): void; };
@@ -583,11 +588,105 @@ test('Electron backup shutdown failure resumes editing and a later close restore
 		({ workbench } = await reloadWorkbench());
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
 		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['after failed close']);
-		await testInfo.attach('backup-shutdown-failure-retry', { body: JSON.stringify({ fault, expectedFailure: errors, subsequentEditDurable: true, retryCloseAndRestore: true }), contentType: 'application/json' });
+		const evidence = testInfo.outputPath('backup-shutdown-failure-retry.json');
+		await writeFile(evidence, JSON.stringify({ fault, expectedFailure: errors, subsequentEditDurable: true, retryCloseAndRestore: true }));
+		await testInfo.attach('backup-shutdown-failure-retry', { path: evidence, contentType: 'application/json' });
 	} finally {
 		if (!restored && !page.isClosed()) {
 			await page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { restore(): void; }; }).backupCloseFault.restore());
 			await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void; }).restoreBackupCloseDialogs());
+		}
+	}
+});
+
+test('Electron keeps a completed shutdown sealed after its close token expires and restores content after a new close', async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.focus();
+	await group.editor.input.type('committed draft before expired close');
+	await expect.poll(() => workingCopyBackupContents(page)).toContain('committed draft before expired close');
+	await application.evaluate(({ dialog }) => {
+		const originalTimeout = globalThis.setTimeout;
+		const originalDialog = dialog.showMessageBox;
+		const state = { messages: [] as string[], expire: undefined as (() => void) | undefined, timer: undefined as ReturnType<typeof setTimeout> | undefined };
+		(globalThis as typeof globalThis & { backupCloseDeadline: typeof state & { restore(): void; }; }).backupCloseDeadline = {
+			...state,
+			restore: () => { globalThis.setTimeout = originalTimeout; dialog.showMessageBox = originalDialog; if (state.timer) clearTimeout(state.timer); },
+		};
+		const capture = (globalThis as typeof globalThis & { backupCloseDeadline: typeof state; }).backupCloseDeadline;
+		globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+			const timer = originalTimeout(...args);
+			const [callback, delay, ...parameters] = args;
+			if (delay === 30_000) {
+				state.timer = timer;
+				capture.expire = () => { clearTimeout(timer); callback(...parameters); };
+			}
+			return timer;
+		}) as typeof setTimeout;
+		dialog.showMessageBox = (async (...args: unknown[]) => {
+			capture.messages.push((args.at(-1) as { message: string; }).message);
+			return { response: 0, checkboxChecked: false };
+		}) as typeof dialog.showMessageBox;
+	});
+	await page.evaluate(() => {
+		const original = IDBDatabase.prototype.transaction;
+		const state = { writes: 0, heldAt: 0, release: undefined as (() => void) | undefined, restore: () => { IDBDatabase.prototype.transaction = original; } };
+		(globalThis as typeof globalThis & { backupCompletionGate: typeof state; }).backupCompletionGate = state;
+		IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<typeof original>): ReturnType<typeof original> {
+			const transaction = original.apply(this, args);
+			if (this.name === 'ash-working-copy-backups' && args[1] === 'readwrite' && ++state.writes === 2) {
+				// The real final transaction commits; delay only its completion notification until the main token expires.
+				let completed: typeof transaction.oncomplete = null;
+				Object.defineProperty(transaction, 'oncomplete', { configurable: true, get: () => completed, set: (handler: typeof completed) => { completed = handler; } });
+				transaction.addEventListener('complete', event => {
+					state.heldAt = state.writes;
+					state.release = () => { Reflect.deleteProperty(transaction, 'oncomplete'); completed?.call(transaction, event); state.release = undefined; };
+				}, { once: true });
+			}
+			return transaction;
+		};
+	});
+	let restored = false;
+	try {
+		const window = await application.browserWindow(page);
+		await window.evaluate(window => window.close());
+		await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCompletionGate: { heldAt: number; }; }).backupCompletionGate.heldAt)).toBe(2);
+		await application.evaluate(() => {
+			const deadline = (globalThis as typeof globalThis & { backupCloseDeadline: { expire?: () => void; }; }).backupCloseDeadline;
+			if (!deadline.expire) throw new Error('Main close deadline was not captured');
+			deadline.expire();
+		});
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { messages: string[]; }; }).backupCloseDeadline.messages)).toEqual(['The window did not respond to the close request.']);
+		await page.evaluate(() => {
+			const gate = (globalThis as typeof globalThis & { backupCompletionGate: { release?: () => void; restore(): void; }; }).backupCompletionGate;
+			if (!gate.release) throw new Error('Final transaction notification was not held');
+			gate.release();
+			gate.restore();
+		});
+		await expect.poll(() => runningApplication.diagnostics.consoleErrors.filter(message => /Failed to complete window close request/u.test(message) && /Window close request is no longer active/u.test(message))).toHaveLength(1);
+		await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(true);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
+		await expect(group.editor.lines).toHaveText(['committed draft before expired close']);
+		const errors = [...runningApplication.diagnostics.consoleErrors];
+		await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
+		restored = true;
+		({ workbench } = await reloadWorkbench());
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['committed draft before expired close']);
+		const evidence = testInfo.outputPath('backup-completion-expired-token-retry.json');
+		await writeFile(evidence, JSON.stringify({ finalWriteHeldAt: 2, expectedFailure: errors, sealedAfterCommit: true, newCloseAndRestore: true }));
+		await testInfo.attach('backup-completion-expired-token-retry', { path: evidence, contentType: 'application/json' });
+	} finally {
+		if (!restored && !page.isClosed()) {
+			await page.evaluate(() => {
+				const gate = (globalThis as typeof globalThis & { backupCompletionGate: { release?: () => void; restore(): void; }; }).backupCompletionGate;
+				gate.release?.();
+				gate.restore();
+			});
+			await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
 		}
 	}
 });
