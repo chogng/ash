@@ -57,7 +57,7 @@ export class SessionsBrowserMain extends Disposable {
 			const host = globalThis.ashWebWorkbenchHost;
 			const ownerWindow = container.ownerDocument.defaultView;
 			if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
-			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB));
+			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB, ownerWindow));
 			const workbench = this._register(await createSessionsWorkbench({
 				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
 				createTextDocumentHost: documentClient ? services => {

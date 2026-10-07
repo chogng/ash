@@ -1,4 +1,5 @@
-import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
@@ -9,6 +10,7 @@ import { EditorInputSerializers } from '../../../src/ash/workbench/services/edit
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Schemas } from '../../../src/ash/base/common/network.js';
 import { IndexedDBFileSystemProvider } from '../../../src/ash/platform/files/browser/indexedDBFileSystemProvider.js';
+import { HTMLFileSystemProvider } from '../../../src/ash/platform/files/browser/htmlFileSystemProvider.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
@@ -42,9 +44,140 @@ let originalName = 'Before';
 let textGroups: EditorPart | undefined;
 let sharedText: TextModel | undefined;
 let textResolutions = 0;
+const browserWatchResources = new DisposableStore();
+const browserWatchShutdown = addDisposableListener(window, 'pagehide', () => {
+	browserWatchResources.dispose();
+	browserWatchShutdown.dispose();
+}, { once: true });
+let browserFolder: FileSystemDirectoryHandle;
+let browserFiles: FileService;
+let browserProvider: HTMLFileSystemProvider;
+let browserWatch: DisposableStore;
+let firstBrowserWatch: IDisposable;
+let browserWatchRoot: URI;
+const browserWatchEvents: (string[] | null)[] = [];
+interface ObservationRecord {
+	readonly type: string;
+	readonly relativePathComponents: string[];
+	readonly relativePathMovedFrom?: string[];
+}
+const observations: { callback: (records: ObservationRecord[]) => void; disconnected: number; recursive: boolean | undefined; }[] = [];
+let finishObservation: (() => void) | undefined;
+let permissionQueries = 0;
+let permissionRequests = 0;
+const foregroundSubscriptions = new Set<EventListenerOrEventListenerObject>();
+
+function trackForegroundListeners(target: EventTarget, eventType: string): void {
+	const add = target.addEventListener;
+	const remove = target.removeEventListener;
+	const addDescriptor = Object.getOwnPropertyDescriptor(target, 'addEventListener');
+	const removeDescriptor = Object.getOwnPropertyDescriptor(target, 'removeEventListener');
+	Object.defineProperty(target, 'addEventListener', {
+		configurable: true,
+		value: function (this: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void {
+			if (type === eventType) foregroundSubscriptions.add(listener);
+			add.call(this, type, listener, options);
+		},
+	});
+	Object.defineProperty(target, 'removeEventListener', {
+		configurable: true,
+		value: function (this: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void {
+			if (type === eventType) foregroundSubscriptions.delete(listener);
+			remove.call(this, type, listener, options);
+		},
+	});
+	browserWatchResources.add(toDisposable(() => {
+		if (addDescriptor) Object.defineProperty(target, 'addEventListener', addDescriptor);
+		else Reflect.deleteProperty(target, 'addEventListener');
+		if (removeDescriptor) Object.defineProperty(target, 'removeEventListener', removeDescriptor);
+		else Reflect.deleteProperty(target, 'removeEventListener');
+	}));
+}
+
 const textInput = { resource: URI.parse('review:/content.txt'), label: 'Provider text', languageId: 'plaintext' };
 const integration = {
 	get changes(): number { return changes; },
+	async prepareBrowserWatch(mode: 'unavailable' | 'available' | 'rejected' | 'pending' | 'real', recursive = true, excludes: string[] = []): Promise<string> {
+		browserWatchResources.clear();
+		if (foregroundSubscriptions.size !== 0) throw new Error('Previous watches leaked foreground listeners');
+		browserWatchEvents.length = 0;
+		observations.length = 0;
+		finishObservation = undefined;
+		permissionQueries = 0;
+		permissionRequests = 0;
+		trackForegroundListeners(window, 'focus');
+		trackForegroundListeners(document, 'visibilitychange');
+		const descriptor = Object.getOwnPropertyDescriptor(window, 'FileSystemObserver');
+		if (mode !== 'real') {
+			Object.defineProperty(window, 'FileSystemObserver', {
+				configurable: true,
+				value: mode === 'unavailable' ? undefined : class {
+					private readonly observation: typeof observations[number];
+					constructor(callback: (records: ObservationRecord[]) => void) {
+						this.observation = { callback, disconnected: 0, recursive: undefined };
+						observations.push(this.observation);
+					}
+					async observe(_handle: FileSystemHandle, options: { recursive: boolean; }): Promise<void> {
+						this.observation.recursive = options.recursive;
+						if (mode === 'rejected') throw new DOMException('Observation unavailable', 'NotSupportedError');
+						if (mode === 'pending') await new Promise<void>(resolve => { finishObservation = resolve; });
+					}
+					disconnect(): void { this.observation.disconnected++; }
+				},
+			});
+			browserWatchResources.add(toDisposable(() => {
+				if (descriptor) Object.defineProperty(window, 'FileSystemObserver', descriptor);
+				else Reflect.deleteProperty(window, 'FileSystemObserver');
+			}));
+		}
+		browserFolder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`watch-${crypto.randomUUID()}`, { create: true });
+		browserProvider = browserWatchResources.add(new HTMLFileSystemProvider(indexedDB, window));
+		browserWatchRoot = await browserProvider.registerDirectoryHandle(browserFolder);
+		browserFiles = browserWatchResources.add(new FileService());
+		browserWatchResources.add(browserFiles.registerProvider(Schemas.file, browserProvider));
+		browserWatchResources.add(browserFiles.onDidChangeFiles(event => {
+			browserWatchEvents.push(event.resources?.map(resource => resource.toString()) ?? null);
+		}));
+		browserWatch = browserWatchResources.add(new DisposableStore());
+		firstBrowserWatch = browserWatch.add(browserFiles.watch(browserWatchRoot, { recursive, excludes }));
+		browserWatch.add(browserFiles.watch(browserWatchRoot, { recursive, excludes }));
+		return browserWatchRoot.toString();
+	},
+	get browserWatchEvents(): (string[] | null)[] { return browserWatchEvents; },
+	get observations(): { disconnected: number; recursive: boolean | undefined; }[] {
+		return observations.map(({ disconnected, recursive }) => ({ disconnected, recursive }));
+	},
+	get permissionQueries(): number { return permissionQueries; },
+	get permissionRequests(): number { return permissionRequests; },
+	get foregroundSubscriptions(): number { return foregroundSubscriptions.size; },
+	setBrowserPermission(permission: PermissionState): void {
+		const query = Object.getOwnPropertyDescriptor(browserFolder, 'queryPermission');
+		const request = Object.getOwnPropertyDescriptor(browserFolder, 'requestPermission');
+		Object.defineProperty(browserFolder, 'queryPermission', { configurable: true, value: async () => { permissionQueries++; return permission; } });
+		Object.defineProperty(browserFolder, 'requestPermission', { configurable: true, value: async () => { permissionRequests++; throw new Error('Background permission request'); } });
+		browserWatchResources.add(toDisposable(() => {
+			if (query) Object.defineProperty(browserFolder, 'queryPermission', query);
+			else Reflect.deleteProperty(browserFolder, 'queryPermission');
+			if (request) Object.defineProperty(browserFolder, 'requestPermission', request);
+			else Reflect.deleteProperty(browserFolder, 'requestPermission');
+		}));
+	},
+	clearBrowserEvents(): void { browserWatchEvents.length = 0; },
+	emitObservation(index: number, records: ObservationRecord[]): void { observations[index]!.callback(records); },
+	finishObservation(): void { finishObservation!(); },
+	closeBrowserWatch(): void { browserWatch.dispose(); },
+	releaseFirstBrowserWatch(): void { firstBrowserWatch.dispose(); },
+	closeBrowserProvider(): void { browserProvider.dispose(); },
+	async changeBrowserFile(name: string, content: string | null): Promise<void> {
+		if (content === null) await browserFolder.removeEntry(name);
+		else {
+			const file = await browserFolder.getFileHandle(name, { create: true });
+			const writer = await file.createWritable();
+			await writer.write(content);
+			await writer.close();
+		}
+	},
+	readBrowserFile: async (name: string): Promise<string> => (await browserFiles.readFile(browserWatchRoot.joinPathSegment(name))).content,
 	async offlineExtensionFolders(): Promise<unknown> {
 		using lifetime = new DisposableStore();
 		const browserRoot = resource.with({ path: '/offline-project' });

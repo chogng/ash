@@ -1,5 +1,8 @@
+import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { parse, type ParsedPattern } from '../../../base/common/glob.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { extUri } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from '../common/files.js';
@@ -19,6 +22,26 @@ interface IterableDirectoryHandle extends FileSystemDirectoryHandle {
 	entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
 }
 
+// The browser observation API is optional and is not yet declared by our DOM library.
+interface BrowserFileSystemObserver {
+	observe(handle: FileSystemHandle, options: { recursive: boolean; }): Promise<void>;
+	disconnect(): void;
+}
+
+interface BrowserFileSystemRecord {
+	readonly type: string;
+	readonly relativePathComponents: readonly string[];
+	readonly relativePathMovedFrom?: readonly string[];
+}
+
+interface BrowserFileWatch extends DisposableStore {
+	readonly resource: URI;
+	readonly options: IWatchOptions;
+	readonly excludes: readonly ParsedPattern[];
+	readonly observer: MutableDisposable<IDisposable>;
+	isStarting: boolean;
+}
+
 const DATABASE_NAME = 'ash-browser-folders';
 const STORE_NAME = 'directories';
 const ROOT_PREFIX = '/@browser/';
@@ -30,9 +53,13 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	private readonly database: Promise<IDBDatabase>;
 	private readonly directories = new Map<string, SavedDirectory>();
+	private readonly watches = this._register(new DisposableMap<object, BrowserFileWatch>());
+	private readonly foregroundListeners = this._register(new MutableDisposable<DisposableStore>());
+	private isRefreshScheduled = false;
+	private shouldRetryObservers = false;
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(factory: IDBFactory) {
+	constructor(factory: IDBFactory, private readonly ownerWindow: Window) {
 		super();
 		this.database = openDatabase(factory);
 		this._register(toDisposable(() => { void this.database.then(database => database.close()); }));
@@ -100,11 +127,146 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		return { resource, bytes, revision: await revision(bytes) };
 	}
 
-	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+	public watch(resource: URI, options: IWatchOptions): IDisposable {
 		this.assertNotDisposed();
 		partsOf(resource);
-		// Picked-folder APIs have no system watcher; editor focus still revalidates disk content.
-		return Disposable.None;
+		const excludes = options.excludes.map(pattern => parse(pattern));
+		const lifetime = new DisposableStore();
+		const watch: BrowserFileWatch = Object.assign(lifetime, {
+			resource,
+			options: { recursive: options.recursive, excludes: [...options.excludes] },
+			excludes,
+			observer: lifetime.add(new MutableDisposable<IDisposable>()),
+			isStarting: false,
+		});
+		this.watches.set(watch, watch);
+		if (!this.foregroundListeners.value) {
+			const listeners = this.foregroundListeners.value = new DisposableStore();
+			listeners.add(addDisposableListener(this.ownerWindow, 'focus', () => this.scheduleRefresh(true)));
+			listeners.add(addDisposableListener(this.ownerWindow.document, 'visibilitychange', () => this.scheduleRefresh(true)));
+		}
+		void this.startWatching(watch);
+		return toDisposable(() => {
+			this.watches.deleteAndDispose(watch);
+			if (this.watches.size === 0) {
+				this.foregroundListeners.clear();
+			}
+		});
+	}
+
+	private async startWatching(watch: BrowserFileWatch): Promise<void> {
+		if (this.isDisposed || watch.isDisposed || watch.isStarting || watch.observer.value) {
+			return;
+		}
+		const Observer = (this.ownerWindow as Window & {
+			FileSystemObserver?: new (callback: (records: readonly BrowserFileSystemRecord[]) => void) => BrowserFileSystemObserver;
+		}).FileSystemObserver;
+		if (typeof Observer !== 'function') {
+			return;
+		}
+		watch.isStarting = true;
+		let observer: BrowserFileSystemObserver | undefined;
+		try {
+			// Restored handles are queried without prompting; permission can only be granted by a user action.
+			const handle = await this.handle(watch.resource);
+			if (this.isDisposed || watch.isDisposed) {
+				return;
+			}
+			let observation: IDisposable | undefined;
+			observer = new Observer(records => {
+				if (observation && watch.observer.value === observation) {
+					this.acceptWatchRecords(watch, records);
+				}
+			});
+			const activeObserver = observer;
+			observation = toDisposable(() => activeObserver.disconnect());
+			watch.observer.value = observation;
+			await observer.observe(handle, { recursive: watch.options.recursive });
+			// Recheck the loaded views after registration, covering changes during asynchronous handle lookup.
+			this.scheduleRefresh();
+		} catch {
+			// Unsupported handles, revoked permission and observation limits retain the foreground fallback.
+			watch.observer.clear();
+		} finally {
+			watch.isStarting = false;
+			// An observation that completes after cancellation must not revive the released watch.
+			if (this.isDisposed || watch.isDisposed) {
+				observer?.disconnect();
+			}
+		}
+	}
+
+	private acceptWatchRecords(watch: BrowserFileWatch, records: readonly BrowserFileSystemRecord[]): void {
+		if (this.isDisposed || watch.isDisposed || records.length === 0) {
+			return;
+		}
+		const resources = new Map<string, URI>();
+		let shouldRescan = false;
+		for (const record of records) {
+			if (record.type === 'errored') {
+				watch.observer.clear();
+			}
+			if (!['appeared', 'disappeared', 'modified', 'moved'].includes(record.type)) {
+				shouldRescan = true;
+				continue;
+			}
+			const paths = [record.relativePathComponents];
+			if (record.type === 'moved') {
+				if (record.relativePathMovedFrom) {
+					paths.push(record.relativePathMovedFrom);
+				} else {
+					shouldRescan = true;
+				}
+			}
+			for (const parts of paths) {
+				if (parts.some(part => !part || part === '.' || part === '..' || part.includes('/') || part.includes('\\'))) {
+					shouldRescan = true;
+					continue;
+				}
+				if (!watch.options.recursive && parts.length > 1) {
+					continue;
+				}
+				const resource = parts.reduce((parent, name) => childUri(parent, name), watch.resource);
+				if (watch.excludes.some(matches => matches(parts.join('/')) || matches(resource.path))) {
+					continue;
+				}
+				resources.set(extUri.getComparisonKey(resource), resource);
+			}
+		}
+		if (this.ownerWindow.document.hidden) {
+			return;
+		}
+		if (shouldRescan) {
+			this.scheduleRefresh();
+		} else if (resources.size > 0) {
+			this.changes.fire({ resources: [...resources.values()] });
+		}
+	}
+
+	private scheduleRefresh(retryObservers = false): void {
+		if (this.isDisposed || this.watches.size === 0 || this.ownerWindow.document.hidden) {
+			return;
+		}
+		this.shouldRetryObservers ||= retryObservers;
+		if (this.isRefreshScheduled) {
+			return;
+		}
+		this.isRefreshScheduled = true;
+		this.ownerWindow.queueMicrotask(() => {
+			this.isRefreshScheduled = false;
+			const shouldRetry = this.shouldRetryObservers;
+			this.shouldRetryObservers = false;
+			if (this.isDisposed || this.watches.size === 0 || this.ownerWindow.document.hidden) {
+				return;
+			}
+			// Coarse invalidation rechecks open clean models and loaded, expanded tree nodes; it never scans the workspace here.
+			this.changes.fire({ resources: undefined });
+			if (shouldRetry) {
+				for (const [, watch] of this.watches) {
+					void this.startWatching(watch);
+				}
+			}
+		});
 	}
 
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {

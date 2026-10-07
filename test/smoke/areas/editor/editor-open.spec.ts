@@ -3,6 +3,69 @@ import { basename, join } from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
+test('browser picked folders refresh expanded directories and clean editors on resume while preserving unsaved edits', async ({ target, workbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires browser folder access');
+	const page = workbench.page;
+	const folderName = await page.evaluate(async () => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`watch-smoke-${crypto.randomUUID()}`, { create: true });
+		const nested = await folder.getDirectoryHandle('nested', { create: true });
+		for (const [directory, name] of [[folder, 'main.txt'], [nested, 'before.txt']] as const) {
+			const writer = await (await directory.getFileHandle(name, { create: true })).createWritable();
+			await writer.write('initial content');
+			await writer.close();
+		}
+		Object.defineProperty(window, 'FileSystemObserver', { configurable: true, value: undefined });
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		return folder.name;
+	});
+	await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	const explorer = page.locator('.ash-explorer');
+	await explorer.getByRole('treeitem', { name: 'main.txt', exact: true }).dblclick();
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorContents(content => content === 'initial content');
+	const nested = explorer.getByRole('treeitem', { name: 'nested', exact: true });
+	await nested.locator('.ash-tree-twistie').click();
+	await expect(nested).toHaveAttribute('aria-expanded', 'true');
+	await expect(explorer.getByRole('treeitem', { name: /before\.txt$/u })).toBeVisible();
+	await page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		const writer = await (await folder.getFileHandle('main.txt')).createWritable();
+		await writer.write('external update');
+		await writer.close();
+		const nested = await folder.getDirectoryHandle('nested');
+		await nested.removeEntry('before.txt');
+		const added = await (await nested.getFileHandle('after.txt', { create: true })).createWritable();
+		await added.write('external creation');
+		await added.close();
+		window.dispatchEvent(new Event('focus'));
+		document.dispatchEvent(new Event('visibilitychange'));
+	}, folderName);
+	await editor.waitForEditorContents(content => content === 'external update');
+	await expect(explorer.getByRole('treeitem', { name: /before\.txt$/u })).toHaveCount(0);
+	await expect(explorer.getByRole('treeitem', { name: /after\.txt$/u })).toBeVisible();
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('unsaved content');
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.txt' })).toHaveAttribute('aria-label', /unsaved changes/u);
+	await page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		const writer = await (await folder.getFileHandle('main.txt')).createWritable();
+		await writer.write('competing external update');
+		await writer.close();
+		await (await folder.getDirectoryHandle('nested')).removeEntry('after.txt');
+		document.dispatchEvent(new Event('visibilitychange'));
+	}, folderName);
+	await expect(explorer.getByRole('treeitem', { name: /after\.txt$/u })).toHaveCount(0);
+	await editor.waitForEditorContents(content => content === 'unsaved content');
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+S');
+	await expect(page.getByRole('dialog')).toContainText(/changed|conflict|modified/i);
+	expect(await page.evaluate(async name => {
+		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+		return await (await (await folder.getFileHandle('main.txt')).getFile()).text();
+	}, folderName)).toBe('competing external update');
+});
+
 test('large YAML lockfiles highlight text and minimap without editor interaction', async ({ target, testWorkspace, workbench }, testInfo) => {
 	test.skip(target.appServerMode !== 'required', 'Bundled language grammars require the Code App Server product.');
 	const text = await readFile(new URL('../../../../pnpm-lock.yaml', import.meta.url), 'utf8');

@@ -95,21 +95,21 @@ Rust primitive 与 model adapter 的实现细节分别见
 [`crates/utils/path-uri/README.md`](../crates/utils/path-uri/README.md)；Project root 的 App Server
 输出已接入该契约，Files 的共享 URI 状态仍为“部分具备”。
 
-| 能力                                              | Owner                                        | 当前状态                                                                  |
-| ------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------- |
-| 文件树渲染、展开、加载态                          | Renderer                                     | ✅ 单目录 Explorer 与 Seti 文件图标                                       |
-| 选中、快捷键、文件打开与编辑                      | Renderer                                     | 已接入文件编辑和保存；选择与快捷键由 Explorer 和 Editor 维护               |
-| 系统目录选择器                                    | Electron Main / Preload                      | ✅ Empty Explorer 选择单目录并重启绑定 workspace                          |
-| 在原生文件管理器中显示                            | Electron Main / Preload                      | 尚未完成                                                                  |
-| 目录枚举、metadata、文件读写与 workspace 边界校验 | Rust / App Server                            | ✅ metadata、目录枚举、原始字节读写和条件发布                              |
-| 重命名、删除                                      | Rust / App Server                            | 尚未完成                                                                  |
-| workspace 内容搜索执行、取消与结果限额            | Rust / App Server                            | ✅ connection-owned pull job                                              |
-| 搜索表单、增量结果分组与高亮                      | Renderer                                     | ✅ Search contrib                                                         |
-| 搜索结果打开文件                                  | Files / Editor vertical                      | 尚未完成                                                                  |
-| Explorer watcher invalidation 与文件树自动刷新    | Rust / App Server + Renderer                  | ✅ Renderer 消费 `fs/changed`，当前 Workspace 拥有 watch 句柄              |
-| 文件位置 identity                                 | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射                                                   |
-| 跨重启的领域 `FileId` 或 `DocumentId`             | 拥有该生命周期的 Rust 领域模型               | 尚未完成                                                                  |
-| Tab、Pane 等纯 UI 实例 ID                         | Renderer                                     | 已有 Workbench 基础设施                                                   |
+| 能力                                              | Owner                                        | 当前状态                                                          |
+| ------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| 文件树渲染、展开、加载态                          | Renderer                                     | ✅ 单目录 Explorer 与 Seti 文件图标                               |
+| 选中、快捷键、文件打开与编辑                      | Renderer                                     | 已接入文件编辑和保存；选择与快捷键由 Explorer 和 Editor 维护      |
+| 系统目录选择器                                    | Electron Main / Preload                      | ✅ Empty Explorer 选择单目录并重启绑定 workspace                  |
+| 在原生文件管理器中显示                            | Electron Main / Preload                      | 尚未完成                                                          |
+| 目录枚举、metadata、文件读写与 workspace 边界校验 | Rust / App Server                            | ✅ metadata、目录枚举、原始字节读写和条件发布                     |
+| 重命名、删除                                      | Rust / App Server                            | 尚未完成                                                          |
+| workspace 内容搜索执行、取消与结果限额            | Rust / App Server                            | ✅ connection-owned pull job                                      |
+| 搜索表单、增量结果分组与高亮                      | Renderer                                     | ✅ Search contrib                                                 |
+| 搜索结果打开文件                                  | Files / Editor vertical                      | 尚未完成                                                          |
+| Explorer watcher invalidation 与文件树自动刷新    | 文件 provider + Renderer                     | ✅ Workspace 持有 watch；Rust 事件或浏览器观察 / 前台回退驱动刷新 |
+| 文件位置 identity                                 | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射                                           |
+| 跨重启的领域 `FileId` 或 `DocumentId`             | 拥有该生命周期的 Rust 领域模型               | 尚未完成                                                          |
+| Tab、Pane 等纯 UI 实例 ID                         | Renderer                                     | 已有 Workbench 基础设施                                           |
 
 集成终端同样按 UI 与进程 authority 拆分：
 
@@ -394,7 +394,11 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 注销或服务销毁时关闭句柄；`WorkspaceWatcher` 随当前目录集合更新注册。Rust 继续拥有授权目录
 的 OS 监听和 `fs/changed`，Renderer 的 watch 不重复建立系统监听。Electron profile 目录的
 OS 监听由 Main 的 `DiskFileSystemProvider` 持有，随窗口关闭释放；用户数据 provider 映射其事件。
-IndexedDB 通过跨窗口消息提供变化通知；浏览器选取的文件夹没有系统监听，仍在编辑器恢复焦点时校验内容。
+IndexedDB 通过跨窗口消息提供变化通知。浏览器选取的文件夹由 `HTMLFileSystemProvider` 检测并接入
+`FileSystemObserver`，把变化和移动前后的路径转成 FileService 事件。观察失效或页面恢复焦点、重新可见时，
+通过失效通知重读打开且未修改的文件和已加载、展开的 Explorer 目录；不支持观察 API 时同样使用这条前台回退路径，
+后台不轮询，也不自动请求权限。最后一个 watch 释放时移除页面监听，取消或卸载 provider 时断开观察器；
+未保存内容继续由文本模型保护，保存时校验内容 revision。
 
 Workspace 内容搜索通过独立的
 `grep/search/start|read|cancel` contract 接入；其 ownership 与限制见

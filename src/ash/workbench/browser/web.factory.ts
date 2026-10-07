@@ -123,7 +123,7 @@ export async function startWebWorkbench(
 		}
 		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>; };
 		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
-			? new HTMLFileSystemProvider(globalThis.indexedDB)
+			? new HTMLFileSystemProvider(globalThis.indexedDB, window)
 			: undefined;
 		const instance = await createWebWorkbench({
 			...options,
