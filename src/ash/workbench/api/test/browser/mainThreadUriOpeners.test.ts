@@ -15,7 +15,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../platform/configuration/common/configurationSchema.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import type { AppServerConnectionState } from '../../../../platform/app-server/common/appServerApi.js';
+import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionHostApi, normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../platform/extensionHost/common/extensionHostApi.js';
 import { externalUriOpenersConfigurationNode } from '../../../contrib/externalUriOpener/common/configuration.js';
 import { IExternalUriOpenerService } from '../../../contrib/externalUriOpener/common/externalUriOpenerService.js';

@@ -3,7 +3,7 @@ import { test } from "mocha";
 import {
 	createDisconnectedRendererApi,
 	WebAppServerUnavailableError,
-} from "../../../../platform/app-server/browser/rendererApi.js";
+} from "../../browser/rendererApi.js";
 
 test("disconnected Web renderer API reports stopped without events", async () => {
 	const api = createDisconnectedRendererApi();

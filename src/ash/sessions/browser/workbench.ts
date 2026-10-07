@@ -16,7 +16,7 @@ import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionA
 import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
-import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
+import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
@@ -96,7 +96,7 @@ import { SessionsWorkspaceContextService } from '../services/workspace/browser/w
 import { GitService } from '../../workbench/contrib/git/browser/gitService.js';
 import { IGitService } from '../../workbench/contrib/git/common/gitService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
-import { SessionFileService } from '../contrib/providers/appServer/browser/sessionFileService.js';
+import { SessionFileService } from '../contrib/providers/agentHost/browser/sessionFileService.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
@@ -187,8 +187,8 @@ import type { BrowserStorageServiceOptions } from "../../workbench/services/stor
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
 import { WorkbenchThemeService } from "../../workbench/services/themes/browser/workbenchThemeService.js";
 import { IHostColorSchemeService } from '../../workbench/services/themes/common/hostColorSchemeService.js';
-import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from "../contrib/providers/appServer/browser/appServerSessionsProvider.js";
-import { AppServerTeamsProvider } from '../contrib/providers/appServer/browser/appServerTeamsProvider.js';
+import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from "../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
+import { AppServerTeamsProvider } from '../contrib/providers/agentHost/browser/appServerTeamsProvider.js';
 import { TeamsManagementService } from '../services/teams/browser/teamsManagementService.js';
 import { ITeamsManagementService } from '../services/teams/common/teamsManagement.js';
 import { SessionsAccountMenu } from '../contrib/accounts/browser/sessionsAccountMenu.js';

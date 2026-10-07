@@ -10,7 +10,7 @@ import type { ILocalTranscriptionService } from '../../localTranscription/common
 import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
-import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
+import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../agentHost/common/appServerApi.js";
 import type { IExtensionApi } from "../../extensions/common/extensionApi.js";
 import type { IFileApi } from "../../files/common/fileApi.js";
 import type { IDiffApi } from "../../diff/common/diffApi.js";

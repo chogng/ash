@@ -1,8 +1,8 @@
 import type { DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
-import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
-import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
+import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
+import { AppServerRemoteError } from "../../agentHost/common/appServerError.js";
+import type { AppServerConnectionRelay } from "../../agentHost/electron-main/appServerConnectionRelay.js";
 import { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { RemoteAppServerProcessLauncher } from '../../remote/electron-main/remoteAppServerProcessLauncher.js';
 import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';

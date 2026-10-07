@@ -15,7 +15,7 @@ Workbench / 编辑器调用方
 
 前端 Service 是调用方的稳定契约。它决定 UI 看见什么状态和错误、如何订阅变化，以及何时释放资源；如果一个能力只是简单的领域 API，并无需要管理的前端状态，也不必为了目录整齐新建 Service。领域适配层负责类型与协议的转换，不保存另一份后端持久状态。多个领域 API 复用一个窗口的协议客户端，不能各自启动进程或建立连接。
 
-例如 [Workbench 装配](../src/ash/workbench/browser/workbench.ts)把 `api.git` 交给 Git Service；[Git API](../src/ash/platform/git/browser/gitApi.ts)将 `status()` 映射为 `git/status` 请求；[Renderer API 装配](../src/ash/platform/app-server/browser/webRendererApi.ts)让 Git、账户、会话等领域 API 共用协议客户端。普通 UI 不需要知道请求 ID、JSON-RPC 消息或连接端口。
+例如 [Workbench 装配](../src/ash/workbench/browser/workbench.ts)把 `api.git` 交给 Git Service；[Git API](../src/ash/platform/git/browser/gitApi.ts)将 `status()` 映射为 `git/status` 请求；[Renderer API 装配](../src/ash/platform/agentHost/browser/webRendererApi.ts)让 Git、账户、会话等领域 API 共用协议客户端。普通 UI 不需要知道请求 ID、JSON-RPC 消息或连接端口。
 
 ## 目录按职责选择
 
@@ -23,9 +23,9 @@ Workbench / 编辑器调用方
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
 | `platform/<领域>/common/`、`workbench/services/<领域>/common/` 或 `workbench/contrib/<功能>/common/`    | 前端领域接口和类型                                                   | 传输消息、生成协议类型                                 |
 | `platform/<领域>/browser/`、`workbench/services/<领域>/browser/` 或 `workbench/contrib/<功能>/browser/` | 领域 API 适配层、Service 实现                                        | 进程启动、通用连接状态                                 |
-| `platform/app-server/browser/`                                                                          | 协议客户端、请求配对、初始化和通知                                   | 具体领域的业务状态                                     |
-| `platform/app-server/electron-browser/`                                                                 | Renderer 的 MessagePort 传输                                         | Rust 进程管理                                          |
-| `platform/app-server/electron-main/`                                                                    | 窗口连接、端口取得和透明转发，以及本地与远程启动器共用的连接载体契约 | daemon 包选择、业务方法路由、领域 Service              |
+| `platform/agentHost/browser/`                                                                          | 协议客户端、请求配对、初始化和通知                                   | 具体领域的业务状态                                     |
+| `platform/agentHost/electron-browser/`                                                                 | Renderer 的 MessagePort 传输                                         | Rust 进程管理                                          |
+| `platform/agentHost/electron-main/`                                                                    | 窗口连接、端口取得和透明转发，以及本地与远程启动器共用的连接载体契约 | daemon 包选择、业务方法路由、领域 Service              |
 | `platform/app-server-daemon/`                                                                           | 本地 daemon 连接程序、包路径与摘要校验、环境变量和开发构建重启       | JSON-RPC 请求配对、领域状态、Rust 进程管理的第二份实现 |
 | `code/electron-main/`                                                                                   | Electron 应用、窗口与上述组件的装配                                  | 领域协议解析                                           |
 | `crates/`                                                                                               | 协议入口及各 Rust 领域的执行与持久状态                               | 前端编辑器对象和窗口 UI                                |
@@ -34,7 +34,7 @@ Workbench / 编辑器调用方
 
 ## 谁启动后端
 
-桌面启动时，[Electron 应用入口](../src/ash/code/electron-main/app.ts)调用 [daemon 创建入口](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)，再装配窗口的连接转发组件。daemon 模块选择包、校验摘要、构造明确的环境变量；发布版运行 `ash-app-server-daemon connect`，开发版运行 `connect-selected`。[开发重载器](../src/ash/platform/app-server-daemon/electron-main/developmentAppServerReloader.ts)负责选择新的开发构建并明确重启后台。[连接转发组件](../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)把连接程序的消息与 Renderer 的 MessagePort 对接。[Rust daemon 客户端](../crates/app-server-daemon/src/client.rs)复用同一 profile 选中的受管理 App Server，首次没有后台包时从完整的随包后端安装，再转发当前连接的输入输出。
+桌面启动时，[Electron 应用入口](../src/ash/code/electron-main/app.ts)调用 [daemon 创建入口](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)，再装配窗口的连接转发组件。daemon 模块选择包、校验摘要、构造明确的环境变量；发布版运行 `ash-app-server-daemon connect`，开发版运行 `connect-selected`。[开发重载器](../src/ash/platform/app-server-daemon/electron-main/developmentAppServerReloader.ts)负责选择新的开发构建并明确重启后台。[连接转发组件](../src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts)把连接程序的消息与 Renderer 的 MessagePort 对接。[Rust daemon 客户端](../crates/app-server-daemon/src/client.rs)复用同一 profile 选中的受管理 App Server，首次没有后台包时从完整的随包后端安装，再转发当前连接的输入输出。
 
 窗口有各自的连接程序和协议客户端，后端服务进程可由多个窗口共用。关闭窗口只释放其连接，不停止共享后台；明确重启后台会影响同一 profile 的所有连接。实际进程管理、启动互斥和版本选择由 Rust daemon 拥有，TypeScript 模块只调用它。SSH 连接与远程运行包继续属于 `platform/remote`。
 
@@ -43,6 +43,10 @@ Web 页面使用另一条接入路径：浏览器直接连接经过认证的 App
 工作区切换由 [Workspace 运行时适配器](../src/ash/platform/workspaces/electron-main/appServerWorkspaceTransition.ts)执行：先持久化目录授权，再替换本窗口的连接与本地环境或 SSH 根目录，确认后更新目录；失败时恢复原连接和目录，两次失败都保留在错误中。`code/electron-main/app.ts` 只装配适配器及窗口上下文，不再拥有这套切换与回滚算法。此操作不停止 profile 共用的后台服务。
 
 ## 与 VS Code 的关系
+
+`platform/agentHost` 是 Ash 前端的后端接入 owner，承接 Renderer 协议客户端、传输、Main 连接转发和 [App Server 文件 provider](../src/ash/platform/agentHost/browser/appServerFileSystemProvider.ts)。它使用 Rust 生成的 app-server 协议，不运行 VS Code 的 Node agent runtime，也不引入 AHP 的 action/state 协议。`AppServer*` 名称标明这项实现使用的后端；没有相同协议与状态语义的接口，不通过改名伪装成上游契约。
+
+Workbench 和 Agents 的文件操作继续经过同一个 `IFileService` 契约。文件 provider 将 URI 转为授权目录内的路径，保留 revision 条件写入、连接资源分块与释放，以及 `fs/changed` 失效通知；text model、dirty buffer、undo 和保存冲突仍由前端编辑器拥有。[Sessions 文件适配](../src/ash/sessions/contrib/providers/agentHost/browser/sessionFileService.ts)只绑定原 Session 目录和搜索目标，切换选中 Session 不会重定向已经打开文件的保存位置。Sessions Provider 仍使用后端 Session/Thread 身份，不建立另一份持久状态。
 
 VS Code 的 Service 是前端取得能力的一种接口形式，也不意味着 Service 实现自己创建进程。其 Electron Main 创建 shared process（`src/vs/platform/sharedProcess/electron-main/sharedProcess.ts`）；扩展宿主由 Main 中的 `ExtensionHostStarter` 创建，Renderer 通过注册的远程 Service 请求它。Ash 可以借鉴“调用接口与进程生命周期分开”的边界，但 Rust App Server 是 Ash 自己的业务后端，不对应 VS Code 的某一个通用后端进程。
 

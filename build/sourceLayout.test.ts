@@ -105,7 +105,7 @@ test("build tools do not import repository command implementations", () => {
 	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.ts' && !path.endsWith('.test.ts'))) {
 		assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()\s*["'][^"']*\/scripts\//u, path);
 	}
-	const runtime = join(repositoryRoot, 'src/ash/platform/app-server/node');
+	const runtime = join(repositoryRoot, 'src/ash/platform/agentHost/node');
 	for (const path of walk(runtime).filter(path => extname(path) === '.ts')) {
 		assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()\s*["'][^"']*\/(?:build|scripts)\//u, path);
 	}

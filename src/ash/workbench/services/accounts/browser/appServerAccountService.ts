@@ -3,7 +3,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAccountApi } from '../../../../platform/accounts/common/accountApi.js';
 import type { Account, AccountLoginChallenge, AccountLoginCompletion, AccountLoginMethod, AccountState, IAccountService } from '../../../../platform/accounts/common/accountService.js';
-import type { IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 
 export class AppServerAccountService extends Disposable implements IAccountService {
 	private readonly _onDidChangeAccounts = this._register(new Emitter<AccountState>());

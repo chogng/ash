@@ -27,6 +27,14 @@ export const commands = Object.freeze({
 	},
 });
 
+export const window = Object.freeze({
+	registerStatusBar(registrationId, snapshot) {
+		if (typeof snapshot !== 'function') throw new TypeError('Status bar requires a snapshot callback');
+		// Compute activation metadata on demand so the registration never retains old command arguments.
+		return register({ registrationId, kind: 'statusBar', get revision() { return snapshot().revision; }, get entries() { return snapshot().entries; } });
+	},
+});
+
 export const languages = Object.freeze({
 	registerCompletionProvider(registrationId, languageIds, provider, triggerCharacters = []) {
 		if (typeof registrationId !== 'string' || !registrationId || !Array.isArray(languageIds) || !languageIds.length || languageIds.some(id => typeof id !== 'string' || !id) || new Set(languageIds).size !== languageIds.length || typeof provider?.provideCompletionItems !== 'function') {
@@ -131,6 +139,9 @@ function commandContext(requestId) {
 			},
 		}),
 		window: Object.freeze({
+			async setStatusBarEntries(registrationId, revision, entries) {
+				await request({ operation: 'setStatusBarEntries', registrationId, revision, entries }, 'done');
+			},
 			showInformationMessage: message => showMessage(message, 'information'),
 			showWarningMessage: message => showMessage(message, 'warning'),
 			showErrorMessage: message => showMessage(message, 'error'),
@@ -146,6 +157,7 @@ function commandContext(requestId) {
 
 // Only the host uses this export. Authority remains in Rust even if an extension calls it directly.
 export const __runtime = Object.freeze({
+	get isDisposed() { return phase === 'disposed'; },
 	beginActivation(extensionId) {
 		if (phase !== 'new') { throw new Error('Extension is already initialized'); }
 		phase = 'activating';

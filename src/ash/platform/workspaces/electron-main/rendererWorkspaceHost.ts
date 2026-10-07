@@ -1,4 +1,4 @@
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
 import { Disposable } from '../../../base/common/lifecycle.js';

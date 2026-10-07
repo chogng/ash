@@ -1,6 +1,6 @@
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import { type IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../../../.build/protocol/typescript/index.js";
 import type { IOutputChannel, IOutputService } from "../../output/common/output.js";

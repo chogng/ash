@@ -2,7 +2,7 @@ import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
 import { Schemas } from '../../base/common/network.js';
-import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
@@ -14,7 +14,7 @@ import { FileDialogService } from '../../workbench/services/dialogs/browser/file
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
 import { Disposable } from "../../base/common/lifecycle.js";
-import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
+import { createDisconnectedRendererApi } from "../../platform/agentHost/browser/rendererApi.js";
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';

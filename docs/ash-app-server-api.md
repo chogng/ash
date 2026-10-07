@@ -1458,7 +1458,7 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 | 测试树与编辑器按钮           | `src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts`                                                                     |
 | 协议与生成物                 | `crates/app-server-protocol/src/protocol/testing.rs`、`.build/protocol/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 直接引用同一份快照 |
 
-桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
+桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `src/ash/platform/agentHost/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
 
 内置支持 Cargo 工作区中的普通测试、宏展开后生成的测试、异步测试属性和文档测试。库、二进制及集成测试先通过 Cargo 编译，再读取测试程序的 `--list`；编译配置未启用的测试不进入目录。Rust 语法树只补充源码位置，宏生成的测试没有可靠位置时 `source` 为 `null`，仍可运行和调试。文档测试通过 rustdoc 列举和执行，保留 `ignore`、`no_run`、`compile_fail` 的含义。
 

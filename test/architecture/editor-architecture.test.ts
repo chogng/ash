@@ -698,8 +698,8 @@ test("Code renderers select App Server debug transport without Electron debug IP
 	const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench.ts"), "utf8");
 	const main = readFileSync(resolve(editorRoot, "../code/electron-main/main.ts"), "utf8");
 	const sharedElectronRenderer = readFileSync(resolve(editorRoot, "../platform/native/electron-browser/rendererApi.ts"), "utf8");
-	const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/rendererApi.ts"), "utf8");
-	const sharedConnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/webRendererApi.ts"), "utf8");
+	const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/agentHost/browser/rendererApi.ts"), "utf8");
+	const sharedConnectedRenderer = readFileSync(resolve(editorRoot, "../platform/agentHost/browser/webRendererApi.ts"), "utf8");
 	const sharedElectronMain = readFileSync(resolve(editorRoot, "../code/electron-main/app.ts"), "utf8");
 	assert.match(browserCode, /createAppServerDebugAdapterCapability/u);
 	assert.match(electronCode, /createAppServerDebugAdapterCapability/u);

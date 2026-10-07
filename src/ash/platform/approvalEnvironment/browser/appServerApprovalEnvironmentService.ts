@@ -1,7 +1,7 @@
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import type { EnvironmentEntry as EntryDto, ApprovalEnvironmentReadResult as ProfileDto, ApprovalEnvironmentScanResult as DraftDto } from '../../../../../.build/protocol/typescript/index.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { localize } from '../../../nls.js';
 import type { IApprovalEnvironmentService, ReviewEnvironmentDraft, ReviewEnvironmentEntry, ReviewEnvironmentInput, ReviewEnvironmentModel, ReviewEnvironmentProfile, ReviewEnvironmentScanOptions, ReviewEnvironmentScope } from '../common/approvalEnvironmentService.js';
 

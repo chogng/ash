@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
-import type { IAppServerApi, IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { GitRepositoriesResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { IGitApi } from "../../../../../platform/git/common/gitApi.js";

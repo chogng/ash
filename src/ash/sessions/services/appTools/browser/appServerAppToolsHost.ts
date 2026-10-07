@@ -1,7 +1,7 @@
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import type { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { APP_SERVER_SERVER_REQUESTS, type AppHostOperation } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IAppToolsHost } from './appTools.js';
 

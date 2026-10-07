@@ -5,7 +5,7 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from "../../../../base/common/uri.js";
-import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
 import { ILogService } from '../../../../platform/log/common/log.js';

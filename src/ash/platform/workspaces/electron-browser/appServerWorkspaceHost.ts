@@ -1,10 +1,10 @@
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { isRecord } from '../../../base/common/types.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { parseWorkspace } from '../../workspace/common/workspace.js';
 import { createWorkspaceContextApi } from '../../workspace/electron-browser/workspaceContextApi.js';

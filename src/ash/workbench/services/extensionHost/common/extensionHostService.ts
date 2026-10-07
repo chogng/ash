@@ -5,7 +5,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 /** Aggregate lifecycle of the extension-process fleet owned by the service. */
 export type ExtensionHostState = "stopped" | "starting" | "ready" | "degraded" | "failed";
 export type ExtensionRuntimeState = "dormant" | "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
-export type ExtensionHostRegistrationKind = 'textDocumentEvents' | 'customTextEditor' | "command" | "languageProvider" | "debugAdapter" | "taskProvider" | "testProfileProvider" | 'dataChannel' | 'linkPresentationProvider' | 'externalUriOpener';
+export type ExtensionHostRegistrationKind = 'statusBar' | 'textDocumentEvents' | 'customTextEditor' | "command" | "languageProvider" | "debugAdapter" | "taskProvider" | "testProfileProvider" | 'dataChannel' | 'linkPresentationProvider' | 'externalUriOpener';
 
 /** Stable frontend identity for one registration owned by exactly one extension process. */
 export interface ExtensionHostRegistration {

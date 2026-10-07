@@ -1,6 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { AppServerConnectionState, IAppServerApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState, IAppServerApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IRemoteAgentApi, RemoteAgentConnection, RemoteAgentReconnectResult, RemoteRuntimeRollbackResult } from "../../../../platform/remote/common/remoteAgentApi.js";
 import type { IRemoteAgentService } from "../common/remoteAgentService.js";

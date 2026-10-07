@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../.build/protocol/typescript/index.js";
-import { IAppServerApi, type AppServerConnectionState, type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { IAppServerApi, type AppServerConnectionState, type IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { AppServerSessionsProvider } from "../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
 import type { IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
 
 ensureNoDisposablesAreLeakedInTestSuite();

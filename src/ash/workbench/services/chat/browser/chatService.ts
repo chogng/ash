@@ -2,7 +2,7 @@ import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRef
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IAppServerApi, IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";

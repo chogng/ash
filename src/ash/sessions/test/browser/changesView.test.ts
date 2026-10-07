@@ -11,7 +11,7 @@ import { ContextKeyService, IContextKeyService } from '../../../platform/context
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { createDisconnectedRendererApi } from '../../../platform/app-server/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import type { TurnChangesReadResult } from '../../../../../.build/protocol/typescript/index.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';

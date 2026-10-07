@@ -1,4 +1,4 @@
-import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
+import type { AppServerConnectionRelay } from "../../agentHost/electron-main/appServerConnectionRelay.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { getWorkspaceRemoteAuthority } from "../../workspace/common/workspace.js";

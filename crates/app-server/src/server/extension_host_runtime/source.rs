@@ -266,6 +266,7 @@ fn activation_event(event: &EditorExtensionActivationEvent) -> String {
 
 fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapability {
     match capability {
+        EditorExtensionCapability::StatusBar => ExtensionCapability::StatusBar,
         EditorExtensionCapability::Command => ExtensionCapability::Command,
         EditorExtensionCapability::LanguageProvider => ExtensionCapability::LanguageProvider,
         EditorExtensionCapability::DebugAdapter => ExtensionCapability::DebugAdapter,
@@ -281,6 +282,7 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
 
 fn capability_name(capability: EditorExtensionCapability) -> &'static str {
     match capability {
+        EditorExtensionCapability::StatusBar => "statusBar",
         EditorExtensionCapability::Command => "command",
         EditorExtensionCapability::LanguageProvider => "languageProvider",
         EditorExtensionCapability::DebugAdapter => "debugAdapter",

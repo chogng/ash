@@ -1,8 +1,8 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { URI } from '../../../base/common/uri.js';
 import type { AccountLoginStartResult } from '../../../../../.build/protocol/typescript/index.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { IAccountApi } from '../common/accountApi.js';
 import type { IClipboardService } from '../../clipboard/common/clipboardService.js';

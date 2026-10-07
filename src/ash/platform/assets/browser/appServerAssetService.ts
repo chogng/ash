@@ -1,9 +1,9 @@
 import { URI } from '../../../base/common/uri.js';
 import { decodeBase64 } from '../../../base/common/buffer.js';
 import { localize } from '../../../nls.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { AssetVersionResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { AssetCatalog, AssetCollection, AssetImport, AssetVersion, IAssetService } from '../common/assetService.js';
 

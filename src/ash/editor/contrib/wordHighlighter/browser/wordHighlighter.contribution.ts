@@ -3,6 +3,7 @@ import { RunOnceScheduler, TimeoutTimer } from '../../../../base/common/async.js
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { Selection } from '../../../common/core/selection.js';
@@ -193,7 +194,7 @@ class WordHighlighter extends Disposable {
 		this.request = request;
 		const requestId = ++this.requestId;
 		try {
-			const result = await this.coordinator.provide(this, position, request.token);
+			const result = await this.coordinator.provide(this, position, request.token, this.onError);
 			if (request.token.isCancellationRequested || requestId !== this.requestId) return;
 			this.coordinator.apply(this, result);
 		} catch (error) {
@@ -257,26 +258,36 @@ class WordHighlighter extends Disposable {
 	}
 }
 
-export async function getOccurrencesAtPosition(registry: LanguageFeatureRegistry<DocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+export async function getOccurrencesAtPosition(registry: LanguageFeatureRegistry<DocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, onError: (error: unknown) => void = reportHighlightError): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	for (const provider of registry.ordered(model.model)) {
 		if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
-		const highlights = await provider.provideDocumentHighlights(model.model, position, token);
-		if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
-		if (highlights === undefined || highlights === null) continue;
-		const result = new ResourceMap<readonly DocumentHighlight[]>();
-		result.set(model.resource, normalizeHighlights(model.model, highlights));
-		return result;
+		try {
+			const highlights = await provider.provideDocumentHighlights(model.model, position, token);
+			if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
+			if (highlights === undefined || highlights === null) continue;
+			const result = new ResourceMap<readonly DocumentHighlight[]>();
+			result.set(model.resource, normalizeHighlights(model.model, highlights));
+			return result;
+		} catch (error) {
+			if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
+			if (!isCancellationError(error)) onError(error);
+		}
 	}
 	return new ResourceMap();
 }
 
-export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatureRegistry<MultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatureRegistry<MultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[], onError: (error: unknown) => void = reportHighlightError): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	const targets = Object.freeze([model, ...otherModels]);
 	for (const provider of registry.ordered(model.model)) {
 		if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
-		const highlights = await provider.provideMultiDocumentHighlights(model.model, position, otherModels.map(target => target.model), token);
-		if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
-		if (highlights !== undefined && highlights !== null) return normalizeHighlightMap(highlights, targets);
+		try {
+			const highlights = await provider.provideMultiDocumentHighlights(model.model, position, otherModels.map(target => target.model), token);
+			if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
+			if (highlights !== undefined && highlights !== null) return normalizeHighlightMap(highlights, targets);
+		} catch (error) {
+			if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
+			if (!isCancellationError(error)) onError(error);
+		}
 	}
 	return new ResourceMap();
 }
@@ -338,15 +349,15 @@ class WordHighlightCoordinator {
 		}, 0);
 	}
 
-	async provide(source: WordHighlighter, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+	async provide(source: WordHighlighter, position: Position, token: CancellationToken, onError: (error: unknown) => void): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 		const targets = source.highlightMode === 'multiFile'
 			? [...this.controllers].filter(controller => controller.highlightMode === 'multiFile').map(controller => controller.createTarget())
 			: [source.createTarget()];
 		const primary = source.createTarget();
 		if (targets.length > 1 && source.multiDocumentHighlightProvider.has(source.textModel)) {
-			return getOccurrencesAcrossMultipleModels(source.multiDocumentHighlightProvider, primary, position, token, targets.filter(target => target.model !== primary.model));
+			return getOccurrencesAcrossMultipleModels(source.multiDocumentHighlightProvider, primary, position, token, targets.filter(target => target.model !== primary.model), onError);
 		}
-		return getOccurrencesAtPosition(source.documentHighlightProvider, primary, position, token);
+		return getOccurrencesAtPosition(source.documentHighlightProvider, primary, position, token, onError);
 	}
 
 	apply(source: WordHighlighter, result: ResourceMap<readonly DocumentHighlight[]>): void {

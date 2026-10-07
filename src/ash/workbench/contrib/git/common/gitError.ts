@@ -1,4 +1,4 @@
-import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
+import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
 import { localize } from '../../../../nls.js';
 import { GitWorkspaceError } from './gitService.js';
 

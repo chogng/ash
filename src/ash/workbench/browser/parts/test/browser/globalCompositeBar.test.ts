@@ -36,7 +36,7 @@ const { InstantiationService } = await import('../../../../../platform/instantia
 const { CommandService } = await import('../../../../services/commands/common/commandService.js');
 const { GlobalCompositeBar } = await import('../../globalCompositeBar.js');
 const { IRendererHostService } = await import('../../../../../platform/renderer/common/rendererHost.js');
-const { createDisconnectedRendererApi } = await import('../../../../../platform/app-server/browser/rendererApi.js');
+const { createDisconnectedRendererApi } = await import('../../../../../platform/agentHost/browser/rendererApi.js');
 
 test('Activity Bar global actions open account and management menus', async () => {
 	using disposables = new DisposableStore();

@@ -1,7 +1,7 @@
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { CancellationError } from "../../../base/common/errors.js";
-import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
+import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 import { parseLinkPresentation, type LinkPresentationKind } from '../../dataChannel/common/dataChannel.js';
@@ -65,6 +65,22 @@ export interface ExtensionHostDocumentEventsRegistration extends ExtensionHostRe
 	readonly kind: 'textDocumentEvents';
 }
 
+export interface ExtensionStatusBarEntry {
+	readonly id: string;
+	readonly text: string;
+	readonly tooltip: string | null;
+	readonly ariaLabel: string | null;
+	readonly alignment: 'left' | 'right';
+	readonly priority: number;
+	readonly command: { readonly command: string; readonly arguments: readonly JsonValue[]; } | null;
+}
+
+export interface ExtensionHostStatusBarRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'statusBar';
+	readonly revision: number;
+	readonly entries: readonly ExtensionStatusBarEntry[];
+}
+
 export interface ExtensionHostDebugAdapterRegistration extends ExtensionHostRegistrationBase {
 	readonly kind: "debugAdapter";
 	readonly debuggerType: string;
@@ -98,7 +114,7 @@ export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHos
 	readonly label: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export type ExtensionHostRegistration = ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
 
 export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'startupFinished'; };
 export interface ExtensionHostActivationRequest {
@@ -171,6 +187,7 @@ export interface ExtensionDocumentEdit {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| { operation: 'setStatusBarEntries'; registrationId: string; revision: number; entries: readonly ExtensionStatusBarEntry[]; }
 	| { operation: 'setDiagnostics'; collection: string; entries: ExtensionDiagnosticEntry[]; }
 	| { operation: 'executeCommand'; command: string; arguments: JsonValue[]; }
 	| { operation: 'readDocument'; uri: string; }
@@ -389,10 +406,48 @@ function normalizeFailure(value: unknown): ExtensionHostRuntimeFailure {
 	});
 }
 
+export function normalizeExtensionStatusBarEntries(value: unknown): readonly ExtensionStatusBarEntry[] {
+	const entries = boundedArray(normalizeExtensionHostPayload(value), 'Status bar entries', 128).map(value => {
+		const entry = exactRecord(value, 'Status bar entry', ['id', 'text', 'tooltip', 'ariaLabel', 'alignment', 'priority', 'command']);
+		if (typeof entry.priority !== 'number' || !Number.isFinite(entry.priority)) throw new TypeError('Invalid status bar priority');
+		let command: ExtensionStatusBarEntry['command'] = null;
+		if (entry.command !== null) {
+			const input = exactRecord(entry.command, 'Status bar command', ['command', 'arguments']);
+			command = Object.freeze({ command: statusBarIdentifier(input.command), arguments: Object.freeze([...boundedArray(input.arguments, 'Status bar command arguments', 1024)]) as readonly JsonValue[] });
+		}
+		const result = {
+			id: statusBarIdentifier(entry.id), text: boundedOptionalText(entry.text, 'Status bar text', 8192),
+			tooltip: entry.tooltip === null ? null : boundedOptionalText(entry.tooltip, 'Status bar tooltip', 8192),
+			ariaLabel: entry.ariaLabel === null ? null : boundedOptionalText(entry.ariaLabel, 'Status bar accessible label', 8192),
+			alignment: stringEnum(entry.alignment, 'Status bar alignment', ['left', 'right'] as const), priority: entry.priority, command,
+		};
+		if ([result.text, result.tooltip, result.ariaLabel].some(value => value !== null && utf8Length(value) > 8192)) throw new TypeError('Status bar text exceeds its UTF-8 quota');
+		return Object.freeze(result);
+	});
+	assertUnique(entries.map(entry => entry.id), 'Status bar IDs');
+	return Object.freeze(entries);
+}
+
+export function normalizeExtensionStatusBarUpdate(value: unknown): Extract<ExtensionClientOperation, { operation: 'setStatusBarEntries'; }> {
+	const input = exactRecord(value, 'Status bar update', ['operation', 'registrationId', 'revision', 'entries']);
+	if (input.operation !== 'setStatusBarEntries') throw new TypeError('Invalid status bar operation');
+	return { operation: 'setStatusBarEntries', registrationId: statusBarIdentifier(input.registrationId), revision: positiveSafeInteger(input.revision, 'Status bar revision'), entries: normalizeExtensionStatusBarEntries(input.entries) };
+}
+
+function statusBarIdentifier(value: unknown): string {
+	const id = boundedText(value, 'Status bar identifier', 256);
+	if (utf8Length(id) > 256 || /[\s\p{Cc}]/u.test(id)) throw new TypeError('Invalid status bar identifier');
+	return id;
+}
+
 function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	const input = record(value, "Extension Host registration");
 	const kind = input.kind;
 	const registrationId = boundedText(input.registrationId, "Extension Host registration ID", 256);
+	if (kind === 'statusBar') {
+		exactKeys(input, 'Extension status bar registration', ['kind', 'registrationId', 'revision', 'entries']);
+		return Object.freeze({ kind, registrationId: statusBarIdentifier(registrationId), revision: positiveSafeInteger(input.revision, 'Status bar revision'), entries: normalizeExtensionStatusBarEntries(input.entries) });
+	}
 	if (kind === 'textDocumentEvents') {
 		exactKeys(input, 'Extension document events registration', ['kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId });

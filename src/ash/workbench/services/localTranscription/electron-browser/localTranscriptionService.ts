@@ -2,7 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerLocalTranscriptionBackendService } from '../../../../platform/localTranscription/browser/appServerLocalTranscriptionBackendService.js';
 import { ILocalTranscriptionBackendService, ILocalTranscriptionService, LocalTranscriptionModelState, type ILocalTranscriptionResult, type ILocalTranscriptionModelStatus, type ILocalTranscriptionModelOperation, type LocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
 import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';

@@ -23,6 +23,7 @@ import { TextModelResolverService } from '../../services/textmodelResolver/commo
 import { IFileTextModelService, ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
+import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
 
 /** Real Output and resolver assembly; filesystem acquisition is an explicit scenario boundary. */
 class TestWorkbenchServices extends InstantiationService {
@@ -38,6 +39,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	const features = overrides.languageFeatures ?? resources.add(new LanguageFeaturesService());
 	const languageConfiguration = resources.add(createTestLanguageConfigurationService());
 	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IStatusbarService, resources.add(new StatusbarService()));
 	services.registerInstance(ILanguageService, languages);
 	services.registerInstance(ILanguageFeaturesService, features);
 	services.registerInstance(IModelService, resources.add(new ModelService(configuration, services.createInstance(TextResourcePropertiesService), languages, features, languageConfiguration)));

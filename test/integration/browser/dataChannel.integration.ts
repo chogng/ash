@@ -8,7 +8,7 @@ import '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriO
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { Emitter } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
-import type { AppServerConnectionState } from '../../../src/ash/platform/app-server/common/appServerApi.js';
+import type { AppServerConnectionState } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IDataChannelService, ILinkPresentationService } from '../../../src/ash/platform/dataChannel/common/dataChannel.js';
 import { DataChannelForwardingTelemetryService } from '../../../src/ash/platform/dataChannel/browser/forwardingTelemetryService.js';

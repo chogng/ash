@@ -2,7 +2,7 @@ import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
-import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';

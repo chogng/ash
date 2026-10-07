@@ -18,7 +18,7 @@ import type { IDocumentCollaborationService } from '../common/documentCollaborat
 import type { DocumentCollaborationEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../../../.build/protocol/typescript/index.js";
 import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSnapshot } from "../../../../../../.build/protocol/typescript/index.js";
 import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../../../.build/protocol/typescript/index.js";

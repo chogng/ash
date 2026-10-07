@@ -4,7 +4,7 @@ import { suite, test } from 'mocha';
 import { Event } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import type { AppServerConnectionRelay } from '../../../app-server/electron-main/appServerConnectionRelay.js';
+import type { AppServerConnectionRelay } from '../../../agentHost/electron-main/appServerConnectionRelay.js';
 import { AppServerDaemonLauncher } from '../../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { RemoteAppServerProcessLauncher } from '../../../remote/electron-main/remoteAppServerProcessLauncher.js';
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';

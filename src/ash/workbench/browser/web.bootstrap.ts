@@ -1,7 +1,7 @@
-import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
-import type { RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
+import type { RendererCapabilityContribution } from "../../platform/agentHost/browser/webRendererApi.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
 import type { IStartWorkbenchOptions } from './workbench.js';
 import { startWebWorkbench } from "./web.factory.js";

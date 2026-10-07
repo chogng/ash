@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
 import { WorkbenchThemesRegistry } from '../../../common/theme.js';

@@ -441,6 +441,9 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
     );
     let mut unsupported = value.clone();
     unsupported["contributions"]["editorExtensions"][0]["capabilities"] =
+        json!(["command", "statusBar"]);
+    assert!(parse(&unsupported).is_ok());
+    unsupported["contributions"]["editorExtensions"][0]["capabilities"] =
         json!(["languageProvider"]);
     unsupported["contributions"]["editorExtensions"][0]["activationEvents"] =
         json!([{"type": "onLanguage", "id": "typescript"}]);

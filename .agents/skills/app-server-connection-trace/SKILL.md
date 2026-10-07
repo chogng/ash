@@ -13,8 +13,8 @@ Read the current call path before adding marks:
 
 | Boundary | Owner | Source |
 | --- | --- | --- |
-| Acquire a port, run protocol `initialize`, acknowledge initialization | Renderer | `src/ash/platform/native/electron-browser/rendererApi.ts` and `src/ash/platform/app-server/electron-browser/appServerMessagePortTransport.ts` |
-| Validate and launch the command carrier, attach its port, relay frames | Electron Main | `src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts` |
+| Acquire a port, run protocol `initialize`, acknowledge initialization | Renderer | `src/ash/platform/native/electron-browser/rendererApi.ts` and `src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts` |
+| Validate and launch the command carrier, attach its port, relay frames | Electron Main | `src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts` |
 | Start or reuse the managed App Server, wait for its endpoint, probe `initialize` | Rust daemon | `crates/app-server-daemon/src/client.rs` and `process.rs` |
 | Open the managed runtime and serve protocol `initialize` | Rust App Server | `crates/app-server/src/managed/registry.rs` and `crates/app-server/src/local.rs` |
 
@@ -29,7 +29,7 @@ On initial startup, Main's `startAppServerWithRecovery` precedes window creation
 
 VS Code's `../vscode/src/vs/workbench/services/timer/browser/timerService.ts` keeps startup marks with their process source; its `startupTimings.ts` checks startup conditions before interpreting a duration. Apply both practices here. A faster socket accept or daemon `--version` is evidence about that step only.
 
-Rust's WebSocket span exporter uses `ASH_TRACE_WEBSOCKET_ADDR` and `ASH_TRACE_WEBSOCKET_TOKEN` for a directly launched App Server. Check `src/ash/platform/app-server/common/appServerEnvironment.ts` before expecting those variables in Desktop: its current allowlist does not forward them. Confirm that spans were captured before using them as evidence.
+Rust's WebSocket span exporter uses `ASH_TRACE_WEBSOCKET_ADDR` and `ASH_TRACE_WEBSOCKET_TOKEN` for a directly launched App Server. Check `src/ash/platform/agentHost/common/appServerEnvironment.ts` before expecting those variables in Desktop: its current allowlist does not forward them. Confirm that spans were captured before using them as evidence.
 
 ## Use Desktop startup as an impact check
 

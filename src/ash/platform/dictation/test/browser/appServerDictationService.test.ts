@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IConfigurationApi } from '../../../configuration/common/configurationIpc.js';
 import { AppServerDictationService } from '../../browser/appServerDictationService.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';

@@ -3,9 +3,9 @@ import { DisposableStore, toDisposable } from '../../../src/ash/base/common/life
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
-import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
-import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
+import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
+import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
 import { AppServerGitHubService } from '../../../src/ash/platform/github/browser/appServerGitHubService.js';
 import type { IAccountService, AccountState } from '../../../src/ash/platform/accounts/common/accountService.js';
 import { ConsoleLogger } from '../../../src/ash/platform/log/common/log.js';

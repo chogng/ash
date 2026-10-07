@@ -6,7 +6,7 @@ import { WORKSPACE_RECOVERY_CHANNEL } from '../../platform/window/common/window.
 import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { WorkingCopyBackupService } from '../services/workingCopy/browser/workingCopyBackupService.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
-import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
+import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
 import { addDisposableListener } from '../../base/browser/dom.js';

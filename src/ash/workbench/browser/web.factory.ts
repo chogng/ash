@@ -11,7 +11,7 @@ import {
 } from "../../base/common/lifecycle.js";
 import {
 	createDisconnectedRendererApi,
-} from "../../platform/app-server/browser/rendererApi.js";
+} from "../../platform/agentHost/browser/rendererApi.js";
 import {
 	type IEmptyWorkspaceIdentifier,
 	workspaceFromIdentifier,

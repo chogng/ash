@@ -1,7 +1,7 @@
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { validateConfigurationSnapshot, type IConfigurationApi } from '../../configuration/common/configurationIpc.js';
 import { dictationBackend, dictationInputOptions } from '../common/dictationConfiguration.js';

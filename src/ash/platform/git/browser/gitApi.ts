@@ -1,10 +1,10 @@
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IGitApi } from "../common/gitApi.js";
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 
 export function createDisconnectedGitApi(unavailable: UnavailableOperation): IGitApi {
 	return {

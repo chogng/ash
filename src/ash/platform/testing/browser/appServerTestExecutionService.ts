@@ -1,8 +1,8 @@
 import type { Event } from '../../../base/common/event.js';
 import { localize } from '../../../nls.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { appServerRequest, voidResult } from '../../app-server/browser/appServerRequest.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { ITestExecutionService, TestSnapshot, TestUpdate } from '../common/testExecutionService.js';
 
 /** Converts the generated protocol at the boundary of the shared testing contract. */

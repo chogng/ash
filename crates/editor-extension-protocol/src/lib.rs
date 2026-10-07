@@ -15,6 +15,10 @@ const MAX_PROVIDER_OPERATIONS: usize = 32;
 const MAX_DISPLAY_TEXT_BYTES: usize = 512;
 
 mod client;
+mod statusbar;
+pub use statusbar::ExtensionStatusBarAlignment;
+pub use statusbar::ExtensionStatusBarCommand;
+pub use statusbar::ExtensionStatusBarEntry;
 mod output;
 pub use client::ExtensionClientOperation;
 pub use client::ExtensionClientRequest;
@@ -153,6 +157,7 @@ pub struct ActivateParams {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionCapability {
+    StatusBar,
     Command,
     LanguageProvider,
     DebugAdapter,
@@ -228,6 +233,10 @@ impl<'de> Deserialize<'de> for RegistrationDescriptor {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    StatusBar {
+        revision: u64,
+        entries: Vec<ExtensionStatusBarEntry>,
+    },
     /// Document observation shares the language capability ceiling; models remain client-owned.
     TextDocumentEvents {},
     ExternalUriOpener {

@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { createHash } from 'node:crypto';
 import type { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
-import type { IServerEventApi } from '../../../../../platform/app-server/common/appServerApi.js';
+import type { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { editorBackground } from "../../../../../platform/theme/common/colors/editorColors.js";
 import { ColorScheme } from "../../../../../platform/theme/common/theme.js";

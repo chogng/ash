@@ -1,7 +1,7 @@
 import type { ConnectorConnectionStateDto, ConnectorDto } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IConnectorApi } from "../../../../platform/connectors/common/connectorApi.js";
 import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 

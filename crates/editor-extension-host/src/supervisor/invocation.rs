@@ -25,6 +25,16 @@ use crate::PendingHostRequest;
 
 const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
+enum StatusBarUpdate {
+    Unchanged,
+    Rejected,
+    Replace {
+        registration_id: String,
+        revision: u64,
+        entries: Vec<extension_protocol::ExtensionStatusBarEntry>,
+    },
+}
+
 /// One brokered provider invocation. `deadline_unix_millis` is an absolute UTC deadline.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtensionInvocation {
@@ -220,11 +230,81 @@ impl ExtensionInvocationHandle {
                     break Ok(Some(response));
                 }
                 Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
-                    let outcome = handler(
-                        request.operation,
-                        &self.client_cancellation.token(),
-                        self.wait_timeout.saturating_sub(started.elapsed()),
-                    );
+                    let status_update = match &request.operation {
+                        extension_protocol::ExtensionClientOperation::SetStatusBarEntries {
+                            registration_id,
+                            revision,
+                            entries,
+                        } => {
+                            let state = self
+                                .supervisor
+                                .inner
+                                .state
+                                .lock()
+                                .map_err(|_| ExtensionHostError::HostExited)?;
+                            let valid = state.incarnation == self.incarnation
+                                && state.registrations.iter().any(|registration| {
+                                    registration.registration_id == *registration_id
+                                        && matches!(
+                                            registration.kind,
+                                            extension_protocol::RegistrationKind::StatusBar { .. }
+                                        )
+                                });
+                            if valid {
+                                StatusBarUpdate::Replace {
+                                    registration_id: registration_id.clone(),
+                                    revision: *revision,
+                                    entries: entries.clone(),
+                                }
+                            } else {
+                                StatusBarUpdate::Rejected
+                            }
+                        }
+                        _ => StatusBarUpdate::Unchanged,
+                    };
+                    let outcome = if matches!(status_update, StatusBarUpdate::Rejected) {
+                        Err(crate::HostFailure {
+                            code: crate::HostErrorCode::RegistrationNotFound,
+                            message: "status bar registration is not owned by this incarnation"
+                                .into(),
+                        })
+                    } else {
+                        handler(
+                            request.operation,
+                            &self.client_cancellation.token(),
+                            self.wait_timeout.saturating_sub(started.elapsed()),
+                        )
+                    };
+                    // Retain only the latest acknowledged UI value for reconnects. Concurrent older
+                    // callbacks cannot restore a hidden entry or keep a history of command arguments.
+                    if matches!(outcome, Ok(extension_protocol::ExtensionClientResult::Done))
+                        && let StatusBarUpdate::Replace {
+                            registration_id,
+                            revision,
+                            entries,
+                        } = status_update
+                    {
+                        let mut state = self
+                            .supervisor
+                            .inner
+                            .state
+                            .lock()
+                            .map_err(|_| ExtensionHostError::HostExited)?;
+                        if state.incarnation == self.incarnation
+                            && let Some(registration) =
+                                state.registrations.iter_mut().find(|registration| {
+                                    registration.registration_id == registration_id
+                                })
+                            && let extension_protocol::RegistrationKind::StatusBar {
+                                revision: previous,
+                                entries: current,
+                            } = &mut registration.kind
+                            && revision > *previous
+                        {
+                            *previous = revision;
+                            *current = entries;
+                        }
+                    }
                     if let Err(error) =
                         self.process
                             .respond_client(extension_protocol::ExtensionClientResponse {

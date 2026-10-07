@@ -12,17 +12,17 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 	assert.equal(existsSync(join(generatedRoot, 'index.ts')), true, 'consumers share the Rust-owned protocol snapshot');
 	assert.equal(existsSync(resolve(sourceRoot, '../../crates/app-server-protocol/schema')), false, 'generated contracts stay outside the source tree');
 	assert.equal(existsSync(resolve(sourceRoot, '../../generated/app-server')), false, 'retired protocol snapshot');
-	assert.equal(existsSync(join(sourceRoot, 'platform/app-server/common/generated')), false, 'retired frontend protocol copy');
+	assert.equal(existsSync(join(sourceRoot, 'platform/agentHost/common/generated')), false, 'retired frontend protocol copy');
 	const violations: string[] = [];
 	for (const file of files(sourceRoot)) {
 		const name = relative(sourceRoot, file).replaceAll('\\', '/');
 		if (name.includes('/test/') || name.includes('/generated/')) continue;
 		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-		const allowed = /^platform\/app-server\//u.test(name)
+		const allowed = /^platform\/agentHost\//u.test(name)
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
 			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
 			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name)
-			|| /^sessions\/contrib\/providers\/appServer\/browser\//u.test(name)
+			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name)
 			|| name === 'workbench/contrib/git/browser/gitService.ts'
 			// This shared implementation adapts IModelApi into frontend model choices.
 			|| name === 'workbench/contrib/chat/common/languageModels.ts';

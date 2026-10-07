@@ -301,6 +301,11 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    StatusBar {
+        #[ts(type = "number")]
+        revision: u64,
+        entries: Vec<extension_protocol::ExtensionStatusBarEntry>,
+    },
     TextDocumentEvents {},
     ExternalUriOpener {
         #[schemars(length(min = 1, max = 2))]

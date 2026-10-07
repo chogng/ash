@@ -285,7 +285,7 @@ macOS 与 64 位 Windows Rust V8 宿主执行受支持的 CommonJS 包，可信 
 | 包入口     | `browser` 优先，否则 `main`；单文件 CommonJS bundle，入口可省略 `.js`；`require` 只提供 `vscode`           |
 | 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；按命令、语言或启动完成事件激活                    |
 | 命令       | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg`                      |
-| 界面       | 三种消息通知（无按钮或选项）；字符串或 label 项的单选 `window.showQuickPick` 与 `placeHolder`              |
+| 界面       | 三种消息通知（无按钮或选项）；字符串或 label 项的单选 `window.showQuickPick` 与 `placeHolder`；`window.createStatusBarItem` |
 | 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围 |
 | 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离 |
 | 语言       | 字符串语言 ID 的 Hover 和 CompletionItem Provider；触发字符、未完成列表、snippet、附加文本编辑                    |
@@ -295,7 +295,9 @@ macOS 与 64 位 Windows Rust V8 宿主执行受支持的 CommonJS 包，可信 
 补全不支持 resolve、命令、分别插入/替换的范围，以及 Color、EnumMember、Constant、Struct、Event、Operator kind；
 诊断不支持 relatedInformation、tags 或带目标链接的 code。服务调用只在命令、语言 Provider 或文档事件回调内有效，不能在激活阶段或回调结束后访问窗口。
 文档事件对象随修改更新；语言 Provider 使用不可变快照。`workspace.textDocuments` 在激活后的事件送达或显式读取文档时建立，激活阶段不是完整的初始文档列表。
-本轮扩大窗口操作范围后，市场执行授权契约版本升为 2；旧授权需重新启用并授权。
+状态栏支持 `createStatusBarItem` 的两个重载、`StatusBarAlignment`、文本、字符串 tooltip、name、accessibilityInformation.label、命令字符串或带 JSON 参数的 Command，以及 show/hide/dispose。首次显示随激活结果提交；回调内的同步更新合并为一次替换。隐藏条目只保留当前命令，不保存旧参数；点击开始后，该次调用持有自己的参数。停用、重启、卸载或断开连接会释放工作台条目。暂不支持颜色、Markdown tooltip 和 `setStatusBarMessage`。优先级允许有限小数；每个状态栏注册最多 128 个可见条目，VS Code 桥接最多创建 128 个未释放条目。
+
+状态栏扩大窗口操作范围后，市场执行授权契约版本升为 3；旧授权需重新启用并授权。
 V8 将调用身份随 Promise 续执行保留；并行命令不共享身份，过期续执行不能借用后来的调用。
 命令忽略通知的 Thenable 时，宿主仍等待该通知结束再关闭调用。
 

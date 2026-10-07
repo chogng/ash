@@ -6,7 +6,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CommandRegistry } from "../../../../platform/commands/common/commands.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type ExtensionHostActivationEvent } from "../../../../platform/extensionHost/common/extensionHostApi.js";
-import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState } from "../../../../platform/agentHost/common/appServerApi.js";
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../output/common/output.js";
 import { MainThreadExtensionApi, type ExtensionApiIssue } from "../../../api/browser/mainThreadExtensionApi.js";
 import { EmptyExtensionHostSnapshot, type ExtensionHostExtension, type ExtensionHostFailure, type ExtensionHostRegistration as WorkbenchExtensionHostRegistration, type ExtensionHostSnapshot, type ExtensionHostState, type IExtensionHostService } from "../common/extensionHostService.js";

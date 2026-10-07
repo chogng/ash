@@ -1,8 +1,8 @@
 import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type { ProviderConfigDto, ProviderModelsListFailureCodeDto } from '../../../../../.build/protocol/typescript/index.js';
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult, turnSteerResult } from "../common/sessionApi.js";
 import type { CustomModelProvider, IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";

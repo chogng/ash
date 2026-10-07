@@ -3,9 +3,9 @@ import { CancellationError, onUnexpectedError } from '../../../base/common/error
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Event } from '../../../base/common/event.js';
 import type { GitHubPullRequestReference } from '../common/githubService.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../../../../.build/protocol/typescript/index.js';
 import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
 import type { IGitHubService, GitHubAccount, GitHubNotificationFilter, GitHubNotification, GitHubCreateFork, GitHubFork, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';

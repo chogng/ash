@@ -39,15 +39,26 @@ impl Package {
             .pointer("/contributes/commands")
             .cloned()
             .unwrap_or(serde_json::json!([]));
-        let configuration = serde_json::to_string(&serde_json::json!({"commands": commands}))
-            .map_err(|error| error.to_string())?;
+        let publisher = manifest
+            .get("publisher")
+            .and_then(serde_json::Value::as_str)
+            .ok_or("missing VS Code publisher")?;
+        let name = manifest
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .ok_or("missing VS Code name")?;
+        let public_extension_id = format!("{publisher}.{name}");
+        let configuration = serde_json::to_string(
+            &serde_json::json!({"commands": commands, "extensionId": public_extension_id}),
+        )
+        .map_err(|error| error.to_string())?;
         let source = package.sources.get(&entry).ok_or("missing VS Code entry")?;
         // A CommonJS bundle receives only the public editor module. It cannot obtain a Node
         // loader, host globals or package files through require, regardless of its manifest entry.
         let source = serde_json::to_string(&format!("\"use strict\";\n{source}"))
             .map_err(|error| error.to_string())?;
         let wrapper = format!(
-            "import {{ createApi }} from '@ash/vscode';\nconst bridge = createApi({configuration});\nconst module = {{ exports: {{}} }};\nconst require = name => {{ if (name !== 'vscode') throw new Error('Unsupported extension module: ' + name); return bridge.api; }};\nFunction('exports', 'require', 'module', {source}).call(module.exports, module.exports, require, module);\nexport function activate(context) {{ bridge.activate(context); return module.exports.activate(context); }}\nexport function deactivate() {{ return module.exports.deactivate?.(); }}\n"
+            "import {{ createApi }} from '@ash/vscode';\nconst bridge = createApi({configuration});\nconst module = {{ exports: {{}} }};\nconst require = name => {{ if (name !== 'vscode') throw new Error('Unsupported extension module: ' + name); return bridge.api; }};\nFunction('exports', 'require', 'module', {source}).call(module.exports, module.exports, require, module);\nexport async function activate(context) {{ bridge.activate(context); const result = await module.exports.activate(context); bridge.didActivate(); return result; }}\nexport function deactivate() {{ bridge.deactivate(); return module.exports.deactivate?.(); }}\n"
         );
         package.sources.insert(entry, wrapper);
         package

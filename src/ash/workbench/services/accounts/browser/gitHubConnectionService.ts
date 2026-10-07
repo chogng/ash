@@ -1,6 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IAccountService, type AccountLoginCompletion } from '../../../../platform/accounts/common/accountService.js';
-import { AppServerRemoteError } from '../../../../platform/app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ILogService } from '../../../../platform/log/common/log.js';

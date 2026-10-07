@@ -1,7 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import type { MarketplaceEditorExtensionPolicy, MarketplaceEditorExtensionPolicyAction, MarketplaceEditorExtensions } from '../../../../platform/marketplace/common/marketplaceService.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IMarketplaceApi } from "../../../../platform/marketplace/common/marketplaceApi.js";
 import type { IMarketplaceService, MarketplaceAcquiredCapability, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary, MarketplaceSearchOptions } from "../../../../platform/marketplace/common/marketplaceService.js";
 

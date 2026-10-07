@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
-import { IAppServerApi } from '../../../platform/app-server/common/appServerApi.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
@@ -31,7 +31,7 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-await import('../../contrib/providers/appServer/browser/workbenchSessionsService.contribution.js');
+await import('../../contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 await import('../../browser/workbenchChat.contribution.js');
 await import('../../browser/turnMultiDiffSource.contribution.js');
 

@@ -3,7 +3,7 @@ import type { MemoryReport } from '../../../../../.build/protocol/typescript/ind
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import type { IMemoryDiagnosticsService, MemoryDiagnosticSummary, MemoryObservation } from '../common/memoryDiagnosticsService.js';
 
 export class AppServerMemoryDiagnosticsService extends Disposable implements IMemoryDiagnosticsService {

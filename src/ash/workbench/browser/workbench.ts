@@ -16,7 +16,7 @@ import { ModelService } from '../../editor/common/services/modelService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
 import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
-import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/app-server/common/appServerApi.js';
+import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
@@ -110,8 +110,8 @@ import {
 	type IDialogHandler,
 } from "../../platform/dialogs/common/dialogs.js";
 import {
-	BrowserFileService,
-} from "../../platform/files/browser/fileService.js";
+	AppServerFileSystemProvider,
+} from "../../platform/agentHost/browser/appServerFileSystemProvider.js";
 import { FileService } from "../../platform/files/common/fileService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
@@ -597,7 +597,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IDirPermissionsService, dirPermissionsService);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
 		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
-		const workspaceFileService = new BrowserFileService({
+		const workspaceFileService = new AppServerFileSystemProvider({
 			api: api.fs,
 			resourceApi: api.resource,
 			workspaceContextService: workspaceContext,

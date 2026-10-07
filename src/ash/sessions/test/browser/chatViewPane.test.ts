@@ -2,7 +2,7 @@ import { KeybindingTestServices } from '../../../workbench/services/keybinding/t
 import { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { createTestModel } from '../../../platform/app-server/test/common/testAppServerProtocol.js';
+import { createTestModel } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
@@ -14,7 +14,7 @@ import { LanguageModelsConfigurationService as CoworkModelPreferencesService } f
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
 import { IModelApi } from '../../../platform/sessions/common/sessionApi.js';
-import { IAppServerApi, IServerEventApi } from '../../../platform/app-server/common/appServerApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
@@ -61,7 +61,7 @@ import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from "../../../workbench/contrib/chat/common/languageModelsConfiguration.js";
 import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
 import { SessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/browser/sessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../contrib/providers/appServer/browser/appServerSessionsProvider.js";
+import { AppServerSessionsProvider } from "../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
 import type { ISession } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";

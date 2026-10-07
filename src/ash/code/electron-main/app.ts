@@ -11,7 +11,7 @@ import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-ma
 import { isRecord } from '../../base/common/types.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
-import { AppServerBrowserHost } from "../../platform/app-server/electron-main/appServerBrowserHost.js";
+import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
@@ -26,7 +26,7 @@ import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableD
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
-import { AppServerConnectionRelay } from "../../platform/app-server/electron-main/appServerConnectionRelay.js";
+import { AppServerConnectionRelay } from "../../platform/agentHost/electron-main/appServerConnectionRelay.js";
 import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { remoteExecutablePath } from "../../platform/remote/node/remotePackage.js";

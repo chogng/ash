@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { URI } from "../../../../base/common/uri.js";
-import type { AppServerConnectionRelay } from "../../../../platform/app-server/electron-main/appServerConnectionRelay.js";
+import type { AppServerConnectionRelay } from "../../../agentHost/electron-main/appServerConnectionRelay.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { REMOTE_AGENT_RECONNECT_CHANNEL } from "../../../../platform/remote/common/remoteAgentApi.js";
 import { REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL } from "../../../../platform/remote/common/remoteAgentApi.js";

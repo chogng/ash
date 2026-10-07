@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { test } from "mocha";
 import { AppServerDaemonLauncher } from "../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
-import { AppServerProtocolIncompatibleError } from "../../../../platform/app-server/common/appServerProtocolCompatibility.js";
+import { AppServerProtocolIncompatibleError } from "../../../agentHost/common/appServerProtocolCompatibility.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { RemoteAppServerProcessLauncher, SshRuntimeProbeError, sshRuntimeProbeArguments } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 

@@ -285,7 +285,7 @@ Stopped/Starting/Initializing/Ready/Stopping/Crashed/Restarting 状态、initial
 结构化 IPC router 集中注册有限 channel，并在调用 validator/handler 前同时验证目标
 webContents、main frame identity 和确切入口 URL。各能力在自己的
 `platform/<capability>/electron-main/*IpcRoutes.ts` 中拥有 channel、exact-shape validator 与
-App Server method 映射；`platform/app-server/electron-main` 只拥有连接状态、通用 Resource
+App Server method 映射；`platform/agentHost/electron-main` 只拥有连接状态、通用 Resource
 route、Supervisor、Session 与 JSON-RPC transport。通用可信 router 和 exact-shape validation
 primitive 位于 `platform/ipc/electron-main`，不反向依赖任何产品能力。`code/electron-main/app.ts`
 是这些 route factory 的 composition root。unknown field、错误 enum、空 ID 或畸形 Turn input均
@@ -379,7 +379,7 @@ Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份�
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
 contribution 不得通过该服务直接访问文件系统。单根 Folder 启动时，Electron Main 将该根
-配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
+配置给 App Server；Renderer 的 `AppServerFileSystemProvider` 只把 workspace URI 映射成根相对路径，
 目录枚举、metadata、有界原子写入、filesystem invalidation 与最终边界授权由 Rust / App Server
 完成。文件 provider 的 `readFile()` 返回原始字节和不透明 revision；公共 `FileService` 按 scheme
 路由读写，并为文本调用执行保留 BOM 的严格 UTF-8 解码和编码。provider 的 `writeFile()` 接收

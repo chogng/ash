@@ -5,7 +5,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { IModelApi, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/sessions/common/sessionApi.js';
 import type { ModelPreferencesUpdate } from '../../../../platform/sessions/common/sessionApi.js';
 import type { ApprovalReviewModelSelection } from '../../../../platform/sessions/common/sessionApi.js';
-import { IAppServerApi, IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';

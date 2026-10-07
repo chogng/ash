@@ -4,8 +4,8 @@ import type { Memory as MemoryDto, MemorySummary as MemorySummaryDto, MemoryPoli
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { IMemoriesService, Memory, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary } from '../common/memoriesService.js';
 
 export class AppServerMemoriesService extends Disposable implements IMemoriesService {

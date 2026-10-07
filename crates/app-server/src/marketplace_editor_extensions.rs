@@ -145,6 +145,7 @@ pub(crate) fn deployments(
         let capabilities = vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
+            ExtensionCapability::StatusBar,
         ];
         let binding = MarketplaceEditorExtensionBinding {
             package: source.package().clone(),
@@ -683,6 +684,7 @@ fn valid_event_selector(value: &str) -> bool {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 enum ManifestCapability {
+    StatusBar,
     Command,
     LanguageProvider,
     DebugAdapter,
@@ -696,6 +698,7 @@ enum ManifestCapability {
 impl ManifestCapability {
     fn host(self) -> ExtensionCapability {
         match self {
+            Self::StatusBar => ExtensionCapability::StatusBar,
             Self::Command => ExtensionCapability::Command,
             Self::LanguageProvider => ExtensionCapability::LanguageProvider,
             Self::DebugAdapter => ExtensionCapability::DebugAdapter,
@@ -709,6 +712,7 @@ impl ManifestCapability {
 
     fn name(self) -> &'static str {
         match self {
+            Self::StatusBar => "statusBar",
             Self::Command => "command",
             Self::LanguageProvider => "languageProvider",
             Self::DebugAdapter => "debugAdapter",

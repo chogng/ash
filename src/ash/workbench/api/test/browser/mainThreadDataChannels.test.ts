@@ -4,7 +4,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import type { AppServerConnectionState } from '../../../../platform/app-server/common/appServerApi.js';
+import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
 import { ContextKeyService, IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDataChannelService, ILinkPresentationService } from '../../../../platform/dataChannel/common/dataChannel.js';
 import { IExtensionHostApi, normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../platform/extensionHost/common/extensionHostApi.js';

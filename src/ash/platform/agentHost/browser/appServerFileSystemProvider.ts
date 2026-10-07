@@ -1,34 +1,40 @@
-import type { FsFileType, FsFileWriteMode, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteBinaryFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { FsFileType, FsFileWriteMode, FsReadBinaryFileResult, FsReadDirectoryResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { FsChanged } from "../../../../../.build/protocol/typescript/index.js";
-import type { IResourceApi } from "../../app-server/common/appServerApi.js";
-import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
+import type { IResourceApi } from "../common/appServerApi.js";
+import { AppServerRemoteError } from "../common/appServerError.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import { Emitter, Event } from "../../../base/common/event.js";
-import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { canceled } from '../../../base/common/errors.js';
+import { raceCancellationError } from '../../../base/common/async.js';
+import { newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, FileNotFoundError, FileRevisionConflictError, FileOperationNotSupportedError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from "../common/files.js";
-import { workspaceRelativePath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
-import { isRemoteResource } from "../../remote/common/remote.js";
-import type { ISystemFileTransferService } from '../common/systemFileTransferService.js';
+import {
+	FileKind,
+	FileNotFoundError,
+	FileRevisionConflictError,
+	FileOperationNotSupportedError,
+	FileSystemProviderCapabilities,
+	type FileDeleteMode,
+	type FileExistingTargetBehavior,
+	type FileMissingTargetBehavior,
+	type IFileBytes,
+	type IFileChangeEvent,
+	type IFileEntry,
+	type IFileSystemProviderWithFileReadStreamCapability,
+	type IFileReadStreamOptions,
+	type IFileStat,
+	type IFileWriteOptions,
+	type IFileWriteResult,
+	type IWatchOptions,
+} from "../../files/common/files.js";
+import { workspaceRelativePath, workspaceResourceFromPath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
+import type { IFileApi } from '../../files/common/fileApi.js';
+import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
 
-/** Narrow App Server surface consumed by the browser file-service adapter. */
-export interface IFileSystemApi {
-	getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
-	readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
-	readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
-	readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
-	writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
-	writeBinaryFile(params: FsWriteBinaryFileParams): Promise<FsWriteFileResult>;
-	createFile(params: import("../../../../../.build/protocol/typescript/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
-	createDirectory(params: import("../../../../../.build/protocol/typescript/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
-	copy(params: import("../../../../../.build/protocol/typescript/index.js").FsCopyParams): Promise<void>;
-	pasteSystemFiles(params: import("../../../../../.build/protocol/typescript/index.js").FsPasteSystemFilesParams): Promise<boolean>;
-	rename(params: import("../../../../../.build/protocol/typescript/index.js").FsRenameParams): Promise<void>;
-	delete(params: import("../../../../../.build/protocol/typescript/index.js").FsDeleteParams): Promise<void>;
-}
-
-export interface BrowserFileServiceOptions {
-	readonly api: IFileSystemApi;
+export interface AppServerFileSystemProviderOptions {
+	readonly api: IFileApi;
 	readonly resourceApi: IResourceApi;
 	readonly workspaceContextService: IWorkspaceContextService;
 	readonly onDidChange?: Event<FsChanged>;
@@ -37,17 +43,18 @@ export interface BrowserFileServiceOptions {
 /**
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
-export class BrowserFileService extends Disposable implements IFileSystemProvider, ISystemFileTransferService {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, ISystemFileTransferService {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream;
 	public readonly onDidChangeCapabilities = Event.None;
-	private readonly api: IFileSystemApi;
+	private readonly api: IFileApi;
 	private readonly resourceApi: IResourceApi;
 	private readonly workspaceContextService: IWorkspaceContextService;
 	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
+	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 
 	readonly onDidChangeFiles = this.fileChanges.event;
 
-	constructor(options: BrowserFileServiceOptions) {
+	constructor(options: AppServerFileSystemProviderOptions) {
 		super();
 		this.api = options.api;
 		this.resourceApi = options.resourceApi;
@@ -96,6 +103,39 @@ export class BrowserFileService extends Disposable implements IFileSystemProvide
 		} finally {
 			await this.resourceApi.release({ resourceId: result.resource.resourceId });
 		}
+	}
+
+	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
+		this.assertNotDisposed();
+		const target = this.fileTarget(resource);
+		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
+		const lifetime = new DisposableStore();
+		this.reads.set(lifetime, lifetime);
+		const cancellation = new CancellationTokenSource(token);
+		lifetime.add(toDisposable(() => cancellation.dispose(true)));
+		const destroy = stream.destroy;
+		stream.destroy = (): void => { this.reads.deleteAndDispose(lifetime); destroy(); };
+		void (async () => {
+			let snapshot: FsReadBinaryFileResult | undefined;
+			try {
+				if (cancellation.token.isCancellationRequested) { throw canceled(); }
+				// The allocation request has no backend cancel method; retain its late response so it can be released.
+				snapshot = await this.api.readBinaryFile(target);
+				for await (const chunk of this.resourceChunks(snapshot.resource, options, cancellation.token)) {
+					await raceCancellationError(Promise.resolve(stream.write(chunk)), cancellation.token);
+				}
+			} catch (error) {
+				stream.error(isFileNotFound(error) ? new FileNotFoundError(resource) : error instanceof Error ? error : new Error(String(error)));
+			} finally {
+				if (snapshot) {
+					try { await this.resourceApi.release({ resourceId: snapshot.resource.resourceId }); }
+					catch (error) { stream.error(error instanceof Error ? error : new Error(String(error))); }
+				}
+				this.reads.deleteAndDispose(lifetime);
+				stream.end();
+			}
+		})();
+		return stream;
 	}
 
 	async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
@@ -176,17 +216,35 @@ export class BrowserFileService extends Disposable implements IFileSystemProvide
 		}
 		const bytes = new Uint8Array(resource.size);
 		let offset = 0;
-		while (offset < bytes.length) {
+		for await (const chunk of this.resourceChunks(resource, {}, CancellationToken.None)) {
+			bytes.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		return bytes;
+	}
+
+	private async *resourceChunks(resource: ResourceMetadataResult, options: IFileReadStreamOptions, token: CancellationToken): AsyncIterable<Uint8Array> {
+		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_FILE_READ_BYTES) {
+			throw new Error('Workspace binary resource size is invalid');
+		}
+		if (options.limits?.size !== undefined && resource.size > options.limits.size) { throw new Error('File exceeds the read size limit'); }
+		let offset = options.position ?? 0;
+		const end = Math.min(resource.size, options.length === undefined ? resource.size : offset + options.length);
+		while (offset < end) {
+			if (token.isCancellationRequested) { throw canceled(); }
+			const maxBytes = Math.min(MAX_RESOURCE_READ_BYTES, end - offset);
 			const chunk = await this.resourceApi.read({
 				resourceId: resource.resourceId,
 				offset,
-				maxBytes: Math.min(MAX_RESOURCE_READ_BYTES, bytes.length - offset),
+				maxBytes,
 			});
-			const chunkBytes = decodeResourceChunk(chunk, resource.resourceId, offset, bytes.length);
-			bytes.set(chunkBytes, offset);
-			offset += chunkBytes.length;
+			if (token.isCancellationRequested) { throw canceled(); }
+			const chunkBytes = decodeResourceChunk(chunk, resource.resourceId, offset, resource.size);
+			if (chunkBytes.byteLength > maxBytes) { throw new Error('Workspace binary resource response exceeds the requested range'); }
+			offset += chunkBytes.byteLength;
+			yield chunkBytes;
 		}
-		return bytes;
+		if (token.isCancellationRequested) { throw canceled(); }
 	}
 
 	private acceptFileChange(change: FsChanged): void {
@@ -242,19 +300,6 @@ function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expe
 		throw new Error("Workspace binary resource response is inconsistent");
 	}
 	return bytes;
-}
-
-/** Resolves one slash-separated protocol path beneath a workspace root. */
-export function workspaceResourceFromPath(root: URI, path: string): URI | undefined {
-	if (!isWorkspaceFileSystemResource(root)) return undefined;
-	const normalizedPath = root.scheme === "file" ? path.replaceAll("\\", "/") : path;
-	const segments = normalizedPath.split("/");
-	if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
-	return URI.joinPath(root, ...segments);
-}
-
-function isWorkspaceFileSystemResource(resource: URI): boolean {
-	return resource.scheme === "file" || isRemoteResource(resource);
 }
 
 function fileKind(fileType: FsFileType): FileKind {

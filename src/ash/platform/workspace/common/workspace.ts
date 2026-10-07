@@ -388,3 +388,12 @@ function parseRemoteAuthority(value: unknown): string {
 	if (!authority.startsWith('ssh+') || createSshRemoteAuthority(authority.slice(4)).authority !== authority) throw new Error('Invalid Remote authority');
 	return authority;
 }
+
+/** Resolves one slash-separated protocol path beneath a workspace root. */
+export function workspaceResourceFromPath(root: URI, path: string): URI | undefined {
+	if (root.scheme !== "file" && !isRemoteResource(root)) return undefined;
+	const normalizedPath = root.scheme === "file" ? path.replaceAll("\\", "/") : path;
+	const segments = normalizedPath.split("/");
+	if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
+	return URI.joinPath(root, ...segments);
+}

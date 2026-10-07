@@ -7,7 +7,7 @@ import { URI } from '../../../base/common/uri.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { createDisconnectedRendererApi } from '../../../platform/app-server/browser/rendererApi.js';
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ISessionsService, SessionsService } from '../../services/sessions/browser/sessionsService.js';
@@ -16,7 +16,7 @@ import { SessionsManagementService } from '../../services/sessions/browser/sessi
 import type { ISessionsProvider } from '../../services/sessions/common/sessionsProvider.js';
 import type { ISession, SessionId } from '../../services/sessions/common/session.js';
 import { SessionsWorkspaceContextService } from '../../services/workspace/browser/workspaceContextService.js';
-import { SessionFileService } from '../../contrib/providers/appServer/browser/sessionFileService.js';
+import { SessionFileService } from '../../contrib/providers/agentHost/browser/sessionFileService.js';
 
 test('Session files preserve their original directory through selection, directory moves and archive', async () => {
 	const browser = new JSDOM('<!doctype html>', { url: 'https://sessions.test' });

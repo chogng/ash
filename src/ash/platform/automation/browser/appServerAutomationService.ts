@@ -1,9 +1,9 @@
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import type { Automation, AutomationDefinition, AutomationRun, AutomationStatus, IAutomationService } from '../common/automationService.js';
 
 export class AppServerAutomationService extends Disposable implements IAutomationService {

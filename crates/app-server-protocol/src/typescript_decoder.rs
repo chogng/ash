@@ -8,6 +8,10 @@ pub(crate) fn generate(schema: &Value) -> String {
     let mut runtime_schema = serde_json::json!({ "$defs": schema["$defs"] });
     retain_decoder_definitions(&mut runtime_schema, DECODER_ROOTS);
     remove_annotations(&mut runtime_schema);
+    // Growing extension contracts must not duplicate identical validation definitions in
+    // the renderer's bounded chunk. Public schema names and wire validation stay unchanged.
+    runtime_schema.sort_all_objects();
+    deduplicate_definitions(&mut runtime_schema, DECODER_ROOTS);
     compact_definition_names(&mut runtime_schema, DECODER_ROOTS);
     // With preserve_order, removing annotations can swap the remaining object keys.
     runtime_schema.sort_all_objects();
@@ -41,6 +45,42 @@ const DECODER_ROOTS: &[&str] = &[
     "AppServerError",
     "JsonRpcError",
 ];
+
+fn deduplicate_definitions(schema: &mut Value, roots: &[&str]) {
+    let definitions = schema["$defs"]
+        .as_object()
+        .expect("decoder schema must contain definitions");
+    let mut names: Vec<_> = definitions.keys().cloned().collect();
+    // Preserve every public entry point, preferring it over an identical internal definition.
+    names.sort_by_key(|name| (!roots.contains(&name.as_str()), name.clone()));
+    let mut canonical: BTreeMap<String, String> = BTreeMap::new();
+    let mut aliases: BTreeMap<String, String> = BTreeMap::new();
+    for name in names {
+        let fingerprint =
+            serde_json::to_string(&definitions[&name]).expect("schema definition must serialize");
+        if let Some(previous) = canonical.get(&fingerprint) {
+            if !roots.contains(&name.as_str()) {
+                aliases.insert(name, previous.clone());
+            }
+        } else {
+            canonical.insert(fingerprint, name);
+        }
+    }
+    visit_schema(schema, &mut |object| {
+        if let Some(reference) = object.get_mut("$ref")
+            && let Some(target) = reference
+                .as_str()
+                .and_then(|reference| reference.strip_prefix("#/$defs/"))
+            && let Some(canonical) = aliases.get(target)
+        {
+            *reference = Value::String(format!("#/$defs/{canonical}"));
+        }
+    });
+    schema["$defs"]
+        .as_object_mut()
+        .expect("decoder schema must contain definitions")
+        .retain(|name, _| !aliases.contains_key(name));
+}
 
 /// Only decoder entry points need public names; internal references never enter the wire contract.
 /// Rewrite schema references, not payload keys or literal values that happen to contain `$ref`.

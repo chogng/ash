@@ -1,7 +1,7 @@
 import { AppServerDaemonLauncher } from "../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState } from "../../../agentHost/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { RemoteConnectionRecoveryCoordinator, type RemoteConnectionRecoveryHost } from "../../../../platform/remote/electron-main/remoteConnectionRecoveryCoordinator.js";
 import { RemoteAppServerProcessLauncher } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";

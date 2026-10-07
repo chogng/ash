@@ -15,7 +15,7 @@ import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../..
 import { applyDocumentTransaction, DocumentTransaction } from "../../../../../editor/common/model/documentTransaction.js";
 import { serializeDocumentTransaction } from "../../../../../editor/common/model/documentTransactionSerialization.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../../../../editor/common/services/documentCollaborationService.js";
-import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";
 import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
 

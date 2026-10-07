@@ -4,7 +4,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { Emitter } from '../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AppServerConnectionState } from '../../../app-server/common/appServerApi.js';
+import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
 import { BrowserExtensionHostApi } from '../../browser/extensionHostApi.js';
 import { normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type IExtensionHostApi } from '../../common/extensionHostApi.js';
 

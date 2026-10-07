@@ -1,12 +1,12 @@
 import type { FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { BrowserFileService } from '../../../../../platform/files/browser/fileService.js';
+import { AppServerFileSystemProvider } from '../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
 import type { IFileApi } from '../../../../../platform/files/common/fileApi.js';
 import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 
 /** Selects the owning Session at the transport boundary; shared file/editor state stays in Workbench. */
-export class SessionFileService extends BrowserFileService implements IFileSearchService {
+export class SessionFileService extends AppServerFileSystemProvider implements IFileSearchService {
 	private readonly fileSearch: IFileSearchService;
 	constructor(
 		host: IRendererHost,
@@ -60,7 +60,7 @@ export class SessionFileService extends BrowserFileService implements IFileSearc
 	}
 }
 
-function sessionDirectoryFor(dirId: string): { sessionId: string; path: string } {
+function sessionDirectoryFor(dirId: string): { sessionId: string; path: string; } {
 	const [sessionId, path] = dirId.slice('session:'.length).split(':').map(decodeURIComponent);
 	return { sessionId, path };
 }

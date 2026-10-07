@@ -5,7 +5,7 @@
     "src/typings/editContext.d.ts",
     "src/ash/platform/memories/**/*.ts",
     "src/ash/platform/native/electron-browser/rendererApi.ts",
-    "src/ash/platform/app-server/browser/webRendererApi.ts",
+    "src/ash/platform/agentHost/browser/webRendererApi.ts",
     "src/ash/workbench/workbench.common.main.ts",
     "src/ash/workbench/browser/workbench.ts"
   ]

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import { createAppServerMarketplaceApi } from '../../browser/marketplaceApi.js';
 
 test('Marketplace filtered search requires an advertised search contract before sending a request', async () => {

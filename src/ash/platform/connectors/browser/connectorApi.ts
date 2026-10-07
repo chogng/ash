@@ -1,8 +1,8 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { URI } from '../../../base/common/uri.js';
 import { timeout } from "../../../base/common/async.js";
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IConnectorApi } from "../common/connectorApi.js";
 import type { IClipboardService } from "../../clipboard/common/clipboardService.js";

@@ -118,13 +118,12 @@ export class MainThreadDataChannels extends Disposable {
 				this.registrations.set(key, store);
 				const controller = new AbortController();
 				store.add(toDisposable(() => controller.abort('Extension registration was revoked')));
+				const extensionId = runtime.id;
+				const request = { extensionId, registrationId: registration.registrationId, incarnation: runtime.incarnation, activationGeneration: runtime.activationGeneration };
 				const invoke = async (operation: string, payload: JsonValue, signal: AbortSignal): Promise<JsonValue> => {
 					const cancellation = AbortSignal.any([controller.signal, signal]);
 					const result = await this.api.invoke({
-						extensionId: runtime.id,
-						registrationId: registration.registrationId,
-						incarnation: runtime.incarnation!,
-						activationGeneration: runtime.activationGeneration,
+						...request,
 						operation,
 						payload,
 						deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis,
@@ -145,7 +144,7 @@ export class MainThreadDataChannels extends Disposable {
 									await invoke('receiveData', payload, controller.signal);
 								} catch (error) {
 									if (!controller.signal.aborted) {
-										this.logService.error('dataChannel', `Extension '${runtime.id}' could not receive channel data`, error);
+										this.logService.error('dataChannel', `Extension '${extensionId}' could not receive channel data`, error);
 									}
 								}
 							}
@@ -158,7 +157,7 @@ export class MainThreadDataChannels extends Disposable {
 							return;
 						}
 						if (queue.length >= 32) {
-							this.logService.error('dataChannel', `Extension '${runtime.id}' exceeded its channel delivery queue`);
+							this.logService.error('dataChannel', `Extension '${extensionId}' exceeded its channel delivery queue`);
 							return;
 						}
 						queue.push(normalizeExtensionHostPayload({ data: event.data }));

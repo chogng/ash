@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { developmentAshPackagePath } from './runtimeStore.ts';
 import { prepareAppServer } from './appServer.ts';
-import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../src/ash/platform/app-server/common/appServerEnvironment.ts';
+import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../src/ash/platform/agentHost/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../.build/protocol/typescript/WebProtocolDecoder.ts';
 import type { WebListenInfo } from '../../.build/protocol/typescript/WebListenInfo.ts';
 

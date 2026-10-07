@@ -11,7 +11,7 @@ import { LanguageCompletionService } from '../../../../../editor/contrib/suggest
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
-import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { type IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import { type PermissionDto, type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";

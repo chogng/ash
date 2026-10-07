@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey } from "../../../../platform/app-server/common/appServerEnvironment.js";
+import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey } from "../../common/appServerEnvironment.js";
 
 test("App Server environment keeps safe POSIX session variables and excludes credentials", () => {
 	const environment = buildAppServerEnvironment({

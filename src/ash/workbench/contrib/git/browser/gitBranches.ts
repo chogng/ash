@@ -1,7 +1,7 @@
 import { localize2, localize } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 
-import { AppServerRemoteError } from '../../../../platform/app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';

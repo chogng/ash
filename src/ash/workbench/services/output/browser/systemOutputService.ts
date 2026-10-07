@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IAppServerApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IAppServerApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { ILogSink, LogEntry } from "../../../../platform/log/common/log.js";
 import type { IOutputChannel, IOutputService } from "../common/output.js";
 

@@ -1,9 +1,9 @@
 import { decodeBase64, VSBuffer } from "../../../base/common/buffer.js";
 import type { ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } from "../common/extensionApi.js";
 import { normalizeExtensionCatalog, normalizeExtensionResourceChunk, normalizeExtensionResourceOpenResult, verifyExtensionResourceDigest } from "../common/extensionApi.js";
-import type { IResourceApi } from "../../app-server/common/appServerApi.js";
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import type { IResourceApi } from "../../agentHost/common/appServerApi.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import { localize } from '../../../nls.js';
 
 /** Reads complete package snapshots prepared by the browser build, without server transport. */

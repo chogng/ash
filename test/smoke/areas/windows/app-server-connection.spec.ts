@@ -55,8 +55,8 @@ import { app } from 'electron/main';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
 app.setAppPath(${JSON.stringify(desktop)});
-const { AppServerConnectionRelay } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/app-server/electron-main/appServerConnectionRelay.js')).href)});
-const { ChildProcessJsonlTransport } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/app-server/node/childProcessJsonlTransport.js')).href)});
+const { AppServerConnectionRelay } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/agentHost/electron-main/appServerConnectionRelay.js')).href)});
+const { ChildProcessJsonlTransport } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/agentHost/node/childProcessJsonlTransport.js')).href)});
 const scenario = globalThis.connectionScenario = {
 	acquisitions: 0,
 	isClosing: false,
@@ -153,6 +153,8 @@ startElectronApplication();
 				const details = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n'));
 				throw new Error(`Agents startup failed at ${page.url()}:\n${details}`, { cause: error });
 			}
+			// The window can render before its first handshake finishes; restart scenarios need a ready carrier.
+			await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.state)).toBe('ready');
 			await use({
 				application, page, backend: async () => {
 					const runtime = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktop));

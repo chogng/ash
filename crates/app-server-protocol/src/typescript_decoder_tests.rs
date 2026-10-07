@@ -1,8 +1,33 @@
 use super::DECODER_ROOTS;
 use super::compact_definition_names;
+use super::deduplicate_definitions;
 use super::remove_annotations;
 use super::retain_decoder_definitions;
 use serde_json::json;
+
+#[test]
+fn deduplication_keeps_public_roots_and_rewrites_schema_references_without_changing_literals() {
+    let mut schema = json!({ "$defs": {
+        "Root": { "type":"string" }, "OtherRoot": { "type":"string" },
+        "Duplicate": { "type":"string" },
+        "Object": { "type":"object", "properties": {
+            "child": { "$ref":"#/$defs/Duplicate" },
+            "literal": { "const": { "$ref":"#/$defs/Duplicate" } }
+        }}
+    }});
+    deduplicate_definitions(&mut schema, &["Root", "OtherRoot"]);
+    assert!(schema["$defs"].get("Root").is_some());
+    assert!(schema["$defs"].get("OtherRoot").is_some());
+    assert!(schema["$defs"].get("Duplicate").is_none());
+    assert_eq!(
+        schema["$defs"]["Object"]["properties"]["child"]["$ref"],
+        "#/$defs/OtherRoot"
+    );
+    assert_eq!(
+        schema["$defs"]["Object"]["properties"]["literal"]["const"]["$ref"],
+        "#/$defs/Duplicate"
+    );
+}
 
 #[test]
 fn annotation_removal_preserves_validation_and_payload_property_names() {

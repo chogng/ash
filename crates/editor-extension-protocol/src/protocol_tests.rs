@@ -262,6 +262,38 @@ fn activation_rejects_registration_outside_manifest_capability_ceiling() {
 }
 
 #[test]
+fn status_bar_activation_requires_its_own_declared_capability() {
+    let mut request = ExtensionHostRequest {
+        context: RequestContext::new(4, 8, 12),
+        request: HostRequestKind::Activate(activation()),
+    };
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![RegistrationDescriptor {
+                registration_id: "status".into(),
+                kind: RegistrationKind::StatusBar {
+                    revision: 1,
+                    entries: vec![],
+                },
+            }],
+        })),
+    };
+    assert!(
+        response
+            .validate_for(&request, &ProtocolLimits::default())
+            .is_err()
+    );
+    let HostRequestKind::Activate(params) = &mut request.request else {
+        unreachable!()
+    };
+    params.capabilities.push(ExtensionCapability::StatusBar);
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+}
+
+#[test]
 fn registration_fields_are_bounded_and_provider_sets_are_unique() {
     let mut params = activation();
     params.capabilities = vec![ExtensionCapability::LanguageProvider];
@@ -340,7 +372,10 @@ fn document_events_require_language_capability_and_completion_triggers_are_uniqu
                     kind: RegistrationKind::LanguageProvider {
                         language_ids: vec!["rust".into()],
                         operations: vec![super::LanguageProviderOperation::Completion],
-                        completion_trigger_characters: triggers.into_iter().map(str::to_owned).collect(),
+                        completion_trigger_characters: triggers
+                            .into_iter()
+                            .map(str::to_owned)
+                            .collect(),
                     },
                 }],
             })),

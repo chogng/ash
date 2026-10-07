@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { APP_SERVER_METHODS } from "../../../../../../.build/protocol/typescript/index.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
-import type { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
+import type { AppServerConnectionState } from "../../../agentHost/common/appServerApi.js";
+import type { AppServerProtocolClient } from "../../../agentHost/browser/appServerProtocolClient.js";
 import { ReconnectableTerminalProcessService } from "../../../../platform/terminal/browser/reconnectableTerminalProcessService.js";
 import type { ITerminalProcessService } from "../../common/terminal.js";
 

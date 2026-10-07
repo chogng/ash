@@ -357,6 +357,9 @@ fn registration_dto(
     ExtensionHostRegistrationDescriptorDto {
         registration_id: registration.registration_id,
         kind: match registration.kind {
+            RegistrationKind::StatusBar { revision, entries } => {
+                ExtensionHostRegistrationKindDto::StatusBar { revision, entries }
+            }
             RegistrationKind::TextDocumentEvents {} => {
                 ExtensionHostRegistrationKindDto::TextDocumentEvents {}
             }

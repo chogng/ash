@@ -2,8 +2,8 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerCallService } from '../../browser/appServerCallService.js';
-import { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../app-server/common/appServerTransport.js';
+import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
 import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type CallStatus } from '../../../../../../.build/protocol/typescript/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 

@@ -45,7 +45,7 @@ Semantic tokens and language-server features continue independently.
 
 ## Ownership and failure semantics
 
-`Workbench` constructs `TextFileService` after `BrowserFileService`, registers
+`Workbench` constructs `TextFileService` after `AppServerFileSystemProvider`, registers
 it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
 Stanza text and document contributions reject construction when that service is absent.
 

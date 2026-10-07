@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import type { IResourceApi } from "../../../app-server/common/appServerApi.js";
-import type { AppServerProtocolClient } from "../../../app-server/browser/appServerProtocolClient.js";
+import type { IResourceApi } from "../../../agentHost/common/appServerApi.js";
+import type { AppServerProtocolClient } from "../../../agentHost/browser/appServerProtocolClient.js";
 import { createAppServerExtensionApi } from "../../browser/extensionApi.js";
 import { MAX_EXTENSION_RESOURCE_BYTES } from "../../common/extensionApi.js";
 

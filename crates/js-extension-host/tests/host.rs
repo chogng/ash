@@ -104,6 +104,7 @@ fn start_vscode(source: &str) -> Result<Running, ExtensionHostError> {
         vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
+            ExtensionCapability::StatusBar,
         ],
         isolation,
         launcher,
@@ -205,6 +206,151 @@ fn run(running: &Running, id: &str, arguments: Value) -> Result<Value, Extension
         .supervisor
         .invoke(invocation(id, arguments, Duration::from_secs(5)))
         .map(|result| result.payload)
+}
+
+#[test]
+fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() {
+    let running = start_vscode(r#"
+        const v = require('vscode');
+        const item = v.window.createStatusBarItem('status', v.StatusBarAlignment.Right, 1.5);
+        exports.activate = context => {
+            const defaultItem = v.window.createStatusBarItem();
+            if (defaultItem.alignment !== v.StatusBarAlignment.Left || defaultItem.priority !== undefined || defaultItem.id !== 'test.example') throw Error('Invalid default status bar overload');
+            defaultItem.dispose();
+            item.text = 'Initial'; item.tooltip = 'Run'; item.accessibilityInformation = { label: 'Run extension status' };
+            item.command = { command: 'example.probe', title: 'Probe', arguments: [{ value: 0 }] };
+            item.show();
+            context.subscriptions.push(item, v.commands.registerCommand('example.probe', arg => arg.value));
+            context.subscriptions.push(v.commands.registerCommand('example.hello', mode => {
+                if (mode === 'hide') {
+                    item.hide();
+                    // Retaining the previous argument on every hidden replacement exceeds the isolate's heap budget.
+                    for (let index = 0; index < 512; index++) item.command = { command: 'example.probe', title: 'Probe', arguments: [Array(32768).fill(index)] };
+                    item.command = { command: 'example.probe', title: 'Probe', arguments: [{ value: 512 }] };
+                } else if (mode === 'show') { item.text = 'Current'; item.show(); }
+                else if (mode === 'dispose') { item.dispose(); item.dispose(); if (item.command !== undefined) throw Error('Disposed item retained command'); }
+            }));
+        };
+    "#).unwrap();
+    let initial = running.supervisor.snapshot();
+    let status = initial
+        .registrations
+        .iter()
+        .find(|registration| registration.registration_id == "vscode.statusBar")
+        .unwrap();
+    let extension_protocol::RegistrationKind::StatusBar { entries, .. } = &status.kind else {
+        panic!("missing status bar");
+    };
+    assert_eq!(entries[0].priority.as_f64(), Some(1.5));
+    assert_eq!(entries[0].text, "Initial");
+    assert_eq!(
+        entries[0].aria_label.as_deref(),
+        Some("Run extension status")
+    );
+    drop(initial);
+    for (mode, expected_count) in [("hide", 0), ("show", 1), ("dispose", 0)] {
+        let handle = running
+            .supervisor
+            .begin_invoke(invocation("hello", json!([mode]), Duration::from_secs(10)))
+            .unwrap();
+        let mut requests = 0;
+        handle
+            .wait_with_client(|operation, _, _| {
+                let ExtensionClientOperation::SetStatusBarEntries {
+                    registration_id,
+                    entries,
+                    ..
+                } = operation
+                else {
+                    panic!("unexpected operation");
+                };
+                requests += 1;
+                assert_eq!(registration_id, "vscode.statusBar");
+                assert_eq!(entries.len(), expected_count);
+                if expected_count == 1 {
+                    assert_eq!(entries[0].text, "Current");
+                    assert_eq!(
+                        entries[0].command.as_ref().unwrap().arguments,
+                        json!([{ "value": 512 }]).as_array().unwrap().clone()
+                    );
+                }
+                Ok(ExtensionClientResult::Done)
+            })
+            .unwrap();
+        assert_eq!(requests, 1);
+        let snapshot = running.supervisor.snapshot();
+        let status = snapshot
+            .registrations
+            .iter()
+            .find(|registration| registration.registration_id == "vscode.statusBar")
+            .unwrap();
+        let extension_protocol::RegistrationKind::StatusBar { entries, .. } = &status.kind else {
+            panic!("missing status bar");
+        };
+        assert_eq!(entries.len(), expected_count);
+    }
+    assert_eq!(
+        run(&running, "probe", json!([{ "value": 512 }])).unwrap(),
+        json!(512)
+    );
+    running.supervisor.shutdown().unwrap();
+}
+
+#[test]
+fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations() {
+    let running = start_with_capabilities(r#"
+        import { commands, window } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(window.registerStatusBar('status', () => ({ revision: 1, entries: [] })));
+            context.subscriptions.push(commands.registerCommand('example.update', 'Update', async (call, id, revision) => {
+                try { await call.window.setStatusBarEntries(id, revision, []); return 'ok'; }
+                catch (error) { return error.code; }
+            }));
+        }
+    "#, vec![ExtensionCapability::Command, ExtensionCapability::StatusBar]).unwrap();
+    for (id, revision, permit, expected) in [
+        ("foreign", 2, true, "registrationNotFound"),
+        ("example.update", 2, true, "registrationNotFound"),
+        ("status", 2, true, "ok"),
+        ("status", 1, true, "ok"),
+        ("status", 3, false, "permissionDenied"),
+    ] {
+        let handle = running
+            .supervisor
+            .begin_invoke(invocation(
+                "update",
+                json!([id, revision]),
+                Duration::from_secs(5),
+            ))
+            .unwrap();
+        let mut calls = 0;
+        let result = handle
+            .wait_with_client(|_, _, _| {
+                calls += 1;
+                if permit {
+                    Ok(ExtensionClientResult::Done)
+                } else {
+                    Err(host::HostFailure {
+                        code: HostErrorCode::PermissionDenied,
+                        message: "Rejected".into(),
+                    })
+                }
+            })
+            .unwrap();
+        assert_eq!(result.payload, json!(expected));
+        assert_eq!(calls, usize::from(id == "status"));
+    }
+    let snapshot = running.supervisor.snapshot();
+    let status = snapshot
+        .registrations
+        .iter()
+        .find(|registration| registration.registration_id == "status")
+        .unwrap();
+    assert!(matches!(
+        status.kind,
+        extension_protocol::RegistrationKind::StatusBar { revision: 2, .. }
+    ));
+    running.supervisor.shutdown().unwrap();
 }
 
 fn hover_invocation(text: &str) -> ExtensionInvocation {
@@ -583,6 +729,7 @@ fn hover_receives_frozen_unsaved_utf16_snapshot_and_can_call_authorized_services
         vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
+            ExtensionCapability::StatusBar,
         ],
     )
     .unwrap();
@@ -626,6 +773,7 @@ fn hover_requires_declared_capability_and_rejects_invalid_snapshots_and_disposed
         vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
+            ExtensionCapability::StatusBar,
         ],
     )
     .unwrap();
@@ -675,6 +823,7 @@ fn cancelling_a_pending_hover_retires_its_isolate_and_restores_the_provider_in_a
         vec![
             ExtensionCapability::Command,
             ExtensionCapability::LanguageProvider,
+            ExtensionCapability::StatusBar,
         ],
     )
     .unwrap();

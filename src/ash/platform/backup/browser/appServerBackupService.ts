@@ -1,6 +1,6 @@
 import { URI } from '../../../base/common/uri.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS, type BackupRecordDto } from '../../../../../.build/protocol/typescript/index.js';
 import { BackupError, type IBackupContent, type IBackupRecord, type IBackupService, type IBackupWorkspace } from '../common/backup.js';
 

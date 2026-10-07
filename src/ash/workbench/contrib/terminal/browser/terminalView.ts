@@ -6,7 +6,7 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { IMenuService } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
+import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";

@@ -73,6 +73,7 @@ export interface InvocationContext {
 		readTextFile(path: string): Promise<string>;
 	};
 	readonly window: {
+		setStatusBarEntries(registrationId: string, revision: number, entries: readonly StatusBarEntry[]): Promise<void>;
 		showInformationMessage(message: string): Promise<void>;
 		showWarningMessage(message: string): Promise<void>;
 		showErrorMessage(message: string): Promise<void>;
@@ -86,6 +87,20 @@ export interface ExtensionContext {
 /** Registration occurs during activate; dispose revokes its callback. The host publishes the activation atomically. */
 export const commands: {
 	registerCommand(command: string, title: string, callback: (context: InvocationContext, ...arguments_: JsonValue[]) => JsonValue | undefined | Promise<JsonValue | undefined>): Disposable;
+};
+
+export interface StatusBarEntry {
+	readonly id: string;
+	readonly text: string;
+	readonly tooltip: string | null;
+	readonly ariaLabel: string | null;
+	readonly alignment: 'left' | 'right';
+	readonly priority: number;
+	readonly command: { readonly command: string; readonly arguments: readonly JsonValue[]; } | null;
+}
+/** Activation snapshot is computed without retaining obsolete values. Requires statusBar capability. */
+export const window: {
+	registerStatusBar(registrationId: string, snapshot: () => { readonly revision: number; readonly entries: readonly StatusBarEntry[]; }): Disposable;
 };
 /** Uses the initiating editor's immutable snapshot. Cancellation retires the host, including pending provider callbacks. */
 export const languages: {

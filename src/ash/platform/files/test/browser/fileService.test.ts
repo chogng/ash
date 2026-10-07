@@ -6,9 +6,10 @@ import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { Emitter, Event } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
-import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
+import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
 import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
-import { BrowserFileService, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
+import { AppServerFileSystemProvider } from "../../../agentHost/browser/appServerFileSystemProvider.js";
+import { workspaceResourceFromPath } from "../../../workspace/common/workspace.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../.build/protocol/typescript/index.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -16,16 +17,20 @@ import { WorkspaceContextService } from "../../../../workbench/services/workspac
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { WorkspaceWatcher } from '../../../../workbench/contrib/files/browser/workspaceWatcher.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { consumeStream } from '../../../../base/common/stream.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 
 test("disconnected file API declines system file paste without requiring App Server", async () => {
 	const api = createDisconnectedFileApi(() => { throw new Error("App Server unavailable"); });
 	assert.equal(await api.pasteSystemFiles({ dirId: "root", path: ".", moveRequested: false }), false);
 });
 
-test("BrowserFileService passes the paste destination and move request to App Server", async () => {
+test("AppServerFileSystemProvider passes the paste destination and move request to App Server", async () => {
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 	const requests: unknown[] = [];
-	using service = new BrowserFileService({
+	using service = new AppServerFileSystemProvider({
 		workspaceContextService: workspace,
 		resourceApi: unavailableResourceApi(),
 		api: {
@@ -68,12 +73,21 @@ test("workspace paths preserve backslashes as POSIX filename characters for Remo
 	assert.equal(workspaceResourceFromPath(URI.parse("file:///C:/project"), "src\\generated\\main.ts")?.toString(), "file:///C:/project/src/generated/main.ts");
 });
 
-test("BrowserFileService maps wire entries back to resource URIs", async () => {
+test("workspaceResourceFromPath rejects invalid protocol path segments", () => {
+	for (const root of [URI.parse("file:///C:/project"), createSshRemoteWorkspaceUri("work-server", "/home/ash/Project")]) {
+		for (const path of ["", "/main.ts", "src/", "src//main.ts", "./main.ts", "../main.ts", "src/../main.ts"]) {
+			assert.equal(workspaceResourceFromPath(root, path), undefined, path);
+		}
+	}
+	assert.equal(workspaceResourceFromPath(URI.parse("file:///C:/project"), "src\\..\\main.ts"), undefined);
+});
+
+test("AppServerFileSystemProvider maps wire entries back to resource URIs", async () => {
 	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService =
 		new WorkspaceContextService({ id: "workspace", uri: root });
-	const service = new BrowserFileService({
+	const service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		api: {
 			getMetadata: async ({ path }) => {
@@ -174,10 +188,56 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 	});
 });
 
-test("BrowserFileService maps App Server revision conflicts to the file contract", async () => {
+test('workspace stream cancellation releases a snapshot allocated after the caller stops', async () => {
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using cancellation = new CancellationTokenSource();
+	const allocated = new DeferredPromise<{ resource: { resourceId: string; mimeType: string; size: number; sha256: string; }; revision: string; }>();
+	const released: string[] = [];
+	using provider = new AppServerFileSystemProvider({
+		workspaceContextService: workspace,
+		api: { ...unavailableFileApi(), readBinaryFile: () => allocated.p },
+		resourceApi: {
+			metadata: async () => { throw new Error('not used'); },
+			read: async () => { throw new Error('Cancelled snapshot must not be read'); },
+			release: async ({ resourceId }) => { released.push(resourceId); },
+		},
+	});
+	const stream = provider.readFileStream(URI.file('/project/paper.pdf'), {}, cancellation.token);
+	const consumed = consumeStream(stream);
+	cancellation.cancel();
+	await allocated.complete({ resource: { resourceId: 'late', mimeType: 'application/pdf', size: 1, sha256: 'sha256:late' }, revision: 'revision' });
+	await assert.rejects(consumed, CancellationError);
+	assert.deepEqual(released, ['late']);
+});
+
+test('workspace stream cancellation stops requesting chunks and releases its snapshot', async () => {
+	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using cancellation = new CancellationTokenSource();
+	const requested: number[] = [];
+	const released: string[] = [];
+	using provider = new AppServerFileSystemProvider({
+		workspaceContextService: workspace,
+		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'chunks', mimeType: 'application/pdf', size: 600000, sha256: 'sha256:chunks' }, revision: 'revision' }) },
+		resourceApi: {
+			metadata: async () => { throw new Error('not used'); },
+			read: async ({ resourceId, offset, maxBytes }) => {
+				requested.push(offset);
+				const data = new Uint8Array(maxBytes);
+				return { resourceId, offset, dataBase64: Buffer.from(data).toString('base64'), decodedLength: data.byteLength, eof: false };
+			},
+			release: async ({ resourceId }) => { released.push(resourceId); },
+		},
+	});
+	const stream = provider.readFileStream(URI.file('/project/paper.pdf'), {}, cancellation.token);
+	stream.on('data', () => cancellation.cancel());
+	await assert.rejects(consumeStream(stream), CancellationError);
+	assert.deepEqual({ requested, released }, { requested: [0], released: ['chunks'] });
+});
+
+test("AppServerFileSystemProvider maps App Server revision conflicts to the file contract", async () => {
 	const resource = URI.parse("file:///C:/project/src/main.ts");
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.parse("file:///C:/project") });
-	const service = new BrowserFileService({
+	const service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		resourceApi: unavailableResourceApi(),
 		api: {
@@ -199,12 +259,12 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 	await assert.rejects(service.writeFile(resource, new TextEncoder().encode("local"), { create: true, overwrite: true, expectedRevision: "stale" }), FileRevisionConflictError);
 });
 
-test('BrowserFileService reports missing entries through the file contract for every read operation', async () => {
+test('AppServerFileSystemProvider reports missing entries through the file contract for every read operation', async () => {
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/missing');
 	let error: Error = new AppServerRemoteError(-32000, 'Missing entry', { kind: 'FileSystemNotFound' });
 	const missing = async (): Promise<never> => { throw error; };
-	using service = new BrowserFileService({
+	using service = new AppServerFileSystemProvider({
 		workspaceContextService: workspace,
 		resourceApi: unavailableResourceApi(),
 		api: { ...unavailableFileApi(), getMetadata: missing, readDirectory: missing, readFile: missing, readBinaryFile: missing },
@@ -217,7 +277,7 @@ test('BrowserFileService reports missing entries through the file contract for e
 	for (const read of reads) { await assert.rejects(read, value => value === error); }
 });
 
-test("BrowserFileService reads connection-owned binary resources in bounded chunks", async () => {
+test("AppServerFileSystemProvider reads connection-owned binary resources in bounded chunks", async () => {
 	const root = URI.parse("file:///C:/project");
 	const resource = URI.parse("file:///C:/project/large.pdf");
 	const bytes = new Uint8Array(17 * 1024 * 1024 + 1);
@@ -226,7 +286,7 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 	const readOffsets: number[] = [];
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
-	const service = new BrowserFileService({
+	const service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		api: {
 			getMetadata: async () => { throw new Error("not used"); },
@@ -268,11 +328,11 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 	assert.deepEqual(releasedResources, ["resource-large"]);
 });
 
-test("BrowserFileService maps App Server invalidations to workspace resources", () => {
+test("AppServerFileSystemProvider maps App Server invalidations to workspace resources", () => {
 	const root = URI.parse("file:///C:/project");
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
 	using changes = new Emitter<FsChanged>();
-	using service = new BrowserFileService({
+	using service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		resourceApi: unavailableResourceApi(),
 		api: unavailableFileApi(),
@@ -287,7 +347,7 @@ test("BrowserFileService maps App Server invalidations to workspace resources", 
 	assert.deepEqual(observed, [[URI.parse("file:///C:/project/src/main.ts"), URI.parse("file:///C:/project/README.md")], undefined]);
 });
 
-test("BrowserFileService routes nested multi-root resources by Workspace folder id", async () => {
+test("AppServerFileSystemProvider routes nested multi-root resources by Workspace folder id", async () => {
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({
 		id: "multi-root",
 		folders: [
@@ -299,7 +359,7 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 	const requests: { readonly dirId?: string; readonly path: string; }[] = [];
 	const copies: unknown[] = [];
 	const pastes: unknown[] = [];
-	const service = new BrowserFileService({
+	const service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		resourceApi: { ...unavailableResourceApi(), release: async () => { } },
 		api: {
@@ -395,11 +455,11 @@ test('FileService decodes text from provider bytes without changing revisions or
 	await assert.rejects(service.readFile(binary), TypeError);
 });
 
-test('BrowserFileService releases a byte resource when reading its content fails', async () => {
+test('AppServerFileSystemProvider releases a byte resource when reading its content fails', async () => {
 	using workspace = new WorkspaceContextService({ id: 'read-failure', uri: URI.file('/workspace') });
 	const failure = new Error('Resource read failed');
 	const released: string[] = [];
-	using provider = new BrowserFileService({
+	using provider = new AppServerFileSystemProvider({
 		workspaceContextService: workspace,
 		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'failed-read', mimeType: 'application/octet-stream', size: 1, sha256: 'sha256:failed' }, revision: 'raw-revision' }) },
 		resourceApi: { ...unavailableResourceApi(), read: async () => { throw failure; }, release: async request => { released.push(request.resourceId); } },

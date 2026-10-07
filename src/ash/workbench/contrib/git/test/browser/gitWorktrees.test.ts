@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
-import { AppServerRemoteError } from '../../../../../platform/app-server/common/appServerError.js';
+import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';

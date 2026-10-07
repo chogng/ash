@@ -18,7 +18,7 @@ import type { LanguageDescriptionContribution, LanguageDescriptionRegistration }
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 import { DebugAdapterFactoriesRegistry, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from "../../debug/common/debugAdapterFactory.js";
 import type { ITextMateService } from "../../textMate/common/textMateService.js";

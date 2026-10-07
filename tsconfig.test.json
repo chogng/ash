@@ -56,10 +56,10 @@
     "src/ash/workbench/services/documentCollaboration/**/*.ts",
     "src/ash/workbench/services/documentEditor/**/*.ts",
     "src/ash/platform/app-server-daemon/node/appServerDaemonPackage.ts",
-    "src/ash/platform/app-server/node/**/*.ts",
+    "src/ash/platform/agentHost/node/**/*.ts",
     "src/ash/platform/files/electron-main/**/*.ts",
     "src/ash/platform/ipc/electron-main/**/*.ts",
-    "src/ash/platform/app-server/browser/**/*.ts",
+    "src/ash/platform/agentHost/browser/**/*.ts",
     "src/ash/platform/browserView/common/**/*.ts",
     "src/ash/platform/browserView/electron-main/browserViewIpc.ts",
     "test/architecture/**/*.ts"

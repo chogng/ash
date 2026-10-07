@@ -1,6 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IPluginApi } from "../../../../platform/plugins/common/pluginApi.js";
 import type { IPluginService, PluginCatalogView, PluginInstallation, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 

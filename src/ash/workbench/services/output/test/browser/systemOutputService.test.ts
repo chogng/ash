@@ -3,7 +3,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../common/output.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { SystemOutputService } from "../../browser/systemOutputService.js";
 
 test("SystemOutputService projects App Server lifecycle", async () => {

@@ -9,7 +9,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
 import { BrowserViewStorageScope, type BrowserViewEvent } from '../../common/browserView.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../electron-main/browserViewMainService.js';
-import { AppServerBrowserHost } from '../../../app-server/electron-main/appServerBrowserHost.js';
+import { AppServerBrowserHost } from '../../../agentHost/electron-main/appServerBrowserHost.js';
 import { IPlaywrightService } from '../../common/playwrightService.js';
 import type { IBrowserViewObservation } from '../../common/browserView.js';
 

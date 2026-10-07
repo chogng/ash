@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { Disposable, DisposableMap, DisposableStore, type IDisposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import type { AppServerConnectionRelay } from '../../app-server/electron-main/appServerConnectionRelay.js';
+import type { AppServerConnectionRelay } from '../../agentHost/electron-main/appServerConnectionRelay.js';
 import type { AppServerDaemonLauncher } from './appServerDaemonLauncher.js';
 import type { IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
 

@@ -818,6 +818,7 @@ fn dispatch_client(
             | ExtensionClientOperation::ShowMessage { .. }
             | ExtensionClientOperation::ShowQuickPick { .. }
             | ExtensionClientOperation::SetDiagnostics { .. }
+            | ExtensionClientOperation::SetStatusBarEntries { .. }
     ) {
         return Err("operation is outside JavaScript SDK v1".into());
     }

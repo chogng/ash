@@ -27,7 +27,7 @@ import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/
 import { WorkspaceOpenTargetKind } from '../../../../platform/environment/common/argv.js';
 import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
+import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
 import { WorkspaceContextMainService } from '../../../../platform/window/electron-main/window.js';
 import { WindowsMainService, workspaceContextIpcRoutes } from '../../../../platform/windows/electron-main/windowsMainService.js';
 import { WorkspacesManagementMainService } from '../../../../platform/workspaces/electron-main/workspacesManagementMainService.js';

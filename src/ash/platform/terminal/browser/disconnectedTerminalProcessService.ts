@@ -1,5 +1,5 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
+import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminal.js";
 

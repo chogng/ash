@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'mocha';
 import { DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AppServerConnectionState } from '../../../app-server/common/appServerApi.js';
+import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
 import { AppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
 import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration } from '../../electron-main/developmentAppServerReloader.js';
 import type { IDevelopmentAppServerRuntime } from '../../electron-main/developmentAppServerRuntime.js';

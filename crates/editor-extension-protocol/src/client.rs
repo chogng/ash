@@ -25,6 +25,15 @@ impl ExtensionClientRequest {
             ));
         }
         validate_encoded_size(&self.operation, limits.maximum_payload_bytes)?;
+        if let ExtensionClientOperation::SetStatusBarEntries {
+            registration_id,
+            revision,
+            entries,
+        } = &self.operation
+        {
+            crate::validation::validate_identifier(registration_id)?;
+            crate::statusbar::validate_entries(*revision, entries)?;
+        }
         if let ExtensionClientOperation::SetDiagnostics {
             collection,
             entries,
@@ -78,6 +87,12 @@ impl ExtensionClientRequest {
     deny_unknown_fields
 )]
 pub enum ExtensionClientOperation {
+    SetStatusBarEntries {
+        registration_id: String,
+        #[cfg_attr(feature = "export", ts(type = "number"))]
+        revision: u64,
+        entries: Vec<crate::ExtensionStatusBarEntry>,
+    },
     ExecuteCommand {
         command: String,
         arguments: Vec<Value>,

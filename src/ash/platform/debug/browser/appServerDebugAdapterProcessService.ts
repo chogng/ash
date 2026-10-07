@@ -1,7 +1,7 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type IAppServerApi } from "../../app-server/common/appServerApi.js";
-import { type AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
+import { type IAppServerApi } from "../../agentHost/common/appServerApi.js";
+import { type AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService, type IDebugAdapterProcessStartOptions } from "../common/debugAdapterProcessService.js";
 import { type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 

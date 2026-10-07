@@ -1,5 +1,5 @@
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { ITurnChangesApi } from "../common/turnChangesApi.js";
 

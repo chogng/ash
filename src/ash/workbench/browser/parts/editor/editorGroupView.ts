@@ -19,7 +19,7 @@ import type { IDiffService } from "../../../services/diff/common/diffService.js"
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { EditorOpenOptions } from "./editorInput.js";
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
 import type { IEditorGroupView } from './editor.js';

@@ -49,6 +49,15 @@ Language changes close the old document and open the new language. Callbacks can
 services. The connection retains at most 64 pending events per subscription; exceeding that limit stops
 the subscription and reports an error, rather than skipping edits. A new incarnation receives fresh open events.
 
+`window.registerStatusBar(id, snapshot)` requires `statusBar` capability. Register during activation;
+the snapshot callback returns `{ revision, entries }` without keeping historical command arguments.
+`call.window.setStatusBarEntries(id, revision, entries)` replaces all visible entries for that registration.
+Each entry contains `id`, `text`, nullable `tooltip` and `ariaLabel`, `alignment` (`left` or `right`), finite
+`priority`, and a nullable `{ command, arguments }` command. Arguments are JSON values. Revisions are
+positive safe integers and increase monotonically; stale updates are ignored. Empty entries hide all
+items, and disconnect, stop or restart release their accessors. The workbench executes clicks through its
+existing command service. Keep the registration in `context.subscriptions`.
+
 `call.languages.setDiagnostics(collection, entries)` replaces the entire named collection for that
 extension incarnation; `[]` clears it. Each entry has a URI, observed document version (or null for an
 unread resource) and diagnostics with zero-based UTF-16 start/end, severity, message, nullable source and code.

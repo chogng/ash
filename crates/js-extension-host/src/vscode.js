@@ -1,4 +1,4 @@
-import { commands as ashCommands, languages as ashLanguages, workspace as ashWorkspace } from '@ash/extension';
+import { commands as ashCommands, languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, __runtime as ashRuntime } from '@ash/extension';
 
 // This is the public editor contract inside the confined process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
@@ -20,6 +20,91 @@ export function createApi(configuration) {
 	const documentListeners = { open: new Set(), change: new Set(), close: new Set() };
 	let documentRegistration;
 	let collectionSequence = 0;
+	const statusItems = new Map();
+	const statusFlushes = new Set();
+	let statusSequence = 0;
+	let statusRevision = 1;
+	let statusActive = false;
+	let statusDisposed = false;
+	const statusRegistrationId = 'vscode.statusBar';
+
+	function statusSnapshot() {
+		return { revision: statusRevision, entries: [...statusItems.values()].filter(item => item.visible).map(item => item.snapshot()) };
+	}
+	function statusChanged() {
+		++statusRevision;
+		if (!statusActive || statusDisposed || ashRuntime.isDisposed) return;
+		const id = globalThis.__ashInvocation();
+		const owned = pending.get(id);
+		if (!owned) throw new Error('Status bar update requires an active VS Code callback');
+		if (statusFlushes.has(id)) return;
+		statusFlushes.add(id);
+		// Coalesce synchronous property changes and keep the flush inside its originating invocation.
+		const flush = Promise.resolve().then(async () => {
+			statusFlushes.delete(id);
+			await request({ operation: 'setStatusBarEntries', registrationId: statusRegistrationId, ...statusSnapshot() }, 'done');
+		});
+		owned.push(flush);
+		flush.catch(() => undefined);
+	}
+	function checkStatusUpdate() {
+		if (statusActive && !statusDisposed && !ashRuntime.isDisposed && !pending.has(globalThis.__ashInvocation(false))) throw new Error('Status bar update requires an active VS Code callback');
+	}
+	class StatusBarItem {
+		#handle;
+		#values = { text: '', name: undefined, tooltip: undefined, command: undefined, accessibilityInformation: undefined };
+		#disposed = false;
+		#visible = false;
+		constructor(id, alignment, priority) {
+			Object.defineProperties(this, { id: { value: id, enumerable: true }, alignment: { value: alignment, enumerable: true }, priority: { value: priority, enumerable: true } });
+			this.#handle = `item.${++statusSequence}`;
+			statusItems.set(this.#handle, this);
+		}
+		get visible() { return this.#visible; }
+		get text() { return this.#values.text; }
+		set text(value) { if (typeof value !== 'string' || value.length > 8192 || value.includes('\0')) throw new TypeError('Invalid status bar text'); this.set('text', value); }
+		get name() { return this.#values.name; }
+		set name(value) { if (value !== undefined && (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))) throw new TypeError('Invalid status bar name'); this.set('name', value); }
+		get color() { return unsupported('StatusBarItem.color'); }
+		set color(_value) { return unsupported('StatusBarItem.color'); }
+		get backgroundColor() { return unsupported('StatusBarItem.backgroundColor'); }
+		set backgroundColor(_value) { return unsupported('StatusBarItem.backgroundColor'); }
+		get tooltip() { return this.#values.tooltip; }
+		set tooltip(value) { if (value !== undefined && typeof value !== 'string') return unsupported('StatusBarItem.tooltip MarkdownString'); if (value?.length > 8192 || value?.includes('\0')) throw new TypeError('Invalid status bar tooltip'); this.set('tooltip', value); }
+		get command() { return this.#values.command; }
+		set command(value) {
+			if (value !== undefined && (typeof (typeof value === 'string' ? value : value?.command) !== 'string' || !(typeof value === 'string' ? value : value.command) || typeof value !== 'string' && value.arguments !== undefined && !Array.isArray(value.arguments))) throw new TypeError('Invalid status bar command');
+			this.set('command', value);
+		}
+		get accessibilityInformation() { return this.#values.accessibilityInformation; }
+		set accessibilityInformation(value) { if (value !== undefined && (typeof value?.label !== 'string' || value.label.length > 8192 || value.label.includes('\0'))) throw new TypeError('Invalid status bar accessibility information'); if (value?.role !== undefined && value.role !== 'button') return unsupported('StatusBarItem.accessibilityInformation.role'); this.set('accessibilityInformation', value); }
+		set(key, value) { if (this.#disposed) return; if (this.#visible) checkStatusUpdate(); this.#values[key] = value; if (this.#visible) statusChanged(); }
+		show() { if (this.#disposed || this.#visible) return; checkStatusUpdate(); this.#visible = true; statusChanged(); }
+		hide() { if (!this.#visible) return; checkStatusUpdate(); this.#visible = false; statusChanged(); }
+		dispose() {
+			if (this.#disposed) return;
+			this.hide();
+			this.#disposed = true;
+			statusItems.delete(this.#handle);
+			// A retained, disposed public item must not keep its last command's argument graph alive.
+			this.#values = { text: '', name: undefined, tooltip: undefined, command: undefined, accessibilityInformation: undefined };
+		}
+		snapshot() {
+			const value = this.#values.command;
+			const command = value === undefined ? null : { command: typeof value === 'string' ? value : value.command, arguments: typeof value === 'string' ? [] : value.arguments ?? [] };
+			return { id: this.#handle, text: this.text, tooltip: this.tooltip ?? null, ariaLabel: this.accessibilityInformation?.label ?? this.name ?? null, alignment: this.alignment === 1 ? 'left' : 'right', priority: this.priority ?? 0, command };
+		}
+	}
+	function createStatusBarItem(idOrAlignment, alignmentOrPriority, priority) {
+		if (statusDisposed || ashRuntime.isDisposed) throw new Error('Extension is not active');
+		const explicitId = typeof idOrAlignment === 'string';
+		const id = explicitId ? idOrAlignment : configuration.extensionId;
+		const alignment = (explicitId ? alignmentOrPriority : idOrAlignment) ?? 1;
+		const order = explicitId ? priority : alignmentOrPriority;
+		if (!id || id.length > 256 || ![1, 2].includes(alignment) || order !== undefined && !Number.isFinite(order)) throw new TypeError('Invalid status bar identity, alignment or priority');
+		if (statusItems.size >= 128) throw new RangeError('Status bar item quota exceeded');
+		return new StatusBarItem(id, alignment, order);
+	}
 
 	function unsupported(name) { throw new Error(`Unsupported VS Code API: ${name}`); }
 	function contract(name, members) {
@@ -304,6 +389,7 @@ export function createApi(configuration) {
 	}
 	class SnippetString { constructor(value = '') { this.value = value; } }
 	const api = contract('vscode', {
+		StatusBarAlignment: Object.freeze({ Left: 1, Right: 2 }),
 		Disposable, Position, Range, Uri, Diagnostic, SnippetString,
 		DiagnosticSeverity: Object.freeze({ Error: 0, Warning: 1, Information: 2, Hint: 3 }),
 		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.map((name, index) => [name, index]))),
@@ -324,6 +410,7 @@ export function createApi(configuration) {
 			},
 		}),
 		window: contract('window', {
+			createStatusBarItem,
 			showInformationMessage: (text, ...items) => message('information', text, ...items),
 			showWarningMessage: (text, ...items) => message('warning', text, ...items),
 			showErrorMessage: (text, ...items) => message('error', text, ...items),
@@ -378,5 +465,19 @@ export function createApi(configuration) {
 			},
 		}),
 	});
-	return Object.freeze({ api, activate(context) { subscriptions = context.subscriptions; } });
+	return Object.freeze({
+		api,
+		activate(context) {
+			subscriptions = context.subscriptions;
+			subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
+			subscriptions.push(new Disposable(() => {
+				statusDisposed = true;
+				statusActive = false;
+				for (const item of [...statusItems.values()]) item.dispose();
+				statusFlushes.clear();
+			}));
+		},
+		didActivate() { statusActive = true; },
+		deactivate() { statusActive = false; },
+	});
 }

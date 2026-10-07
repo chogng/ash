@@ -26,7 +26,7 @@ import { binaryDiffEditorDescriptor } from '../../../src/ash/workbench/browser/p
 import { createTestFileService, createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { BrowserExtensionHostApi, createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensionHost/browser/extensionHostApi.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import { IAppServerApi } from '../../../src/ash/platform/app-server/common/appServerApi.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';

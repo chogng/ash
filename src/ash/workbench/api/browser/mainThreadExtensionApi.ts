@@ -1,4 +1,5 @@
 import { localize } from '../../../nls.js';
+import { MainThreadStatusBar } from './mainThreadStatusBar.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
 import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
@@ -67,6 +68,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly taskRegistration: TaskProviderRegistration;
 	private readonly testRegistration: TestProfileProviderRegistration;
 	private activeContributions: ContributionSet | undefined;
+	private contributionIdentity: string | undefined;
 	private activationController = new AbortController();
 	private readonly extensionOutputs = this._register(new DisposableMap<string, IOutputChannel>());
 	private readonly outputCursors = new Map<string, ExtensionOutputCursor>();
@@ -75,6 +77,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly customEditors: MainThreadCustomEditors;
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
+	private readonly statusbar: MainThreadStatusBar;
 
 	constructor(
 		commands: CommandRegistry,
@@ -99,6 +102,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this._register(toDisposable(() => clientHandler.dispose()));
 		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
 		this.diagnostics = this._register(instantiation.createInstance(MainThreadDiagnostics));
+		this.statusbar = this._register(instantiation.createInstance(MainThreadStatusBar, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.documents = this._register(instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
@@ -121,6 +125,9 @@ export class MainThreadExtensionApi extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
+			case 'setStatusBarEntries':
+				this.statusbar.set(source, operation.registrationId, operation.revision, operation.entries);
+				return { result: 'done' };
 			case 'setDiagnostics':
 				this.diagnostics.set(source, operation.collection, operation.entries);
 				return { result: 'done' };
@@ -188,18 +195,29 @@ export class MainThreadExtensionApi extends Disposable {
 
 	public update(snapshot: ExtensionHostFleetSnapshot): readonly ExtensionApiIssue[] {
 		this.assertNotDisposed();
-		const contributions = this.buildContributions(snapshot);
-		try {
-			this.replaceContributions(contributions);
-		} catch (error) {
-			contributions.controller.abort(error);
-			throw error;
+		const identity = JSON.stringify(snapshot.extensions.map(runtime => ({
+			id: runtime.id, version: runtime.version, packageDigest: runtime.packageDigest, runtimeApiVersion: runtime.runtimeApiVersion,
+			activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, activation: runtime.activation, failure: runtime.failure,
+			registrations: runtime.registrations.filter(registration => registration.kind !== 'statusBar'),
+		})));
+		// Status values and Output events can change during a command. Only executable
+		// registrations and runtime identity may invalidate that command's lifetime.
+		if (this.contributionIdentity !== identity) {
+			const contributions = this.buildContributions(snapshot);
+			try {
+				this.replaceContributions(contributions);
+			} catch (error) {
+				contributions.controller.abort(error);
+				throw error;
+			}
+			this.contributionIdentity = identity;
 		}
 		this.projectOutput(snapshot);
 		this.customEditors.update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
-		return contributions.issues;
+		this.statusbar.update(snapshot);
+		return this.activeContributions?.issues ?? [];
 	}
 
 	public clear(): void {
@@ -207,9 +225,11 @@ export class MainThreadExtensionApi extends Disposable {
 		this.activationController.abort();
 		this.activationController = new AbortController();
 		this.revokeContributions();
+		this.contributionIdentity = undefined;
 		this.customEditors.clear();
 		this.documents.clear();
 		this.diagnostics.clear();
+		this.statusbar.clear();
 		for (const key of this.namedOutputChannels.keys()) {
 			this.namedOutputChannels.deleteAndDispose(key);
 		}
@@ -231,15 +251,17 @@ export class MainThreadExtensionApi extends Disposable {
 			taskProviders.set(runtime.id, providers);
 		}
 		for (const runtime of snapshot.extensions) {
+			const extensionId = runtime.id;
+			const activationGeneration = runtime.activationGeneration;
 			if (runtime.lifecycle === 'dormant') {
 				const signal = this.activationController.signal;
 				for (const command of runtime.activation!.commands) {
 					commands.push({
 						id: command.command, metadata: { description: command.title }, handler: async (_accessor, ...args) => {
 							signal.throwIfAborted();
-							const activated = await this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event: { type: 'command', command: command.command } });
+							const activated = await this.api.activateByEvent({ extensionId, activationGeneration, event: { type: 'command', command: command.command } });
 							signal.throwIfAborted();
-							const current = activated.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration && candidate.lifecycle === 'ready');
+							const current = activated.extensions.find(candidate => candidate.id === extensionId && candidate.activationGeneration === activationGeneration && candidate.lifecycle === 'ready');
 							const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
 							if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
 							// Activating replaces process registrations. This command retains the connection
@@ -251,7 +273,7 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'textDocumentEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'statusBar' || registration.kind === 'textDocumentEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
@@ -307,7 +329,7 @@ export class MainThreadExtensionApi extends Disposable {
 					const localTaskProviders = taskProviders.get(runtime.id)!;
 					tests.push(createExtensionHostTestProfileProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, (taskProviderRegistrationId, taskId) => {
 						const providerId = localTaskProviders.get(taskProviderRegistrationId);
-						if (!providerId) throw new TypeError(`Test Profile references unknown Task provider registration '${taskProviderRegistrationId}' in extension '${runtime.id}'`);
+						if (!providerId) throw new TypeError(`Test Profile references unknown Task provider registration '${taskProviderRegistrationId}' in extension '${extensionId}'`);
 						return extensionHostCanonicalTaskId(providerId, taskId);
 					}));
 					continue;
@@ -319,16 +341,20 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
+		// Provider callbacks outlive UI snapshots. Retain only their process fence,
+		// so replacing a status value can release its previous command arguments.
+		const { id: extensionId, activationGeneration, incarnation } = runtime;
+		const { registrationId } = registration;
 		return async (operation, payload, callerSignal) => {
-			if (runtime.incarnation === undefined) throw new Error(`Extension '${runtime.id}' has no active runtime incarnation`);
+			if (incarnation === undefined) throw new Error(`Extension '${extensionId}' has no active runtime incarnation`);
 			const combined = combineSignals(generationSignal, callerSignal);
 			try {
 				combined.signal.throwIfAborted();
 				const result = await this.api.invoke({
-					extensionId: runtime.id,
-					registrationId: registration.registrationId,
-					activationGeneration: runtime.activationGeneration,
-					incarnation: runtime.incarnation,
+					extensionId,
+					registrationId,
+					activationGeneration,
+					incarnation,
 					operation,
 					payload,
 					deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis,

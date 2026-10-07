@@ -1,7 +1,7 @@
 import { BROWSER_VIEW_CLOSE_CHANNEL, BROWSER_VIEW_CREATE_CHANNEL, BROWSER_VIEW_EVENT_CHANNEL, BROWSER_VIEW_GO_BACK_CHANNEL, BROWSER_VIEW_GO_FORWARD_CHANNEL, BROWSER_VIEW_LAYOUT_CHANNEL, BROWSER_VIEW_NAVIGATE_CHANNEL, BROWSER_VIEW_RELOAD_CHANNEL, BROWSER_VIEW_STATE_CHANNEL, BROWSER_VIEW_STOP_CHANNEL, BROWSER_VIEW_VISIBILITY_CHANNEL, type BrowserViewEvent, type IBrowserViewService, type IBrowserViewState } from "../common/browserView.js";
 import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
 import { BROWSER_VIEW_FOCUS_CHANNEL, BROWSER_VIEW_LIST_CHANNEL, BROWSER_VIEW_SHARING_CHANNEL, type IBrowserViewInfo } from '../common/browserView.js';
-import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { BROWSER_VIEW_PERMISSION_CHANNEL, BROWSER_VIEW_PERMISSIONS_CLEAR_CHANNEL, BROWSER_VIEW_DOWNLOAD_CANCEL_CHANNEL } from '../common/browserView.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';

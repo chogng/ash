@@ -1,6 +1,6 @@
 import type { AppServerMethod, LanguageOperationParams, MethodParams, MethodResult } from "../../../../../.build/protocol/typescript/index.js";
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import { runCancellableLanguageRequest, type ILanguageApi, type LanguageRequestOptions } from "../common/languageApi.js";
 

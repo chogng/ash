@@ -13,7 +13,7 @@ import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.j
 import { normalizeLocale } from "../../../../../platform/languagePacks/common/languagePackCatalog.js";
 import { LocalizationConfiguration } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
-import { AppServerProtocolIncompatibleError } from '../../../../../platform/app-server/common/appServerProtocolCompatibility.js';
+import { AppServerProtocolIncompatibleError } from '../../../../../platform/agentHost/common/appServerProtocolCompatibility.js';
 
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { JSDOM } from 'jsdom';

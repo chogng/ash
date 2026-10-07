@@ -4,9 +4,9 @@ import { URI } from '../../../../base/common/uri.js';
 import { setNlsResolver, resetNlsResolver, formatNlsMessage } from '../../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { AppServerAssetService } from '../../browser/appServerAssetService.js';
-import { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../app-server/common/appServerTransport.js';
-import { createTestInitializeResult } from '../../../app-server/test/common/testAppServerProtocol.js';
+import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
+import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
 
 class Transport implements AppServerTransport {
 	public readonly requests: { method: string; params: Record<string, unknown>; }[] = [];

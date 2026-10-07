@@ -1,8 +1,8 @@
 import type { ExtensionHostReconcileMode, IExtensionHostApi } from "../common/extensionHostApi.js";
 import { invokeExtensionHost, normalizeExtensionHostChanged, normalizeExtensionHostSnapshot } from "../common/extensionHostApi.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
-import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
+import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
+import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import { APP_SERVER_SERVER_REQUESTS } from '../../../../../.build/protocol/typescript/index.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../.build/protocol/typescript/index.js';
 import type { ExtensionClientHandler } from '../common/extensionHostApi.js';
@@ -10,7 +10,7 @@ import { inertSubscription } from "../../renderer/browser/disconnectedHost.js";
 import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { IFileService, FileKind, FileNotFoundError } from '../../files/common/files.js';
-import { IAppServerApi } from '../../app-server/common/appServerApi.js';
+import { IAppServerApi } from '../../agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../workspace/common/workspace.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import type { ExtensionClientOperation } from '../common/extensionHostApi.js';
@@ -18,7 +18,7 @@ import { Emitter } from '../../../base/common/event.js';
 import type { IExtensionApi, ExtensionDescriptor } from '../../extensions/common/extensionApi.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import { ICommandService } from '../../commands/common/commands.js';
-import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../common/extensionHostApi.js';
+import { normalizeExtensionStatusBarUpdate, normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../common/extensionHostApi.js';
 
 export type BrowserExtensionHostRequest =
 	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; }
@@ -133,9 +133,22 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 				const path = manifest.browser.replace(/^\.\//, '');
 				const source = await this.extensions.readResource({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
-				worker = this.instantiation.createInstance(BrowserExtensionWorker, source, (operation: ExtensionClientOperation, signal: AbortSignal) => {
+				worker = this.instantiation.createInstance(BrowserExtensionWorker, source, async (operation: ExtensionClientOperation, signal: AbortSignal) => {
 					if (!this.clientHandler) throw new Error('No extension client handler is registered');
-					return this.clientHandler(operation, signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
+					const result = await this.clientHandler(operation, signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
+					if (operation.operation === 'setStatusBarEntries' && result.result === 'done' && !signal.aborted) {
+						// Reconnect snapshots retain only the current acknowledged value, never activation's old arguments.
+						this.snapshot = {
+							...this.snapshot, extensions: this.snapshot.extensions.map(runtime => runtime.id !== extension.id || runtime.incarnation !== generation ? runtime : {
+								...runtime, registrations: runtime.registrations.map(registration => registration.kind === 'statusBar' && registration.registrationId === operation.registrationId && operation.revision > registration.revision
+									? { ...registration, revision: operation.revision, entries: operation.entries } : registration),
+							})
+						};
+						// The client already applied this value. Publishing a fleet change before
+						// the Worker receives its reply would invalidate the originating command.
+						this.snapshotGeneration++;
+					}
+					return result;
 				});
 				this.workers.set(extension.id, worker);
 				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage() }, Date.now() + 30_000);
@@ -243,6 +256,7 @@ class BrowserExtensionWorker extends Disposable {
 							throw error;
 						}
 					}
+					if (value.operation === 'setStatusBarEntries') return await clientHandler(normalizeExtensionStatusBarUpdate(value), AbortSignal.any([lifetime.signal, client.signal])) as unknown as JsonValue;
 					if (value.operation !== 'listDocuments' && value.operation !== 'readDocument' && value.operation !== 'readConfiguration') throw new TypeError('Unsupported browser extension client operation');
 					if (value.operation === 'readDocument' && typeof value.uri !== 'string') throw new TypeError('Expected a document URI');
 					if (value.operation === 'readConfiguration' && (typeof value.section !== 'string' || value.resource !== null && typeof value.resource !== 'string')) throw new TypeError('Expected a configuration section and resource');
@@ -334,7 +348,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			if (operation.operation === 'readWorkspaceFile') {
 				throw new Error('Workspace file requests must be handled by App Server');
 			}
-			const request = operation.operation === 'executeCommand'
+			const request = operation.operation === 'setStatusBarEntries' ? normalizeExtensionStatusBarUpdate(operation) : operation.operation === 'executeCommand'
 				? { ...operation, arguments: operation.arguments.map(normalizeExtensionHostPayload) }
 				: operation.operation === 'updateConfiguration'
 					? { ...operation, value: normalizeExtensionHostPayload(operation.value) }

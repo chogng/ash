@@ -6,7 +6,7 @@ import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
-import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
 import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
 import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";

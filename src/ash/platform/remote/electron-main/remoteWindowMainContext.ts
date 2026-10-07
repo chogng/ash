@@ -1,7 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
+import type { AppServerConnectionRelay } from "../../agentHost/electron-main/appServerConnectionRelay.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import type { IWorkspaceContextMainChangeEvent } from "../../window/electron-main/window.js";

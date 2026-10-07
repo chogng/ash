@@ -174,6 +174,12 @@ use extension_protocol::ExtensionDocumentSnapshot;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionMessageSeverity;
 #[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionStatusBarAlignment;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionStatusBarCommand;
+#[cfg(any(test, feature = "export"))]
+use extension_protocol::ExtensionStatusBarEntry;
+#[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionTextEdit;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionTextPosition;
@@ -5316,6 +5322,9 @@ typescript_bindings! {
     crate::protocol::app_tools::AppHostResult,
     TextDocumentsCapability,
     ExtensionClientOperation,
+    ExtensionStatusBarEntry,
+    ExtensionStatusBarAlignment,
+    ExtensionStatusBarCommand,
     ExtensionDiagnostic,
     ExtensionDiagnosticEntry,
     ExtensionDiagnosticSeverity,

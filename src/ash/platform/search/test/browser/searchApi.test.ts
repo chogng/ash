@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { ConfigUpdateParams } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerContentSearchConfigurationApi, createDisconnectedContentSearchConfigurationApi } from '../../browser/searchApi.js';
 

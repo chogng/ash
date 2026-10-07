@@ -8,7 +8,7 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
-import type { AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
+import type { AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
@@ -19,6 +19,7 @@ import { ITaskService, type TaskProvider, type TaskProviderRegistration } from "
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
 import { AppServerExtensionHostService } from "../../browser/appServerExtensionHostService.js";
 import { MainThreadExtensionApi } from '../../../../api/browser/mainThreadExtensionApi.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../statusbar/browser/statusbar.js';
 import { createExtensionHostLanguageProviderBatch } from '../../../../api/browser/extensionHostLanguageBridge.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { IOutputService } from '../../../output/common/output.js';
@@ -466,6 +467,39 @@ test('extension API cancels old invocations and rejects results from replaced re
 	assert.equal(api.invocations.length, 1);
 	api.invocationResult = undefined;
 	assert.deepEqual(await commands.getCommand('acme.new')!({} as ServicesAccessor), { executed: true });
+});
+
+test('status bar content snapshots keep a pending command alive and disconnect releases its entry', async () => {
+	const status = { kind: 'statusBar' as const, registrationId: 'status', revision: 1, entries: [] };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [status]));
+	const initialRuntime = { ...api.current.extensions[0]! };
+	api.current = { ...api.current, extensions: [initialRuntime] };
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const result = deferred<JsonValue>();
+	api.invocationResult = result.promise;
+	const handler = commands.getCommand('acme.run')!;
+	const pending = Promise.resolve(handler({} as ServicesAccessor));
+	const entry = { id: 'item', text: 'Current', tooltip: null, ariaLabel: null, alignment: 'right' as const, priority: 1.5, command: null };
+	api.current = snapshot(2, 'acme.run', [{ ...status, revision: 2, entries: [entry] }], '', [], 11);
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.equal(commands.getCommand('acme.run'), handler);
+	assert.equal(api.invocationSignals[0]!.aborted, false);
+	result.resolve({ completed: true });
+	assert.deepEqual(await pending, { completed: true });
+	// The unchanged command belongs to the process, not to the retired UI snapshot.
+	for (const property of ['id', 'activationGeneration', 'incarnation']) {
+		Object.defineProperty(initialRuntime, property, { get: () => { throw new Error('Retired UI snapshot was accessed'); } });
+	}
+	assert.deepEqual(await handler({} as ServicesAccessor), { completed: true });
+	const statusbar = services.get(IStatusbarService);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]!.entry.text, 'Current');
+	api.emitConnection('restarting');
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).length, 0);
 });
 
 test('extension API releases named output and providers when its host stops', async () => {

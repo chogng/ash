@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IDirPermissionsApi } from "../../../../platform/dirPermissions/common/dirPermissionsApi.js";
 import type { DirPermission, DirPermissionsCommandResult, DirPermissionsSnapshot, IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 

@@ -120,6 +120,10 @@ pub(super) fn validate_registrations(
                 require_unique(&mut commands, command, "commands")?;
                 ExtensionCapability::Command
             }
+            RegistrationKind::StatusBar { revision, entries } => {
+                crate::statusbar::validate_entries(*revision, entries)?;
+                ExtensionCapability::StatusBar
+            }
             RegistrationKind::LanguageProvider {
                 language_ids,
                 operations,

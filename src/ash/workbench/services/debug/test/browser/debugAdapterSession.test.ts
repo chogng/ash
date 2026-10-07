@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
-import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
+import { type AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
 import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
 import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";

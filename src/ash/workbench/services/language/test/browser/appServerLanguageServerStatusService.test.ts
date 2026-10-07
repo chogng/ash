@@ -3,7 +3,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { type IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { DialogService } from "../../../dialogs/common/dialogService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";

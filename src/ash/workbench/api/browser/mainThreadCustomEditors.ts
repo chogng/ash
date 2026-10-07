@@ -57,13 +57,11 @@ export class MainThreadCustomEditors extends Disposable {
 				this.providers.set(registration.viewType, lifetime);
 				const controller = new AbortController();
 				lifetime.add(toDisposable(() => controller.abort()));
+				const request = { extensionId: runtime.id, registrationId: registration.registrationId, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation };
 				lifetime.add(this.registerCustomTextEditorProvider(registration, async (operation, payload, signal) => {
 					controller.signal.throwIfAborted();
 					return this.api.invoke({
-						extensionId: runtime.id,
-						registrationId: registration.registrationId,
-						activationGeneration: runtime.activationGeneration,
-						incarnation: runtime.incarnation!,
+						...request,
 						operation,
 						payload,
 						deadlineUnixMillis: Date.now() + this.timeout,

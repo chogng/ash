@@ -3,7 +3,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
-import { IAppServerApi, type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { IAppServerApi, type IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
 import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
