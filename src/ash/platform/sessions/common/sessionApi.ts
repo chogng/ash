@@ -107,6 +107,10 @@ export interface IModelApi {
 }
 
 export interface IThreadApi {
+	readTrace(params: SessionTraceReadParams): Promise<SessionTraceReadResult>;
+	readTraceDiagnostics(params: SessionTraceDiagnosticsReadParams): Promise<SessionTraceDiagnosticsReadResult>;
+	readTracePayload(params: SessionTracePayloadReadParams): Promise<SessionTracePayloadReadResult>;
+	readTraceGraph(params: SessionReadParams): Promise<SessionTraceGraphReadResult>;
 	configureAdvisor(params: SessionOperationInput<"configureAdvisor">): Promise<AdvisorConfigureResult>;
 	read(params: SessionThreadReadParams): Promise<SessionThreadReadResult>;
 	subscribe(params: SessionThreadSubscribeParams): Promise<SessionThreadSubscribeResult>;

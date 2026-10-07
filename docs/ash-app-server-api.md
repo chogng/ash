@@ -795,6 +795,46 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 `agent/capabilities/read` 接受 `{}`，读取当前已组合的工具注册表。`tools` 中每项包含名称、描述、来源类别、无凭据的 `sourceChain`、暴露方式与 `authority` 类别；其中本地文件工具区分目录读写、命令工具标记进程执行，扩展、MCP 等提供方工具的具体范围由提供方定义。`localProcessSandboxConfigured` 表示当前环境已启用本地进程执行；`sandboxBackends` 是已注册的候选后端，不保证任意请求能通过后端检查。`directoryGrantsReadable` 表示本连接有目录授权宿主权限；只有此时才能再通过 `config/dirPermissions/list` 读取目录路径与已保存授权。某个 Session 实际选中的目录和每次调用的参数、操作策略、沙箱策略还会进一步收窄权限。该接口不授予权限，也不预测单次执行的结果。Workbench 的 Settings > Agents > Tools / Sandbox 使用这两个只读接口。
 
+### 读取执行 Trace
+
+`session/trace/read` 接受 `{ "sessionId": "...", "after": { "thread-id": 42 }, "limit": 500 }`。
+`after` 缺省为空；每个游标属于该 Session 的一个 Thread，表示已经读取的 durable sequence。
+`limit` 必须为 1–500，限制一次返回的 Thread 事件总数。返回 `{ "trace", "cursors", "hasMore" }`；
+客户端合并各 Thread 的新事件，将 `cursors` 原样用于下一页，直到 `hasMore` 为 false。
+
+`trace` 是后端既有的版本 3 rollout artifact，保留原始 StoredEvent envelope、全部 Thread 身份和
+该页引用的共享历史前缀闭包。客户端必须累计合并前缀，不能用后页替换前页已保留的前缀。
+SQLite 从索引读取请求范围，不先加载整段历史再裁剪。读取不会启动模型、执行工具或写入历史，
+没有全局 Session sequence。跨 Session、超过当前历史的游标及无效 limit 返回 `InvalidParams`；
+不存在的 Session 返回现有 NotFound 错误。
+
+实时查看使用既有 `session/thread/subscribe`：先读取历史，再订阅各 Thread，并以订阅 snapshot
+补齐读取空窗。Session 目录变化后再次读取可发现新子 Thread。关闭视图释放所属订阅。
+
+`session/trace/diagnostics/read` 接受 `{ sessionId, after, limit }`，after 缺省为 0，limit 为 1–500；
+返回 `{ diagnostics, cursor, hasMore }`。诊断格式版本为 1，captureId 标识一次本地捕获，事件序号
+独立于所有 Thread 的 sequence。事件覆盖 Core 的 Agent、compaction 和辅助 Tool 模型调用，
+逐次记录开始、准备好的语义请求、成功响应、失败、取消或 guard 未正常结束，并引用独立 payload。
+`recordingStatus` 为 disabled、recording、incomplete 或 unavailable；droppedRecords 表示记录省略数量。
+
+App Server 在 Thread owner 启动时读取 `ASH_ROLLOUT_TRACE_ROOT`；缺省禁用，只有本地 IO，没有上传。
+根目录按 Session 摘要分目录，保存 manifest、append-only trace.jsonl 与 payloads/*.json。每正文最多
+8 MiB，每捕获最多 128 MiB／32,000 条事件，超过限制省略并报告不完整。存储故障不影响执行结果。
+重开已有捕获校验身份与顺序，不覆盖遗留正文，也不会把没有结束事件的 attempt 伪装为已取消。
+该目录的清理由设置目录的调用方负责；运行时释放缓存与文件句柄，评测 runner 保留目录作为产物。
+
+`session/trace/payload/read` 接受 `{ sessionId, captureId, payloadId }` 并返回 `{ payload }`。
+只接受该捕获已保存的正文引用，不接受路径；读取验证文件类型、大小与摘要。错误 capture 或游标
+返回 InvalidParams；不存在的 Session／正文返回 NotFound；损坏正文返回现有 Core 操作错误。
+语义请求记录 Core 输入与附件转换后的 ModelService 输入，不宣称是 provider 的实际 HTTP 字节。
+逐个 stream chunk 和其他内部模型服务调用尚不记录；历史缺口不得从当前运行状态推测补齐。
+
+`session/trace/graph/read` 接受 `{ sessionId }` 并返回 `{ graph }`；明确请求时读取完整已存历史、诊断
+和响应正文，归纳节点、边及缺失证据 warnings。关系复用 toolCallId、parentToolCallId、cellId、
+runtimeCallId、Thread 与消息身份；终端节点表示已绑定的命令操作，不凭空生成 PID 或会话身份。
+导出的 rollout v3 可附加 diagnostics（包含 payloads 字典）与 graph，老格式仍可只含持久历史。
+原始 JSON 和文件被导入后作为外部证据展示，不证明来源真实性。
+
 ### 创建 Thread
 
 ```json
