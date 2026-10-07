@@ -1,4 +1,7 @@
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { errorHandler } from '../../../../../base/common/errors.js';
+import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
@@ -25,8 +28,10 @@ import {
 import {
 	IQuickInputService,
 	QuickPickFocus,
+	type IQuickPick,
+	type IQuickPickItem,
 } from "../../../../../platform/quickinput/common/quickInput.js";
-import { IQuickAccessController } from "../../../../../platform/quickinput/common/quickAccess.js";
+import { IQuickAccessController, QuickAccessRegistry } from "../../../../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../../../../platform/quickinput/browser/quickAccess.js";
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import {
@@ -235,6 +240,170 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	commands.dispose();
 	contextKeys.dispose();
 	dom.window.close();
+});
+
+test('Command Palette releases its provider before an accepted command disposes the captured editor', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	installDomGlobals(dom);
+	const unexpectedErrors: unknown[] = [];
+	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
+	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
+	try {
+		using services = new InstantiationService();
+		services.registerSingleton(IDialogService, () => new DialogService());
+		services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
+		using contextKeys = new ContextKeyService();
+		services.registerInstance(IContextKeyService, contextKeys);
+		using commands = new CommandService(services);
+		services.registerInstance(ICommandService, commands);
+		services.registerInstance(IMenuService, new MenuService(commands, contextKeys));
+		using keybindingsChanged = new Emitter<void>();
+		services.registerInstance(IKeybindingService, { ...emptyKeybindingService(), onDidUpdateKeybindings: keybindingsChanged.event });
+		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		services.registerInstance(IQuickInputService, quickInput);
+		using quickAccess = services.createInstance(QuickAccessController);
+		services.registerInstance(IQuickAccessController, quickAccess);
+		let disposed = false;
+		let executions = 0;
+		const editor = {
+			getId: () => 'test.palette.disposal', hasTextFocus: () => true, hasWidgetFocus: () => false,
+			getSupportedActions: () => { assert.equal(disposed, false, 'Hidden provider queried a disposed editor'); return []; },
+		} as unknown as ICodeEditor;
+		const editors = services.get(ICodeEditorService);
+		editors.addCodeEditor(editor);
+		class DisposeEditorAction extends Action2 {
+			constructor() { super({ id: 'test.palette.disposeEditor', title: 'Dispose Captured Editor', f1: true }); }
+			override run(): void {
+				executions++;
+				disposed = true;
+				editors.removeCodeEditor(editor);
+				keybindingsChanged.fire();
+			}
+		}
+		using actionRegistration = registerAction2(DisposeEditorAction);
+		quickAccess.show('>Dispose Captured Editor');
+		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+		assert.ok(input);
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+		await Promise.resolve();
+		assert.deepEqual({ executions, disposed, picker: dom.window.document.querySelector('.ash-quick-pick'), errors: unexpectedErrors }, {
+			executions: 1, disposed: true, picker: null, errors: [],
+		});
+	} finally {
+		errorHandler.setUnexpectedErrorHandler(previousErrorHandler);
+		dom.window.close();
+	}
+});
+
+test('Quick Access preserves hide delivery and a new session opened before old cleanup', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	installDomGlobals(dom);
+	try {
+		using services = new InstantiationService();
+		using contextKeys = new ContextKeyService();
+		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		services.registerInstance(IQuickInputService, quickInput);
+		using quickAccess = services.createInstance(QuickAccessController);
+		const runs: { picker: IQuickPick<IQuickPickItem>; signal: AbortSignal; disposed: number; complete(): Promise<void>; }[] = [];
+		class PendingProvider {
+			provide(picker: IQuickPick<IQuickPickItem>, _prefix: string, signal: AbortSignal) {
+				const generation = runs.length + 1;
+				picker.items = [{ label: `Current ${generation}` }];
+				let resolve!: () => void;
+				const completed = new Promise<void>(done => { resolve = done; }).then(() => {
+					if (!signal.aborted) picker.items = [{ label: `Completed ${generation}` }];
+				});
+				const run = { picker, signal, disposed: 0, complete: () => { resolve(); return completed; } };
+				runs.push(run);
+				return toDisposable(() => { run.disposed++; });
+			}
+		}
+		using registration = QuickAccessRegistry.register({ prefix: 'test-lifetime:', placeholder: 'Lifetime', helpLabel: 'Lifetime', ctor: PendingProvider });
+		quickAccess.show('test-lifetime:');
+		const first = runs[0]!;
+		let hideEvents = 0;
+		using hideListener = first.picker.onDidHide(() => { hideEvents++; });
+		using visibilityListener = quickAccess.onDidChangeVisibility(visible => {
+			if (!visible && runs.length === 1) quickAccess.show('test-lifetime:');
+		});
+		first.picker.hide();
+		first.picker.hide();
+		assert.deepEqual({ hidden: hideEvents, aborted: first.signal.aborted, disposed: first.disposed, generations: runs.length }, {
+			hidden: 1, aborted: true, disposed: 1, generations: 2,
+		});
+		const second = runs[1]!;
+		await first.complete();
+		first.picker.dispose();
+		assert.deepEqual({ items: second.picker.items.map(item => item.label), aborted: second.signal.aborted, disposed: second.disposed, visible: contextKeys.getValue(InQuickInputContext.key) }, {
+			items: ['Current 2'], aborted: false, disposed: 0, visible: true,
+		});
+		await second.complete();
+		assert.deepEqual(second.picker.items.map(item => item.label), ['Completed 2']);
+		quickAccess.dispose();
+		quickAccess.dispose();
+		await Promise.resolve();
+		assert.deepEqual({ disposed: runs.map(run => run.disposed), aborted: runs.map(run => run.signal.aborted), picker: dom.window.document.querySelector('.ash-quick-pick') }, {
+			disposed: [1, 1], aborted: [true, true], picker: null,
+		});
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Quick Access cancels old provider results when switching modes in the same picker', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	installDomGlobals(dom);
+	try {
+		using services = new InstantiationService();
+		using contextKeys = new ContextKeyService();
+		using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		services.registerInstance(IQuickInputService, quickInput);
+		using quickAccess = services.createInstance(QuickAccessController);
+		let oldSignal: AbortSignal | undefined;
+		let oldPicker: IQuickPick<IQuickPickItem> | undefined;
+		let newPicker: IQuickPick<IQuickPickItem> | undefined;
+		let resolve!: () => void;
+		let completed: Promise<void> | undefined;
+		let oldDisposed = 0;
+		let newDisposed = 0;
+		class OldProvider {
+			provide(picker: IQuickPick<IQuickPickItem>, _prefix: string, signal: AbortSignal) {
+				oldSignal = signal;
+				oldPicker = picker;
+				completed = new Promise<void>(done => { resolve = done; }).then(() => {
+					if (!signal.aborted) picker.items = [{ label: 'Stale result' }];
+				});
+				return toDisposable(() => { oldDisposed++; });
+			}
+		}
+		class NewProvider {
+			provide(picker: IQuickPick<IQuickPickItem>) {
+				newPicker = picker;
+				picker.items = [{ label: 'Current result' }];
+				return toDisposable(() => { newDisposed++; });
+			}
+		}
+		using oldRegistration = QuickAccessRegistry.register({ prefix: 'test-old:', placeholder: 'Old', helpLabel: 'Old', ctor: OldProvider });
+		using newRegistration = QuickAccessRegistry.register({ prefix: 'test-new:', placeholder: 'New', helpLabel: 'New', ctor: NewProvider });
+		quickAccess.show('test-old:');
+		quickAccess.show('test-new:');
+		assert.ok(newPicker);
+		assert.equal(newPicker, oldPicker);
+		resolve();
+		await completed;
+		assert.deepEqual({ aborted: oldSignal?.aborted, disposed: oldDisposed, items: newPicker.items.map(item => item.label) }, {
+			aborted: true, disposed: 1, items: ['Current result'],
+		});
+		newPicker.hide();
+		newPicker.hide();
+		quickAccess.dispose();
+		quickAccess.dispose();
+		await Promise.resolve();
+		assert.deepEqual({ oldDisposed, newDisposed, picker: dom.window.document.querySelector('.ash-quick-pick') }, { oldDisposed: 1, newDisposed: 1, picker: null });
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('Quick Access switches search modes in one picker and restores focus on close', () => {

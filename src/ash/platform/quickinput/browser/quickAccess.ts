@@ -52,12 +52,13 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		session.add(picker.onDidChangeValue(activate));
 		session.add(picker.onDidHide(() => {
 			this.active = undefined;
+			// A hide listener can open a new session without prematurely disposing this picker.
+			if (this.session.value === session) this.session.clearAndLeak();
+			// Accepted commands can dispose the captured editor before deferred picker cleanup.
+			provider.clear();
 			this.visibilityChanged.fire(false);
-			// Owners must receive the hide event before disposing its emitter; a new session may open during that event.
-			queueMicrotask(() => {
-				if (this.session.value === session) this.session.clear();
-				else session.dispose();
-			});
+			// Preserve delivery to hide listeners while releasing only this session afterward.
+			queueMicrotask(() => session.dispose());
 		}));
 		this.session.value = session;
 		this.active = picker;

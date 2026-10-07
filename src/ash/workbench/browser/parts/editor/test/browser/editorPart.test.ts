@@ -6,7 +6,7 @@ import { EditorInputSerializerRegistry } from '../../../../../services/editor/co
 import { Dimension } from '../../../../../../base/browser/dom.js';
 import type { IEditorPartOptions } from '../../editorPart.js';
 import Severity from '../../../../../../base/common/severity.js';
-import { CancellationError } from '../../../../../../base/common/errors.js';
+import { CancellationError, errorHandler } from '../../../../../../base/common/errors.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -875,6 +875,98 @@ test('EditorPart pins an already dirty working copy before opening another previ
 			{ input: clean, preview: true, dirty: false },
 		]);
 	} finally {
+		dom.window.close();
+	}
+});
+
+test('preview replacement stops old pane status listeners before clearing its input', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const unexpectedErrors: unknown[] = [];
+	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
+	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
+	try {
+		class StatusPane extends TestEditorPane {
+			private readonly statusChanged = this._register(new Emitter<void>());
+			readonly onDidChangeStatus = this.statusChanged.event;
+			private languageId: string | undefined = 'typescript';
+			hadStatusListenersWhenCleared: boolean | undefined;
+			getStatus() { return { languageId: this.languageId }; }
+			updateLanguage(languageId: string): void { this.languageId = languageId; this.statusChanged.fire(); }
+			override clearInput(): void {
+				this.hadStatusListenersWhenCleared = this.statusChanged.hasListeners();
+				this.languageId = undefined;
+				this.statusChanged.fire();
+			}
+		}
+		const panes: StatusPane[] = [];
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('ash.test.status', '.ts', () => {
+			const pane = new StatusPane('ash.test.status');
+			panes.push(pane);
+			return pane;
+		}));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		using labelsChanged = new Emitter<void>();
+		const first = { ...input('C:/project/first-preview.ts'), onDidChangeLabel: labelsChanged.event };
+		const second = input('C:/project/second-preview.ts');
+		await editor.openEditor(first, { pinned: false });
+		await editor.openEditor(second, { pinned: false });
+		assert.deepEqual({ inputs: editor.activeGroup.inputs, active: editor.activeInput, errors: unexpectedErrors }, {
+			inputs: [second], active: second, errors: [],
+		});
+		const stateChanges: string[] = [];
+		using listener = editor.onDidChangeEditors(event => {
+			if (event.kind === 'groupChanged' && event.event.kind === 'editorStateChanged') stateChanges.push(event.event.editor.input.resource.toString());
+		});
+		labelsChanged.fire();
+		panes[0]!.updateLanguage('python');
+		panes[1]!.updateLanguage('javascript');
+		assert.deepEqual(stateChanges, [second.resource.toString()]);
+		await editor.closeEditor(second);
+		panes[1]!.updateLanguage('rust');
+		await editor.openEditor(first);
+		labelsChanged.fire();
+		panes[2]!.updateLanguage('json');
+		assert.deepEqual({ changes: stateChanges, clearedListeners: panes.slice(0, 2).map(pane => pane.hadStatusListenersWhenCleared), active: editor.activeInput, errors: unexpectedErrors }, {
+			changes: [second.resource.toString(), first.resource.toString(), first.resource.toString()], clearedListeners: [false, false], active: first, errors: [],
+		});
+	} finally {
+		errorHandler.setUnexpectedErrorHandler(previousErrorHandler);
+		dom.window.close();
+	}
+});
+
+test('changing editor implementation removes old pane listeners before input cleanup', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const unexpectedErrors: unknown[] = [];
+	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
+	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
+	try {
+		class StatusPane extends TestEditorPane {
+			private readonly statusChanged = this._register(new Emitter<void>());
+			readonly onDidChangeStatus = this.statusChanged.event;
+			private languageId: string | undefined = 'typescript';
+			hadStatusListenersWhenCleared: boolean | undefined;
+			getStatus() { return { languageId: this.languageId }; }
+			override clearInput(): void {
+				this.hadStatusListenersWhenCleared = this.statusChanged.hasListeners();
+				this.languageId = undefined;
+				this.statusChanged.fire();
+			}
+		}
+		const original = new StatusPane('ash.test.original');
+		using registry = new EditorPaneRegistry();
+		using firstRegistration = registry.registerEditorPane(descriptor(original.id, '.ts', () => original));
+		using secondRegistration = registry.registerEditorPane(descriptor('ash.test.alternate', '.ts', () => new StatusPane('ash.test.alternate')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const resource = input('C:/project/implementation.ts');
+		await editor.openEditor(resource, { preferredEditorId: original.id });
+		await editor.openEditor(resource, { preferredEditorId: 'ash.test.alternate' });
+		assert.deepEqual({ inputs: editor.activeGroup.inputs, pane: editor.activePane?.id, clearedListeners: original.hadStatusListenersWhenCleared, errors: unexpectedErrors }, {
+			inputs: [resource], pane: 'ash.test.alternate', clearedListeners: false, errors: [],
+		});
+	} finally {
+		errorHandler.setUnexpectedErrorHandler(previousErrorHandler);
 		dom.window.close();
 	}
 });

@@ -573,8 +573,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const state = result.editor;
 		const replaced = result.replaced ? this.paneEntries.get(result.replaced.instanceId) : undefined;
 		if (replaced) {
-			this.panes.disposePane(replaced.paneInstance);
+			// clearInput can emit status changes while the replacement has no pane entry yet.
 			this.paneEntries.deleteAndDispose(replaced.instanceId);
+			this.panes.disposePane(replaced.paneInstance);
 		}
 		const entry = new EditorGroupEntry(state, paneInstance);
 		this.paneEntries.set(entry.instanceId, entry);
