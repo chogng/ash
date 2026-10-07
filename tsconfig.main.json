@@ -28,7 +28,6 @@
     "src/ash/platform/configuration/common/**/*.ts",
     "src/ash/platform/configuration/electron-main/**/*.ts",
     "src/ash/platform/contextkey/common/**/*.ts",
-    "src/ash/platform/contextview/electron-main/**/*.ts",
     "src/ash/platform/files/electron-main/**/*.ts",
     "src/ash/platform/ipc/electron-main/**/*.ts",
     "src/ash/platform/keybinding/common/**/*.ts",

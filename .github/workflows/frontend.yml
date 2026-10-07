@@ -97,6 +97,12 @@ jobs:
           workspaces: ". -> .build/cargo"
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+      # Protocol prehooks resolve the repository interpreter on Windows.
+      - name: Install pinned Python tools
+        run: python -B scripts/install_python_tools.py
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Check localization sources
