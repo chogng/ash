@@ -559,3 +559,51 @@ test('Search Copy All copies current retained results through the host clipboard
 	for (const [path, content] of contents.slice(0, 2)) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 	expect(await readFile(join(testWorkspace.directory, 'root.ts'), 'utf8')).toBe('ash_copy_token root\nash_copy_token latest\n');
 });
+
+test('Search Copy uses result selection, explicit context rows and collapsed folders through the host clipboard', async ({ target, workbench, testWorkspace, application }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual workspace searches and the host clipboard.');
+	const contents = [['src/file2.ts', '中文😀 ash_copy_selected_token one\nash_copy_selected_token two\n'], ['src/file10.ts', 'ash_copy_selected_token ten\n'], ['root.ts', 'ash_copy_selected_token root\n']] as const;
+	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
+	for (const [path, content] of contents) { await writeFile(join(testWorkspace.directory, path), content); }
+	const page = workbench.page;
+	// Only read clipboard values after writing a marker owned by this test.
+	if (target.kind === 'browser') {
+		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.evaluate(() => navigator.clipboard.writeText('ash-selected-copy-fixture'));
+	} else {
+		await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-selected-copy-fixture'));
+	}
+	const readCopied = () => target.kind === 'browser' ? page.evaluate(() => navigator.clipboard.readText()) : (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	await workbench.search.open();
+	await workbench.search.search('ash_copy_selected_token');
+	await expect(workbench.search.status).toHaveText('4 results');
+	const tree = workbench.search.element.getByRole('tree');
+	const first = tree.getByRole('treeitem', { name: 'Line 1, column 6: 中文😀 ash_copy_selected_token one', exact: true });
+	const second = tree.getByRole('treeitem', { name: 'Line 2, column 1: ash_copy_selected_token two', exact: true });
+	const other = tree.getByRole('treeitem', { name: 'Line 1, column 1: ash_copy_selected_token ten', exact: true });
+	await first.click();
+	await second.click({ modifiers: ['ControlOrMeta'] });
+	await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(2);
+	await tree.focus();
+	await tree.press('ControlOrMeta+c');
+	await expect.poll(readCopied).toBe('1,6: 中文😀 ash_copy_selected_token one');
+	await workbench.menus.select(application, () => other.click({ button: 'right' }), ['Copy']);
+	await expect.poll(readCopied).toBe('1,1: ash_copy_selected_token ten');
+	const delimiter = process.platform === 'win32' ? '\r\n' : '\n';
+	const pathLabel = (path: string) => join(testWorkspace.directory, path).replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
+	const file2 = [pathLabel('src/file2.ts'), '  1,6: 中文😀 ash_copy_selected_token one', '  2,1: ash_copy_selected_token two'].join(delimiter);
+	const file10 = [pathLabel('src/file10.ts'), '  1,1: ash_copy_selected_token ten'].join(delimiter);
+	const header = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/file2.ts' }) });
+	await header.locator('.ash-tree-twistie').click();
+	await workbench.menus.select(application, () => header.click({ button: 'right' }), ['Copy']);
+	await expect.poll(readCopied).toBe(file2);
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as tree']);
+	const folder = tree.getByRole('treeitem', { name: 'src', exact: true });
+	await folder.locator('.ash-tree-twistie').click();
+	await workbench.menus.select(application, () => folder.click({ button: 'right' }), ['Copy']);
+	await expect.poll(readCopied).toBe(file2 + delimiter + delimiter + file10);
+	await expect(folder).toHaveAttribute('aria-expanded', 'false');
+	await expect(workbench.search.status).toHaveText('4 results');
+	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
+});

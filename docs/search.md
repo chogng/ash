@@ -139,6 +139,15 @@ Windows 的结果块分隔为 CRLF，其他系统为 LF；多行匹配内部仍�
 空结果的界面操作禁用，直接执行命令写入空字符串。剪贴板失败向调用方返回错误，
 不会修改结果或文件，也不会缓存旧文本或停止当前搜索。
 
+Copy 使用 `search.action.copyMatch`。结果树的 Ctrl/Cmd+C 与 More Actions 中的
+Copy 读取 active Search 的 selection 首项，不合并多选；无 active Search 或无选择时
+不写剪贴板。右键与 Shift+F10 菜单显式传入对应行，优先于 selection。
+匹配输出无缩进的行列前缀和完整匹配行；文件输出路径及缩进匹配；文件夹输出其保留子树，
+包括折叠结果。格式、排序与剪贴板错误语义复用 Copy All，不改变结果、文件或搜索任务。
+显式命令参数不会重新校验结果成员资格：已移除的匹配对象仍可复制自身文本；
+界面菜单在其结果行移除、Search 隐藏或 SearchView 释放时关闭；行移除时释放监听，
+不保留旧菜单入口。
+
 协议提供三个有界 pull RPC：
 
 - `grep/search/start` 冻结目录、查询和上限，返回 `searchId`。

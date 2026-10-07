@@ -1,5 +1,61 @@
 import { expect, test } from '@playwright/test';
 
+test('Copy shortcut uses the first selection and a context menu copies its explicit row', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('中文');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const first = tree.getByRole('treeitem', { name: 'Line 1, column 6: 中文😀 needle needle', exact: true });
+	const other = tree.getByRole('treeitem', { name: 'Line 8, column 7: const needle = true;', exact: true });
+	await first.click();
+	await other.click({ modifiers: ['ControlOrMeta'] });
+	await tree.press('ControlOrMeta+c');
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,6: 中文😀 needle needle']);
+	await other.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,6: 中文😀 needle needle', '8,7: const needle = true;']);
+	await expect(page.getByRole('status')).toHaveText('3 results');
+});
+
+test('Copy does not intercept query text copying and keyboard menus close on refresh', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await tree.getByRole('treeitem', { name: 'Line 1, column 7: const needle = true;', exact: true }).click();
+	await query.focus();
+	await query.press('ControlOrMeta+a');
+	await query.press('ControlOrMeta+c');
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([]);
+	await tree.focus();
+	await tree.press('ControlOrMeta+c');
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,7: const needle = true;']);
+	await tree.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(tree).toBeFocused();
+	await tree.press('Shift+F10');
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(page.getByRole('status')).toHaveText('1 results');
+});
+
+test('Copy result menu and accessibility guidance use the Chinese catalog', async ({ page }) => {
+	await page.goto('/search.html?locale=zh-CN');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 个结果');
+	await page.locator('.ash-search-match').click({ button: 'right' });
+	await page.getByRole('menuitem', { name: '复制', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,7: const needle = true;']);
+	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('不会合并多选');
+});
+
 test('Dismiss updates retained results and focus while refresh restores the searched files', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -411,8 +467,20 @@ test('Copy All reads the latest incremental results and its help is translated',
 	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('已移除的结果不会复制');
 });
 
-test.describe('Windows Copy All formatting', () => {
+test.describe('Windows search clipboard formatting', () => {
 	test.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36' });
+	test('Copy formats a single multi-line match and its file with Windows labels and separators', async ({ page }) => {
+		await page.goto('/search.html?windows=1');
+		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+		await query.fill('windows');
+		await query.press('Enter');
+		await expect(page.getByRole('status')).toHaveText('2 results');
+		await page.locator('.ash-search-match').filter({ hasText: 'next' }).click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
+		await page.locator('.ash-search-file-path').filter({ hasText: 'src/main.ts' }).click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['9,1: needle\n10:  next', 'C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next']);
+	});
 	test('Copy All uses Windows labels and block separators while preserving multi-line previews', async ({ page }) => {
 		await page.goto('/search.html?windows=1');
 		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });

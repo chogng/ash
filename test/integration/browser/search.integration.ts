@@ -43,6 +43,18 @@ import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/sear
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { ILabelService, LabelService } from '../../../src/ash/platform/label/common/labelService.js';
+import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
+import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
+import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
@@ -65,13 +77,28 @@ const configuration = store.add(new WorkbenchConfigurationService());
 instantiation.registerInstance(IConfigurationService, configuration);
 instantiation.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 let treeViewAction: IAction | undefined;
-// Menu presentation is outside this fixture; retain the actual toolbar action for tree-layout scenarios.
+let resultMenus: BrowserContextMenuService;
+// Existing toolbar scenarios retain their action; result menus exercise the production menu host.
 const menus: IContextMenuService = {
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-	showContextMenu: delegate => { treeViewAction = delegate.getActions?.().find(action => action.id === 'search.treeView'); },
-	hideContextMenu() { },
+	showContextMenu: delegate => {
+		const action = delegate.getActions?.().find(action => action.id === 'search.treeView');
+		if (action) { treeViewAction = action; return; }
+		resultMenus.showContextMenu(delegate);
+	},
+	hideContextMenu: () => resultMenus.hideContextMenu(),
 };
 const contextView = store.add(new BrowserContextViewService(document.body));
+instantiation.registerInstance(IContextViewService, contextView);
+instantiation.registerInstance(INotificationService, store.add(new NotificationService()));
+instantiation.registerInstance(IUserDataProfileService, new UserDataProfileService());
+instantiation.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: '[]', revision: '1' }) } as IFileService);
+const keyboardLayout = store.add(new BrowserKeyboardLayoutService({ navigator }));
+const keybindings = store.add(instantiation.createInstance(WorkbenchKeybindingService, { ownerDocument: document, commandService: commands, contextKeyService: instantiation.get(IContextKeyService), keyboardLayoutService: keyboardLayout }));
+await keybindings.initialize();
+instantiation.registerInstance(IKeybindingService, keybindings);
+instantiation.registerInstance(IMenuService, instantiation.createInstance(MenuService));
+resultMenus = store.add(instantiation.createInstance(BrowserContextMenuService));
 instantiation.registerInstance(IContextMenuService, menus);
 instantiation.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
 const workspace = store.add(new WorkspaceContextService({

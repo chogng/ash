@@ -1,4 +1,4 @@
-import { DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import { LabelActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
@@ -11,7 +11,7 @@ import { IConfigurationService } from "../../../../platform/configuration/common
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { IHoverService, type IManagedHover } from "../../../../platform/hover/browser/hoverService.js";
+import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { EditorOpenSource, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
@@ -31,6 +31,7 @@ import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { URI } from "../../../../base/common/uri.js";
 import { SearchEditorID } from "../../searchEditor/browser/constants.js";
 import { serializeSearchResultForEditor } from "../../searchEditor/browser/searchEditorSerialization.js";
+import type { ContextMenuAnchor } from "../../../../base/browser/contextmenu.js";
 
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchView extends ViewPane {
@@ -58,7 +59,9 @@ export class SearchView extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<RenderableMatch>;
 	private readonly resultFocused: IContextKey<boolean>;
 	private readonly resultActions: WorkbenchToolBar;
-	private readonly rowHovers = this._register(new DisposableMap<HTMLElement, IManagedHover>());
+	private readonly rowResources = this._register(new DisposableMap<HTMLElement, DisposableStore>());
+	private readonly resultMenu = this._register(new MutableDisposable());
+	private menuElement: RenderableMatch | undefined;
 	private result: SearchResultImpl;
 	private treeView = false;
 	private sortByCount = false;
@@ -75,7 +78,7 @@ export class SearchView extends ViewPane {
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IEditorService private readonly editorService: IEditorService,
-		@IContextMenuService contextMenuService: IContextMenuService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IHoverService private readonly hoverService: IHoverService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ISearchHistoryService private readonly historyService: ISearchHistoryService,
@@ -210,7 +213,7 @@ export class SearchView extends ViewPane {
 			renderElement: element => this.renderResult(element),
 			onDidRemoveRow: row => {
 				const content = row.querySelector<HTMLElement>(".ash-search-result");
-				if (content) { this.rowHovers.deleteAndDispose(content); }
+				if (content) { this.rowResources.deleteAndDispose(content); }
 			},
 		}));
 		this.tree.element.setAttribute("aria-busy", "false");
@@ -234,6 +237,15 @@ export class SearchView extends ViewPane {
 		}));
 		this.updateResultActions();
 		this._register(this.tree.onDidChangeFocus(() => this.updateResultActions()));
+		this._register(this.tree.onDidChangeSelection(() => this.updateResultActions()));
+		this._register(this.onDidChangeBodyVisibility(visible => { if (!visible) { this.resultMenu.clear(); } }));
+		this._register(addDisposableListener(this.tree.domNode, "keydown", event => {
+			if ((event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) && this.tree.focus) {
+				event.preventDefault();
+				event.stopPropagation();
+				this.showResultContextMenu(this.tree.focus, this.tree.domNode);
+			}
+		}));
 		this._register(addDisposableListener(this.queryInput, "input", () => { this.queryInput.rows = Math.min(5, this.queryInput.value.split("\n").length); this.updateResultActions(); }));
 		this._register(addDisposableListener(form, "submit", (event) => {
 			event.preventDefault();
@@ -566,6 +578,13 @@ export class SearchView extends ViewPane {
 			},
 		], [
 			{
+				id: SearchCommandIds.CopyMatchCommandId,
+				label: localize("search.copy", "Copy"),
+				tooltip: "",
+				enabled: this.tree.selection.length > 0,
+				run: () => this.commands.executeCommand(SearchCommandIds.CopyMatchCommandId),
+			},
+			{
 				id: SearchCommandIds.CopyAllCommandId,
 				label: localize("search.copyAll", "Copy All"),
 				tooltip: "",
@@ -788,8 +807,33 @@ export class SearchView extends ViewPane {
 				content.append(count);
 			}
 		}
-		this.rowHovers.set(content, this.hoverService.setupHover({ target: content, content: element.kind === "match" ? element.preview : element.resource.toString() }));
+		const resources = new DisposableStore();
+		this.rowResources.set(content, resources);
+		resources.add(this.hoverService.setupHover({ target: content, content: element.kind === "match" ? element.preview : element.resource.toString() }));
+		resources.add(addDisposableListener(content, "contextmenu", event => {
+			event.preventDefault();
+			event.stopPropagation();
+			this.showResultContextMenu(element, { x: event.clientX, y: event.clientY, targetWindow: document.defaultView ?? undefined });
+		}));
+		// A result menu must not retain an actionable row after refresh, virtualization or disposal removes it.
+		resources.add(toDisposable(() => { if (this.menuElement === element) { this.resultMenu.clear(); } }));
 		return content;
+	}
+
+	private showResultContextMenu(element: RenderableMatch, anchor: ContextMenuAnchor): void {
+		if (!this.isBodyVisible()) { return; }
+		this.resultMenu.clear();
+		this.menuElement = element;
+		let open = true;
+		this.resultMenu.value = toDisposable(() => {
+			if (open) { open = false; this.contextMenuService.hideContextMenu(); }
+			this.menuElement = undefined;
+		});
+		this.contextMenuService.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => [{ id: SearchCommandIds.CopyMatchCommandId, label: localize("search.copy", "Copy"), tooltip: "", enabled: true, run: () => this.commands.executeCommand(SearchCommandIds.CopyMatchCommandId, element) }],
+			onHide: () => { open = false; this.menuElement = undefined; if (!this.isDisposed && this.isVisible()) { this.tree.domFocus(); } },
+		});
 	}
 }
 
