@@ -45,8 +45,6 @@ Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The n
 
 | px | Variable | Use |
 |----|----------|-----|
-| px | Variable | Use |
-|----|----------|-----|
 | 2  | `--ash-cornerRadius-xSmall` | very compact elements |
 | 4  | `--ash-cornerRadius-small` | controls (buttons, inputs) |
 | 6  | `--ash-cornerRadius-medium` | base / inner surfaces |
@@ -76,24 +74,6 @@ Generic UI ramp — pair a **size** token with a **weight** token; "Strong" reus
 | 11 | `--ash-fontSize-label2` | regular |
 | 10 | `--ash-fontSize-label3` | regular |
 
-**Deprecated** — the legacy `--ash-bodyFontSize*` and Agents-specific `--ash-agents-fontSize-*` tokens are deprecated. Use the generic ramp above instead:
-
-| Deprecated | px | Use instead |
-|------------|----|-------------|
-| Deprecated | px | Use instead |
-|------------|----|-------------|
-| `--ash-bodyFontSize` | 13 | `--ash-fontSize-body1` |
-| `--ash-bodyFontSize-small` | 12 | `--ash-fontSize-label1` |
-| `--ash-bodyFontSize-xSmall` | 11 | `--ash-fontSize-body2` |
-| `--ash-agents-fontSize-heading1` | 26 | `--ash-fontSize-heading1` |
-| `--ash-agents-fontSize-heading2` | 18 | `--ash-fontSize-heading2` |
-| `--ash-agents-fontSize-heading3` | 13 | `--ash-fontSize-heading3` |
-| `--ash-agents-fontSize-body1` | 13 | `--ash-fontSize-body1` |
-| `--ash-agents-fontSize-body2` | 11 | `--ash-fontSize-body2` |
-| `--ash-agents-fontSize-label1` | 12 | `--ash-fontSize-label1` |
-| `--ash-agents-fontSize-label2` | 11 | `--ash-fontSize-label2` |
-| `--ash-agents-fontSize-label3` | 10 | `--ash-fontSize-label3` |
-
 ## Font weight — `font-weight`
 
 The generic ramp uses two weights — there are no others. Pair every text style with one of these:
@@ -102,8 +82,6 @@ The generic ramp uses two weights — there are no others. Pair every text style
 |--------|----------|-----|
 | 400 | `--ash-fontWeight-regular` | body, labels, metadata |
 | 600 | `--ash-fontWeight-semiBold` | headings, "strong" emphasis |
-
-The legacy `--ash-agents-fontWeight-regular` and `--ash-agents-fontWeight-semiBold` tokens are deprecated; use the corresponding generic variables above.
 
 - **No medium (500).** `font-weight: 500` is **off the ramp** — snap it to `semiBold` (600). The same goes for `700`/`bold` and any other numeric weight: round to the nearer of 400/600.
 - **"Strong" is not a separate size.** A "Body 1 Strong" / "Label 2 Strong" style reuses the matching `--ash-fontSize-*` token paired with `semiBold`. Never introduce a separate strong *size* token.

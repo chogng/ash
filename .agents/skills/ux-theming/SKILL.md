@@ -36,11 +36,6 @@ export const myWidgetBackground = registerColor('myWidget.background',
 
 ## 3. Using Colors in CSS
 
-### Workbench Tooltip 配色
-
-- 常规 Workbench tooltip 的背景与文字颜色跟随当前主题，采用 VS Code `editorHoverWidget.background` / `editorHoverWidget.foreground` 的主题语义：浅色主题使用浅色浮层，深色主题使用深色浮层，允许主题自定义覆盖。不能把所有主题的默认配色统一成深灰背景与浅色文字。
-- 共享 tooltip、外层容器和箭头使用同一组主题颜色。Sessions 的 tooltip 背景与文字配色由 [Sessions 设计规范](../sessions-design-philosophy/SKILL.md#悬停提示tooltip) 独立定义；Sessions 专属配色不能修改共享 Workbench token 的注册值，也不能放进无窗口限定的共享选择器。
-
 Colors are injected as CSS custom properties on `.stanza-workbench`:
 
 ```
@@ -141,7 +136,7 @@ Reviewers will always flag hardcoded colors, shadows, sizes that should use them
 | `padding: 8px 12px` (off-scale) | spacing ramp (`--ash-spacing-size*`) |
 | `font-size: 14px` (arbitrary) | size ramp (`--ash-fontSize-*`) |
 | `font-weight: 500` | `--ash-fontWeight-semiBold` (no 500) |
-| codicon `font-size: 14px` | `--ash-codiconFontSize` (16) / `-compact` (12) |
+| lxicon `font-size: 14px` | `--ash-lxiconFontSize` (16) / `-compact` (12) |
 
 **Rule:** If a value relates to color, shadow, or border — it must come from a CSS variable or registered color token. The only exception is `0` (zero) values and purely structural measurements like `100%`.
 

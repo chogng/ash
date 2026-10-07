@@ -50,7 +50,7 @@ Workbench-level global styles live in `src/ash/workbench/browser/media/`.
 | Line height | 1.4em |
 | Validation message font-size | 12px (line-height: 17px) |
 
-> For `padding`/`margin`/`gap`, `border-radius`, `font-size`/`font-weight`, lxicon size and border width, prefer the design-system **size tokens** over raw px — see [§10 Design-System Size Tokens](#10-design-system-size-tokens-spacing-radius-font-codicon-stroke). Canonical reference: `.github/instructions/design-tokens.instructions.md` (auto-injected for `src/ash/**/*.css`).
+> For `padding`/`margin`/`gap`, `border-radius`, `font-size`/`font-weight`, lxicon size and border width, prefer the design-system **size tokens** over raw px — see [§10 Design-System Size Tokens](#10-design-system-size-tokens-spacing-radius-font-lxicon-stroke). Canonical reference: `.github/instructions/design-tokens.instructions.md` (auto-injected for `src/ash/**/*.css`).
 
 
 ## 4. CSS Selector Quality
