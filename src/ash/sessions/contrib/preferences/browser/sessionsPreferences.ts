@@ -9,7 +9,8 @@ import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferenc
 import './media/sessionsPreferences.css';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { ContextView, type ContextViewOptions, type ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -85,7 +86,6 @@ export class SessionsPreferences extends Disposable {
 		private readonly showEditor: () => void,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IClipboardService private readonly clipboardService: IClipboardService,
-		@IContextMenuService private readonly contextMenuProvider: IContextMenuService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -105,7 +105,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -185,10 +185,18 @@ export class SessionsPreferences extends Disposable {
 			if (event.target === dialog.element) dialog.close();
 		}));
 		const contextView = resources.add(new ContextView(dialog.element));
+		// Modal menus and dropdowns must live in the dialog's top layer and end with it.
+		const contentServices = resources.add(this.instantiationService.createChild(new ServiceCollection([IContextViewService, {
+			container: dialog.element,
+			show: (options: ContextViewOptions) => contextView.show(options),
+			hide: (reason?: ContextViewHideReason) => contextView.hide(reason),
+			layout: () => contextView.layout(),
+		}])));
+		const contextMenus = resources.add(contentServices.createInstance(BrowserContextMenuService));
 		const settingOptions: SettingWidgetOptions = {
 			clipboardService: this.clipboardService,
 			configurationService: this.configurationService,
-			contextMenuProvider: this.contextMenuProvider,
+			contextMenuProvider: contextMenus,
 			contextViewProvider: contextView,
 			onStatus: (message, isError) => {
 				status.textContent = message;
@@ -201,13 +209,6 @@ export class SessionsPreferences extends Disposable {
 		const renderer = resources.add(new SettingsRenderer(list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));
-		// Modal controls must mount their dropdowns inside the dialog's top layer.
-		const contentServices = resources.add(this.instantiationService.createChild(new ServiceCollection([IContextViewService, {
-			container: dialog.element,
-			show: (options: ContextViewOptions) => contextView.show(options),
-			hide: (reason?: ContextViewHideReason) => contextView.hide(reason),
-			layout: () => contextView.layout(),
-		}])));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor));
 		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsContent, list));
 		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.close(); }));
@@ -221,9 +222,9 @@ export class SessionsPreferences extends Disposable {
 			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
 				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
 					: categoryId === 'execution-trace' ? categories.findIndex(category => category.content === traceContent)
-					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
-							: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
+						: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
+							: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
+								: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
 		const tree = resources.add(new SettingsTree(list, {
 			model: treeModel,

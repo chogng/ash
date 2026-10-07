@@ -1,6 +1,102 @@
 import { expect, test } from '../../../automation/test.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 
+test('Sessions setting menus copy their current registered value as JSON', async ({ application, target, workbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.press('ControlOrMeta+A');
+	await group.editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, '{ "window.menuStyle": "custom", "sessions.activityBar.compact": true }');
+	await group.editor.input.press('ControlOrMeta+S');
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	const sessionsPage = await workbench.openAgentsWindow(target.kind);
+	if ('windows' in application) {
+		await application.evaluate(({ clipboard }) => {
+			const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; restoreSessionsCopy(): void; };
+			const write = clipboard.writeText.bind(clipboard);
+			captured.sessionsCopyText = '';
+			captured.sessionsCopyCount = 0;
+			clipboard.writeText = async text => { captured.sessionsCopyText = text; captured.sessionsCopyCount++; await write(text); };
+			captured.restoreSessionsCopy = () => { clipboard.writeText = write; };
+		});
+	} else {
+		await sessionsPage.evaluate(() => {
+			const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; restoreSessionsCopy(): void; };
+			const write = navigator.clipboard.writeText.bind(navigator.clipboard);
+			captured.sessionsCopyText = '';
+			captured.sessionsCopyCount = 0;
+			navigator.clipboard.writeText = async text => { captured.sessionsCopyText = text; captured.sessionsCopyCount++; };
+			captured.restoreSessionsCopy = () => { navigator.clipboard.writeText = write; };
+		});
+	}
+	try {
+		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		const openSettings = async (): Promise<void> => {
+			const accounts = sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+			// The saved custom menu style also applies to the Sessions account menu.
+			await accounts.click();
+			await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+			await expect(settings).toHaveCount(1);
+			await expect(settings.locator('.ash-context-view')).toHaveCount(1);
+			await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+		};
+		const row = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]');
+		const more = row.getByRole('button', { name: /^More actions/u });
+		const copy = settings.getByRole('menuitem', { name: 'Copy Setting as JSON', exact: true });
+		const openMenu = async (): Promise<void> => {
+			await more.focus();
+			await more.press('Enter');
+			await sessionsPage.keyboard.press('End');
+			await expect(copy).toBeFocused();
+		};
+		const read = 'windows' in application
+			? () => application.evaluate(() => {
+				const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; };
+				return { text: captured.sessionsCopyText, count: captured.sessionsCopyCount };
+			})
+			: () => sessionsPage.evaluate(() => {
+				const captured = globalThis as typeof globalThis & { sessionsCopyText: string; sessionsCopyCount: number; };
+				return { text: captured.sessionsCopyText, count: captured.sessionsCopyCount };
+			});
+		await openSettings();
+		await expect(row.getByRole('switch')).toBeChecked();
+		await openMenu();
+		await copy.press('Enter');
+		await expect(copy).toHaveCount(0);
+		await expect(more).toBeFocused();
+		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 1 });
+		await openMenu();
+		await sessionsPage.keyboard.press('Escape');
+		await expect(copy).toHaveCount(0);
+		await expect(more).toBeFocused();
+		await expect(settings).toBeVisible();
+		await openMenu();
+		// Request the platform cancel path while the dialog still owns an open menu.
+		await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
+		await expect(settings).toHaveCount(0);
+		await expect(sessionsPage.locator('.ash-context-view-menu')).toHaveCount(0);
+		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 1 });
+		await openSettings();
+		await expect(row.getByRole('switch')).toBeChecked();
+		await openMenu();
+		await copy.press('Enter');
+		await expect(more).toBeFocused();
+		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 2 });
+		await sessionsPage.keyboard.press('Escape');
+		await expect(settings).toHaveCount(0);
+		await expect(sessionsPage.locator('.ash-context-view-menu')).toHaveCount(0);
+	} finally {
+		if ('windows' in application) {
+			await application.evaluate(() => { (globalThis as typeof globalThis & { restoreSessionsCopy(): void; }).restoreSessionsCopy(); });
+		} else {
+			await sessionsPage.evaluate(() => { (globalThis as typeof globalThis & { restoreSessionsCopy(): void; }).restoreSessionsCopy(); });
+		}
+	}
+});
+
 test('Workbench and Sessions keep one settings document across edits and window restarts', async ({ application, target, workbench }) => {
 	const source = JSON.stringify({
 		'window.title': 'Shared settings test',
@@ -52,8 +148,10 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		await workbench.waitForReady();
 	}
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	await expect(group.editor.element).toBeVisible();
 	await expect.poll(async () => {
 		const contents = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
+		if (contents.trim().length === 0) return undefined;
 		return JSON.parse(contents);
 	}).toEqual({
 		'window.title': 'Shared settings test',

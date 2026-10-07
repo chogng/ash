@@ -251,6 +251,114 @@ test('URL rule suggestions follow extension registration without changing saved 
 	assert.deepEqual(configuration.getValue('workbench.externalUriOpeners'), { '*': 'extension:test:viewer' });
 });
 
+test('Copy Setting as JSON reads the latest local user values and preserves falsy and structured values', async () => {
+	using resources = new DisposableStore();
+	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({
+		key: 'copy.boolean', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+		setting: { valueType: 'boolean', title: 'Boolean', description: '' },
+	});
+	registry.registerConfiguration({
+		key: 'copy.number', defaultValue: 1, parse: value => value as number,
+		setting: { valueType: 'number', title: 'Number', description: '', minimum: 0, maximum: 10 },
+	});
+	registry.registerConfiguration({
+		key: 'copy.text', defaultValue: 'Default', parse: value => value as string,
+		setting: { valueType: 'text', title: 'Text', description: '', placeholder: '' },
+	});
+	registry.registerConfiguration({
+		key: 'copy.structured', defaultValue: {}, parse: value => value as Record<string, unknown>,
+		setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' },
+	});
+	const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.replaceChildren(root);
+	resources.add(toDisposable(() => root.remove()));
+	const contextView = resources.add(new BrowserContextViewService(root));
+	let actions: readonly IAction[] = [];
+	const copied: string[] = [];
+	const errors: string[] = [];
+	const widgets = new Map<string, import('../../browser/settingsWidgets.js').SettingWidget>();
+	for (const setting of new DefaultSettings(registry).all) {
+		const widget = resources.add(createSettingWidget(root, setting, {
+			configurationService: configuration, contextViewProvider: contextView,
+			contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
+			clipboardService: {
+				readText: async () => '', writeText: async value => { copied.push(value); }, readImage: async () => new Uint8Array(),
+				readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+			},
+			onStatus: (message, isError) => { if (isError) errors.push(message); },
+		}));
+		root.append(widget.domNode);
+		widgets.set(setting.id, widget);
+	}
+	const copy = async (key: string): Promise<void> => {
+		widgets.get(key)!.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+		await actions.find(action => action.id === 'settings.copySettingAsJSON')!.run();
+	};
+	await copy('copy.boolean');
+	// A menu can stay open while another window saves a new value.
+	await configuration.write('{ "copy.boolean": false, "copy.number": 0, "copy.text": "", "[typescript]": { "copy.boolean": true } }', 0);
+	await actions.find(action => action.id === 'settings.copySettingAsJSON')!.run();
+	await copy('copy.number');
+	await copy('copy.text');
+	await copy('copy.structured');
+	const structured = { 'quoted"key': ['back\\slash', 'line\nbreak', '中文', false, 0, null], nested: { empty: '' } };
+	await configuration.updateValue('copy.structured', structured);
+	await copy('copy.structured');
+	await configuration.updateValue('copy.text', 'quote" and back\\slash\n中文');
+	await copy('copy.text');
+	assert.deepEqual(copied.map(fragment => JSON.parse(`{${fragment}}`)), [
+		{ 'copy.boolean': true }, { 'copy.boolean': false }, { 'copy.number': 0 }, { 'copy.text': '' },
+		{ 'copy.structured': {} }, { 'copy.structured': structured }, { 'copy.text': 'quote" and back\\slash\n中文' },
+	]);
+	assert.equal(copied[5], `"copy.structured": ${JSON.stringify(structured, null, 2)}`);
+	assert.deepEqual(errors, []);
+});
+
+test('Copy Setting as JSON uses the current window default and reports clipboard failures in Chinese', async () => {
+	using resources = new DisposableStore();
+	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
+	const { ConfigurationService } = await import('../../../../../sessions/services/configuration/browser/configurationService.js');
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({
+		key: 'copy.window', defaultValue: true, parse: value => value as boolean, agentsWindow: { default: false },
+		setting: { valueType: 'boolean', title: 'Window default', description: '' },
+	});
+	const configuration = resources.add(new ConfigurationService({ registry }));
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.replaceChildren(root);
+	resources.add(toDisposable(() => root.remove()));
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	resources.add(toDisposable(resetNlsResolver));
+	const contextView = resources.add(new BrowserContextViewService(root));
+	let actions: readonly IAction[] = [];
+	let copied = '';
+	let fail = false;
+	const reported = new DeferredPromise<{ message: string; isError: boolean; }>();
+	const widget = resources.add(createSettingWidget(root, new DefaultSettings(registry).get('copy.window'), {
+		configurationService: configuration, contextViewProvider: contextView,
+		contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
+		clipboardService: {
+			readText: async () => '', writeText: async value => { if (fail) throw undefined; copied = value; }, readImage: async () => new Uint8Array(),
+			readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+		},
+		onStatus: (message, isError) => { void reported.complete({ message, isError }); },
+	}));
+	root.append(widget.domNode);
+	widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+	const action = actions.find(action => action.id === 'settings.copySettingAsJSON')!;
+	assert.equal(action.label, '复制设置为 JSON');
+	await action.run();
+	assert.equal(copied, '"copy.window": false');
+	fail = true;
+	await action.run();
+	assert.deepEqual(await reported.p, { message: '无法执行设置操作。', isError: true });
+	assert.equal((await configuration.read()).source, '{}\n');
+});
+
 test('Chinese setting actions, search filters and pending saves expose translated labels', async () => {
 	using resources = new DisposableStore();
 	const { createSettingWidget, SettingsSearchWidget } = await import('../../browser/settingsWidgets.js');

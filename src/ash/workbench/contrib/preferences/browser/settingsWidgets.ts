@@ -118,6 +118,7 @@ interface SettingActionsOptions {
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly clipboardService: IClipboardService;
 	readonly onError: (error: unknown) => void;
+	readonly copySettingAsJSON?: () => Promise<void>;
 	readonly openSettings?: () => Promise<void>;
 }
 
@@ -173,6 +174,15 @@ class SettingActions extends Disposable {
 				run: () => this.run(() => this.options.clipboardService.writeText(this.options.reference.id)),
 			},
 		];
+		if (this.options.copySettingAsJSON) {
+			actions.push({
+				id: 'settings.copySettingAsJSON',
+				label: localize({ bundle: 'ash.settings', key: 'actions.copyJson' }, 'Copy Setting as JSON'),
+				tooltip: '',
+				enabled: true,
+				run: () => this.run(this.options.copySettingAsJSON!),
+			});
+		}
 		if (this.options.openSettings) {
 			actions.push({
 				id: 'settings.editInSettingsJson',
@@ -248,6 +258,13 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			contextMenuProvider: options.contextMenuProvider,
 			clipboardService: options.clipboardService,
 			onError: error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
+			copySettingAsJSON: descriptor.binding ? undefined : async () => {
+				// The current Settings target is local user, without a language override.
+				const setting = this.descriptor.configuration;
+				const inspected = options.configurationService.inspect<TValue>(setting.key);
+				const value = inspected.userLocalValue === undefined ? inspected.defaultValue : inspected.userLocalValue;
+				await options.clipboardService.writeText(`${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`);
+			},
 			openSettings: !descriptor.binding && options.onOpenSettings ? () => options.onOpenSettings!(descriptor.configuration.key) : undefined,
 		}));
 	}

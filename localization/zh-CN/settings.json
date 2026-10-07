@@ -63,6 +63,7 @@
     "actions.more": "{0} 的更多操作",
     "actions.reset": "重置设置",
     "actions.copyId": "复制设置 ID",
+    "actions.copyJson": "复制设置为 JSON",
     "actions.failed": "无法执行设置操作。",
     "search.filter": "筛选设置",
     "search.id": "设置 ID…",

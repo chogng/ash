@@ -1,7 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 
 async function pasteJson(input: Locator, source: string): Promise<void> {
 	await input.evaluate((element, source) => {
@@ -9,6 +10,122 @@ async function pasteJson(input: Locator, source: string): Promise<void> {
 		clipboardData.setData('text/plain', source);
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, source);
+}
+
+async function captureCopiedSetting(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; restore(): Promise<void>; }> {
+	if ('windows' in application) {
+		await application.evaluate(({ clipboard }) => {
+			const captured = globalThis as typeof globalThis & { settingsCopyText: string; restoreSettingsCopy(): void; };
+			const write = clipboard.writeText.bind(clipboard);
+			captured.settingsCopyText = '';
+			clipboard.writeText = async text => { captured.settingsCopyText = text; await write(text); };
+			captured.restoreSettingsCopy = () => { clipboard.writeText = write; };
+		});
+		return {
+			// Read the captured IPC write, never the user's system clipboard.
+			read: () => application.evaluate(() => (globalThis as typeof globalThis & { settingsCopyText: string; }).settingsCopyText),
+			restore: () => application.evaluate(() => { (globalThis as typeof globalThis & { restoreSettingsCopy(): void; }).restoreSettingsCopy(); }),
+		};
+	}
+	await page.evaluate(() => {
+		const captured = globalThis as typeof globalThis & { settingsCopyText: string; restoreSettingsCopy(): void; };
+		const write = navigator.clipboard.writeText.bind(navigator.clipboard);
+		captured.settingsCopyText = '';
+		// Each test owns its browser context; keep clipboard data inside that context.
+		navigator.clipboard.writeText = async text => { captured.settingsCopyText = text; };
+		captured.restoreSettingsCopy = () => { navigator.clipboard.writeText = write; };
+	});
+	return {
+		read: () => page.evaluate(() => (globalThis as typeof globalThis & { settingsCopyText: string; }).settingsCopyText),
+		restore: () => page.evaluate(() => { (globalThis as typeof globalThis & { restoreSettingsCopy(): void; }).restoreSettingsCopy(); }),
+	};
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Copy Setting as JSON preserves values and saves through the settings resource (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench }) => {
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const page = workbench.page;
+		const title = 'Copy test "quoted" \\ path\n中文';
+		const tokenColors = { textMateRules: [{ scope: ['keyword', 'string'], settings: { foreground: '#ff1122' } }] };
+		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+		const group = workbench.editors.groupAt(0);
+		await group.editor.input.press('ControlOrMeta+A');
+		await pasteJson(group.editor.input, JSON.stringify({
+			'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors,
+			...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
+		}, null, 2));
+		await group.editor.input.press('ControlOrMeta+S');
+		const tab = group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' });
+		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		const copySettings = async (): Promise<string[]> => {
+			const currentPage = workbench.page;
+			const capture = await captureCopiedSetting(application, currentPage);
+			const fragments: string[] = [];
+			try {
+				await workbench.settingsEditor.openUserSettingsUI();
+				const settings = workbench.settingsEditor.element;
+				await workbench.settingsEditor.selectGroup('workbench');
+				await workbench.settingsEditor.selectCategory('appearance');
+				for (const [key, value] of [['window.title', title], ['editor.tokenColorCustomizations', tokenColors]] as const) {
+					await settings.getByRole('searchbox').fill(`@id:${key}`);
+					const row = settings.locator(`[data-settings-item-id="${key}"]`);
+					const more = row.getByRole('button', { name: chinese ? /更多操作/u : /^More actions/u });
+					await more.focus();
+					await more.press('Enter');
+					const action = currentPage.getByRole('menuitem', { name: chinese ? '复制设置为 JSON' : 'Copy Setting as JSON', exact: true });
+					await action.focus();
+					await expect(action).toBeFocused();
+					await action.press('Enter');
+					await expect(more).toBeFocused();
+					await expect.poll(capture.read).toBe(`${JSON.stringify(key)}: ${JSON.stringify(value, null, 2)}`);
+					fragments.push(await capture.read());
+				}
+				await settings.locator('.ash-modal-editor-close').click();
+			} finally {
+				await capture.restore();
+			}
+			return fragments;
+		};
+		const fragments = await copySettings();
+		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+		await group.editor.input.press('ControlOrMeta+A');
+		await pasteJson(group.editor.input, `{\n"window.menuStyle": "custom",\n${fragments.join(',\n')}${chinese ? ',\n"workbench.locale": "zh-CN"' : ''}\n}`);
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		if ('windows' in application) {
+			const profile = await application.evaluate(() => process.env.ASH_HOME!);
+			await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))).toEqual({
+				'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors, ...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
+			});
+		} else {
+			await expect.poll(() => page.evaluate(async () => {
+				const database = await new Promise<IDBDatabase>((resolve, reject) => {
+					const request = indexedDB.open('ash-configuration');
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+				try {
+					return await new Promise<string>((resolve, reject) => {
+						const request = database.transaction('resources').objectStore('resources').get('settings.json');
+						request.onsuccess = () => resolve(request.result.document.source);
+						request.onerror = () => reject(request.error);
+					});
+				} finally { database.close(); }
+			}).then(source => JSON.parse(source))).toEqual({
+				'window.menuStyle': 'custom', 'window.title': title, 'editor.tokenColorCustomizations': tokenColors, ...(chinese ? { 'workbench.locale': 'zh-CN' } : {}),
+			});
+		}
+		({ application, workbench } = await reloadWorkbench());
+		// Copy again from the reopened configuration owner, independent of editor viewport state.
+		await expect(await copySettings()).toEqual(fragments);
+	});
 }
 
 test('Code Action settings offer save modes and persist file and notebook configuration', async ({ workbench, reloadWorkbench }) => {

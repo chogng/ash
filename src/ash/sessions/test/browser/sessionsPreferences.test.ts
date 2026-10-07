@@ -1,5 +1,9 @@
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
+import { IMenuService } from '../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../platform/actions/common/menuService.js';
+import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -39,6 +43,10 @@ test('Sessions Models switches control the model picker visibility preference', 
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	window.HTMLElement.prototype.scrollTo = function () { };
+	// JSDOM has no layout; shared keyboard navigation still checks rendered visibility.
+	Object.defineProperty(window.Element.prototype, 'getClientRects', {
+		value: function (this: Element) { return this.isConnected && !this.closest('[hidden], [inert]') ? [{}] : []; },
+	});
 	window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
 	window.HTMLDialogElement.prototype.close = function () {
 		this.removeAttribute('open');
@@ -108,16 +116,32 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(INotificationService, notifications);
 	const { IClipboardService: ClipboardService } = await import('../../../platform/clipboard/common/clipboardService.js');
 	const { IContextMenuService: ContextMenus } = await import('../../../platform/contextview/browser/contextView.js');
+	const { IContextViewService } = await import('../../../platform/contextview/browser/contextView.js');
+	const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
+	const { BrowserContextMenuService } = await import('../../../platform/contextview/browser/contextMenuService.js');
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	const { IAccessibleViewService: AccessibleView } = await import('../../../platform/accessibility/browser/accessibleView.js');
-	services.registerInstance(ClipboardService, {} as IClipboardService);
-	services.registerInstance(ContextMenus, {} as import('../../../platform/contextview/browser/contextView.js').IContextMenuService);
+	const copied: string[] = [];
+	services.registerInstance(ClipboardService, {
+		readText: async () => '', writeText: async text => { copied.push(text); }, readImage: async () => new Uint8Array(),
+		readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+	} satisfies IClipboardService);
+	services.registerInstance(IKeybindingService, {
+		inChordMode: false, onDidUpdateKeybindings: Event.None, getKeybindings: () => [],
+		registerSchemaContribution: () => Disposable.None,
+		resolveKeybinding: () => { throw new Error('Explicit keybinding resolution is not used by this fixture'); },
+		resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+	});
+	using windowContextView = new BrowserContextViewService(window.document.body);
+	services.registerInstance(IContextViewService, windowContextView);
+	services.registerSingleton(ContextMenus, () => services.createInstance(BrowserContextMenuService));
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IMarketplaceService);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IMenuService, services.createInstance(MenuService));
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(IHooksService, { onDidChange: Event.None, userConfigurationEditor: undefined, read: async () => [] });
 	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
@@ -140,8 +164,34 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
 	services.registerInstance(IDirPermissionsService, { onDidChangePermissions: Event.None } as import('../../../platform/dirPermissions/common/dirPermissionsService.js').IDirPermissionsService);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { });
+	await configuration.updateValue('sessions.activityBar.compact', true);
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
+	const openCopyMenu = (category = 'Appearance', copyLabel = 'Copy Setting as JSON') => {
+		const dialog = window.document.querySelector<HTMLDialogElement>('dialog')!;
+		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === category)!.click();
+		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="sessions.activityBar.compact"] .ash-setting-item-actions-trigger')!;
+		more.focus();
+		more.click();
+		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
+		assert.ok(menu);
+		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		const copy = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === copyLabel)!;
+		assert.ok(copy);
+		assert.equal(window.document.activeElement, copy);
+		assert.equal(dialog.querySelectorAll('.ash-context-view').length, 1);
+		return { copy, menu, more };
+	};
+	const firstMenu = openCopyMenu();
+	firstMenu.copy.click();
+	await Promise.resolve();
+	assert.deepEqual(copied, ['"sessions.activityBar.compact": true']);
+	assert.equal(firstMenu.menu.isConnected, false);
+	assert.equal(window.document.activeElement, firstMenu.more);
+	const cancelledMenu = openCopyMenu();
+	cancelledMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(cancelledMenu.menu.isConnected, false);
+	assert.equal(window.document.activeElement, cancelledMenu.more);
 	void preferences.open('tools');
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(window.document.querySelector('[aria-current="page"]')?.textContent, 'Tools');
@@ -234,14 +284,23 @@ test('Sessions Models switches control the model picker visibility preference', 
 	advisorSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
 	await Promise.resolve();
 	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
+	const closingMenu = openCopyMenu();
 	window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 	await opened;
+	assert.equal(closingMenu.menu.isConnected, false);
+	assert.equal(window.document.querySelector('dialog'), null);
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const reopened = preferences.open();
+		const reopenedMenu = openCopyMenu('外观', '复制设置为 JSON');
+		reopenedMenu.copy.click();
+		await Promise.resolve();
+		assert.deepEqual(copied, ['"sessions.activityBar.compact": true', '"sessions.activityBar.compact": true']);
+		assert.equal(reopenedMenu.menu.isConnected, false);
+		assert.equal(window.document.activeElement, reopenedMenu.more);
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
 		assert.ok(translatedDesign);
 		translatedDesign.click();
