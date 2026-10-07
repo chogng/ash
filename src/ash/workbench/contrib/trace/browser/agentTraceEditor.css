@@ -143,7 +143,9 @@
 	font-size: 12px;
 	overflow-wrap: anywhere;
 }
-.ash-agent-trace-relations:empty { display: none; }
+.ash-agent-trace-relations:empty {
+	display: none;
+}
 .ash-agent-trace-relation {
 	display: block;
 	width: 100%;
@@ -157,5 +159,11 @@
 	overflow-wrap: anywhere;
 	cursor: pointer;
 }
-.ash-agent-trace-relation:disabled { opacity: 0.6; cursor: default; }
-.ash-agent-trace-relation:focus-visible { outline: 1px solid var(--ash-focusBorder); outline-offset: -1px; }
+.ash-agent-trace-relation:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.ash-agent-trace-relation:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
