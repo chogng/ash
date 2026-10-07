@@ -6,19 +6,21 @@
 
 完成 [环境初始化](build.md#初始化) 后，在仓库根目录选择启动方式：
 
-| 用途                                                 | 命令                          | F5 配置                               |
-| ---------------------------------------------------- | ----------------------------- | ------------------------------------- |
-| 完整 Electron 桌面端，监听前后端变化                 | `pnpm dev`，等同于 `just ash` | `Ash (Electron)`                      |
-| 直接开发 Agents 窗口，监听前后端变化                 | `pnpm dev:agents`             | `Ash (Electron, Agents)`              |
-| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm dev:ui:connected`       | `Ash (Electron, Frontend Watch Only)` |
-| Electron 界面，不构建或启动后端                      | `pnpm dev:ui`                 | —                                     |
-| 浏览器工作台、本地文件编辑，不构建或启动后端         | `pnpm dev:web`                | `Ash Web (Chrome)`                    |
-| 浏览器与真实 App Server，监听前后端变化              | `pnpm dev:web:full`           | —                                     |
-| 直接开发 Sessions Web，监听前后端变化                | `pnpm dev:web:agents`         | `Ash Sessions Web (Chrome)`           |
-| Sessions Web 界面，不构建或启动后端                  | `pnpm dev:web:agents:ui`      | `Ash Sessions Web (Chrome, UI Only)`  |
-| 独立 Stanza 编辑器                                   | `pnpm dev:stanza`             | `Stanza Editor - Standalone`          |
+| 用途                                                 | 命令                          | F5 配置                                                                    |
+| ---------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| 完整 Electron 桌面端，监听前后端变化                 | `pnpm dev`，等同于 `just ash` | `Ash`                                                                      |
+| 直接开发 Agents 窗口，监听前后端变化                 | `pnpm dev:agents`             | `Ash Agents`                                                               |
+| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm dev:ui:connected`       | `Ash (Hot Reload)`                                                         |
+| Electron 界面，不构建或启动后端                      | `pnpm dev:ui`                 | —                                                                          |
+| 浏览器工作台、本地文件编辑，不构建或启动后端         | `pnpm dev:web`                | `Ash Web (Chrome)` / `Ash Web (Edge)`                                      |
+| 浏览器与真实 App Server，监听前后端变化              | `pnpm dev:web:full`           | `Ash Server (Web)` / `Ash Server (Web, Chrome)` / `Ash Server (Web, Edge)` |
+| 直接开发 Sessions Web，监听前后端变化                | `pnpm dev:web:agents`         | `Ash Agents Server (Web, Chrome)` / `Ash Agents Server (Web, Edge)`        |
+| Sessions Web 界面，不构建或启动后端                  | `pnpm dev:web:agents:ui`      | `Ash Agents Web (Chrome)` / `Ash Agents Web (Edge)`                        |
+| 独立 Stanza 编辑器                                   | `pnpm dev:stanza`             | `Stanza Editor (Chrome)` / `Stanza Editor (Edge)`                          |
 
-`Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
+`Ash (Hot Reload)` 专用于前端热更新和 Electron 宿主监听，仍连接 Rust 后端，但不监听后端源码变化；`Ash` 和 `Ash Agents` 同时监听前后端，也支持前端热更新。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
+
+`Ash Server (Web)` 只启动完整 Web 服务并输出认证链接，可手动在浏览器打开；带 `Chrome` 或 `Edge` 的配置在服务就绪后自动打开对应浏览器调试器。Ash 的 Agent 执行由 Rust App Server 承担，没有 VS Code 的独立 Node Agent Host 入口。Chrome 和 Edge 配置分别要求本机安装对应浏览器。
 
 浏览器仅前端模式打开 `http://127.0.0.1:5173/`。完整 Web 模式使用 5174 端口，须打开终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
 
@@ -30,7 +32,7 @@
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
 5. 提交前执行 `pnpm build:web` 和 `pnpm test:web --grep '<场景标题>'`，验证生产资源。已有构建时用 `pnpm test:smoke:browser:no-compile`；`pnpm start:web` 启动生产资源预览。
 
-F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在“调试控制台”，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web (UI Only)` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。F5 和手动启动共用 5173，选择一种启动方式；已有服务占用端口时启动会报错。
+F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在“调试控制台”，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。F5 和手动启动共用 5173，选择一种启动方式；已有服务占用端口时启动会报错。
 
 F5 生命周期回归测试使用已安装的 VS Code 和 Playwright。设置 `ASH_VSCODE_EXECUTABLE` 为 VS Code 可执行文件的绝对路径，再执行 `pnpm --dir build exec node --test desktop/launch/webDebug.test.ts`；它使用独立配置目录，验证停止任一调试会话、进程退出、端口释放、再次启动和端口占用失败。未提供该环境变量时，构建工具测试会跳过这一项。
 
@@ -40,9 +42,9 @@ Web 构建只包含浏览器 Workbench 与 Sessions 页面，输出到 `.build/d
 
 连接后端的 Web 和 Electron 源码启动器在选取可执行文件前检查并准备当前源码对应的开发包；这一顺序也适用于直接调用启动器或 Vite 的入口。输入未变化时复用开发包，准备失败则停止启动。Web 启动日志输出实际使用的后端文件路径，便于核对联调版本。
 
-Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions 认证链接；F5 选择 `Ash Sessions Web (Chrome)`，准备前后端后自动打开该链接并连接 Chrome 调试器。只开发界面时使用 `pnpm dev:web:agents:ui` 或 `Ash Sessions Web (Chrome, UI Only)`，5173 根地址直接进入 Sessions。两种 Sessions 入口复用相同的浏览器页面、Vite 热更新和 Web 构建。切回 Workbench 后可继续使用同一浏览器会话。
+Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions 认证链接；F5 选择 `Ash Agents Server (Web, Chrome)`，准备前后端后自动打开该链接并连接 Chrome 调试器。只开发界面时使用 `pnpm dev:web:agents:ui` 或 `Ash Agents Web (Chrome)`，5173 根地址直接进入 Sessions。两种 Sessions 入口复用相同的浏览器页面、Vite 热更新和 Web 构建。切回 Workbench 后可继续使用同一浏览器会话。
 
-完整 Web 开发由 Vite 管理 Rust 监听器和 Web 启动进程。保存 Rust 或 Cargo 文件后先同步协议、编译并发布含独立 Node 的开发包；成功后通过 `ensure-selected` 切换受管后端。编译失败保留当前后端。Web 启动进程持续持有原入口，使重启后的监听地址和浏览器授权继续有效；页面重连时保留会话选择和未发送输入。停止 Vite 会释放监听器和入口授权；其他客户端共用的后端仍按共享生命周期管理。连接后端的 F5 配置通过 `serverReadyAction` 打开动态认证链接，停止服务器调试会同时停止其 `Browser Debug`；只停止浏览器调试时服务器继续运行，可在调试工具栏停止服务器。仅界面 F5 配置保留服务器与浏览器双向停止。
+完整 Web 开发由 Vite 管理 Rust 监听器和 Web 启动进程。保存 Rust 或 Cargo 文件后按变更范围同步协议，再编译并发布含独立 Node 的开发包；成功后通过 `ensure-selected` 切换受管后端。编译失败保留当前后端。Web 启动进程持续持有原入口，使重启后的监听地址和浏览器授权继续有效；页面重连时保留会话选择和未发送输入。停止 Vite 会释放监听器和入口授权；其他客户端共用的后端仍按共享生命周期管理。连接后端的 F5 配置通过 `serverReadyAction` 打开动态认证链接，停止服务器调试会同时停止其 `Browser Debug`；只停止浏览器调试时服务器继续运行，可在调试工具栏停止服务器。仅界面 F5 配置保留服务器与浏览器双向停止。
 
 F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](build.md#初始化) 后，F5 和手动启动共用仓库的 Python 环境，macOS 无需额外的 `uv run` 包装。
 
@@ -61,7 +63,7 @@ Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter �
 
 需要重新执行初始化的可释放贡献，由注册入口通过 `platform/observable/common/wrapInReloadableClass.ts` 包装构造函数。开发模式下，模块替换会先释放旧贡献，再通过编辑器原有的服务容器创建新贡献；编辑器和模型由宿主继续持有。占位文本贡献已接入这条链路，修改其构造器、字段或方法可以更新现有编辑器。注册模块应与实现模块分开，避免重新执行注册副作用。注册处保存的是释放句柄，需要访问贡献实现时使用 `hotClassGetOriginalInstance`。这些热更新只用于开发 Ash 自身；发布构建不注入 Vite 热更新边界。
 
-Electron 启动前并行准备键盘模块、前端生成资源和后端资源；输入未变化时复用已有结果。运行期间 Rust 保存只增量编译并发布程序，复用准备好的资源文件，不走完整包验证和发布。`ASH_DEV_RUNTIME_ROOT` 由启动器提供，统一定位搜索工具、语言服务、内置 Skills 和辅助程序。Workbench 与 Agents 共用一个重启协调者：先停连接，重启一次后端，再连接仍打开的窗口。新窗口在重启期间等待；关闭窗口会注销监听。Main/Preload 编译或校验失败会保留当前进程，Rust 构建失败不切换运行版本；启动失败会报告错误。监听器忽略 Cargo 输出，避免构建再次触发自己。
+Electron 启动前并行准备键盘模块、前端生成资源和后端资源；输入未变化时复用已有结果。运行期间 Rust 保存只增量编译并发布程序，复用准备好的资源文件，不走完整包验证和发布。Electron 与 Web 后端监听器按 Cargo 的协议生成器依赖图判断变更：普通业务源码保存跳过协议生成，协议及其共享契约源码保存先生成协议再构建后端；Cargo 清单变化时刷新依赖图并生成协议。生成失败会阻止后端构建，下一次保存仍会先重试生成。`ASH_DEV_RUNTIME_ROOT` 由启动器提供，统一定位搜索工具、语言服务、内置 Skills 和辅助程序。Workbench 与 Agents 共用一个重启协调者：先停连接，重启一次后端，再连接仍打开的窗口。新窗口在重启期间等待；关闭窗口会注销监听。Main/Preload 编译或校验失败会保留当前进程，Rust 构建失败不切换运行版本；启动失败会报告错误。监听器忽略 Cargo 输出，避免构建再次触发自己。
 
 开发启动器使用 `.build/desktop/dev/profile` 和 `.build/desktop/dev/user-data`，Workbench 与 Agents 共享开发数据；设置 `ASH_HOME` 可以指定其他开发配置。资源或运行工具锁文件修改后执行 VS Code 任务 `Prepare Ash Backend`，或 `pnpm prepare:backend`，准备完成后已运行的完整开发窗口会切换到新版本。
 
@@ -117,7 +119,7 @@ pnpm dev:web
 
 ### 独立调试 Stanza
 
-运行 `pnpm dev:stanza`，打开终端输出的地址；也可在 VS Code 选择 `Stanza Editor - Standalone` 后按 F5。页面通过 `globalThis.stanza` 暴露 API，可在浏览器控制台检查 `stanza.editor.getEditors()` 和 `stanza.editor.getModels()`。
+运行 `pnpm dev:stanza`，打开终端输出的地址；也可在 VS Code 选择 `Stanza Editor (Chrome)` 后按 F5。页面通过 `globalThis.stanza` 暴露 API，可在浏览器控制台检查 `stanza.editor.getEditors()` 和 `stanza.editor.getModels()`。
 
 ## Electron sandbox 边界
 

@@ -2,18 +2,7 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Ash Code (TUI)",
-			"type": "node-terminal",
-			"request": "launch",
-			"command": "just ash-code",
-			"cwd": "${workspaceFolder}",
-			"presentation": {
-				"group": "0_ash_code",
-				"order": 1
-			}
-		},
-		{
-			"name": "Ash (Electron)",
+			"name": "Ash",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "bash ./scripts/ash.sh",
@@ -22,12 +11,23 @@
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "1_ash",
+				"group": "0_ash",
 				"order": 1
 			}
 		},
 		{
-			"name": "Ash (Electron, Frontend Watch Only)",
+			"name": "Ash Agents",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "pnpm dev:agents",
+			"cwd": "${workspaceFolder}",
+			"presentation": {
+				"group": "0_ash",
+				"order": 2
+			}
+		},
+		{
+			"name": "Ash (Hot Reload)",
 			"type": "node-terminal",
 			"request": "launch",
 			"command": "bash ./scripts/ash.sh --connected",
@@ -36,19 +36,158 @@
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "1_ash",
-				"order": 2
+				"group": "0_ash",
+				"order": 3
 			}
 		},
 		{
-			"name": "Ash (Electron, Agents)",
-			"type": "node-terminal",
+			"name": "Ash Server (Web)",
+			"type": "node",
 			"request": "launch",
-			"command": "pnpm dev:agents",
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
 			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "1",
+				"NO_COLOR": "1"
+			},
+			"preLaunchTask": "Prepare Ash Web Backend",
+			"console": "internalConsole",
+			"outputCapture": "std",
 			"presentation": {
-				"group": "1_ash",
-				"order": 3
+				"group": "0_ash",
+				"order": 4
+			}
+		},
+		{
+			"name": "Ash Server (Web, Chrome)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "1",
+				"NO_COLOR": "1"
+			},
+			"preLaunchTask": "Prepare Ash Web Backend",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
+				"action": "debugWithChrome",
+				"uriFormat": "%s",
+				"webRoot": "${workspaceFolder}",
+				"killOnServerStop": true
+			},
+			"presentation": {
+				"group": "0_ash",
+				"order": 5
+			}
+		},
+		{
+			"name": "Ash Server (Web, Edge)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "1",
+				"NO_COLOR": "1"
+			},
+			"preLaunchTask": "Prepare Ash Web Backend",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
+				"action": "debugWithEdge",
+				"uriFormat": "%s",
+				"webRoot": "${workspaceFolder}",
+				"killOnServerStop": true
+			},
+			"presentation": {
+				"group": "0_ash",
+				"order": 6
+			}
+		},
+		{
+			"name": "Ash Agents Server (Web, Chrome)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "1",
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"NO_COLOR": "1"
+			},
+			"preLaunchTask": "Prepare Ash Web Backend",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
+				"action": "debugWithChrome",
+				"uriFormat": "%s",
+				"webRoot": "${workspaceFolder}",
+				"killOnServerStop": true
+			},
+			"presentation": {
+				"group": "0_ash",
+				"order": 7
+			}
+		},
+		{
+			"name": "Ash Agents Server (Web, Edge)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "1",
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"NO_COLOR": "1"
+			},
+			"preLaunchTask": "Prepare Ash Web Backend",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
+				"action": "debugWithEdge",
+				"uriFormat": "%s",
+				"webRoot": "${workspaceFolder}",
+				"killOnServerStop": true
+			},
+			"presentation": {
+				"group": "0_ash",
+				"order": 8
 			}
 		},
 		{
@@ -77,23 +216,12 @@
 				"killOnServerStop": true
 			},
 			"presentation": {
-				"group": "1_ash",
-				"order": 3
+				"group": "0_ash",
+				"order": 9
 			}
 		},
 		{
-			"name": "Ash Web Browser (Chrome)",
-			"type": "chrome",
-			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
-			"webRoot": "${workspaceFolder}",
-			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
-			"presentation": {
-				"hidden": true
-			}
-		},
-		{
-			"name": "Ash Sessions Web (Chrome)",
+			"name": "Ash Web (Edge)",
 			"type": "node",
 			"request": "launch",
 			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
@@ -105,27 +233,25 @@
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
-				"ASH_WEB_APP_SERVER": "1",
-				"ASH_DEV_AGENTS_WINDOW": "1",
+				"ASH_WEB_APP_SERVER": "0",
 				"NO_COLOR": "1"
 			},
-			"preLaunchTask": "Prepare Ash Web Backend",
+			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
-				"action": "debugWithChrome",
-				"uriFormat": "%s",
-				"webRoot": "${workspaceFolder}",
+				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"action": "startDebugging",
+				"name": "Ash Web Browser (Edge)",
 				"killOnServerStop": true
 			},
 			"presentation": {
-				"group": "1_ash",
-				"order": 4
+				"group": "0_ash",
+				"order": 10
 			}
 		},
 		{
-			"name": "Ash Sessions Web (Chrome, UI Only)",
+			"name": "Ash Agents Web (Chrome)",
 			"type": "node",
 			"request": "launch",
 			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
@@ -147,37 +273,122 @@
 			"serverReadyAction": {
 				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
 				"action": "startDebugging",
-				"name": "Ash Sessions Web Browser (Chrome)",
+				"name": "Ash Agents Web Browser (Chrome)",
 				"killOnServerStop": true
 			},
 			"presentation": {
-				"group": "1_ash",
-				"order": 5
+				"group": "0_ash",
+				"order": 11
 			}
 		},
 		{
-			"name": "Ash Sessions Web Browser (Chrome)",
-			"type": "chrome",
+			"name": "Ash Agents Web (Edge)",
+			"type": "node",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
-			"webRoot": "${workspaceFolder}",
-			"cascadeTerminateToConfigurations": [
-				"Ash Sessions Web (Chrome, UI Only)"
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
 			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "0",
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"NO_COLOR": "1"
+			},
+			"preLaunchTask": "Prepare Ash Web",
+			"console": "internalConsole",
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"action": "startDebugging",
+				"name": "Ash Agents Web Browser (Edge)",
+				"killOnServerStop": true
+			},
 			"presentation": {
-				"hidden": true
+				"group": "0_ash",
+				"order": 12
 			}
 		},
 		{
-			"name": "Stanza Editor - Standalone",
+			"name": "Ash Code (TUI)",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "just ash-code",
+			"cwd": "${workspaceFolder}",
+			"presentation": {
+				"group": "1_ash_code",
+				"order": 1
+			}
+		},
+		{
+			"name": "Stanza Editor (Chrome)",
 			"type": "chrome",
 			"request": "launch",
 			"url": "http://127.0.0.1:5199/",
 			"webRoot": "${workspaceFolder}",
 			"preLaunchTask": "Launch Stanza Vite",
 			"presentation": {
-				"group": "3_stanza",
+				"group": "2_stanza",
 				"order": 1
+			}
+		},
+		{
+			"name": "Stanza Editor (Edge)",
+			"type": "msedge",
+			"request": "launch",
+			"url": "http://127.0.0.1:5199/",
+			"webRoot": "${workspaceFolder}",
+			"preLaunchTask": "Launch Stanza Vite",
+			"presentation": {
+				"group": "2_stanza",
+				"order": 1
+			}
+		},
+		{
+			"name": "Ash Web Browser (Chrome)",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/",
+			"webRoot": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
+			"presentation": {
+				"hidden": true
+			}
+		},
+		{
+			"name": "Ash Web Browser (Edge)",
+			"type": "msedge",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/",
+			"webRoot": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": ["Ash Web (Edge)"],
+			"presentation": {
+				"hidden": true
+			}
+		},
+		{
+			"name": "Ash Agents Web Browser (Chrome)",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/",
+			"webRoot": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": ["Ash Agents Web (Chrome)"],
+			"presentation": {
+				"hidden": true
+			}
+		},
+		{
+			"name": "Ash Agents Web Browser (Edge)",
+			"type": "msedge",
+			"request": "launch",
+			"url": "http://127.0.0.1:5173/",
+			"webRoot": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": ["Ash Agents Web (Edge)"],
+			"presentation": {
+				"hidden": true
 			}
 		}
 	]

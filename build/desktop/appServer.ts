@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { type FSWatcher, readFileSync, watch } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
-import { generateProtocol } from '../protocol/generate.ts';
+import { generateProtocol, protocolSourceDirectories } from '../protocol/generate.ts';
 import { pythonCommand } from '../python.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
@@ -54,6 +54,11 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
 export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; } = {}): Promise<() => void> {
 	let activeBuild: ChildProcess | undefined;
 	let buildRequested = !options.skipInitial;
+	let protocolRequested = buildRequested;
+	let protocolDirectories: string[] | undefined;
+	let manifestRevision = 0;
+	let protocolManifestRevision = -1;
+	const changedSources = new Set<string>();
 	let debounce: NodeJS.Timeout | undefined;
 	let stopped = false;
 	let building = false;
@@ -61,15 +66,18 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	const watchers: FSWatcher[] = [];
 
 	watchers.push(
-		watch(sharedRustSource, { recursive: true }, (_event, file) => requestBuild(file, fileName => shouldRebuildAppServer(fileName, watchedTargetDirectory))),
-		watch(repositoryRoot, (_event, file) => requestBuild(file, shouldRebuildWorkspaceManifest)),
+		watch(sharedRustSource, { recursive: true }, (_event, file) => requestBuild(sharedRustSource, file, fileName => shouldRebuildAppServer(fileName, watchedTargetDirectory))),
+		watch(repositoryRoot, (_event, file) => requestBuild(repositoryRoot, file, shouldRebuildWorkspaceManifest)),
 	);
 	console.log('[app-server] Watching Rust App Server sources');
 	if (buildRequested) void drainBuilds();
 	return stop;
 
-	function requestBuild(file: string | null, shouldRebuild: (file: string | null) => boolean): void {
-		if (stopped || !shouldRebuild(file)) return;
+	function requestBuild(watchRoot: string, file: string | null, shouldRebuild: (file: string | null) => boolean): void {
+		if (stopped || file === null || !shouldRebuild(file)) return;
+		const source = resolve(watchRoot, file.replaceAll('\\', '/'));
+		changedSources.add(source);
+		if (source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`)) manifestRevision++;
 		clearTimeout(debounce);
 		debounce = setTimeout(() => {
 			buildRequested = true;
@@ -83,13 +91,30 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		try {
 			while (buildRequested && !stopped) {
 				buildRequested = false;
+				const sources = [...changedSources];
+				changedSources.clear();
+				let needsProtocol = protocolRequested || sources.some(source => source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`));
+				protocolRequested = false;
 				try {
-					await generateProtocol(cancellation.signal);
+					if (protocolDirectories === undefined || protocolManifestRevision !== manifestRevision) {
+						const revision = manifestRevision;
+						protocolDirectories = await protocolSourceDirectories(cancellation.signal);
+						protocolManifestRevision = revision;
+					}
+					// Snapshot each batch before awaiting: saves during a build belong to the next one.
+					const directories = protocolDirectories;
+					needsProtocol ||= sources.some(source => directories.some(directory => relativeWatchedDirectory(directory, source) !== undefined));
+					if (needsProtocol) {
+						await generateProtocol(cancellation.signal);
+						needsProtocol = false;
+					}
 					cancellation.signal.throwIfAborted();
 					await runBackendBuild();
 					cancellation.signal.throwIfAborted();
 					await options.onDidBuild?.();
 				} catch (error) {
+					// A failed export must be retried before the next backend build, even for a business save.
+					protocolRequested ||= needsProtocol || protocolDirectories === undefined || protocolManifestRevision !== manifestRevision;
 					if (!stopped) console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
 				}
 			}

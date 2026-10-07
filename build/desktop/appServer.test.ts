@@ -2,11 +2,35 @@ import assert from 'node:assert/strict';
 import childProcess, { ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { join } from 'node:path';
-import test from 'node:test';
+import { join, resolve } from 'node:path';
+import test, { type TestContext } from 'node:test';
 
 import { prepareAppServer, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
 import { pythonCommand } from '../python.ts';
+
+const repositoryRoot = resolve(import.meta.dirname, '../..');
+const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name => join(repositoryRoot, 'crates', name));
+
+function mockProtocolDirectories(t: TestContext, directories = () => protocolDirectories) {
+	return t.mock.method(childProcess, 'execFile', (_command: string, args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+		assert.deepEqual(args, pythonCommand(['-B', 'build/protocol/generate.py', '--source-directories']).args);
+		setImmediate(() => callback(null, JSON.stringify(directories()), ''));
+		return new ChildProcess();
+	});
+}
+
+function mockSourceChanges(t: TestContext) {
+	const listeners = new Map<string, (event: string, file: string) => void>();
+	t.mock.method(fs, 'watch', (...args: unknown[]) => {
+		listeners.set(args[0] as string, args.at(-1) as (event: string, file: string) => void);
+		return { close() { } };
+	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	return (file: string, workspaceManifest = false) => {
+		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, 'crates');
+		listeners.get(directory)!('change', file);
+	};
+}
 
 for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const) {
 	for (const succeeds of [true, false]) {
@@ -71,6 +95,7 @@ test('watcher stops before the backend build when protocol generation fails', as
 		t.mock.restoreAll();
 		syncBuiltinESMExports();
 	});
+	mockProtocolDirectories(t);
 	t.mock.method(fs, 'watch', () => ({ close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
@@ -93,6 +118,7 @@ test('watcher invokes the Python backend builder after protocol generation', asy
 		t.mock.restoreAll();
 		syncBuiltinESMExports();
 	});
+	mockProtocolDirectories(t);
 	t.mock.method(fs, 'watch', () => ({ close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
@@ -114,6 +140,7 @@ for (const succeeds of [true, false]) {
 		const completed = Promise.withResolvers<void>();
 		let reloads = 0;
 		t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+		mockProtocolDirectories(t);
 		t.mock.method(fs, 'watch', () => ({ close() { } }));
 		t.mock.method(console, 'error', (message: string) => {
 			assert.match(message, /backend build exited with status 1/);
@@ -135,3 +162,174 @@ for (const succeeds of [true, false]) {
 		});
 	});
 }
+
+for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const) {
+	test(`${javascriptRuntime} business saves build the backend without exporting protocols`, async t => {
+		const commands: string[][] = [];
+		const completed = Promise.withResolvers<void>();
+		mockProtocolDirectories(t);
+		const save = mockSourceChanges(t);
+		t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+			commands.push([...args]);
+			const child = new ChildProcess();
+			setImmediate(() => child.emit('close', 0, null));
+			return child;
+		});
+		syncBuiltinESMExports();
+		const stop = await watchAppServer({ skipInitial: true, javascriptRuntime, onDidBuild: async () => completed.resolve() });
+		t.after(stop);
+		save('app-server/src/server/operations.rs');
+		await completed.promise;
+		const expected = javascriptRuntime === 'packaged-node'
+			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+			: ['-B', 'build/desktop/develop.py'];
+		assert.deepEqual(commands, [pythonCommand(expected).args]);
+	});
+}
+
+test('a shared contract save survives a later business save in the same batch', async t => {
+	const commands: string[] = [];
+	const completed = Promise.withResolvers<void>();
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('queue-contract/src/lib.rs');
+	save('app-server/src/server/operations.rs');
+	await completed.promise;
+	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/desktop/develop.py']);
+});
+
+test('a protocol save during an active backend build exports before the next build', async t => {
+	const commands: string[] = [];
+	const firstBuild = Promise.withResolvers<ChildProcess>();
+	const completed = Promise.withResolvers<void>();
+	let builds = 0;
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		if (commands.length === 1) firstBuild.resolve(child);
+		else setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => { if (++builds === 2) completed.resolve(); } });
+	t.after(stop);
+	save('app-server/src/server/operations.rs');
+	const backend = await firstBuild.promise;
+	save('protocol/src/lib.rs');
+	setTimeout(() => backend.emit('close', 0, null), 300);
+	await completed.promise;
+	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
+});
+
+test('a manifest as the first save exports before building the backend', async t => {
+	const commands: string[] = [];
+	const completed = Promise.withResolvers<void>();
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('Cargo.lock', true);
+	await completed.promise;
+	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/desktop/develop.py']);
+});
+
+test('failed dependency discovery blocks the backend and is retried on the next save', async t => {
+	const commands: string[] = [];
+	const failed = Promise.withResolvers<void>();
+	const completed = Promise.withResolvers<void>();
+	let discoveries = 0;
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'execFile', (_command: string, _args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+		const error = ++discoveries === 1 ? new Error('invalid Cargo manifest') : null;
+		setImmediate(() => callback(error, JSON.stringify(protocolDirectories), ''));
+		return new ChildProcess();
+	});
+	t.mock.method(console, 'error', () => failed.resolve());
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('app-server/src/server/operations.rs');
+	await failed.promise;
+	assert.deepEqual(commands, []);
+	save('app-server/src/server/operations.rs');
+	await completed.promise;
+	assert.equal(discoveries, 2);
+	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/desktop/develop.py']);
+});
+
+test('failed protocol export is retried before a subsequent business build', async t => {
+	const commands: string[] = [];
+	const failed = Promise.withResolvers<void>();
+	const completed = Promise.withResolvers<void>();
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(console, 'error', () => failed.resolve());
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		const code = commands.length === 1 ? 1 : 0;
+		setImmediate(() => child.emit('close', code, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('app-server-protocol/src/lib.rs');
+	await failed.promise;
+	assert.deepEqual(commands, ['build/protocol/generate.py']);
+	save('app-server/src/server/operations.rs');
+	await completed.promise;
+	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
+});
+
+test('manifest changes refresh the protocol graph before new dependency saves', async t => {
+	const commands: string[] = [];
+	let directories = protocolDirectories;
+	const discovery = mockProtocolDirectories(t, () => directories);
+	const save = mockSourceChanges(t);
+	let completed = Promise.withResolvers<void>();
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('app-server/src/server/operations.rs');
+	await completed.promise;
+	completed = Promise.withResolvers<void>();
+	directories = [...directories, join(repositoryRoot, 'crates/new-contract')];
+	save('Cargo.toml', true);
+	await completed.promise;
+	completed = Promise.withResolvers<void>();
+	save('new-contract/src/lib.rs');
+	await completed.promise;
+	assert.equal(discovery.mock.callCount(), 2);
+	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
+});

@@ -19,8 +19,13 @@ interface DebugState {
 // An installed VS Code supplies the real task runner, server-ready extension and JavaScript debugger.
 for (const [serverName, browserName, port, connected] of [
 	['Ash Web (Chrome)', 'Ash Web Browser (Chrome)', 5173, false],
-	['Ash Sessions Web (Chrome, UI Only)', 'Ash Sessions Web Browser (Chrome)', 5173, false],
-	['Ash Sessions Web (Chrome)', 'Browser Debug', 5174, true],
+	['Ash Web (Edge)', 'Ash Web Browser (Edge)', 5173, false],
+	['Ash Agents Web (Chrome)', 'Ash Agents Web Browser (Chrome)', 5173, false],
+	['Ash Agents Web (Edge)', 'Ash Agents Web Browser (Edge)', 5173, false],
+	['Ash Server (Web, Chrome)', 'Browser Debug', 5174, true],
+	['Ash Server (Web, Edge)', 'Browser Debug', 5174, true],
+	['Ash Agents Server (Web, Chrome)', 'Browser Debug', 5174, true],
+	['Ash Agents Server (Web, Edge)', 'Browser Debug', 5174, true],
 ] as const) {
 	test(`${serverName} F5 releases its server and browser when ${connected ? 'the server' : 'either debug session'} stops and can launch again`, {
 		// The connected launch can compile the Rust backend before its first debugger starts.
@@ -80,10 +85,10 @@ for (const [serverName, browserName, port, connected] of [
 			catch (error) { if (error.code !== 'ENOENT') { throw error; } return false; }
 		}, { timeout: 30_000 }).toBe(true);
 
-		async function command<T = unknown>(action: string, name?: string): Promise<T> {
+		async function command<T = unknown>(action: string, name?: string, expression?: string): Promise<T> {
 			const response = await fetch(endpoint!, {
 				method: 'POST', headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ action, name }),
+				body: JSON.stringify({ action, name, expression }),
 			});
 			const result = await response.json();
 			assert.equal(response.status, 200, JSON.stringify(result));
@@ -102,7 +107,9 @@ for (const [serverName, browserName, port, connected] of [
 			}
 			await expect.poll(async () => (await command<DebugState>('state')).sessions.some(session => session.parentName === browserName), { timeout: 30_000 }).toBe(true);
 			await expect.poll(async () => {
-				const result = await command<{ result: string; }>(connected ? 'evaluateConnected' : 'evaluate', browserName);
+				const selector = serverName.includes('Agents') ? '.ash-sessions-window' : '.ash-workbench';
+				const expression = `!!document.querySelector(${JSON.stringify(selector)})${connected ? ' && !!globalThis.ashWebWorkbenchHost' : ''}`;
+				const result = await command<{ result: string; }>('evaluate', browserName, expression);
 				return result.result;
 			}, { timeout: 30_000 }).toBe('true');
 			const pids = await debugProcessIds(application.process().pid!);
@@ -186,7 +193,7 @@ exports.activate = function (context) {
 		try {
 			let body = '';
 			for await (const chunk of request) { body += chunk; }
-			const { action, name } = JSON.parse(body);
+			const { action, name, expression } = JSON.parse(body);
 			let result;
 			if (action === 'state') {
 				result = { sessions: [...sessions.values()].map(session => ({ name: session.name, parentName: session.parentSession?.name })), output: output.slice(-30) };
@@ -202,11 +209,11 @@ exports.activate = function (context) {
 				if (action === 'stop') {
 					await vscode.debug.stopDebugging(session);
 					result = true;
-				} else if (action === 'evaluate' || action === 'evaluateConnected') {
+				} else if (action === 'evaluate') {
 					const target = [...sessions.values()].find(candidate => candidate.parentSession?.id === session.id);
 					if (!target) { throw new Error('Missing browser target'); }
 					result = await target.customRequest('evaluate', {
-						expression: action === 'evaluateConnected' ? '!!document.querySelector(".ash-sessions-window") && !!globalThis.ashWebWorkbenchHost' : session.name.includes('Sessions') ? '!!document.querySelector(".ash-sessions-window")' : '!!document.querySelector(".ash-workbench")', context: 'repl',
+						expression, context: 'repl',
 					});
 				} else { throw new Error('Unknown action: ' + action); }
 			}
