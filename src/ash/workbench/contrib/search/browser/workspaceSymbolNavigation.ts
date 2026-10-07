@@ -9,7 +9,7 @@ export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, fil
 	const revision = localSymbolRevision(symbol);
 	if (revision) {
 		try {
-			if (await currentSourceRevision(symbol, files, workingCopies) !== revision) {
+			if (await readWorkspaceSymbolSource(symbol, files, workingCopies) === undefined) {
 				refresh();
 				return;
 			}
@@ -23,16 +23,19 @@ export async function acceptWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, fil
 	await editor.openEditor({ resource: symbol.resource }, { selection: symbol.range }).catch(error => console.error("Could not open workspace symbol", error));
 }
 
-async function currentSourceRevision(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService): Promise<string | undefined> {
+/** Captures symbol text only while its local index revision still matches the source. */
+export async function readWorkspaceSymbolSource(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService): Promise<string | undefined> {
+	const revision = localSymbolRevision(symbol);
 	const contents = workingCopies.get(symbol.resource).filter(workingCopy => workingCopy.backupKind === "text").map(workingCopy => workingCopy.backup());
 	if (contents.length > 0) {
 		const content = contents[0] as string;
 		if (contents.some(candidate => candidate !== content)) return undefined;
 		const digest = await globalThis.crypto.subtle.digest("SHA-256", VSBuffer.fromString(content).buffer);
-		return `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+		const currentRevision = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+		return !revision || revision === currentRevision ? content : undefined;
 	}
 	const current = await files.readFile(symbol.resource);
-	return `sha256:${current.revision}`;
+	return !revision || revision === `sha256:${current.revision}` ? current.content : undefined;
 }
 
 function localSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {

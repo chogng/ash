@@ -74,6 +74,7 @@ import { h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { URI } from "../../../base/common/uri.js";
 import { ICommandService } from "../../../platform/commands/common/commands.js";
+import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { IOpenerService, OpenOptions } from "../../../platform/opener/common/opener.js";
 import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -86,6 +87,8 @@ suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
@@ -756,6 +759,7 @@ test('sending from one session preserves a later draft during first-session crea
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
+	editorServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	registerTestDictationOnboarding(editorServices);
 	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
@@ -2182,7 +2186,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
 		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
-		retirement: undefined,
+		inputModalities: null, retirement: undefined,
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
 		selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }],
 		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],

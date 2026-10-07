@@ -199,3 +199,23 @@ test('Search preserves multiline queries and restores history after recreating t
 	await query.press('ArrowUp');
 	await expect(query).toHaveValue('first\nsecond');
 });
+
+test('search context snapshot preserves query, file locations and matches and excludes in-progress results', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toBeUndefined();
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('tree')).toHaveAttribute('aria-busy', 'false');
+	const snapshot = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	expect(snapshot).toMatchObject({ query: 'needle', matchCount: 1 });
+	expect(snapshot!.content).toContain('# File: file:///workspace/src/main.ts');
+	expect(snapshot!.content).toContain('1:7-1:13: needle');
+	await query.fill('slow');
+	await query.press('Enter');
+	await expect(page.getByRole('tree')).toHaveAttribute('aria-busy', 'true');
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toBeUndefined();
+	await page.evaluate(() => window.ashSearchIntegration.closeWorkspace());
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toBeUndefined();
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+});

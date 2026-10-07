@@ -56,7 +56,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 				if (!analysis.syntaxValid || analysis.exportNames.length === 0) return undefined;
 				if (code.includes(hotExportsName)) throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
 				analyses.set(file, analysis);
-				return injectHotReloadBoundary(code, analysis.exportNames, neutralModuleId(file, desktopRoot), analysis.classNames.length > 0);
+				return injectHotReloadBoundary(code, analysis.exportNames, neutralModuleId(file, desktopRoot), analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)), analysis.widgetClassNames);
 			},
 		},
 		async handleHotUpdate(context) {
@@ -81,10 +81,34 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 	};
 }
 
-function injectHotReloadBoundary(code: string, exportNames: readonly string[], moduleId: string, patchPrototype: boolean): string {
+function injectHotReloadBoundary(code: string, exportNames: readonly string[], moduleId: string, patchPrototype: boolean, widgetClassNames: readonly string[]): string {
 	const exports = exportNames.join(", ");
 	const config = patchPrototype ? '{ mode: "patch-prototype" }' : "{}";
-	return `${code}\n\nconst ${hotExportsName} = { ${exports} };\nexport { ${hotExportsName} };\nif (import.meta.hot) {\n  import.meta.hot.data.$hotReloadExports ??= ${hotExportsName};\n  import.meta.hot.accept(newModule => {\n    const oldExports = import.meta.hot.data.$hotReloadExports;\n    const newExports = newModule?.${hotExportsName};\n    const acceptNewExports = globalThis.$hotReload_applyNewExports?.({\n      oldExports,\n      newSrc: ${JSON.stringify(moduleId)},\n      config: ${config},\n    });\n    if (newExports && acceptNewExports?.(newExports)) {\n      import.meta.hot.data.$hotReloadExports = newExports;\n    } else {\n      import.meta.hot.invalidate("No compatible hot-reload handler accepted this module");\n    }\n  });\n}\n`;
+	const widgetRegistrations = widgetClassNames.map(name => `${name}.registerWidgetHotReplacement(${JSON.stringify(`${moduleId}#${name}`)});`).join('\n');
+	const widgetAcceptance = widgetClassNames.length > 0 ? ` || ${JSON.stringify(widgetClassNames)}.every(name => typeof newExports[name] === "function")` : '';
+	return `${code}
+
+${widgetRegistrations}
+const ${hotExportsName} = { ${exports} };
+export { ${hotExportsName} };
+if (import.meta.hot) {
+  import.meta.hot.data.$hotReloadExports ??= ${hotExportsName};
+  import.meta.hot.accept(newModule => {
+    const oldExports = import.meta.hot.data.$hotReloadExports;
+    const newExports = newModule?.${hotExportsName};
+    const acceptNewExports = globalThis.$hotReload_applyNewExports?.({
+      oldExports,
+      newSrc: ${JSON.stringify(moduleId)},
+      config: ${config},
+    });
+    if (newExports && (acceptNewExports?.(newExports)${widgetAcceptance})) {
+      import.meta.hot.data.$hotReloadExports = newExports;
+    } else {
+      import.meta.hot.invalidate("No compatible hot-reload handler accepted this module");
+    }
+  });
+}
+`;
 }
 
 function cleanModuleId(id: string): string {

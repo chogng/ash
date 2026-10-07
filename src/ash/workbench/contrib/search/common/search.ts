@@ -1,4 +1,10 @@
+import type { IView } from '../../../common/views.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
+
+/** The Search view owns results; consumers may capture a completed, retained result. */
+export interface ISearchView extends IView {
+	getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number; } | undefined;
+}
 
 export async function getWorkspaceSymbols(providers: readonly LanguageWorkspaceSymbolProvider[], query: string, signal: AbortSignal = new AbortController().signal, onDidUpdate?: (symbols: readonly LanguageWorkspaceSymbol[]) => void): Promise<readonly LanguageWorkspaceSymbol[]> {
 	const completed = new Array<readonly LanguageWorkspaceSymbol[] | undefined>(providers.length);

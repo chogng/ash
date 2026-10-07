@@ -107,6 +107,34 @@ test("Vite hot reload keeps HMR for a safe method-only update", async () => {
 	assert.deepEqual(messages, []);
 });
 
+test('Vite registers DomWidget identities and accepts constructor and instance-field updates', async () => {
+	const plugin = hotReloadPlugin({ desktopRoot: '/workspace' });
+	const file = '/workspace/src/ash/tip.ts';
+	const before = 'export class Tip extends DomWidget { label = "before"; constructor() { super(); } get element() { return node; } }';
+	const after = before.replace('"before"', '"after"').replace('super();', 'super(); render();');
+	const transformed = transform(plugin, before, file);
+	assert.ok(transformed);
+	assert.match(transformed, /Tip\.registerWidgetHotReplacement\("src\/ash\/tip.ts#Tip"\)/u);
+	assert.match(transformed, /config: \{\}/u);
+	const messages: unknown[] = [];
+	const result = await plugin.handleHotUpdate({
+		file, read: () => after,
+		server: { config: { logger: { info() { } } }, ws: { send: message => messages.push(message) } },
+	});
+	assert.deepEqual({ result, messages }, { result: undefined, messages: [] });
+});
+
+test('DomWidget static, inheritance, and module-registration changes still require a full reload', () => {
+	const before = 'export class Tip extends DomWidget { label = "before"; get element() { return node; } }';
+	const analysis = analyzeHotReloadModule(before);
+	for (const after of [before.replace('label =', 'static label ='), before.replace('extends DomWidget', 'extends OtherWidget'), `${before}\nregisterTip();`]) {
+		assert.ok(unsafeHotReloadChangeReason(analysis, analyzeHotReloadModule(after)));
+	}
+	assert.ok(unsafeHotReloadChangeReason(analysis, analyzeHotReloadModule(before.replace('label =', 'constructor(required: string) { super(); } label ='))));
+	const mixed = analyzeHotReloadModule(`${before}\nexport class SidebarPart extends BasePart { render() {} }`);
+	assert.ok(unsafeHotReloadChangeReason(mixed, mixed));
+});
+
 test("Vite hot reload lets helper-driven modules reach the runtime handler", async () => {
 	const plugin = hotReloadPlugin({ desktopRoot: "/workspace" });
 	const file = "/workspace/src/ash/feature.ts";

@@ -959,7 +959,9 @@
     "quickAccess.recentlyOpened": "最近打开",
     "quickAccess.workspaceResources": "工作区",
     "quickAccess.fileSearchFailed": "无法搜索文件：{0}",
-    "quickInput.searching": "正在搜索…"
+    "quickInput.searching": "正在搜索…",
+    "terminal.context.closed": "此终端已关闭",
+    "search.focus": "在文件中搜索"
   },
   "ash.menu": {
     "file": "文件",

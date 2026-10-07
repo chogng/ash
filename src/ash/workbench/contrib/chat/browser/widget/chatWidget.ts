@@ -56,7 +56,7 @@ export interface IChatWidgetModel extends IDisposable {
 export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable {
 	readonly element: HTMLElement;
 	readonly model: TModel;
-	private readonly listWidget: ChatListWidget;
+	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
 	private submittedMessage = false;
@@ -90,14 +90,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
-		this.listWidget = this._register(instantiationService.createInstance(ChatListWidget, this.element, {
+		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
 			imageResourceLoader,
 			onDidRequestLink: (target: string) => {
 				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
 			},
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
-		}));
+		});
+		this.listWidget = listWidgets.get();
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, mode, skills, contexts) => this.send(text, mode, skills, contexts),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
@@ -120,6 +121,13 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
+		this._register(listWidgets.onDidChange(widget => {
+			const previous = this.listWidget;
+			const state = previous.getViewState();
+			previous.element.replaceWith(widget.element);
+			this.listWidget = widget;
+			widget.restoreViewState(state, this.model.items);
+		}));
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();

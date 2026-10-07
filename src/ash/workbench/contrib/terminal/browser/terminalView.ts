@@ -135,6 +135,13 @@ export class TerminalViewPane extends ViewPane {
 
 	public startVoice(): Promise<void> { return this.voice.start(); }
 	public stopVoice(): Promise<void> { return this.voice.stop(); }
+	public async getTerminalOutput(instance: ITerminalInstance, maxCharacters: number, signal: AbortSignal): Promise<string | undefined> {
+		const item = this.items.get(instance);
+		if (!item || this.isDisposed || signal.aborted) { return undefined; }
+		const content = await item.widget.getBufferText(maxCharacters, signal);
+		return this.items.get(instance) === item && !signal.aborted ? content : undefined;
+	}
+
 	public async openDetectedLink(): Promise<void> { await this.activeItem()?.widget.openDetectedLink(); }
 
 	override focus(): void {

@@ -25,3 +25,10 @@
 	height: 32px;
 	object-fit: contain;
 }
+
+.ash-chat-input-attachment-item > .ash-chat-attachment-open {
+	flex: 1;
+	min-width: 0;
+	justify-content: flex-start;
+	overflow: hidden;
+}

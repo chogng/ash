@@ -18,7 +18,8 @@ export class ChatAttachmentModel extends Disposable {
 
 	public addContext(...attachments: ChatContextAttachment[]): void {
 		for (const attachment of attachments) {
-			this.entries.set(attachment.id, attachment);
+			// Identical image bytes share one entry, including the original preview name and in-flight identity.
+			if (attachment.kind !== 'image' || !this.entries.has(attachment.id)) this.entries.set(attachment.id, attachment);
 		}
 		this.changes.fire();
 	}

@@ -1,3 +1,4 @@
+import type { IView } from "../../../common/views.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -64,6 +65,11 @@ export interface ITerminalInstance extends IDisposable {
 	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;
 	close(): Promise<void>;
+}
+
+/** Reads the retained terminal screen without changing the active terminal or focus. */
+export interface ITerminalView extends IView {
+	getTerminalOutput(instance: ITerminalInstance, maxCharacters: number, signal: AbortSignal): Promise<string | undefined>;
 }
 
 /** Workbench service contract for terminal instances and active-instance selection. */

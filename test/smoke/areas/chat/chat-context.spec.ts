@@ -19,7 +19,7 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	await page.keyboard.press('Enter');
 	await (await upload).setFiles([
 		{ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Workbench attachment brief') },
-		{ name: 'preview.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Z1kAAAAASUVORK5CYII=', 'base64') },
+		{ name: 'preview.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64') },
 	]);
 	const attachments = chat.getByRole('list', { name: 'Attached context' });
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
@@ -75,22 +75,22 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const png = await page.evaluate(() => {
 		const canvas = document.createElement('canvas');
-		canvas.width = 32; canvas.height = 24;
-		canvas.getContext('2d')!.fillRect(0, 0, 32, 24);
+		canvas.width = 2560; canvas.height = 1280;
+		canvas.getContext('2d')!.fillRect(0, 0, 2560, 1280);
 		return canvas.toDataURL('image/png').split(',')[1];
 	});
 	const electron = application as ElectronApplication;
 	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	// Snapshot every available format before writing so the smoke test restores the user's clipboard.
 	const previous = target.kind === 'electron' ? await electron.evaluate(async ({ clipboard }) => Promise.all((await clipboard.read()).map(async item => {
-		const formats: Record<string, { bytes: number[] } | { bookmark: { title: string; url: string } }> = {};
+		const formats: Record<string, { bytes: number[]; } | { bookmark: { title: string; url: string; }; }> = {};
 		for (const type of item.types) {
 			const value = await item.getType(type);
 			formats[type] = value instanceof Blob ? { bytes: Array.from(new Uint8Array(await value.arrayBuffer())) } : { bookmark: value };
 		}
 		return formats;
 	}))) : await page.evaluate(async () => Promise.all((await navigator.clipboard.read()).map(async item => {
-		const formats: Record<string, { bytes: number[] }> = {};
+		const formats: Record<string, { bytes: number[]; }> = {};
 		for (const type of item.types) formats[type] = { bytes: Array.from(new Uint8Array(await (await item.getType(type)).arrayBuffer())) };
 		return formats;
 	})));
@@ -107,9 +107,13 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 			await surfacePage.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
 			const image = composer.getByRole('img', { name: 'Pasted Image', exact: true });
 			await expect(image).toBeVisible();
-			await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([32, 24]);
+			await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([2048, 1024]);
 			await expect(surfacePage.getByRole('dialog')).toHaveCount(0);
 			await expect(composer.locator('.stanza-editor-input')).toBeFocused();
+			await composer.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+			await surfacePage.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
+			await expect(surfacePage.getByRole('dialog')).toHaveCount(0);
+			await expect(composer.getByRole('listitem')).toHaveCount(1);
 			await composer.getByRole('button', { name: 'Remove Pasted Image', exact: true }).press('Enter');
 		}
 	} finally {
@@ -141,7 +145,7 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 			canvas.getContext('2d')!.fillRect(0, 0, 48, 36);
 			const stream = canvas.captureStream(10);
 			Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => stream });
-			(window as Window & { ashContextCapture?: MediaStream }).ashContextCapture = stream;
+			(window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture = stream;
 		});
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -151,7 +155,7 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 	await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
 	await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 	if (target.kind === 'browser') {
-		await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
+		await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
 		await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([48, 36]);
 	}
 	await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -177,4 +181,63 @@ test('browser screen chooser cancellation returns to the attachment picker', asy
 	await page.keyboard.press('Escape');
 	await expect(chat.getByRole('list', { name: 'Attached context' })).toBeHidden();
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+});
+
+test('Sessions direct image pastes use the shared resizing and preview path', async ({ workbench, target }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const composer = page.locator('.ash-sessions-chat-slot.active:visible');
+	await composer.locator('.stanza-editor-input').evaluate(element => {
+		const canvas = document.createElement('canvas'); canvas.width = 3072; canvas.height = 1536;
+		canvas.getContext('2d')!.fillRect(0, 0, 3072, 1536);
+		const bytes = Uint8Array.from(atob(canvas.toDataURL('image/png').split(',')[1]), character => character.charCodeAt(0));
+		const clipboardData = new DataTransfer();
+		clipboardData.items.add(new File([bytes], 'direct-paste.png', { type: 'image/png' }));
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	});
+	const image = composer.getByRole('img', { name: 'direct-paste.png', exact: true });
+	await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([2048, 1024]);
+	await expect(composer.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(1);
+	await composer.getByRole('button', { name: 'Remove direct-paste.png', exact: true }).press('Enter');
+	await expect(composer.locator('.stanza-editor-input')).toBeFocused();
+});
+
+test('terminal, symbol and search context source buttons return to their product owners', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires workspace search, symbols and a real shell.');
+	const page = workbench.page;
+	await page.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
+	await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeAttached();
+	await workbench.terminal.runCommand(`node -e "console.log(['ash','context-ready'].join('-'))"`);
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText('ash-context-ready');
+	await workbench.search.open();
+	await workbench.search.search('const value');
+	await expect(workbench.search.status).toHaveText('1 results');
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const add = chat.getByRole('button', { name: 'Add context', exact: true });
+	const picker = page.getByRole('dialog');
+	await add.press('Enter');
+	await picker.getByRole('option', { name: 'Terminal…', exact: true }).click();
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select a terminal to attach its selection or recent output');
+	await page.keyboard.press('Control+Enter');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+	await picker.getByRole('option', { name: 'Symbols…', exact: true }).click();
+	await picker.getByRole('combobox').fill('main');
+	await expect(picker.getByRole('option', { name: /main/ }).first()).toBeVisible();
+	await picker.getByRole('option', { name: /main/ }).first().click();
+	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+	await add.press('Enter');
+	await picker.getByRole('option', { name: 'Search Results', exact: true }).click();
+	await expect(chat.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(3);
+	await chat.getByRole('button', { name: 'Open Search Results: const value', exact: true }).press('Enter');
+	await expect(workbench.search.query).toBeFocused();
+	await chat.getByRole('button', { name: 'Open main', exact: true }).press('Enter');
+	await expect(page.getByRole('tab', { name: 'main.rs', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await page.getByRole('button', { name: 'New Terminal', exact: true }).click();
+	await expect(workbench.terminal.tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+	await chat.getByRole('button', { name: /^Open Terminal:/ }).press('Enter');
+	await expect(workbench.terminal.tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+	await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText('ash-context-ready');
 });

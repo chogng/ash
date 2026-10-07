@@ -1,3 +1,4 @@
+import type { URI } from '../../../../base/common/uri.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -12,6 +13,8 @@ export interface ResolvedChatContext {
 export interface ChatContextAttachment {
 	readonly id: string;
 	readonly kind: string;
+	/** Original source; the resolved content remains the selected snapshot. */
+	readonly resource?: URI;
 	readonly name: string;
 	resolve(): Promise<ResolvedChatContext>;
 }

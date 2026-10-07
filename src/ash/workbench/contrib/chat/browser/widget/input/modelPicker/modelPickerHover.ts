@@ -1,5 +1,5 @@
 import { h } from '../../../../../../../base/browser/dom.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelCard } from './modelPickerCard.js';
@@ -8,7 +8,9 @@ import { ModelCard } from './modelPickerCard.js';
 export class ModelPickerDetailsMenu extends Disposable {
 	public readonly domNode: HTMLElement;
 	private model: ModelRef | undefined;
-	private readonly card = this._register(new MutableDisposable<ModelCard>());
+	private readonly cardScope = this._register(new MutableDisposable<DisposableStore>());
+	private card: ModelCard | undefined;
+	private active: { entry: ModelCatalogEntry; row: HTMLElement; } | undefined;
 
 	constructor(private readonly picker: HTMLElement) {
 		super();
@@ -21,12 +23,24 @@ export class ModelPickerDetailsMenu extends Disposable {
 
 	public show(entry: ModelCatalogEntry, row: HTMLElement): void {
 		if (!entry.description?.trim()) { this.hide(); return; }
-		if (!this.card.value || this.model?.provider !== entry.model.provider || this.model.model !== entry.model.model) {
-			this.card.value = new ModelCard(this.picker.ownerDocument);
+		this.active = { entry, row };
+		if (!this.card || this.model?.provider !== entry.model.provider || this.model.model !== entry.model.model) {
+			const scope = new DisposableStore();
+			this.cardScope.value = scope;
 			this.model = entry.model;
-			this.domNode.append(this.card.value.domNode);
+			const cards = ModelCard.createObservable(scope, this.picker.ownerDocument);
+			this.card = cards.get();
+			this.domNode.append(this.card.element);
+			scope.add(cards.onDidChange(card => {
+				const previous = this.card!;
+				const hadFocus = previous.element.contains(this.picker.ownerDocument.activeElement);
+				previous.element.replaceWith(card.element);
+				this.card = card;
+				if (this.active) { this.show(this.active.entry, this.active.row); }
+				if (hadFocus) { card.focus(); }
+			}));
 		}
-		this.card.value.update(entry);
+		this.card.update(entry);
 		this.domNode.hidden = false;
 		const pickerBounds = this.picker.getBoundingClientRect();
 		const rowBounds = row.getBoundingClientRect();
@@ -39,11 +53,13 @@ export class ModelPickerDetailsMenu extends Disposable {
 	}
 
 	public focus(): void {
-		this.card.value?.focus();
+		this.card?.focus();
 	}
 
 	public hide(): void {
 		this.domNode.hidden = true;
-		this.card.clear();
+		this.active = undefined;
+		this.cardScope.clear();
+		this.card = undefined;
 	}
 }

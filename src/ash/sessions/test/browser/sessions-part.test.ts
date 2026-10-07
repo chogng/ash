@@ -370,7 +370,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
-	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }] };
+	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
 	writeNewChatDraftState(storage, draft, 'untitled:first');
 	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
 	await storage.flush();
@@ -390,7 +390,7 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
 	const chatDraft = { mode: 'agent' as const, text: 'Chat text', contexts: [] };
-	const codeDraft = { mode: 'plan' as const, text: 'Code text', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }] };
+	const codeDraft = { mode: 'plan' as const, text: 'Code text', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
 	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.codeDraftState:thread-1', JSON.stringify(codeDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.activityBar.activePage', 'code', StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -408,7 +408,7 @@ test('legacy drafts merge by session identity and conflicting content survives u
 test('Sessions file acquisition preserves valid UTF-8 and rejects binary content without adding it', async () => {
 	using model = new ChatAttachmentModel();
 	using notifications = new NotificationService();
-	using attachments = new NewChatContextAttachments(document.body, model, notifications);
+	using attachments = new NewChatContextAttachments(document.body, model, () => true, notifications);
 	await attachments.attachFiles([new browserEnvironment.window.File(['A literal \uFFFD character'], 'context.txt', { type: 'text/plain' })]);
 	assert.deepEqual(await model.attachments[0]!.resolve(), { name: 'context.txt', content: 'A literal \uFFFD character' });
 	await attachments.attachFiles([new browserEnvironment.window.File([new Uint8Array([0xFF, 0x00])], 'binary.dat')]);
@@ -419,10 +419,20 @@ test('Sessions file acquisition preserves valid UTF-8 and rejects binary content
 test('Closing Sessions file acquisition cancels its readers and does not mutate attachments', async () => {
 	using model = new ChatAttachmentModel();
 	using notifications = new NotificationService();
-	using attachments = new NewChatContextAttachments(document.body, model, notifications);
+	using attachments = new NewChatContextAttachments(document.body, model, () => true, notifications);
 	const pending = attachments.attachFiles([new browserEnvironment.window.File(['Pending read'], 'context.txt', { type: 'text/plain' })]);
 	attachments.dispose();
 	await pending;
 	assert.equal(model.size, 0);
 	assert.deepEqual(notifications.getNotifications(), []);
+});
+
+test('Sessions file acquisition rejects image inputs for a text-only model while keeping text available', async () => {
+	using model = new ChatAttachmentModel();
+	using notifications = new NotificationService();
+	using attachments = new NewChatContextAttachments(document.body, model, () => false, notifications);
+	await attachments.attachFiles([new browserEnvironment.window.File(['image'], 'preview.png', { type: 'image/png' })]);
+	assert.deepEqual({ size: model.size, message: notifications.getNotifications()[0]?.message }, { size: 0, message: 'Could not attach files: Error: The selected model does not support images' });
+	await attachments.attachFiles([new browserEnvironment.window.File(['Text remains available'], 'context.txt', { type: 'text/plain' })]);
+	assert.deepEqual(await model.attachments[0]!.resolve(), { name: 'context.txt', content: 'Text remains available' });
 });

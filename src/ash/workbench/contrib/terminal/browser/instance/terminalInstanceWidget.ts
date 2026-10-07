@@ -144,6 +144,49 @@ export class TerminalInstanceWidget extends Disposable {
 		this.writeWhenReady(terminal => terminal.clear());
 	}
 
+	/** Uses xterm's parsed screen, including a selection when present; raw PTY bytes are not a transcript. */
+	public async getBufferText(maxCharacters: number, signal: AbortSignal): Promise<string | undefined> {
+		if (this.isDisposed || signal.aborted) { return undefined; }
+		await this.initialize();
+		if (this.isDisposed || signal.aborted) { return undefined; }
+		const terminal = this.terminal!;
+		// An empty write completes after queued output. Disposal or cancellation must also release the reader.
+		let release: ReturnType<typeof toDisposable> | undefined;
+		let abort: (() => void) | undefined;
+		try {
+			await new Promise<void>(resolve => {
+				release = this._register(toDisposable(resolve));
+				abort = resolve;
+				signal.addEventListener('abort', abort, { once: true });
+				terminal.write('', resolve);
+			});
+		} finally {
+			if (abort) { signal.removeEventListener('abort', abort); }
+			if (release) {
+				this._store.delete(release);
+				release.dispose();
+			}
+		}
+		if (this.isDisposed || signal.aborted) { return undefined; }
+		let content = terminal.getSelection();
+		if (!content) {
+			const buffer = terminal.buffer.active;
+			const lines: string[] = [];
+			let characters = 0;
+			for (let index = buffer.length - 1; index >= 0; index--) {
+				const line = buffer.getLine(index)!;
+				const text = line.translateToString(!buffer.getLine(index + 1)?.isWrapped);
+				if (!text && !lines.length) { continue; }
+				lines.push(text);
+				characters += text.length + (line.isWrapped ? 0 : 1);
+				if (!line.isWrapped) { lines.push('\n'); }
+				if (characters > maxCharacters + 1) { break; }
+			}
+			content = lines.reverse().join('').trimEnd().replace(/^\n/, '');
+		}
+		return content.length > maxCharacters ? `[Earlier output omitted]\n${content.slice(-maxCharacters)}` : content;
+	}
+
 	public async openDetectedLink(): Promise<void> {
 		await this.initialize();
 		this.assertNotDisposed();

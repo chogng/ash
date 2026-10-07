@@ -3,7 +3,7 @@ import { Range } from "../../../../editor/common/core/range.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
 import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
-import type { ICodebaseSymbolsService, CodebaseSymbolsMatch } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js";
+import type { ICodebaseSymbolsService, CodebaseSymbolsRange } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 
 const MAX_WORKSPACE_SYMBOL_RESULTS = 100;
@@ -27,9 +27,9 @@ class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolP
 				name: match.name,
 				kind: match.kind,
 				resource,
-				range: textRange(match),
+				range: textRange(match.selectionRange),
 				...(match.containerName === undefined ? {} : { containerName: match.containerName }),
-				data: Object.freeze({ source: "codebaseSymbols", score: match.score, sourceRevision: match.sourceRevision, matchedIndices: match.matchedIndices }),
+				data: Object.freeze({ source: "codebaseSymbols", score: match.score, sourceRevision: match.sourceRevision, declarationRange: textRange(match.declarationRange), matchedIndices: match.matchedIndices }),
 			})];
 		}));
 	}
@@ -40,9 +40,9 @@ function singleWorkspaceRoot(workspace: IWorkspaceContextService) {
 	return folders.length === 1 ? folders[0]?.uri : undefined;
 }
 
-function textRange(match: CodebaseSymbolsMatch): Range {
+function textRange(range: CodebaseSymbolsRange): Range {
 	return Range.fromPositions(
-		new Position(match.selectionRange.start.lineIndex + 1, match.selectionRange.start.columnIndex + 1),
-		new Position(match.selectionRange.end.lineIndex + 1, match.selectionRange.end.columnIndex + 1),
+		new Position(range.start.lineIndex + 1, range.start.columnIndex + 1),
+		new Position(range.end.lineIndex + 1, range.end.columnIndex + 1),
 	);
 }

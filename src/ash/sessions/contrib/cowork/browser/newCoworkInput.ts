@@ -87,7 +87,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
-		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel));
+		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel, () => this.supportsImages()));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);

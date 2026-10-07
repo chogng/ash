@@ -20,6 +20,8 @@ export interface ModelRetirement {
 }
 
 export interface ModelCatalogEntry {
+	/** Unknown modalities preserve existing attachment behavior. */
+	readonly inputModalities?: readonly ('text' | 'image' | 'audio')[] | null;
 	readonly longContext: boolean | null;
 	readonly model: ModelRef;
 	readonly displayName: string;

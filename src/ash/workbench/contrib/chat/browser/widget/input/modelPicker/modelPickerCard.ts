@@ -1,11 +1,14 @@
 import { h } from '../../../../../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { DomWidget } from '../../../../../../../platform/domWidget/browser/domWidget.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 
 /** Displays the catalog description without changing model preferences. */
-export class ModelCard extends Disposable {
+export class ModelCard extends DomWidget {
 	public readonly domNode: HTMLElement;
 	private readonly descriptionDomNode: HTMLElement;
+
+	public get element(): HTMLElement { return this.domNode; }
 
 	constructor(ownerDocument: Document) {
 		super();

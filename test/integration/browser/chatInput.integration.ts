@@ -1,6 +1,19 @@
+import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeaturesService.js';
+import { registerCodebaseSymbolsWorkspaceSymbolProvider } from '../../../src/ash/workbench/services/codebaseSymbols/browser/codebaseSymbolsWorkspaceSymbolProvider.js';
+import type { ICodebaseSymbolsService } from '../../../src/ash/platform/codebaseSymbols/common/codebaseSymbolsService.js';
+import { ITerminalService, type ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
+import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
+import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { Disposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -52,7 +65,7 @@ import { IGitHubService } from '../../../src/ash/platform/github/common/githubSe
 import { IGitService } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -62,30 +75,43 @@ if (locale) {
 }
 const resources = new DisposableStore();
 setARIAContainer(document.body);
-resources.add(bindColorTheme(resources.add(new TestThemeService(darkColorTheme)), document.body));
+const theme = resources.add(new TestThemeService(darkColorTheme));
+resources.add(bindColorTheme(theme, document.body));
 if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	const main = document.querySelector('main')!;
 	resources.add(Gesture.addTarget(main));
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
 const services = resources.add(new InstantiationService());
-const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Z1kAAAAASUVORK5CYII='), character => character.charCodeAt(0));
+const destinations = document.createElement('output');
+destinations.setAttribute('aria-label', 'Opened sources');
+destinations.textContent = '[]';
+document.body.append(destinations);
+const recordDestination = (value: unknown): void => { destinations.textContent = JSON.stringify([...JSON.parse(destinations.textContent!), value]); };
+services.registerInstance(IThemeService, theme);
+services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: URI | string) => { recordDestination({ command: id, ...(resource !== undefined ? { resource: resource.toString() } : {}) }); } } as unknown as ICommandService);
+const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
 services.registerInstance(IClipboardService, {
 	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
-services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { }, getScreenshot: async () => new URLSearchParams(location.search).has('cancelScreenshot') ? undefined : png });
+services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { }, getScreenshot: async () => new URLSearchParams(location.search).has('cancelScreenshot') ? undefined : Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/QAAADggGA8sg/+gAAAABJRU5ErkJggg=='), character => character.charCodeAt(0)) });
 services.registerInstance(IChatSessionNavigationService, {
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
 	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
-	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async () => { },
+	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async (sessionId, threadId) => { recordDestination({ sessionId, threadId }); },
 });
 services.registerInstance(IChatService, {
-	readThread: async (sessionId: string, threadId: string) => ({ transcript: { sessionId, threadId, durableSequence: 2, revision: 1, entries: [
-		{ type: 'item', transient: false, item: { type: 'userMessage', text: 'Design the attachment picker' } },
-		{ type: 'item', transient: false, item: { type: 'agentMessage', text: 'Use one resource search owner' } },
-		{ type: 'item', transient: false, item: { type: 'reasoning', text: 'Private reasoning is not attached' } },
-	] } }),
+	readThread: async (sessionId: string, threadId: string) => ({
+		transcript: {
+			sessionId, threadId, durableSequence: 2, revision: 1, entries: [
+				{ type: 'item', transient: false, item: { type: 'userMessage', text: 'Design the attachment picker' } },
+				{ type: 'item', transient: false, item: { type: 'agentMessage', text: 'Use one resource search owner' } },
+				{ type: 'item', transient: false, item: { type: 'reasoning', text: 'Private reasoning is not attached' } },
+			]
+		}
+	}),
 } as unknown as IChatService);
 services.registerInstance(IGitService, {
 	listRepositories: async () => [{ id: 'repo', label: 'workspace' }],
@@ -132,6 +158,7 @@ const modelOptions = new URLSearchParams(location.search).get('modelOptions');
 const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
 let models: readonly ModelCatalogEntry[] = [{
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
+	inputModalities: new URLSearchParams(location.search).get('imageCapability') === 'text' ? ['text'] : new URLSearchParams(location.search).get('imageCapability') === 'image' ? ['text', 'image'] : null,
 	longContext: false, contextWindow: 272_000, defaultContextWindow: 272_000, maximumContextWindow: 872_000,
 	description: 'A model for everyday tasks',
 	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
@@ -203,11 +230,53 @@ resources.add(contextPicks.registerPicker({
 		return [{ label: 'Source context', attachment: { id: 'source', kind: 'source', name: 'Source context', resolve: async () => ({ name: 'Source context', content: 'Registered context content' }) } }];
 	},
 }));
+const hasContextSources = new URLSearchParams(location.search).has('contextSources');
+const languageFeatures = resources.add(new LanguageFeaturesService());
+services.registerInstance(ILanguageFeaturesService, languageFeatures);
+const symbolWaiters = new Map<string, () => void>();
+const symbolReads = document.createElement('output');
+symbolReads.setAttribute('aria-label', 'Symbol reads');
+symbolReads.textContent = '[]';
+document.body.append(symbolReads);
+let symbolSource = 'before\nfunction attach() {\n  return 42;\n}\nafter';
+let terminalSource = 'context terminal ready';
+let searchSnapshot: { query: string; content: string; matchCount: number; } | undefined = hasContextSources ? { query: 'needle', content: '# Search: needle\n# File: file:///workspace/main.ts\n  2:1-2:7: needle', matchCount: 1 } : undefined;
+const terminalOutput = resources.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').IProcessDataEvent>());
+const terminalInstance: ITerminalInstance = {
+	...Disposable.None, id: 'context-shell', dirId: 'workspace', processId: 1, initialCwd: '/workspace', title: 'Shell',
+	profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
+	onDidWriteData: terminalOutput.event, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
+	write: () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
+};
+const terminalHost = document.createElement('div');
+document.body.append(terminalHost);
+const terminalScreen = hasContextSources ? resources.add(services.createInstance(TerminalInstanceWidget, terminalHost, terminalInstance)) : undefined;
+if (hasContextSources) terminalOutput.fire({ data: new TextEncoder().encode(`\x1b[32m${terminalSource}\x1b[0m\r\n`), trackCommit: false });
+const terminalInstances = hasContextSources ? [terminalInstance] : [];
+services.registerInstance(ITerminalService, { instances: terminalInstances } as unknown as ITerminalService);
+services.registerInstance(IViewsService, {
+	getViewWithId: (id: string) => id === TERMINAL_VIEW_ID && terminalScreen ? { getTerminalOutput: (_instance: ITerminalInstance, limit: number, signal: AbortSignal) => terminalScreen.getBufferText(limit, signal) } : id === SEARCH_VIEW_ID && hasContextSources ? { getSearchResultSnapshot: () => searchSnapshot } : null,
+} as unknown as IViewsService);
 const root = URI.file('/workspace');
 const edited = URI.file('/workspace/edited.ts');
 services.registerInstance(IWorkspaceContextService, { getWorkspace: () => ({ folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] }) } as unknown as IWorkspaceContextService);
+if (hasContextSources) resources.add(registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures, {
+	search: async (query: string, _limit: number, signal: AbortSignal) => {
+		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(symbolSource));
+		const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+		if (query && new URLSearchParams(location.search).has('deferSymbolSearch')) await new Promise<void>(resolve => symbolWaiters.set(query, resolve));
+		symbolReads.textContent = JSON.stringify([...JSON.parse(symbolReads.textContent!), { query, aborted: signal.aborted }]);
+		return {
+			matches: [{
+				name: query || 'attach', kind: 'function', path: 'symbol.ts', language: 'typescript', sourceRevision: new URLSearchParams(location.search).has('staleSymbol') ? 'sha256:stale' : `sha256:${revision}`, score: 1, matchedIndices: [],
+				declarationRange: { start: { lineIndex: 1, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 1 } },
+				selectionRange: { start: { lineIndex: 1, columnIndex: 9 }, end: { lineIndex: 1, columnIndex: 15 } },
+			}]
+		};
+	},
+} as unknown as ICodebaseSymbolsService, services.get(IWorkspaceContextService)));
 services.registerInstance(IEditorGroupsService, { groups: [{ inputs: [{ resource: edited }] }] } as unknown as IEditorGroupsService);
-services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
+services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === '/workspace/symbol.ts' ? [{ backupKind: 'text', backup: () => symbolSource }] : resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
 const fileSearchWaiters = new Map<number, () => void>();
 let fileSearchReads = 0;
 let fileSearchCompleted = 0;
@@ -290,6 +359,16 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	changeContextSources: () => {
+		symbolSource = 'changed source';
+		terminalSource = 'new terminal output';
+		terminalOutput.fire({ data: new TextEncoder().encode(terminalSource), trackCommit: false });
+		searchSnapshot = undefined;
+		terminalInstances.length = 0;
+	},
+	releaseSymbolSearch: query => { const release = symbolWaiters.get(query)!; symbolWaiters.delete(query); release(); },
+	restoreCapturedDraft: async () => { const captured = await part.captureDraft(); if (captured) { captured.clear(); part.restoreDraft(captured.draft); } },
+	setImageCapability: capability => { models = models.map(entry => ({ ...entry, inputModalities: capability === 'unknown' ? null : capability === 'text' ? ['text'] : ['text', 'image'] })); renderModels(); modelChanged.fire(); },
 	releaseGitHubSearch: query => { const release = gitHubSearchWaiters.get(query)!; gitHubSearchWaiters.delete(query); release(); },
 	releaseFileSearch: index => {
 		const release = fileSearchWaiters.get(index)!;

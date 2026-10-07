@@ -357,3 +357,45 @@ test('runCommands shortcuts execute with Terminal focused and keep command keys 
 	expect(errors).toEqual([]);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
+
+test('terminal context captures parsed queued output, wrapped lines and a bounded tail', async ({ page }) => {
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	const wrapped = 'x'.repeat(100);
+	const snapshot = await page.evaluate(async text => {
+		window.ashTerminalIntegration.write(`\x1b[32mgreen\x1b[0m\r\n${text}\r\nlast`);
+		return window.ashTerminalIntegration.snapshot(1000);
+	}, wrapped);
+	expect(snapshot).toBe(`green\n${wrapped}\nlast`);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(4))).toBe('[Earlier output omitted]\nlast');
+	expect(await page.evaluate(async () => {
+		const pending = window.ashTerminalIntegration.snapshot(1000);
+		window.ashTerminalIntegration.dispose();
+		return pending;
+	})).toBeUndefined();
+});
+
+test('hidden terminal view exposes its retained output without changing focus or creating a shell', async ({ page }) => {
+	await page.goto('/terminal.html?pane&existing');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalIntegration.write('hidden output\r\n'));
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.snapshot())).toBe('hidden output');
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
+	await expect(page.locator('.ash-terminal-instance:visible')).toHaveCount(0);
+});
+
+test('terminal context prefers the user selection over unrelated output', async ({ page }) => {
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(() => {
+		window.ashTerminalIntegration.write('first selected last\r\nother output');
+		window.ashTerminalIntegration.start();
+	});
+	await page.evaluate(() => window.ashTerminalIntegration.ready());
+	await expect(page.locator('.xterm-rows')).toContainText('first selected last');
+	const screen = await page.locator('.xterm-screen').boundingBox();
+	const columns = await page.evaluate(() => window.ashTerminalIntegration.resizes.at(-1)!.cols);
+	const row = await page.locator('.xterm-rows > div').first().boundingBox();
+	await page.mouse.dblclick(screen!.x + screen!.width / columns * 9, row!.y + row!.height / 2);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toBe('selected');
+});

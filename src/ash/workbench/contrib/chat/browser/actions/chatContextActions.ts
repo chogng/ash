@@ -1,3 +1,4 @@
+import { createImageAttachment } from '../chatImageUtils.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -14,15 +15,16 @@ import { IChatContextPickService, type IChatContextTarget } from '../../../../se
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickAccessController, type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
-import { FilesAndFoldersPickerPick } from '../../../search/browser/searchChatContext.js';
+import { FilesAndFoldersPickerPick, SymbolsContextPickerPick, SearchViewResultChatContextPick } from '../../../search/browser/searchChatContext.js';
 import type { IAnythingQuickPickItem } from '../../../search/browser/anythingQuickAccess.js';
-import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, type ChatContextSource } from './chatContext.js';
+import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, TerminalContext, type ChatContextSource } from './chatContext.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
 interface AttachContextHost {
 	readonly target: Pick<IChatContextTarget, 'addContext'>;
 	readonly container: HTMLElement;
 	readonly focusInput: () => void;
+	readonly supportsImages: () => boolean;
 }
 
 type ContextSourceItem = IQuickPickItem & (
@@ -58,13 +60,15 @@ export class AttachContextAction extends Disposable {
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
 			const contexts: readonly ChatContextSource[] = [
-				this.instantiation.createInstance(ClipboardImageContextValuePick),
-				this.instantiation.createInstance(ScreenshotContextValuePick),
+				...(this.host.supportsImages() ? [this.instantiation.createInstance(ClipboardImageContextValuePick), this.instantiation.createInstance(ScreenshotContextValuePick)] : []),
 				this.instantiation.createInstance(SessionReferenceContextPickerPick, this.navigation.getActiveConversation()),
 				this.instantiation.createInstance(GitHubContextValuePick, 'issue'),
 				this.instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
+				this.instantiation.createInstance(TerminalContext),
+				this.instantiation.createInstance(SymbolsContextPickerPick),
+				this.instantiation.createInstance(SearchViewResultChatContextPick),
 			];
-			sources.push(...contexts.map(context => ({ label: context.label, iconClass: ThemeIcon.asClassName(context.icon), source: 'context' as const, context })));
+			sources.push(...contexts.filter(context => context.isEnabled?.() !== false).map(context => ({ label: context.label, iconClass: ThemeIcon.asClassName(context.icon), source: 'context' as const, context })));
 			if (this.editors.groups.some(group => group.inputs.length)) sources.push({ label: localize('chat.context.editors', 'Open editors'), iconClass: ThemeIcon.asClassName(Lxicon.files), source: 'editors' });
 			if ((await Promise.all(this.contextPicks.items.map(picker => picker.isEnabled()))).some(Boolean)) sources.push({ label: localize('chat.context.providers', 'Other context sources'), iconClass: ThemeIcon.asClassName(Lxicon.connectors), source: 'providers' });
 			if (this.isDisposed) return;
@@ -96,7 +100,7 @@ export class AttachContextAction extends Disposable {
 			const show = (folders = false): void => {
 				if (finished || signal.aborted) return;
 				transitioning = true;
-				const additions: readonly ContextSourceItem[] = folders ? [{ label: localize('chat.context.goBack', 'Go back ↩'), iconClass: ThemeIcon.asClassName(Lxicon.arrowLeft), source: 'back', alwaysShow: true }] : sources;
+				const additions: readonly ContextSourceItem[] = folders ? [{ label: localize('chat.context.goBack', 'Go back ↩'), iconClass: ThemeIcon.asClassName(Lxicon.arrowLeft), source: 'back', alwaysShow: true }] : sources.filter(item => item.source !== 'context' || item.context.isEnabled?.() !== false);
 				const providerOptions: AnythingQuickAccessProviderRunOptions = {
 					includeFolders: folders,
 					additionPicks: additions,
@@ -126,13 +130,16 @@ export class AttachContextAction extends Disposable {
 						transitioning = true;
 						picker?.hide();
 						if (item.source === 'context') {
-							const attachment = await (item as Extract<ContextSourceItem, { source: 'context'; }>).context.asAttachment(signal);
+							const context = (item as Extract<ContextSourceItem, { source: 'context'; }>).context;
+							if ((context instanceof ClipboardImageContextValuePick || context instanceof ScreenshotContextValuePick) && !this.host.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+							const selection = await context.asAttachment(signal);
+							const attachment = selection?.attachment;
 							if (finished || signal.aborted) return;
 							if (attachment) {
 								this.host.target.addContext(attachment);
 								status(localize('chat.context.added', 'Added {0}', attachment.name));
 							}
-							if (!attachment || background) show(); else finish();
+							if (!attachment || background || selection?.acceptInBackground) show(); else finish();
 							return;
 						}
 						if (item.source === 'upload') { await this.showFilePicker(); finish(); return; }
@@ -185,11 +192,8 @@ export class AttachContextAction extends Disposable {
 				const image = /^image\/(png|jpeg|gif|webp)$/u.test(file.type);
 				let content: string;
 				if (image) {
-					let binary = '';
-					for (let offset = 0; offset < bytes.length; offset += 8192) {
-						binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
-					}
-					content = `data:${file.type};base64,${btoa(binary)}`;
+					if (!this.host.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+					return createImageAttachment(file.name, bytes, file.type);
 				} else {
 					try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
 					catch { throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)); }
@@ -197,7 +201,7 @@ export class AttachContextAction extends Disposable {
 						throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name));
 					}
 				}
-				return { id: createUuid(), name: file.name, kind: image ? 'image' : 'file', resolve: async () => image ? { name: file.name, content, kind: 'image' as const } : { name: file.name, content } };
+				return { id: createUuid(), name: file.name, kind: 'file', resolve: async () => ({ name: file.name, content }) };
 			}));
 			if (!this.isDisposed) {
 				for (const attachment of attachments) { this.host.target.addContext(attachment); }

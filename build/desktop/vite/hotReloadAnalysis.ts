@@ -13,6 +13,7 @@ export interface HotReloadModuleAnalysis {
 	readonly syntaxValid: boolean;
 	readonly exportNames: readonly string[];
 	readonly classNames: readonly string[];
+	readonly widgetClassNames: readonly string[];
 	readonly classes: readonly HotReloadClassAnalysis[];
 	readonly moduleBoundary: readonly string[];
 }
@@ -22,17 +23,21 @@ export function analyzeHotReloadModule(code: string, file = "module.ts"): HotRel
 	const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	const explicitOptIn = code.includes(explicitPrototypePatchMarker);
 	const classes: HotReloadClassAnalysis[] = [];
+	const widgetClassNames: string[] = [];
 	const targetDeclarations = new Set<ts.ClassDeclaration>();
 	for (const statement of source.statements) {
 		if (!ts.isClassDeclaration(statement) || !statement.name || !extendsClause(statement)) continue;
-		if (!explicitOptIn && !conventionalUiClassPattern.test(statement.name.text)) continue;
+		const isWidget = extendsClause(statement)?.types[0]?.expression.getText(source) === 'DomWidget';
+		if (!isWidget && !explicitOptIn && !conventionalUiClassPattern.test(statement.name.text)) continue;
 		targetDeclarations.add(statement);
-		classes.push(analyzeClass(statement, statement.name, source));
+		classes.push(analyzeClass(statement, statement.name, source, isWidget));
+		if (isWidget) widgetClassNames.push(statement.name.text);
 	}
 	return {
 		syntaxValid: sourceParseDiagnostics(source).length === 0,
 		exportNames: collectRuntimeExportNames(source, targetDeclarations),
 		classNames: classes.map(entry => entry.name),
+		widgetClassNames,
 		classes,
 		moduleBoundary: source.statements.filter(statement => !targetDeclarations.has(statement as ts.ClassDeclaration)).map(statement => statement.getText(source)),
 	};
@@ -81,6 +86,7 @@ function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
 /** Explains why a change must rebuild the module rather than patch existing prototypes. */
 export function unsafeHotReloadChangeReason(previous: HotReloadModuleAnalysis, next: HotReloadModuleAnalysis): string | undefined {
 	if (previous.classNames.join("\0") !== next.classNames.join("\0")) return "persistent UI class set changed";
+	if (previous.widgetClassNames.length > 0 && previous.widgetClassNames.length !== previous.classNames.length) return 'module mixes recreated widgets and persistent UI classes';
 	if (JSON.stringify(previous.moduleBoundary) !== JSON.stringify(next.moduleBoundary)) return "module imports, exports, declarations, or side effects changed";
 	for (let index = 0; index < previous.classes.length; index += 1) {
 		const before = previous.classes[index];
@@ -91,14 +97,24 @@ export function unsafeHotReloadChangeReason(previous: HotReloadModuleAnalysis, n
 	return undefined;
 }
 
-function analyzeClass(declaration: ts.ClassDeclaration, name: ts.Identifier, source: ts.SourceFile): HotReloadClassAnalysis {
+function analyzeClass(declaration: ts.ClassDeclaration, name: ts.Identifier, source: ts.SourceFile, isWidget: boolean): HotReloadClassAnalysis {
+	const initialization = declaration.members.filter(member => {
+		if (isPrototypePatchableMember(member)) return false;
+		if (!isWidget) return true;
+		// Widgets recreate instance initialization; static state and decorators still require a page reload.
+		return hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasRuntimeDecorator(member) || ts.isClassStaticBlockDeclaration(member);
+	}).map(member => member.getText(source));
+	if (isWidget) {
+		const constructor = declaration.members.find(ts.isConstructorDeclaration);
+		initialization.push(JSON.stringify(constructor?.parameters.map(parameter => parameter.getText(source)) ?? []));
+	}
 	return {
 		name: name.text,
 		declaration: JSON.stringify({
 			modifiers: declaration.modifiers?.map(modifier => modifier.getText(source)) ?? [],
 			extends: extendsClause(declaration)?.getText(source),
 		}),
-		initialization: declaration.members.filter(member => !isPrototypePatchableMember(member)).map(member => member.getText(source)),
+		initialization,
 	};
 }
 

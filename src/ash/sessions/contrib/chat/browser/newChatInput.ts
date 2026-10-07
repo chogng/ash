@@ -95,7 +95,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, this.element, model));
 		this.element.insertBefore(pullRequests.domNode, this.inputContainer);
 		pullRequests.render();
-		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel));
+		this.contextAttachments = this._register(instantiationService.createInstance(NewChatContextAttachments, this.inputContainer, this.attachmentModel, () => this.supportsImages()));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);

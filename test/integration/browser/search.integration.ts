@@ -8,7 +8,8 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
-import { registerSearchViews, SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/browser/search.contribution.js';
+import { registerSearchViews } from '../../../src/ash/workbench/contrib/search/browser/search.contribution.js';
+import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchViewPane } from '../../../src/ash/workbench/contrib/search/browser/searchViewPane.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { Event } from '../../../src/ash/base/common/event.js';
@@ -106,6 +107,7 @@ pane.setVisible(true);
 pane.layout(600, 0, 280);
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 window.ashSearchIntegration = {
+	snapshot: () => pane.getSearchResultSnapshot(),
 	queries,
 	opened,
 	finishLateSearch: () => finishLateSearch?.(),
@@ -118,6 +120,7 @@ window.ashSearchIntegration = {
 declare global {
 	interface Window {
 		ashSearchIntegration: {
+			snapshot(): { query: string; content: string; matchCount: number; } | undefined;
 			readonly queries: readonly IContentSearchQuery[];
 			readonly opened: readonly { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[];
 			finishLateSearch(): void;

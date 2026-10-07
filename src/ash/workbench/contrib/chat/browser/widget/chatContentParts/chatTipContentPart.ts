@@ -1,14 +1,19 @@
 import { h } from '../../../../../../base/browser/dom.js';
 import { MarkdownElement } from '../../../../../../base/browser/markdownRenderer.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
+import { DomWidget } from '../../../../../../platform/domWidget/browser/domWidget.js';
 import { localize } from '../../../../../../nls.js';
 import type { IChatTip } from '../../chatTipService.js';
 
 /** Renders one tip; the presenter owns visibility and the service owns dismissal. */
-export class ChatTipContentPart extends Disposable {
+export class ChatTipContentPart extends DomWidget {
 	public readonly domNode: HTMLElement;
+
+	public get element(): HTMLElement {
+		return this.domNode;
+	}
 
 	constructor(document: Document, tip: IChatTip, dismiss: () => void) {
 		super();

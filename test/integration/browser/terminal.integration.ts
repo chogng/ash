@@ -68,6 +68,7 @@ widget.setVisible(true);
 let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
+	snapshot: limit => widget.getBufferText(limit, new AbortController().signal),
 	writes,
 	binaryWrites,
 	resizes,
@@ -86,6 +87,7 @@ window.ashTerminalIntegration = {
 declare global {
 	interface Window {
 		ashTerminalIntegration: {
+			snapshot(limit: number): Promise<string | undefined>;
 			readonly writes: readonly string[];
 			readonly binaryWrites: readonly number[][];
 			readonly resizes: readonly ITerminalDimensions[];
@@ -225,6 +227,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	}, services));
 	document.querySelector<HTMLElement>('#terminal')!.append(pane.partTitleProjection.actions!);
 	window.ashTerminalPaneIntegration = {
+		snapshot: () => pane.getTerminalOutput(instance, 100_000, new AbortController().signal),
 		counts: () => ({ profiles, creates }),
 		transcript: (text, final) => transcript(text, final),
 		stops: () => stops,
@@ -241,6 +244,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 declare global {
 	interface Window {
 		ashTerminalPaneIntegration: {
+			snapshot(): Promise<string | undefined>;
 			counts(): { profiles: number; creates: number; };
 			transcript(text: string, final: boolean): void;
 			stops(): number;

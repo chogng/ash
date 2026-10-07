@@ -5,7 +5,7 @@ import { colorSchemeChannel } from '../../electron-main/nativeHostIpc.js';
 import type { IColorScheme } from '../../../window/common/window.js';
 import { isAdmin, performShellCommand } from '../../electron-main/nativeHostMainService.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../electron-main/nativeHostIpc.js';
-import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../common/nativeHost.js';
+import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL } from '../../common/nativeHost.js';
 
 test('shell command IPC reaches the system host and rejects an unsupported installation before writing files', async () => {
 	const route = nativeHostIpcRoutes({
@@ -50,4 +50,17 @@ test('the Main color channel exposes only its named read and change event withou
 	subscription.dispose();
 	changes.fire({ dark: true, highContrast: false });
 	assert.deepEqual(received, [scheme]);
+});
+
+
+test('Agents Window handoff preserves optional context sources and rejects malformed attachments', async () => {
+	let opened: unknown;
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async options => { opened = options; } } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
+	const context = { id: 'file', kind: 'file', name: 'brief.ts', content: 'Snapshot', resource: 'file:///workspace/brief.ts' };
+	const options = { draft: { mode: 'agent', text: '', contexts: [context, { id: 'text', kind: 'file', name: 'upload.txt', content: 'Upload' }] } };
+	await route.invoke(route.validate(options));
+	assert.deepEqual(opened, options);
+	for (const attachment of [{ ...context, resource: 42 }, { ...context, unexpected: true }, { resource: context.resource }]) {
+		assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [attachment] } }), /Invalid Agents Window context/);
+	}
 });

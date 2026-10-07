@@ -1649,7 +1649,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	const editor = new Editor(chat);
 	const input = editor.input;
 	await expect(chat.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
-	await expect(page.locator('.ash-sessions-chat-slot-header')).toBeHidden();
+	await expect(page.locator('[data-part="sessions"] .ash-editor-title-control')).toBeHidden();
 	await expect(card).toHaveCSS('border-radius', '12px');
 	// Windows display scaling can serialize a one-pixel border as a fractional CSS width.
 	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
@@ -2652,7 +2652,7 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 	const targetChat = sessionsPage.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 	await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
 	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
-	const sessionTitle = (await sessionsPage.locator('.ash-sessions-chat-slot.active:visible .ash-sessions-chat-slot-title').textContent())!;
+	const sessionTitle = (await sessionsPage.locator('.ash-sessions-chat-slot.active:visible').evaluate(element => element.closest('.ash-editor-group')!.querySelector('[role="tab"]')!.textContent))!;
 	const navigation = sessionsPage.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await sessionsPage.locator('.ash-sessions-list-item').filter({ hasText: sessionTitle }).click();
@@ -3386,6 +3386,28 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 	await returnFromSessions(page, application);
 	await closed;
+});
+
+test('Sessions reuse one editor group when replacing a conversation and restore its draft through history', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const host = page.locator('[data-part="sessions"]');
+	const editor = new Editor(host.locator('.ash-sessions-chat-slot.active:visible'));
+	await replaceChatInput(editor, 'Keep the replaced conversation draft');
+	const group = await host.locator('.ash-editor-group').elementHandle();
+	const chat = host.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)');
+	const identity = await chat.getAttribute('data-untitled-session-id');
+	expect(identity).toBeTruthy();
+	await page.locator('.ash-sessions-list-add').click();
+	await editor.waitForEditorContents(text => text === '');
+	await expect(host.locator('.ash-editor-group')).toHaveCount(1);
+	await expect(host.locator('.ash-editor-title-control')).toBeHidden();
+	expect(await host.locator('.ash-editor-group').evaluate((element, previous) => element === previous, group)).toBe(true);
+	await expect(chat).not.toHaveAttribute('data-untitled-session-id', identity!);
+	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Back', exact: true }).click();
+	await editor.waitForEditorContents(text => text === 'Keep the replaced conversation draft');
+	await expect(chat).toHaveAttribute('data-untitled-session-id', identity!);
+	await expect(host.locator('.ash-editor-group')).toHaveCount(1);
+	await group!.dispose();
 });
 
 test('Sessions Activity Bar changes layout while retaining the same session, draft, attachments and history', async ({ application, target, workbench }) => {

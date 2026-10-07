@@ -50,7 +50,7 @@ test('context uploads preview images, retain keyboard focus and remain attached 
 	await page.keyboard.press('Enter');
 	await (await upload).setFiles([
 		{ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Uploaded brief') },
-		{ name: 'preview.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Z1kAAAAASUVORK5CYII=', 'base64') },
+		{ name: 'preview.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64') },
 	]);
 	const attachments = page.getByRole('list', { name: 'Attached context' });
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
@@ -255,7 +255,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const contexts = JSON.parse((await page.getByLabel('Submission').textContent())!) as { name: string; content: string; kind?: string; }[];
 		expect(contexts.slice(0, 2).map(item => item.kind)).toEqual(['image', 'image']);
 		expect(contexts[0].content).toMatch(/^data:image\/png;base64,/);
-		expect(contexts[1].content).toBe(contexts[0].content);
+		expect(contexts[1].content).not.toBe(contexts[0].content);
 		expect(contexts[2]).toEqual({ name: 'Earlier design', content: 'Conversation: Earlier design\nSession: previous-session\nThread: previous-thread\n\nUser: Design the attachment picker\n\nAssistant: Use one resource search owner' });
 	});
 
@@ -276,7 +276,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await add.press('Enter');
 		await picker.getByRole('option', { name: 'Pull Request…', exact: true }).click();
 		await picker.getByRole('combobox').fill('https://github.com/other/project/pull/27');
-		await expect(picker.getByRole('option')).toHaveCount(1);
+		await expect(picker.getByRole('option')).toHaveCount(2);
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveCount(0);
 		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
@@ -319,7 +319,8 @@ test('GitHub selection accepts manual repositories and numbers without forwardin
 	await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 	for (const link of ['https://other.test/team/alpha/issues/12', 'https://github.com/team/alpha/pull/12']) {
 		await picker.getByRole('combobox').fill(link);
-		await expect(picker.getByRole('option')).toHaveCount(0);
+		await expect(picker.getByRole('option')).toHaveCount(1);
+		await expect(picker.getByRole('option', { name: 'Go back ↩', exact: true })).toBeVisible();
 		await expect(page.getByLabel('GitHub reads')).toHaveText('[]');
 	}
 	await picker.getByRole('combobox').fill('other/project');
@@ -354,7 +355,7 @@ test('GitHub account selection keeps the chosen host and grant with a pasted iss
 	await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 	await picker.getByRole('option', { name: /work-developer github.company.test/ }).click();
 	await picker.getByRole('combobox').fill('https://github.company.test/team/project/issues/8');
-	await picker.getByRole('option').click();
+	await picker.getByRole('option', { name: 'team/project/issues/8', exact: true }).click();
 	await expect(picker).toHaveCount(0);
 	const reads = JSON.parse((await page.getByLabel('GitHub reads').textContent())!);
 	expect(reads).toEqual([{ type: 'issue', repository: { host: 'github.company.test', accountId: 'work-account', owner: 'team', name: 'project' }, number: 8 }]);
@@ -396,5 +397,251 @@ test('GitHub query changes and composer disposal cancel reads and discard late r
 	await page.evaluate(() => window.ashChatInputIntegration.releaseGitHubSearch('pending'));
 	await expect(page.getByLabel('GitHub reads')).toContainText('"query":"pending","cancelled":true');
 	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByLabel('Context error')).toHaveText('');
+});
+
+for (const capability of ['text', 'image', 'unknown'] as const) {
+	test(`context image actions follow the selected model's ${capability} capability`, async ({ page }) => {
+		await page.goto(`/chatInput.html?imageCapability=${capability}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const add = page.getByRole('button', { name: 'Add context', exact: true });
+		await add.press('Enter');
+		const picker = page.getByRole('dialog');
+		await expect(picker.getByRole('option', { name: 'Image from Clipboard', exact: true })).toHaveCount(capability === 'text' ? 0 : 1);
+		await expect(picker.getByRole('option', { name: 'Screenshot…', exact: true })).toHaveCount(capability === 'text' ? 0 : 1);
+		if (capability === 'text') {
+			const chooser = page.waitForEvent('filechooser');
+			await picker.getByRole('option', { name: 'Attach files', exact: true }).click();
+			await (await chooser).setFiles({ name: 'unsupported.png', mimeType: 'image/png', buffer: Buffer.from('image') });
+			await expect(page.getByLabel('Context error')).toContainText('The selected model does not support images');
+			await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
+			await add.press('Enter');
+			await page.getByRole('dialog').getByRole('option', { name: 'Open editors', exact: true }).click();
+			await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+			await expect(page.getByLabel('Submission')).toContainText('Unsaved editor text');
+		} else {
+			await picker.getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
+			await expect(picker).toHaveCount(0);
+			await page.evaluate(() => window.ashChatInputIntegration.setImageCapability('text'));
+			await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+			await expect(page.getByLabel('Context error')).toContainText('The selected model does not support images');
+			await expect(page.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(1);
+			await expect(page.getByLabel('Submission')).toHaveText('');
+			await page.evaluate(() => window.ashChatInputIntegration.setImageCapability('image'));
+			await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+			await expect(page.getByLabel('Submission')).toContainText('"kind":"image"');
+		}
+	});
+}
+
+test('images decode, resize transparently and deduplicate across upload and clipboard', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	const large = await page.evaluate(() => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 4096; canvas.height = 2048;
+		canvas.getContext('2d')!.fillRect(0, 0, 2048, 2048);
+		return canvas.toDataURL('image/png').split(',')[1];
+	});
+	const add = page.getByRole('button', { name: 'Add context', exact: true });
+	await add.press('Enter');
+	let chooser = page.waitForEvent('filechooser');
+	await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
+	await (await chooser).setFiles({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.from(large, 'base64') });
+	const image = page.getByRole('img', { name: 'large.png', exact: true });
+	await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([2048, 1024]);
+	expect(await image.evaluate(element => {
+		const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 1024;
+		const context = canvas.getContext('2d')!; context.drawImage(element as HTMLImageElement, 0, 0);
+		return context.getImageData(1800, 500, 1, 1).data[3];
+	})).toBe(0);
+	await add.press('Enter');
+	await page.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await add.press('Enter');
+	chooser = page.waitForEvent('filechooser');
+	await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
+	await (await chooser).setFiles({ name: 'duplicate.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64') });
+	await expect(page.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(2);
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect(page.getByRole('img', { name: 'Pasted Image', exact: true })).toBeVisible();
+	await add.press('Enter');
+	chooser = page.waitForEvent('filechooser');
+	await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
+	await (await chooser).setFiles([{ name: 'valid.txt', mimeType: 'text/plain', buffer: Buffer.from('Valid') }, { name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('Invalid image') }]);
+	await expect(page.getByLabel('Context error')).toContainText('invalid.png could not be decoded as an image');
+	await expect(page.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(2);
+});
+
+test('source buttons preserve file, folder, session and GitHub destinations through draft capture and restore', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	const add = page.getByRole('button', { name: 'Add context', exact: true });
+	await add.press('Enter');
+	let picker = page.getByRole('dialog');
+	await picker.getByRole('combobox').fill('edited');
+	await page.keyboard.press('Enter');
+	await add.press('Enter');
+	await picker.getByRole('option', { name: 'Files & Folders…', exact: true }).click();
+	await picker.getByRole('option', { name: /src \/workspace/ }).click();
+	await add.press('Enter');
+	await picker.getByRole('option', { name: 'Sessions…', exact: true }).click();
+	await picker.getByRole('option', { name: 'Earlier design', exact: true }).click();
+	await add.press('Enter');
+	await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
+	await picker.getByRole('combobox').fill('https://github.com/team/alpha/issues/12');
+	await picker.getByRole('option', { name: 'team/alpha/issues/12', exact: true }).click();
+	await expect(picker).toHaveCount(0);
+	await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+	for (const name of ['edited.ts', 'src', 'Earlier design', 'team/alpha #12: Attachment issue']) {
+		await page.getByRole('button', { name: `Open ${name}`, exact: true }).press('Enter');
+	}
+	await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([
+		{ resource: 'file:///workspace/edited.ts', options: { fromUserGesture: true, openExternal: false } },
+		{ command: 'revealInExplorer', resource: 'file:///workspace/src' },
+		{ sessionId: 'previous-session', threadId: 'previous-thread' },
+		{ resource: 'https://github.com/team/alpha/issues/12', options: { fromUserGesture: true, openExternal: true } },
+	]));
+	await expect(page.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(4);
+});
+
+test('child context pickers go back one step and continue adding after Ctrl+Enter', async ({ page }) => {
+	await page.goto('/chatInput.html?multipleGitHubAccounts=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	await picker.getByRole('option', { name: 'Sessions…', exact: true }).click();
+	await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+	await picker.getByRole('option', { name: 'Sessions…', exact: true }).click();
+	await picker.getByRole('combobox').fill('Earlier design');
+	await page.keyboard.press('Control+Enter');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+	await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
+	await picker.getByRole('option', { name: 'developer github.com', exact: true }).click();
+	await picker.getByRole('option', { name: /team\/alpha workspace/ }).click();
+	await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select a repository, enter owner/repository, or paste a GitHub link');
+	await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select a GitHub account');
+	await picker.getByRole('option', { name: 'developer github.com', exact: true }).click();
+	await picker.getByRole('option', { name: /team\/alpha workspace/ }).click();
+	await picker.getByRole('combobox').fill('#12');
+	await expect(picker.getByRole('option', { name: /#12 Attachment issue/ })).toBeVisible();
+	await page.keyboard.press('Control+Enter');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+	await expect(picker.getByRole('combobox')).toBeFocused();
+	await expect(page.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(2);
+	await page.keyboard.press('Escape');
+});
+
+test('long source attachment buttons fit a narrow composer and remain keyboard accessible', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.setViewportSize({ width: 320, height: 600 });
+	await page.locator('main').evaluate(element => { element.style.width = '260px'; element.style.setProperty('--ash-contrastBorder', 'rgb(255, 255, 255)'); });
+	const owner = 'a'.repeat(160);
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
+	await picker.getByRole('combobox').fill(`https://github.com/${owner}/project/issues/12`);
+	await picker.getByRole('option', { name: `${owner}/project/issues/12`, exact: true }).click();
+	const item = page.getByRole('list', { name: 'Attached context' }).getByRole('listitem');
+	await expect(item).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
+	expect(await item.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+	const open = item.getByRole('button', { name: `Open ${owner}/project #12: Attachment issue`, exact: true });
+	await open.press('Enter');
+	await expect(open).toBeFocused();
+	await expect(page.getByLabel('Opened sources')).toContainText(`https://github.com/${owner}/project/issues/12`);
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal, symbols and search results keep snapshots and source buttons after draft restore in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?contextSources=1&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+		const picker = page.getByRole('dialog');
+		await add.press('Enter');
+		await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
+		await picker.getByRole('combobox').fill('Shell');
+		await expect(picker.getByRole('option', { name: /Shell \/workspace/ })).toBeVisible();
+		await page.keyboard.press('Control+Enter');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '搜索附件' : 'Search attachments');
+		// Stable terminal identity replaces its snapshot rather than creating a second chip.
+		await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
+		await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
+		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+		await add.press('Enter');
+		await picker.getByRole('option', { name: chinese ? '符号…' : 'Symbols…', exact: true }).click();
+		await picker.getByRole('combobox').fill('attach');
+		await expect(picker.getByRole('option', { name: /attach/ })).toBeVisible();
+		await page.keyboard.press('Control+Enter');
+		await picker.getByRole('option', { name: chinese ? '搜索结果' : 'Search Results', exact: true }).click();
+		await expect(picker).toHaveCount(0);
+		await page.evaluate(() => { window.ashChatInputIntegration.changeContextSources(); });
+		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+		const names = [chinese ? '终端：Shell' : 'Terminal: Shell', 'attach', chinese ? '搜索结果：needle' : 'Search Results: needle'];
+		for (const name of names) await page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} ${name}`, exact: true }).press('Enter');
+		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([
+			{ command: 'workbench.action.terminal.focus', resource: 'context-shell' },
+			{ resource: 'file:///workspace/symbol.ts#2,1-4,2', options: { fromUserGesture: true, openExternal: false } },
+			{ command: 'workbench.action.findInFiles' },
+		]));
+		await expect(page.getByRole('list', { name: chinese ? '已添加的上下文' : 'Attached context' }).getByRole('listitem')).toHaveCount(3);
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([
+			{ name: names[0], content: 'Terminal: Shell\nDirectory: /workspace\n\ncontext terminal ready' },
+			{ name: names[1], content: 'Symbol: attach\nSource: file:///workspace/symbol.ts#2,1-4,2\n\nfunction attach() {\n  return 42;\n}' },
+			{ name: names[2], content: 'Matches: 1\n# Search: needle\n# File: file:///workspace/main.ts\n  2:1-2:7: needle' },
+		]));
+		await expect(page.getByLabel('Opened editor count')).toHaveText('0');
+		await expect(page.getByLabel('Context error')).toHaveText('');
+	});
+}
+
+test('context picker hides unavailable terminal and search sources and lets symbol pickers go back', async ({ page }) => {
+	await page.goto('/chatInput.html');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	for (const name of ['Terminal…', 'Symbols…', 'Search Results']) await expect(picker.getByRole('option', { name, exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.goto('/chatInput.html?contextSources=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await picker.getByRole('option', { name: 'Symbols…', exact: true }).click();
+	await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect(page.locator('.ash-chat-input-attachment-item')).toHaveCount(0);
+});
+
+test('stale indexed symbols never attach the code at an outdated range', async ({ page }) => {
+	await page.goto('/chatInput.html?contextSources=1&staleSymbol=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('dialog').getByRole('option', { name: 'Symbols…', exact: true }).click();
+	await page.getByRole('dialog').getByRole('option', { name: /attach/ }).click();
+	await expect(page.getByLabel('Context error')).toContainText('The symbol source changed. Search again to attach its current code.');
+	await expect(page.locator('.ash-chat-input-attachment-item')).toHaveCount(0);
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+});
+
+test('symbol search cancellation discards late provider results after composer disposal', async ({ page }) => {
+	await page.goto('/chatInput.html?contextSources=1&deferSymbolSearch=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	await picker.getByRole('option', { name: 'Symbols…', exact: true }).click();
+	await picker.getByRole('combobox').fill('pending');
+	await expect(picker.getByRole('option', { name: /pending/ })).toHaveCount(0);
+	await page.evaluate(() => window.ashChatInputIntegration.dispose());
+	await page.evaluate(() => window.ashChatInputIntegration.releaseSymbolSearch('pending'));
+	await expect(page.getByLabel('Symbol reads')).toContainText('"query":"pending","aborted":true');
+	await expect(picker).toHaveCount(0);
+	await expect(page.getByLabel('Submission')).toHaveText('');
 	await expect(page.getByLabel('Context error')).toHaveText('');
 });

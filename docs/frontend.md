@@ -61,6 +61,10 @@ F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](bu
 
 Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/desktop/vite/hotReloadPlugin.ts`。
 
+需要重建 DOM 的组件可以继承 `platform/domWidget/browser/domWidget.ts` 的 `DomWidget`，提供稳定的 `element` 根节点，并由宿主通过 `createObservable(scope, ...args)` 创建。需要构造注入的组件通过 `instantiateObservable(instantiationService, scope, ...args)` 创建，每次替换都由原服务容器解析依赖。开发转换按模块路径和类名注册版本；修改构造器或实例字段后，宿主收到新组件，在旧根节点仍存在时替换 DOM、恢复组件内的焦点，随后释放旧实例。传入的 scope 拥有实例和热更新订阅，关闭组件时一起释放；业务状态和输入草稿继续由原 model/service 或宿主持有。静态状态、继承和模块注册副作用变化仍重载页面。
+
+聊天输入提示、模型详情卡片、Workbench/Code 与 Cowork 聊天消息列表和 Sessions 侧栏会话列表已接入此机制。提示的关闭状态仍由 `ChatTipService` 管理；模型卡片从当前目录条目恢复描述；聊天列表恢复阅读位置、折叠状态和操作焦点，输入编辑器继续保留原实例；侧栏恢复搜索词、滚动位置和按会话身份定位的焦点，选中会话仍由 `ISessionsService` 管理。这些接入覆盖各区域的上述组件，其他组件仍按各自的创建路径逐步接入。
+
 Workbench 与 Sessions 的 Web、Electron 开发页面通过 `platform/cssDev/node/cssDevService.ts` 获取源码相对路径的 CSS 清单；清单在开发宿主内扫描一次并缓存，新增 CSS 文件后需要重启宿主。现有 HTML 宿主只负责将路径解析为模块和样式 URL，`code/browser/workbench/workbench-dev.html` 在模块执行前安装 import map，按组件的 CSS import 创建 stylesheet link。发现服务和浏览器加载器均不依赖 Vite；当前 Vite 适配负责 URL 解析、源码转换和 stylesheet link 的热更新。发布构建不扫描或注入开发清单，继续打包 CSS。独立 Stanza 开发入口保持原有 Vite CSS 加载。
 
 需要重新执行初始化的可释放贡献，由注册入口通过 `platform/observable/common/wrapInReloadableClass.ts` 包装构造函数。开发模式下，模块替换会先释放旧贡献，再通过编辑器原有的服务容器创建新贡献；编辑器和模型由宿主继续持有。占位文本贡献已接入这条链路，修改其构造器、字段或方法可以更新现有编辑器。注册模块应与实现模块分开，避免重新执行注册副作用。注册处保存的是释放句柄，需要访问贡献实现时使用 `hotClassGetOriginalInstance`。这些热更新只用于开发 Ash 自身；发布构建不注入 Vite 热更新边界。

@@ -5,7 +5,8 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { AbstractDisposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DomWidget } from '../../../../platform/domWidget/browser/domWidget.js';
 import type { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
 import type { IGitHubService } from '../../../contrib/github/browser/githubService.js';
@@ -15,7 +16,7 @@ import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
-export class SessionsList extends Disposable {
+export class SessionsList extends DomWidget {
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly newSessionButton: HTMLButtonElement;
@@ -26,6 +27,8 @@ export class SessionsList extends Disposable {
 	private readonly empty: HTMLParagraphElement;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly viewService: ISessionsService;
+
+	public get element(): HTMLElement { return this.domNode; }
 
 	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService, private readonly groups?: ISessionGroupsService) {
 		super();
@@ -72,6 +75,22 @@ export class SessionsList extends Disposable {
 		const firstItem = this.list.querySelector<HTMLButtonElement>("button");
 		if (firstItem) firstItem.focus();
 		else this.newSessionButton.focus();
+	}
+
+	public getViewState(): { readonly query: string; readonly top: number; readonly focus: string | undefined; } {
+		const active = this.domNode.ownerDocument.activeElement;
+		const item = [...this.items].find(([, item]) => item.domNode === active);
+		const focus = active === this.searchInput ? 'search' : active === this.newSessionButton ? 'new' : item?.[0];
+		return { query: this.searchInput.value, top: this.list.scrollTop, focus };
+	}
+
+	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
+		this.searchInput.value = state.query;
+		this.render();
+		this.list.scrollTop = state.top;
+		if (state.focus === 'search') this.searchInput.focus({ preventScroll: true });
+		else if (state.focus === 'new') this.newSessionButton.focus({ preventScroll: true });
+		else if (state.focus) this.items.get(state.focus)?.domNode.focus({ preventScroll: true });
 	}
 
 	private render(): void {

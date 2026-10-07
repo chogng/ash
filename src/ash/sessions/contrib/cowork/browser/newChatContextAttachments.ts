@@ -1,5 +1,6 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { createImageAttachment } from '../../../../workbench/contrib/chat/browser/chatImageUtils.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
@@ -14,6 +15,7 @@ export class NewChatContextAttachments extends Disposable {
 	constructor(
 		container: HTMLElement,
 		private readonly model: ChatAttachmentModel,
+		private readonly supportsImages: () => boolean,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
@@ -42,7 +44,12 @@ export class NewChatContextAttachments extends Disposable {
 		try {
 			const attachments = await Promise.all(files.map(async file => {
 				const image = /^image\/(png|jpeg|gif|webp)$/u.test(file.type);
-				const content = await this.readFileContent(file, image);
+				if (image && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+				const bytes = await this.readFileContent(file);
+				if (image) return createImageAttachment(file.name, bytes, file.type);
+				let content: string;
+				try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+				catch { throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)); }
 				if (!image && content.includes('\0')) {
 					throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name));
 				}
@@ -51,9 +58,9 @@ export class NewChatContextAttachments extends Disposable {
 				}
 				return {
 					id: createUuid(),
-					kind: image ? 'image' : 'file',
+					kind: 'file',
 					name: file.name,
-					resolve: async () => image ? { name: file.name, content, kind: 'image' as const } : { name: file.name, content },
+					resolve: async () => ({ name: file.name, content }),
 				};
 			}));
 			if (!this.isDisposed) {
@@ -66,23 +73,22 @@ export class NewChatContextAttachments extends Disposable {
 		}
 	}
 
-	private async readFileContent(file: File, image: boolean): Promise<string> {
+	private async readFileContent(file: File): Promise<Uint8Array> {
 		const reader = new FileReader();
 		const resources = new DisposableStore();
 		this.readers.add(reader);
 		try {
-			return await new Promise<string>((resolve, reject) => {
+			return await new Promise<Uint8Array>((resolve, reject) => {
 				resources.add(addDisposableListener(reader, 'load', () => {
 					try {
-						resolve(image ? String(reader.result) : new TextDecoder('utf-8', { fatal: true }).decode(reader.result as ArrayBuffer));
+						resolve(new Uint8Array(reader.result as ArrayBuffer));
 					} catch {
 						reject(new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)));
 					}
 				}));
 				resources.add(addDisposableListener(reader, 'error', () => reject(reader.error)));
 				resources.add(addDisposableListener(reader, 'abort', () => reject(new CancellationError())));
-				if (image) reader.readAsDataURL(file);
-				else reader.readAsArrayBuffer(file);
+				reader.readAsArrayBuffer(file);
 			});
 		} finally {
 			resources.dispose();

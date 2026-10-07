@@ -471,6 +471,11 @@ export class SearchViewPane extends ViewPane {
 		this.queryInput.focus();
 	}
 
+	public getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number; } | undefined {
+		if (this.isDisposed || !this.resultQuery || !this.result.count || this.searchController || this.replaceController) { return undefined; }
+		return { query: this.resultQuery.text, content: serializeSearchResultForEditor(this.resultQuery, this.result), matchCount: this.result.count };
+	}
+
 	private updateResultActions(): void {
 		const hasResults = this.result.count > 0;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;

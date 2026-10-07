@@ -9,6 +9,7 @@ import type { IAction } from "../../../../../../base/common/actions.js";
 import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
+import { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
@@ -183,7 +184,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					if (type === AccessibleViewType.View && this.attachmentModel.size === 0) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						const names = this.attachmentModel.attachments.map(attachment => attachment.name).join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return from Files & Folders. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the Remove button on each attachment. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + names;
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -265,6 +266,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			kind: attachment.kind,
 			name: attachment.name,
 			content: (await attachment.resolve()).content,
+			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
 		})));
 		if (this.draftRevision !== revision || this.mode !== mode) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
 		return {
@@ -296,6 +298,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				id: context.id,
 				kind: context.kind,
 				name: context.name,
+				resource: context.resource ? URI.parse(context.resource) : undefined,
 				resolve: async () => context.kind === 'image' ? { name: context.name, content: context.content, kind: 'image' } : { name: context.name, content: context.content },
 			});
 		}
@@ -324,6 +327,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}
 			if (input.kind === "command" && input.binding.origin === "server") {
 				await this.submit(inputValue, [], this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
+				return;
+			}
+			if (!this.supportsImages() && this.attachmentModel.attachments.some(attachment => attachment.kind === 'image')) {
+				this.notifications.error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return;
 			}
 			const skills = this.skills.referencesIn(inputValue);
@@ -480,7 +487,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			id: 'ash.chat.input.attach', label: localize('chat.context.add', 'Add context'), tooltip: localize('chat.context.add', 'Add context'), icon: Lxicon.add, enabled: true,
 			run: () => {
 				// The command creates the picker owner only when this composer opens it.
-				this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, { container: this.inputContainer, target: this, focusInput: () => this.focus() });
+				this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, { container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages() });
 				return this.attachContext.value.run();
 			},
 		});
@@ -489,6 +496,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 		this.modelPickerPresentationChanged.fire();
 		this.pickerResponsiveLayout.layout();
+	}
+
+	protected supportsImages(): boolean {
+		if (this.state.isAutomaticModel) return true;
+		const selected = this.state.models.find(entry => entry.model.provider === this.state.selectedModel?.provider && entry.model.model === this.state.selectedModel?.model);
+		return selected?.inputModalities == null || selected.inputModalities.includes('image');
 	}
 
 	private async stopDictation(): Promise<void> {
@@ -506,7 +519,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		for (const attachment of attachments) {
 			if (this.attachmentWidgets.has(attachment.id)) { continue; }
 			const Widget = attachment.kind === 'image' ? ImageAttachmentWidget : DefaultChatAttachmentWidget;
-			const widget = new Widget(this.attachmentList, attachment, () => {
+			const widget = this.instantiationService.createInstance(Widget, this.attachmentList, attachment, () => {
 				const index = this.attachmentModel.attachments.indexOf(attachment);
 				this.attachmentModel.delete(attachment.id);
 				const remaining = this.attachmentModel.attachments;

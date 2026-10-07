@@ -19,6 +19,11 @@ import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js'
 import { LocalTranscriptionModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
@@ -54,6 +59,10 @@ function inputPart(notifications: NotificationService, dictation?: Pick<IDictati
 		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
+	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+	partServices.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
+	partServices.registerInstance(INotificationService, notifications);
+	partServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	const contextView = inputResources.add(new BrowserContextViewService(document.body));
 	partServices.registerInstance(IContextViewService, contextView);
 	partServices.registerInstance(IConfigurationService, inputResources.add(new InMemoryConfigurationService()));
@@ -207,13 +216,13 @@ test('Chat draft handoff moves text and resolved attachments after acknowledgeme
 	using source = inputPart(sharedNotifications, undefined, 'debug');
 	using target = inputPart(sharedNotifications);
 	edit(source, 'Review this file');
-	source.addContext({ id: 'src/file.ts', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
+	source.addContext({ id: 'src/file.ts', kind: 'file', resource: URI.file('/workspace/file.ts'), name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'const answer = 42;' }) });
 	const captured = await source.captureDraft();
 	assert.ok(captured);
 	assert.deepEqual(captured.draft, {
 		mode: 'debug',
 		text: 'Review this file',
-		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;' }],
+		contexts: [{ id: 'src/file.ts', kind: 'file', name: 'file.ts', content: 'const answer = 42;', resource: 'file:///workspace/file.ts' }],
 	});
 	target.restoreDraft(captured.draft);
 	assert.equal(target.element.querySelector('textarea')?.value, 'Review this file');

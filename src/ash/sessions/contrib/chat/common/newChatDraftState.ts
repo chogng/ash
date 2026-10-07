@@ -15,7 +15,8 @@ function parseChatDraft(raw: string): ChatDraft {
 	if (!isRecord(draft) || !['agent', 'plan', 'debug', 'multitask', 'ask'].includes(draft.mode as string)
 		|| typeof draft.text !== 'string' || !Array.isArray(draft.contexts)
 		|| !draft.contexts.every(context => isRecord(context) && typeof context.id === 'string'
-			&& typeof context.kind === 'string' && typeof context.name === 'string' && typeof context.content === 'string')) {
+			&& typeof context.kind === 'string' && typeof context.name === 'string' && typeof context.content === 'string'
+			&& (context.resource === undefined || typeof context.resource === 'string'))) {
 		throw new TypeError('Invalid stored Chat draft');
 	}
 	return draft as unknown as ChatDraft;

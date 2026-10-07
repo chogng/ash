@@ -39,11 +39,30 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 }
 
 class SessionsNavigationView extends ViewPane {
-	private readonly list: SessionsList;
+	private list: SessionsList;
+	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
 	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
-		this.list = this._register(new SessionsList(this.contentElement, management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups));
+		const lists = SessionsList.createObservable(this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups);
+		this.list = lists.get();
+		this.contentElement.append(this.list.element);
+		this._register(lists.onDidChange(list => {
+			const previous = this.list;
+			const state = this.hiddenListState ?? previous.getViewState();
+			previous.element.replaceWith(list.element);
+			this.list = list;
+			if (this.isVisible()) { list.restoreViewState(state); }
+			else { this.hiddenListState = state; }
+		}));
+	}
+	public override setVisible(visible: boolean): void {
+		if (!visible && this.isVisible()) { this.hiddenListState = this.list.getViewState(); }
+		super.setVisible(visible);
+		if (visible && this.hiddenListState) {
+			this.list.restoreViewState({ ...this.hiddenListState, focus: undefined });
+			this.hiddenListState = undefined;
+		}
 	}
 	public focus(): void { this.list.focus(); }
 }

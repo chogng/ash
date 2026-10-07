@@ -11,6 +11,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { ChatEditorConfiguration } from '../chat.shared.contribution.js';
+import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 
 interface ChatListWidgetOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
@@ -31,9 +32,18 @@ interface ReadingAnchor {
 	readonly viewportTop: number;
 }
 
+interface ChatListViewState {
+	readonly visible: boolean;
+	readonly shouldFollow: boolean;
+	readonly top: number;
+	readonly anchor: ReadingAnchor | undefined;
+	readonly advisorExpansion: readonly [string, boolean][];
+	readonly focus: { readonly itemId: string; readonly index: number; } | undefined;
+}
+
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
-export class ChatListWidget extends Disposable {
-	readonly element: HTMLElement;
+export class ChatListWidget extends DomWidget {
+	private readonly domNode: HTMLElement;
 	private readonly scrollable: ScrollableElement;
 	private readonly transcript: HTMLDivElement;
 	private readonly renderedItems = this._register(new DisposableMap<string, RenderedItem>());
@@ -44,6 +54,9 @@ export class ChatListWidget extends Disposable {
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private visible = false;
 	private shouldFollow = true;
+	private pendingReadingPosition: { readonly top: number; readonly anchor: ReadingAnchor | undefined; } | undefined;
+
+	public get element(): HTMLElement { return this.domNode; }
 
 	constructor(container: HTMLElement, options: ChatListWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super();
@@ -56,7 +69,7 @@ export class ChatListWidget extends Disposable {
 			vertical: "auto",
 			tabIndex: -1,
 		}));
-		this.element = this.scrollable.element;
+		this.domNode = this.scrollable.element;
 		this.element.classList.add("ash-chat-list-widget", "ash-chat-transcript-scrollable");
 		this.transcript = this.scrollable.contentElement;
 		this.transcript.classList.add("ash-chat-transcript");
@@ -112,9 +125,52 @@ export class ChatListWidget extends Disposable {
 
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
-		if (!visible) this.captureFollowState();
+		if (!visible) {
+			this.captureFollowState();
+			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingAnchor() };
+		}
 		this.visible = visible;
-		if (visible) this.layout();
+		if (visible) {
+			if (this.pendingReadingPosition) {
+				this.scrollable.layout();
+				this.scrollable.scrollTo(0, this.pendingReadingPosition.top);
+			}
+			this.layout(this.pendingReadingPosition?.anchor);
+			this.pendingReadingPosition = undefined;
+		}
+	}
+
+	/** Captures presentation state without taking ownership of conversation data. */
+	public getViewState(): ChatListViewState {
+		if (this.visible) this.captureFollowState();
+		const active = this.element.ownerDocument.activeElement;
+		let focus: ChatListViewState['focus'];
+		for (const [itemId, row] of this.renderedItems) {
+			const index = [...row.element.querySelectorAll('button, a, summary')].indexOf(active!);
+			if (index >= 0) { focus = { itemId, index }; break; }
+		}
+		return {
+			visible: this.visible,
+			shouldFollow: this.shouldFollow,
+			top: this.pendingReadingPosition?.top ?? this.scrollable.state.top,
+			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingAnchor() : undefined),
+			advisorExpansion: [...this.advisorExpansion],
+			focus,
+		};
+	}
+
+	/** Re-renders from the model, then restores reading position after the host mounts the new root. */
+	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[]): void {
+		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
+		this.render(items);
+		this.shouldFollow = state.shouldFollow;
+		// Hidden panes cannot measure their scroll range until their retained host is shown again.
+		this.pendingReadingPosition = { top: state.top, anchor: state.anchor };
+		this.setVisible(state.visible);
+		if (state.focus) {
+			const row = this.renderedItems.get(state.focus.itemId);
+			row?.element.querySelectorAll<HTMLElement>('button, a, summary')[state.focus.index]?.focus({ preventScroll: true });
+		}
 	}
 
 	private captureFollowState(): void {
