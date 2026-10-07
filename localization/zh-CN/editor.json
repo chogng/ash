@@ -213,7 +213,7 @@
     "notifications.showList": "显示通知",
     "notifications.hideList": "隐藏通知",
     "notifications.clearAllCommand": "清除所有通知",
-    "notifications.accessibilityHelp": "通知中心\n按 Tab 和 Shift+Tab 在通知与操作间移动。在通知上按 Delete 可移除通知。按 Escape 关闭通知中心。按 <keybinding:editor.action.accessibleView> 可朗读通知历史。",
+    "notifications.accessibilityHelp": "通知中心\n按 Tab 和 Shift+Tab 在通知与操作间移动。在通知上按 Delete 可移除通知。按 Escape 关闭通知中心。通知弹出提示的移除通知按钮获得焦点时，按 Escape 可收起弹出提示并保留通知历史。按 <keybinding:editor.action.accessibleView> 可朗读通知历史。",
     "accessibility.explorerVerbosityDescription": "文件树获得焦点时播报打开无障碍帮助的方法。",
     "accessibility.gettingStartedVerbosityTitle": "欢迎页无障碍帮助",
     "accessibility.gettingStartedVerbosityDescription": "欢迎页获得焦点时播报打开无障碍帮助的方法。",

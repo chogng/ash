@@ -33,6 +33,22 @@ export class NotificationsToasts extends Disposable {
 				this.previousFocus = target;
 			}
 		}));
+		this._register(addDisposableListener(this.element, "keydown", event => {
+			if (event.key !== "Escape" || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || this.hidden || this.isDisposed) return;
+			const target = event.target;
+			const HTMLButtonElement = document.defaultView?.HTMLButtonElement;
+			if (!HTMLButtonElement || !(target instanceof HTMLButtonElement) || target !== document.activeElement || !this.element.isConnected || !target.matches("[data-notification-close]")) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const previousFocus = this.previousFocus;
+			// Passive dismissal clears this presentation, leaving the model and future arrivals intact.
+			this.visible.clear();
+			this.render();
+			// DOM removal can transfer ownership of focus or dispose this window's presentation.
+			if (!this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body && previousFocus?.isConnected && !previousFocus.closest("[hidden], [inert], [aria-hidden='true']") && !previousFocus.matches(":disabled") && previousFocus.checkVisibility({ checkVisibilityCSS: true })) {
+				previousFocus.focus();
+			}
+		}));
 		this._register(addDisposableListener(this.element, "click", event => {
 			const target = event.target;
 			const Element = document.defaultView?.Element;

@@ -13,7 +13,7 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.Notifications,
 		{ type: AccessibleViewType.Help },
-		() => localize('notifications.accessibilityHelp', 'Notification Center\nUse Tab and Shift+Tab to move between notifications and actions. Press Delete on a notification to remove it. Press Escape to close the center. Press <keybinding:editor.action.accessibleView> to read the notification history.'),
+		() => localize('notifications.accessibilityHelp', 'Notification Center\nUse Tab and Shift+Tab to move between notifications and actions. Press Delete on a notification to remove it. Press Escape to close the center. When the Remove notification button in a toast has focus, press Escape to hide the toasts without removing them from history. Press <keybinding:editor.action.accessibleView> to read the notification history.'),
 		() => accessor.get(INotificationsCenter).show(),
 		AccessibilityVerbositySettingId.Notifications,
 	),

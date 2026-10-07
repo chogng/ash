@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { INotificationService, NotificationSeverity, type NotificationAction } from "../../../../../platform/notification/common/notification.js";
+import { AccessibleViewRegistry } from "../../../../../platform/accessibility/browser/accessibleViewRegistry.js";
 import type { IAction, IRunEvent } from "../../../../../base/common/actions.js";
 import { CancellationError } from "../../../../../base/common/errors.js";
 import { Lxicon } from "../../../../../base/common/lxicons.js";
@@ -208,6 +209,152 @@ function toastControl(document: Document, id: number, control: "action" | "remov
 	const actions = remove?.closest("article")?.querySelectorAll<HTMLButtonElement>(".ash-notification-action");
 	return actions?.item(1) ?? actions?.item(0) ?? undefined;
 }
+
+for (const control of ["action", "remove"] as const) {
+	test(`toast Escape ${control === "remove" ? "from a focused remove hides the presentation" : "leaves a focused action unchanged"}, preserves history, and admits new notifications`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service, center, panel, origin } = fixture;
+		// jsdom has no layout. Real visibility and keyboard input are covered in smoke tests.
+		origin.checkVisibility = () => true;
+		let actionRuns = 0;
+		const first = service.info("First", [{ id: "action", label: "Action", run() { actionRuns++; } }]);
+		const second = service.info("Second");
+		let removals = 0;
+		using listener = service.onDidRemove(() => removals++);
+		origin.focus();
+		const target = toastControl(document, first.item.id, control)!;
+		target.focus();
+		const escape = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+		target.dispatchEvent(escape);
+		assert.deepEqual({
+			toasts: document.querySelectorAll(".ash-notification-host .ash-notification").length,
+			history: service.getNotifications(), removals, actionRuns,
+			controlFocused: document.activeElement === (control === "remove" ? origin : target), consumed: escape.defaultPrevented,
+		}, { toasts: control === "remove" ? 0 : 2, history: [first.item, second.item], removals: 0, actionRuns: 0, controlFocused: true, consumed: control === "remove" });
+		const next = service.info("Next");
+		assert.deepEqual([...document.querySelectorAll<HTMLElement>(".ash-notification-host [data-notification-id]")].map(item => Number(item.dataset.notificationId)), control === "remove" ? [next.item.id] : [first.item.id, second.item.id, next.item.id]);
+		center.show();
+		assert.deepEqual([...panel.querySelectorAll<HTMLElement>("[data-notification-id]")].map(item => Number(item.dataset.notificationId)), [next.item.id, second.item.id, first.item.id]);
+		center.hide();
+		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
+	});
+
+	test(`toast Escape from a focused ${control} leaves consumed, modified, and composing input to its owner`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service, origin } = fixture;
+		const handle = service.info("Retained", [{ id: "action", label: "Action", run() { assert.fail("Escape must not run an action"); } }]);
+		origin.focus();
+		const target = toastControl(document, handle.item.id, control)!;
+		target.focus();
+		for (const options of [{ key: "Enter" }, { altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }, { consumed: true }]) {
+			const escape = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...options });
+			if ("consumed" in options) escape.preventDefault();
+			target.dispatchEvent(escape);
+			assert.equal(document.activeElement, target);
+			assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 1);
+			assert.deepEqual(service.getNotifications(), [handle.item]);
+			assert.equal(escape.defaultPrevented, "consumed" in options);
+		}
+	});
+}
+
+for (const unavailable of ["removed", "hidden", "hidden ancestor", "inert", "disabled", "aria hidden", "no visible layout"] as const) {
+	test(`toast Escape keeps history without restoring a source that is ${unavailable}`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service, origin } = fixture;
+		origin.checkVisibility = () => unavailable !== "no visible layout";
+		const handle = service.info("Retained");
+		origin.focus();
+		const target = toastControl(document, handle.item.id, "remove")!;
+		target.focus();
+		if (unavailable === "removed") origin.remove();
+		if (unavailable === "hidden") origin.hidden = true;
+		if (unavailable === "inert") origin.setAttribute("inert", "");
+		if (unavailable === "disabled") origin.disabled = true;
+		if (unavailable === "aria hidden") origin.setAttribute("aria-hidden", "true");
+		if (unavailable === "hidden ancestor") {
+			const parent = document.createElement("div");
+			document.body.append(parent);
+			parent.append(origin);
+			parent.hidden = true;
+		}
+		target.dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
+		assert.equal(document.activeElement, document.body);
+		assert.deepEqual(service.getNotifications(), [handle.item]);
+	});
+}
+
+for (const transition of ["outside", "center", "dispose"] as const) {
+	test(`toast Escape does not reclaim focus when ${transition} owns the input before it bubbles`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service, center, panel, origin, outside } = fixture;
+		origin.checkVisibility = () => true;
+		const handle = service.info("Retained");
+		origin.focus();
+		const target = toastControl(document, handle.item.id, "remove")!;
+		target.focus();
+		using listener = addDisposableListener(target, "keydown", () => {
+			if (transition === "center") center.show();
+			else { if (transition === "dispose") center.dispose(); outside.focus(); }
+		});
+		const escape = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+		target.dispatchEvent(escape);
+		assert.equal(document.activeElement, transition === "center" ? panel : outside);
+		assert.equal(escape.defaultPrevented, false);
+		assert.deepEqual(service.getNotifications(), [handle.item]);
+	});
+
+	test(`toast Escape does not reclaim focus when ${transition} takes ownership during DOM removal`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service, center, panel, origin, outside } = fixture;
+		origin.checkVisibility = () => true;
+		const handle = service.info("Retained");
+		origin.focus();
+		const target = toastControl(document, handle.item.id, "remove")!;
+		target.focus();
+		const toast = target.closest<HTMLElement>("article")!;
+		const remove = toast.remove.bind(toast);
+		let transitions = 0;
+		toast.remove = () => {
+			remove(); transitions++;
+			if (transition === "center") center.show();
+			else { if (transition === "dispose") center.dispose(); outside.focus(); }
+		};
+		target.dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+		assert.equal(transitions, 1);
+		assert.equal(document.activeElement, transition === "center" ? panel : outside);
+		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
+		assert.deepEqual(service.getNotifications(), [handle.item]);
+	});
+}
+
+test("toast Escape applies only to a currently focused toast control", () => {
+	using fixture = new NotificationsFixture();
+	const { document, service, outside } = fixture;
+	const handle = service.info("Retained");
+	const target = toastControl(document, handle.item.id, "remove")!;
+	outside.focus();
+	const staleInput = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+	target.dispatchEvent(staleInput);
+	const content = target.closest("article")!.querySelector<HTMLElement>(".ash-notification-content")!;
+	content.tabIndex = 0;
+	content.focus();
+	const contentInput = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+	content.dispatchEvent(contentInput);
+	assert.deepEqual({ consumed: [staleInput.defaultPrevented, contentInput.defaultPrevented], toasts: document.querySelectorAll(".ash-notification-host .ash-notification").length, history: service.getNotifications() }, {
+		consumed: [false, false], toasts: 1, history: [handle.item],
+	});
+});
+
+test("notification accessibility help explains toast Escape and retained history", () => {
+	using fixture = new NotificationsFixture();
+	using services = new InstantiationService();
+	services.registerInstance(INotificationsCenter, fixture.center);
+	const implementation = AccessibleViewRegistry.getImplementations().find(item => item.name === "notificationsHelp")!;
+	using provider = implementation.getProvider(services)!;
+	assert.match(provider.provideContent(), /When the Remove notification button in a toast has focus, press Escape to hide the toasts without removing them from history\./);
+});
 
 test("notification handle removes its record once", () => {
 	using service = new NotificationService();

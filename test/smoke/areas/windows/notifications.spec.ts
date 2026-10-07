@@ -59,7 +59,78 @@ test('keyboard clearing moves between notification toasts and restores focus aft
 	await expect(page.getByRole('region', { name: 'Notification Center', exact: true }).getByText('No notifications', { exact: true })).toBeVisible();
 });
 
-test('notification toast removal uses the Chinese label and clears the localized center', async ({ workbench, restartWorkbench }) => {
+for (const control of ['action', 'remove'] as const) {
+	test(`toast Escape ${control === 'remove' ? 'from a focused remove restores focus' : 'leaves a focused action unchanged'}, preserves history, and permits a new toast`, async ({ workbench }) => {
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('notifications.clearAll');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		const surface = page.locator('.ash-notification-host');
+		const ids = await surface.locator('[data-notification-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-notification-id')));
+		expect(ids).toHaveLength(2);
+		const origin = page.getByRole('button', { name: 'Show Notification Center', exact: true });
+		await origin.focus();
+		const target = surface.locator(`[data-notification-id="${ids[0]}"]`).getByRole('button', { name: control === 'action' ? 'Always Enable' : 'Remove notification', exact: true });
+		await target.focus();
+		await surface.evaluate(element => {
+			// Observe after the presentation's listener without changing event handling.
+			element.addEventListener('keydown', event => {
+				(element as HTMLElement).dataset.testEscapeConsumed = String(event.defaultPrevented);
+			}, { once: true });
+		});
+		await page.keyboard.press('Escape');
+		await expect(surface).toHaveAttribute('data-test-escape-consumed', String(control === 'remove'));
+		await expect(surface.locator('.ash-notification')).toHaveCount(control === 'remove' ? 0 : 2);
+		await expect(control === 'remove' ? origin : target).toBeFocused();
+		if (control === 'remove') await origin.press('Enter');
+		else await workbench.quickaccess.runCommand('notifications.showList');
+		const center = page.getByRole('region', { name: 'Notification Center', exact: true });
+		await expect(center.locator('[data-notification-id]')).toHaveCount(2);
+		for (const id of ids) await expect(center.locator(`[data-notification-id="${id}"]`)).toBeVisible();
+		await workbench.quickaccess.runCommand('notifications.hideList');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		await expect(surface.locator('.ash-notification')).toHaveCount(1);
+		const nextId = await surface.locator('[data-notification-id]').getAttribute('data-notification-id');
+		expect(ids).not.toContain(nextId);
+		await workbench.quickaccess.runCommand('notifications.showList');
+		await expect(center.locator('[data-notification-id]')).toHaveCount(3);
+		await expect(center.locator(`[data-notification-id="${nextId}"]`)).toBeVisible();
+		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+		await workbench.quickaccess.runCommand('editor.action.accessibilityHelp');
+		await expect(help.getByRole('textbox')).toHaveValue(/When the Remove notification button in a toast has focus, press Escape to hide the toasts without removing them from history\./);
+		await page.keyboard.press('Escape');
+		await expect(help).toBeHidden();
+		await expect(center).toBeVisible();
+	});
+}
+
+for (const unavailable of ['display', 'visibility'] as const) {
+	test(`toast Escape preserves history without restoring an origin hidden by CSS ${unavailable}`, async ({ workbench }) => {
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('notifications.clearAll');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		const origin = page.getByRole('button', { name: 'Show Notification Center', exact: true });
+		await origin.focus();
+		const target = page.locator('.ash-notification-host').getByRole('button', { name: 'Remove notification', exact: true });
+		const id = await target.getAttribute('data-notification-close');
+		await target.focus();
+		// A hidden origin leaves the accessibility tree, so retain its identity for cleanup.
+		const originElement = await origin.elementHandle();
+		assert.ok(originElement);
+		await originElement.evaluate((element, property) => (element as HTMLElement).style.setProperty(property, property === 'display' ? 'none' : 'hidden'), unavailable);
+		try {
+			await page.keyboard.press('Escape');
+			await expect(page.locator('.ash-notification-host .ash-notification')).toHaveCount(0);
+			expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+			await workbench.quickaccess.runCommand('notifications.showList');
+			await expect(page.locator(`.ash-notifications-center [data-notification-id="${id}"]`)).toBeVisible();
+		} finally {
+			await originElement.evaluate((element, property) => (element as HTMLElement).style.removeProperty(property), unavailable);
+		}
+	});
+}
+
+test('notification toast Escape, help, and removal use the Chinese labels and retained history', async ({ workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language', exact: true });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -70,10 +141,24 @@ test('notification toast removal uses the Chinese label and clears the localized
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
 	const toast = page.locator('.ash-notification-host').getByRole('button', { name: '移除通知', exact: true });
 	await expect(toast).toBeVisible();
-	await toast.click();
+	const id = await toast.getAttribute('data-notification-close');
+	const origin = page.getByRole('button', { name: '显示通知中心', exact: true });
+	await origin.focus();
+	await toast.focus();
+	await page.keyboard.press('Escape');
 	await expect(toast).toHaveCount(0);
+	await expect(origin).toBeFocused();
+	await origin.press('Enter');
+	const center = page.getByRole('region', { name: '通知中心', exact: true });
+	await expect(center.locator(`[data-notification-id="${id}"]`)).toBeVisible();
+	await workbench.quickaccess.runCommand('editor.action.accessibilityHelp');
+	const help = page.getByRole('dialog', { name: '无障碍帮助', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/通知弹出提示的移除通知按钮获得焦点时，按 Escape 可收起弹出提示并保留通知历史。/);
+	await page.keyboard.press('Escape');
+	await expect(center).toBeVisible();
+	await center.getByRole('button', { name: '移除通知', exact: true }).click();
 	await workbench.quickaccess.runCommand('notifications.showList');
-	await expect(page.getByRole('region', { name: '通知中心', exact: true }).getByText('没有通知', { exact: true })).toBeVisible();
+	await expect(center.getByText('没有通知', { exact: true })).toBeVisible();
 });
 
 test('center keyboard removal keeps other records open and restores focus after the last row', async ({ workbench }) => {
