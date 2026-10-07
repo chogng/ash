@@ -44,6 +44,14 @@ Sessions 设置项菜单使用对话框内的 ContextView，以便在模态设�
 
 代码名也按职责区分：`preferencesActions.ts`、`PreferencesService` 负责跨页面入口；`settingsEditorInput.ts`、`settingsModels.ts`、`settingsSearch.ts`、`settingsWidgets.ts` 和 `settingsRenderers.ts` 只处理设置内容。快捷键编辑器保留独立名称和模型。
 
+快捷键图形编辑器的录制框按输入顺序收集最多四段组合键，复用现有 parser 和 resolver 的四段上限。打开已有绑定时先显示已保存值，首个录制组合键替换它；录满四段后，第五段开始新序列，并显示和朗读提示。在录制框中，裸 Enter 保存，裸 Escape 清空，再按一次取消；Tab 和 Shift+Tab 移动焦点。带修饰键的 Enter/Escape 可以录制；裸 Enter、Escape、Tab 及 Shift+Tab 绑定需在 JSON 编辑器中编辑。重复 keydown、IME 组合输入和纯修饰键不计为一段。保存期间禁用录制、条件、行操作和取消按钮，失败保留草稿并允许重试；取消后返回原行操作，原行已被替换时返回搜索框；保存完成后在焦点仍属于当前页面时聚焦搜索框，避免文件监听替换原行时丢失焦点。清空 input 或销毁 pane 后，保存结束不再向已退休的草稿反馈状态；隐藏页面或焦点已移到其他编辑器时不恢复焦点，也不阻止用户关闭编辑器。
+
+录制草稿仅由 `KeyboardShortcutsEditor` 持有，保存继续通过 `KeyboardShortcutsEditorModel → IKeybindingEditingService →` 当前 profile 的共享 JSONC 文件模型，保留注释、参数与其他绑定。文件系统 owner 负责持久化：Web 使用 `IndexedDBFileSystemProvider` 保存 `ash-userdata:/user/keybindings.json`；Electron 使用 `FileUserDataProvider`，经既有主进程文件通道写入当前 profile 的 `keybindings.json`。快捷键不经过 Settings 的配置键值 API，也不新增 AppServer 接口。
+
+在保存一致性修复已进入 main 的基线 `2cc6ab4e` 上，recorder 13 项单元测试、严格 Web 7 项与 Electron 6 项通过；正常 Web/Desktop 构建、Automation 类型、格式与样式检查通过。真实 AppServer 验收读回当前 profile，覆盖两段与四段保存、JSONC 和参数保留、立即重载后的文本一致性与完整组合恰好执行一次、脏 JSON 失败重试，以及中文控制说明、Tab 焦点和第五段提示。pending-close 在真实 IndexedDB 事务或 Main 原子文件发布处暂停，关闭快捷键页后，完成或拒绝写入均不修改已销毁的 pane、不抢焦点；失败后重试写入实际文件。单元测试还覆盖保存等待期间 clearInput、隐藏、销毁和焦点转移各自的成功与失败路径。
+
+早期 Web 严格重载失败由 editor/backup owner 修复：实际文件已有新值，但旧恢复备份曾被重新载入编辑器。历史失败证据保留；修复后原 recorder 场景与全程不打开 recorder 的对照均通过，未增加保存后等待备份删除，也未放宽文本断言。Web 备份仍由 `IndexedDbWorkingCopyBackupService` 持有，不经过 Rust backup RPC。此轮运行验证限定于 macOS Web/Electron Workbench，Windows 与 Linux 尚未运行；Web 保留 11 条、Electron 保留 9 条既有 Session catalog 与 syntax document 关闭期 console 错误，Electron 数量与类型和旧基线一致，所有场景的 page/forbidden errors 为 0。
+
 样式也跟随创建页面的代码：[`settingsEditor.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css) 负责页面布局和状态提示，[`settingsTree.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsTree.css) 负责分类树布局，[`settingsWidgets.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsWidgets.css) 负责设置搜索框和设置项控件。
 
 ## Models 设置
