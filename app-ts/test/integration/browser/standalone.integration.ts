@@ -2784,6 +2784,7 @@ window.ashStandaloneIntegration = {
 			...services.get(ITextModelResourceService),
 			addSaveParticipant: participant => snapshots.addSaveParticipant(participant),
 			getModel: resource => resource.toString() === callerModel.uri.toString() ? callerModel : null,
+			getModels: () => [callerModel],
 			onModelRemoved: EventUtils.None,
 			onModelLanguageChanged: EventUtils.None,
 			refresh: async () => { },

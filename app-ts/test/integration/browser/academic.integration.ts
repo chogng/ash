@@ -4,9 +4,9 @@ import { StandaloneCommandService } from '../../../src/ash/editor/standalone/bro
 import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
-import type { TextFileResolveRequest, TextFileSaveRequest } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
+import type { ITextFileService, TextFileResolveRequest, TextFileSaveRequest } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
-import { Emitter, type Event } from "../../../src/ash/base/common/event.js";
+import { Emitter, Event } from "../../../src/ash/base/common/event.js";
 import { Disposable, DisposableStore } from "../../../src/ash/base/common/lifecycle.js";
 import '../../../src/ash/base/browser/ui/dialog/dialog.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
@@ -156,7 +156,12 @@ services.registerInstance(IOpenerService, opener);
 disposables.add(opener.registerExternalOpener({ openExternal: async href => { openedLinks.push(href); return true; } }));
 disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 const copies = disposables.add(new BrowserWorkingCopyService());
-const files = { onDidChangeFiles: codeBlockFiles.onDidChangeFiles, resolve: (request: TextFileResolveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(request, signal), save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal) };
+const files: ITextFileService = {
+	onDidChangeFiles: codeBlockFiles.onDidChangeFiles,
+	onDidSave: Event.any(codeBlockFiles.onDidSave, structuredFiles.onDidSave),
+	resolve: (request: TextFileResolveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(request, signal),
+	save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal),
+};
 services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
 const codeBlockPane = disposables.add(registerTestComponentServices(services).createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json' }));
 const structuredPane = disposables.add(registerTestComponentServices(services).createInstance(DocumentEditorPane, { contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
