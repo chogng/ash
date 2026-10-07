@@ -1,3 +1,4 @@
+import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
 import { Schemas } from '../../base/common/network.js';
@@ -215,6 +216,7 @@ import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebar
 import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
+	readonly createAppToolsHost?: (services: IInstantiationService) => IDisposable;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly contributionIds: readonly string[];
 	readonly profile: SessionsProfile;
@@ -321,6 +323,7 @@ export abstract class Workbench extends Disposable {
 			eventApi: options.api.events,
 		}));
 		services.registerInstance(ISessionsService, view);
+		services.registerInstance(ISessionGroupsService, this._register(services.createInstance(SessionGroupsService)));
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IGitService, this._register(services.createInstance(GitService, { api: options.api.git, appServerApi: options.api.appServer, eventApi: options.api.events, workspaceContext: workspace, canCloneRepository: options.nativeHostApi !== undefined })));
@@ -554,7 +557,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.'),
+					() => localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -674,6 +677,7 @@ export abstract class Workbench extends Disposable {
 				activitybar.setCompact(configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact));
 			}
 		}));
+		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys));
 		this.layoutService.layout();

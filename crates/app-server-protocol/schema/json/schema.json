@@ -2156,6 +2156,285 @@
       ],
       "type": "string"
     },
+    "AppHostOperation": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "openFile",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "openBrowser",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "openTerminal",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "modified": {
+              "type": "string"
+            },
+            "original": {
+              "type": "string"
+            },
+            "type": {
+              "const": "openReview",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "original",
+            "modified"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "navigate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "listSections",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "createSection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "sectionId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "renameSection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sectionId",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "sectionId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "deleteSection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sectionId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "sectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "type": {
+              "const": "moveSession",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "sectionId": {
+              "type": "string"
+            },
+            "sessionIds": {
+              "items": {
+                "$ref": "#/$defs/SessionId"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "reorderSection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sectionId",
+            "sessionIds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "checkUpdate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "confetti",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AppHostRequestParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/AppHostOperation"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "turnId",
+        "operation"
+      ],
+      "type": "object"
+    },
+    "AppHostResult": {
+      "additionalProperties": false,
+      "description": "Host results are bounded JSON text; tools keep the semantic result in their own contract.",
+      "properties": {
+        "json": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "json"
+      ],
+      "type": "object"
+    },
     "AppServerError": {
       "properties": {
         "code": {
@@ -2399,6 +2678,29 @@
         "kind",
         "version",
         "endpoint"
+      ],
+      "type": "object"
+    },
+    "AppToolsCapability": {
+      "additionalProperties": false,
+      "description": "The originating connection can execute the application operations for this window.",
+      "properties": {
+        "agents": {
+          "type": "boolean"
+        },
+        "desktop": {
+          "type": "boolean"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "agents",
+        "desktop"
       ],
       "type": "object"
     },
@@ -4866,6 +5168,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/AgentInteractionCapability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "appTools": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppToolsCapability"
             },
             {
               "type": "null"
@@ -30690,8 +31003,37 @@
       ],
       "type": "object"
     },
+    "HostRequestCancelParams": {
+      "additionalProperties": false,
+      "description": "Cancels one server-issued host request without closing its connection.",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "HostRequestSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "app/request",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AppHostRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -30856,6 +31198,22 @@
     },
     "HostResultSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "app/request",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AppHostResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -31084,6 +31442,7 @@
           "$ref": "#/$defs/ClientCapabilities",
           "default": {
             "agentInteractions": null,
+            "appTools": null,
             "browser": null,
             "dirPermissionsHost": null,
             "notifications": null,
@@ -41954,6 +42313,22 @@
     },
     "ServerNotificationSchema": {
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "$/cancelRequest",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/HostRequestCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {

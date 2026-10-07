@@ -1,5 +1,6 @@
 //! JSON-RPC application boundary between product clients and Ash's domain components.
 
+mod app_tools_host;
 mod attachment_upload_store;
 mod browser_host;
 mod browser_tool;

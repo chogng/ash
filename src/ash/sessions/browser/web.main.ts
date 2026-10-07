@@ -1,3 +1,4 @@
+import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
 import { Schemas } from '../../base/common/network.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
@@ -46,7 +47,7 @@ export async function startBrowserSessions(profile: SessionsProfile): Promise<vo
 	let connectedHost: IDisposable | undefined;
 	try {
 		let documentClient: AppServerProtocolClient | undefined;
-		connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true);
+		connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true, true);
 		await mountBrowserSessions(profile, connectedHost, documentClient);
 	} catch (error) {
 		connectedHost?.dispose();
@@ -67,6 +68,7 @@ async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: ID
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 		const workbench = sessions.add(await createSessionsWorkbench({
+			createAppToolsHost: documentClient ? services => services.createInstance(AppToolsHost, documentClient!, document, undefined) : undefined,
 			createTextDocumentHost: documentClient ? services => {
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));

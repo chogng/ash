@@ -180,10 +180,11 @@ impl InProcessTransport {
     /// Hosts that provide their own composition root can use this instead of the local filesystem
     /// composition used by [`start_in_process_client`].
     pub fn from_server(server: AppServer) -> Self {
-        Self::from_shared_server(Arc::new(server))
+        Self::from_shared_server(server.into_shared())
     }
 
     /// Creates one logical connection to a shared embedded App Server composition root.
+    /// Publish the configured root with [`AppServer::into_shared`] before sharing it.
     pub fn from_shared_server(server: Arc<AppServer>) -> Self {
         let background = Arc::new(
             server
@@ -298,7 +299,7 @@ pub fn open_in_process_app_server(
     }
     let server = open_app_server(server_options)
         .map_err(|error| ClientError::Transport(error.to_string()))?;
-    let server = Arc::new(server);
+    let server = server.into_shared();
     let background = Arc::new(server.start_queue().map_err(ClientError::Transport)?);
     Ok(InProcessAppServer {
         background,

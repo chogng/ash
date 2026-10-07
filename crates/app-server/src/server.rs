@@ -66,6 +66,7 @@ mod agent_environment_source;
 #[cfg(test)]
 mod agent_runtime_tests;
 mod agent_selection;
+mod app_tools_operations;
 mod approval_environment_operations;
 mod asset_operations;
 #[cfg(test)]
@@ -277,6 +278,8 @@ pub struct AppServer {
     pub(super) client_host: Arc<crate::client_host::ClientHost>,
     pub(super) text_document_host: Arc<crate::text_document_host::TextDocumentHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
+    app_tool_port: crate::tool_composition::ToolPort,
+    app_tools_host: Arc<crate::app_tools_host::AppToolsHost>,
     env_state: EnvStateMode,
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
@@ -525,14 +528,31 @@ impl AppServer {
             Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
             Arc::new(BrowserToolPolicy),
         );
-        let turn_executor = TurnExecutor::without_tools(threads.clone(), model.clone())
-            .with_execution_activity(runtime_extensions::ExecutionActivity::shared())
-            .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                client_host: Arc::clone(&client_host),
-                threads: Arc::clone(&threads),
-                updates: updates.clone(),
-            }))
-            .with_extensions(Arc::clone(&agent_extensions));
+        let app_tools_host = Arc::new(crate::app_tools_host::AppToolsHost::default());
+        let app_tool_port = crate::tool_composition::ToolPort::application(
+            Arc::new(app_tools::AppToolService::new(app_tools_host.clone())),
+            Arc::new(app_tools::AppToolPolicy),
+        );
+        let application = crate::tool_composition::combine_tool_ports_at_generation_with_search(
+            vec![app_tool_port.clone()],
+            ash_tools::ToolRegistryGeneration::new(1),
+            Default::default(),
+        )
+        .expect("static application tools compose")
+        .expect("application tools are present");
+        let turn_executor = TurnExecutor::new(
+            threads.clone(),
+            model.clone(),
+            application.tools,
+            application.policy,
+        )
+        .with_execution_activity(runtime_extensions::ExecutionActivity::shared())
+        .with_thread_updates(Arc::new(AppServerThreadUpdates {
+            client_host: Arc::clone(&client_host),
+            threads: Arc::clone(&threads),
+            updates: updates.clone(),
+        }))
+        .with_extensions(Arc::clone(&agent_extensions));
         let multi_agent = Arc::new(MultiAgentCoordinator::new(
             Arc::clone(&threads),
             AgentTreeLimits::default(),
@@ -628,6 +648,8 @@ impl AppServer {
             client_host,
             text_document_host,
             browser_tool_port,
+            app_tool_port,
+            app_tools_host,
             env_state: EnvStateMode::Unconfigured,
             pty_helper: None,
             codebase_models: None,
@@ -812,6 +834,13 @@ impl AppServer {
         );
         self.memories = Some(Arc::new(memories::Memories::new(store)));
         self.with_memory_extension()
+    }
+
+    /// Publishes a configured backend and binds application tools without retaining a strong cycle.
+    pub fn into_shared(self) -> Arc<Self> {
+        let server = Arc::new(self);
+        server.app_tools_host.bind(&server);
+        server
     }
 
     pub fn connection(&self) -> ConnectionState {

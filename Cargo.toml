@@ -10,6 +10,7 @@ members = [
     "crates/ext/goal",
     "crates/ext/advisor",
     "crates/ext/agent",
+    "crates/ext/app-tools",
     "crates/ext/agent-message-board",
     "crates/agent-message-board-client",
     "crates/ext/workflows",
@@ -274,6 +275,7 @@ git-attribution = { package = "ash-git-attribution", path = "crates/ext/git-attr
 image-generation = { package = "ash-image-generation", path = "crates/ext/image-generation" }
 history-notes = { package = "ash-history-notes", path = "crates/ext/history-notes" }
 goal = { package = "ash-goal", path = "crates/ext/goal" }
+app-tools = { package = "ash-app-tools", path = "crates/ext/app-tools" }
 advisor = { package = "ash-advisor", path = "crates/ext/advisor" }
 agent = { package = "ash-agent", path = "crates/ext/agent" }
 agent-message-board = { package = "ash-agent-message-board", path = "crates/ext/agent-message-board" }

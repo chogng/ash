@@ -1,3 +1,4 @@
+import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
 import { h } from '../../../../base/browser/dom.js';
@@ -39,10 +40,10 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 
 class SessionsNavigationView extends ViewPane {
 	private readonly list: SessionsList;
-	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService) {
+	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
-		this.list = this._register(new SessionsList(this.contentElement, management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github));
+		this.list = this._register(new SessionsList(this.contentElement, management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups));
 	}
 	public focus(): void { this.list.focus(); }
 }

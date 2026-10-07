@@ -42,6 +42,7 @@ git-attribution = { workspace = true }
 image-generation = { workspace = true }
 history-notes = { workspace = true }
 goal = { workspace = true }
+app-tools = { workspace = true }
 advisor = { workspace = true }
 agent = { workspace = true }
 agent-message-board = { workspace = true }

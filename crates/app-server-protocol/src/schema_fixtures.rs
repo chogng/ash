@@ -216,6 +216,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert_eq!(
         host_methods,
         BTreeSet::from([
+            "app/request",
             "browser/close",
             "browser/sharing/set",
             "extensionClient/request",

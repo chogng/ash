@@ -164,3 +164,11 @@
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-font-size-label1);
 }
+
+.ash-sessions-list-items h3 {
+	margin: var(--ash-spacing-size160) var(--ash-spacing-size120) var(--ash-spacing-size80);
+	font-size: var(--ash-font-size-label1);
+	font-weight: var(--ash-font-weight-semi-bold);
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}

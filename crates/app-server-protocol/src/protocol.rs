@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod agent;
+pub mod app_tools;
 pub mod approval_environment;
 pub mod assets;
 pub mod attachments;

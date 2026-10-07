@@ -1,3 +1,5 @@
+import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
+import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
@@ -90,7 +92,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		profileServices.registerInstance(IMainProcessService, mainProcessService);
 		await mainProcessService.connect();
 		logger = profileServices.createInstance(LoggerChannelClient);
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true }, permissionDialog, mainProcessService);
+		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
@@ -122,6 +124,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(await createSessionsWorkbench({
+		createAppToolsHost: documentClient ? services => services.createInstance(AppToolsHost, documentClient!, container.ownerDocument, services.createInstance(ElectronUpdateService)) : undefined,
 		createTextDocumentHost: documentClient ? services => {
 			const editing = services.get(IChatEditingService);
 			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));

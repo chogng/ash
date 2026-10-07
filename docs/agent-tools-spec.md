@@ -551,6 +551,34 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 重新读取 canonical projection，旧 Thread sequence 通知会被忽略。中断使用节点的 exact
 `threadId/currentTurnId/threadSequence` 中断单个目标。
 
+## 应用级工具
+
+`crates/ext/app-tools` 拥有 Ash 应用工具的模型定义、参数校验和产品操作策略。App Server
+通过 Application ToolPort 将它们纳入共享工具目录，并将业务操作交给既有 Session、Project
+和 Automation owner。TypeScript 不重复维护模型工具定义。
+
+| 能力 | 工具 |
+| --- | --- |
+| 任务 | `list_threads`、`read_thread`、`create_thread`、`fork_thread`、`set_thread_archived` |
+| 项目 | `list_projects` |
+| 自动化 | `automation_update`，支持 list/view/save/delete/run/runs/stop |
+| 界面导航 | `open_in_ash`、`navigate_to_ash_page` |
+| 侧栏组织 | `list_sidebar_sections`、`create_sidebar_section`、`rename_sidebar_section`、`delete_sidebar_section`、`move_thread_to_sidebar_section`、`reorder_section` |
+| 桌面与庆祝 | `check_app_update`、`fire_confetti` |
+
+创建任务不会隐式发送提示词。创建、fork、归档和自动化应由用户明确请求；不得归档正在执行
+该工具的任务。自动化修改使用完整共享定义及 expected_revision，保留未请求修改的字段。
+模型参数为 snake_case；任务和分组返回值保留产品契约中的 sessionId、threadId 和 sectionId。
+
+界面操作使用 Core 提供的 Session/Thread/Turn 身份，交给发起该 Turn 的 Agents 窗口。
+它们不根据窗口焦点选宿主；断连返回不可用，重连不会重放操作。打开文件或比较文件必须位于
+调用任务已授权读取的目录中；浏览器目标只允许 HTTP/HTTPS。桌面更新仅检查，不下载或安装。
+庆祝仅在用户邀请时调用，并遵守减少动画设置。
+
+侧栏分组属于 Profile 呈现状态，由 ISessionGroupsService 保存。删除分组保留任务，重排必须
+列出该组全部任务且各出现一次；归档移除分组成员关系，临时目录缺失不移除关系。
+这些工具当前覆盖已实现的 Ash 能力；分享链接、跨主机迁移和桌面语音等能力尚未提供对应工具。
+
 ## 附录 A：工具行为评测基线
 
 以下文字是工具描述、模型基础 instructions 和行为测试的评测基线，不作为要复制进中央 system prompt 的模板。具体工具名、参数和失败语义只在对应 `ToolDefinition` owner 中维护；模型基础 instructions 只要求遵守 host 提供的 exact schema。

@@ -1,3 +1,5 @@
+#[path = "app_tools_tests.rs"]
+mod app_tools_tests;
 #[path = "audio_tests.rs"]
 mod audio_tests;
 

@@ -88,7 +88,7 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     )?;
     match command {
         Command::Stdio => {
-            let server = Arc::new(open_server(&options)?);
+            let server = open_server(&options)?.into_shared();
             let _queue = server.start_queue()?;
             server.serve_stdio().map_err(|error| error.to_string())
         }
@@ -236,7 +236,7 @@ fn serve_websocket(server: AppServer, options: WebSocketOptions) -> Result<(), S
         .build()
         .map_err(|error| error.to_string())?;
     runtime.block_on(async move {
-        let server = Arc::new(server);
+        let server = server.into_shared();
         let _queue = server.start_queue()?;
         let connection_server = Arc::clone(&server);
         let listener = start_websocket_acceptor(

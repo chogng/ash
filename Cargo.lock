@@ -408,6 +408,7 @@ dependencies = [
  "ash-app-server-daemon",
  "ash-app-server-protocol",
  "ash-app-server-transport",
+ "ash-app-tools",
  "ash-apply-patch",
  "ash-arg0",
  "ash-assets",
@@ -677,6 +678,20 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "url",
  "urlencoding",
+]
+
+[[package]]
+name = "ash-app-tools"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-core",
+ "ash-core-api",
+ "ash-protocol",
+ "schemars",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,3 +1,4 @@
+import type { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import "./media/sessionsControls.css";
 import "./media/sessionsList.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
@@ -21,11 +22,12 @@ export class SessionsList extends Disposable {
 	private readonly searchInput: HTMLInputElement;
 	private readonly list: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
+	private readonly sectionHeadings = new Map<string, HTMLHeadingElement>();
 	private readonly empty: HTMLParagraphElement;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly viewService: ISessionsService;
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService) {
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService, private readonly groups?: ISessionGroupsService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.sessionService = sessionService;
@@ -62,6 +64,7 @@ export class SessionsList extends Disposable {
 		this._register(addDisposableListener(this.searchInput, 'input', () => this.render()));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
+		if (groups) this._register(groups.onDidChange(() => this.render()));
 		this.render();
 	}
 
@@ -73,7 +76,8 @@ export class SessionsList extends Disposable {
 
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
-		const ordered: SessionListItem[] = [];
+		const ordered: HTMLElement[] = [];
+		const grouped = new Map<string, HTMLElement>();
 		const present = new Set<string>();
 		const activeSelection = this.viewService.activeSelection;
 		const query = this.searchInput.value.trim().toLocaleLowerCase();
@@ -85,7 +89,7 @@ export class SessionsList extends Disposable {
 			const key = `untitled:${session.untitledSessionId}`;
 			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
 			item.update(session.title || "New Session", selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
-			ordered.push(item);
+			ordered.push(item.domNode);
 			present.add(key);
 		}
 		for (const session of this.sessionService.sessions) {
@@ -100,8 +104,21 @@ export class SessionsList extends Disposable {
 			item.update(session.title || "Untitled Session", current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId));
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			ordered.push(item);
+			grouped.set(session.sessionId, item.domNode);
 			present.add(key);
+		}
+		for (const group of this.groups?.groups ?? []) {
+			const members = group.sessionIds.filter(id => grouped.has(id));
+			if (query && !members.length && !group.name.toLocaleLowerCase().includes(query)) continue;
+			const heading = this.sectionHeadings.get(group.sectionId) ?? h(ownerDocument, 'h3');
+			this.sectionHeadings.set(group.sectionId, heading);
+			heading.textContent = group.name;
+			ordered.push(heading);
+			for (const id of members) { ordered.push(grouped.get(id)!); grouped.delete(id); }
+		}
+		ordered.push(...grouped.values());
+		for (const id of this.sectionHeadings.keys()) {
+			if (!this.groups?.groups.some(group => group.sectionId === id)) this.sectionHeadings.delete(id);
 		}
 		for (const key of this.items.keys()) {
 			if (!present.has(key)) this.items.deleteAndDispose(key);
@@ -114,7 +131,7 @@ export class SessionsList extends Disposable {
 			return;
 		}
 		for (let index = 0; index < ordered.length; index++) {
-			const button = ordered[index].domNode;
+			const button = ordered[index];
 			if (this.list.childNodes[index] !== button) this.list.insertBefore(button, this.list.childNodes[index] ?? null);
 		}
 		while (this.list.childNodes.length > ordered.length) this.list.removeChild(this.list.lastChild!);

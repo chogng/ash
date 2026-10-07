@@ -272,6 +272,22 @@ version 1 宿主同时声明 `observe + input`；最后一个完整宿主断开�
 Desktop 当前实现和 Playwright 后续边界见
 [`ash-desktop-architecture.md#7-浏览器能力`](ash-desktop-architecture.md#7-浏览器能力)。
 
+### Agents 窗口应用工具宿主
+
+受信 Desktop 或 Browser 连接可以在 initialize 中声明
+`appTools: { version: 1, agents: true, desktop: boolean }`。普通 wire client 不能通过该字段
+提升宿主权限，Browser 不能声明 desktop。业务工具在后端直接执行；需要窗口的操作走
+Server → Client `app/request`，不增加 Main 中的业务分发。
+
+请求包含发起操作的 sessionId、threadId、turnId 和类型化 operation。操作包括打开文件、
+浏览器、终端或比较，任务导航，侧栏分组管理，以及检查更新与庆祝。响应是
+`{ json: string }`，Rust 验证其为不超过 1 MiB 的 JSON 文本，再形成模型工具结果。
+
+请求绑定到发起 Turn 的连接，其他连接不能响应。它复用 ClientHost 的 30 秒 deadline、
+`$/cancelRequest`、断连失效和晚到响应处理。取消会阻止尚未提交的 UI 操作；已经完成的导航
+或保存不会回滚，因此未知结果时应先查询状态，不自动重放。缺少窗口或能力时返回执行错误。
+工具定义和使用约束见 [工具契约](agent-tools-spec.md#应用级工具)。
+
 ## 5. 方法清单
 
 | Method                                                                                   | Aggregate                                 | Effect                                                                                                                                                                                                                      |

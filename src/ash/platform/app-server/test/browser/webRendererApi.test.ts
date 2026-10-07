@@ -722,3 +722,27 @@ test('file glob cancellation waits for the original terminal reply and rejects l
 	await assert.rejects(connected.api.fileSearch.glob(folder, query, controller.signal), isCancellationError);
 	assert.equal(transport.requests.length, count);
 });
+
+test('host cancellation retires only its request and ignores late completion', async () => {
+	const hot = new FakeTransport();
+	const client = new AppServerProtocolClient(hot);
+	using cleanup = toDisposable(() => client.dispose());
+	let signal: AbortSignal | undefined;
+	let finish!: (value: { targetId: string; }) => void;
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
+		signal = context.signal;
+		return new Promise(resolve => { finish = resolve; });
+	});
+	await client.connect();
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'cancel-host', method: 'browser/create', params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' } }) });
+	await Promise.resolve();
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'cancel-host' } }) });
+	assert.equal(signal?.aborted, true);
+	assert.equal(client.state, 'ready');
+	assert.deepEqual(hot.requests.find(request => request.id === 'cancel-host')?.error, { code: -32800, message: 'Host request cancelled' });
+	finish({ targetId: 'cancelled-target' });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(hot.requests.filter(request => request.id === 'cancel-host').length, 1);
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'unknown-host' } }) });
+	assert.equal(client.state, 'ready');
+});

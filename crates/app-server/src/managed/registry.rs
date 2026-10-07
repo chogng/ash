@@ -429,7 +429,8 @@ fn server_for(
     drop(opening);
     finish_directory(
         &runtime,
-        open_server_with_profile_runtime(&options, Arc::clone(profile_runtime)).map(Arc::new),
+        open_server_with_profile_runtime(&options, Arc::clone(profile_runtime))
+            .map(AppServer::into_shared),
     )
 }
 
@@ -486,7 +487,8 @@ fn open_queued_directory(
     if start {
         let _ = finish_directory(
             &runtime,
-            open_server_with_profile_runtime(&options, Arc::clone(profile_runtime)).map(Arc::new),
+            open_server_with_profile_runtime(&options, Arc::clone(profile_runtime))
+                .map(AppServer::into_shared),
         );
     }
 }

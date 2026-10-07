@@ -15,6 +15,7 @@ import type { ExtensionHostChanged } from './types/ExtensionHostChanged.js';
 import type { FsChanged } from './types/FsChanged.js';
 import type { GitIgnoreChanged } from './types/GitIgnoreChanged.js';
 import type { GitStatusChanged } from './types/GitStatusChanged.js';
+import type { HostRequestCancelParams } from './types/HostRequestCancelParams.js';
 import type { LanguageDiagnosticsNotification } from './types/LanguageDiagnosticsNotification.js';
 import type { LanguageServerMessageNotification } from './types/LanguageServerMessageNotification.js';
 import type { LanguageServerProgressNotification } from './types/LanguageServerProgressNotification.js';
@@ -38,6 +39,7 @@ import type { TurnChangesChanged } from './types/TurnChangesChanged.js';
 import type { JsonRpcVersion } from './protocol.js';
 
 export interface AppServerNotificationMap {
+  "$/cancelRequest": HostRequestCancelParams;
   "textDocument/turnFinished": TextDocumentTurnFinished;
   "testing/updated": TestingUpdate;
   "account/login/completed": AccountLoginCompleted;
@@ -93,6 +95,7 @@ readonly __params?: NotificationParams<M>;
 export const APP_SERVER_NOTIFICATIONS: {
 [M in AppServerNotificationMethod]: AppServerNotificationDefinition<M>
 } = {
+  "$/cancelRequest": { method: "$/cancelRequest" },
   "textDocument/turnFinished": { method: "textDocument/turnFinished" },
   "testing/updated": { method: "testing/updated" },
   "account/login/completed": { method: "account/login/completed" },

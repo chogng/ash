@@ -31,6 +31,9 @@ pub struct ClientInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ClientCapabilities {
     #[serde(default)]
+    #[ts(optional = nullable)]
+    pub app_tools: Option<crate::protocol::app_tools::AppToolsCapability>,
+    #[serde(default)]
     #[ts(optional)]
     pub notifications: Option<bool>,
     #[serde(default)]
@@ -114,4 +117,11 @@ impl TS for EmptyParams {
     fn inline(_: &ts_rs::Config) -> String {
         "Record<string, never>".into()
     }
+}
+
+/// Cancels one server-issued host request without closing its connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HostRequestCancelParams {
+    pub id: String,
 }

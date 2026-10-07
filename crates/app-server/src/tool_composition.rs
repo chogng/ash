@@ -215,6 +215,7 @@ impl Default for ToolSearchOptions {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ToolPortKind {
     Environment,
+    Application,
     Dynamic,
     Extension,
     Host,
@@ -226,6 +227,7 @@ impl ToolPortKind {
     fn runtime_namespace(self) -> &'static str {
         match self {
             Self::Environment => "environment",
+            Self::Application => "application",
             Self::Dynamic => "dynamic",
             Self::Extension => "extension",
             Self::Host => "host",
@@ -237,6 +239,7 @@ impl ToolPortKind {
     fn search_label(self) -> &'static str {
         match self {
             Self::Environment => "execution environment",
+            Self::Application => "Ash application tool",
             Self::Dynamic => "client-hosted dynamic tool",
             Self::Extension => "host-installed extension tool",
             Self::Host => "product-hosted capability",
@@ -247,6 +250,9 @@ impl ToolPortKind {
 
     fn source_provenance(self, name: &ToolName) -> ToolSourceProvenance {
         match self {
+            Self::Application => ToolSourceProvenance::Product {
+                component: "ash-app-tools".into(),
+            },
             Self::Environment => ToolSourceProvenance::Product {
                 component: "ash-app-server/execution-environment".into(),
             },
@@ -286,6 +292,18 @@ impl ToolPort {
     ) -> Self {
         Self::from_service(
             ToolPortKind::Environment,
+            ToolExposure::Direct,
+            tools,
+            policy,
+        )
+    }
+
+    pub(crate) fn application(
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Self {
+        Self::from_service(
+            ToolPortKind::Application,
             ToolExposure::Direct,
             tools,
             policy,
@@ -1010,6 +1028,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let mut dynamic_policy = None;
     let mut extension_policy = None;
     let mut host_policy = None;
+    let mut application_policy = None;
     let mut environment_policy = None;
     for (service_index, port) in ports.into_iter().enumerate() {
         for contribution in port.contributions {
@@ -1026,6 +1045,14 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             });
         }
         match port.kind {
+            ToolPortKind::Application if application_policy.is_none() => {
+                application_policy = Some(Arc::clone(&port.policy));
+            }
+            ToolPortKind::Application => {
+                return Err(ToolCompositionError(
+                    "multiple application tool policy ports".into(),
+                ));
+            }
             ToolPortKind::Environment if environment_policy.is_none() => {
                 environment_policy = Some(Arc::clone(&port.policy));
             }
@@ -1086,7 +1113,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
                 ToolPortKind::Environment => ToolSourceDto::Environment,
                 ToolPortKind::Dynamic => ToolSourceDto::Dynamic,
                 ToolPortKind::Extension => ToolSourceDto::Extension,
-                ToolPortKind::Host => ToolSourceDto::Host,
+                ToolPortKind::Host | ToolPortKind::Application => ToolSourceDto::Host,
                 ToolPortKind::Local => ToolSourceDto::Local,
                 ToolPortKind::Mcp => ToolSourceDto::Mcp,
             },
@@ -1119,6 +1146,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             dynamic: dynamic_policy,
             extension: extension_policy,
             host: host_policy,
+            application: application_policy,
             environment: environment_policy,
             local: local_policy,
             mcp: mcp_policy,
@@ -1135,7 +1163,7 @@ fn tool_authority(tool: &CollectedToolDefinition) -> ToolAuthorityDto {
             | ToolPortKind::Dynamic
             | ToolPortKind::Extension
             | ToolPortKind::Mcp => ToolAuthorityDto::ProviderDefined,
-            ToolPortKind::Host => ToolAuthorityDto::ProductService,
+            ToolPortKind::Host | ToolPortKind::Application => ToolAuthorityDto::ProductService,
             ToolPortKind::Local => unreachable!(),
         };
     }
@@ -1631,6 +1659,7 @@ struct CompositeActionPolicyService {
     dynamic: Option<Arc<dyn ActionPolicyService>>,
     extension: Option<Arc<dyn ActionPolicyService>>,
     host: Option<Arc<dyn ActionPolicyService>>,
+    application: Option<Arc<dyn ActionPolicyService>>,
     local: Option<Arc<dyn ActionPolicyService>>,
     mcp: Option<Arc<dyn ActionPolicyService>>,
     search_enabled: bool,
@@ -1639,7 +1668,10 @@ struct CompositeActionPolicyService {
 impl ActionPolicyService for CompositeActionPolicyService {
     fn revision(&self) -> String {
         format!(
-            "composite-policy-v1:environment={}:dynamic={}:extension={}:host={}:local={}:mcp={}:tool-search={}",
+            "composite-policy-v1:application={}:environment={}:dynamic={}:extension={}:host={}:local={}:mcp={}:tool-search={}",
+            self.application
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
             self.environment
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
@@ -1680,6 +1712,11 @@ impl ActionPolicyService for CompositeActionPolicyService {
         let policy = match request.provenance().source() {
             ActionSource::DynamicTool => self.dynamic.as_ref(),
             ActionSource::Plugin => self.extension.as_ref(),
+            ActionSource::BuiltInTool
+                if request.action_policy_revision().as_str() == "ash-app-tools-v1" =>
+            {
+                self.application.as_ref()
+            }
             ActionSource::BuiltInTool
                 if request.provenance().source_id().starts_with("browser_") =>
             {

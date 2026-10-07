@@ -55,6 +55,7 @@ struct ClientHostState {
 }
 
 struct ClientHostOwner {
+    app_tools: Option<ash_app_server_protocol::protocol::app_tools::AppToolsCapability>,
     outbound: NotificationQueue,
     text_documents: bool,
 }
@@ -118,10 +119,39 @@ impl ClientHost {
             .insert(
                 connection_id,
                 ClientHostOwner {
+                    app_tools: None,
                     outbound,
                     text_documents,
                 },
             );
+    }
+
+    pub(crate) fn register_app_tools(
+        &self,
+        connection_id: u64,
+        capability: Option<ash_app_server_protocol::protocol::app_tools::AppToolsCapability>,
+    ) {
+        if let Some(owner) = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .owners
+            .get_mut(&connection_id)
+        {
+            owner.app_tools = capability;
+        }
+    }
+
+    pub(crate) fn app_tools_capability(
+        &self,
+        connection_id: u64,
+    ) -> Option<ash_app_server_protocol::protocol::app_tools::AppToolsCapability> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .owners
+            .get(&connection_id)
+            .and_then(|owner| owner.app_tools.clone())
     }
 
     pub(crate) fn unregister(&self, connection_id: u64) {

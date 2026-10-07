@@ -817,6 +817,7 @@ pub(crate) struct EnvToolPorts {
     state: Mutex<EnvToolPortState>,
     reloadable: Arc<ReloadableToolPorts>,
     host: ToolPort,
+    application: ToolPort,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
 
@@ -842,6 +843,7 @@ impl EnvToolPorts {
 
     fn new(
         host: ToolPort,
+        application: ToolPort,
         environment: Option<ToolPort>,
         mcp: Option<ToolPort>,
         dynamic: Option<ToolPort>,
@@ -853,8 +855,8 @@ impl EnvToolPorts {
         let search =
             resolve_tool_search(search_config, providers, semantic_model_provider.as_ref());
         let registry_generation = ToolRegistryGeneration::new(1);
-        let ports = extension
-            .iter()
+        let ports = std::iter::once(&application)
+            .chain(extension.iter())
             .chain(environment.iter())
             .chain(dynamic.iter())
             .chain(mcp.iter())
@@ -882,6 +884,7 @@ impl EnvToolPorts {
             }),
             reloadable: ReloadableToolPorts::new(combined),
             host,
+            application,
             semantic_model_provider,
         }))
     }
@@ -984,9 +987,8 @@ impl EnvToolPorts {
             ),
         };
         update(&mut next)?;
-        let ports = next
-            .extension
-            .iter()
+        let ports = std::iter::once(&self.application)
+            .chain(next.extension.iter())
             .chain(next.environment.iter())
             .chain(next.dynamic.iter())
             .chain(next.host.iter())
@@ -1066,9 +1068,8 @@ impl AppServer {
                 })
                 .map_err(|error| error.to_string())?;
         } else {
-            let ports = self
-                .extension_tool_port
-                .iter()
+            let ports = std::iter::once(&self.app_tool_port)
+                .chain(self.extension_tool_port.iter())
                 .chain(self.dynamic_tool_port.iter())
                 .cloned()
                 .chain(std::iter::once(port.clone()))
@@ -1100,7 +1101,8 @@ impl AppServer {
         {
             tools.replace_extension(Some(extension.clone()))?;
         } else {
-            let ports = std::iter::once(extension.clone())
+            let ports = std::iter::once(self.app_tool_port.clone())
+                .chain(std::iter::once(extension.clone()))
                 .chain(self.dynamic_tool_port.iter().cloned())
                 .chain(self.execution_tool_port.iter().cloned())
                 .collect();
@@ -1145,9 +1147,8 @@ impl AppServer {
                 .replace_dynamic(Some(port.clone()))
                 .map_err(|error| DynamicToolCompositionError::configuration(error.to_string()))?;
         } else {
-            let ports = self
-                .extension_tool_port
-                .iter()
+            let ports = std::iter::once(&self.app_tool_port)
+                .chain(self.extension_tool_port.iter())
                 .cloned()
                 .chain(self.execution_tool_port.iter().cloned())
                 .chain(std::iter::once(port.clone()))
@@ -1222,6 +1223,7 @@ impl AppServer {
         };
         let tools = EnvToolPorts::new(
             self.browser_tool_port.clone(),
+            self.app_tool_port.clone(),
             self.execution_tool_port.clone(),
             mcp,
             self.dynamic_tool_port.clone(),

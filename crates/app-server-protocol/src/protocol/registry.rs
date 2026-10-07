@@ -4744,6 +4744,7 @@ macro_rules! host_methods {
 }
 
 host_methods! {
+    AppHostRequest => "app/request" { params: crate::protocol::app_tools::AppHostRequestParams, response: crate::protocol::app_tools::AppHostResult, },
     ExtensionClientRequest => "extensionClient/request" { params: ExtensionClientRequestParams, response: ExtensionClientResult, },
     TextDocumentList => "textDocument/list" { params: TextDocumentListParams, response: TextDocumentListResult, },
     TextDocumentRead => "textDocument/read" { params: TextDocumentReadParams, response: TextDocumentReadResult, },
@@ -4869,6 +4870,7 @@ macro_rules! notification_storage {
 }
 
 server_notifications! {
+    CancelHostRequest => "$/cancelRequest" { params: crate::protocol::common::HostRequestCancelParams, },
     TextDocumentTurnFinished => "textDocument/turnFinished" { params: TextDocumentTurnFinished, },
     TestingUpdated => "testing/updated" {
         params: TestingUpdate,
@@ -5251,6 +5253,11 @@ typescript_bindings! {
     BrowserPerformResult,
     BrowserTextInputTargetDto,
     ClientCapabilities,
+    crate::protocol::common::HostRequestCancelParams,
+    crate::protocol::app_tools::AppToolsCapability,
+    crate::protocol::app_tools::AppHostRequestParams,
+    crate::protocol::app_tools::AppHostOperation,
+    crate::protocol::app_tools::AppHostResult,
     TextDocumentsCapability,
     ExtensionClientOperation,
     ExtensionDiagnostic,

@@ -2,7 +2,7 @@ import { WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../common/generated/index.js";
 import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../common/generated/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
-import { toError } from "../../../base/common/errors.js";
+import { isCancellationError, toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
@@ -278,11 +278,22 @@ export class AppServerProtocolClient {
 			controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
 			void Promise.resolve().then(() => handler(request.params as never, { signal: controller.signal })).then(
 				value => reply({ result: decodeAppServerServerRequestResult(request.method, value) }),
-				error => reply({ error: { code: -32000, message: toError(error).message } }),
+				error => reply({ error: { code: isCancellationError(error) ? -32800 : -32000, message: toError(error).message } }),
 			).catch(error => this.fail(toError(error)));
 			return;
 		}
 		const wireNotification = decodeAppServerNotification(message);
+		if (wireNotification.method === '$/cancelRequest') {
+			const id = wireNotification.params.id;
+			const controller = this.inbound.get(id);
+			if (controller) {
+				// Retire first: cancellation listeners and late promises must not send a second reply.
+				this.inbound.delete(id);
+				controller.abort();
+				this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Host request cancelled' } }) });
+			}
+			return;
+		}
 		const notification = { method: wireNotification.method, params: wireNotification.params } as ServerNotification;
 		for (const listener of this.notificationListeners) {
 			try {

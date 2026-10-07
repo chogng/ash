@@ -144,6 +144,16 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
+        let created = self.create_session(params)?;
+        self.updates
+            .subscribe_session(connection.connection_id, created.session.session_id.clone());
+        result(&created)
+    }
+
+    pub(super) fn create_session(
+        &self,
+        params: SessionCreateParams,
+    ) -> Result<SessionResult, RpcError> {
         let execution_target = match &params.execution_target {
             None => None,
             Some(SessionExecutionTarget::Local { root }) => {
@@ -253,9 +263,7 @@ impl AppServer {
             });
         }
         self.updates.publish_session_changed(&created.session_id);
-        self.updates
-            .subscribe_session(connection.connection_id, created.session_id.clone());
-        result(&self.session_result(&created.session_id)?)
+        self.session_result(&created.session_id)
     }
 
     pub(super) fn fork_session_request(

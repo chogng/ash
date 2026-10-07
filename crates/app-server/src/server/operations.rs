@@ -286,6 +286,18 @@ impl AppServer {
             ));
         }
         let params: InitializeParams = decode(params)?;
+        if params
+            .capabilities
+            .app_tools
+            .as_ref()
+            .is_some_and(|capability| {
+                capability.version != 1
+                    || !connection.allows_team_capabilities()
+                    || capability.desktop && !connection.allows_product_host_capabilities()
+            })
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         if params.client_info.name.trim().is_empty() || params.client_info.version.trim().is_empty()
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
@@ -367,6 +379,10 @@ impl AppServer {
             connection.connection_id,
             params.capabilities.text_documents.is_some(),
             connection.outbound_notifications.clone(),
+        );
+        self.client_host.register_app_tools(
+            connection.connection_id,
+            params.capabilities.app_tools.clone(),
         );
         connection.set_initialized();
         let (file_system, git, content_search, codebase, cloud_codebase, terminal, debug_adapter) =
