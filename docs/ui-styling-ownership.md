@@ -57,6 +57,14 @@ Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变
 
 编辑器分组的常驻边界由 `EditorPart` 选择语义颜色，`Grid` 传递给各层 `SplitView`，再由相邻 pane 的边缘绘制。`Sash` 只负责拖动命中区及悬停、焦点反馈；即使边界不可拖动，也应保留分组的视觉边界。
 
+### View 欢迎内容
+
+视图欢迎内容由 `WorkbenchViewRegistry` 注册，`viewPane.ts` 中的 `ViewWelcomeController`
+负责说明、按钮、滚动和条件更新，并随创建它的 View 释放。SCM 只判断是否没有仓库；Git
+贡献提供打开文件夹、克隆和初始化的文案与命令链接。链接经现有命令和 `IGitService` 执行，
+Git 状态和仓库操作仍归 Rust 后端。`views.css` 负责欢迎内容的排列；Button 与 ScrollableElement
+保留自己的焦点、禁用和滚动样式，SCM 不再单独渲染欢迎文案。
+
 ### Workbench 外观贡献
 
 `workbench/contrib/modernUI` 是 Workbench 外观方案的集中覆盖层。它只在 `.modern-ui` 存在时覆盖已有稳定 class，不创建 Part DOM，也不接管交互状态。

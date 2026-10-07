@@ -73,6 +73,19 @@
     "scm.repositories.selectFailed": "Could not select repository: {0}",
     "scm.repositories.verbosityTitle": "Repositories accessibility help",
     "scm.repositories.verbosityDescription": "Announce how to open accessibility help when source control repositories receive focus.",
-    "scm.repositories.help": "Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path."
+    "scm.repositories.help": "Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path.",
+    "view.welcome": "Welcome",
+    "view.welcome.actionFailed": "Could not complete the action: {0}",
+    "scm.welcome.noProviders": "No source control providers registered.",
+    "git.welcome.empty": "Open a folder containing a Git repository to use source control.",
+    "git.welcome.openFolder": "Open Folder",
+    "git.welcome.clone": "Clone Repository",
+    "git.welcome.initialize": "Initialize Repository",
+    "git.welcome.noRepository": "The open folder does not contain a Git repository. Initialize a repository to start tracking changes.",
+    "scm.welcome.help": "Source control has no repositories yet. Open a folder containing a Git repository, clone a repository when available, or initialize a repository in an open folder. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.",
+    "scm.welcome.helpHint": "Press Alt+F1 for accessibility help.",
+    "scm.welcome.verbosityInvalid": "Source control accessibility verbosity must be a boolean.",
+    "scm.welcome.verbosityTitle": "Source control accessibility help",
+    "scm.welcome.verbosityDescription": "Announce how to open accessibility help when source control receives focus."
   }
 }

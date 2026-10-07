@@ -13,7 +13,7 @@ Electron Main 在创建窗口前读取语言资源，Workbench、Sessions 和系
 - `en/*.json` 只保存不能由静态调用提取的声明，例如以数据表或动态 key 调用的文案。可以静态提取的英文留在调用位置。
 - 主题颜色说明由主题注册代码声明。审批模式的英中说明由生成的 `ApprovalModes` 提供，不在这里重复维护。
 
-`build/resources/localization.ts` 提取英文、合并领域资源并生成 `src/ash/workbench/services/localization/common/localizationCatalogs.ts`。不要手工修改生成文件。
+`build/resources/localization.ts` 提取英文、合并领域资源，生成 `.build/desktop/localization/` 中的语言目录。生成文件不提交到 Git，也不要手工修改。源码中的 `src/ash/workbench/services/localization/common/localizationCatalogs.ts` 是固定加载入口，不随词条变化。
 
 ## 生成与校验
 
@@ -25,11 +25,11 @@ pnpm localization:check
 pnpm localization:check --report-missing
 ```
 
-生成器拒绝冲突的英文声明、重复译文、未知翻译 key 和不匹配的参数。没有语言条目的文案显示代码中的原文，并在生成时报告数量；`--report-missing` 列出具体 key。
+`localization:check` 只校验源词条，不要求已有生成文件，也不写入产物。生成和校验均拒绝冲突的英文声明、重复译文、未知翻译 key 和不匹配的参数。没有语言条目的文案显示代码中的原文，并报告数量；`--report-missing` 列出具体 key。
 
 不是所有内容都需要翻译。产品名、技术名称、颜色通道符号等可以保留原文，在所属语言 JSON 中显式填写相同内容，例如 `"hueShort": "H"`。生成器分别报告没有语言条目的文案与显式保留原文的条目。配置键、命令标识、协议字段、路径和用户内容保持原样，不作为界面文案翻译。
 
-正常构建和测试准备会生成资源。Vite 开发服务会在文案或领域 JSON 改动时重新生成，资源变化后重新加载页面。
+正常构建和测试准备会生成资源，干净 checkout 无需预先保存生成文件。Vite 开发服务会在文案或领域 JSON 改动时重新生成，资源变化后重新加载页面。多设备同步只需合并功能文案与领域 JSON，再运行正常开发、构建或测试命令；生成资源不会改动源码工作区。
 
 ## 本地语言资源
 

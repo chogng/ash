@@ -8,6 +8,8 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ISCMHistoryProvider } from './history.js';
 
+export const VIEW_PANE_ID = 'ash.gitView';
+
 export interface ISCMResourceDecorations {
 	readonly badge: string;
 	readonly tooltip: string;

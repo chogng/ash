@@ -15,3 +15,43 @@
 	color: color-mix(in srgb, currentColor 70%, transparent);
 	font-size: 12px;
 }
+
+.ash-view-pane > .ash-pane-view-content.welcome > :not(.ash-view-welcome) {
+	display: none;
+}
+
+.ash-view-welcome {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.5;
+}
+
+.ash-view-welcome-viewport {
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ash-view-welcome-content {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--ash-spacing-size120);
+	min-height: 0;
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size200);
+}
+
+.ash-view-welcome.hidden {
+	display: none;
+}
+
+.ash-view-welcome-content > p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}

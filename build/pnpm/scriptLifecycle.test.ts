@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-test("aggregate and standalone unit commands prepare inputs once and stop on preparation failure", async (t) => {
+test("aggregate, test and typecheck commands prepare inputs once and stop on preparation failure", async (t) => {
 	const directory = await mkdtemp(join(tmpdir(), "ash-lifecycle-"));
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8"));
@@ -15,6 +15,10 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
 		"test:build-tools": "tools",
 		"test:unit": "unit",
 		"test:editor:unit": "editor",
+		"test:extensions": "extension-tests",
+		"test:browser:integration": "browser",
+		"test:editor:browser": "editor-browser",
+		"test:editor:browser:build": "browser-build",
 		"prepare:output": "output",
 		"prepare:extensions": "extensions",
 		"localization:generate": "localization",
@@ -33,11 +37,17 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["test:main", ["styles", "tools", "output", "localization", "extensions", "common", "icons", "unit"], ""],
+		["test:main", ["styles", "tools", "output", "extensions", "localization", "common", "icons", "unit"], ""],
 		["test:main", ["styles"], "styles"],
-		["test:unit", ["output", "localization", "extensions", "common", "icons", "unit"], ""],
-		["test:editor:unit", ["output", "localization", "extensions", "common", "icons", "editor"], ""],
-		["test:main", ["styles", "tools", "output", "localization", "extensions", "common"], "common"],
+		["test:unit", ["output", "extensions", "localization", "common", "icons", "unit"], ""],
+		["test:editor:unit", ["output", "extensions", "localization", "common", "icons", "editor"], ""],
+		["test:extensions", ["output", "extensions", "localization", "common", "icons", "extension-tests"], ""],
+		["test:browser:integration", ["extensions", "localization", "common", "icons", "browser"], ""],
+		["test:editor:browser", ["extensions", "localization", "common", "icons", "editor-browser"], ""],
+		["test:editor:browser:build", ["extensions", "localization", "common", "icons", "browser-build"], ""],
+		["typecheck:common", ["localization", "common"], ""],
+		["test:browser:integration", ["extensions", "localization"], "localization"],
+		["test:main", ["styles", "tools", "output", "extensions", "localization", "common"], "common"],
 	] as const) {
 		await writeFile(join(directory, "operations.jsonl"), "");
 		const result = spawnSync(executable, [...prefix, "run", command], {

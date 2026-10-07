@@ -32,8 +32,8 @@ test('keeps the generated App Server decoder separate from shared renderer code'
 });
 
 test('shares each language catalog between renderers without combining languages into an oversized chunk', async () => {
-	const catalogs = ['en', 'zh-CN'].map(locale => `fixture/localization/common/localizationCatalog.${locale}.ts`);
-	const index = 'fixture/localization/common/localizationCatalogs.ts';
+	const catalogs = ['en', 'zh-CN'].map(locale => `fixture/.build/desktop/localization/localizationCatalog.${locale}.ts`);
+	const index = 'fixture/.build/desktop/localization/localizationCatalogs.ts';
 	const result = await build({
 		configFile: false,
 		logLevel: 'silent',

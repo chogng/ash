@@ -9,7 +9,7 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContain
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { SCMHistoryViewPane } from "./scmHistoryViewPane.js";
 import { SCMActiveRepositoryController, ScmStatusContribution } from './activity.js';
-import { GIT_VIEW_ID, ScmViewPane } from "./scmViewPane.js";
+import { ScmViewPane } from "./scmViewPane.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
@@ -30,7 +30,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import './media/scmMergeEditor.css';
 import './scm.service.contribution.js';
-import { ISCMService, ISCMViewService, SCMHistoryBusyContext } from '../common/scm.js';
+import { ISCMService, ISCMViewService, SCMHistoryBusyContext, VIEW_PANE_ID } from '../common/scm.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -41,6 +41,24 @@ import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { REPOSITORIES_VIEW_PANE_ID, SCMRepositoriesViewPane } from './scmRepositoriesViewPane.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
+	content: localize('scm.welcome.noProviders', 'No source control providers registered.'),
+	when: 'default',
+});
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help,
+	priority: 100,
+	name: 'scm',
+	when: ContextKeyExpr.and(FocusedViewContext.isEqualTo(VIEW_PANE_ID), ContextKeyExpr.equals('scm.providerCount', 0)),
+	getProvider: accessor => {
+		const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement as HTMLElement;
+		return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help },
+			() => localize('scm.welcome.help', 'Source control has no repositories yet. Open a folder containing a Git repository, clone a repository when available, or initialize a repository in an open folder. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.'),
+			() => restoreFocus(focused), AccessibilityVerbositySettingId.Scm);
+	},
+});
 type ScmWorkingSetDefault = 'current' | 'empty';
 
 configurationRegistry.registerConfiguration<boolean>({
@@ -126,7 +144,6 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 
 export const GIT_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
 export const GIT_GRAPH_VIEW_ID = 'ash.gitGraph';
-export { GIT_VIEW_ID };
 
 registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
 
@@ -226,7 +243,7 @@ export function registerGitViews(
 			ctorDescriptor: new SyncDescriptor(SCMRepositoriesViewPane),
 		},
 		{
-			id: GIT_VIEW_ID,
+			id: VIEW_PANE_ID,
 			title: "Changes",
 			localizationKey: { bundle: "ash.views", key: "changes" },
 			order: 1,

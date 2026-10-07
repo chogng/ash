@@ -29,7 +29,7 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IGitService } from '../../../contrib/git/common/gitService.js';
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
-import { GIT_VIEW_ID } from '../../scm/browser/scmViewPane.js';
+import { VIEW_PANE_ID } from '../../scm/common/scm.js';
 import { createGitMultiDiffEditorInput } from './scmMultiDiffAction.js';
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 import { MultiDiffEditorToolbar } from './multiDiffEditorToolbar.js';
@@ -117,7 +117,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		}
 		this.session.value = this.pendingSession.clearAndLeak();
 		this.session.value?.show();
-		await this.options.viewsService?.focusView(GIT_VIEW_ID);
+		await this.options.viewsService?.focusView(VIEW_PANE_ID);
 	}
 
 	public override clearInput(): void {

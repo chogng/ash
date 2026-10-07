@@ -10,6 +10,20 @@ export const accessibleViewVerbosityEnabled = new RawContextKey<boolean>('access
 export const accessibleViewCurrentProviderId = new RawContextKey<string>('accessibleViewCurrentProviderId', '');
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Scm,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('scm.welcome.verbosityInvalid', 'Source control accessibility verbosity must be a boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('scm.welcome.verbosityTitle', 'Source control accessibility help'); },
+		get description() { return localize('scm.welcome.verbosityDescription', 'Announce how to open accessibility help when source control receives focus.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Disassembly, defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') { throw new TypeError(localize('debug.disassemblyVerbosityInvalid', 'Disassembly accessibility verbosity must be a boolean.')); }

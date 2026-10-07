@@ -83,3 +83,75 @@ function installDomGlobals(dom: JSDOM): readonly string[] {
 	}
 	return Object.keys(globals);
 }
+
+test('View welcome content follows context, preserves focus, runs commands and releases its DOM', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(dom);
+	try {
+		const { ViewPane, ViewWelcomeController } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+		const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
+		const { ContextKeyService, IContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { ContextKeyExpr } = await import('../../../../../../platform/contextkey/common/contextkey.js');
+		const { InstantiationService } = await import('../../../../../../platform/instantiation/common/instantiationService.js');
+		const { registerCodeEditorServices } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
+		const { CommandRegistry, ICommandService } = await import('../../../../../../platform/commands/common/commands.js');
+		const { CommandService } = await import('../../../../../../workbench/services/commands/common/commandService.js');
+		class WelcomePane extends ViewPane {
+			public empty = true;
+			constructor(container: HTMLElement) { super(container, { id: 'welcome.test', title: 'Welcome' }); }
+			public override shouldShowWelcome(): boolean { return this.empty; }
+			public changeEmpty(empty: boolean): void { this.empty = empty; this.viewWelcomeState.fire(); }
+			public get body(): HTMLElement { return this.contentElement; }
+		}
+		using services = new InstantiationService();
+		using context = new ContextKeyService();
+		services.registerInstance(IContextKeyService, context);
+		const commands = new CommandRegistry();
+		const calls: unknown[][] = [];
+		using command = commands.register('welcome.start', (_accessor, ...args) => { calls.push([...args]); });
+		using commandService = new CommandService(services, commands);
+		services.registerInstance(ICommandService, commandService);
+		registerCodeEditorServices(services);
+		const registry = new WorkbenchViewRegistry();
+		using fallback = registry.registerViewWelcomeContent('welcome.test', { content: 'No provider', when: 'default' });
+		using content = registry.registerViewWelcomeContent('welcome.test', {
+			content: 'Start source control\n[Start](command:welcome.start?%5B%22folder%22%5D)',
+			when: ContextKeyExpr.has('hasFolder'), precondition: ContextKeyExpr.has('ready'),
+		});
+		using pane = new WelcomePane(dom.window.document.body);
+		pane.setVisible(true);
+		using controller = services.createInstance(ViewWelcomeController, pane.body, pane, registry);
+		controller.update();
+		assert.equal(pane.body.querySelector('.ash-view-welcome')?.textContent, 'No provider');
+		context.setContext('hasFolder', true);
+		const button = pane.body.querySelector<HTMLButtonElement>('.ash-view-welcome button')!;
+		assert.equal(button.disabled, true);
+		context.setContext('ready', true);
+		controller.focus();
+		context.setContext('unrelated', true);
+		assert.equal(dom.window.document.activeElement, button);
+		assert.equal(pane.body.querySelector('.ash-view-welcome button'), button);
+		button.click();
+		await Promise.resolve();
+		assert.deepEqual(calls, [['folder']]);
+		context.setContext('ready', false);
+		assert.equal(button.disabled, true);
+		button.click();
+		assert.equal(calls.length, 1);
+		context.setContext('ready', true);
+		controller.focus();
+		pane.changeEmpty(false);
+		assert.equal(controller.enabled, false);
+		assert.equal(pane.body.classList.contains('welcome'), false);
+		assert.equal(dom.window.document.activeElement, pane.element);
+		pane.changeEmpty(true);
+		assert.equal(controller.enabled, true);
+		controller.dispose();
+		assert.equal(pane.body.querySelector('.ash-view-welcome'), null);
+		context.setContext('hasFolder', false);
+		assert.equal(pane.body.classList.contains('welcome'), false);
+	} finally {
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		dom.window.close();
+	}
+});

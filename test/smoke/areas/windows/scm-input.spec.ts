@@ -10,8 +10,89 @@ const commitShortcut = process.platform === 'darwin' ? '⌘Enter' : 'Ctrl+Enter'
 test('SCM hides the commit form when no repository is available', async ({ workbench }) => {
 	await workbench.page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const changes = workbench.page.locator('[data-view-id="ash.gitView"]');
-	await expect(changes.locator('.ash-scm-empty')).toBeVisible();
+	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeVisible();
 	await expect(changes.locator('.ash-scm-commit-form')).toBeHidden();
+});
+
+test.describe('SCM welcome', () => {
+	test.use({ openWorkspace: false });
+
+	test('SCM welcome shows host actions and restores keyboard focus from help', async ({ target, workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const welcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
+		await expect(welcome).toContainText('Open a folder containing a Git repository');
+		const open = welcome.getByRole('button', { name: 'Open Folder', exact: true });
+		await expect(open).toBeEnabled();
+		if (target.kind === 'electron') {
+			const clone = welcome.getByRole('button', { name: 'Clone Repository', exact: true });
+			await expect(clone).toBeVisible();
+			await clone.click();
+			await expect(page.getByRole('dialog', { name: 'Clone Repository', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+		} else {
+			await expect(welcome.getByRole('button', { name: 'Clone Repository', exact: true })).toHaveCount(0);
+		}
+		await open.focus();
+		await open.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+		await expect(help.getByRole('textbox')).toHaveValue(/Use Tab and Shift\+Tab/u);
+		await page.keyboard.press('Escape');
+		await expect(open).toBeFocused();
+	});
+
+	test('SCM welcome wraps in a narrow pane and uses theme colors and keyboard focus', async ({ workbench }) => {
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const welcome = page.locator('[data-view-id="ash.gitView"] .ash-view-welcome');
+		const open = welcome.getByRole('button', { name: 'Open Folder', exact: true });
+		for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			await workbench.quickaccess.select(theme);
+			await open.focus();
+			await expect(open).toHaveCSS('outline-style', 'solid');
+			const colors = await open.evaluate(element => {
+				const probe = element.ownerDocument.createElement('span');
+				probe.style.backgroundColor = 'var(--ash-button-primaryBackground)';
+				probe.style.color = 'var(--ash-focusBorder)';
+				element.append(probe);
+				const actual = getComputedStyle(element);
+				const expected = getComputedStyle(probe);
+				const result = { background: actual.backgroundColor, expectedBackground: expected.backgroundColor, outline: actual.outlineColor, expectedOutline: expected.color };
+				probe.remove();
+				return result;
+			});
+			expect(colors.background).toBe(colors.expectedBackground);
+			expect(colors.outline).toBe(colors.expectedOutline);
+		}
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+		const sidebarBounds = (await sidebar.boundingBox())!;
+		const sashBounds = (await sash.boundingBox())!;
+		const x = sashBounds.x + sashBounds.width / 2;
+		const y = sashBounds.y + sashBounds.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + 240 - sidebarBounds.width, y);
+		await page.mouse.up();
+		await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(240, 0);
+		await expect.poll(() => welcome.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+	});
+});
+
+test('SCM welcome initializes a repository through the backend and returns to Changes', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Repository initialization requires a connected backend.');
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const changes = page.locator('[data-view-id="ash.gitView"]');
+	await changes.getByRole('button', { name: 'Initialize Repository', exact: true }).click();
+	await page.locator('.ash-quick-pick').getByRole('option').first().click();
+	const branch = page.getByRole('dialog', { name: 'Quick Input', exact: true }).getByRole('textbox');
+	await branch.fill('welcome-main');
+	await branch.press('Enter');
+	await expect.poll(() => run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: testWorkspace.directory }).then(result => result.stdout.trim(), () => undefined)).toBe('welcome-main');
+	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeHidden();
+	await expect(changes.locator('.ash-scm-commit-form')).toBeVisible();
 });
 
 test.describe('SCM commit input', () => {

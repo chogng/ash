@@ -99,6 +99,8 @@ jobs:
           cache-on-failure: true
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check localization sources
+        run: pnpm localization:check
       - name: Check CSS variable names
         run: pnpm stylelint
       - name: Check generated protocol contracts

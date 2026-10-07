@@ -4,6 +4,12 @@ Ash treats UI localization as a data catalog capability, separate from programmi
 packages. The product owns the catalog contract it consumes; the remote Marketplace only validates,
 signs, and distributes product-independent static locale payloads.
 
+Built-in catalogs are generated into `.build/desktop/localization/` and are not tracked by Git.
+The source `localizationCatalogs.ts` is a stable loading entrypoint. Build and test preparation
+generate the data before compilation; Vite emits one shared chunk per language, and TypeScript
+includes the data modules in the host and test outputs. `pnpm localization:check` validates the
+source declarations and translations without requiring or writing generated catalogs.
+
 ## Ownership
 
 | Surface                                                              | Owner                                                                           | Contract                                                          |
@@ -11,7 +17,7 @@ signs, and distributes product-independent static locale payloads.
 | Built-in English and Simplified Chinese                              | `workbench/services/localization/common/localizationCatalogs.ts`                | Always available without Marketplace access                       |
 | Language-pack discovery, acquisition, leases, and catalog projection | `platform/languagePacks`                                                        | `ILanguagePackService`; Marketplace `packageType: "localization"` |
 | Locale selection and persistence                                     | `workbench/services/localization/common/locale.ts` + `browser/localeService.ts` | `ILocaleService`, local-profile `workbench.locale`                |
-| Message lookup and NLS projection                                    | `workbench/services/localization` + `src/ash/nls.ts`                     | Selected catalog → English catalog → caller fallback              |
+| Message lookup and NLS projection                                    | `workbench/services/localization` + `src/ash/nls.ts`                            | Selected catalog → English catalog → caller fallback              |
 | Remote package discovery and distribution                            | `../marketplace`                                                                | `packageType: "localization"` and `localization/package.json`     |
 | Installed package lease and resource reads                           | Ash Marketplace Manager                                                         | A localization capability exposes one static JSON catalog         |
 

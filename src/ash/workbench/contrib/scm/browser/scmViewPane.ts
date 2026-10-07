@@ -16,14 +16,14 @@ import { registerOpenEditorListeners } from '../../../../platform/editor/browser
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { IResourceIconRenderer, IResourceLabelService, type ResourceLabels } from '../../../browser/labels.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { SCMInputWidget } from './scmInput.js';
-import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { ViewPane, ViewWelcomeController, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { ViewsRegistry } from '../../../common/views.js';
 import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
-
-export const GIT_VIEW_ID = 'ash.gitView';
+import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
 type TreeElement =
 	| { readonly id: string; readonly group: ISCMResourceGroup; }
@@ -32,6 +32,7 @@ type TreeElement =
 
 /** Displays resources and actions from the selected SCM provider. */
 export class ScmViewPane extends ViewPane {
+	private readonly welcomeController: ViewWelcomeController;
 	private readonly commitInput: SCMInputWidget;
 	private readonly commitForm: HTMLFormElement;
 	private readonly commitButton: Button;
@@ -48,11 +49,10 @@ export class ScmViewPane extends ViewPane {
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		@ISCMService scmService: ISCMService,
+		@ISCMService private readonly scmService: ISCMService,
 		@ISCMViewService private readonly scmViewService: ISCMViewService,
 		@IResourceLabelService resourceLabelService: IResourceLabelService,
 		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
-		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IResourceIconRenderer resourceIconRenderer: IResourceIconRenderer,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -108,6 +108,12 @@ export class ScmViewPane extends ViewPane {
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
 		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
+		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
+		this._register(this.onDidFocus(() => {
+			if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
+				status(localize('scm.welcome.helpHint', 'Press Alt+F1 for accessibility help.'));
+			}
+		}));
 		this._register(this.tree.onDidOpen(event => {
 			if ('resource' in event.element) {
 				void event.element.resource.open(event.editorOptions, event.sideBySide);
@@ -128,11 +134,22 @@ export class ScmViewPane extends ViewPane {
 		this._register(scmService.onDidAddRepository(() => this.render()));
 		this._register(scmService.onDidRemoveRepository(() => this.render()));
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.bindProvider()));
-		this._register(workspaceContext.onDidChangeWorkspace(() => this.render()));
 		this.bindProvider();
 	}
 
 	private get provider(): ISCMProvider | undefined { return this.scmViewService.activeRepository?.provider; }
+
+	public override shouldShowWelcome(): boolean {
+		return [...this.scmService.repositories].length === 0;
+	}
+
+	public override focus(): void {
+		if (this.welcomeController.enabled) {
+			this.welcomeController.focus();
+		} else {
+			super.focus();
+		}
+	}
 
 	private bindProvider(): void {
 		const provider = this.provider;
@@ -170,10 +187,8 @@ export class ScmViewPane extends ViewPane {
 		}
 		this.commitButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept;
 		this.statusElement.classList.toggle('ash-aria-live', !!provider);
-		this.statusElement.classList.toggle('ash-scm-empty', !provider);
-		this.statusElement.textContent = provider?.statusMessage ?? (this.workspaceContext.getWorkbenchState() === WorkbenchState.EMPTY
-			? localize('scm.emptyWindow', 'Open a folder to use source control.')
-			: localize('scm.noRepository', 'No source control repository found in the open folder.'));
+		this.statusElement.hidden = !provider;
+		this.statusElement.textContent = provider?.statusMessage ?? '';
 		const groups = provider?.groups;
 		if (provider !== this.renderedProvider || groups !== this.renderedGroups) {
 			this.renderedProvider = provider;
@@ -191,6 +206,7 @@ export class ScmViewPane extends ViewPane {
 			}));
 		}
 		for (const item of this.actionViewItems) item.setBusy(provider?.isBusy === true);
+		this.viewWelcomeState.fire();
 	}
 
 	private resourceChildren(parent: IResourceNode<ISCMResource, ISCMResourceGroup>, repositoryId: string): ObjectTreeElement<TreeElement>[] {

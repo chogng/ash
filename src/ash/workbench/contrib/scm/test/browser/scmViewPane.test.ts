@@ -55,7 +55,7 @@ import { GitSCMContribution, GitSCMProvider, type GitSCMProviderServices } from 
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { SCMRepositoriesViewPane } from '../../browser/scmRepositoriesViewPane.js';
-import { ISCMService, ISCMViewService, type ISCMProvider } from '../../common/scm.js';
+import { ISCMService, ISCMViewService, VIEW_PANE_ID, type ISCMProvider } from '../../common/scm.js';
 
 const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
@@ -167,13 +167,13 @@ test("Git contribution registers Repositories before Changes and hides it for a 
 
 	try {
 		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import("../../../../../workbench/common/views.js");
-		const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, GIT_VIEW_ID, registerGitViews } = await import("../../../../../workbench/contrib/scm/browser/scm.contribution.js");
+		const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, registerGitViews } = await import("../../../../../workbench/contrib/scm/browser/scm.contribution.js");
 		const registry = new WorkbenchViewRegistry();
 
 		registerGitViews(registry);
 
 		const views = registry.getViews(WorkbenchViewContainerId.Git);
-		assert.deepEqual(views.map((view) => view.id), ['workbench.scm.repositories', GIT_VIEW_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+		assert.deepEqual(views.map((view) => view.id), ['workbench.scm.repositories', VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
 		assert.deepEqual(views.map((view) => view.title), ['Repositories', "Changes", "Agent Review", "Graph"]);
 		assert.deepEqual(views.map((view) => view.collapsed === true), [false, false, true, true]);
 		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
@@ -1221,6 +1221,8 @@ test("ScmViewPane groups App Server Git status", async () => {
 		{ id: first.repositoryId, label: "workspace", path: "", root: URI.file("/workspace") },
 		{ id: nestedStatus.repositoryId, label: "nested", path: "nested", root: URI.file("/workspace/nested") },
 	];
+	let repositoryList = repositories;
+	using repositoryChanges = new Emitter<readonly GitRepository[]>();
 	let activeRepository: GitRepository | undefined = repositories[0];
 	const activeRepositoryChanges = new Emitter<GitRepository | undefined>();
 	const readyChanges = new Emitter<void>();
@@ -1231,9 +1233,9 @@ test("ScmViewPane groups App Server Git status", async () => {
 	} as unknown as IWorkingCopyService;
 	const selectedRepositories: string[] = [];
 	const gitService = {
-		repositories,
+		get repositories() { return repositoryList; },
 		get activeRepository() { return activeRepository; },
-		onDidChangeRepositories: noEvent,
+		onDidChangeRepositories: repositoryChanges.event,
 		onDidChangeActiveRepository: activeRepositoryChanges.event,
 		selectRepository: async (repositoryId: string) => {
 			selectedRepositories.push(repositoryId);
@@ -1291,9 +1293,9 @@ test("ScmViewPane groups App Server Git status", async () => {
 		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		registerCodeEditorServices(services);
 		using pane = new ScmViewPane(browser.window.document.body, {
-			id: "ash.git",
+			id: VIEW_PANE_ID,
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService(), services);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), services);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -1450,15 +1452,21 @@ test("ScmViewPane groups App Server Git status", async () => {
 
 		workspaceError = new GitWorkspaceError('noFolder');
 		activeRepository = undefined;
+		repositoryList = [];
+		repositoryChanges.fire(repositoryList);
 		activeRepositoryChanges.fire(undefined);
-		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === 'Open a folder to use source control.');
+		await waitFor(() => pane.shouldShowWelcome());
+		assert.equal(pane.element.querySelector<HTMLElement>('.ash-view-welcome')?.hidden, false);
+		assert.equal(pane.element.querySelector<HTMLElement>('.ash-scm-status')?.hidden, true);
 		assert.equal(pane.element.querySelectorAll('.ash-scm-change').length, 0);
 		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, true);
 
 		workspaceError = undefined;
 		activeRepository = repositories[0];
+		repositoryList = repositories;
+		repositoryChanges.fire(repositoryList);
 		activeRepositoryChanges.fire(activeRepository);
-		assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled, false);
+		await waitFor(() => pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')?.disabled === false);
 		readyChanges.fire();
 		await waitFor(() => pane.element.querySelector('.ash-scm-status')?.textContent === '4 changed files');
 	} finally {
@@ -1522,7 +1530,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, testWorkspaceContext(), configuration, testFileIconThemeService(), editorServices);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), editorServices);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);

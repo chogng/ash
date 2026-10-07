@@ -51,6 +51,15 @@ export interface IViewDescriptor {
 	readonly canToggleVisibility?: boolean;
 }
 
+/** Text and command links contributed to a view's welcome state. */
+export interface IViewContentDescriptor {
+	readonly content: string;
+	readonly when?: ContextKeyExpression | 'default';
+	readonly group?: string;
+	readonly order?: number;
+	readonly precondition?: ContextKeyExpression;
+}
+
 /** Batch of views associated with one registered container. */
 export interface IViewsChangeEvent {
 	readonly container: IViewContainerDescriptor;
@@ -137,6 +146,32 @@ export const WorkbenchViewContainerId = Object.freeze({
  * previous registry state. Disposing a container also removes its views.
  */
 export class WorkbenchViewRegistry {
+	private readonly welcomeContents = new Map<string, Set<IViewContentDescriptor>>();
+	private readonly welcomeContentChanged = new Emitter<string>();
+	readonly onDidChangeViewWelcomeContent = this.welcomeContentChanged.event;
+
+	registerViewWelcomeContent(id: string, content: IViewContentDescriptor): IDisposable {
+		validateId(id, 'view');
+		if (typeof content.content !== 'string' || !content.content.trim()) {
+			throw new TypeError('View welcome content must not be empty');
+		}
+		const descriptor = Object.freeze({ ...content });
+		const contents = this.welcomeContents.get(id) ?? new Set<IViewContentDescriptor>();
+		contents.add(descriptor);
+		this.welcomeContents.set(id, contents);
+		this.welcomeContentChanged.fire(id);
+		return toDisposable(() => {
+			contents.delete(descriptor);
+			if (contents.size === 0) this.welcomeContents.delete(id);
+			this.welcomeContentChanged.fire(id);
+		});
+	}
+
+	getViewWelcomeContent(id: string): IViewContentDescriptor[] {
+		return [...(this.welcomeContents.get(id) ?? [])].sort((left, right) =>
+			(left.group ?? '9_more').localeCompare(right.group ?? '9_more') || (left.order ?? 5) - (right.order ?? 5));
+	}
+
 	private readonly containers =
 		new Map<string, IRegisteredViewContainer>();
 	private readonly views = new Map<string, IRegisteredView>();

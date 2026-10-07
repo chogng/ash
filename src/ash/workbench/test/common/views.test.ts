@@ -163,3 +163,16 @@ class TestView implements IView {
 		this.visible = visible;
 	}
 }
+
+test('view welcome registrations sort content and release each contribution independently', () => {
+	const registry = new WorkbenchViewRegistry();
+	const events: string[] = [];
+	using listener = registry.onDidChangeViewWelcomeContent(id => events.push(id));
+	using later = registry.registerViewWelcomeContent('welcome.test', { content: 'Later', group: '5_scm' });
+	using first = registry.registerViewWelcomeContent('welcome.test', { content: 'First', group: '2_open', order: 1 });
+	using second = registry.registerViewWelcomeContent('welcome.test', { content: 'Second', group: '2_open', order: 2 });
+	assert.deepEqual(registry.getViewWelcomeContent('welcome.test').map(item => item.content), ['First', 'Second', 'Later']);
+	second.dispose();
+	assert.deepEqual(registry.getViewWelcomeContent('welcome.test').map(item => item.content), ['First', 'Later']);
+	assert.deepEqual(events, ['welcome.test', 'welcome.test', 'welcome.test', 'welcome.test']);
+});

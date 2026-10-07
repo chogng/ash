@@ -7,7 +7,7 @@ export const rendererOutput: Rolldown.OutputOptions = {
 		groups: [{
 			name: id => `localization-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationCatalog.'.length, -3)}`,
 			// Languages grow independently; keep each catalog separate from Workbench code and other languages.
-			test: id => /\/localization\/common\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
+			test: id => /\/\.build\/desktop\/localization\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
 		}, {
 			name: 'app-server-protocol',
 			// The generated validator is shared by both renderers and nearly fills one output chunk.

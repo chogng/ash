@@ -29,6 +29,11 @@ test('display language stays unchanged until restart and initializes Chinese com
 	page = workbench.page;
 	await expect(page.getByRole('button', { name: '搜索命令', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: '管理', exact: true })).toBeVisible();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const scmWelcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: '欢迎', exact: true });
+	await expect(scmWelcome).toContainText('打开包含 Git 仓库的文件夹');
+	await expect(scmWelcome.getByRole('button', { name: '打开文件夹', exact: true })).toBeVisible();
+	if (target.kind === 'electron') await expect(scmWelcome.getByRole('button', { name: '克隆仓库', exact: true })).toBeVisible();
 	if (target.appServerMode === 'required') {
 		await workbench.quickaccess.runCommand('ash.call.open');
 		const call = page.locator('.ash-call').getByRole('combobox', { name: 'Call', exact: true });

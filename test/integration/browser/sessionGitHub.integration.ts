@@ -2,7 +2,7 @@ import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import { languagePackCatalog } from '../../../src/ash/workbench/services/localization/common/localizationCatalog.zh-CN.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
@@ -89,7 +89,7 @@ class Transport implements AppServerTransport {
 
 const resources = new DisposableStore();
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', languagePackCatalog.bundles);
+	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 const transport = new Transport();
 const client = new AppServerProtocolClient(transport);

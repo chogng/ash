@@ -42,6 +42,41 @@ import { IQuickDiffService } from '../../scm/common/quickDiff.js';
 import { IGitService, type GitStatus } from '../common/gitService.js';
 import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
 import { GitSCMContribution } from './gitSCMProvider.js';
+import { ViewsRegistry } from '../../../common/views.js';
+import { VIEW_PANE_ID } from '../../scm/common/scm.js';
+import { AppServerAvailableContext, BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
+import { IsNativeContext } from '../../../../platform/contextkey/common/contextkeys.js';
+import { GitCloneCommandId } from '../common/gitCommands.js';
+
+const noWorkspaceFolders = WorkspaceFolderCountContext.isEqualTo(0);
+ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
+	content: localize('git.welcome.empty', 'Open a folder containing a Git repository to use source control.'),
+	when: noWorkspaceFolders,
+	group: '2_open', order: 1,
+});
+ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
+	content: `[${localize('git.welcome.openFolder', 'Open Folder')}](command:workbench.action.files.openFolder)`,
+	when: ContextKeyExpr.and(noWorkspaceFolders, ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(false))),
+	precondition: OpenFolderWorkspaceSupportContext.isEqualTo(true),
+	group: '2_open', order: 2,
+});
+ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
+	content: `[${localize('git.welcome.openFolder', 'Open Folder')}](command:workbench.action.files.openFolderViaWorkspace)`,
+	when: ContextKeyExpr.and(noWorkspaceFolders, OpenFolderWorkspaceSupportContext.isEqualTo(false), BrowserLocalFolderSupportContext.isEqualTo(true)),
+	group: '2_open', order: 2,
+});
+ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
+	content: `[${localize('git.welcome.clone', 'Clone Repository')}](command:${GitCloneCommandId})`,
+	when: ContextKeyExpr.and(noWorkspaceFolders, IsNativeContext.isEqualTo(true)),
+	precondition: AppServerAvailableContext.isEqualTo(true),
+	group: '2_open', order: 3,
+});
+ViewsRegistry.registerViewWelcomeContent(VIEW_PANE_ID, {
+	content: localize('git.welcome.noRepository', 'The open folder does not contain a Git repository. Initialize a repository to start tracking changes.') + `\n[${localize('git.welcome.initialize', 'Initialize Repository')}](command:git.init)`,
+	when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
+	precondition: AppServerAvailableContext.isEqualTo(true),
+	group: '5_scm',
+});
 
 const ignoredResourceForeground = registerColor('gitDecoration.ignoredResourceForeground', {
 	dark: '#8c8c8c', light: '#767676', hcDark: foreground, hcLight: foreground,

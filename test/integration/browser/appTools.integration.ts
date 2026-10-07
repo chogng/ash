@@ -19,13 +19,13 @@ import { IAccessibilityService } from '../../../src/ash/platform/accessibility/c
 import type { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
-import { languagePackCatalog } from '../../../src/ash/workbench/services/localization/common/localizationCatalog.zh-CN.js';
+import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
-if (new URL(location.href).searchParams.get('locale') === 'zh-CN') setNlsMessages('zh-CN', languagePackCatalog.bundles);
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	private readonly pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; }>();
