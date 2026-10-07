@@ -38,7 +38,7 @@ test('Search Dismiss removes retained matches, files and folders without changin
 	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
 	await expect(workbench.search.status).toHaveText('2 results');
 	await expect(tree.getByRole('treeitem', { name: 'src', exact: true })).toHaveCount(0);
-	await tree.getByRole('treeitem').filter({ has: search.locator('.ash-search-file-path', { hasText: 'main.ts' }) }).click();
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'main.ts' }) }).click();
 	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
 	await expect(workbench.search.files).toHaveText(['notes.md']);
@@ -440,7 +440,7 @@ test('Search Copy All copies current retained results through the host clipboard
 	await workbench.search.open();
 	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
 	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await expect(page.getByRole('menuitem', { name: 'Copy All', exact: true })).toHaveAttribute('aria-disabled', 'true');
+	await expect(page.getByRole('menuitem', { name: 'Copy All', exact: true })).toBeDisabled();
 	await page.keyboard.press('Escape');
 	await workbench.search.search('ash_copy_token');
 	await expect(workbench.search.status).toHaveText('4 results');
