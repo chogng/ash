@@ -65,9 +65,17 @@ test('ordinary Output filters complete backend lines while log records and raw e
 		expect(raw).toBe('keep one\ndrop one\nkeep excluded\nkee');
 		await testInfo.attach('backend-output-snapshot', { body: JSON.stringify(runtime), contentType: 'application/json' });
 	}
+	await filter.fill('keep,drop,!excluded');
+	await expect.poll(visibleLines).toEqual(['keep one', 'drop one']);
+	await filter.fill('keep !excluded');
+	await expect(output.locator('.view-lines')).toHaveCount(0);
+	await filter.fill('"keep one"');
+	await expect(output.locator('.view-lines')).toHaveCount(0);
 	await filter.fill('keep');
 	await expect.poll(visibleLines).toEqual(['keep one', 'keep excluded']);
-	await filter.fill('keep !excluded');
+	expect(await filter.getAttribute('title')).toBeNull();
+	expect(await filter.getAttribute('aria-description')).toBeNull();
+	await filter.fill('keep,!excluded');
 	await expect.poll(visibleLines).toEqual(['keep one']);
 	await workbench.quickaccess.runCommand('ash.output.fixture.append');
 	await expect.poll(visibleLines).toEqual(['keep one', 'keep tail']);
@@ -75,12 +83,15 @@ test('ordinary Output filters complete backend lines while log records and raw e
 	await expect.poll(visibleLines).toEqual(['keep one', 'keep tail', 'keep unfinished']);
 	await selectChannel('Output Other Fixture');
 	await expect.poll(visibleLines).toEqual(['keep other']);
+	await filter.fill('keep,drop');
+	await expect.poll(visibleLines).toEqual(['drop other', 'keep other']);
+	await filter.fill('keep');
 	await selectChannel('Output Log Fixture');
 	await expect.poll(visibleLines).toEqual(['keep log', 'log continuation']);
 	await filter.fill('!continuation');
 	await expect.poll(visibleLines).toEqual(['other log']);
 	await selectChannel('Output Filter Fixture');
-	await filter.fill('keep !excluded');
+	await filter.fill('keep,!excluded');
 	await expect.poll(visibleLines).toEqual(['keep one', 'keep tail', 'keep unfinished']);
 	await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
 	const editor = workbench.editors.groupAt(0).content;
@@ -108,4 +119,64 @@ test('ordinary Output filters complete backend lines while log records and raw e
 	await manage('Revoke permissions');
 	await manage('Disable');
 	await manage('Uninstall');
+});
+
+
+test('Output saved query restoration exits on explicit input and protects newer stored versions across reloads', async ({ target, workbench, reloadWorkbench }) => {
+	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Covers the connected Web client workspace storage.');
+	const page = workbench.page;
+	const selectChannel = async (): Promise<void> => {
+		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+		await workbench.quickaccess.select('App Server');
+	};
+	const output = page.locator('[data-view-id="ash.output"]');
+	const filter = output.getByRole('searchbox', { name: 'Filter Output', exact: true });
+	const persistedFilter = async (value?: string): Promise<string> => page.evaluate(value => {
+		// Only this fixture's isolated workspace document is edited to seed older
+		// or future client data; Output events and services are never injected.
+		const documents = Object.keys(localStorage).filter(key => key.startsWith('ash.storage.workspace.')).map(key => ({
+			key, document: JSON.parse(localStorage.getItem(key)!) as { entries: Record<string, { value: string; target: string; }>; },
+		})).filter(item => item.document.entries['output.filterState']);
+		if (documents.length !== 1) { throw new Error('Expected one isolated Output filter workspace document'); }
+		const { key, document } = documents[0]!;
+		const entry = document.entries['output.filterState']!;
+		if (value !== undefined) {
+			entry.value = value;
+			localStorage.setItem(key, JSON.stringify(document));
+		}
+		return entry.value;
+	}, value);
+	await selectChannel();
+	await filter.fill('connection');
+	await expect(output.locator('.view-lines')).toContainText('connection');
+	const restored = JSON.stringify({ text: 'connection !crashed', hiddenSeverities: [], hiddenCategories: [] });
+	await persistedFilter(restored);
+	await reloadWorkbench();
+	await selectChannel();
+	await expect(filter).toHaveValue('connection !crashed');
+	await expect(filter).toHaveAttribute('title', /Saved filter restored/);
+	await expect(filter).toHaveAttribute('aria-description', /Saved filter restored/);
+	await expect(output.locator('.view-lines')).toContainText('connection');
+	expect(await persistedFilter()).toBe(restored);
+	await filter.fill('connection !crashed');
+	await expect(output.locator('.view-lines')).toHaveCount(0);
+	expect(await filter.getAttribute('title')).toBeNull();
+	expect(JSON.parse(await persistedFilter())).toEqual({ syntaxVersion: 2, text: 'connection !crashed', hiddenSeverities: [], hiddenCategories: [] });
+	await reloadWorkbench();
+	await selectChannel();
+	await expect(filter).toHaveValue('connection !crashed');
+	await expect(output.locator('.view-lines')).toHaveCount(0);
+	expect(await filter.getAttribute('aria-description')).toBeNull();
+	await filter.press('Escape');
+	await expect(filter).toHaveValue('');
+	await expect(output.locator('.view-lines')).toContainText('connection');
+	const future = JSON.stringify({ syntaxVersion: 3, text: 'future query', future: { untouched: true } });
+	await persistedFilter(future);
+	await reloadWorkbench();
+	await selectChannel();
+	await expect(filter).toHaveValue('');
+	await expect(filter).toHaveAttribute('title', /Changes in this window are not saved/);
+	await filter.fill('connection');
+	await expect(output.locator('.view-lines')).toContainText('connection');
+	expect(await persistedFilter()).toBe(future);
 });

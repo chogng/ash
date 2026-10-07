@@ -73,7 +73,7 @@ export class OutputViewPane extends ViewPane {
 		this.filterInput = h(container.ownerDocument, "input");
 		this.filterInput.className = "ash-output-filter-input";
 		this.filterInput.type = "search";
-		this.filterInput.placeholder = localize('output.filterPlaceholder', 'Filter Output (prefix with ! to exclude)');
+		this.filterInput.placeholder = localize('output.filterPlaceholder', 'Filter Output (text1,text2,!exclude)');
 		this.filterInput.setAttribute("aria-label", localize('output.filter', 'Filter Output'));
 		this.filterInput.value = this.filters.text;
 		filterBar.append(this.filterInput);
@@ -174,6 +174,18 @@ export class OutputViewPane extends ViewPane {
 			this.titleActions.updateActions(this.createTitleActions(active));
 		}
 		this.filterInput.value = this.filters.text;
+		let description: string | undefined;
+		switch (this.filters.textFilterNotice) {
+			case 'restored': description = localize('output.filterRestored', 'Saved filter restored. Edit or clear to use comma-separated filters.'); break;
+			case 'unsupported': description = localize('output.filterUnsupported', 'A newer saved filter is preserved. Changes in this window are not saved.'); break;
+		}
+		if (description) {
+			this.filterInput.title = description;
+			this.filterInput.setAttribute('aria-description', description);
+		} else {
+			this.filterInput.removeAttribute('title');
+			this.filterInput.removeAttribute('aria-description');
+		}
 		const model = this.loadedModel;
 		if (!active || !model) return;
 		const visibleLines = new Map<number, boolean>();

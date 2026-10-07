@@ -105,6 +105,8 @@ export const OutputSeverities: readonly OutputEntrySeverity[] = Object.freeze(['
 /** Structured producer metadata drives view filtering without changing shared text. */
 export interface IOutputViewFilters {
 	readonly text: string;
+	/** Input guidance derived from saved-query compatibility, never a selectable mode. */
+	readonly textFilterNotice: 'restored' | 'unsupported' | undefined;
 	readonly onDidChange: Event<void>;
 	setText(text: string): void;
 	isSeverityVisible(severity: OutputEntrySeverity): boolean;

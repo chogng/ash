@@ -176,10 +176,12 @@ function validateChannelId(value: string): string {
 }
 
 const OutputFilterStorageKey = "output.filterState";
+const CurrentTextSyntaxVersion = 2;
 
 const SeverityRanks: Readonly<Record<OutputEntrySeverity, number>> = Object.freeze({ trace: 0, debug: 1, information: 2, log: 2, warning: 3, error: 4 });
 
 interface StoredOutputFilterState {
+	readonly syntaxVersion: 1 | 2;
 	readonly text: string;
 	readonly hiddenSeverities: readonly OutputEntrySeverity[];
 	readonly hiddenCategories: readonly string[];
@@ -191,6 +193,8 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	private readonly hiddenSeverities = new Set<OutputEntrySeverity>();
 	private readonly hiddenCategories = new Set<string>();
 	private _text = "";
+	private textSyntaxVersion: 1 | 2 = CurrentTextSyntaxVersion;
+	private preserveStoredState = false;
 
 	readonly onDidChange = this.changeEmitter.event;
 
@@ -201,8 +205,16 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 
 	get text(): string { return this._text; }
 
+	get textFilterNotice(): IOutputViewFilters['textFilterNotice'] {
+		if (this.preserveStoredState) { return 'unsupported'; }
+		return this.textSyntaxVersion === 1 && this._text.length > 0 ? 'restored' : undefined;
+	}
+
 	setText(text: string): void {
-		if (this._text === text) return;
+		if (this._text === text && this.textSyntaxVersion === CurrentTextSyntaxVersion) { return; }
+		// Only restoration can enter the older grammar. Explicit input always leaves it,
+		// including resubmitting the same text, whose meaning may now be different.
+		this.textSyntaxVersion = CurrentTextSyntaxVersion;
 		this._text = text;
 		this.persistAndFire();
 	}
@@ -237,7 +249,8 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	reset(): void {
-		if (!this._text && this.hiddenSeverities.size === 0 && this.hiddenCategories.size === 0) return;
+		if (!this._text && this.hiddenSeverities.size === 0 && this.hiddenCategories.size === 0 && this.textSyntaxVersion === CurrentTextSyntaxVersion) { return; }
+		this.textSyntaxVersion = CurrentTextSyntaxVersion;
 		this._text = "";
 		this.hiddenSeverities.clear();
 		this.hiddenCategories.clear();
@@ -246,9 +259,11 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 
 	matches(entry: IOutputEntry): boolean {
 		if (this.hiddenSeverities.has(entry.severity) || (entry.category && this.hiddenCategories.has(entry.category))) return false;
-		const haystack = `${entry.category ?? ""} ${entry.text}`.toLocaleLowerCase();
-		const terms = parseFilterTerms(this._text);
-		return terms.includes.every(term => haystack.includes(term)) && terms.excludes.every(term => !haystack.includes(term));
+		const restored = this.textSyntaxVersion === 1;
+		const haystack = (restored ? `${entry.category ?? ""} ${entry.text}` : entry.text).toLocaleLowerCase();
+		const terms = restored ? parseRestoredFilterTerms(this._text) : parseFilterTerms(this._text);
+		const included = restored ? terms.includes.every(term => haystack.includes(term)) : terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
+		return included && terms.excludes.every(term => !haystack.includes(term));
 	}
 
 	private restore(): void {
@@ -256,7 +271,16 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		if (!raw) return;
 		try {
 			const stored = JSON.parse(raw) as Partial<StoredOutputFilterState>;
-			if (typeof stored.text === "string") this._text = stored.text;
+			if (hasUnknownTextSyntaxVersion(stored)) {
+				// A newer client owns this schema. Leave it intact and use unsaved,
+				// current-version filters in this window instead of guessing its meaning.
+				this.preserveStoredState = true;
+				return;
+			}
+			if (typeof stored.text === "string") {
+				this._text = stored.text;
+				this.textSyntaxVersion = stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0 ? CurrentTextSyntaxVersion : 1;
+			}
 			if (Array.isArray(stored.hiddenSeverities)) {
 				for (const severity of stored.hiddenSeverities) if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);
 			}
@@ -269,8 +293,17 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	private persistAndFire(): void {
-		const stored: StoredOutputFilterState = { text: this._text, hiddenSeverities: [...this.hiddenSeverities], hiddenCategories: [...this.hiddenCategories] };
-		this.storageService.store(OutputFilterStorageKey, JSON.stringify(stored), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		if (!this.preserveStoredState) {
+			// Another window can publish a newer schema after this owner restored.
+			// Recheck before writing so a local filter edit cannot overwrite that state.
+			const raw = this.storageService.get(OutputFilterStorageKey, StorageScope.WORKSPACE);
+			try { this.preserveStoredState = raw !== undefined && hasUnknownTextSyntaxVersion(JSON.parse(raw)); }
+			catch { /* Malformed JSON has no usable schema; this owner can replace it. */ }
+		}
+		if (!this.preserveStoredState) {
+			const stored: StoredOutputFilterState = { syntaxVersion: this.textSyntaxVersion, text: this._text, hiddenSeverities: [...this.hiddenSeverities], hiddenCategories: [...this.hiddenCategories] };
+			this.storageService.store(OutputFilterStorageKey, JSON.stringify(stored), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		}
 		this.changeEmitter.fire();
 	}
 }
@@ -282,7 +315,28 @@ function updateHiddenSet<T>(set: Set<T>, value: T, visible: boolean): boolean {
 	return true;
 }
 
+function hasUnknownTextSyntaxVersion(value: unknown): boolean {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) { return false; }
+	const version = (value as Record<string, unknown>).syntaxVersion;
+	return version !== undefined && version !== 1 && version !== CurrentTextSyntaxVersion;
+}
+
 function parseFilterTerms(value: string): { readonly includes: readonly string[]; readonly excludes: readonly string[]; } {
+	const includes: string[] = [];
+	const excludes: string[] = [];
+	// Quotes protect commas but remain literal matching characters; backslashes
+	// do not introduce a separate escaping grammar.
+	for (const pattern of value.match(/(?:[^,"]+|"[^"]*(?:"|$))+/g) ?? []) {
+		const raw = pattern.trim();
+		const excluded = raw.startsWith('!');
+		const term = (excluded ? raw.slice(1).trim() : raw).toLocaleLowerCase();
+		if (term) { (excluded ? excludes : includes).push(term); }
+	}
+	return { includes, excludes };
+}
+
+/** Restoration-only adapter; no explicit input can select this grammar. */
+function parseRestoredFilterTerms(value: string): { readonly includes: readonly string[]; readonly excludes: readonly string[]; } {
 	const includes: string[] = [];
 	const excludes: string[] = [];
 	for (const match of value.matchAll(/(?:"([^"]+)"|(\S+))/g)) {

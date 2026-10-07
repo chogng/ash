@@ -1,7 +1,8 @@
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
+import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -131,9 +132,9 @@ test('Output normalizes CRLF once when producers split it between writes', async
 test("OutputFilterState combines include, exclude, severity, and category filters", () => {
 	using filterResources = new DisposableStore();
 	const filters = workbenchInstantiationService(filterResources).get(IOutputService).filters;
-	filters.setText('"server restart" !failed');
+	filters.setText('server restart,!failed');
 	assert.equal(filters.matches(entry), true);
-	filters.setText("server !scheduled");
+	filters.setText("server,!scheduled");
 	assert.equal(filters.matches(entry), false);
 	filters.setText("");
 	filters.setSeverityVisible("warning", false);
@@ -164,4 +165,159 @@ test("OutputFilterState restores workspace-local filter choices", () => {
 		assert.equal(filters.isSeverityVisible("trace"), false);
 	}
 	browser.window.close();
+});
+
+
+function filterStorage(resources: DisposableStore, raw?: string): BrowserStorageService {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'output-query', backend: browser.window.localStorage, flushInterval: 0 }));
+	resources.add(toDisposable(() => browser.window.close()));
+	if (raw !== undefined) { storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
+	return storage;
+}
+
+test('Output text queries match comma alternatives with exclusions taking precedence', () => {
+	using resources = new DisposableStore();
+	const filters = workbenchInstantiationService(resources).get(IOutputService).filters;
+	const lines = ['KEEP one', 'other two', 'keep banned', 'drop', 'keep,other'];
+	const scenarios = [
+		{ query: 'keep,other,!banned', expected: ['KEEP one', 'other two', 'keep,other'] },
+		{ query: ' keep, ! banned ', expected: ['KEEP one', 'keep,other'] },
+		{ query: '!keep', expected: ['other two', 'drop'] },
+		{ query: ', ,!, ,', expected: lines },
+	];
+	for (const scenario of scenarios) {
+		filters.setText(scenario.query);
+		assert.deepEqual(lines.filter(text => filters.matches({ ...entry, text })), scenario.expected, scenario.query);
+	}
+});
+
+test('Output text queries keep spaces, minus and protected quotes literal', () => {
+	using resources = new DisposableStore();
+	const filters = workbenchInstantiationService(resources).get(IOutputService).filters;
+	const scenarios = [
+		{ query: 'server restart', lines: ['server restart', 'restart server'], expected: ['server restart'] },
+		{ query: '-failed', lines: ['passed', 'failed', '-failed'], expected: ['-failed'] },
+		{ query: '"a,b",other', lines: ['a,b', '"a,b"', 'other'], expected: ['"a,b"', 'other'] },
+		{ query: '! "a,b"', lines: ['a,b', '"a,b"', 'other'], expected: ['a,b', 'other'] },
+		{ query: 'keep,"a,b', lines: ['keep one', '"a,b', 'a,b'], expected: ['keep one', '"a,b'] },
+		{ query: '\\"a,b",other', lines: ['\\"a,b"', '"a,b"', 'other'], expected: ['\\"a,b"', 'other'] },
+	];
+	for (const scenario of scenarios) {
+		filters.setText(scenario.query);
+		assert.deepEqual(scenario.lines.filter(text => filters.matches({ ...entry, text })), scenario.expected, scenario.query);
+	}
+});
+
+test('Output text queries search content while category filtering remains independent', () => {
+	using resources = new DisposableStore();
+	const filters = workbenchInstantiationService(resources).get(IOutputService).filters;
+	filters.setText('lifecycle');
+	assert.equal(filters.matches(entry), false);
+	filters.setText('server');
+	assert.equal(filters.matches(entry), true);
+	filters.setCategoryVisible('lifecycle', false);
+	assert.equal(filters.matches(entry), false);
+	filters.reset();
+	assert.equal(filters.matches(entry), true);
+});
+
+test('Output restores saved queries unchanged and adopts current syntax on identical explicit input', () => {
+	const lines = ['Server restart scheduled', 'restart server', 'Failed server restart'];
+	const scenarios = [
+		{ query: 'server restart', restored: lines, current: [lines[0], lines[2]] },
+		{ query: '"server restart" !failed', restored: [lines[0]], current: [] },
+		{ query: '-failed', restored: [lines[0], lines[1]], current: [] },
+		{ query: 'lifecycle', restored: lines, current: [] },
+		{ query: 'server,restart', restored: [], current: lines },
+	];
+	for (const scenario of scenarios) {
+		using resources = new DisposableStore();
+		const raw = JSON.stringify({ text: scenario.query, hiddenSeverities: [], hiddenCategories: [], ignored: 'not owned' });
+		const storage = filterStorage(resources, raw);
+		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+		const matches = (): string[] => lines.filter(text => filters.matches({ ...entry, text }));
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: matches(), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
+			text: scenario.query, notice: 'restored', matches: scenario.restored, stored: raw,
+		});
+		let changes = 0;
+		resources.add(filters.onDidChange(() => changes++));
+		filters.setText(scenario.query);
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: matches(), changes, stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!) }, {
+			text: scenario.query, notice: undefined, matches: scenario.current, changes: 1,
+			stored: { syntaxVersion: 2, text: scenario.query, hiddenSeverities: [], hiddenCategories: [] },
+		});
+	}
+});
+
+test('Output metadata changes preserve restored syntax through reload until clear or reset', () => {
+	for (const action of ['clear', 'reset']) {
+		using storageResources = new DisposableStore();
+		const query = '"server restart" !failed';
+		const storage = filterStorage(storageResources, JSON.stringify({ text: query, hiddenSeverities: [], hiddenCategories: [] }));
+		{
+			using resources = new DisposableStore();
+			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+			filters.setMinimumSeverity('debug');
+			filters.setCategoryVisible('hidden', false);
+			assert.deepEqual({ notice: filters.textFilterNotice, matches: filters.matches(entry), stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!) }, {
+				notice: 'restored', matches: true, stored: { syntaxVersion: 1, text: query, hiddenSeverities: ['trace'], hiddenCategories: ['hidden'] },
+			});
+		}
+		{
+			using resources = new DisposableStore();
+			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry) }, { text: query, notice: 'restored', matches: true });
+			if (action === 'clear') { filters.setText(''); }
+			else { filters.reset(); }
+			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
+			assert.deepEqual(stored, { syntaxVersion: 2, text: '', hiddenSeverities: action === 'clear' ? ['trace'] : [], hiddenCategories: action === 'clear' ? ['hidden'] : [] });
+		}
+		{
+			using resources = new DisposableStore();
+			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry) }, { text: '', notice: undefined, matches: true });
+		}
+	}
+});
+
+test('Output does not show a migration notice for empty or current-version saved queries', () => {
+	for (const saved of [{ text: '' }, { syntaxVersion: 2, text: 'server,restart' }]) {
+		using resources = new DisposableStore();
+		const raw = JSON.stringify({ ...saved, hiddenSeverities: [], hiddenCategories: [] });
+		const storage = filterStorage(resources, raw);
+		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+		assert.equal(filters.textFilterNotice, undefined);
+		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
+		filters.setText('server,restart');
+		assert.equal(filters.matches({ ...entry, text: 'restart server' }), true);
+	}
+});
+
+test('Output preserves unknown saved versions and applies only unsaved current-window filters', () => {
+	for (const syntaxVersion of [3, 'future', null]) {
+		using resources = new DisposableStore();
+		const raw = JSON.stringify({ syntaxVersion, text: 'unknown', hiddenSeverities: ['warning'], hiddenCategories: ['lifecycle'], future: { query: 'untouched' } });
+		const storage = filterStorage(resources, raw);
+		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry) }, { text: '', notice: 'unsupported', matches: true });
+		filters.setText('server,restart');
+		filters.setSeverityVisible('warning', false);
+		assert.equal(filters.matches(entry), false);
+		filters.setCategoryVisible('lifecycle', false);
+		filters.reset();
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: '', notice: 'unsupported', matches: true, stored: raw });
+	}
+});
+
+test('Output does not overwrite a newer saved schema published after the window opened', () => {
+	using resources = new DisposableStore();
+	const storage = filterStorage(resources);
+	const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+	filters.setText('server');
+	const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', future: [1, 2] });
+	storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	filters.setSeverityVisible('trace', false);
+	filters.setText('restart');
+	assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: 'restart', notice: 'unsupported', matches: true, stored: raw });
 });

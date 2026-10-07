@@ -27,6 +27,22 @@ The browser path is:
 4. Selecting a channel updates the service and persists its id in workspace
    storage; if that producer returns later, the selection is restored.
 
+Text queries use comma-separated alternatives and `!` exclusions. Exclusions take
+precedence; spaces and `-` are literal. Double quotes protect commas but remain
+part of the matched text. Text queries search the displayed content; category
+metadata is filtered separately.
+
+`OutputFilterState` alone owns query syntax and the `output.filterState` workspace
+value. New input writes syntax version 2. Nonempty saved queries with no version,
+or version 1, retain their previous matching behavior only until the first
+explicit text edit, clear, or reset. Severity and category changes preserve that
+restored syntax. The input's tooltip and accessible description explain restored
+queries; normal queries have no migration notice. A newer unsupported version is
+left untouched, including writes from another window. This window can apply
+unsaved filters, and the input explains that its changes will not be persisted.
+Serialization writes only this owner's syntax version, text, hidden severities,
+and hidden categories through the existing storage service.
+
 Language Server event adaptation is owned by
 [`../language/README.md`](../language/README.md). It consumes this service like
 any other producer. Adding Language Server fields, App Server DTOs, or producer-
